@@ -1,0 +1,408 @@
+/**
+ * The orb's one-click handoff: the order of the four steps it drives, the
+ * failure stage each step reports, and the wait for the session's own writing
+ * turn.
+ *
+ * The session faces here are hand-written rather than mocked transports: the
+ * wait reads exactly three things — `getSnapshot().running`, `subscribe`, and
+ * the disposer that installs it — so a test can drive the run and observe the
+ * disposal directly.
+ *
+ * @module dsh-a2d2/tests/client/orb-actions
+ */
+
+import { describe, expect, it, vi } from 'vitest'
+import {
+  ORB_TURN_START_TIMEOUT_MS,
+  ORB_TURN_TIMEOUT_MS,
+  awaitWritingTurn,
+  handoffLine,
+  runOrbHandoff,
+  workspaceOf,
+} from '../../src/client/orb-actions.ts'
+import type { OrbHandoffDeps } from '../../src/client/orb-actions.ts'
+import type {
+  ClientCommandResult,
+  ClientSessionFace,
+  ClientSessionsService,
+  ClientWorkspacesService,
+} from '../../src/client/context.ts'
+
+const CURRENT = 'session-current'
+const SUCCESSOR = 'session-next'
+const WORKSPACE = 'workspace-1'
+
+/** The admission result a session face returns for a line it ran. */
+const accepted: ClientCommandResult = { ok: true, value: { matched: true } }
+
+/**
+ * The budgets a test passes so a bounded wait is observed in a few milliseconds.
+ *
+ * A short real budget is enough and needs no fake timers: nothing else can
+ * settle a wait, so a wait that expires always expires at this budget.
+ */
+const QUICK: Pick<OrbHandoffDeps, 'startTimeoutMs' | 'turnTimeoutMs'> = {
+  startTimeoutMs: 20,
+  turnTimeoutMs: 20,
+}
+
+/** What one fake session face exposes to the test driving it. */
+interface FakeSession {
+  readonly face: ClientSessionFace
+  /** The command lines this session was asked to run, in order. */
+  readonly commands: string[]
+  /** Set the host's `running` fact and notify subscribers, as the transport does. */
+  setRunning(running: boolean): void
+  /** How many listeners are attached right now. */
+  listeners(): number
+  /** How many times a listener has been installed. */
+  subscriptions(): number
+}
+
+/**
+ * A session face whose `running` fact and admitted commands a test drives.
+ * @param options - the initial `running` flag, and the command implementation.
+ * @returns the face plus the controls a test uses to drive it.
+ */
+function fakeSession(options: {
+  running?: boolean
+  command?: (line: string, control: { setRunning(running: boolean): void }) => Promise<ClientCommandResult>
+} = {}): FakeSession {
+  const attached = new Set<() => void>()
+  const commands: string[] = []
+  let installed = 0
+  let running = options.running ?? false
+  const setRunning = (value: boolean): void => {
+    running = value
+    for (const listener of [...attached]) listener()
+  }
+  const face: ClientSessionFace = {
+    projections: { faceOf: () => ({ getSnapshot: () => undefined, subscribe: () => () => {} }) },
+    command: async (line: string) => {
+      commands.push(line)
+      return await (options.command ?? (async () => accepted))(line, { setRunning })
+    },
+    getSnapshot: () => ({ running }),
+    subscribe: (listener: () => void) => {
+      installed += 1
+      attached.add(listener)
+      return () => {
+        attached.delete(listener)
+      }
+    },
+  }
+  return {
+    face,
+    commands,
+    setRunning,
+    listeners: () => attached.size,
+    subscriptions: () => installed,
+  }
+}
+
+/** The turn a session runs after `/handoff`: it starts the run, then ends it. */
+function runWritingTurn(control: { setRunning(running: boolean): void }): void {
+  control.setRunning(true)
+  setTimeout(() => control.setRunning(false), 0)
+}
+
+/** The handing-off session's face: it admits every line and runs the writing turn. */
+function writingSession(): FakeSession {
+  return fakeSession({
+    command: async (_line, control) => {
+      runWritingTurn(control)
+      return accepted
+    },
+  })
+}
+
+/** A sessions double resolving the faces a test supplies, recording what it was asked to do. */
+function sessions(
+  faces: Readonly<Record<string, FakeSession>>,
+  log: string[] = [],
+): ClientSessionsService & { readonly opened: string[] } {
+  const opened: string[] = []
+  return {
+    binding: (id: string) => {
+      const fake = faces[id]
+      return fake === undefined ? undefined : { session: fake.face }
+    },
+    scope: () => undefined,
+    open: (id: string) => {
+      log.push(`open ${id}`)
+      opened.push(id)
+    },
+    opened,
+  } as unknown as ClientSessionsService & { readonly opened: string[] }
+}
+
+/** A workspaces double whose list accounts the current session under one workspace. */
+function workspaces(
+  overrides: Partial<{
+    items: { workspaceId: string; sessionIds: string[] }[]
+    connect: (id: string) => Promise<string>
+  }> = {},
+): ClientWorkspacesService {
+  const items = overrides.items ?? [{ workspaceId: WORKSPACE, sessionIds: [CURRENT] }]
+  return {
+    list: { getSnapshot: () => ({ items }) },
+    connectWorkspace: overrides.connect ?? (async () => SUCCESSOR),
+  }
+}
+
+/** Let the microtasks of a wait settle before a test observes the face again. */
+async function flush(): Promise<void> {
+  for (let tick = 0; tick < 10; tick += 1) await Promise.resolve()
+}
+
+describe('workspaceOf', () => {
+  it('finds the workspace that accounts a session', () => {
+    expect(workspaceOf(workspaces(), CURRENT)).toBe(WORKSPACE)
+  })
+
+  it('is undefined when no workspace lists the session', () => {
+    expect(workspaceOf(workspaces({ items: [{ workspaceId: WORKSPACE, sessionIds: ['other'] }] }), CURRENT)).toBeUndefined()
+  })
+})
+
+describe('handoffLine', () => {
+  it('asks for a generic handoff when no focus is stated', () => {
+    expect(handoffLine(undefined)).toBe('/handoff')
+    expect(handoffLine('')).toBe('/handoff')
+    expect(handoffLine('   ')).toBe('/handoff')
+  })
+
+  it('flattens a focus onto the one line the grammar reads', () => {
+    expect(handoffLine('  finish  the\n store layer ')).toBe('/handoff finish the store layer')
+  })
+})
+
+describe('awaitWritingTurn', () => {
+  it('bounds both waits, so a wait that ends reports which one expired', () => {
+    expect(ORB_TURN_START_TIMEOUT_MS).toBe(30_000)
+    expect(ORB_TURN_TIMEOUT_MS).toBe(600_000)
+  })
+
+  it('reports finished for a session that is already running and then stops', async () => {
+    const session = fakeSession({ running: true })
+    const wait = awaitWritingTurn(session.face, QUICK)
+
+    // The run is already visible, so the wait subscribes to watch it end.
+    await flush()
+    expect(session.subscriptions()).toBe(1)
+    expect(session.listeners()).toBe(1)
+    session.setRunning(false)
+    expect(await wait).toBe('finished')
+    expect(session.listeners()).toBe(0)
+  })
+
+  it('reports finished for a session that picks the turn up and then stops', async () => {
+    const session = fakeSession()
+    const wait = awaitWritingTurn(session.face, QUICK)
+
+    session.setRunning(true)
+    await flush()
+    session.setRunning(false)
+    expect(await wait).toBe('finished')
+    expect(session.listeners()).toBe(0)
+  })
+
+  it('reports never-started when the session never runs the turn', async () => {
+    const session = fakeSession()
+    expect(await awaitWritingTurn(session.face, QUICK)).toBe('never-started')
+    expect(session.subscriptions()).toBe(1)
+    expect(session.listeners()).toBe(0)
+  })
+
+  it('reports timeout when the session never ends its turn', async () => {
+    const session = fakeSession({ running: true })
+    expect(await awaitWritingTurn(session.face, QUICK)).toBe('timeout')
+    expect(session.subscriptions()).toBe(1)
+    expect(session.listeners()).toBe(0)
+  })
+})
+
+describe('runOrbHandoff', () => {
+  it('hands off on the session it sits on, then creates and takes in the successor', async () => {
+    const log: string[] = []
+    const current = writingSession()
+    const successor = fakeSession({
+      command: async (line) => {
+        log.push(`take ${line}`)
+        return accepted
+      },
+    })
+    const connect = vi.fn(async () => {
+      log.push('connect')
+      return SUCCESSOR
+    })
+
+    const s = sessions({ [CURRENT]: current, [SUCCESSOR]: successor }, log)
+    const outcome = await runOrbHandoff(
+      { sessions: s, workspaces: workspaces({ connect }), ...QUICK },
+      CURRENT,
+      'finish the store',
+    )
+
+    expect(outcome).toEqual({ ok: true, successor: SUCCESSOR })
+    expect(current.commands).toEqual(['/handoff finish the store'])
+    expect(connect).toHaveBeenCalledWith(WORKSPACE)
+    expect(log).toEqual(['connect', `open ${SUCCESSOR}`, `take /handoff take ${CURRENT}`])
+  })
+
+  it('asks for a generic handoff when the focus is blank', async () => {
+    const current = writingSession()
+    const outcome = await runOrbHandoff(
+      { sessions: sessions({ [CURRENT]: current, [SUCCESSOR]: fakeSession() }), workspaces: workspaces(), ...QUICK },
+      CURRENT,
+      '   ',
+    )
+    expect(outcome).toEqual({ ok: true, successor: SUCCESSOR })
+    expect(current.commands).toEqual(['/handoff'])
+  })
+
+  it('stops at prepare when the session is not addressable', async () => {
+    const outcome = await runOrbHandoff(
+      { sessions: sessions({}), workspaces: workspaces(), ...QUICK },
+      CURRENT,
+      undefined,
+    )
+    expect(outcome).toEqual({ ok: false, stage: 'prepare', error: 'this session is not addressable yet' })
+  })
+
+  it('stops at prepare when the command throws', async () => {
+    const current = fakeSession({ command: async () => { throw new Error('transport down') } })
+    const outcome = await runOrbHandoff(
+      { sessions: sessions({ [CURRENT]: current }), workspaces: workspaces(), ...QUICK },
+      CURRENT,
+      undefined,
+    )
+    expect(outcome).toEqual({ ok: false, stage: 'prepare', error: 'transport down' })
+  })
+
+  it('stops at prepare when the session refuses the command', async () => {
+    const current = fakeSession({ command: async () => ({ ok: false }) })
+    const s = sessions({ [CURRENT]: current })
+    const outcome = await runOrbHandoff(
+      { sessions: s, workspaces: workspaces(), ...QUICK },
+      CURRENT,
+      undefined,
+    )
+    expect(outcome).toEqual({ ok: false, stage: 'prepare', error: 'this session refused `/handoff`' })
+    expect(s.opened).toEqual([])
+  })
+
+  it('stops at summary when the writing turn never starts', async () => {
+    const connect = vi.fn(async () => SUCCESSOR)
+    const current = fakeSession({ command: async () => accepted })
+    const outcome = await runOrbHandoff(
+      { sessions: sessions({ [CURRENT]: current }), workspaces: workspaces({ connect }), ...QUICK },
+      CURRENT,
+      undefined,
+    )
+    expect(outcome).toEqual({
+      ok: false,
+      stage: 'summary',
+      error: 'this session never started writing the summary, so no handoff was recorded',
+    })
+    expect(connect).not.toHaveBeenCalled()
+    expect(current.listeners()).toBe(0)
+  })
+
+  it('stops at summary when the writing turn never finishes', async () => {
+    const connect = vi.fn(async () => SUCCESSOR)
+    const current = fakeSession({
+      command: async (_line, control) => {
+        control.setRunning(true)
+        return accepted
+      },
+    })
+    const outcome = await runOrbHandoff(
+      { sessions: sessions({ [CURRENT]: current }), workspaces: workspaces({ connect }), ...QUICK },
+      CURRENT,
+      undefined,
+    )
+    expect(outcome).toEqual({
+      ok: false,
+      stage: 'summary',
+      error: 'this session is still writing the summary; take the handoff again once it finishes',
+    })
+    expect(connect).not.toHaveBeenCalled()
+    expect(current.listeners()).toBe(0)
+  })
+
+  it('stops at workspace when no workspace accounts the session', async () => {
+    const current = writingSession()
+    const outcome = await runOrbHandoff(
+      {
+        sessions: sessions({ [CURRENT]: current }),
+        workspaces: workspaces({ items: [] }),
+        ...QUICK,
+      },
+      CURRENT,
+      undefined,
+    )
+    expect(outcome.ok).toBe(false)
+    if (!outcome.ok) expect(outcome.stage).toBe('workspace')
+  })
+
+  it('stops at create when connecting the workspace throws', async () => {
+    const current = writingSession()
+    const outcome = await runOrbHandoff(
+      {
+        sessions: sessions({ [CURRENT]: current }),
+        workspaces: workspaces({ connect: async () => { throw new Error('connect failed') } }),
+        ...QUICK,
+      },
+      CURRENT,
+      undefined,
+    )
+    expect(outcome).toEqual({ ok: false, stage: 'create', error: 'connect failed' })
+  })
+
+  it('stops at create when the successor is not yet addressable', async () => {
+    const current = writingSession()
+    const s = sessions({ [CURRENT]: current })
+    const outcome = await runOrbHandoff(
+      { sessions: s, workspaces: workspaces(), ...QUICK },
+      CURRENT,
+      undefined,
+    )
+    expect(outcome).toEqual({
+      ok: false,
+      stage: 'create',
+      error: 'the successor session was created but is not yet addressable',
+    })
+    expect(s.opened).toEqual([])
+  })
+
+  it('stops at take when the successor refuses the command', async () => {
+    const current = writingSession()
+    const successor = fakeSession({ command: async () => ({ ok: false }) })
+    const s = sessions({ [CURRENT]: current, [SUCCESSOR]: successor })
+    const outcome = await runOrbHandoff(
+      { sessions: s, workspaces: workspaces(), ...QUICK },
+      CURRENT,
+      undefined,
+    )
+    expect(outcome).toEqual({
+      ok: false,
+      stage: 'take',
+      error: `the successor session refused \`/handoff take ${CURRENT}\``,
+    })
+    // The successor was focused before the take, so the user watches it land.
+    expect(s.opened).toEqual([SUCCESSOR])
+    expect(successor.commands).toEqual([`/handoff take ${CURRENT}`])
+  })
+
+  it('stops at take when the command throws', async () => {
+    const current = writingSession()
+    const successor = fakeSession({ command: async () => { throw new Error('take transport down') } })
+    const outcome = await runOrbHandoff(
+      { sessions: sessions({ [CURRENT]: current, [SUCCESSOR]: successor }), workspaces: workspaces(), ...QUICK },
+      CURRENT,
+      undefined,
+    )
+    expect(outcome).toEqual({ ok: false, stage: 'take', error: 'take transport down' })
+  })
+})
