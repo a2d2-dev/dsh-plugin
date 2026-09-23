@@ -88,6 +88,15 @@ export interface ClientSessionFace {
    * host inject the handoff as its first prompt.
    */
   command(line: string): Promise<ClientCommandResult>
+  /**
+   * Rename this session (explicit user title). The orb gives the successor the
+   * handing-off session's title so a handoff chain keeps one readable name; only
+   * the accept/reject bit is read, because a failed rename is non-fatal and
+   * leaves the successor on its automatic title rather than stopping the handoff.
+   * @param title - the raw title text; the host normalizes acceptance.
+   * @returns whether the host accepted the rename.
+   */
+  rename(title: string): Promise<{ readonly ok: boolean }>
   /** The current conversation state, read for {@link ClientConversationState.running}. */
   getSnapshot(): ClientConversationState
   /**
@@ -169,8 +178,8 @@ export interface ClientSessionListStore {
 
 /** The published session list, narrowed to the two maps the subagent list reads. */
 export interface ClientSessionListSnapshot {
-  /** Every host row keyed by id, each carrying the projections the host folded for it. */
-  readonly byId: Readonly<Record<string, { readonly projectionValues?: Readonly<Record<string, ClientRouteSource | undefined>> } | undefined>>
+  /** Every host row keyed by id, each carrying its display title and the projections the host folded for it. */
+  readonly byId: Readonly<Record<string, { readonly title?: string; readonly projectionValues?: Readonly<Record<string, ClientRouteSource | undefined>> } | undefined>>
   /** Direct catalogs, keyed by the parent address they were requested for. */
   readonly subagentsByParent: Readonly<Record<string, { readonly entries: readonly CatalogEntry[] } | undefined>>
 }

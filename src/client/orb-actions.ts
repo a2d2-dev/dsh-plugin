@@ -195,6 +195,20 @@ export async function runOrbHandoff(
   // handoff land in the session they were switched to.
   deps.sessions.open(successor)
 
+  // Carry the handing-off session's title to the successor so a handoff chain
+  // reads as one named piece of work. Non-fatal: a session with no title, or a
+  // rejected rename, leaves the successor on its automatic title rather than
+  // stopping a handoff whose summary already landed.
+  const inherited = inheritedTitle(deps.sessions, sessionId)
+  if (inherited !== undefined) {
+    try {
+      await binding.session.rename(nextTitle(inherited))
+    } catch {
+      // A rename failure is a title-only loss; the successor keeps its automatic
+      // title and the handoff proceeds to the take below.
+    }
+  }
+
   let taken: ClientCommandResult
   try {
     taken = await binding.session.command(`/handoff take ${sessionId}`)
@@ -222,4 +236,38 @@ function summaryError(wait: Exclude<WritingTurnWait, 'finished'>): string {
 /** One error's message, whatever its type. */
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * The handing-off session's current display title, or `undefined` when it has
+ * none to carry.
+ *
+ * Read from the session list store, the client's own record of every host row's
+ * folded title; a blank title is treated as absent so the successor is not
+ * renamed to nothing.
+ * @param sessions - the sessions service.
+ * @param sessionId - the handing-off session.
+ * @returns the non-blank source title, or `undefined`.
+ */
+export function inheritedTitle(sessions: ClientSessionsService, sessionId: string): string | undefined {
+  const title = sessions.list.getSnapshot().byId[sessionId]?.title?.trim()
+  return title === undefined || title === '' ? undefined : title
+}
+
+/**
+ * The successor's title: the source title with its trailing number incremented,
+ * matching how a fork numbers a peer so a handoff chain does not read as several
+ * sessions with one identical name.
+ *
+ * A trailing ASCII or fullwidth parenthesized number is incremented in its own
+ * style; an unnumbered title gains ` (1)`.
+ * @param title - the inherited source title.
+ * @returns the numbered successor title.
+ */
+export function nextTitle(title: string): string {
+  const ascii = /^(.*)\((\d+)\)$/u.exec(title)
+  if (ascii !== null) return `${ascii[1]}(${Number(ascii[2]) + 1})`
+  const fullwidth = /^(.*)（(\d+)）$/u.exec(title)
+  if (fullwidth !== null) return `${fullwidth[1]}（${Number(fullwidth[2]) + 1}）`
+  return `${title} (1)`
 }

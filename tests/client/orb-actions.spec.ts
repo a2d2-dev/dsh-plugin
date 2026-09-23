@@ -17,6 +17,8 @@ import {
   ORB_TURN_TIMEOUT_MS,
   awaitWritingTurn,
   handoffLine,
+  inheritedTitle,
+  nextTitle,
   runOrbHandoff,
   workspaceOf,
 } from '../../src/client/orb-actions.ts'
@@ -51,6 +53,8 @@ interface FakeSession {
   readonly face: ClientSessionFace
   /** The command lines this session was asked to run, in order. */
   readonly commands: string[]
+  /** The titles this session was asked to rename to, in order. */
+  readonly renames: string[]
   /** Set the host's `running` fact and notify subscribers, as the transport does. */
   setRunning(running: boolean): void
   /** How many listeners are attached right now. */
@@ -67,9 +71,11 @@ interface FakeSession {
 function fakeSession(options: {
   running?: boolean
   command?: (line: string, control: { setRunning(running: boolean): void }) => Promise<ClientCommandResult>
+  rename?: (title: string) => Promise<{ readonly ok: boolean }>
 } = {}): FakeSession {
   const attached = new Set<() => void>()
   const commands: string[] = []
+  const renames: string[] = []
   let installed = 0
   let running = options.running ?? false
   const setRunning = (value: boolean): void => {
@@ -81,6 +87,10 @@ function fakeSession(options: {
     command: async (line: string) => {
       commands.push(line)
       return await (options.command ?? (async () => accepted))(line, { setRunning })
+    },
+    rename: async (title: string) => {
+      renames.push(title)
+      return await (options.rename ?? (async () => ({ ok: true })))(title)
     },
     getSnapshot: () => ({ running }),
     subscribe: (listener: () => void) => {
@@ -94,6 +104,7 @@ function fakeSession(options: {
   return {
     face,
     commands,
+    renames,
     setRunning,
     listeners: () => attached.size,
     subscriptions: () => installed,
@@ -120,8 +131,12 @@ function writingSession(): FakeSession {
 function sessions(
   faces: Readonly<Record<string, FakeSession>>,
   log: string[] = [],
+  titles: Readonly<Record<string, string>> = {},
 ): ClientSessionsService & { readonly opened: string[] } {
   const opened: string[] = []
+  const byId = Object.fromEntries(
+    Object.keys(faces).map(id => [id, titles[id] === undefined ? {} : { title: titles[id] }]),
+  )
   return {
     binding: (id: string) => {
       const fake = faces[id]
@@ -132,6 +147,7 @@ function sessions(
       log.push(`open ${id}`)
       opened.push(id)
     },
+    list: { getSnapshot: () => ({ byId, subagentsByParent: {} }), subscribe: () => () => {} },
     opened,
   } as unknown as ClientSessionsService & { readonly opened: string[] }
 }
@@ -404,5 +420,94 @@ describe('runOrbHandoff', () => {
       undefined,
     )
     expect(outcome).toEqual({ ok: false, stage: 'take', error: 'take transport down' })
+  })
+
+  it('renames the successor to the incremented source title before the take', async () => {
+    const current = writingSession()
+    const successor = fakeSession()
+    const outcome = await runOrbHandoff(
+      {
+        sessions: sessions({ [CURRENT]: current, [SUCCESSOR]: successor }, [], { [CURRENT]: 'Ship the store' }),
+        workspaces: workspaces(),
+        ...QUICK,
+      },
+      CURRENT,
+      undefined,
+    )
+    expect(outcome).toEqual({ ok: true, successor: SUCCESSOR })
+    expect(successor.renames).toEqual(['Ship the store (1)'])
+  })
+
+  it('skips the rename when the source session has no title', async () => {
+    const current = writingSession()
+    const successor = fakeSession()
+    const outcome = await runOrbHandoff(
+      { sessions: sessions({ [CURRENT]: current, [SUCCESSOR]: successor }), workspaces: workspaces(), ...QUICK },
+      CURRENT,
+      undefined,
+    )
+    expect(outcome).toEqual({ ok: true, successor: SUCCESSOR })
+    expect(successor.renames).toEqual([])
+  })
+
+  it('completes the handoff when the rename is rejected', async () => {
+    const current = writingSession()
+    const successor = fakeSession({ rename: async () => ({ ok: false }) })
+    const outcome = await runOrbHandoff(
+      {
+        sessions: sessions({ [CURRENT]: current, [SUCCESSOR]: successor }, [], { [CURRENT]: 'Ship the store' }),
+        workspaces: workspaces(),
+        ...QUICK,
+      },
+      CURRENT,
+      undefined,
+    )
+    expect(outcome).toEqual({ ok: true, successor: SUCCESSOR })
+    expect(successor.commands).toEqual([`/handoff take ${CURRENT}`])
+  })
+
+  it('completes the handoff when the rename throws', async () => {
+    const current = writingSession()
+    const successor = fakeSession({ rename: async () => { throw new Error('rename transport down') } })
+    const outcome = await runOrbHandoff(
+      {
+        sessions: sessions({ [CURRENT]: current, [SUCCESSOR]: successor }, [], { [CURRENT]: 'Ship the store' }),
+        workspaces: workspaces(),
+        ...QUICK,
+      },
+      CURRENT,
+      undefined,
+    )
+    expect(outcome).toEqual({ ok: true, successor: SUCCESSOR })
+    expect(successor.commands).toEqual([`/handoff take ${CURRENT}`])
+  })
+})
+
+describe('inheritedTitle', () => {
+  it('returns the source session title', () => {
+    const s = sessions({ [CURRENT]: fakeSession() }, [], { [CURRENT]: 'Ship the store' })
+    expect(inheritedTitle(s, CURRENT)).toBe('Ship the store')
+  })
+
+  it('returns undefined for a blank or missing title', () => {
+    const blank = sessions({ [CURRENT]: fakeSession() }, [], { [CURRENT]: '   ' })
+    expect(inheritedTitle(blank, CURRENT)).toBeUndefined()
+    const missing = sessions({ [CURRENT]: fakeSession() })
+    expect(inheritedTitle(missing, CURRENT)).toBeUndefined()
+  })
+})
+
+describe('nextTitle', () => {
+  it('appends (1) to an unnumbered title', () => {
+    expect(nextTitle('Ship the store')).toBe('Ship the store (1)')
+  })
+
+  it('increments a trailing ASCII number', () => {
+    expect(nextTitle('Ship the store (1)')).toBe('Ship the store (2)')
+    expect(nextTitle('Ship the store (9)')).toBe('Ship the store (10)')
+  })
+
+  it('increments a trailing fullwidth number in its own style', () => {
+    expect(nextTitle('实现插件（1）')).toBe('实现插件（2）')
   })
 })
