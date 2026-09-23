@@ -1,0 +1,11 @@
+{
+  "//": "Declaration build for the shipped client types, mirroring tsconfig.build.json for the host face. Declarations are what `exports['./client'].types` points at; tsdown bundles only the JS.",
+  "extends": "./tsconfig.client.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": "lib/types/client"
+  },
+  "include": ["src/client"]
+}

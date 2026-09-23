@@ -1,0 +1,20 @@
+{
+  "//": "Client face: the browser bundle has DOM and React globals and no Node ones, so it compiles separately from the host face (`tsconfig.json`). The split is what keeps `document` out of the host build and `process` out of the bundle.",
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "types": []
+  },
+  "include": ["src/client", "tests/client"]
+}
