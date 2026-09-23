@@ -1,0 +1,82 @@
+/*
+ * The subagent model list.
+ *
+ * Colors read the theme's alias tokens through `var(…, <literal>)`: the sidebar
+ * is a themed surface, so the variables are normally present, and the fallback
+ * keeps the rows readable if this bundle renders before they exist.
+ */
+
+.root {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  padding: 10px;
+  overflow-y: auto;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--dsw-alias-label-primary, #e6e6e6);
+}
+
+.header {
+  font-size: 11px;
+  color: var(--dsw-alias-label-secondary, #a0a0a0);
+}
+
+.own {
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--dsw-alias-label-secondary, #a0a0a0);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.3));
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-2, rgba(128, 128, 128, 0.08));
+}
+
+.label {
+  font-weight: 600;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.meta {
+  font-size: 11px;
+  color: var(--dsw-alias-label-secondary, #a0a0a0);
+}
+
+.route {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--dsw-alias-label-primary, #e6e6e6);
+  overflow-wrap: anywhere;
+}
+
+.routeDrifted {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 600;
+  color: var(--dsw-alias-state-warn-primary, #d99100);
+  overflow-wrap: anywhere;
+}
+
+.routeUnknown {
+  color: var(--dsw-alias-label-secondary, #a0a0a0);
+}
+
+.empty {
+  padding: 6px 2px;
+  color: var(--dsw-alias-label-secondary, #a0a0a0);
+}

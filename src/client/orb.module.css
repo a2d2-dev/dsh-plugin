@@ -1,0 +1,271 @@
+/*
+ * The floating handoff indicator: a circle that fills with water as the context
+ * grows.
+ *
+ * Every color here is a literal rather than a theme variable: this bundle is
+ * applied before the theme's own tokens exist, so a variable it cannot see
+ * resolves to nothing and leaves the text unreadable against the shell.
+ *
+ * The fill share arrives as `--a2d2-level` (0-100%) and the tier arrives as a
+ * level class; the water's height is the occupancy and its color is the tier, so
+ * one glance reads both.
+ */
+
+.root {
+  position: fixed;
+  right: 16px;
+  bottom: 108px;
+  z-index: 2147483000;
+  box-sizing: border-box;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  overflow: hidden;
+  display: block;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  border-radius: 50%;
+  /* The empty part of the circle: the context not yet used. */
+  background: #1b2430;
+  color: #ffffff;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  transition: transform 120ms ease, border-color 160ms ease;
+}
+
+.root:hover {
+  transform: scale(1.06);
+  border-color: rgba(255, 255, 255, 0.85);
+}
+
+/*
+ * The water. Its top edge is a repeating wave drawn by a gradient rather than an
+ * image, and the two layers drift at different speeds so the surface reads as
+ * moving water instead of a static bar.
+ */
+.water {
+  position: absolute;
+  left: -25%;
+  right: -25%;
+  bottom: 0;
+  height: var(--a2d2-level, 0%);
+  min-height: 0;
+  display: block;
+  transition: height 420ms ease;
+  animation: a2d2-wave 3.2s linear infinite;
+  background-image:
+    repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.16) 0 6px, rgba(255, 255, 255, 0) 6px 14px),
+    repeating-linear-gradient(65deg, rgba(255, 255, 255, 0.10) 0 9px, rgba(255, 255, 255, 0) 9px 20px);
+}
+
+@keyframes a2d2-wave {
+  from { background-position: 0 0, 0 0; }
+  to { background-position: 56px 0, -60px 0; }
+}
+
+/* A lighter crest right at the surface, so the level is unmistakable. */
+.water::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.readout {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  transition: transform 240ms ease;
+}
+
+.tokens {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.cost {
+  font-size: 10px;
+  font-weight: 500;
+  opacity: 0.92;
+}
+
+/*
+ * The fixed anchor that positions the orb and its hover affordances together.
+ * The orb itself is no longer `position: fixed`; this wrapper is, and the orb,
+ * the hover action button, and the confirm card lay out relative to it, so the
+ * card cannot drift away from the circle when the details panel resizes.
+ */
+.anchor {
+  position: fixed;
+  right: 16px;
+  bottom: 108px;
+  z-index: 2147483000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/*
+ * Inside the anchor the orb is placed by the flex column instead of the
+ * viewport, but it must stay a POSITIONED box: `.water` and `.readout` are
+ * absolutely positioned against it, so `static` would let them escape the
+ * circle and resolve their offsets against the anchor instead — which renders
+ * the water as a full-width band and the readout over the card. `relative`
+ * keeps the circle as their containing block while the anchor owns the fixing.
+ */
+.anchor .root {
+  position: relative;
+  right: auto;
+  bottom: auto;
+}
+
+/*
+ * The hover action button: revealed when the pointer is over the anchor, it is
+ * the explicit "交接" entry the user asked for instead of the circle mutating
+ * the draft on a stray click.
+ */
+.action {
+  box-sizing: border-box;
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: #1b2430;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+  transition: transform 120ms ease, border-color 160ms ease;
+}
+
+.action:hover {
+  transform: scale(1.04);
+  border-color: rgba(255, 255, 255, 0.75);
+}
+
+.action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/*
+ * The confirm card: the plugin's own surface (no DSH command modal exists), so
+ * it is a small panel drawn beside the orb. It collects the focus and turns the
+ * two-step "fill then send" into one confirm that creates the successor session
+ * and injects the summary.
+ */
+.card {
+  box-sizing: border-box;
+  width: 288px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  background: #1b2430;
+  color: #f2f5f8;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+}
+
+.cardTitle {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.cardHint {
+  font-size: 11px;
+  line-height: 1.4;
+  opacity: 0.75;
+}
+
+.cardInput {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  background: #101823;
+  color: #f2f5f8;
+  font-size: 12px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 52px;
+}
+
+.cardInput:focus {
+  outline: none;
+  border-color: rgba(120, 180, 255, 0.8);
+}
+
+.cardRow {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.cardButton {
+  box-sizing: border-box;
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.cardButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.cancel {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #f2f5f8;
+}
+
+.confirm {
+  background: #2f7d5a;
+  color: #ffffff;
+}
+
+.cardError {
+  font-size: 11px;
+  line-height: 1.4;
+  color: #ff9b95;
+}
+
+.cardBusy {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+/* Tier colors, applied to the water only; the circle keeps its dark shell. */
+.normal .water {
+  background-color: #2f7d5a;
+}
+
+.warn .water {
+  background-color: #b3751f;
+}
+
+.critical .water {
+  background-color: #b03a35;
+}
