@@ -2,8 +2,8 @@
  * Host-side loading of writable skill sources.
  *
  * A skill is injected as authored rather than translated into plugin-owned
- * guidance. Local markdown resources named by the skill body follow the main
- * file in declaration order, so the skill remains the only source of rules.
+ * guidance. Local markdown resources explicitly linked by the skill body follow
+ * the main file in declaration order, so the skill remains the only source of rules.
  *
  * @module @deepseek-ai/dsh-a2d2/src/skill-source
  */
@@ -83,11 +83,6 @@ export interface MissingSkillSource {
 /** Result of reading one installed skill. */
 export type SkillSource = LoadedSkillSource | MissingSkillSource
 
-interface LocatedReference {
-  readonly index: number
-  readonly path: string
-}
-
 function isMissing(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT'
 }
@@ -105,34 +100,22 @@ function skillBody(markdown: string): string {
   return frontMatter === null ? markdown : markdown.slice(frontMatter[0].length)
 }
 
-// TODO(ticket 03): prose .md mentions are overmatched; before ask-matt injection, accept only explicit markdown-link declarations (see boundary-card ticket 03).
-/** Find markdown links and bare markdown filenames without reordering either form. */
+/** Find explicit local markdown links in declaration order. */
 function declaredMarkdownResources(markdown: string): readonly string[] {
-  const references: LocatedReference[] = []
-  const linkRanges: Array<readonly [number, number]> = []
+  const references: string[] = []
   const linkPattern = /!?\[[^\]]*\]\(\s*(<[^>]+>|[^\s)]+)(?:\s+["'][^"']*["'])?\s*\)/gu
   for (const match of markdown.matchAll(linkPattern)) {
     const raw = match[1]
-    if (match.index === undefined || raw === undefined) continue
-    linkRanges.push([match.index, match.index + match[0].length])
+    if (raw === undefined) continue
     const path = localMarkdownPath(raw)
-    if (path !== undefined) references.push({ index: match.index, path })
+    if (path !== undefined) references.push(path)
   }
 
-  const barePattern = /(?:^|[^\w./-])((?:\.{1,2}\/)?(?:[\w.-]+\/)*[\w.-]+\.md)(?=$|[^\w./-])/gimu
-  for (const match of markdown.matchAll(barePattern)) {
-    if (match.index === undefined || match[1] === undefined) continue
-    const index = match.index + match[0].indexOf(match[1])
-    if (linkRanges.some(([start, end]) => index >= start && index < end)) continue
-    references.push({ index, path: match[1] })
-  }
-
-  references.sort((left, right) => left.index - right.index)
   const seen = new Set<string>()
-  return references.flatMap((reference) => {
-    if (seen.has(reference.path)) return []
-    seen.add(reference.path)
-    return [reference.path]
+  return references.flatMap((path) => {
+    if (seen.has(path)) return []
+    seen.add(path)
+    return [path]
   })
 }
 
@@ -171,7 +154,7 @@ export async function readSkillSource(
     try {
       resources.push({ path, content: await readFile(resourcePath, 'utf8') })
     } catch (error) {
-      throw new Error(`a2d2: handoff skill resource "${path}" could not be read`, { cause: error })
+      throw new Error(`a2d2: ${name} skill resource "${path}" could not be read`, { cause: error })
     }
   }
   return { status: 'loaded', skill, resources }

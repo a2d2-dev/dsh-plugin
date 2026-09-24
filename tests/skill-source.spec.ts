@@ -63,7 +63,7 @@ describe('skill source', () => {
     expect(pathExists).not.toHaveBeenCalled()
   })
 
-  it('reads SKILL.md and local markdown resources in declaration order without rewriting them', async () => {
+  it('reads SKILL.md and explicitly linked local markdown resources without rewriting them', async () => {
     const root = await tempRoot()
     const directory = join(root, 'handoff')
     await mkdir(join(directory, 'references'), { recursive: true })
@@ -78,19 +78,28 @@ describe('skill source', () => {
       '',
     ].join('\n')
     const first = '# First\n\nKeep this exact.\n'
-    const second = '# Second\n\nKeep this exact too.\n'
     await writeFile(join(directory, 'SKILL.md'), skill, 'utf8')
     await writeFile(join(directory, 'references', 'FIRST.md'), first, 'utf8')
-    await writeFile(join(directory, 'SECOND.md'), second, 'utf8')
 
     expect(await readSkillSource('handoff', root)).toEqual({
       status: 'loaded',
       skill,
       resources: [
         { path: 'references/FIRST.md', content: first },
-        { path: 'SECOND.md', content: second },
       ],
     })
+  })
+
+  it('loads the installed ask-matt source without treating prose mentions as resources', async () => {
+    const source = await readSkillSource('ask-matt')
+
+    expect(source.status).toBe('loaded')
+    if (source.status === 'missing') return
+    expect(source.skill).toContain('# Ask Matt')
+    expect(source.skill).toContain('`CONTEXT.md`')
+    expect(source.skill).toContain('AGENTS.md')
+    expect(source.resources.map(resource => resource.path)).toEqual(['PHASE-BOUNDARIES.md'])
+    expect(source.resources[0]?.content).toContain('# Phase boundaries')
   })
 
   it('returns an explicit missing signal when SKILL.md is unavailable', async () => {
