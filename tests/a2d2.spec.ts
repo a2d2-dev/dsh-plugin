@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
-import A2d2Service from '../src/index.ts'
+import A2d2Service, { DEFAULT_HANDOFF_WARN_TOKENS } from '../src/index.ts'
 import { TaskId } from '../src/brand.ts'
 import { handedOff, memberOf, successorsOf } from '../src/derive.ts'
 import {
@@ -220,6 +220,10 @@ describe('a2d2 service', () => {
     await ctx.plugin(A2d2Service, { root })
     return ctx.a2d2
   }
+
+  it('defaults the smart-zone warning threshold to 150k tokens', () => {
+    expect(DEFAULT_HANDOFF_WARN_TOKENS).toBe(150_000)
+  })
 
   it('creates a task and resolves it for the project', async () => {
     const root = await tempRoot()

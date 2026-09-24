@@ -6,14 +6,14 @@
  * @module dsh-a2d2/tests/handoff-service
  */
 
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import A2d2Service from '../src/index.ts'
-import type { PrepareHandoffRequest } from '../src/index.ts'
+import type { Config, PrepareHandoffRequest } from '../src/index.ts'
 import { TaskId } from '../src/brand.ts'
 import {
   HANDOFF_SUMMARY_END,
@@ -46,11 +46,18 @@ afterEach(async () => {
  * The service declares no required service, so a bare context is enough; the
  * store, the document files, and the project-root walk all stay real.
  * @param root - the project root the store is pinned to.
+ * @param config - optional plugin configuration under test.
  * @returns the mounted service.
  */
-async function mount(root: string): Promise<A2d2Service> {
+async function mount(root: string, config: Partial<Config> = {}): Promise<A2d2Service> {
+  const skillsRoot = config.skillsRoot ?? join(root, '.test-skills')
+  if (config.skillsRoot === undefined) {
+    const handoff = join(skillsRoot, 'handoff')
+    await mkdir(handoff, { recursive: true })
+    await writeFile(join(handoff, 'SKILL.md'), 'Write exact test continuation content.\n', 'utf8')
+  }
   const ctx = new Context()
-  await ctx.plugin(A2d2Service, { root })
+  await ctx.plugin(A2d2Service, { ...config, root, skillsRoot })
   return ctx.a2d2
 }
 
@@ -132,6 +139,27 @@ describe('prepareHandoff', () => {
     expect(prepared.instruction).toContain(HANDOFF_SUMMARY_START)
     expect(prepared.instruction).toContain(HANDOFF_SUMMARY_END)
     expect(prepared.instruction).toContain('finish the store layer')
+    expect(prepared.instruction).toContain('Write exact test continuation content.')
+  })
+
+  it('marks the document and uses the minimal instruction when the skill is missing', async () => {
+    const root = await tempRoot()
+    const service = await mount(root, { skillsRoot: join(root, 'missing-skills') })
+    const prepared = await service.prepareHandoff(request(root))
+    const skeleton = await readFile(prepared.path, 'utf8')
+
+    expect(prepared.instruction).toContain('The handoff skill source was not available.')
+    expect(prepared.instruction).not.toContain('<handoff-skill-source>')
+    expect(skeleton).toContain('skillSource: unavailable')
+  })
+
+  it('accepts deprecated suggestedSkills without rendering them', async () => {
+    const root = await tempRoot()
+    const service = await mount(root, { suggestedSkills: ['legacy-skill'] })
+    const prepared = await service.prepareHandoff(request(root))
+
+    expect(await readFile(prepared.path, 'utf8')).not.toContain('Suggested skills')
+    expect(await readFile(prepared.path, 'utf8')).not.toContain('legacy-skill')
   })
 
   it('names the task after the project directory when the handoff has no focus', async () => {

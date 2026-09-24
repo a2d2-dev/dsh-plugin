@@ -131,11 +131,13 @@
   bottom: auto;
 }
 
-/*
- * The hover action button: revealed when the pointer is over the anchor, it is
- * the explicit "交接" entry the user asked for instead of the circle mutating
- * the draft on a stray click.
- */
+/* Peer boundary actions revealed together while the pointer is over the anchor. */
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .action {
   box-sizing: border-box;
   padding: 6px 12px;
@@ -255,6 +257,44 @@
 .cardBusy {
   font-size: 11px;
   opacity: 0.8;
+}
+
+.degraded {
+  padding: 7px 9px;
+  border-left: 3px solid #d69a3a;
+  background: #2a2216;
+  color: #ffd99a;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 7px 10px;
+  border: 1px solid rgba(126, 184, 255, 0.55);
+  border-radius: 999px;
+  background: #101823;
+  color: #f2f5f8;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.chip:hover,
+.chip:focus-visible {
+  border-color: #8dc0ff;
+  background: #17263a;
+  outline: none;
 }
 
 /* Tier colors, applied to the water only; the circle keeps its dark shell. */

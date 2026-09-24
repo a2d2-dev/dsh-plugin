@@ -31,11 +31,9 @@ const facts: HandoffFacts = {
   focus: 'land the retry guard',
 }
 
-const skills = ['tdd', 'code-review']
-
 /** The document the handing-off agent produces: the skeleton with its summary filled in. */
-function written(summary: string, options: { facts?: HandoffFacts; skills?: readonly string[] } = {}): string {
-  const skeleton = renderHandoffSkeleton(options.facts ?? facts, options.skills ?? skills)
+function written(summary: string, options: { facts?: HandoffFacts } = {}): string {
+  const skeleton = renderHandoffSkeleton(options.facts ?? facts)
   expect(skeleton).toContain(HANDOFF_SUMMARY_PLACEHOLDER)
   return skeleton.replace(HANDOFF_SUMMARY_PLACEHOLDER, summary)
 }
@@ -59,7 +57,7 @@ function bodyOf(text: string): string {
 
 describe('handoff skeleton', () => {
   it('writes version 2 front matter carrying the handoff facts', () => {
-    const skeleton = renderHandoffSkeleton(facts, skills)
+    const skeleton = renderHandoffSkeleton(facts)
     expect(HANDOFF_DOCUMENT_VERSION).toBe(2)
     expect(skeleton).toContain(`version: ${HANDOFF_DOCUMENT_VERSION}`)
     expect(skeleton).toContain('source: session-a')
@@ -69,15 +67,13 @@ describe('handoff skeleton', () => {
   })
 
   it('writes the fixed sections the successor is told to read', () => {
-    const skeleton = renderHandoffSkeleton(facts, skills)
+    const skeleton = renderHandoffSkeleton(facts)
     expect(skeleton).toContain('# Handoff from session-a')
     expect(skeleton).toContain('## What to read first')
     expect(skeleton).toContain('.dsh/a2d2/handoffs/session-a.md')
     expect(skeleton).toContain('.dsh/a2d2/tasks/fix-flaky-test.yaml')
     expect(skeleton).toContain('## Focus')
-    expect(skeleton).toContain('## Suggested skills')
-    expect(skeleton).toContain('- tdd')
-    expect(skeleton).toContain('- code-review')
+    expect(skeleton).not.toContain('## Suggested skills')
     expect(skeleton).toContain('## Summary')
   })
 
@@ -85,13 +81,13 @@ describe('handoff skeleton', () => {
     // The successor reads this body as its first prompt, and `take` has recorded
     // the edge by then; the line that finishes a handoff belongs to the source
     // side's command result, which the person reads before a successor exists.
-    const skeleton = renderHandoffSkeleton(facts, skills)
+    const skeleton = renderHandoffSkeleton(facts)
     expect(skeleton).not.toContain('/handoff take')
     expect(skeleton).not.toContain('no successor')
   })
 
   it('leaves the summary region carrying its placeholder', () => {
-    const skeleton = renderHandoffSkeleton(facts, skills)
+    const skeleton = renderHandoffSkeleton(facts)
     const region = skeleton.slice(
       skeleton.indexOf(HANDOFF_SUMMARY_START) + HANDOFF_SUMMARY_START.length,
       skeleton.indexOf(HANDOFF_SUMMARY_END),
@@ -101,15 +97,19 @@ describe('handoff skeleton', () => {
 
   it('omits the focus section, and the focus field, when the handoff states none', () => {
     const focusless: HandoffFacts = { ...facts, focus: undefined }
-    const skeleton = renderHandoffSkeleton(focusless, skills)
+    const skeleton = renderHandoffSkeleton(focusless)
     expect(skeleton).not.toContain('## Focus')
     expect(skeleton).not.toContain('focus:')
     expect(parseHandoffDocument(written('the store layer is next', { facts: focusless }), source).focus)
       .toBeUndefined()
   })
 
-  it('omits the suggested-skills section when the deployment configures none', () => {
-    expect(renderHandoffSkeleton(facts, [])).not.toContain('## Suggested skills')
+  it('marks an unavailable skill source in front matter', () => {
+    const degraded: HandoffFacts = { ...facts, skillSource: 'unavailable' }
+    const skeleton = renderHandoffSkeleton(degraded)
+    expect(skeleton).toContain('skillSource: unavailable')
+    expect(parseHandoffDocument(written('continue', { facts: degraded }), source).skillSource)
+      .toBe('unavailable')
   })
 
   it('names the document after the handed-off session', () => {
@@ -119,7 +119,7 @@ describe('handoff skeleton', () => {
 
 describe('reading a handoff document', () => {
   it('refuses a skeleton whose summary is still the placeholder', () => {
-    const failure = refusal(renderHandoffSkeleton(facts, skills))
+    const failure = refusal(renderHandoffSkeleton(facts))
     expect(failure.code).toBe('unwritten')
     expect(failure.message).toContain('not written yet')
   })
@@ -129,7 +129,7 @@ describe('reading a handoff document', () => {
   })
 
   it('refuses a body carrying no summary region at all', () => {
-    const text = renderHandoffSkeleton(facts, skills)
+    const text = renderHandoffSkeleton(facts)
       .replace(HANDOFF_SUMMARY_START, '').replace(HANDOFF_SUMMARY_END, '').replace(HANDOFF_SUMMARY_PLACEHOLDER, '')
     const failure = refusal(text)
     expect(failure.code).toBe('malformed')

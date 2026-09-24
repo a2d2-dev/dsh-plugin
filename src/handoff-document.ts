@@ -70,6 +70,8 @@ export interface HandoffFacts {
   readonly createdAt: string
   /** What the next session is for, absent for a generic handoff. */
   readonly focus: string | undefined
+  /** Visible degradation marker when the host could not read the handoff skill. */
+  readonly skillSource?: 'unavailable'
 }
 
 /** A handoff document with its summary written. */
@@ -83,7 +85,7 @@ export interface HandoffDocument extends HandoffFacts {
 }
 
 /** Field names the front matter may carry; an unexpected one fails loudly. */
-const FRONT_MATTER_FIELDS = ['version', 'source', 'task', 'createdAt', 'focus'] as const
+const FRONT_MATTER_FIELDS = ['version', 'source', 'task', 'createdAt', 'focus', 'skillSource'] as const
 
 function malformed(message: string): HandoffDocumentError {
   return new HandoffDocumentError('malformed', message)
@@ -160,6 +162,11 @@ export function parseHandoffDocument(text: string, source: SessionId): HandoffDo
     throw malformed('focus must be a non-empty string when present')
   }
 
+  const rawSkillSource = record['skillSource']
+  if (rawSkillSource !== undefined && rawSkillSource !== 'unavailable') {
+    throw malformed('skillSource must be "unavailable" when present')
+  }
+
   assertSummaryWritten(body)
 
   return {
@@ -167,6 +174,7 @@ export function parseHandoffDocument(text: string, source: SessionId): HandoffDo
     task: TaskId(requiredString(record, 'task')),
     createdAt: requiredString(record, 'createdAt'),
     focus: rawFocus as string | undefined,
+    ...(rawSkillSource === undefined ? {} : { skillSource: rawSkillSource }),
     body,
   }
 }
@@ -213,10 +221,9 @@ export function handoffDocumentName(source: SessionId): string {
  * document telling its reader to take a handoff would describe a step that has
  * already happened by the time that reader sees it.
  * @param facts - the parsed facts of the handoff.
- * @param skills - skills the successor is told to load, rendered for a person.
  * @returns the document's UTF-8 content.
  */
-export function renderHandoffSkeleton(facts: HandoffFacts, skills: readonly string[]): string {
+export function renderHandoffSkeleton(facts: HandoffFacts): string {
   const lines: string[] = [
     renderFrontMatter(facts),
     '',
@@ -234,11 +241,6 @@ export function renderHandoffSkeleton(facts: HandoffFacts, skills: readonly stri
 
   if (facts.focus !== undefined) {
     lines.push('', '## Focus', '', facts.focus)
-  }
-
-  if (skills.length > 0) {
-    lines.push('', '## Suggested skills', '')
-    for (const skill of skills) lines.push(`- ${skill}`)
   }
 
   lines.push(
@@ -276,5 +278,6 @@ function renderFrontMatter(facts: HandoffFacts): string {
     createdAt: facts.createdAt,
   }
   if (facts.focus !== undefined) fields['focus'] = facts.focus
+  if (facts.skillSource !== undefined) fields['skillSource'] = facts.skillSource
   return ['---', stringifyYaml(fields, { lineWidth: 0 }).trimEnd(), '---'].join('\n')
 }

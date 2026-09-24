@@ -21,16 +21,18 @@ export interface OrbThresholds {
 }
 
 /**
- * Default thresholds: warn at 200k tokens, critical when the context is full.
+ * Default thresholds: warn near the 150k-token smart zone, critical when the
+ * context is full.
  *
- * Lengths rather than ratios, because that is the decision a person makes — a
- * session is changed when it has said enough, not when it has consumed a share
- * of whatever window the current model happens to advertise. Both are overridden
- * through this plugin's `handoffWarnTokens` / `handoffCriticalTokens` config,
- * which the host publishes to the browser.
+ * Lengths rather than ratios, because the smart-zone signal follows how much
+ * context a session carries, not the share of whatever window the current model
+ * happens to advertise. Reaching it cues a choice at the next phase boundary;
+ * changing sessions is only one outcome. Both thresholds are overridden through
+ * this plugin's `handoffWarnTokens` / `handoffCriticalTokens` config, which the
+ * host publishes to the browser.
  */
 export const DEFAULT_ORB_THRESHOLDS: OrbThresholds = {
-  warnAtTokens: 200_000,
+  warnAtTokens: 150_000,
   criticalAtTokens: 1_000_000,
 }
 

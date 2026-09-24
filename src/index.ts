@@ -18,6 +18,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { TaskId } from './brand.ts'
+import { CONSULT_ROUTE_PATH, createConsultHandler } from './consult.ts'
 import { handedOff, memberOf, successorsOf } from './derive.ts'
 import type { HandoffDocument, HandoffFacts } from './handoff-document.ts'
 import {
@@ -30,6 +31,7 @@ import { handoffPrompt } from './handoff-prompt.ts'
 import { indicatorProjectionDefinition } from './indicator-projection.ts'
 import type { HandoffThresholds, ModelPrice } from './indicator-projection.ts'
 import { parseSessionId, redactText } from './handoff.ts'
+import { DEFAULT_SKILLS_ROOT, readSkillSource, resolveSkillsRoot } from './skill-source.ts'
 import {
   DEFAULT_PROJECT_MARKERS,
   TaskDocumentStore,
@@ -43,6 +45,30 @@ import type { CreateTaskRequest, Task } from './types.ts'
 
 export { TaskId } from './brand.ts'
 export type { TaskId as TaskIdType } from './brand.ts'
+export {
+  CONSULT_MAX_OUTPUT_TOKENS,
+  CONSULT_MESSAGE_LIMIT,
+  CONSULT_ROUTE_PATH,
+  MalformedCandidatesError,
+  buildConsultPrompt,
+  collectConsultMaterial,
+  createConsultHandler,
+  currentConsultRoute,
+  generateConsultCandidates,
+  isTrustedConsultRequest,
+  parseConsultCandidates,
+  statusOf,
+} from './consult.ts'
+export type {
+  ConsultCandidate,
+  ConsultDependencies,
+  ConsultErrorCode,
+  ConsultMaterial,
+  ConsultMessageExcerpt,
+  ConsultRoute,
+  ConsultSession,
+  ConsultValue,
+} from './consult.ts'
 export { handedOff, memberOf, successorsOf } from './derive.ts'
 export {
   DEFAULT_PROJECT_MARKERS,
@@ -70,6 +96,8 @@ export {
 } from './handoff-document.ts'
 export type { HandoffDocument, HandoffDocumentErrorCode, HandoffFacts } from './handoff-document.ts'
 export { HANDOFF_SUMMARY_MAX_CHARS, handoffInstruction } from './handoff-instruction.ts'
+export { DEFAULT_SKILLS_ROOT, readSkillSource } from './skill-source.ts'
+export type { LoadedSkillSource, MissingSkillSource, SkillResource, SkillSource } from './skill-source.ts'
 export { handoffPrompt } from './handoff-prompt.ts'
 export {
   HANDOFF_USAGE,
@@ -96,13 +124,7 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/**
- * Skills a handoff suggests to its successor.
- *
- * The list is deployment configuration, not a constant: which skills a project
- * works through is a property of how that project is run, and the default names
- * the A²D² mainline in the order a handoff usually reaches it.
- */
+/** @deprecated Handoff documents no longer render suggested skills. */
 export const DEFAULT_SUGGESTED_SKILLS: readonly string[] = ['implement', 'tdd', 'code-review']
 
 /**
@@ -110,12 +132,11 @@ export const DEFAULT_SUGGESTED_SKILLS: readonly string[] = ['implement', 'tdd', 
  * deployment configures none.
  *
  * A length rather than a ratio: the indicator reports how much context a session
- * is carrying, and the decision to change sessions is made against that number.
- * The design record's own baseline is the smart zone at about 120k; this default
- * is the point at which a session has said enough to be worth continuing
- * elsewhere.
+ * is carrying. The design baseline is the smart zone at about 150k; reaching it
+ * signals that the next phase boundary should choose among the five workflow
+ * outcomes, of which changing sessions is only one.
  */
-export const DEFAULT_HANDOFF_WARN_TOKENS = 200_000
+export const DEFAULT_HANDOFF_WARN_TOKENS = 150_000
 
 /** Context length at which the floating indicator is critical, when a deployment configures none. */
 export const DEFAULT_HANDOFF_CRITICAL_TOKENS = 1_000_000
@@ -129,7 +150,9 @@ export interface Config {
   root?: string
   /** Directory entries that identify a project root while walking upward from a session cwd. */
   projectMarkers?: string[]
-  /** Skills a handoff document suggests to its successor. */
+  /** Explicit root containing installed skills; omitted to probe conventional locations. */
+  skillsRoot?: string
+  /** @deprecated Accepted for compatibility; handoff documents no longer render this list. */
   suggestedSkills?: string[]
   /** Context length, in tokens, at which the floating indicator warns. */
   handoffWarnTokens?: number
@@ -157,7 +180,7 @@ export interface PreparedHandoff {
   readonly source: SessionId
   /** Absolute path of the skeleton document the handing-off agent fills in. */
   readonly path: string
-  /** The turn that asks that agent to write the summary. */
+  /** The turn that asks that agent to write the continuation content. */
   readonly instruction: string
 }
 
@@ -207,6 +230,7 @@ export class A2d2Service extends Service {
   static Config: z<Config> = z.object({
     root: z.string(),
     projectMarkers: z.array(z.string()).default([...DEFAULT_PROJECT_MARKERS]),
+    skillsRoot: z.string(),
     suggestedSkills: z.array(z.string()).default([...DEFAULT_SUGGESTED_SKILLS]),
     handoffWarnTokens: z.number().default(DEFAULT_HANDOFF_WARN_TOKENS),
     handoffCriticalTokens: z.number().default(DEFAULT_HANDOFF_CRITICAL_TOKENS),
@@ -218,7 +242,7 @@ export class A2d2Service extends Service {
   })
 
   private readonly store: TaskDocumentStore
-  private readonly suggestedSkills: readonly string[]
+  private readonly skillsRoot: string
   private readonly thresholds: HandoffThresholds
   private readonly prices: ReadonlyMap<string, ModelPrice>
   private readonly currency: string
@@ -238,7 +262,10 @@ export class A2d2Service extends Service {
     if (projectMarkers.length === 0) {
       throw new Error('a2d2: projectMarkers must name at least one directory entry')
     }
-    this.suggestedSkills = [...(config.suggestedSkills ?? DEFAULT_SUGGESTED_SKILLS)]
+    this.skillsRoot = resolveSkillsRoot(config.skillsRoot)
+    if (!isAbsolute(this.skillsRoot)) {
+      throw new Error(`a2d2: skillsRoot must be an absolute path, received "${this.skillsRoot}"`)
+    }
     this.thresholds = {
       warnAtTokens: config.handoffWarnTokens ?? DEFAULT_HANDOFF_WARN_TOKENS,
       criticalAtTokens: config.handoffCriticalTokens ?? DEFAULT_HANDOFF_CRITICAL_TOKENS,
@@ -266,6 +293,7 @@ export class A2d2Service extends Service {
     }
     this.currency = config.currency ?? DEFAULT_CURRENCY
     this.publishIndicator()
+    this.publishConsult()
     // Stated once at load: whether the browser half received these is otherwise
     // only visible by looking at the indicator, which never reports absence.
     this.ctx.logger.info(
@@ -390,6 +418,40 @@ export class A2d2Service extends Service {
     })
   }
 
+  /** Publish the optional Web host's one-shot next-step consultation route. */
+  private publishConsult(): void {
+    this.ctx.inject(['webServer'], (routeCtx) => {
+      type WebServer = {
+        register(route: {
+          kind: 'exact'
+          path: string
+          handler: ReturnType<typeof createConsultHandler>
+        }): () => void
+      }
+      type WebRuntime = { readonly trustedHosts: readonly string[] }
+      const getService = <T>(name: string): T | undefined => (
+        (routeCtx.get as unknown as (name: string) => T | undefined).call(routeCtx, name)
+      )
+      const server = getService<WebServer>('webServer')
+      if (server === undefined) return
+      const handler = createConsultHandler({
+        trustedHosts: () => getService<WebRuntime>('webRuntime')?.trustedHosts ?? [],
+        getSession: id => routeCtx.get('sessions')?.get(id),
+        listTasks: cwd => this.store.list(cwd),
+        readAskMatt: () => readSkillSource('ask-matt', this.skillsRoot),
+        stream: (options) => {
+          const llm = routeCtx.get('llm')
+          if (llm === undefined) throw new Error('a2d2 consult: llm service is unavailable')
+          return llm.stream(options)
+        },
+      })
+      routeCtx.effect(
+        () => server.register({ kind: 'exact', path: CONSULT_ROUTE_PATH, handler }),
+        'a2d2 consult route',
+      )
+    })
+  }
+
   /**
    * The ratios the indicator applies.
    * @returns the configured thresholds.
@@ -418,16 +480,16 @@ export class A2d2Service extends Service {
 
   /**
    * Record a handoff, write the skeleton its document starts from, and render
-   * the turn that writes the summary.
+   * the turn that writes the continuation content.
    *
    * The source session joins the task now; the successor joins when it takes the
    * handoff, because a session that never opens leaves no edge behind and the
    * document stays the only record of the intent. Nothing here writes the
-   * summary: only the handing-off session holds the conversation, so the caller
-   * queues `instruction` as one of that session's own turns, and the document
-   * stays unreadable — `unwritten` — until that turn finishes.
+   * continuation content: only the handing-off session holds the conversation,
+   * so the caller queues `instruction` as one of that session's own turns, and
+   * the document stays unreadable — `unwritten` — until that turn finishes.
    * @param request - the handed-off session, its cwd, focus, and target task.
-   * @returns the task, the document path, and the turn that fills the summary in.
+   * @returns the task, document path, and turn that fills the continuation content in.
    * @throws when the session id is unusable as a filename, the session records no
    *   working directory, or an explicit task does not exist.
    */
@@ -441,6 +503,8 @@ export class A2d2Service extends Service {
       throw new Error('a2d2: the handed-off session records no working directory, so no project owns its handoff')
     }
 
+    const skillSource = await readSkillSource('handoff', this.skillsRoot)
+
     const task = request.taskId === undefined
       ? await this.resolveOrCreateTask(cwd, request)
       : await this.existingTask(cwd, request.taskId)
@@ -450,14 +514,15 @@ export class A2d2Service extends Service {
       task: registered.id,
       createdAt: request.now.toISOString(),
       focus: request.focus,
+      ...(skillSource.status === 'missing' ? { skillSource: 'unavailable' as const } : {}),
     }
     const directory = handoffsDirectory(await this.store.projectRoot(cwd))
     const path = await writeHandoffDocument(
       directory,
       source,
-      renderHandoffSkeleton(facts, this.suggestedSkills),
+      renderHandoffSkeleton(facts),
     )
-    return { task: registered, source, path, instruction: handoffInstruction(path, request.focus) }
+    return { task: registered, source, path, instruction: handoffInstruction(path, request.focus, skillSource) }
   }
 
   /**
