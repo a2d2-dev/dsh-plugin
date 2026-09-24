@@ -3,7 +3,7 @@
  * context occupancy, turning warning-colored as the context approaches the
  * configured smart-zone threshold.
  *
- * Hovering the orb reveals peer "交接" and "下一步" actions. The first opens a
+ * Hovering the orb reveals peer "压缩" (compress and open a new context) and "下一步" actions. The first opens a
  * confirm card where the user writes the focus and confirms. Confirming runs the one-click
  * handoff — this session's own agent writes the summary, the browser waits for
  * that turn to finish, creates the successor session, focuses it, and has it take
@@ -287,8 +287,10 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
       createElement('button', {
         type: 'button',
         className: css.action,
+        title: '压缩并且开启新上下文',
+        'aria-label': '压缩并且开启新上下文',
         onClick: () => { openHandoff() },
-      }, '交接'),
+      }, '压缩'),
       createElement('button', {
         type: 'button',
         className: css.action,
