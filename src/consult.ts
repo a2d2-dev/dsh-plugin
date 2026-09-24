@@ -2,9 +2,9 @@
  * Host-only next-step consultation over a live session and its A2D2 ledger.
  *
  * The model call is deliberately detached from the session log: this module
- * reads `session.events`, calls the injected LLM stream, and never appends an
- * event. The resulting candidates enter history only if a person later submits
- * one through the ordinary composer.
+ * reads `session.events` and `session.surface`, calls the injected LLM stream,
+ * and never appends an event. The resulting candidates enter history only if a
+ * person later submits one through the ordinary composer.
  *
  * @module @deepseek-ai/dsh-a2d2/src/consult
  */
@@ -21,12 +21,12 @@ import type {
   Message,
   StreamChunk,
 } from '@deepseek-ai/dsh-llm'
-import type { SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionEvent, SessionHeader, SessionId, SessionSurface } from '@deepseek-ai/dsh-session'
 import { parseSessionId } from './handoff.ts'
 import type { SkillSource } from './skill-source.ts'
 import type { Task } from './types.ts'
 
-/** Number of newest human surface messages supplied to one consultation. */
+/** Number of newest current-surface messages supplied to one consultation. */
 export const CONSULT_MESSAGE_LIMIT = 12
 
 /** Output budget for the small JSON candidate array. */
@@ -71,7 +71,7 @@ export interface ConsultRoute {
   readonly model: string
 }
 
-/** A human message retained as consultation material. */
+/** A current-surface message retained as consultation material. */
 export interface ConsultMessageExcerpt {
   readonly seq: number
   readonly text: string
@@ -88,6 +88,7 @@ export interface ConsultSession {
   readonly id: SessionId
   readonly header: SessionHeader
   readonly events: readonly SessionEvent[]
+  readonly surface: Pick<SessionSurface, 'nodes'>
 }
 
 /** Injectable host capabilities used by the HTTP route. */
@@ -99,6 +100,7 @@ export interface ConsultDependencies {
   readonly stream: (options: GenerateOptions) => AsyncIterable<StreamChunk>
   readonly collectMaterial?: (
     events: readonly SessionEvent[],
+    surfaceNodes: readonly number[],
     tasks: readonly Task[],
   ) => ConsultMaterial
   readonly buildPrompt?: (material: ConsultMaterial, skillSource: SkillSource) => string
@@ -124,18 +126,23 @@ export function currentConsultRoute(events: readonly SessionEvent[]): ConsultRou
 }
 
 /**
- * Retain the newest human-authored text messages and a detached ledger view.
- * Synthetic user-role injections are intentionally excluded by source kind.
+ * Retain text from the newest messages that remain on the model-visible surface.
+ * Both user and assistant messages are useful consultation context; tool results
+ * are omitted because they are not conversational excerpts.
  */
 export function collectConsultMaterial(
   events: readonly SessionEvent[],
+  surfaceNodes: readonly number[],
   tasks: readonly Task[],
 ): ConsultMaterial {
   const messages: ConsultMessageExcerpt[] = []
-  for (const event of events) {
-    if (event.type !== 'user/message' || event.data.source.kind !== 'user') continue
-    const text = event.data.content
-      .filter((block): block is Extract<(typeof event.data.content)[number], { type: 'text' }> => block.type === 'text')
+  const eventsBySeq = new Map(events.map(event => [event.seq, event]))
+  for (const seq of surfaceNodes) {
+    const event = eventsBySeq.get(seq)
+    if (event?.type !== 'user/message' && event?.type !== 'assistant/message') continue
+    const content = event.type === 'user/message' ? event.data.content : event.data.message.content
+    const text = content
+      .filter((block): block is Extract<(typeof content)[number], { type: 'text' }> => block.type === 'text')
       .map(block => block.text)
       .join('\n')
     if (text.trim().length === 0) continue
@@ -277,21 +284,62 @@ function header(headers: IncomingHttpHeaders, name: string): string | undefined 
   return typeof value === 'string' ? value : undefined
 }
 
-function hostnameOfAuthority(authority: string): string | undefined {
+interface ParsedAuthority {
+  readonly hostname: string
+  readonly literalHostname: string
+  readonly port?: string
+}
+
+function parseAuthority(authority: string): ParsedAuthority | undefined {
+  let literalHostname: string
+  let literalPort: string | undefined
+  if (authority === '::1') {
+    literalHostname = authority
+  } else if (authority.startsWith('[')) {
+    const closingBracket = authority.indexOf(']')
+    if (closingBracket < 0) return undefined
+    literalHostname = authority.slice(1, closingBracket)
+    const remainder = authority.slice(closingBracket + 1)
+    if (remainder !== '') {
+      if (!/^:\d+$/u.test(remainder)) return undefined
+      literalPort = remainder.slice(1)
+    }
+  } else {
+    const firstColon = authority.indexOf(':')
+    if (firstColon < 0) {
+      literalHostname = authority
+    } else {
+      if (firstColon !== authority.lastIndexOf(':')) return undefined
+      literalHostname = authority.slice(0, firstColon)
+      literalPort = authority.slice(firstColon + 1)
+      if (!/^\d+$/u.test(literalPort)) return undefined
+    }
+  }
+  if (literalHostname === '') return undefined
+
   try {
-    const url = new URL(`http://${authority}`)
+    const url = new URL(`http://${authority === '::1' ? '[::1]' : authority}`)
     if (url.username !== '' || url.password !== '' || url.pathname !== '/' || url.search !== '' || url.hash !== '') {
       return undefined
     }
-    const hostname = url.hostname.toLowerCase()
-    return hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname
+    const urlHostname = url.hostname.toLowerCase()
+    const hostname = urlHostname.startsWith('[') && urlHostname.endsWith(']')
+      ? urlHostname.slice(1, -1)
+      : urlHostname
+    return {
+      hostname,
+      literalHostname: literalHostname.toLowerCase(),
+      ...(literalPort === undefined ? {} : { port: String(Number(literalPort)) }),
+    }
   } catch {
     return undefined
   }
 }
 
-function isLoopback(hostname: string): boolean {
-  return hostname === 'localhost' || hostname === '::1' || hostname.startsWith('127.')
+function isLoopback(authority: ParsedAuthority): boolean {
+  if (authority.hostname === 'localhost' || authority.hostname === '::1') return true
+  const match = /^127\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/u.exec(authority.literalHostname)
+  return match !== null && match.slice(1).every(octet => Number(octet) <= 255)
 }
 
 /** Evaluate the route's host/fetch/origin trust fence for one request. */
@@ -301,21 +349,26 @@ export function isTrustedConsultRequest(
 ): boolean {
   const authority = header(headers, 'host')
   if (authority === undefined) return false
-  const hostname = hostnameOfAuthority(authority)
-  if (hostname === undefined) return false
+  const parsedAuthority = parseAuthority(authority)
+  if (parsedAuthority === undefined) return false
   if (header(headers, 'sec-fetch-site')?.toLowerCase() === 'cross-site') return false
   const origin = header(headers, 'origin')
   if (origin !== undefined) {
     try {
       const originUrl = new URL(origin)
       const originHostname = originUrl.hostname.toLowerCase().replace(/^\[|\]$/gu, '')
-      if (originHostname !== hostname) return false
+      if (originHostname !== parsedAuthority.hostname) return false
     } catch {
       return false
     }
   }
-  if (isLoopback(hostname)) return true
-  return trustedHosts.some(candidate => hostnameOfAuthority(candidate) === hostname)
+  if (isLoopback(parsedAuthority)) return true
+  return trustedHosts.some((candidate) => {
+    const trusted = parseAuthority(candidate)
+    return trusted !== undefined
+      && trusted.hostname === parsedAuthority.hostname
+      && (trusted.port === undefined || trusted.port === parsedAuthority.port)
+  })
 }
 
 /** Map one public error code to its required HTTP status. */
@@ -388,7 +441,7 @@ export function createConsultHandler(
       ])
       const collectMaterial = dependencies.collectMaterial ?? collectConsultMaterial
       const buildPrompt = dependencies.buildPrompt ?? buildConsultPrompt
-      const prompt = buildPrompt(collectMaterial(session.events, tasks), skillSource)
+      const prompt = buildPrompt(collectMaterial(session.events, session.surface.nodes, tasks), skillSource)
       const candidates = await generateConsultCandidates({
         stream: dependencies.stream,
         route,

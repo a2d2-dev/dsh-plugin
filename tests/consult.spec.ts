@@ -4,8 +4,9 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { describe, expect, it, vi } from 'vitest'
 import { Context, Service } from '@deepseek-ai/cordis'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
+import { createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { FinishReason, GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
+import { foldSurface } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { TaskId } from '../src/brand.ts'
@@ -17,6 +18,7 @@ import {
   collectConsultMaterial,
   createConsultHandler,
   currentConsultRoute,
+  generateConsultCandidates,
   isTrustedConsultRequest,
   parseConsultCandidates,
 } from '../src/consult.ts'
@@ -67,7 +69,30 @@ function userEvent(seq: number, text: string, source: 'user' | 'plugin' = 'user'
       ? { kind: 'user' }
       : { kind: 'plugin', plugin: 'test' },
   })
-  return event({ type: 'user/message', data: message, seq, time: seq } as SessionEvent<'user/message'>)
+  return event({
+    type: 'user/message',
+    data: message,
+    seq,
+    time: seq,
+    surfaceOp: 'append',
+  } as SessionEvent<'user/message'>)
+}
+
+function assistantEvent(seq: number, text: string): SessionEvent {
+  return event({
+    type: 'assistant/message',
+    data: {
+      turn: 1,
+      step: 1,
+      message: createAssistantMessage({
+        content: [{ type: 'text', text }],
+        source: { provider: 'provider-a', model: 'model-a' },
+      }),
+    },
+    seq,
+    time: seq,
+    surfaceOp: 'append',
+  } as SessionEvent<'assistant/message'>)
 }
 
 function routeEvent(seq: number, provider: string, model: string): SessionEvent {
@@ -89,6 +114,7 @@ function session(overrides: Partial<ConsultSession> = {}): ConsultSession & { ap
       cwd: '/project',
     } satisfies SessionHeader,
     events: [userEvent(0, 'We finished the implementation.'), routeEvent(1, 'provider-a', 'model-a')],
+    surface: { nodes: [0] },
     append: vi.fn(),
     ...overrides,
   }
@@ -103,12 +129,12 @@ const task: Task = {
   members: [{ sessionId }],
 }
 
-function output(text: string): AsyncIterable<StreamChunk> {
+function output(text: string, reason: FinishReason = { kind: 'stop' }): AsyncIterable<StreamChunk> {
   return (async function* () {
     yield { type: 'block-start', index: 0, blockType: 'text' }
     yield { type: 'text-delta', index: 0, text }
     yield { type: 'block-end', index: 0, block: { type: 'text', text } }
-    yield { type: 'finish', reason: { kind: 'stop' } }
+    yield { type: 'finish', reason }
   })()
 }
 
@@ -182,7 +208,7 @@ async function send(
 }
 
 describe('consult material and route', () => {
-  it('keeps only the newest surface human messages and folds the newest route', () => {
+  it('keeps only the newest current-surface messages and folds the newest route', () => {
     const events = [
       ...Array.from({ length: CONSULT_MESSAGE_LIMIT + 2 }, (_, index) => userEvent(index, `human-${String(index)}`)),
       userEvent(20, 'synthetic', 'plugin'),
@@ -190,12 +216,41 @@ describe('consult material and route', () => {
       routeEvent(22, 'new-provider', 'new-model'),
     ]
 
-    const material = collectConsultMaterial(events, [task])
+    const surfaceNodes = events
+      .filter(item => item.type === 'user/message' && item.data.source.kind === 'user')
+      .map(item => item.seq)
+    const material = collectConsultMaterial(events, surfaceNodes, [task])
     expect(material.messages).toHaveLength(CONSULT_MESSAGE_LIMIT)
     expect(material.messages[0]?.text).toBe('human-2')
     expect(material.messages.at(-1)?.text).toBe(`human-${String(CONSULT_MESSAGE_LIMIT + 1)}`)
     expect(material.messages.some(message => message.text === 'synthetic')).toBe(false)
     expect(currentConsultRoute(events)).toEqual({ provider: 'new-provider', model: 'new-model' })
+  })
+
+  it('uses the folded surface after compaction and excludes shadowed messages', () => {
+    const oldUser = userEvent(0, 'private detail from the old user message')
+    const oldAssistant = assistantEvent(1, 'old assistant response')
+    const summary = {
+      ...userEvent(2, 'current compacted summary', 'plugin'),
+      surfaceOp: { op: 'replace' as const, start: 0, end: 1 },
+      sourceEventSeqs: [0, 1],
+    } as SessionEvent
+    const events = [oldUser, oldAssistant, summary]
+
+    const material = collectConsultMaterial(events, foldSurface(events).nodes, [])
+
+    expect(material.messages).toEqual([{ seq: 2, text: 'current compacted summary' }])
+    expect(JSON.stringify(material)).not.toContain('private detail from the old user message')
+    expect(JSON.stringify(material)).not.toContain('old assistant response')
+  })
+
+  it('includes assistant text that remains on the current surface', () => {
+    const events = [userEvent(0, 'current user'), assistantEvent(1, 'current assistant')]
+
+    expect(collectConsultMaterial(events, [0, 1], []).messages).toEqual([
+      { seq: 0, text: 'current user' },
+      { seq: 1, text: 'current assistant' },
+    ])
   })
 
   it('snapshots the factual envelope and preserves injected skill sources verbatim', () => {
@@ -258,12 +313,51 @@ describe('candidate parsing', () => {
   })
 })
 
+describe('consult generation finishes', () => {
+  it.each([
+    ['error', { kind: 'error', failure: { message: 'provider failed', code: 'PROVIDER' } }, /provider failed/u],
+    ['aborted', { kind: 'aborted', failure: { message: 'request aborted', code: 'ABORTED' } }, /request aborted/u],
+    ['max-tokens', { kind: 'max-tokens' }, /token limit/u],
+    ['tool-calls', { kind: 'tool-calls' }, /requested a tool/u],
+  ] satisfies ReadonlyArray<readonly [string, FinishReason, RegExp]>)('rejects a %s finish', async (_name, reason, message) => {
+    await expect(generateConsultCandidates({
+      stream: () => output(candidatesJson, reason),
+      route: { provider: 'provider-a', model: 'model-a' },
+      sessionId,
+      prompt: 'consult',
+      signal: new AbortController().signal,
+    })).rejects.toThrow(message)
+  })
+})
+
 describe('consult request trust', () => {
-  it('accepts loopback and trusted hostnames with or without ports', () => {
+  it('accepts only strict loopback authorities without a trusted-host entry', () => {
+    expect(isTrustedConsultRequest({ host: '127.0.0.1' }, [])).toBe(true)
+    expect(isTrustedConsultRequest({ host: '127.1.2.3:3710' }, [])).toBe(true)
     expect(isTrustedConsultRequest({ host: 'localhost:3710' }, [])).toBe(true)
+    expect(isTrustedConsultRequest({ host: '::1' }, [])).toBe(true)
+    expect(isTrustedConsultRequest({ host: '[::1]' }, [])).toBe(true)
     expect(isTrustedConsultRequest({ host: '[::1]:3710' }, [])).toBe(true)
+  })
+
+  it.each([
+    '127.evil.example',
+    '127x.example',
+    '0127.0.0.1',
+    '127.1',
+    '127.0.0.256',
+  ])('rejects the loopback lookalike %s', (host) => {
+    expect(isTrustedConsultRequest({ host }, [])).toBe(false)
+  })
+
+  it('honors explicit trusted ports and lets portless entries match any port', () => {
+    expect(isTrustedConsultRequest({ host: 'trusted.example:3710' }, ['trusted.example:3710'])).toBe(true)
+    expect(isTrustedConsultRequest({ host: 'trusted.example:9999' }, ['trusted.example:3710'])).toBe(false)
+    expect(isTrustedConsultRequest({ host: 'trusted.example' }, ['trusted.example:3710'])).toBe(false)
+    expect(isTrustedConsultRequest({ host: 'trusted.example:80' }, ['trusted.example:80'])).toBe(true)
+    expect(isTrustedConsultRequest({ host: 'trusted.example' }, ['trusted.example:80'])).toBe(false)
     expect(isTrustedConsultRequest({ host: 'trusted.example:9999' }, ['trusted.example'])).toBe(true)
-    expect(isTrustedConsultRequest({ host: 'trusted.example' }, ['trusted.example:3710'])).toBe(true)
+    expect(isTrustedConsultRequest({ host: 'trusted.example' }, ['trusted.example'])).toBe(true)
   })
 
   it('rejects cross-site fetches and cross-host origins even for trusted authorities', () => {

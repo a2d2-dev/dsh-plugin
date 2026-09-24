@@ -90,16 +90,26 @@ describe('skill source', () => {
     })
   })
 
-  it('loads the installed ask-matt source without treating prose mentions as resources', async () => {
-    const source = await readSkillSource('ask-matt')
+  it('loads ask-matt from an isolated fixture without treating prose mentions as resources', async () => {
+    const root = await tempRoot()
+    const directory = join(root, 'ask-matt')
+    await mkdir(directory, { recursive: true })
+    const skill = [
+      '# Ask Matt',
+      '',
+      'Read [the phase guide](PHASE-BOUNDARIES.md).',
+      'CONTEXT.md and AGENTS.md are prose mentions, not linked resources.',
+      '',
+    ].join('\n')
+    const boundaries = '# Phase boundaries\n\nFixture decision tree.\n'
+    await writeFile(join(directory, 'SKILL.md'), skill, 'utf8')
+    await writeFile(join(directory, 'PHASE-BOUNDARIES.md'), boundaries, 'utf8')
 
-    expect(source.status).toBe('loaded')
-    if (source.status === 'missing') return
-    expect(source.skill).toContain('# Ask Matt')
-    expect(source.skill).toContain('`CONTEXT.md`')
-    expect(source.skill).toContain('AGENTS.md')
-    expect(source.resources.map(resource => resource.path)).toEqual(['PHASE-BOUNDARIES.md'])
-    expect(source.resources[0]?.content).toContain('# Phase boundaries')
+    await expect(readSkillSource('ask-matt', root)).resolves.toEqual({
+      status: 'loaded',
+      skill,
+      resources: [{ path: 'PHASE-BOUNDARIES.md', content: boundaries }],
+    })
   })
 
   it('returns an explicit missing signal when SKILL.md is unavailable', async () => {
