@@ -63,7 +63,7 @@ describe('skill source', () => {
     expect(pathExists).not.toHaveBeenCalled()
   })
 
-  it('reads SKILL.md and local markdown resources in declaration order without rewriting them', async () => {
+  it('reads SKILL.md and explicitly linked local markdown resources without rewriting them', async () => {
     const root = await tempRoot()
     const directory = join(root, 'handoff')
     await mkdir(join(directory, 'references'), { recursive: true })
@@ -78,18 +78,37 @@ describe('skill source', () => {
       '',
     ].join('\n')
     const first = '# First\n\nKeep this exact.\n'
-    const second = '# Second\n\nKeep this exact too.\n'
     await writeFile(join(directory, 'SKILL.md'), skill, 'utf8')
     await writeFile(join(directory, 'references', 'FIRST.md'), first, 'utf8')
-    await writeFile(join(directory, 'SECOND.md'), second, 'utf8')
 
     expect(await readSkillSource('handoff', root)).toEqual({
       status: 'loaded',
       skill,
       resources: [
         { path: 'references/FIRST.md', content: first },
-        { path: 'SECOND.md', content: second },
       ],
+    })
+  })
+
+  it('loads ask-matt from an isolated fixture without treating prose mentions as resources', async () => {
+    const root = await tempRoot()
+    const directory = join(root, 'ask-matt')
+    await mkdir(directory, { recursive: true })
+    const skill = [
+      '# Ask Matt',
+      '',
+      'Read [the phase guide](PHASE-BOUNDARIES.md).',
+      'CONTEXT.md and AGENTS.md are prose mentions, not linked resources.',
+      '',
+    ].join('\n')
+    const boundaries = '# Phase boundaries\n\nFixture decision tree.\n'
+    await writeFile(join(directory, 'SKILL.md'), skill, 'utf8')
+    await writeFile(join(directory, 'PHASE-BOUNDARIES.md'), boundaries, 'utf8')
+
+    await expect(readSkillSource('ask-matt', root)).resolves.toEqual({
+      status: 'loaded',
+      skill,
+      resources: [{ path: 'PHASE-BOUNDARIES.md', content: boundaries }],
     })
   })
 

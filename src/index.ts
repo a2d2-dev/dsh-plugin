@@ -18,6 +18,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { TaskId } from './brand.ts'
+import { CONSULT_ROUTE_PATH, createConsultHandler } from './consult.ts'
 import { handedOff, memberOf, successorsOf } from './derive.ts'
 import type { HandoffDocument, HandoffFacts } from './handoff-document.ts'
 import {
@@ -44,6 +45,30 @@ import type { CreateTaskRequest, Task } from './types.ts'
 
 export { TaskId } from './brand.ts'
 export type { TaskId as TaskIdType } from './brand.ts'
+export {
+  CONSULT_MAX_OUTPUT_TOKENS,
+  CONSULT_MESSAGE_LIMIT,
+  CONSULT_ROUTE_PATH,
+  MalformedCandidatesError,
+  buildConsultPrompt,
+  collectConsultMaterial,
+  createConsultHandler,
+  currentConsultRoute,
+  generateConsultCandidates,
+  isTrustedConsultRequest,
+  parseConsultCandidates,
+  statusOf,
+} from './consult.ts'
+export type {
+  ConsultCandidate,
+  ConsultDependencies,
+  ConsultErrorCode,
+  ConsultMaterial,
+  ConsultMessageExcerpt,
+  ConsultRoute,
+  ConsultSession,
+  ConsultValue,
+} from './consult.ts'
 export { handedOff, memberOf, successorsOf } from './derive.ts'
 export {
   DEFAULT_PROJECT_MARKERS,
@@ -268,6 +293,7 @@ export class A2d2Service extends Service {
     }
     this.currency = config.currency ?? DEFAULT_CURRENCY
     this.publishIndicator()
+    this.publishConsult()
     // Stated once at load: whether the browser half received these is otherwise
     // only visible by looking at the indicator, which never reports absence.
     this.ctx.logger.info(
@@ -389,6 +415,40 @@ export class A2d2Service extends Service {
     })
     this.ctx.inject(['sessionProjections'], projectionCtx => {
       projectionCtx.sessionProjections.register(definition)
+    })
+  }
+
+  /** Publish the optional Web host's one-shot next-step consultation route. */
+  private publishConsult(): void {
+    this.ctx.inject(['webServer'], (routeCtx) => {
+      type WebServer = {
+        register(route: {
+          kind: 'exact'
+          path: string
+          handler: ReturnType<typeof createConsultHandler>
+        }): () => void
+      }
+      type WebRuntime = { readonly trustedHosts: readonly string[] }
+      const getService = <T>(name: string): T | undefined => (
+        (routeCtx.get as unknown as (name: string) => T | undefined).call(routeCtx, name)
+      )
+      const server = getService<WebServer>('webServer')
+      if (server === undefined) return
+      const handler = createConsultHandler({
+        trustedHosts: () => getService<WebRuntime>('webRuntime')?.trustedHosts ?? [],
+        getSession: id => routeCtx.get('sessions')?.get(id),
+        listTasks: cwd => this.store.list(cwd),
+        readAskMatt: () => readSkillSource('ask-matt', this.skillsRoot),
+        stream: (options) => {
+          const llm = routeCtx.get('llm')
+          if (llm === undefined) throw new Error('a2d2 consult: llm service is unavailable')
+          return llm.stream(options)
+        },
+      })
+      routeCtx.effect(
+        () => server.register({ kind: 'exact', path: CONSULT_ROUTE_PATH, handler }),
+        'a2d2 consult route',
+      )
     })
   }
 
