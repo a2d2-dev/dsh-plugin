@@ -9,7 +9,7 @@ This repository holds the **A²D² DeepSeek Harness plugin**: the components tha
 What the plugin gives DSH today:
 
 - **Task aggregation** — a task groups the sessions belonging to one piece of work and records the handoff edges between them, so related sessions keep a relationship a person can read, review, and commit. The data lives in project-local documents, and no session's durable format changes to carry it.
-- **Session handoff** — `/handoff` moves work from a long, expensive session to a fresh one without losing the thread: the handing-off session writes its own bounded summary, and the successor continues from it.
+- **Session handoff** — `/handoff` moves work from a long, expensive session to a fresh one without losing the thread: the handing-off session writes bounded continuation content, and the successor continues from it.
 - **A floating indicator** — an at-a-glance orb by the composer that tracks context length and cost, and warns when a session approaches the smart zone so the next phase boundary can choose its outcome.
 
 > `A²D²` is the brand and display form; `a2d2` is the technical identifier — package name, directories, and service names all use it, because `²` cannot appear in an npm package name. The package is `@deepseek-ai/dsh-a2d2`.
@@ -31,7 +31,8 @@ The package contributes two mount rows. `ctx.a2d2` is the task store and declare
 |---|---|---|
 | `root` | derived per call | Absolute project root. When set, the session cwd no longer selects the store. A relative value fails at load. |
 | `projectMarkers` | `['.git']` | Directory entries that identify a project root while walking upward from a session cwd. An empty list fails at load. |
-| `suggestedSkills` | `['implement', 'tdd', 'code-review']` | Skills a handoff document suggests to its successor. |
+| `skillsRoot` | `~/.agents/skills` | Explicit absolute directory containing installed skills; omitted to probe conventional locations. The host reads `handoff/SKILL.md` and its declared local markdown resources from here. |
+| `suggestedSkills` | `['implement', 'tdd', 'code-review']` | Deprecated compatibility key. It remains accepted but is no longer rendered or consumed. |
 | `handoffWarnTokens` | `150000` | Context length, in tokens, at which the floating indicator warns that the session is approaching the smart zone. A value at or below 0 fails at load, and a value above `handoffCriticalTokens` fails at load. |
 | `handoffCriticalTokens` | `1000000` | Context length at which the indicator is critical. |
 | `modelPrices` | `{}` | Per-million-token rates the indicator's cost line uses, keyed `provider/model` and then bare `model`. A negative or non-finite rate fails at load. |
@@ -72,11 +73,11 @@ One command name covers both sides of the handoff, because the successor's sessi
 | Invocation | Effect |
 |---|---|
 | `/handoff` | Starts a handoff of the current session, with no stated focus. |
-| `/handoff <focus>` | The same, with the next session's purpose recorded and suggested skills rendered for it. |
+| `/handoff <focus>` | The same, with the next session's purpose recorded. |
 | `/handoff --task <task-id>` | Hands off within a named task instead of the resolved default. |
 | `/handoff take <session-id>` | Reads that session's handoff document, joins the current session to the task the handed-off session belongs to, and submits the document body as this session's first prompt. |
 
-Preparing is two steps, because only the handing-off session holds the conversation the summary is about. The command writes the document's skeleton — front matter plus the fixed sections — and then queues one ordinary turn of that session asking its agent to write the summary into the document. Until that turn finishes the document parses as `unwritten` rather than as a handoff, so a summary that was never written cannot be taken. Taking is one step: `take` derives the task from the handed-off session's own membership, so the successor needs only the session id it continues.
+Preparing is two steps, because only the handing-off session holds the state that may still live in the conversation. The command writes the document's skeleton — front matter plus the fixed sections — and then queues one ordinary turn of that session asking its agent to write continuation content into the document. Until that turn finishes the document parses as `unwritten` rather than as a handoff, so content that was never written cannot be taken. Taking is one step: `take` derives the task from the handed-off session's own membership, so the successor needs only the session id it continues.
 
 The source side resolves the project's newest `active` task and creates one when the project has none, naming it after the focus (or the project directory when there is no focus). The task document is compiled into the project, so a handoff needs a task to belong to; requiring a person to write that file by hand first would make the command unusable until they did.
 
@@ -88,15 +89,15 @@ Redaction is best-effort and runs on the way into the successor's prompt. A secr
 
 ## Handoff documents
 
-One markdown document per handed-off session, under `<projectRoot>/.dsh/a2d2/handoffs/<session-id>.md`. Two writers own different halves. The plugin owns the YAML front matter it parses back — the source session, the task, the timestamp, and the focus — and the fixed sections of the body: what the successor should read first, the focus, and the suggested skills. The handing-off session's own agent owns the summary, written between two HTML-comment markers the plugin places. That summary is written prose rather than a transcript: the goal, what is done, the current state, what is next, the paths that matter, and the decisions left open. The body is what the successor receives as its first prompt, so it carries only what that session needs: the `take` line that finishes a handoff belongs to the source side, which reads it from that command's own result before a successor exists.
+One markdown document per handed-off session, under `<projectRoot>/.dsh/a2d2/handoffs/<session-id>.md`. Two writers own different halves. The plugin owns the YAML front matter it parses back — the source session, the task, the timestamp, the focus, and an optional visible skill-source degradation marker — plus the fixed sections of the body. The handing-off session's own agent owns the continuation content between two HTML-comment markers. It decides whether that content is a pointer to durable state, a compact account of conversational state, or a mixture. The body is what the successor receives as its first prompt, so it carries only what that session needs: the `take` line that finishes a handoff belongs to the source side, which reads it from that command's own result before a successor exists.
 
 `/handoff take` validates the document at this file boundary: an unsupported `version`, a `source` that disagrees with the session it was looked up by, an unknown front-matter field, a body with no summary region, and a summary still carrying its placeholder each reject it. A missing document is a failure too, never an empty continuation, because a fresh clone may simply not have the file yet.
 
 `.dsh/` is not gitignored (only `.dsh-build/` is), so both task and handoff documents enter version control — which is the point of keeping them in the workspace. The document therefore carries the summary into the repository, which is why the plugin redacts it before the successor reads it, and why the file is worth reading before committing.
 
-### The writing turn
+### The continuation-writing turn
 
-The summary is whatever the session's agent wrote, so the document is only as good as that turn. The plugin asks for it with the `handoff` skill's contract spelled out in the turn's text — summarise rather than quote, reference other artifacts by path instead of repeating them, redact secrets — and asks for under about 4000 characters, because the successor carries the result as its first prompt and for the rest of its work. The document version is `2`: a document written by an earlier build declares version `1` and is refused rather than read for a summary it does not contain.
+The host reads `handoff/SKILL.md` from `skillsRoot`, follows local markdown references in its body in declaration order, and injects those files verbatim. A parameter-only envelope follows with the document path, marker pair, focus, and approximate 4000-character limit; skill rules are not restated there. If `SKILL.md` is unavailable, the turn uses one minimal continuation requirement and the skeleton records `skillSource: unavailable`, making the degradation visible rather than substituting embedded fallback knowledge. The document version remains `2`: a document written by an earlier build declares version `1` and is refused rather than read for content it does not contain.
 
 ## Derived handoff edges
 
@@ -114,11 +115,11 @@ It renders one fixed circle beside the composer showing the session's context le
 
 Clicking the circle or the revealed action opens a confirm card the plugin draws itself (no DSH command modal exists): a focus field and **创建并交接** / **取消**. Confirming performs the whole handoff in one gesture — it no longer fills the composer and waits for a send:
 
-1. the browser runs `/handoff <focus>` on the session it sits on, through that session's own command face, which is what makes the host write the skeleton and queue the turn that writes the summary;
+1. the browser runs `/handoff <focus>` on the session it sits on, through that session's own command face, which is what makes the host write the skeleton and queue the turn that writes the continuation content;
 2. the browser waits for that turn, reading the session's own `running` state over the session transport — not a timer, and not another plugin's rendered DOM, either of which would report the session as finished at the wrong moment;
 3. the browser finds the session's workspace, `connectWorkspace`s a fresh successor session, and focuses it;
-4. the successor inherits the handing-off session's title, incremented in the same style a fork numbers a peer (`Ship the store` → `Ship the store (1)`), so a handoff chain reads as one named piece of work rather than several sessions with an identical name. A source with no title, or a rejected rename, leaves the successor on its automatic title — a title-only loss never stops a handoff whose summary already landed;
-5. the successor runs `/handoff take <session-id>`, which is what makes the host inject the summary as its first prompt.
+4. the successor inherits the handing-off session's title, incremented in the same style a fork numbers a peer (`Ship the store` → `Ship the store (1)`), so a handoff chain reads as one named piece of work rather than several sessions with an identical name. A source with no title, or a rejected rename, leaves the successor on its automatic title — a title-only loss never stops a handoff whose continuation content already landed;
+5. the successor runs `/handoff take <session-id>`, which is what makes the host inject the continuation content as its first prompt.
 
 A wait that ends without the turn having run, or with it still running, stops the sequence and names the step that failed; the take would refuse an unwritten summary anyway, so a half-finished handoff cannot look like a finished one. The orb reaches only services the client already composes — the session face and the workspaces service — and needs no host route of its own, so the gesture adds no HTTP surface. When the session belongs to no workspace there is no successor to create, and when either service is absent the orb falls back to the older behavior of appending the literal `/handoff ` to the draft and focusing the textarea, leaving the send to the user. An existing draft is preserved rather than replaced.
 
@@ -158,11 +159,11 @@ None. No request content changes, so no cache entry is invalidated.
 
 #### What the model sees
 
-The command result itself never reaches the model — command results are rendered to the dispatching UI only. Two plugin-authored messages do: preparing queues the writing instruction as one ordinary prompt of the handing-off session, and taking queues the handoff document's body as the successor's first prompt, both through `agent.followup`. The writing instruction names the document path and the markers to replace; the successor's message carries the summary with the fixed sections around it.
+The command result itself never reaches the model — command results are rendered to the dispatching UI only. Two host-submitted messages do: preparing queues the verbatim handoff skill source plus a parameter envelope as one ordinary prompt of the handing-off session, and taking queues the handoff document's body as the successor's first prompt, both through `agent.followup`. The envelope names the document path and content markers; the successor's message carries the continuation content with the fixed sections around it.
 
 #### Token effect
 
-The successor's first request carries the handoff document body — the summary plus the fixed sections — and every later turn of that session carries it too, as ordinary conversation history. Its size is whatever the writing agent produced, bounded by the instruction's request for under about 4000 characters rather than by a plugin budget. Preparing also adds one turn to the handing-off session's own history, so every later request of that session carries the writing instruction as well.
+The successor's first request carries the handoff document body — the continuation content plus the fixed sections — and every later turn of that session carries it too, as ordinary conversation history. Its size is whatever the writing agent produced, bounded by the envelope's approximate 4000-character parameter rather than by a plugin budget. Preparing also adds one turn to the handing-off session's own history, so every later request of that session carries the injected skill source and envelope as well.
 
 #### KV Cache effect
 
@@ -186,8 +187,7 @@ None. No session's request content changes.
 
 - **No task sidebar** — tasks are visible only in their documents; nothing lists a project's tasks or a task's members in the shell. The floating orb now creates the successor session and switches focus (through `connectWorkspace` + `sessions.open`, not a `session.create` the browser lacks), so a one-click handoff no longer needs two pasted lines, but a session that belongs to no workspace still has no successor to create and falls back to filling the draft.
 - **The indicator cannot place the caret** — it focuses the textarea and appends the command, but no sanctioned caret API exists for an out-of-tree plugin, so the caret position after insertion is the textarea's own.
-- **A summary is only as good as the turn that wrote it** — the plugin asks the handing-off session to write the summary and can verify that something was written, never that it is accurate, complete, or free of the secrets the patterns miss. A session that never runs the turn leaves a document `take` refuses.
-- **The writing instruction restates the `handoff` skill** — that skill declares `disable-model-invocation`, so the model cannot load it on its own and the plugin spells its rules out in the turn's text instead. Editing the skill does not edit the instruction, so the two have to be kept in step by hand.
+- **Continuation content is only as good as the turn that wrote it** — the plugin can verify that something was written, never that it is accurate, complete, or free of the secrets the patterns miss. A session that never runs the turn leaves a document `take` refuses.
 - **Documents are version 2** — a document written by an earlier build declares version `1`, carried a transcript projection instead of a summary, and is refused rather than read. An existing project has to run `/handoff` again before its handoff is takeable.
 - **Recency is approximated** — `resolve` returns the newest `active` task, because a document carries no activity timestamp of its own. Deriving recency from member sessions is the intended refinement.
 - **Members are never verified** — the store records session ids and never checks that a session exists, because a document is committable and crosses machines. A consumer must render a member whose session is missing rather than failing on it.

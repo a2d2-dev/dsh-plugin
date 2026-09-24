@@ -30,6 +30,7 @@ import { handoffPrompt } from './handoff-prompt.ts'
 import { indicatorProjectionDefinition } from './indicator-projection.ts'
 import type { HandoffThresholds, ModelPrice } from './indicator-projection.ts'
 import { parseSessionId, redactText } from './handoff.ts'
+import { DEFAULT_SKILLS_ROOT, readSkillSource, resolveSkillsRoot } from './skill-source.ts'
 import {
   DEFAULT_PROJECT_MARKERS,
   TaskDocumentStore,
@@ -70,6 +71,8 @@ export {
 } from './handoff-document.ts'
 export type { HandoffDocument, HandoffDocumentErrorCode, HandoffFacts } from './handoff-document.ts'
 export { HANDOFF_SUMMARY_MAX_CHARS, handoffInstruction } from './handoff-instruction.ts'
+export { DEFAULT_SKILLS_ROOT, readSkillSource } from './skill-source.ts'
+export type { LoadedSkillSource, MissingSkillSource, SkillResource, SkillSource } from './skill-source.ts'
 export { handoffPrompt } from './handoff-prompt.ts'
 export {
   HANDOFF_USAGE,
@@ -96,13 +99,7 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/**
- * Skills a handoff suggests to its successor.
- *
- * The list is deployment configuration, not a constant: which skills a project
- * works through is a property of how that project is run, and the default names
- * the A²D² mainline in the order a handoff usually reaches it.
- */
+/** @deprecated Handoff documents no longer render suggested skills. */
 export const DEFAULT_SUGGESTED_SKILLS: readonly string[] = ['implement', 'tdd', 'code-review']
 
 /**
@@ -128,7 +125,9 @@ export interface Config {
   root?: string
   /** Directory entries that identify a project root while walking upward from a session cwd. */
   projectMarkers?: string[]
-  /** Skills a handoff document suggests to its successor. */
+  /** Explicit root containing installed skills; omitted to probe conventional locations. */
+  skillsRoot?: string
+  /** @deprecated Accepted for compatibility; handoff documents no longer render this list. */
   suggestedSkills?: string[]
   /** Context length, in tokens, at which the floating indicator warns. */
   handoffWarnTokens?: number
@@ -156,7 +155,7 @@ export interface PreparedHandoff {
   readonly source: SessionId
   /** Absolute path of the skeleton document the handing-off agent fills in. */
   readonly path: string
-  /** The turn that asks that agent to write the summary. */
+  /** The turn that asks that agent to write the continuation content. */
   readonly instruction: string
 }
 
@@ -206,6 +205,7 @@ export class A2d2Service extends Service {
   static Config: z<Config> = z.object({
     root: z.string(),
     projectMarkers: z.array(z.string()).default([...DEFAULT_PROJECT_MARKERS]),
+    skillsRoot: z.string(),
     suggestedSkills: z.array(z.string()).default([...DEFAULT_SUGGESTED_SKILLS]),
     handoffWarnTokens: z.number().default(DEFAULT_HANDOFF_WARN_TOKENS),
     handoffCriticalTokens: z.number().default(DEFAULT_HANDOFF_CRITICAL_TOKENS),
@@ -217,7 +217,7 @@ export class A2d2Service extends Service {
   })
 
   private readonly store: TaskDocumentStore
-  private readonly suggestedSkills: readonly string[]
+  private readonly skillsRoot: string
   private readonly thresholds: HandoffThresholds
   private readonly prices: ReadonlyMap<string, ModelPrice>
   private readonly currency: string
@@ -237,7 +237,10 @@ export class A2d2Service extends Service {
     if (projectMarkers.length === 0) {
       throw new Error('a2d2: projectMarkers must name at least one directory entry')
     }
-    this.suggestedSkills = [...(config.suggestedSkills ?? DEFAULT_SUGGESTED_SKILLS)]
+    this.skillsRoot = resolveSkillsRoot(config.skillsRoot)
+    if (!isAbsolute(this.skillsRoot)) {
+      throw new Error(`a2d2: skillsRoot must be an absolute path, received "${this.skillsRoot}"`)
+    }
     this.thresholds = {
       warnAtTokens: config.handoffWarnTokens ?? DEFAULT_HANDOFF_WARN_TOKENS,
       criticalAtTokens: config.handoffCriticalTokens ?? DEFAULT_HANDOFF_CRITICAL_TOKENS,
@@ -417,16 +420,16 @@ export class A2d2Service extends Service {
 
   /**
    * Record a handoff, write the skeleton its document starts from, and render
-   * the turn that writes the summary.
+   * the turn that writes the continuation content.
    *
    * The source session joins the task now; the successor joins when it takes the
    * handoff, because a session that never opens leaves no edge behind and the
    * document stays the only record of the intent. Nothing here writes the
-   * summary: only the handing-off session holds the conversation, so the caller
-   * queues `instruction` as one of that session's own turns, and the document
-   * stays unreadable — `unwritten` — until that turn finishes.
+   * continuation content: only the handing-off session holds the conversation,
+   * so the caller queues `instruction` as one of that session's own turns, and
+   * the document stays unreadable — `unwritten` — until that turn finishes.
    * @param request - the handed-off session, its cwd, focus, and target task.
-   * @returns the task, the document path, and the turn that fills the summary in.
+   * @returns the task, document path, and turn that fills the continuation content in.
    * @throws when the session id is unusable as a filename, the session records no
    *   working directory, or an explicit task does not exist.
    */
@@ -440,6 +443,8 @@ export class A2d2Service extends Service {
       throw new Error('a2d2: the handed-off session records no working directory, so no project owns its handoff')
     }
 
+    const skillSource = await readSkillSource('handoff', this.skillsRoot)
+
     const task = request.taskId === undefined
       ? await this.resolveOrCreateTask(cwd, request)
       : await this.existingTask(cwd, request.taskId)
@@ -449,14 +454,15 @@ export class A2d2Service extends Service {
       task: registered.id,
       createdAt: request.now.toISOString(),
       focus: request.focus,
+      ...(skillSource.status === 'missing' ? { skillSource: 'unavailable' as const } : {}),
     }
     const directory = handoffsDirectory(await this.store.projectRoot(cwd))
     const path = await writeHandoffDocument(
       directory,
       source,
-      renderHandoffSkeleton(facts, this.suggestedSkills),
+      renderHandoffSkeleton(facts),
     )
-    return { task: registered, source, path, instruction: handoffInstruction(path, request.focus) }
+    return { task: registered, source, path, instruction: handoffInstruction(path, request.focus, skillSource) }
   }
 
   /**
