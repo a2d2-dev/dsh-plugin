@@ -110,12 +110,11 @@ export const DEFAULT_SUGGESTED_SKILLS: readonly string[] = ['implement', 'tdd', 
  * deployment configures none.
  *
  * A length rather than a ratio: the indicator reports how much context a session
- * is carrying, and the decision to change sessions is made against that number.
- * The design record's own baseline is the smart zone at about 120k; this default
- * is the point at which a session has said enough to be worth continuing
- * elsewhere.
+ * is carrying. The design baseline is the smart zone at about 150k; reaching it
+ * signals that the next phase boundary should choose among the five workflow
+ * outcomes, of which changing sessions is only one.
  */
-export const DEFAULT_HANDOFF_WARN_TOKENS = 200_000
+export const DEFAULT_HANDOFF_WARN_TOKENS = 150_000
 
 /** Context length at which the floating indicator is critical, when a deployment configures none. */
 export const DEFAULT_HANDOFF_CRITICAL_TOKENS = 1_000_000

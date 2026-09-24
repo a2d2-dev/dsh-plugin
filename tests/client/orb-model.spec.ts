@@ -15,7 +15,7 @@ describe('the two faces agree on the defaults', () => {
     // The client cannot read host config, so its fallback must equal the host's
     // own default or an unconfigured deployment would colour differently from a
     // configured one for no stated reason.
-    expect(DEFAULT_ORB_THRESHOLDS).toEqual({ warnAtTokens: 200_000, criticalAtTokens: 1_000_000 })
+    expect(DEFAULT_ORB_THRESHOLDS).toEqual({ warnAtTokens: 150_000, criticalAtTokens: 1_000_000 })
   })
 
   it('carries host-configured lengths through the projection rather than a constant', () => {

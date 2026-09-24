@@ -205,7 +205,7 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
     `${occupancy.percent}% 已用`,
     ...(cost === undefined ? [] : [`按配置费率约 ${host?.currency ?? ''}${formatCost(cost)}`]),
     '',
-    '悬停展开交接',
+    '接近 smart zone；到下个相位边界做五选一（交接只是其一）',
   ].join('\n')
 
   const cardOpen = phase.kind !== 'closed'
@@ -218,7 +218,7 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
       ref: rootRef,
       className: `${css.root} ${levelClassName(level)}`,
       title: failed ? INSERT_FAILED : detail,
-      'aria-label': failed ? INSERT_FAILED : `${tokens} tokens，${occupancy.percent}% 已用。悬停展开交接`,
+      'aria-label': failed ? INSERT_FAILED : `${tokens} tokens，${occupancy.percent}% 已用。接近 smart zone；到下个相位边界做五选一，交接只是其一`,
       'data-a2d2-orb': level,
       'data-a2d2-level': String(filled),
       onClick: () => { setPhase(current => (current.kind === 'closed' ? { kind: 'open' } : { kind: 'closed' })) },

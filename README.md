@@ -10,7 +10,7 @@ What the plugin gives DSH today:
 
 - **Task aggregation** — a task groups the sessions belonging to one piece of work and records the handoff edges between them, so related sessions keep a relationship a person can read, review, and commit. The data lives in project-local documents, and no session's durable format changes to carry it.
 - **Session handoff** — `/handoff` moves work from a long, expensive session to a fresh one without losing the thread: the handing-off session writes its own bounded summary, and the successor continues from it.
-- **A floating indicator** — an at-a-glance orb by the composer that tracks context length and cost, and starts a handoff when a session grows too costly to keep going.
+- **A floating indicator** — an at-a-glance orb by the composer that tracks context length and cost, and warns when a session approaches the smart zone so the next phase boundary can choose its outcome.
 
 > `A²D²` is the brand and display form; `a2d2` is the technical identifier — package name, directories, and service names all use it, because `²` cannot appear in an npm package name. The package is `@deepseek-ai/dsh-a2d2`.
 
@@ -32,7 +32,7 @@ The package contributes two mount rows. `ctx.a2d2` is the task store and declare
 | `root` | derived per call | Absolute project root. When set, the session cwd no longer selects the store. A relative value fails at load. |
 | `projectMarkers` | `['.git']` | Directory entries that identify a project root while walking upward from a session cwd. An empty list fails at load. |
 | `suggestedSkills` | `['implement', 'tdd', 'code-review']` | Skills a handoff document suggests to its successor. |
-| `handoffWarnTokens` | `200000` | Context length, in tokens, at which the floating indicator warns. A value at or below 0 fails at load, and a value above `handoffCriticalTokens` fails at load. |
+| `handoffWarnTokens` | `150000` | Context length, in tokens, at which the floating indicator warns that the session is approaching the smart zone. A value at or below 0 fails at load, and a value above `handoffCriticalTokens` fails at load. |
 | `handoffCriticalTokens` | `1000000` | Context length at which the indicator is critical. |
 | `modelPrices` | `{}` | Per-million-token rates the indicator's cost line uses, keyed `provider/model` and then bare `model`. A negative or non-finite rate fails at load. |
 | `currency` | `¥` | Currency symbol the rates are quoted in. |
@@ -104,11 +104,11 @@ Only one direction of a handoff edge is stored: a member's `handoffFrom`, naming
 
 `handedOff` reports a continuation, never that a session is finished. Handing off is not terminal: a real workflow hands off to run something elsewhere and then hands back, so the source session stays usable and may itself acquire several successors.
 
-## The floating handoff indicator
+## The floating indicator
 
 The package also ships a browser bundle (`exports["./client"]`, `dsh.client.platform: 'web'`) mounted on the bare `dsh-a2d2` row — a subpath row can never be a client row, and the bundle's registered id must equal the entry name, which is why the id is the package name.
 
-It renders one fixed circle beside the composer showing the session's context length (`453K`, `1.2M`) and, when the route has a configured rate, its estimated input cost. The **background** carries the reading: green below the warn length, amber at it, red at critical. Hovering gives the full figures — exact tokens, capacity, percent, and the cost with the currency it is quoted in — and reveals a **交接** action beside the circle.
+It renders one fixed circle beside the composer showing the session's context length (`453K`, `1.2M`) and, when the route has a configured rate, its estimated input cost. The **background** carries the reading: green below the warn length, amber at it, red at critical. The default warn length is 150K tokens. Amber means the session is approaching the smart zone: at the next phase boundary, choose among the five workflow outcomes; handoff is only one of them. Hovering gives the full figures — exact tokens, capacity, percent, and the cost with the currency it is quoted in — and currently reveals a single **交接** action beside the circle.
 
 ### One-click handoff
 
