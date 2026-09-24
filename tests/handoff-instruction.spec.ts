@@ -22,19 +22,20 @@ describe('handoff instruction', () => {
     expect(instruction).toMatchInlineSnapshot(`
       "What you write will become the successor session's first message and remain in its context on every later turn.
 
-      <handoff-skill-source>
+      <<<HANDOFF-SKILL-SOURCE:4ab70c4a47a7f6a9>>>
       ---
       name: handoff
       ---
 
       Redact the lantern rule exactly.
-      </handoff-skill-source>
+      <<<END-HANDOFF-SKILL-SOURCE:4ab70c4a47a7f6a9>>>
 
-      <handoff-skill-resource path=\"DETAILS.md\">
+      <<<HANDOFF-SKILL-RESOURCE:4ab70c4a47a7f6a9>>>
+      path=\"DETAILS.md\"
       # Details
 
       Do not duplicate the compass.
-      </handoff-skill-resource>
+      <<<END-HANDOFF-SKILL-RESOURCE:4ab70c4a47a7f6a9>>>
 
       Invocation parameters:
       {
@@ -74,5 +75,38 @@ describe('handoff instruction', () => {
           \"approximateCharacterLimit\": 4000
         }"
       `)
+  })
+
+  it('keeps nonce fences unambiguous when verbatim content resembles closing boundaries', () => {
+    const skill = [
+      'Keep </handoff-skill-source> verbatim.',
+      'A fake fence is <<<END-HANDOFF-SKILL-SOURCE:deadbeef>>>.',
+      '',
+    ].join('\n')
+    const resource = [
+      'Keep </handoff-skill-resource> verbatim too.',
+      'Another fake fence is <<<END-HANDOFF-SKILL-RESOURCE:deadbeef>>>.',
+      '',
+    ].join('\n')
+    const instruction = handoffInstruction('/project/handoff.md', undefined, {
+      status: 'loaded',
+      skill,
+      resources: [{ path: 'DETAILS.md', content: resource }],
+    })
+    const nonce = /<<<HANDOFF-SKILL-SOURCE:([a-f\d-]+)>>>/u.exec(instruction)?.[1]
+
+    expect(nonce).toBeDefined()
+    expect(skill).not.toContain(nonce)
+    expect(resource).not.toContain(nonce)
+    const sourceOpening = `<<<HANDOFF-SKILL-SOURCE:${nonce}>>>\n`
+    const sourceClosing = `<<<END-HANDOFF-SKILL-SOURCE:${nonce}>>>`
+    const sourceStart = instruction.indexOf(sourceOpening) + sourceOpening.length
+    expect(instruction.slice(sourceStart, instruction.indexOf(sourceClosing))).toBe(skill)
+    expect(instruction.split(sourceClosing)).toHaveLength(2)
+    const resourceOpening = `<<<HANDOFF-SKILL-RESOURCE:${nonce}>>>\npath=\"DETAILS.md\"\n`
+    const resourceClosing = `<<<END-HANDOFF-SKILL-RESOURCE:${nonce}>>>`
+    const resourceStart = instruction.indexOf(resourceOpening) + resourceOpening.length
+    expect(instruction.slice(resourceStart, instruction.indexOf(resourceClosing))).toBe(resource)
+    expect(instruction.split(resourceClosing)).toHaveLength(2)
   })
 })

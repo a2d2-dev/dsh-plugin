@@ -9,6 +9,7 @@
  * @module @deepseek-ai/dsh-a2d2/src/handoff-instruction
  */
 
+import { createHash } from 'node:crypto'
 import {
   HANDOFF_SUMMARY_END,
   HANDOFF_SUMMARY_START,
@@ -57,13 +58,28 @@ function verbatimBlock(opening: string, content: string, closing: string): strin
   return `${opening}\n${content}${content.endsWith('\n') ? '' : '\n'}${closing}`
 }
 
+function boundaryNonce(source: LoadedSkillSource): string {
+  const parts = [source.skill, ...source.resources.flatMap(resource => [resource.path, resource.content])]
+  const seed = parts.map(part => `${Buffer.byteLength(part, 'utf8')}:${part}`).join('\n')
+  const digest = createHash('sha256').update(seed).digest('hex').slice(0, 16)
+  for (let attempt = 0; ; attempt += 1) {
+    const nonce = attempt === 0 ? digest : `${digest}-${attempt.toString(36)}`
+    if (parts.every(part => !part.includes(nonce))) return nonce
+  }
+}
+
 function renderSkillSource(source: LoadedSkillSource): string {
-  const blocks = [verbatimBlock('<handoff-skill-source>', source.skill, '</handoff-skill-source>')]
+  const nonce = boundaryNonce(source)
+  const blocks = [verbatimBlock(
+    `<<<HANDOFF-SKILL-SOURCE:${nonce}>>>`,
+    source.skill,
+    `<<<END-HANDOFF-SKILL-SOURCE:${nonce}>>>`,
+  )]
   for (const resource of source.resources) {
     blocks.push(verbatimBlock(
-      `<handoff-skill-resource path=${JSON.stringify(resource.path)}>`,
-      resource.content,
-      '</handoff-skill-resource>',
+      `<<<HANDOFF-SKILL-RESOURCE:${nonce}>>>`,
+      `path=${JSON.stringify(resource.path)}\n${resource.content}`,
+      `<<<END-HANDOFF-SKILL-RESOURCE:${nonce}>>>`,
     ))
   }
   return blocks.join('\n\n')

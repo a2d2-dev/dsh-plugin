@@ -1,8 +1,13 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
-import { readSkillSource } from '../src/skill-source.ts'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  DEFAULT_SKILLS_ROOT,
+  defaultSkillsRootCandidates,
+  readSkillSource,
+  resolveSkillsRoot,
+} from '../src/skill-source.ts'
 
 const roots: string[] = []
 
@@ -17,6 +22,47 @@ afterEach(async () => {
 })
 
 describe('skill source', () => {
+  it('orders environment and conventional skill-root candidates', () => {
+    expect(defaultSkillsRootCandidates({
+      DSH_SKILLS_ROOT: '/skills/environment',
+      CODEX_HOME: '/opt/codex',
+    }, '/home/tester')).toEqual([
+      '/skills/environment',
+      '/home/tester/.agents/skills',
+      '/opt/codex/skills',
+      '/home/tester/.codex/skills',
+    ])
+  })
+
+  it('selects the first candidate containing the requested skill', () => {
+    const candidates = ['/skills/first', '/skills/second', '/skills/third']
+    const pathExists = vi.fn((path: string) => path === '/skills/second/handoff/SKILL.md')
+
+    expect(resolveSkillsRoot(undefined, { candidates, pathExists })).toBe('/skills/second')
+    expect(pathExists.mock.calls.flat()).toEqual([
+      '/skills/first/handoff/SKILL.md',
+      '/skills/first/handoff',
+      '/skills/second/handoff/SKILL.md',
+    ])
+  })
+
+  it('falls back to the conventional root when no candidate contains the skill', () => {
+    const pathExists = vi.fn(() => false)
+
+    expect(resolveSkillsRoot(undefined, { candidates: ['/skills/empty'], pathExists }))
+      .toBe(DEFAULT_SKILLS_ROOT)
+  })
+
+  it('uses an explicit root without probing candidates', () => {
+    const pathExists = vi.fn(() => true)
+
+    expect(resolveSkillsRoot('/skills/configured', {
+      candidates: ['/skills/auto'],
+      pathExists,
+    })).toBe('/skills/configured')
+    expect(pathExists).not.toHaveBeenCalled()
+  })
+
   it('reads SKILL.md and local markdown resources in declaration order without rewriting them', async () => {
     const root = await tempRoot()
     const directory = join(root, 'handoff')

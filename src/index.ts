@@ -30,7 +30,7 @@ import { handoffPrompt } from './handoff-prompt.ts'
 import { indicatorProjectionDefinition } from './indicator-projection.ts'
 import type { HandoffThresholds, ModelPrice } from './indicator-projection.ts'
 import { parseSessionId, redactText } from './handoff.ts'
-import { DEFAULT_SKILLS_ROOT, readSkillSource } from './skill-source.ts'
+import { DEFAULT_SKILLS_ROOT, readSkillSource, resolveSkillsRoot } from './skill-source.ts'
 import {
   DEFAULT_PROJECT_MARKERS,
   TaskDocumentStore,
@@ -126,7 +126,7 @@ export interface Config {
   root?: string
   /** Directory entries that identify a project root while walking upward from a session cwd. */
   projectMarkers?: string[]
-  /** Root directory containing installed skills. */
+  /** Explicit root containing installed skills; omitted to probe conventional locations. */
   skillsRoot?: string
   /** @deprecated Accepted for compatibility; handoff documents no longer render this list. */
   suggestedSkills?: string[]
@@ -206,7 +206,7 @@ export class A2d2Service extends Service {
   static Config: z<Config> = z.object({
     root: z.string(),
     projectMarkers: z.array(z.string()).default([...DEFAULT_PROJECT_MARKERS]),
-    skillsRoot: z.string().default(DEFAULT_SKILLS_ROOT),
+    skillsRoot: z.string(),
     suggestedSkills: z.array(z.string()).default([...DEFAULT_SUGGESTED_SKILLS]),
     handoffWarnTokens: z.number().default(DEFAULT_HANDOFF_WARN_TOKENS),
     handoffCriticalTokens: z.number().default(DEFAULT_HANDOFF_CRITICAL_TOKENS),
@@ -238,7 +238,7 @@ export class A2d2Service extends Service {
     if (projectMarkers.length === 0) {
       throw new Error('a2d2: projectMarkers must name at least one directory entry')
     }
-    this.skillsRoot = config.skillsRoot ?? DEFAULT_SKILLS_ROOT
+    this.skillsRoot = resolveSkillsRoot(config.skillsRoot)
     if (!isAbsolute(this.skillsRoot)) {
       throw new Error(`a2d2: skillsRoot must be an absolute path, received "${this.skillsRoot}"`)
     }

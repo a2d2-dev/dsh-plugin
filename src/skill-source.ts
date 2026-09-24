@@ -8,11 +8,55 @@
  * @module @deepseek-ai/dsh-a2d2/src/skill-source
  */
 
+import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { dirname, isAbsolute, resolve } from 'node:path'
+import { homedir } from 'node:os'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 
 /** Conventional host directory containing installed skills. */
-export const DEFAULT_SKILLS_ROOT = '/root/.agents/skills'
+export const DEFAULT_SKILLS_ROOT = join(homedir(), '.agents', 'skills')
+
+/** Injectable inputs for deterministic skill-root resolution. */
+export interface SkillsRootResolutionOptions {
+  readonly candidates?: readonly string[]
+  readonly pathExists?: (path: string) => boolean
+  readonly skillName?: string
+}
+
+/** Ordered conventional locations in which a host may already have skills installed. */
+export function defaultSkillsRootCandidates(
+  environment: NodeJS.ProcessEnv = process.env,
+  homeDirectory: string = homedir(),
+): readonly string[] {
+  const candidates = [
+    environment.DSH_SKILLS_ROOT,
+    join(homeDirectory, '.agents', 'skills'),
+    environment.CODEX_HOME === undefined ? undefined : join(environment.CODEX_HOME, 'skills'),
+    join(homeDirectory, '.codex', 'skills'),
+  ]
+  const seen = new Set<string>()
+  return candidates.flatMap((candidate) => {
+    if (candidate === undefined || !isAbsolute(candidate) || seen.has(candidate)) return []
+    seen.add(candidate)
+    return [candidate]
+  })
+}
+
+/** Resolve an explicit skill root or probe conventional roots in priority order. */
+export function resolveSkillsRoot(
+  configuredRoot: string | undefined,
+  options: SkillsRootResolutionOptions = {},
+): string {
+  if (configuredRoot !== undefined) return configuredRoot
+  const candidates = options.candidates ?? defaultSkillsRootCandidates()
+  const pathExists = options.pathExists ?? existsSync
+  const skillName = options.skillName ?? 'handoff'
+  for (const candidate of candidates) {
+    const skillDirectory = join(candidate, skillName)
+    if (pathExists(join(skillDirectory, 'SKILL.md')) || pathExists(skillDirectory)) return candidate
+  }
+  return DEFAULT_SKILLS_ROOT
+}
 
 /** One markdown resource referenced by a skill, unchanged from disk. */
 export interface SkillResource {
@@ -61,6 +105,7 @@ function skillBody(markdown: string): string {
   return frontMatter === null ? markdown : markdown.slice(frontMatter[0].length)
 }
 
+// TODO(ticket 03): prose .md mentions are overmatched; before ask-matt injection, accept only explicit markdown-link declarations (see boundary-card ticket 03).
 /** Find markdown links and bare markdown filenames without reordering either form. */
 function declaredMarkdownResources(markdown: string): readonly string[] {
   const references: LocatedReference[] = []
@@ -99,14 +144,15 @@ function declaredMarkdownResources(markdown: string): readonly string[] {
  * loudly instead of silently injecting a partial rule set.
  *
  * @param name - installed skill directory name.
- * @param skillsRoot - configurable directory containing installed skills.
+ * @param skillsRoot - explicit directory containing installed skills; omitted to probe conventional roots.
  * @returns the verbatim source, or an explicit missing signal.
  */
 export async function readSkillSource(
   name: string,
-  skillsRoot: string = DEFAULT_SKILLS_ROOT,
+  skillsRoot?: string,
 ): Promise<SkillSource> {
-  const skillPath = resolve(skillsRoot, name, 'SKILL.md')
+  const resolvedSkillsRoot = resolveSkillsRoot(skillsRoot, { skillName: name })
+  const skillPath = resolve(resolvedSkillsRoot, name, 'SKILL.md')
   let skill: string
   try {
     skill = await readFile(skillPath, 'utf8')
