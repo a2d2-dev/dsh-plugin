@@ -3,8 +3,8 @@
  * context occupancy, turning warning-colored as the context approaches the
  * configured smart-zone threshold.
  *
- * Hovering the orb reveals a "交接" action; clicking it opens a confirm card
- * where the user writes the focus and confirms. Confirming runs the one-click
+ * Hovering the orb reveals peer "交接" and "下一步" actions. The first opens a
+ * confirm card where the user writes the focus and confirms. Confirming runs the one-click
  * handoff — this session's own agent writes the summary, the browser waits for
  * that turn to finish, creates the successor session, focuses it, and has it take
  * the handoff — so the whole "fill the command, then press send" sequence
@@ -24,6 +24,8 @@
 import { createElement, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import css from './orb.module.css'
 import { HANDOFF_DRAFT, appendToDraft, focusComposer } from './composer.ts'
+import { requestConsult, selectConsultCandidate } from './consult-actions.ts'
+import type { ConsultCandidate, ConsultPhase } from './consult-actions.ts'
 import { runOrbHandoff } from './orb-actions.ts'
 import type { OrbHandoffOutcome } from './orb-actions.ts'
 import type {
@@ -42,6 +44,8 @@ import {
   waterLevel,
 } from './orb-model.ts'
 import type { OrbLevel, OrbOccupancy } from './orb-model.ts'
+
+const boundaryCss = css as typeof css & Record<'actions' | 'degraded' | 'chips' | 'chip', string>
 
 /** What the user is told when the draft could not be written. */
 const INSERT_FAILED = '无法写入输入框（会话未就绪）'
@@ -151,8 +155,10 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
   const [failed, setFailed] = useState(false)
   const [hovering, setHovering] = useState(false)
   const [phase, setPhase] = useState<CardPhase>({ kind: 'closed' })
+  const [consult, setConsult] = useState<ConsultPhase>({ kind: 'idle' })
   const [focus, setFocus] = useState('')
   const rootRef = useRef<HTMLButtonElement | null>(null)
+  const consultRequestRef = useRef(0)
 
   // The draft-fill fallback: used only when the one-click flow cannot run.
   const fillDraft = useCallback((): void => {
@@ -187,6 +193,40 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
     }
   }, [ctx, sessionId, focus, fillDraft])
 
+  const closeConsult = useCallback((): void => {
+    consultRequestRef.current += 1
+    setConsult({ kind: 'idle' })
+  }, [])
+
+  const openHandoff = useCallback((nextFocus = ''): void => {
+    closeConsult()
+    setFocus(nextFocus)
+    setPhase({ kind: 'open' })
+  }, [closeConsult])
+
+  const consultNext = useCallback((): void => {
+    const requestId = consultRequestRef.current + 1
+    consultRequestRef.current = requestId
+    setPhase({ kind: 'closed' })
+    setFocus('')
+    void requestConsult({
+      fetch: (input, init) => fetch(input, init),
+      setPhase: next => {
+        if (consultRequestRef.current === requestId) setConsult(next)
+      },
+    }, sessionId)
+  }, [sessionId])
+
+  const selectCandidate = useCallback((candidate: ConsultCandidate): void => {
+    const selected = selectConsultCandidate({
+      appendToDraft: input => appendToDraft(ctx, sessionId, input),
+      focusComposer: () => { focusComposer(rootRef.current) },
+      closeConsult,
+      openHandoff,
+    }, candidate)
+    setFailed(!selected)
+  }, [ctx, sessionId, closeConsult, openHandoff])
+
   useEffect(() => {
     if (!failed) return
     const timer = setTimeout(() => { setFailed(false) }, 4000)
@@ -208,7 +248,9 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
     '接近 smart zone；到下个相位边界做五选一（交接只是其一）',
   ].join('\n')
 
-  const cardOpen = phase.kind !== 'closed'
+  const handoffOpen = phase.kind !== 'closed'
+  const consultOpen = consult.kind !== 'idle'
+  const cardOpen = handoffOpen || consultOpen
   const running = phase.kind === 'running'
 
   const orb = createElement(
@@ -221,7 +263,10 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
       'aria-label': failed ? INSERT_FAILED : `${tokens} tokens，${occupancy.percent}% 已用。接近 smart zone；到下个相位边界做五选一，交接只是其一`,
       'data-a2d2-orb': level,
       'data-a2d2-level': String(filled),
-      onClick: () => { setPhase(current => (current.kind === 'closed' ? { kind: 'open' } : { kind: 'closed' })) },
+      onClick: () => {
+        if (phase.kind === 'closed') openHandoff()
+        else { setPhase({ kind: 'closed' }); setFocus('') }
+      },
     },
     createElement('span', { className: css.water, style: { '--a2d2-level': `${filled}%` } as never, 'aria-hidden': true }),
     createElement('span', {
@@ -235,18 +280,24 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
     ),
   )
 
-  // The hover action is shown while the pointer is over the anchor or the card
-  // is open; opening the card keeps it visible while the user types.
-  const showAction = (hovering || cardOpen) && !cardOpen
+  // Both boundary actions appear together and yield the surface to an open card.
+  const showAction = hovering && !cardOpen
   const action = showAction
-    ? createElement('button', {
-      type: 'button',
-      className: css.action,
-      onClick: () => { setPhase({ kind: 'open' }) },
-    }, '交接 →')
+    ? createElement('div', { className: boundaryCss.actions },
+      createElement('button', {
+        type: 'button',
+        className: css.action,
+        onClick: () => { openHandoff() },
+      }, '交接'),
+      createElement('button', {
+        type: 'button',
+        className: css.action,
+        onClick: consultNext,
+      }, '下一步'),
+    )
     : null
 
-  const card = cardOpen ? createElement('div', { className: css.card },
+  const handoffCard = handoffOpen ? createElement('div', { className: css.card },
     createElement('div', { className: css.cardTitle }, '交接到新会话'),
     createElement('div', { className: css.cardHint }, '为后继会话写一句「下一步重点」（可留空），确认后自动创建新会话、带入当前会话摘要并切换过去。'),
     createElement('textarea', {
@@ -275,6 +326,44 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
     ),
   ) : null
 
+  const consultCard = consultOpen ? createElement('div', { className: css.card },
+    createElement('div', { className: css.cardTitle }, '下一步'),
+    consult.kind === 'loading'
+      ? createElement('div', { className: css.cardBusy }, '正在咨询下一步…')
+      : null,
+    consult.kind === 'error'
+      ? createElement('div', { className: css.cardError }, consult.message)
+      : null,
+    consult.kind === 'ready' && consult.degraded
+      ? createElement('div', { className: boundaryCss.degraded }, '未读到 ask-matt skill，以下为降级候选。')
+      : null,
+    consult.kind === 'ready'
+      ? createElement('div', { className: boundaryCss.chips },
+        ...consult.candidates.map((candidate, index) => createElement('button', {
+          type: 'button',
+          className: boundaryCss.chip,
+          key: `${candidate.kind}-${String(index)}`,
+          title: candidate.input,
+          onClick: () => { selectCandidate(candidate) },
+        }, candidate.label)),
+      )
+      : null,
+    createElement('div', { className: css.cardRow },
+      consult.kind === 'error'
+        ? createElement('button', {
+          type: 'button',
+          className: `${css.cardButton} ${css.confirm}`,
+          onClick: consultNext,
+        }, '重试')
+        : null,
+      createElement('button', {
+        type: 'button',
+        className: `${css.cardButton} ${css.cancel}`,
+        onClick: closeConsult,
+      }, '关闭'),
+    ),
+  ) : null
+
   return createElement(
     'div',
     {
@@ -283,7 +372,8 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
       onMouseEnter: () => { setHovering(true) },
       onMouseLeave: () => { setHovering(false) },
     },
-    card,
+    handoffCard,
+    consultCard,
     action,
     orb,
   )

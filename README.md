@@ -105,11 +105,17 @@ Only one direction of a handoff edge is stored: a member's `handoffFrom`, naming
 
 `handedOff` reports a continuation, never that a session is finished. Handing off is not terminal: a real workflow hands off to run something elsewhere and then hands back, so the source session stays usable and may itself acquire several successors.
 
-## The floating indicator
+## The indicator orb
 
 The package also ships a browser bundle (`exports["./client"]`, `dsh.client.platform: 'web'`) mounted on the bare `dsh-a2d2` row — a subpath row can never be a client row, and the bundle's registered id must equal the entry name, which is why the id is the package name.
 
-It renders one fixed circle beside the composer showing the session's context length (`453K`, `1.2M`) and, when the route has a configured rate, its estimated input cost. The **background** carries the reading: green below the warn length, amber at it, red at critical. The default warn length is 150K tokens. Amber means the session is approaching the smart zone: at the next phase boundary, choose among the five workflow outcomes; handoff is only one of them. Hovering gives the full figures — exact tokens, capacity, percent, and the cost with the currency it is quoted in — and currently reveals a single **交接** action beside the circle.
+It renders one fixed circle beside the composer showing the session's context length (`453K`, `1.2M`) and, when the route has a configured rate, its estimated input cost. The **background** carries the reading: green below the warn length, amber at it, red at critical. The default warn length is 150K tokens. Amber means the session is approaching the smart zone: at the next phase boundary, choose among the five workflow outcomes; handoff is only one of them. Hovering gives the full figures — exact tokens, capacity, percent, and the cost with the currency it is quoted in — and reveals peer **交接** and **下一步** actions beside the circle.
+
+### Boundary card
+
+**下一步** requests a one-off consultation for the current session and renders the returned candidate intents as chips without adding a consultation turn to session history. A stay or other chip appends its exact input to the existing composer draft and focuses the composer; the user may edit it and must press Enter to send it. A handoff chip opens the existing handoff card with its input prefilled as the focus. Chips never call the session command face or send on the user's behalf.
+
+The card explicitly shows loading and route errors. If the host could not read the `ask-matt` skill, it still returns degraded candidates and the card marks them with **未读到 ask-matt skill**. If generation fails, the route's error message is shown and the consultation can be retried; every request replaces the prior candidate state instead of accumulating chips.
 
 ### One-click handoff
 
