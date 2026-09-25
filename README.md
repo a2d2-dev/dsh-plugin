@@ -11,6 +11,7 @@ What the plugin gives DSH today:
 - **Task aggregation** — a task groups the sessions belonging to one piece of work and records the handoff edges between them, so related sessions keep a relationship a person can read, review, and commit. The data lives in project-local documents, and no session's durable format changes to carry it.
 - **Session handoff** — `/handoff` moves work from a long, expensive session to a fresh one without losing the thread: the handing-off session writes bounded continuation content, and the successor continues from it.
 - **A floating indicator** — an at-a-glance orb by the composer that tracks context length and cost, and warns when a session approaches the smart zone so the next phase boundary can choose its outcome.
+- **A²D² panel** — a better-sidebar tab for the open session's project tasks, member sessions, handoff edges, and direct subagent model routes.
 
 > `A²D²` is the brand and display form; `a2d2` is the technical identifier — package name, directories, and service names all use it, because `²` cannot appear in an npm package name. The package is `@deepseek-ai/dsh-a2d2`.
 
@@ -173,17 +174,19 @@ The circle is positioned and colored with literals rather than theme variables: 
 
 Occupancy comes from the same `contextPressure` projection the composer's own ContextMeter reads, preferring `projectedTokens` so a compaction registers immediately. The ratios, the route's capacity, and its resolved price travel to the browser as the `a2d2Indicator` session projection, because a browser bundle cannot read this plugin's configuration, cannot see which model the session is routed to, and a compiled-in number would not be configurable per deployment. The price is resolved host-side by folding the session's `request/header`: the client has no model identity to look up. When a profile composes no projection registry, or the table prices no matching route, the key or the price is absent and the indicator shows tokens without a cost rather than a guessed figure. The indicator renders nothing until a provider reports both a numerator and a route capacity, so a fresh session shows no circle until its first request.
 
-## Subagent models (task management plus)
+## A²D² panel
 
-The same browser bundle also registers a sidebar tab with better-sidebar: it lists every direct child of the open session together with the model that child is *actually* routed to.
+The same browser bundle also registers a better-sidebar tab with id `a2d2-panel` and title **A²D²**. better-sidebar is an optional peer, read softly through `ctx.get('betterSidebar')` and kept out of `inject`: a deployment without it registers the indicator alone and skips the tab rather than failing the whole bundle.
 
-It exists because a child's route is otherwise invisible. A session's own model is the one the user picked; a delegated child runs whatever the composition in force when it was created declared, and nothing in the shell surfaces it — so children pinned to another model spend that model's budget unobserved.
+The upper half reads `/a2d2/api/tasks?session=<id>` and shows the tasks in the project that owns the open session's cwd. The browser never sends a path; the host looks up the session, resolves its cwd to a project root with the plugin's normal store rules, and returns `{ root, tasks }`. The route is read-only, GET-only, guarded by the same host/origin/fetch trust fence as the consult and config routes, and every failure is a JSON body (`400` invalid session id, `403` untrusted, `404` unknown session, `405` non-GET, `409` no working directory, `500` read failure).
+
+Task rows show state, goal, member sessions, and incoming handoff edges. The row containing the open session is marked as current. Member titles and clickability come from the shell's session list: a member id present in the list can be opened with `sessions.open`, while a missing one is rendered as a short id and stays inert. A successful empty read says the project has no tasks; a route/read failure is rendered as a failure row.
+
+The lower half keeps the previous subagent model view: it lists every direct child of the open session together with the model that child is *actually* routed to. It exists because a child's route is otherwise invisible. A session's own model is the one the user picked; a delegated child runs whatever the composition in force when it was created declared, and nothing in the shell surfaces it — so children pinned to another model spend that model's budget unobserved.
 
 Both halves of every row are host folds the browser only reads: the child list from the session list's subagent catalog, and each route from that session's own `a2d2Indicator` projection. That is why `route` is now published with the projection, having previously been a host-side lookup for pricing alone. A client holds no adapter registry, and a child's `request/header` lives in the child's own log and never in its parent's, so no parent-session fold can produce a child's route; this is the feature's only host-side change.
 
-Only the catalog is asked for: the host publishes it per selected parent rather than streaming it, so the tab re-requests it every five seconds while visible. Projection updates arrive on their own. A row whose route differs from the session's own is drawn in amber with a `⚠`, and the header reads `N subagents · M running · K off-route`. A child that has not issued a request yet reads "route unknown (no request yet)" rather than a guess.
-
-better-sidebar is an optional peer, read softly through `ctx.get('betterSidebar')` and kept out of `inject`: a deployment without it registers the indicator alone and skips this tab rather than failing the whole bundle. The added host surface area is zero — no new route, no new RPC, and no change to `webServer`'s HTTP surface.
+The panel re-reads the task route and the subagent catalog every five seconds while visible, and does not poll while hidden. Projection updates arrive on their own. A child whose route differs from the session's own is drawn in amber with a `⚠`, and the header reads `N subagents · M running · K off-route`. A child that has not issued a request yet reads "route unknown (no request yet)" rather than a guess.
 
 ## Model Experience
 
@@ -215,15 +218,15 @@ The successor's first request carries the handoff document body — the continua
 
 The successor's prompt prefix is new, so its first request populates the cache instead of reading it. The source session's cache is untouched.
 
-### Subagent models
+### A²D² panel
 
 #### What the model sees
 
-Nothing. The tab is a read-only browser view: it registers no tool, writes no prompt section, and injects no context, and a child is never told it is being observed. Publishing the route changes the projection value a client receives, not the content of any request.
+Nothing. The panel is a read-only browser view: it registers no tool, writes no prompt section, and injects no context. Publishing the route changes the projection value a client receives, not the content of any request.
 
 #### Token effect
 
-None. The list reads projection values already in flight and a catalog response, and adds no tokens to any provider request.
+None. The panel reads task documents through a host route, projection values already in flight, and a catalog response; it adds no tokens to any provider request.
 
 #### KV Cache effect
 
@@ -231,7 +234,6 @@ None. No session's request content changes.
 
 ## Known Limitations and Deferred Work
 
-- **No task sidebar** — tasks are visible only in their documents; nothing lists a project's tasks or a task's members in the shell. The floating orb now creates the successor session and switches focus (through `connectWorkspace` + `sessions.open`, not a `session.create` the browser lacks), so a one-click handoff no longer needs two pasted lines, but a session that belongs to no workspace still has no successor to create and falls back to filling the draft.
 - **The indicator cannot place the caret** — it focuses the textarea and appends the command, but no sanctioned caret API exists for an out-of-tree plugin, so the caret position after insertion is the textarea's own.
 - **Continuation content is only as good as the turn that wrote it** — the plugin can verify that something was written, never that it is accurate, complete, or free of the secrets the patterns miss. A session that never runs the turn leaves a document `take` refuses.
 - **Documents are version 2** — a document written by an earlier build declares version `1`, carried a transcript projection instead of a summary, and is refused rather than read. An existing project has to run `/handoff` again before its handoff is takeable.
