@@ -20,6 +20,8 @@ declare module '*.module.css' {
     readonly warn: string
     readonly critical: string
     readonly anchor: string
+    readonly dragging: string
+    readonly stack: string
     readonly action: string
     readonly card: string
     readonly cardTitle: string
@@ -29,6 +31,7 @@ declare module '*.module.css' {
     readonly cardButton: string
     readonly cancel: string
     readonly confirm: string
+    readonly cardReset: string
     readonly cardError: string
     readonly cardBusy: string
     readonly actions: string

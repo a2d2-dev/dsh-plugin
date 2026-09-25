@@ -57,8 +57,6 @@ import type {
 } from './context.ts'
 import {
   DEFAULT_ORB_THRESHOLDS,
-  ORB_GAP_PX,
-  anchorRightOffset,
   costOf,
   formatCost,
   formatTokenCount,
@@ -66,6 +64,20 @@ import {
   orbOccupancy,
   waterLevel,
 } from './orb-model.ts'
+import {
+  ORB_CARD_WIDTH_PX,
+  ORB_GAP_PX,
+  ORB_POSITION_KEY,
+  ORB_SIZE_PX,
+  ORB_STACK_GAP_PX,
+  anchorRightOffset,
+  clampOrbPoint,
+  isDragGesture,
+  orbPlacement,
+  parseOrbPoint,
+  serializeOrbPoint,
+} from './orb-position.ts'
+import type { OrbPlacement, OrbPoint, OrbViewport } from './orb-position.ts'
 import type { OrbLevel, OrbOccupancy } from './orb-model.ts'
 
 
@@ -235,34 +247,60 @@ function layoutRegion(from: Element | null): Element | null {
 }
 
 /**
- * The `right` offset keeping the orb and its card out of the shell's right panel.
+ * The layout viewport a `position: fixed` element is measured against.
  *
- * The panel is measured, not assumed: {@link anchorRightOffset} combines the
- * region's leftover space with the shell's own details column, so a shell that
- * pushes its content and a shell that keeps a measured column both move the
- * anchor. A `ResizeObserver` follows a drag-resize and the panel opening or
- * closing, and a slow interval covers a region that is remounted (switching
- * sidebar tabs replaces it) without re-running this effect.
- *
- * Only the right panel needs shifting: the left sidebar sits outside this
- * region, so the circle never reaches it.
- * @param rootRef - the orb's own element, the anchor for the region walk.
- * @returns the offset from the viewport's right edge, in px.
+ * The document element's client box, not `innerWidth`/`innerHeight`: a classic
+ * scrollbar lies outside the containing block, and counting it would place the
+ * circle a scrollbar's width short of where it was put.
+ * @returns the viewport size in px.
  */
-function useAnchorRightOffset(rootRef: { readonly current: Element | null }): number {
-  const [offset, setOffset] = useState(ORB_GAP_PX)
+function currentViewport(): OrbViewport {
+  return {
+    width: document.documentElement.clientWidth,
+    height: document.documentElement.clientHeight,
+  }
+}
+
+/**
+ * Where the circle sits and where its card opens, re-measured as the shell moves.
+ *
+ * The shell is measured, not assumed: {@link anchorRightOffset} combines the
+ * layout region's leftover space with the shell's own details column, so a shell
+ * that pushes its content and a shell that keeps a measured column both move the
+ * circle. A `ResizeObserver` follows a drag-resize and a panel opening or
+ * closing, and a slow interval covers a region that is remounted (switching
+ * sidebar tabs replaces it) and a viewport resized behind the observer, without
+ * re-running this effect.
+ * @param rootRef - the orb's own element, the anchor for the region walk.
+ * @param moved - the point a drag left the circle at, or `undefined` for the corner.
+ * @returns the placement to render.
+ */
+function useOrbPlacement(rootRef: { readonly current: Element | null }, moved: OrbPoint | undefined): OrbPlacement {
+  const [room, setRoom] = useState<{ readonly viewport: OrbViewport; readonly rightOffset: number }>(
+    () => ({ viewport: currentViewport(), rightOffset: ORB_GAP_PX }),
+  )
   useEffect(() => {
     const details = (): Element | null => document.querySelector("[class*='detailsCol']")
     const measure = (): void => {
       const region = layoutRegion(rootRef.current)
       const rect = region === null ? undefined : region.getBoundingClientRect()
+      const viewport = currentViewport()
       const column = details()
-      const next = anchorRightOffset({
-        viewportWidth: document.documentElement.clientWidth,
-        regionRight: rect?.right,
-        detailsWidth: column === null ? 0 : column.getBoundingClientRect().width,
-      })
-      setOffset(current => (current === next ? current : next))
+      const next = {
+        viewport,
+        rightOffset: anchorRightOffset({
+          viewportWidth: viewport.width,
+          regionRight: rect?.right,
+          detailsWidth: column === null ? 0 : column.getBoundingClientRect().width,
+        }),
+      }
+      setRoom(current => (
+        current.rightOffset === next.rightOffset
+        && current.viewport.width === next.viewport.width
+        && current.viewport.height === next.viewport.height
+          ? current
+          : next
+      ))
     }
     measure()
     const timer = setInterval(measure, 500)
@@ -272,7 +310,43 @@ function useAnchorRightOffset(rootRef: { readonly current: Element | null }): nu
     }
     return () => { observer?.disconnect(); clearInterval(timer) }
   }, [rootRef])
-  return offset
+  return useMemo(
+    () => orbPlacement({ viewport: room.viewport, rightOffset: room.rightOffset, moved }),
+    [room, moved],
+  )
+}
+
+/** A press that may still turn into a drag. */
+interface OrbDrag {
+  /** The pointer this gesture belongs to; a second pointer is ignored. */
+  readonly pointerId: number
+  /** Where the press started, in viewport coordinates. */
+  readonly from: OrbPoint
+  /** Where the circle was when the press started, in viewport coordinates. */
+  readonly origin: OrbPoint
+  /** Whether the gesture has passed the drag threshold. */
+  moved: boolean
+}
+
+/** The remembered point, or `undefined` when this browser never stored one. */
+function storedOrbPoint(): OrbPoint | undefined {
+  try {
+    return parseOrbPoint(window.localStorage.getItem(ORB_POSITION_KEY))
+  } catch {
+    // A browser that refuses storage (private mode, blocked cookies) leaves the
+    // circle at its corner; the drag still works for this page.
+    return undefined
+  }
+}
+
+/** Remember a dragged point, or forget it when the circle returns to its corner. */
+function rememberOrbPoint(point: OrbPoint | undefined): void {
+  try {
+    if (point === undefined) window.localStorage.removeItem(ORB_POSITION_KEY)
+    else window.localStorage.setItem(ORB_POSITION_KEY, serializeOrbPoint(point))
+  } catch {
+    // Same as reading: the position is a convenience, never a precondition.
+  }
 }
 
 /** The confirm card's own state: what the user has typed and where the flow is. */
@@ -292,7 +366,14 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
   const { ctx, sessionId } = props
   const { occupancy, host } = useOccupancy(ctx, sessionId)
   const rootRef = useRef<HTMLButtonElement | null>(null)
-  const anchorRight = useAnchorRightOffset(rootRef)
+  // The point a drag left the circle at, restored from the last visit. `undefined`
+  // means the user has never moved it, which is what keeps the panel-aware corner
+  // the default rather than a position someone happened to drop it in once.
+  const [moved, setMoved] = useState<OrbPoint | undefined>(storedOrbPoint)
+  const [dragging, setDragging] = useState(false)
+  const dragRef = useRef<OrbDrag | null>(null)
+  const draggedRef = useRef(false)
+  const placement = useOrbPlacement(rootRef, moved)
   const thresholds = host?.thresholds ?? DEFAULT_ORB_THRESHOLDS
   const [failure, setFailure] = useState<string | null>(null)
   const [hovering, setHovering] = useState(false)
@@ -413,6 +494,67 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
     return () => { clearTimeout(timer) }
   }, [failure])
 
+  /**
+   * Take the circle under the pointer.
+   *
+   * The gesture is captured so a fast drag that outruns the pointer keeps
+   * following it, and the press is not yet a drag: `draggedRef` stays false
+   * until the threshold is passed, so a plain click still opens the card.
+   */
+  const startOrbDrag = useCallback((event: { pointerId: number; button: number; clientX: number; clientY: number; currentTarget: HTMLButtonElement }): void => {
+    if (event.button !== 0) return
+    const rect = event.currentTarget.getBoundingClientRect()
+    dragRef.current = {
+      pointerId: event.pointerId,
+      from: { x: event.clientX, y: event.clientY },
+      origin: { x: rect.left, y: rect.top },
+      moved: false,
+    }
+    draggedRef.current = false
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }, [])
+
+  /** Move the circle with the pointer, once the gesture has earned it. */
+  const moveOrbDrag = useCallback((event: { pointerId: number; clientX: number; clientY: number }): void => {
+    const drag = dragRef.current
+    if (drag === null || drag.pointerId !== event.pointerId) return
+    const to = { x: event.clientX, y: event.clientY }
+    if (!drag.moved) {
+      if (!isDragGesture(drag.from, to)) return
+      drag.moved = true
+      setDragging(true)
+    }
+    setMoved(clampOrbPoint({
+      x: drag.origin.x + (to.x - drag.from.x),
+      y: drag.origin.y + (to.y - drag.from.y),
+    }, currentViewport()))
+  }, [])
+
+  /** Drop the circle where the pointer left it, and remember the point. */
+  const endOrbDrag = useCallback((event: { pointerId: number; clientX: number; clientY: number; currentTarget: HTMLButtonElement }): void => {
+    const drag = dragRef.current
+    dragRef.current = null
+    if (drag === null) return
+    if (event.currentTarget.hasPointerCapture(drag.pointerId)) {
+      event.currentTarget.releasePointerCapture(drag.pointerId)
+    }
+    setDragging(false)
+    if (!drag.moved) return
+    const point = clampOrbPoint({
+      x: drag.origin.x + (event.clientX - drag.from.x),
+      y: drag.origin.y + (event.clientY - drag.from.y),
+    }, currentViewport())
+    draggedRef.current = true
+    setMoved(point)
+    rememberOrbPoint(point)
+  }, [])
+
+  /** Put the circle back in the corner the shell manages, and forget the drag. */
+  const resetOrb = useCallback((): void => {
+    setMoved(undefined)
+    rememberOrbPoint(undefined)
+  }, [])
+
   if (occupancy === null) return null
   const level = orbLevel(occupancy.usedTokens, thresholds)
   const filled = waterLevel(occupancy.percent)
@@ -439,11 +581,23 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
       type: 'button',
       ref: rootRef,
       className: `${css.root} ${levelClassName(level)}`,
-      title: failure ?? detail,
+      title: `${failure ?? detail}\n\n拖动可移动位置`,
       'aria-label': failure ?? `${tokens} tokens，${occupancy.percent}% 已用。接近 smart zone；到下个相位边界做五选一，交接只是其一`,
       'data-a2d2-orb': level,
       'data-a2d2-level': String(filled),
-      onClick: consultNext,
+      onPointerDown: startOrbDrag,
+      onPointerMove: moveOrbDrag,
+      onPointerUp: endOrbDrag,
+      onPointerCancel: endOrbDrag,
+      onClick: () => {
+        // A drag ends with a click on the element the pointer went down on, which
+        // would otherwise open the card every time the circle is moved.
+        if (draggedRef.current) {
+          draggedRef.current = false
+          return
+        }
+        consultNext()
+      },
     },
     createElement('span', { className: css.water, style: { '--a2d2-level': `${filled}%` } as never, 'aria-hidden': true }),
     createElement('span', {
@@ -457,8 +611,9 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
     ),
   )
 
-  // The boundary action yields the surface to an open card.
-  const showAction = hovering && !cardOpen
+  // The boundary action yields the surface to an open card, and to a drag: the
+  // pointer is on the circle to move it, not to ask what comes next.
+  const showAction = hovering && !cardOpen && !dragging
   const actionButton = (label: string, hint: string, onClick: () => void): ReturnType<typeof createElement> =>
     createElement('button', { type: 'button', className: css.action, title: hint, 'aria-label': `${label}：${hint}`, onClick }, label)
   const action = showAction
@@ -566,6 +721,14 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
     ),
     attribution === undefined ? null : createElement('div', { className: css.attribution }, attribution),
     createElement('div', { className: css.cardRow },
+      moved === undefined
+        ? null
+        : createElement('button', {
+          type: 'button',
+          className: `${css.cardButton} ${css.cancel} ${css.cardReset}`,
+          title: '把指示球放回原来的角落',
+          onClick: resetOrb,
+        }, '复位'),
       consult.kind === 'error'
         ? createElement('button', {
           type: 'button',
@@ -584,14 +747,35 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
   return createElement(
     'div',
     {
-      className: css.anchor,
-      style: { right: `${String(anchorRight)}px` },
+      className: dragging ? `${css.anchor} ${css.dragging}` : css.anchor,
+      style: {
+        left: `${String(placement.point.x)}px`,
+        top: `${String(placement.point.y)}px`,
+        // The sheet geometry the stylesheet draws, published from the model the
+        // clamps are computed with, so the two cannot drift apart.
+        '--a2d2-orb-size': `${String(ORB_SIZE_PX)}px`,
+        '--a2d2-card-width': `${String(ORB_CARD_WIDTH_PX)}px`,
+        '--a2d2-stack-gap': `${String(ORB_STACK_GAP_PX)}px`,
+      } as never,
       onMouseEnter: () => { setHovering(true) },
       onMouseLeave: () => { setHovering(false) },
     },
-    handoffCard,
-    consultCard,
-    action,
+    createElement(
+      'div',
+      {
+        className: css.stack,
+        style: {
+          left: `${String(placement.card.left)}px`,
+          ...(placement.card.above
+            ? { bottom: `calc(100% + ${String(ORB_STACK_GAP_PX)}px)` }
+            : { top: `calc(100% + ${String(ORB_STACK_GAP_PX)}px)` }),
+          '--a2d2-card-max': `${String(placement.card.maxHeight)}px`,
+        } as never,
+      },
+      handoffCard,
+      consultCard,
+      action,
+    ),
     orb,
   )
 }

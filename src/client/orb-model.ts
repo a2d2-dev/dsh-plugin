@@ -1,11 +1,11 @@
 /**
- * The floating handoff indicator's model: occupancy arithmetic, the alert level
- * that decides its color, and the anchor offset that keeps the circle and its
- * card clear of the shell's own panels.
+ * The floating handoff indicator's model: occupancy arithmetic and the alert
+ * level that decides its color. Where the circle sits is a separate model —
+ * `orb-position.ts` — so this one stays about what the circle says.
  *
- * Pure functions over plain values, so the arithmetic and the placement are
- * testable without a browser and the threshold that drives the color is data
- * rather than a constant embedded in a component.
+ * Pure functions over plain values, so the arithmetic is testable without a
+ * browser and the threshold that drives the color is data rather than a
+ * constant embedded in a component.
  *
  * @module @deepseek-ai/dsh-a2d2/client/orb-model
  */
@@ -111,66 +111,4 @@ export function orbLevel(usedTokens: number, thresholds: OrbThresholds): OrbLeve
  */
 export function waterLevel(percent: number): number {
   return Math.max(0, Math.min(100, Math.round(percent)))
-}
-
-/** Distance kept between the indicator and a shell panel or the viewport edge, in px. */
-export const ORB_GAP_PX = 12
-
-/**
- * The confirm/consult card's width in px.
- *
- * Mirrors `.card { width }` in `orb.module.css`: the guard in
- * {@link anchorRightOffset} needs the number and the stylesheet cannot be read
- * from here, so the two carry each other's name and move together.
- */
-export const ORB_CARD_WIDTH_PX = 288
-
-/**
- * What the shell currently occupies at the right of the viewport.
- *
- * @property viewportWidth - the layout viewport width in px; the containing
- * block a `position: fixed` anchor is measured against, so this is the document
- * element's client width (scrollbar excluded), not `innerWidth`.
- * @property regionRight - the right edge of the layout region the indicator is
- * laid out in, or `undefined` before that region is mounted. A shell that pushes
- * its conversation column left for a right-hand panel reports the squeezed edge,
- * so the space beyond it is exactly that panel.
- * @property detailsWidth - the width of the shell's own details column, for
- * shells that keep a measured column instead of pushing the content aside.
- */
-export interface AnchorRoom {
-  /** The layout viewport width in px. */
-  readonly viewportWidth: number
-  /** Right edge of the region the indicator lives in, or `undefined` when unknown. */
-  readonly regionRight: number | undefined
-  /** Width of the shell's details column in px; zero when it has none or is closed. */
-  readonly detailsWidth: number
-}
-
-/**
- * The `right` offset that puts the indicator next to the shell's right panel
- * rather than underneath it.
- *
- * The indicator is fixed to the viewport, so the shell's layout cannot move it
- * out of a panel's way; the anchor is shifted left by the panel's width instead.
- * Two ways of measuring that width are combined by taking the larger: the space
- * left over to the right of the region the indicator is laid out in (works for a
- * shell that pushes its content aside, and survives the panel's class names
- * changing), and the shell's own details column width (works for a shell that
- * keeps one). Both are zero when no panel is open, which leaves the circle at
- * its viewport corner.
- *
- * The result is capped so the card stays inside the viewport: dodging a panel
- * wider than the room left over would trade a hidden panel for a card with its
- * own left edge cut off. In that case the card keeps its width and overlaps the
- * panel instead, which is the only reading order that stays usable.
- * @param room - the measured shell geometry.
- * @returns the distance from the viewport's right edge, in whole px.
- */
-export function anchorRightOffset(room: AnchorRoom): number {
-  const used = room.regionRight === undefined ? 0 : room.viewportWidth - room.regionRight
-  const panel = Math.max(0, Math.round(Math.max(used, room.detailsWidth)))
-  const dodged = ORB_GAP_PX + panel
-  const insideViewport = Math.max(0, Math.round(room.viewportWidth - ORB_GAP_PX - ORB_CARD_WIDTH_PX))
-  return Math.min(dodged, insideViewport)
 }
