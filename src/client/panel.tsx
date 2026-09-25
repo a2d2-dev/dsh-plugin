@@ -7,8 +7,8 @@
 import { createElement, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { A2d2ClientContext, ClientSessionListSnapshot, ClientSessionListStore, ClientSessionsService } from './context.ts'
 import { fetchPanel } from './panel-api.ts'
-import { nextPanelState, panelLoadState, panelTally, panelTaskRows } from './panel-model.ts'
-import type { PanelClientState, PanelMemberRow, PanelTaskRow } from './panel-model.ts'
+import { handoffForest, nextPanelState, panelLoadState, panelTally, panelTaskRows } from './panel-model.ts'
+import type { PanelClientState, PanelMemberRow, PanelMemberTreeNode, PanelTaskRow } from './panel-model.ts'
 import { SubagentModelTab } from './subagent-tab.tsx'
 import css from './panel.module.css'
 
@@ -42,7 +42,7 @@ function MemberLine({ row, ctx }: { readonly row: PanelMemberRow; readonly ctx: 
   }
   return createElement(
     'div',
-    { className: css.member, title: row.sessionId },
+    { className: row.current ? `${css.member} ${css.memberCurrent}` : css.member, title: row.sessionId },
     createElement(
       'button',
       {
@@ -60,7 +60,23 @@ function MemberLine({ row, ctx }: { readonly row: PanelMemberRow; readonly ctx: 
   )
 }
 
+function MemberNode({ node, ctx }: { readonly node: PanelMemberTreeNode; readonly ctx: A2d2ClientContext }): ReturnType<typeof createElement> {
+  return createElement(
+    'div',
+    { className: css.memberNode },
+    createElement(MemberLine, { row: node.row, ctx }),
+    node.children.length === 0
+      ? null
+      : createElement(
+        'div',
+        { className: css.memberChildren },
+        node.children.map(child => createElement(MemberNode, { key: child.row.sessionId, node: child, ctx })),
+      ),
+  )
+}
+
 function TaskCard({ row, ctx }: { readonly row: PanelTaskRow; readonly ctx: A2d2ClientContext }): ReturnType<typeof createElement> {
+  const memberForest = handoffForest(row.members)
   return createElement(
     'div',
     { className: row.current ? css.cardCurrent : css.card },
@@ -83,7 +99,7 @@ function TaskCard({ row, ctx }: { readonly row: PanelTaskRow; readonly ctx: A2d2
       { className: css.members },
       row.members.length === 0
         ? createElement('div', { className: css.memberEmpty }, '还没有会话加入')
-        : row.members.map(member => createElement(MemberLine, { key: member.sessionId, row: member, ctx })),
+        : memberForest.map(node => createElement(MemberNode, { key: node.row.sessionId, node, ctx })),
     ),
   )
 }

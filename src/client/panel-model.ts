@@ -29,6 +29,12 @@ export interface PanelMemberRow {
   readonly openable: boolean
 }
 
+/** One node in a task member handoff forest. */
+export interface PanelMemberTreeNode {
+  readonly row: PanelMemberRow
+  readonly children: readonly PanelMemberTreeNode[]
+}
+
 /** One task row in the panel. */
 export interface PanelTaskRow {
   readonly id: string
@@ -132,6 +138,67 @@ export function panelTaskRows(
   currentSessionId: string,
 ): readonly PanelTaskRow[] {
   return payload.tasks.map(task => taskRow(task, titles, openable, currentSessionId))
+}
+
+/**
+ * Shape task members into a handoff forest.
+ *
+ * Missing parents, non-member parents, self edges, and cycle-closing edges are
+ * rooted instead of dropped. The input order remains the sibling order.
+ */
+export function handoffForest(members: readonly PanelMemberRow[]): readonly PanelMemberTreeNode[] {
+  const byId = new Map(members.map(member => [member.sessionId, member]))
+  const order = new Map(members.map((member, index) => [member.sessionId, index]))
+  const candidateParent = new Map<string, string>()
+  for (const member of members) {
+    if (member.handoffFrom !== undefined && byId.has(member.handoffFrom) && member.handoffFrom !== member.sessionId) {
+      candidateParent.set(member.sessionId, member.handoffFrom)
+    }
+  }
+  const cycleRoots = new Set<string>()
+  const finished = new Set<string>()
+  for (const member of members) {
+    if (finished.has(member.sessionId)) continue
+    const path: string[] = []
+    const pathIndex = new Map<string, number>()
+    let current: string | undefined = member.sessionId
+    while (current !== undefined && !finished.has(current)) {
+      const seenAt = pathIndex.get(current)
+      if (seenAt !== undefined) {
+        const cycle = path.slice(seenAt)
+        let root = cycle[0]
+        if (root === undefined) break
+        for (const id of cycle.slice(1)) {
+          if ((order.get(id) ?? Number.MAX_SAFE_INTEGER) < (order.get(root) ?? Number.MAX_SAFE_INTEGER)) root = id
+        }
+        cycleRoots.add(root)
+        break
+      }
+      pathIndex.set(current, path.length)
+      path.push(current)
+      current = candidateParent.get(current)
+    }
+    for (const id of path) finished.add(id)
+  }
+
+  const childrenByParent = new Map<string, PanelMemberRow[]>()
+  const roots: PanelMemberRow[] = []
+  for (const member of members) {
+    const parentId = candidateParent.get(member.sessionId)
+    if (parentId === undefined || cycleRoots.has(member.sessionId)) {
+      roots.push(member)
+      continue
+    }
+    const siblings = childrenByParent.get(parentId) ?? []
+    siblings.push(member)
+    childrenByParent.set(parentId, siblings)
+  }
+
+  const visit = (row: PanelMemberRow): PanelMemberTreeNode => ({
+    row,
+    children: (childrenByParent.get(row.sessionId) ?? []).map(visit),
+  })
+  return roots.map(visit)
 }
 
 /** Count task rows for the panel header. */
