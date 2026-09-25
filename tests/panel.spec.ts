@@ -11,6 +11,7 @@ import type { Task } from '../src/types.ts'
 
 const sessionA = SessionId('session-a')
 const sessionB = SessionId('session-b')
+const uuidSession = SessionId('d12521d2-1ec2-494b-95a9-ebde5fa3db76')
 
 function task(overrides: Partial<Task> = {}): Task {
   return {
@@ -137,6 +138,29 @@ describe('panel route handler', () => {
     const unsafe = await send(undefined, get(`${PANEL_ROUTE_PATH}?session=../../etc/passwd`))
     expect(unsafe.status).toBe(400)
     expect(JSON.parse(unsafe.body ?? 'null')).toMatchObject({ ok: false, error: { code: 'missing-session' } })
+  })
+
+  it('accepts a pure UUID session id from in-process subagents', async () => {
+    const getSession = vi.fn((id: SessionId) => id === uuidSession ? session('/tmp/subagent-project') : undefined)
+    const captured = await send(createPanelHandler(deps({ getSession })), get(`${PANEL_ROUTE_PATH}?session=${uuidSession}`))
+
+    expect(captured.status).toBe(200)
+    expect(getSession).toHaveBeenCalledWith(uuidSession)
+  })
+
+  it.each([
+    ['path separators', 'session/a'],
+    ['dot segments', 'session-..'],
+    ['encoded separators', 'session-a%2Fb'],
+    ['percent signs', 'session-%25'],
+    ['too long', `session-${'a'.repeat(122)}`],
+  ])('rejects %s in session query parameters', async (_name, rawSession) => {
+    const getSession = vi.fn()
+    const captured = await send(createPanelHandler(deps({ getSession })), get(`${PANEL_ROUTE_PATH}?session=${rawSession}`))
+
+    expect(captured.status).toBe(400)
+    expect(getSession).not.toHaveBeenCalled()
+    expect(JSON.parse(captured.body ?? 'null')).toMatchObject({ ok: false, error: { code: 'missing-session' } })
   })
 
   it('rejects a session the host does not hold', async () => {

@@ -12,6 +12,7 @@ import {
   handoffForest,
   nextPanelState,
   panelLoadState,
+  panelSessionTarget,
   panelSessionTitles,
   panelTally,
   panelTaskRows,
@@ -131,6 +132,10 @@ export function A2d2Panel({ ctx, sessionId, visible }: A2d2PanelProps): ReturnTy
   const getSnapshot = useCallback(() => list.getSnapshot(), [list])
   const subscribe = useCallback((listener: () => void) => list.subscribe(listener), [list])
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  const sessionTarget = useMemo(
+    () => panelSessionTarget(state.byId, sessionId),
+    [state.byId, sessionId],
+  )
 
   const [panel, setPanel] = useState<PanelClientState>({ payload: undefined, failure: undefined })
   const [titleReads, setTitleReads] = useState<Readonly<Record<string, SessionTitleHistoryRead | undefined>>>({})
@@ -144,7 +149,7 @@ export function A2d2Panel({ ctx, sessionId, visible }: A2d2PanelProps): ReturnTy
     const controller = new AbortController()
     let live = true
     const read = async (): Promise<void> => {
-      const result = await fetchPanel(sessionId, controller.signal)
+      const result = await fetchPanel(sessionTarget.querySessionId, controller.signal)
       if (!live || result === undefined) return
       setPanel(state => nextPanelState(state, result))
     }
@@ -155,7 +160,7 @@ export function A2d2Panel({ ctx, sessionId, visible }: A2d2PanelProps): ReturnTy
       controller.abort()
       window.clearInterval(timer)
     }
-  }, [sessionId, visible])
+  }, [sessionTarget.querySessionId, visible])
 
   useEffect(() => {
     return () => { titleLoader?.dispose() }
@@ -193,9 +198,14 @@ export function A2d2Panel({ ctx, sessionId, visible }: A2d2PanelProps): ReturnTy
     return panelSessionTitles(state.byId, effectiveTitleReads, titleReadCandidates)
   }, [state.byId, effectiveTitleReads, titleReadCandidates])
   const openable = useCallback((id: string) => state.byId[id] !== undefined, [state])
-  const rows = payload === undefined ? [] : panelTaskRows(payload, titles, openable, sessionId)
+  const rows = payload === undefined ? [] : panelTaskRows(payload, titles, openable, sessionTarget.currentMemberSessionId)
   const tally = panelTally(rows)
   const load = panelLoadState(payload, failure)
+  const currentTaskText = tally.current === undefined
+    ? '当前会话不属于任何任务'
+    : sessionTarget.openedAsSubagent
+      ? `当前会话是「${tally.current.name}」的子代理`
+      : `当前会话在「${tally.current.name}」`
   const taskHeader = load.kind === 'failed'
     ? '任务读取失败'
     : load.kind === 'loading'
@@ -218,7 +228,7 @@ export function A2d2Panel({ ctx, sessionId, visible }: A2d2PanelProps): ReturnTy
       load.kind === 'failed' && payload === undefined ? null : createElement(
         'div',
         { className: css.own },
-        tally.current === undefined ? '当前会话不属于任何任务' : `当前会话在「${tally.current.name}」`,
+        currentTaskText,
       ),
       payload === undefined ? null : createElement('div', { className: css.rootPath, title: payload.root }, `项目 ${payload.root}`),
       load.kind === 'failed' ? createElement('div', { className: css.failure }, load.message) : null,

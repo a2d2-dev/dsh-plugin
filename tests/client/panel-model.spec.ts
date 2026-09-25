@@ -5,6 +5,7 @@ import {
   handoffForest,
   nextPanelState,
   panelLoadState,
+  panelSessionTarget,
   panelSessionTitles,
   panelTally,
   panelTaskRows,
@@ -289,6 +290,41 @@ describe('panel task view model', () => {
     const rows = panelTaskRows(payload(), {}, () => true, 'session-other')
 
     expect(panelTally(rows)).toEqual({ total: 1, active: 1, members: 2 })
+  })
+
+  it('resolves a subagent panel to its main session task owner', () => {
+    const childId = 'd12521d2-1ec2-494b-95a9-ebde5fa3db76'
+    expect(panelSessionTarget({
+      'session-root': { id: 'session-root', displayTitle: 'Main' },
+      [childId]: {
+        id: childId,
+        displayTitle: 'Child',
+        origin: 'subagent',
+        parentId: 'session-root',
+      },
+    }, childId)).toEqual({
+      querySessionId: 'session-root',
+      currentMemberSessionId: 'session-root',
+      openedSessionId: childId,
+      openedAsSubagent: true,
+    })
+  })
+
+  it('falls back to the opened session while a subagent parent chain is unavailable', () => {
+    const childId = 'd12521d2-1ec2-494b-95a9-ebde5fa3db76'
+    expect(panelSessionTarget({
+      [childId]: {
+        id: childId,
+        displayTitle: 'Child',
+        origin: 'subagent',
+        parentId: 'session-missing',
+      },
+    }, childId)).toEqual({
+      querySessionId: childId,
+      currentMemberSessionId: childId,
+      openedSessionId: childId,
+      openedAsSubagent: false,
+    })
   })
 })
 
