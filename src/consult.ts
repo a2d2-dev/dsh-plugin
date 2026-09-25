@@ -10,6 +10,8 @@
  */
 
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from 'node:http'
+import { stat } from 'node:fs/promises'
+import { join } from 'node:path'
 import {
   BlockAssembler,
   createUserMessage,
@@ -91,6 +93,18 @@ export interface ConsultCandidate {
   readonly station?: string
 }
 
+export type ConsultPreconditionId = 'context' | 'issue-tracker'
+
+export interface ConsultPreconditionMissing {
+  readonly id: ConsultPreconditionId
+  readonly label: string
+  readonly paths: readonly string[]
+}
+
+export interface ConsultPreconditions {
+  readonly missing: readonly ConsultPreconditionMissing[]
+}
+
 /** The model's complete answer: where the work stands, then where it can go. */
 export interface ConsultOutput {
   /** One sentence naming where this session's work currently stands. */
@@ -114,6 +128,8 @@ export interface ConsultValue {
   readonly fallbacks: readonly ConsultFallback[]
   /** Current station model table, by station, with candidates in configured order. */
   readonly stationModels: StationModelsSettings['stations']
+  /** Host-checked setup facts for the project that owns the session cwd. */
+  readonly preconditions: ConsultPreconditions
 }
 
 /** Stable public failure vocabulary for the route. */
@@ -157,6 +173,7 @@ export interface ConsultMaterial {
   readonly messages: readonly ConsultMessageExcerpt[]
   readonly tasks: readonly Task[]
   readonly context?: ConsultContextFacts
+  readonly preconditions?: ConsultPreconditions
 }
 
 /** Minimal live-session surface needed by the route. */
@@ -172,6 +189,8 @@ export interface ConsultDependencies {
   readonly trustedHosts: () => readonly string[]
   readonly getSession: (id: SessionId) => ConsultSession | undefined
   readonly listTasks: (cwd: string) => Promise<readonly Task[]>
+  readonly projectRoot?: (cwd: string) => Promise<string>
+  readonly checkPreconditions?: (projectRoot: string) => Promise<ConsultPreconditions>
   readonly readAskMatt: () => Promise<SkillSource>
   readonly getStationModels?: () => StationModelsSettings
   readonly contextFacts?: (session: ConsultSession) => ConsultContextFacts | undefined
@@ -189,6 +208,43 @@ export class MalformedCandidatesError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(`a2d2 consult: ${message}`, options)
     this.name = 'MalformedCandidatesError'
+  }
+}
+
+const SETUP_MATT_POCOCK_SKILLS_COMMAND = '/setup-matt-pocock-skills'
+
+const PRECONDITION_CONTEXT: ConsultPreconditionMissing = {
+  id: 'context',
+  label: 'CONTEXT.md or CONTEXT-MAP.md',
+  paths: ['CONTEXT.md', 'CONTEXT-MAP.md'],
+}
+
+const PRECONDITION_ISSUE_TRACKER: ConsultPreconditionMissing = {
+  id: 'issue-tracker',
+  label: 'docs/agents/issue-tracker.md',
+  paths: ['docs/agents/issue-tracker.md'],
+}
+
+async function isFile(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isFile()
+  } catch {
+    return false
+  }
+}
+
+/** Check the Matt setup files in the resolved project root. */
+export async function checkProjectPreconditions(projectRoot: string): Promise<ConsultPreconditions> {
+  const [hasContext, hasContextMap, hasIssueTracker] = await Promise.all([
+    isFile(join(projectRoot, 'CONTEXT.md')),
+    isFile(join(projectRoot, 'CONTEXT-MAP.md')),
+    isFile(join(projectRoot, 'docs', 'agents', 'issue-tracker.md')),
+  ])
+  return {
+    missing: [
+      ...(hasContext || hasContextMap ? [] : [PRECONDITION_CONTEXT]),
+      ...(hasIssueTracker ? [] : [PRECONDITION_ISSUE_TRACKER]),
+    ],
   }
 }
 
@@ -313,6 +369,7 @@ export function buildConsultPrompt(material: ConsultMaterial, skillSource: Skill
   const contextFacts = material.context ?? {
     status: 'unavailable',
   }
+  const preconditions = material.preconditions ?? { missing: [] }
   const envelope = [
     '<situation-envelope>',
     'This is a next-step consultation at a phase boundary.',
@@ -326,6 +383,8 @@ export function buildConsultPrompt(material: ConsultMaterial, skillSource: Skill
     JSON.stringify(HIGHWAY_PROMPT_CATALOG),
     'Current context and smart zone facts:',
     JSON.stringify(contextFacts),
+    'Project preconditions checked by the host:',
+    JSON.stringify(preconditions),
     'Session and project material follows as JSON data:',
     JSON.stringify(material),
     '</situation-envelope>',
@@ -417,6 +476,27 @@ export function parseConsultOutput(text: string): ConsultOutput {
     ...(next === undefined ? {} : { next }),
     candidates,
   })
+}
+
+function setupPreconditionCandidate(candidate?: ConsultCandidate): ConsultCandidate {
+  return {
+    ...(candidate ?? { label: '首次使用前：/setup-matt-pocock-skills' }),
+    input: SETUP_MATT_POCOCK_SKILLS_COMMAND,
+    move: 'continue',
+  }
+}
+
+function candidatesWithSetupPrecondition(
+  candidates: readonly ConsultCandidate[],
+  preconditions: ConsultPreconditions,
+): readonly ConsultCandidate[] {
+  if (preconditions.missing.length === 0) return candidates
+  const setupIndex = candidates.findIndex(candidate => candidate.input.trim() === SETUP_MATT_POCOCK_SKILLS_COMMAND)
+  const setup = setupPreconditionCandidate(setupIndex < 0 ? undefined : candidates[setupIndex])
+  const rest = setupIndex < 0
+    ? candidates
+    : candidates.filter((_candidate, index) => index !== setupIndex)
+  return deepFreeze([setup, ...rest].slice(0, 4))
 }
 
 function parseLocation(value: unknown): ConsultLocation {
@@ -755,19 +835,28 @@ export function createConsultHandler(
         dependencies.listTasks(cwd),
         dependencies.readAskMatt(),
       ])
+      const projectRoot = await (dependencies.projectRoot?.(cwd) ?? Promise.resolve(cwd))
+      const preconditions = await (dependencies.checkPreconditions ?? checkProjectPreconditions)(projectRoot)
       const collectMaterial = dependencies.collectMaterial ?? collectConsultMaterial
       const buildPrompt = dependencies.buildPrompt ?? buildConsultPrompt
       const material = collectMaterial(session.events, session.surface.nodes, tasks)
       const context = dependencies.contextFacts?.(session)
-      const prompt = buildPrompt(context === undefined ? material : { ...material, context }, skillSource)
+      const materialWithFacts = {
+        ...material,
+        ...(context === undefined ? {} : { context }),
+        preconditions,
+      }
+      const prompt = buildPrompt(materialWithFacts, skillSource)
       const stationModels = dependencies.getStationModels?.() ?? DEFAULT_STATION_MODELS
-      const { position, location, next, candidates, answeredBy, fallbacks } = await generateConsultWithFallback({
+      const generated = await generateConsultWithFallback({
         stream: dependencies.stream,
         routes: stationModels.consult,
         sessionId,
         prompt,
         signal: controller.signal,
       })
+      const { position, location, next, answeredBy, fallbacks } = generated
+      const candidates = candidatesWithSetupPrecondition(generated.candidates, preconditions)
       respond(response, 200, {
         ok: true,
         value: {
@@ -779,6 +868,7 @@ export function createConsultHandler(
           answeredBy,
           fallbacks,
           stationModels: stationModels.stations,
+          preconditions,
         },
       })
     } catch (error) {

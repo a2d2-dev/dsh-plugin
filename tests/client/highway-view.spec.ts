@@ -117,4 +117,51 @@ describe('highwayView', () => {
     expect(offRoad.placard).toBe('不在公路上')
     expect(offRoad.stations.every(station => station.state === 'ahead')).toBe(true)
   })
+
+  it('shows a setup placard only when the host reports missing preconditions', () => {
+    const view = highwayView({
+      kind: 'ready',
+      degraded: false,
+      location: { zone: 'main', station: 'grill', phaseDone: true },
+      next: { station: 'to-spec', move: 'continue', reason: '先完成首次配置' },
+      candidates: [
+        { label: '首次使用前：/setup-matt-pocock-skills', input: '/setup-matt-pocock-skills', move: 'continue' },
+        { label: '继续', input: '/to-spec', move: 'continue' },
+      ],
+      preconditions: {
+        missing: [
+          { id: 'context', label: 'CONTEXT.md or CONTEXT-MAP.md', paths: ['CONTEXT.md', 'CONTEXT-MAP.md'] },
+          { id: 'issue-tracker', label: 'docs/agents/issue-tracker.md', paths: ['docs/agents/issue-tracker.md'] },
+        ],
+      },
+    })
+
+    expect(view.preconditionPlacard).toEqual({
+      title: '首次使用前：/setup-matt-pocock-skills',
+      missing: ['CONTEXT.md or CONTEXT-MAP.md', 'docs/agents/issue-tracker.md'],
+    })
+  })
+
+  it('omits the setup placard for configured projects and old hosts', () => {
+    expect(highwayView({
+      kind: 'ready',
+      degraded: false,
+      location: { zone: 'main', station: 'grill', phaseDone: true },
+      candidates: [
+        { label: '继续', input: '/to-spec', move: 'continue' },
+        { label: '代理', input: '整理', move: 'subagent' },
+      ],
+      preconditions: { missing: [] },
+    }).preconditionPlacard).toBeUndefined()
+
+    expect(highwayView({
+      kind: 'ready',
+      degraded: false,
+      location: { zone: 'main', station: 'grill', phaseDone: true },
+      candidates: [
+        { label: '继续', input: '/to-spec', move: 'continue' },
+        { label: '代理', input: '整理', move: 'subagent' },
+      ],
+    }).preconditionPlacard).toBeUndefined()
+  })
 })

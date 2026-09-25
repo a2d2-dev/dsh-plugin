@@ -47,6 +47,18 @@ export interface ConsultNext {
   readonly reason: string
 }
 
+export type ConsultPreconditionId = 'context' | 'issue-tracker'
+
+export interface ConsultPreconditionMissing {
+  readonly id: ConsultPreconditionId
+  readonly label: string
+  readonly paths: readonly string[]
+}
+
+export interface ConsultPreconditions {
+  readonly missing: readonly ConsultPreconditionMissing[]
+}
+
 export interface ClientModelSelection {
   readonly provider: string
   readonly model: string
@@ -111,6 +123,7 @@ export type ConsultPhase =
       readonly answeredBy?: string
       readonly fallbacks?: readonly ConsultFallback[]
       readonly stationModels?: Readonly<Record<string, readonly string[]>>
+      readonly preconditions?: ConsultPreconditions
     }
   | { readonly kind: 'error'; readonly message: string }
 
@@ -177,6 +190,7 @@ type ConsultResponse =
         readonly answeredBy?: string
         readonly fallbacks?: readonly ConsultFallback[]
         readonly stationModels?: Readonly<Record<string, readonly string[]>>
+        readonly preconditions?: ConsultPreconditions
       }
     }
   | {
@@ -282,6 +296,27 @@ function parseStationModels(value: unknown): Readonly<Record<string, readonly st
   return result
 }
 
+function parsePreconditionMissing(value: unknown): ConsultPreconditionMissing | undefined {
+  if (!isRecord(value)) return undefined
+  if (value.id !== 'context' && value.id !== 'issue-tracker') return undefined
+  if (typeof value.label !== 'string' || value.label.trim() === '') return undefined
+  if (!Array.isArray(value.paths) || value.paths.length === 0) return undefined
+  if (value.paths.some(path => typeof path !== 'string' || path.trim() === '')) return undefined
+  return {
+    id: value.id,
+    label: value.label.trim(),
+    paths: value.paths.map(path => path.trim()),
+  }
+}
+
+function parsePreconditions(value: unknown): ConsultPreconditions | undefined {
+  if (value === undefined) return undefined
+  if (!isRecord(value) || !Array.isArray(value.missing)) return undefined
+  const missing = value.missing.map(parsePreconditionMissing)
+  if (missing.some(item => item === undefined)) return undefined
+  return { missing: missing as ConsultPreconditionMissing[] }
+}
+
 /** Parse the route's discriminated response before it reaches rendering state. */
 export function parseConsultResponse(value: unknown): ConsultResponse {
   if (!isRecord(value) || typeof value.ok !== 'boolean') {
@@ -324,6 +359,10 @@ export function parseConsultResponse(value: unknown): ConsultResponse {
   if (value.value.stationModels !== undefined && stationModels === undefined) {
     throw new Error('下一步咨询返回了无效响应')
   }
+  const preconditions = parsePreconditions(value.value.preconditions)
+  if (value.value.preconditions !== undefined && preconditions === undefined) {
+    throw new Error('下一步咨询返回了无效响应')
+  }
   const candidates = value.value.candidates.map(parseCandidate)
   if (candidates.some(candidate => candidate === undefined)) {
     throw new Error('下一步咨询返回了无效响应')
@@ -339,6 +378,7 @@ export function parseConsultResponse(value: unknown): ConsultResponse {
       ...(answeredBy === undefined ? {} : { answeredBy: answeredBy.trim() }),
       ...(parsedFallbacks === undefined ? {} : { fallbacks: parsedFallbacks as ConsultFallback[] }),
       ...(stationModels === undefined ? {} : { stationModels }),
+      ...(preconditions === undefined ? {} : { preconditions }),
     },
   }
 }
@@ -366,6 +406,7 @@ export async function requestConsult(deps: ConsultRequestDeps, sessionId: string
       ...(result.value.answeredBy === undefined ? {} : { answeredBy: result.value.answeredBy }),
       ...(result.value.fallbacks === undefined ? {} : { fallbacks: result.value.fallbacks }),
       ...(result.value.stationModels === undefined ? {} : { stationModels: result.value.stationModels }),
+      ...(result.value.preconditions === undefined ? {} : { preconditions: result.value.preconditions }),
     })
   } catch (error) {
     deps.setPhase({
