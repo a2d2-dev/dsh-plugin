@@ -139,6 +139,42 @@ describe('panel route wiring', () => {
     })
   })
 
+  it('rejects duplicate session query parameters', async () => {
+    const root = await tempRoot()
+    const cwd = join(root, 'src')
+    await mkdir(cwd, { recursive: true })
+    const { server, sessions } = await mount()
+    sessions.add(sessionA, cwd)
+
+    const repeated = record()
+    await server.handler(PANEL_ROUTE_PATH)?.({
+      method: 'GET',
+      url: `${PANEL_ROUTE_PATH}?session=${sessionA}&session=session-b`,
+      headers: { host: '10.126.126.12:3710' },
+    }, repeated.response)
+
+    expect(repeated.status).toBe(400)
+    expect(JSON.parse(repeated.body ?? 'null')).toMatchObject({ ok: false, error: { code: 'missing-session' } })
+  })
+
+  it('rejects duplicate session query parameters even when one value is valid', async () => {
+    const root = await tempRoot()
+    const cwd = join(root, 'src')
+    await mkdir(cwd, { recursive: true })
+    const { server, sessions } = await mount()
+    sessions.add(sessionA, cwd)
+
+    const repeated = record()
+    await server.handler(PANEL_ROUTE_PATH)?.({
+      method: 'GET',
+      url: `${PANEL_ROUTE_PATH}?session=${sessionA}&session=../../etc/passwd`,
+      headers: { host: '10.126.126.12:3710' },
+    }, repeated.response)
+
+    expect(repeated.status).toBe(400)
+    expect(JSON.parse(repeated.body ?? 'null')).toMatchObject({ ok: false, error: { code: 'missing-session' } })
+  })
+
   it('still loads without a web server', async () => {
     const ctx = new Context()
     await ctx.plugin(StubSessions)

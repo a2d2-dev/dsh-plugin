@@ -57,6 +57,17 @@ export type PanelLoadState =
   | { readonly kind: 'loaded' }
   | { readonly kind: 'failed'; readonly message: string }
 
+/** Component-owned task read state. */
+export interface PanelClientState {
+  readonly payload: PanelPayload | undefined
+  readonly failure: string | undefined
+}
+
+/** Result of one host task read, as observed by the panel state machine. */
+export type PanelReadResult =
+  | { readonly kind: 'ok'; readonly payload: PanelPayload }
+  | { readonly kind: 'failed'; readonly message: string }
+
 /** Translate a stored task state into the panel label. */
 export function stateLabel(state: PanelTask['state']): string {
   return STATE_LABELS[state]
@@ -139,6 +150,12 @@ export function panelLoadState(payload: PanelPayload | undefined, failure: strin
   if (failure !== undefined) return { kind: 'failed', message: failure }
   if (payload === undefined) return { kind: 'loading' }
   return payload.tasks.length === 0 ? { kind: 'empty' } : { kind: 'loaded' }
+}
+
+/** Apply one completed task read to the panel state. */
+export function nextPanelState(_state: PanelClientState, result: PanelReadResult): PanelClientState {
+  if (result.kind === 'ok') return { payload: result.payload, failure: undefined }
+  return { payload: undefined, failure: result.message }
 }
 
 function isPanelMember(value: unknown): value is PanelMember {

@@ -4,6 +4,7 @@ import { indicatorProjectionDefinition, indicatorProjectionSchema } from '../../
 import {
   formatRoute,
   subagentRouteRows,
+  subagentRouteHeader,
   subagentRouteTally,
   type CatalogEntry,
 } from '../../src/client/subagent-model.ts'
@@ -139,6 +140,13 @@ describe('subagentRouteTally', () => {
 
   it('is all zeroes for an empty list', () => {
     expect(subagentRouteTally([])).toEqual({ total: 0, running: 0, drifted: 0 })
+  })
+})
+
+describe('subagentRouteHeader', () => {
+  it('always includes the drift count', () => {
+    expect(subagentRouteHeader({ total: 2, running: 1, drifted: 0 }))
+      .toBe('2 个子代理 · 1 运行中 · 0 个与主会话不一致')
   })
 })
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  nextPanelState,
   panelLoadState,
   panelTally,
   panelTaskRows,
@@ -81,6 +82,18 @@ describe('panel task view model', () => {
     expect(panelLoadState(payload({ tasks: [] }), undefined)).toEqual({ kind: 'empty' })
     expect(panelLoadState(undefined, 'read failed')).toEqual({ kind: 'failed', message: 'read failed' })
     expect(panelLoadState(payload(), undefined)).toEqual({ kind: 'loaded' })
+  })
+
+  it('clears stale payload when a refresh fails', () => {
+    expect(nextPanelState({ payload: payload(), failure: undefined }, { kind: 'failed', message: 'read failed' }))
+      .toEqual({ payload: undefined, failure: 'read failed' })
+  })
+
+  it('replaces failure with the latest successful payload', () => {
+    const latest = payload({ root: '/data/latest' })
+
+    expect(nextPanelState({ payload: undefined, failure: 'read failed' }, { kind: 'ok', payload: latest }))
+      .toEqual({ payload: latest, failure: undefined })
   })
 
   it('counts tasks, active tasks, aggregated members, and the current task', () => {

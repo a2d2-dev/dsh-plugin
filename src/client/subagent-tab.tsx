@@ -22,7 +22,7 @@ import type {
   A2d2ClientContext, ClientRouteSource, ClientSessionListSnapshot, ClientSessionListStore,
   ClientSessionsService,
 } from './context.ts'
-import { formatRoute, subagentRouteRows, subagentRouteTally, type SubagentRouteRow } from './subagent-model.ts'
+import { formatRoute, subagentRouteHeader, subagentRouteRows, subagentRouteTally, type SubagentRouteRow } from './subagent-model.ts'
 import css from './subagent-tab.module.css'
 
 /** The projection key every route below is read from. */
@@ -48,15 +48,6 @@ export interface SubagentModelTabProps {
   readonly sessionId: string
   /** Whether this tab is the active one; absent counts as visible, so a host that publishes no flag still refreshes. */
   readonly visible?: boolean
-}
-
-/**
- * Render the standings of a tally's drifted count.
- * @param drifted - how many children run on another route.
- * @returns the header clause to append, or `''` when nothing drifted.
- */
-function driftClause(drifted: number): string {
-  return drifted === 0 ? '' : ` · ${String(drifted)} 个与主会话不一致`
 }
 
 /** Render one child's route line. */
@@ -133,7 +124,7 @@ export function SubagentModelTab({ ctx, sessionId, visible }: SubagentModelTabPr
     createElement(
       'div',
       { className: css.header },
-      `${String(tally.total)} 个子代理 · ${String(tally.running)} 运行中${driftClause(tally.drifted)}`,
+      subagentRouteHeader(tally),
     ),
     createElement(
       'div',

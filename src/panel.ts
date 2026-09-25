@@ -99,9 +99,9 @@ function reasonOf(error: unknown): string {
 }
 
 function sessionIdOf(url: string | undefined): SessionId | undefined {
-  const raw = new URL(url ?? PANEL_ROUTE_PATH, 'http://a2d2.invalid')
-    .searchParams.get('session')
-  return raw === null ? undefined : parseSessionId(raw)
+  const values = new URL(url ?? PANEL_ROUTE_PATH, 'http://a2d2.invalid')
+    .searchParams.getAll('session')
+  return values.length === 1 ? parseSessionId(values[0]!) : undefined
 }
 
 /**

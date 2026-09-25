@@ -5,11 +5,10 @@
  */
 
 import { createElement, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import type { PanelPayload } from '../panel-types.ts'
 import type { A2d2ClientContext, ClientSessionListSnapshot, ClientSessionListStore, ClientSessionsService } from './context.ts'
 import { fetchPanel } from './panel-api.ts'
-import { panelLoadState, panelTally, panelTaskRows } from './panel-model.ts'
-import type { PanelMemberRow, PanelTaskRow } from './panel-model.ts'
+import { nextPanelState, panelLoadState, panelTally, panelTaskRows } from './panel-model.ts'
+import type { PanelClientState, PanelMemberRow, PanelTaskRow } from './panel-model.ts'
 import { SubagentModelTab } from './subagent-tab.tsx'
 import css from './panel.module.css'
 
@@ -100,8 +99,7 @@ export function A2d2Panel({ ctx, sessionId, visible }: A2d2PanelProps): ReturnTy
   const subscribe = useCallback((listener: () => void) => list.subscribe(listener), [list])
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
-  const [payload, setPayload] = useState<PanelPayload | undefined>(undefined)
-  const [failure, setFailure] = useState<string | undefined>(undefined)
+  const [panel, setPanel] = useState<PanelClientState>({ payload: undefined, failure: undefined })
 
   useEffect(() => {
     if (visible === false) return undefined
@@ -110,12 +108,7 @@ export function A2d2Panel({ ctx, sessionId, visible }: A2d2PanelProps): ReturnTy
     const read = async (): Promise<void> => {
       const result = await fetchPanel(sessionId, controller.signal)
       if (!live || result === undefined) return
-      if (result.kind === 'ok') {
-        setPayload(result.payload)
-        setFailure(undefined)
-        return
-      }
-      setFailure(result.message)
+      setPanel(state => nextPanelState(state, result))
     }
     void read()
     const timer = window.setInterval(() => { void read() }, PANEL_REFRESH_MS)
@@ -132,6 +125,7 @@ export function A2d2Panel({ ctx, sessionId, visible }: A2d2PanelProps): ReturnTy
     return map
   }, [state])
   const openable = useCallback((id: string) => state.byId[id] !== undefined, [state])
+  const { payload, failure } = panel
   const rows = payload === undefined ? [] : panelTaskRows(payload, titles, openable, sessionId)
   const tally = panelTally(rows)
   const load = panelLoadState(payload, failure)
