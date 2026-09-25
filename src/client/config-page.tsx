@@ -42,7 +42,7 @@ interface ConfigSnapshot {
   readonly warnings: readonly string[]
 }
 
-type ProbeResult = { readonly status: 'normal' | 'refusal' | 'rate-limited' | 'error'; readonly reason: string }
+export type ProbeResult = { readonly status: 'pending' | 'normal' | 'refusal' | 'rate-limited' | 'error'; readonly reason: string }
 
 interface ModelCatalogApi {
   readonly llm: {
@@ -230,11 +230,17 @@ function isEditableStation(station: ConfigStationId): station is Station {
 
 function probeLabel(status: ProbeResult['status']): string {
   switch (status) {
+    case 'pending': return '测试中'
     case 'normal': return '正常'
     case 'refusal': return '拒答'
     case 'rate-limited': return '限流'
     case 'error': return '报错'
   }
+}
+
+export function probeResultText(result: ProbeResult): string {
+  if (result.status === 'pending') return '测试中…'
+  return `${probeLabel(result.status)} · ${result.reason}`
 }
 
 function groupLabel(station: ConfigStationId): string {
@@ -312,7 +318,7 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
   }
   const probe = async (scope: 'consult' | Station, route: string): Promise<void> => {
     const key = routeKey(scope, route)
-    setProbes(current => ({ ...current, [key]: { status: 'normal', reason: '测试中' } }))
+    setProbes(current => ({ ...current, [key]: { status: 'pending', reason: '测试中' } }))
     try {
       const result = await callConfig<ProbeResult>(fetchImpl, 'probe', { route })
       setProbes(current => ({ ...current, [key]: result }))
@@ -361,7 +367,7 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
             disabled: routes.length <= 1,
             onClick: () => setRoutes(scope, routes.filter(item => item !== route)),
           }, '×'),
-          result === undefined ? null : createElement('span', { className: css.configProbe }, `${probeLabel(result.status)} · ${result.reason}`),
+          result === undefined ? null : createElement('span', { className: css.configProbe }, probeResultText(result)),
         )
       }),
       createElement('div', { className: css.configAddRow },

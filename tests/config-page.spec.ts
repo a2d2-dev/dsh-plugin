@@ -13,6 +13,8 @@ import {
 import { DEFAULT_STATION_MODELS } from '../src/station-models.ts'
 import type { StationModelsSettings } from '../src/station-models.ts'
 
+const anthropicUsagePolicyRefusal = "This request triggered restrictions on violative cyber content and was blocked under Anthropic's Usage Policy. To learn more, see https://platform.claude.com/docs/en/build-with-claude/refusals-and-fallback."
+
 function output(text: string, reason: FinishReason = { kind: 'stop' }): AsyncIterable<StreamChunk> {
   return (async function* () {
     yield { type: 'block-start', index: 0, blockType: 'text' }
@@ -253,6 +255,11 @@ describe('model probe', () => {
       route: 'provider/refusal',
       stream: () => output('', { kind: 'refusal' } as unknown as FinishReason),
     })).resolves.toEqual({ status: 'refusal', reason: 'model refused the probe' })
+
+    await expect(classifyModelProbe({
+      route: 'provider/policy-block',
+      stream: () => output('', { kind: 'error', failure: { message: anthropicUsagePolicyRefusal, code: 'PI_AI_ERROR' } } as FinishReason),
+    })).resolves.toEqual({ status: 'refusal', reason: anthropicUsagePolicyRefusal })
 
     await expect(classifyModelProbe({
       route: 'provider/limited',

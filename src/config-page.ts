@@ -17,6 +17,7 @@ import {
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { SettingsConflictError } from '@deepseek-ai/dsh-settings'
 import { isTrustedConsultRequest } from './consult.ts'
+import { classifyFailureKind } from './refusal.ts'
 import {
   DEFAULT_STATION_MODELS,
   splitModelRoute,
@@ -90,11 +91,6 @@ function reasonOf(error: unknown): string {
   return raw.trim() || 'unknown error'
 }
 
-function isRateLimit(error: Error & { code?: unknown; status?: unknown }): boolean {
-  const code = typeof error.code === 'string' ? error.code.toLowerCase() : ''
-  return code.includes('rate') || code.includes('429') || error.status === 429 || /(^|\D)429(\D|$)|rate limit|too many requests/iu.test(error.message)
-}
-
 class PayloadTooLargeError extends Error {
   constructor() {
     super(`Request body must be ${CONFIG_BODY_LIMIT_BYTES} bytes or smaller.`)
@@ -137,7 +133,13 @@ export async function classifyModelProbe(options: {
       }
       if (typeof failure.code === 'string') error.code = failure.code
       if (typeof failure.status === 'number') error.status = failure.status
-      return { status: isRateLimit(error) ? 'rate-limited' : 'error', reason: error.message }
+      const status = classifyFailureKind({
+        finishKind: finish.kind,
+        message: error.message,
+        code: error.code,
+        status: error.status,
+      })
+      return { status: status === 'empty' ? 'error' : status, reason: error.message }
     }
     if (finish.kind !== 'stop') {
       return { status: 'error', reason: `model stopped with ${String(finish.kind ?? 'unknown')}` }
@@ -150,8 +152,11 @@ export async function classifyModelProbe(options: {
     if (text.length === 0) return { status: 'error', reason: '空输出' }
     return { status: 'normal', reason: text }
   } catch (error) {
-    const err = error instanceof Error ? error as Error & { code?: string; status?: number } : new Error(String(error))
-    return { status: isRateLimit(err) ? 'rate-limited' : 'error', reason: reasonOf(err) }
+    const err: Error & { code?: string; status?: number } = error instanceof Error
+      ? error
+      : new Error(String(error))
+    const status = classifyFailureKind({ message: err.message, code: err.code, status: err.status })
+    return { status: status === 'empty' ? 'error' : status, reason: reasonOf(err) }
   }
 }
 
