@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   CONSULT_ROUTE_PATH,
+  consultAttributionLine,
   requestConsult,
   selectConsultCandidate,
 } from '../../src/client/consult-actions.ts'
@@ -68,6 +69,33 @@ describe('requestConsult', () => {
     })
   })
 
+  it('carries answer attribution, fallbacks, and station models into the ready card', async () => {
+    const setPhase = vi.fn<(phase: ConsultPhase) => void>()
+    await requestConsult({
+      fetch: async () => jsonResponse({
+        ok: true,
+        value: {
+          position: '实现已完成，尚未验证。',
+          candidates: [{ label: '验证', input: '跑一遍测试', kind: 'stay' }],
+          degraded: false,
+          answeredBy: 'codex/gpt-6',
+          fallbacks: [{ route: 'claude-bray/claude-fable-5-1', reason: 'model refused the consultation' }],
+          stationModels: { grill: ['claude-bray/claude-fable-5-1', 'codex/gpt-6'] },
+        },
+      }),
+      setPhase,
+    }, 'session-a')
+    expect(setPhase).toHaveBeenLastCalledWith({
+      kind: 'ready',
+      position: '实现已完成，尚未验证。',
+      candidates: [{ label: '验证', input: '跑一遍测试', kind: 'stay' }],
+      degraded: false,
+      answeredBy: 'codex/gpt-6',
+      fallbacks: [{ route: 'claude-bray/claude-fable-5-1', reason: 'model refused the consultation' }],
+      stationModels: { grill: ['claude-bray/claude-fable-5-1', 'codex/gpt-6'] },
+    })
+  })
+
   it('rejects a non-string position', async () => {
     const setPhase = vi.fn<(phase: ConsultPhase) => void>()
     await requestConsult({
@@ -110,6 +138,22 @@ describe('requestConsult', () => {
       candidates: [{ label: '降级继续', input: '继续当前工作', kind: 'other' }],
       degraded: true,
     })
+  })
+})
+
+describe('consult attribution line', () => {
+  it('stays absent for old hosts with no attribution fields', () => {
+    expect(consultAttributionLine({ kind: 'ready', candidates: [], degraded: false })).toBeUndefined()
+  })
+
+  it('names the answering model and the fallback reason', () => {
+    expect(consultAttributionLine({
+      kind: 'ready',
+      candidates: [],
+      degraded: false,
+      answeredBy: 'codex/gpt-6',
+      fallbacks: [{ route: 'claude-bray/claude-fable-5-1', reason: 'model refused the consultation' }],
+    })).toBe('由 gpt-6 生成（claude-fable-5-1 拒答，改用 gpt-6）')
   })
 })
 

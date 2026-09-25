@@ -24,6 +24,8 @@ import type {
 import type { SessionEvent, SessionHeader, SessionId, SessionSurface } from '@deepseek-ai/dsh-session'
 import { parseSessionId } from './handoff.ts'
 import type { SkillSource } from './skill-source.ts'
+import { DEFAULT_STATION_MODELS, splitModelRoute } from './station-models.ts'
+import type { StationModelsSettings } from './station-models.ts'
 import type { Task } from './types.ts'
 
 /** Number of newest current-surface messages supplied to one consultation. */
@@ -70,6 +72,12 @@ export interface ConsultValue {
   readonly position: string
   readonly candidates: readonly ConsultCandidate[]
   readonly degraded: boolean
+  /** Provider/model route that produced this answer. Absent only from older hosts. */
+  readonly answeredBy: string
+  /** Consult candidates skipped before the answer, with displayable reasons. */
+  readonly fallbacks: readonly ConsultFallback[]
+  /** Current station model table, by station, with candidates in configured order. */
+  readonly stationModels: StationModelsSettings['stations']
 }
 
 /** Stable public failure vocabulary for the route. */
@@ -86,6 +94,11 @@ export type ConsultErrorCode =
 export interface ConsultRoute {
   readonly provider: string
   readonly model: string
+}
+
+export interface ConsultFallback {
+  readonly route: string
+  readonly reason: string
 }
 
 /** A current-surface message retained as consultation material. */
@@ -114,6 +127,7 @@ export interface ConsultDependencies {
   readonly getSession: (id: SessionId) => ConsultSession | undefined
   readonly listTasks: (cwd: string) => Promise<readonly Task[]>
   readonly readAskMatt: () => Promise<SkillSource>
+  readonly getStationModels?: () => StationModelsSettings
   readonly stream: (options: GenerateOptions) => AsyncIterable<StreamChunk>
   readonly collectMaterial?: (
     events: readonly SessionEvent[],
@@ -278,6 +292,9 @@ function finishFailure(finish: FinishReason): Error | undefined {
     case 'tool-calls':
       return new Error('a2d2 consult: model unexpectedly requested a tool')
     default:
+      if ((finish as { kind?: unknown }).kind === 'refusal') {
+        return new Error('a2d2 consult: model refused the consultation')
+      }
       return new Error(`a2d2 consult: unsupported finish reason "${String((finish as { kind?: unknown }).kind)}"`)
   }
 }
@@ -315,7 +332,35 @@ export async function generateConsultOutput(options: {
     .filter((block): block is Extract<(typeof blocks)[number], { type: 'text' }> => block.type === 'text')
     .map(block => block.text)
     .join('')
+  if (text.trim().length === 0) throw new Error('a2d2 consult: model returned no text')
   return parseConsultOutput(text)
+}
+
+export async function generateConsultWithFallback(options: {
+  readonly stream: ConsultDependencies['stream']
+  readonly routes: readonly string[]
+  readonly sessionId: SessionId
+  readonly prompt: string
+  readonly signal: AbortSignal
+}): Promise<ConsultOutput & { readonly answeredBy: string; readonly fallbacks: readonly ConsultFallback[] }> {
+  const fallbacks: ConsultFallback[] = []
+  for (const route of options.routes) {
+    try {
+      const output = await generateConsultOutput({
+        stream: options.stream,
+        route: splitModelRoute(route),
+        sessionId: options.sessionId,
+        prompt: options.prompt,
+        signal: options.signal,
+      })
+      return { ...output, answeredBy: route, fallbacks }
+    } catch (error) {
+      if (error instanceof MalformedCandidatesError) throw error
+      fallbacks.push({ route, reason: reasonOf(error) })
+    }
+  }
+  const reasons = fallbacks.map(item => `${item.route}: ${item.reason}`).join('; ')
+  throw new Error(`a2d2 consult: every consult route failed${reasons === '' ? '' : ` (${reasons})`}`)
 }
 
 function header(headers: IncomingHttpHeaders, name: string): string | undefined {
@@ -486,10 +531,6 @@ export function createConsultHandler(
       }
       const controller = new AbortController()
       request.once('aborted', () => { controller.abort() })
-      const route = currentConsultRoute(session.events)
-      if (route === undefined) {
-        throw new Error('a2d2 consult: no logged request route is available')
-      }
       const [tasks, skillSource] = await Promise.all([
         dependencies.listTasks(cwd),
         dependencies.readAskMatt(),
@@ -497,9 +538,10 @@ export function createConsultHandler(
       const collectMaterial = dependencies.collectMaterial ?? collectConsultMaterial
       const buildPrompt = dependencies.buildPrompt ?? buildConsultPrompt
       const prompt = buildPrompt(collectMaterial(session.events, session.surface.nodes, tasks), skillSource)
-      const { position, candidates } = await generateConsultOutput({
+      const stationModels = dependencies.getStationModels?.() ?? DEFAULT_STATION_MODELS
+      const { position, candidates, answeredBy, fallbacks } = await generateConsultWithFallback({
         stream: dependencies.stream,
-        route,
+        routes: stationModels.consult,
         sessionId,
         prompt,
         signal: controller.signal,
@@ -510,6 +552,9 @@ export function createConsultHandler(
           position,
           candidates,
           degraded: skillSource.status === 'missing',
+          answeredBy,
+          fallbacks,
+          stationModels: stationModels.stations,
         },
       })
     } catch (error) {

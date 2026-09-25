@@ -40,6 +40,26 @@
 
 这些配置键属于 `a2d2` 那一行。每个方法都接收调用方的会话 cwd 并自行推导项目根，因此调用方不携带任何项目簿记。`list` 读取该项目的任务，`resolve` 返回新会话继承的任务，`create` 生成 id 并写入文档，`registerMember` 把一个会话登记为成员并可选地记录交接边，`prepareHandoff` / `takeHandoff` 分别写入与消费交接文档。
 
+### 站点模型 settings
+
+插件还注册一个实时 settings 命名空间 `a2d2-station-models`，存放在 DSH 的 `settings.yaml`。它不属于上面的插件挂载行配置，因为用户应该能在不重启宿主的情况下调整每站模型候选顺序。
+
+```yaml
+a2d2-station-models:
+  consult:
+    - claude-bray/claude-fable-5-1
+    - codex/gpt-6
+  stations:
+    grill:
+      - claude-bray/claude-fable-5-1
+      - codex/gpt-6
+    implement:
+      - codex/gpt-5.5
+      - claude-bray/claude-opus-5-5
+```
+
+`consult` 与每个站点条目都是有序的 `provider/model` 候选列表。空列表和格式错误的 route 会被 settings schema 拒绝。思考类站点（`grill`、`to-spec`、`to-tickets`、`code-review`、`triage`、`wayfinder`、`improve-codebase-architecture`）默认是 `claude-bray/claude-fable-5-1` 再到 `codex/gpt-6`；写代码类站点（`implement`、`prototype`、`diagnosing-bugs`）默认是 `codex/gpt-5.5` 再到 `claude-bray/claude-opus-5-5`。`handoff`、路基和独立技能刻意不列入，因为本票不负责为它们切模型。若 `code-review` 与 `implement` 的首个候选相同，宿主会记录告警，但不会拒绝该设置。
+
 ## 任务文档
 
 一个任务一个 YAML 文档，位于 `<projectRoot>/.dsh/a2d2/tasks/<id>.yaml`。`<projectRoot>/.dsh/` 是既有的项目本地根——与 `skill-filesystem` 使用 `.dsh/skills` 的锚点相同——插件短名给该存储划出命名空间，使它即使将来承载更多种类的状态，足迹仍是一个目录。
@@ -115,7 +135,7 @@ sessions:
 
 点击 **下一步** 打开的卡片，顶部立刻显示现状区块，回答「它现在在干嘛」：运行中（在跑的工具及已运行时长）、在等你（待审批——含工具名与理由——或待回答的问题）、疑似卡住（运行中、无流式输出、且 10 分钟没有新的轮次或工具调用）、出错了、空闲（上一轮何时结束）或尚未开始，外加排队消息与上下文占用。它只读客户端已有的会话快照，不调模型，卡片打开期间实时刷新，因此咨询还在生成时卡片也不是空的。
 
-同时，卡片会针对当前会话发起一次不进入会话历史的咨询，并把返回的候选意图渲染成芯片，芯片上方附一句 **当前位置**（工作走到了哪）作为候选的依据。stay/other 芯片只把对应 input 追加进现有草稿并聚焦输入框；用户可以继续编辑，且必须亲自按回车发送。handoff 芯片则打开既有交接卡，把 input 预填成 focus。芯片绝不调用会话命令面，也不代用户发送。
+同时，卡片会针对当前会话发起一次不进入会话历史的咨询，并把返回的候选意图渲染成芯片，芯片上方附一句 **当前位置**（工作走到了哪）作为候选的依据。咨询不再沿用当前会话 route，而是按 `a2d2-station-models.consult` 候选顺序尝试；提供方错误、限流、拒答或空输出会换下一个候选。非空但畸形的 JSON 不重试，因为这是协议失败，不是 route 可用性问题。响应会带回 `answeredBy`、`fallbacks` 和当前站点模型表；卡底显示「由 X 生成」，发生回落时注明原因。stay/other 芯片只把对应 input 追加进现有草稿并聚焦输入框；用户可以继续编辑，且必须亲自按回车发送。handoff 芯片则打开既有交接卡，把 input 预填成 focus。芯片绝不调用会话命令面，也不代用户发送。
 
 边界卡会明确显示加载中和路由错误。宿主未读到 `ask-matt` skill 时仍返回降级候选，卡片同时标注 **未读到 ask-matt skill**；生成失败时直接展示路由返回的错误消息并允许重试。每次咨询都会替换上一轮候选状态，不累计芯片或其他副作用。
 

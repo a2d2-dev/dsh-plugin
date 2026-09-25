@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { Context } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import A2d2Service, { DEFAULT_HANDOFF_WARN_TOKENS } from '../src/index.ts'
 import { TaskId } from '../src/brand.ts'
@@ -13,8 +13,36 @@ import {
   renderTaskDocument,
   taskIdFromFilename,
 } from '../src/document.ts'
+import { DEFAULT_STATION_MODELS, STATION_MODEL_SETTINGS_NAMESPACE } from '../src/station-models.ts'
 import { TaskDocumentStore, newTask, resolveProjectRoot, tasksDirectory, withMember } from '../src/store.ts'
 import type { Task } from '../src/types.ts'
+
+class StubSettings extends Service {
+  readonly registrations: Array<{
+    readonly ns: string
+    readonly schema: (value?: unknown) => unknown
+    readonly options?: {
+      readonly validate?: (value: unknown) => void
+    }
+  }> = []
+
+  constructor(ctx: Context) {
+    super(ctx, 'settings')
+  }
+
+  register(
+    ns: string,
+    schema: (value?: unknown) => unknown,
+    options?: { readonly validate?: (value: unknown) => void },
+  ): { get(): unknown; watch(callback: (next: unknown, prev: unknown) => void): () => void } {
+    this.registrations.push({ ns, schema, options })
+    options?.validate?.(schema())
+    return {
+      get: () => DEFAULT_STATION_MODELS,
+      watch: () => () => {},
+    }
+  }
+}
 
 const roots: string[] = []
 
@@ -293,6 +321,22 @@ describe('a2d2 service', () => {
   it('rejects an empty marker list at load', async () => {
     const ctx = new Context()
     await expect(ctx.plugin(A2d2Service, { projectMarkers: [] })).rejects.toThrow(/at least one/)
+  })
+
+  it('registers the live station model settings namespace', async () => {
+    const root = await tempRoot()
+    const ctx = new Context()
+    await ctx.plugin(StubSettings)
+    await ctx.plugin(A2d2Service, { root })
+    const settings = ctx.get('settings') as unknown as StubSettings
+    expect(settings.registrations).toHaveLength(1)
+    const registration = settings.registrations[0]
+    expect(registration?.ns).toBe(STATION_MODEL_SETTINGS_NAMESPACE)
+    expect(registration?.schema()).toEqual(DEFAULT_STATION_MODELS)
+    expect(() => registration?.options?.validate?.({
+      ...DEFAULT_STATION_MODELS,
+      consult: [],
+    })).toThrow(/array length >= 1/u)
   })
 })
 

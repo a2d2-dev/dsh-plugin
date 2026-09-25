@@ -40,6 +40,26 @@ The package contributes two mount rows. `ctx.a2d2` is the task store and declare
 
 The configuration keys belong to the `a2d2` row. Every method takes the caller's session cwd and resolves the project root itself, so callers carry no project bookkeeping. `list` reads the project's tasks, `resolve` returns the task a new session inherits, `create` mints an id and writes a document, `registerMember` records a session as a member with an optional handoff edge, and `prepareHandoff` / `takeHandoff` write and consume a handoff document.
 
+### Station model settings
+
+The plugin also registers a live settings namespace, `a2d2-station-models`, stored in DSH's `settings.yaml`. It is separate from the plugin row above because users should be able to reorder station model candidates without restarting the host.
+
+```yaml
+a2d2-station-models:
+  consult:
+    - claude-bray/claude-fable-5-1
+    - codex/gpt-6
+  stations:
+    grill:
+      - claude-bray/claude-fable-5-1
+      - codex/gpt-6
+    implement:
+      - codex/gpt-5.5
+      - claude-bray/claude-opus-5-5
+```
+
+`consult` and every station entry are ordered `provider/model` candidate lists. Empty lists and malformed routes are rejected by the settings schema. Thinking stations (`grill`, `to-spec`, `to-tickets`, `code-review`, `triage`, `wayfinder`, `improve-codebase-architecture`) default to `claude-bray/claude-fable-5-1` then `codex/gpt-6`; coding stations (`implement`, `prototype`, `diagnosing-bugs`) default to `codex/gpt-5.5` then `claude-bray/claude-opus-5-5`. `handoff`, roadbed, and standalone skills are intentionally not listed because this ticket does not switch models for them. If `code-review` and `implement` share the same first candidate the host logs a warning, but keeps the setting.
+
 ## Task documents
 
 One YAML document per task, under `<projectRoot>/.dsh/a2d2/tasks/<id>.yaml`. `<projectRoot>/.dsh/` is the established project-local root — the same anchor `skill-filesystem` uses for `.dsh/skills` — and the plugin's short name namespaces this store, keeping the plugin's footprint one directory even when it later owns further kinds of state.
@@ -115,7 +135,7 @@ It renders one fixed circle beside the composer showing the session's context le
 
 The **下一步** card opens with an instant status block answering "what is this session doing right now": running (with the in-flight tool and how long it has run), waiting on you (a pending approval — naming the tool and reason — or question), possibly stuck (running, not streaming, and no new turn or tool call for 10 minutes), errored, idle (with when the last turn ended), or not started — plus queued messages and context occupancy. It reads only the conversation snapshot the client already holds, never calls a model, and stays live while the card is open — so the card is useful while the consultation below is still generating.
 
-Opening the card also requests a one-off consultation for the current session and renders the returned candidate intents as chips, with a one-sentence **当前位置** (where the work stands) above them as the basis for the candidates, without adding a consultation turn to session history. A stay or other chip appends its exact input to the existing composer draft and focuses the composer; the user may edit it and must press Enter to send it. A handoff chip opens the existing handoff card with its input prefilled as the focus. Chips never call the session command face or send on the user's behalf.
+Opening the card also requests a one-off consultation for the current session and renders the returned candidate intents as chips, with a one-sentence **当前位置** (where the work stands) above them as the basis for the candidates, without adding a consultation turn to session history. The consultation does not reuse the current session route: it tries the `a2d2-station-models.consult` candidates in order, falling back on provider errors, rate limits, refusals, or empty output. Malformed non-empty JSON is not retried because that is a protocol failure, not route availability. The response includes `answeredBy`, `fallbacks`, and the current station model table; the card footer shows "由 X 生成" and names the fallback reason when one occurred. A stay or other chip appends its exact input to the existing composer draft and focuses the composer; the user may edit it and must press Enter to send it. A handoff chip opens the existing handoff card with its input prefilled as the focus. Chips never call the session command face or send on the user's behalf.
 
 The card explicitly shows loading and route errors. If the host could not read the `ask-matt` skill, it still returns degraded candidates and the card marks them with **未读到 ask-matt skill**. If generation fails, the route's error message is shown and the consultation can be retried; every request replaces the prior candidate state instead of accumulating chips.
 

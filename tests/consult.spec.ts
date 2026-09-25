@@ -23,6 +23,7 @@ import {
   parseConsultOutput,
 } from '../src/consult.ts'
 import type { ConsultDependencies, ConsultSession } from '../src/consult.ts'
+import { DEFAULT_STATION_MODELS } from '../src/station-models.ts'
 import type { SkillSource } from '../src/skill-source.ts'
 import type { Task } from '../src/types.ts'
 
@@ -152,6 +153,7 @@ function dependencies(
     getSession: id => id === sessionId ? live : undefined,
     listTasks: async () => [task],
     readAskMatt: async () => ({ status: 'missing' }),
+    getStationModels: () => DEFAULT_STATION_MODELS,
     stream: (options) => {
       calls.push(options)
       return output(candidatesJson)
@@ -438,35 +440,49 @@ describe('consult HTTP route', () => {
     })
   })
 
-  it('contains read/generation failures and rejects malformed model output', async () => {
+  it('contains read/generation failures and rejects malformed model output without trying the next candidate', async () => {
     const readFailure = dependencies({ listTasks: async () => { throw new Error('broken ledger') } })
     expect(await send(createConsultHandler(readFailure))).toMatchObject({
       status: 500,
       json: { ok: false, error: { code: 'consult-failed', message: 'The consultation could not be generated: broken ledger' } },
     })
 
-    const malformed = dependencies({ stream: () => output('{"label":"partial"}') })
+    const malformed = dependencies({
+      getStationModels: () => ({
+        ...DEFAULT_STATION_MODELS,
+        consult: ['primary/model', 'backup/model'],
+      }),
+      stream: (options) => {
+        malformed.calls.push(options)
+        return options.model === 'backup/model' ? output(candidatesJson) : output('{"label":"partial"}')
+      },
+    })
     expect(await send(createConsultHandler(malformed))).toMatchObject({
       status: 502,
       json: { ok: false, error: { code: 'malformed-candidates', message: 'The model returned malformed candidates: model output has no non-empty position' } },
     })
+    expect(malformed.calls.map(call => `${call.provider}/${call.model}`)).toEqual(['primary/model'])
 
     const rateLimited = dependencies({
+      getStationModels: () => ({
+        ...DEFAULT_STATION_MODELS,
+        consult: ['primary/model'],
+      }),
       stream: () => output('', { kind: 'error', failure: { message: 'Concurrency limit exceeded for user, please retry later', code: 'RATE_LIMIT' } } as FinishReason),
     })
     expect(await send(createConsultHandler(rateLimited))).toMatchObject({
       status: 500,
-      json: { ok: false, error: { code: 'consult-failed', message: 'The consultation could not be generated: Concurrency limit exceeded for user, please retry later' } },
-    })
-
-    const noRoute = dependencies({ getSession: () => session({ events: [userEvent(0, 'No route yet.')] }) })
-    expect(await send(createConsultHandler(noRoute))).toMatchObject({
-      status: 500,
-      json: { ok: false, error: { code: 'consult-failed', message: expect.any(String) } },
+      json: {
+        ok: false,
+        error: {
+          code: 'consult-failed',
+          message: 'The consultation could not be generated: every consult route failed (primary/model: Concurrency limit exceeded for user, please retry later)',
+        },
+      },
     })
   })
 
-  it('uses the current route, marks missing ask-matt as degraded, and never appends history', async () => {
+  it('uses the consult route list, marks missing ask-matt as degraded, and never appends history', async () => {
     const deps = dependencies()
     const eventsBefore = deps.session.events
     const result = await send(createConsultHandler(deps))
@@ -479,13 +495,16 @@ describe('consult HTTP route', () => {
           position,
           candidates,
           degraded: true,
+          answeredBy: 'claude-bray/claude-fable-5-1',
+          fallbacks: [],
+          stationModels: DEFAULT_STATION_MODELS.stations,
         },
       },
     })
     expect(deps.calls).toHaveLength(1)
     expect(deps.calls[0]).toMatchObject({
-      provider: 'provider-a',
-      model: 'model-a',
+      provider: 'claude-bray',
+      model: 'claude-fable-5-1',
       maxTokens: CONSULT_MAX_OUTPUT_TOKENS,
       sessionId,
     })
@@ -495,6 +514,69 @@ describe('consult HTTP route', () => {
     })
     expect(deps.session.events).toBe(eventsBefore)
     expect(deps.session.append).not.toHaveBeenCalled()
+  })
+
+  it('falls back on call failure, refusal, and empty output, carrying every reason', async () => {
+    const deps = dependencies({
+      getStationModels: () => ({
+        ...DEFAULT_STATION_MODELS,
+        consult: ['primary/model-a', 'primary/model-b', 'primary/model-c', 'backup/model-ok'],
+      }),
+      stream: (options) => {
+        deps.calls.push(options)
+        if (options.model === 'model-a') {
+          return output('', { kind: 'error', failure: { message: '429 rate limit', code: 'RATE_LIMIT' } } as FinishReason)
+        }
+        if (options.model === 'model-b') return output('', { kind: 'refusal' } as unknown as FinishReason)
+        if (options.model === 'model-c') return output('   ')
+        return output(candidatesJson)
+      },
+    })
+
+    expect(await send(createConsultHandler(deps))).toMatchObject({
+      status: 200,
+      json: {
+        ok: true,
+        value: {
+          answeredBy: 'backup/model-ok',
+          fallbacks: [
+            { route: 'primary/model-a', reason: '429 rate limit' },
+            { route: 'primary/model-b', reason: 'model refused the consultation' },
+            { route: 'primary/model-c', reason: 'model returned no text' },
+          ],
+        },
+      },
+    })
+    expect(deps.calls.map(call => `${call.provider}/${call.model}`)).toEqual([
+      'primary/model-a',
+      'primary/model-b',
+      'primary/model-c',
+      'backup/model-ok',
+    ])
+  })
+
+  it('lists each failed candidate when no consult route can answer', async () => {
+    const deps = dependencies({
+      getStationModels: () => ({
+        ...DEFAULT_STATION_MODELS,
+        consult: ['primary/model-a', 'backup/model-b'],
+      }),
+      stream: (options) => {
+        deps.calls.push(options)
+        return output('', { kind: 'error', failure: { message: `${options.model} unavailable`, code: 'NO_ADAPTER' } } as FinishReason)
+      },
+    })
+
+    expect(await send(createConsultHandler(deps))).toMatchObject({
+      status: 500,
+      json: {
+        ok: false,
+        error: {
+          code: 'consult-failed',
+          message: expect.stringContaining('primary/model-a: model-a unavailable; backup/model-b: model-b unavailable'),
+        },
+      },
+    })
   })
 
   it('does not mark a successfully loaded ask-matt source as degraded', async () => {

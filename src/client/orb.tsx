@@ -27,7 +27,7 @@
 import { createElement, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import css from './orb.module.css'
 import { HANDOFF_DRAFT, appendToDraft, focusComposer } from './composer.ts'
-import { requestConsult, selectConsultCandidate } from './consult-actions.ts'
+import { consultAttributionLine, requestConsult, selectConsultCandidate } from './consult-actions.ts'
 import type { ConsultCandidate, ConsultPhase } from './consult-actions.ts'
 import { runOrbHandoff } from './orb-actions.ts'
 import { sessionStatus } from './status-model.ts'
@@ -369,6 +369,7 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
 
   const occupancyLine = `上下文 ${tokens}${capacity === undefined ? '' : ` / ${capacity}`}（${String(occupancy.percent)}%）`
     + (cost === undefined ? '' : ` · 约 ${host?.currency ?? ''}${formatCost(cost)}`)
+  const attribution = consultAttributionLine(consult)
   const statusBlock = createElement('div', { className: css.statusBlock, role: 'status' },
     createElement('div', { className: `${css.statusHeadline} ${statusClassName(status?.kind)}` },
       createElement('span', { className: css.statusDot, 'aria-hidden': true }),
@@ -406,6 +407,7 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
         }, candidate.label)),
       )
       : null,
+    attribution === undefined ? null : createElement('div', { className: css.attribution }, attribution),
     createElement('div', { className: css.cardRow },
       consult.kind === 'error'
         ? createElement('button', {
