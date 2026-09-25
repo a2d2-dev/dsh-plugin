@@ -22,6 +22,8 @@ import type {
   StreamChunk,
 } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, SessionHeader, SessionId, SessionSurface } from '@deepseek-ai/dsh-session'
+import { contextOccupancy } from './context-occupancy.ts'
+import type { ContextPressureProjection } from './context-occupancy.ts'
 import { parseSessionId } from './handoff.ts'
 import {
   HIGHWAY_PROMPT_CATALOG,
@@ -34,6 +36,7 @@ import {
   isServiceStation,
 } from './highway.ts'
 import type { HighwayZone, MainStation, Move } from './highway.ts'
+import type { HandoffThresholds } from './indicator-projection.ts'
 import type { SkillSource } from './skill-source.ts'
 import { DEFAULT_STATION_MODELS, splitModelRoute } from './station-models.ts'
 import type { StationModelsSettings } from './station-models.ts'
@@ -140,16 +143,20 @@ export interface ConsultMessageExcerpt {
   readonly text: string
 }
 
+/** Model-visible current context and smart-zone facts supplied by the host. */
+export interface ConsultContextFacts {
+  readonly status: 'available' | 'unavailable'
+  readonly usedTokens?: number
+  readonly percent?: number
+  readonly contextWindow?: number
+  readonly smartZone?: { readonly warnTokens: number; readonly criticalTokens: number }
+}
+
 /** Model-visible data gathered without mutating its session. */
 export interface ConsultMaterial {
   readonly messages: readonly ConsultMessageExcerpt[]
   readonly tasks: readonly Task[]
-  readonly context?: {
-    readonly usedTokens?: number
-    readonly percent?: number
-    readonly contextWindow?: number
-    readonly smartZone?: { readonly warnTokens?: number; readonly criticalTokens?: number }
-  }
+  readonly context?: ConsultContextFacts
 }
 
 /** Minimal live-session surface needed by the route. */
@@ -167,6 +174,7 @@ export interface ConsultDependencies {
   readonly listTasks: (cwd: string) => Promise<readonly Task[]>
   readonly readAskMatt: () => Promise<SkillSource>
   readonly getStationModels?: () => StationModelsSettings
+  readonly contextFacts?: (session: ConsultSession) => ConsultContextFacts | undefined
   readonly stream: (options: GenerateOptions) => AsyncIterable<StreamChunk>
   readonly collectMaterial?: (
     events: readonly SessionEvent[],
@@ -227,6 +235,62 @@ export function collectConsultMaterial(
   }
 }
 
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function readNonNegativeInteger(value: unknown): number | undefined {
+  return Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : undefined
+}
+
+function readPositiveInteger(value: unknown): number | undefined {
+  return Number.isSafeInteger(value) && Number(value) > 0 ? Number(value) : undefined
+}
+
+function readContextPressure(value: unknown): ContextPressureProjection | undefined {
+  if (!isRecord(value)) return undefined
+  const pressureTokens = readNonNegativeInteger(value.pressureTokens)
+  const projectedTokens = readNonNegativeInteger(value.projectedTokens)
+  const contextWindow = readPositiveInteger(value.contextWindow)
+  if (pressureTokens === undefined && projectedTokens === undefined && contextWindow === undefined) return undefined
+  return {
+    ...(pressureTokens === undefined ? {} : { pressureTokens }),
+    ...(projectedTokens === undefined ? {} : { projectedTokens }),
+    ...(contextWindow === undefined ? {} : { contextWindow }),
+  }
+}
+
+function readContextWindow(value: unknown): number | undefined {
+  return isRecord(value) ? readPositiveInteger(value.contextWindow) : undefined
+}
+
+/**
+ * Build consult context facts from the same projections the orb reads.
+ *
+ * @param values - a session-projection snapshot's value map.
+ * @param thresholds - this service's configured handoff thresholds.
+ * @returns factual context status plus configured smart-zone thresholds.
+ */
+export function consultContextFactsFromProjectionValues(
+  values: Readonly<Record<string, unknown>> | undefined,
+  thresholds: HandoffThresholds,
+): ConsultContextFacts {
+  const pressure = readContextPressure(values?.contextPressure)
+  const indicatorWindow = readContextWindow(values?.a2d2Indicator)
+  const pressureWithWindow = pressure === undefined && indicatorWindow === undefined
+    ? undefined
+    : { ...pressure, contextWindow: pressure?.contextWindow ?? indicatorWindow }
+  const occupancy = contextOccupancy(pressureWithWindow)
+  return {
+    status: occupancy === null ? 'unavailable' : 'available',
+    ...(occupancy === null ? {} : occupancy),
+    smartZone: {
+      warnTokens: thresholds.warnAtTokens,
+      criticalTokens: thresholds.criticalAtTokens,
+    },
+  }
+}
+
 function renderSkillSource(source: SkillSource): string {
   if (source.status === 'missing') {
     return '<ask-matt-source status="missing" />'
@@ -248,7 +312,6 @@ function renderSkillSource(source: SkillSource): string {
 export function buildConsultPrompt(material: ConsultMaterial, skillSource: SkillSource): string {
   const contextFacts = material.context ?? {
     status: 'unavailable',
-    smartZone: { warnTokens: 150_000, criticalTokens: 1_000_000 },
   }
   const envelope = [
     '<situation-envelope>',
@@ -694,7 +757,9 @@ export function createConsultHandler(
       ])
       const collectMaterial = dependencies.collectMaterial ?? collectConsultMaterial
       const buildPrompt = dependencies.buildPrompt ?? buildConsultPrompt
-      const prompt = buildPrompt(collectMaterial(session.events, session.surface.nodes, tasks), skillSource)
+      const material = collectMaterial(session.events, session.surface.nodes, tasks)
+      const context = dependencies.contextFacts?.(session)
+      const prompt = buildPrompt(context === undefined ? material : { ...material, context }, skillSource)
       const stationModels = dependencies.getStationModels?.() ?? DEFAULT_STATION_MODELS
       const { position, location, next, candidates, answeredBy, fallbacks } = await generateConsultWithFallback({
         stream: dependencies.stream,

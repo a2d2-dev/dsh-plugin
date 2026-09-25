@@ -287,7 +287,7 @@ describe('consult material and route', () => {
       Location values are closed except standalone station names. Use the highway catalog exactly as listed here:
       {"zones":["main","service","ramp","standalone","roadbed","off-road"],"main":["grill","to-spec","to-tickets","implement","code-review"],"service":["prototype","handoff"],"ramp":{"triage":"implement","diagnosing-bugs":"implement","wayfinder":"to-spec","improve-codebase-architecture":"grill"},"roadbed":["domain-modeling","codebase-design"]}
       Current context and smart zone facts:
-      {"status":"unavailable","smartZone":{"warnTokens":150000,"criticalTokens":1000000}}
+      {"status":"unavailable"}
       Session and project material follows as JSON data:
       {"messages":[{"seq":7,"text":"Implementation is done."}],"tasks":[{"id":"consult-route","name":"Consult route","goal":"Offer next-step chips","state":"active","createdAt":"2026-09-24T00:00:00.000Z","members":[{"sessionId":"session-consult"}]}]}
       </situation-envelope>
@@ -542,6 +542,40 @@ describe('consult HTTP route', () => {
     })
     expect(deps.session.events).toBe(eventsBefore)
     expect(deps.session.append).not.toHaveBeenCalled()
+  })
+
+  it('puts injected context occupancy and configured smart-zone thresholds in the prompt', async () => {
+    const deps = dependencies({
+      contextFacts: () => ({
+        status: 'available',
+        usedTokens: 120_320,
+        percent: 47,
+        contextWindow: 256_000,
+        smartZone: { warnTokens: 111_000, criticalTokens: 777_000 },
+      }),
+    })
+
+    await send(createConsultHandler(deps))
+
+    expect(deps.calls[0]?.messages[0]?.content[0]).toMatchObject({
+      type: 'text',
+      text: expect.stringContaining(
+        '"context":{"status":"available","usedTokens":120320,"percent":47,"contextWindow":256000,"smartZone":{"warnTokens":111000,"criticalTokens":777000}}',
+      ),
+    })
+  })
+
+  it('reports unavailable context facts without hard-coded smart-zone thresholds when no dependency is injected', async () => {
+    const deps = dependencies()
+
+    await send(createConsultHandler(deps))
+
+    const prompt = deps.calls[0]?.messages[0]?.content[0]?.type === 'text'
+      ? deps.calls[0].messages[0].content[0].text
+      : ''
+    expect(prompt).toContain('Current context and smart zone facts:\n{"status":"unavailable"}')
+    expect(prompt).not.toContain('"warnTokens":150000')
+    expect(prompt).not.toContain('"criticalTokens":1000000')
   })
 
   it('falls back on call failure, refusal, and empty output, carrying every reason', async () => {

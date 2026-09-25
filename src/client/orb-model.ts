@@ -9,6 +9,13 @@
  * @module @deepseek-ai/dsh-a2d2/client/orb-model
  */
 
+export {
+  contextOccupancy as orbOccupancy,
+} from '../context-occupancy.ts'
+export type {
+  ContextOccupancy as OrbOccupancy,
+} from '../context-occupancy.ts'
+
 /** Which pressure tier the indicator is showing. */
 export type OrbLevel = 'normal' | 'warn' | 'critical'
 
@@ -74,40 +81,6 @@ export function costOf(tokens: number, price: { readonly inputPerMillion: number
 /** Format a cost for the circle: two decimals below 100, whole numbers above. */
 export function formatCost(cost: number): string {
   return cost >= 100 ? String(Math.round(cost)) : cost.toFixed(2)
-}
-
-/** Context occupancy as the indicator reports it. */
-export interface OrbOccupancy {
-  /** Whole percent used, clamped to 100. */
-  readonly percent: number
-  /** The numerator: what the next request's prompt is expected to cost. */
-  readonly usedTokens: number
-  /** The denominator: the newest recorded route capacity. */
-  readonly contextWindow: number
-}
-
-/**
- * Occupancy from the session's `contextPressure` projection value.
- *
- * `projectedTokens` is preferred over `pressureTokens` because it carries the
- * last provider sample forward over the surface's movement since, so a
- * compaction registers immediately instead of after the next request. The
- * numerator and the capacity are independent last-wins fields rather than one
- * atomic observation of a single request, so the result is a reference figure,
- * not a measurement.
- * @param pressure - the `contextPressure` value, or `undefined` when absent.
- * @returns the occupancy, or `null` until both a numerator and a capacity are known.
- */
-export function orbOccupancy(
-  pressure: { readonly pressureTokens?: number; readonly projectedTokens?: number; readonly contextWindow?: number } | undefined,
-): OrbOccupancy | null {
-  const usedTokens = pressure?.projectedTokens ?? pressure?.pressureTokens
-  if (usedTokens === undefined || pressure?.contextWindow === undefined) return null
-  return {
-    percent: Math.min(100, Math.round(usedTokens / pressure.contextWindow * 100)),
-    usedTokens,
-    contextWindow: pressure.contextWindow,
-  }
 }
 
 /**
