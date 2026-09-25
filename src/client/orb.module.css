@@ -771,6 +771,20 @@
   overflow-wrap: anywhere;
 }
 
+.configNoSwitch {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px 10px;
+  border: 1px solid #d7dee8;
+  border-radius: 6px;
+  background: #f6f8fb;
+  color: #46515f;
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
 .configAddRow {
   display: grid;
   grid-template-columns: minmax(180px, 1fr) auto;

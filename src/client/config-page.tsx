@@ -10,8 +10,15 @@
 import { createElement, useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent, ReactNode } from 'react'
 import type { InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
-import { MAIN_STATION_ROLES, MAIN_STATIONS, RAMP_MERGES, ROADBED_STATIONS, SERVICE_STATIONS } from '../highway.ts'
-import type { MainStation } from '../highway.ts'
+import {
+  MAIN_STATION_ROLES,
+  MAIN_STATIONS,
+  RAMP_MERGES,
+  RAMP_STATIONS,
+  ROADBED_STATIONS,
+  SERVICE_STATIONS,
+} from '../highway.ts'
+import type { ClosedHighwayStation } from '../highway.ts'
 import {
   DEFAULT_STATION_MODELS,
   STATION_MODEL_STATIONS,
@@ -20,6 +27,7 @@ import {
 } from '../station-model-data.ts'
 import type { Station, StationModelsSettings } from '../station-model-data.ts'
 import { HighwayMap } from './highway-map.tsx'
+import type { HighwayView, HighwayViewStation } from './highway-view.ts'
 import css from './orb.module.css'
 
 const CONFIG_ROUTE_PATH = '/a2d2/api/config'
@@ -54,18 +62,50 @@ export interface A2d2ConfigInjected {
 export type A2d2ConfigSectionProps = Partial<InjectFace<A2d2ConfigInjected>>
 
 const MAIN_STATION_SET = new Set<string>(MAIN_STATIONS)
+const CONFIG_MODEL_ROW_ORDER = [
+  ...MAIN_STATIONS,
+  ...SERVICE_STATIONS,
+  ...RAMP_STATIONS,
+  ...ROADBED_STATIONS,
+  'standalone',
+] as const
+const NO_SWITCH_MODEL = '不切模型'
+const DEFAULT_LOAD_MODEL_ROUTES = async (): Promise<readonly string[]> => []
 
-const STATION_LABELS: Readonly<Record<Station, string>> = {
+type ConfigStationId = ClosedHighwayStation | 'standalone'
+type ConfigEditableScope = 'consult' | Station
+
+export type ConfigModelRow =
+  | {
+    readonly kind: 'editable'
+    readonly scope: ConfigEditableScope
+    readonly label: string
+    readonly group: string
+    readonly routes: readonly string[]
+  }
+  | {
+    readonly kind: 'fixed'
+    readonly scope: Exclude<ConfigStationId, Station>
+    readonly label: string
+    readonly group: string
+    readonly routes: readonly []
+  }
+
+const STATION_LABELS: Readonly<Record<ConfigStationId, string>> = {
   grill: '/grill · 澄清目标与约束',
   'to-spec': '/to-spec · 沉淀规格与验收',
   'to-tickets': '/to-tickets · 拆成可实施工单',
   implement: '/implement · 实现与 TDD',
   'code-review': '/code-review · 独立评审与收口',
   prototype: '/prototype · 服务区：原型验证',
+  handoff: '/handoff · 服务区：交接',
   'diagnosing-bugs': '/diagnosing-bugs · 匝道，并入 implement',
   triage: '/triage · 匝道，并入 implement',
   wayfinder: '/wayfinder · 匝道，并入 to-spec',
   'improve-codebase-architecture': '/improve-codebase-architecture · 匝道，并入 grill',
+  'domain-modeling': '/domain-modeling · 路基：领域建模',
+  'codebase-design': '/codebase-design · 路基：模块设计',
+  standalone: '独立区 · 其他 skill',
 }
 
 const EMPTY_PROBES: Readonly<Record<string, ProbeResult | undefined>> = Object.freeze({})
@@ -120,19 +160,72 @@ function replaceList(settings: StationModelsSettings, scope: 'consult' | Station
   }
 }
 
-function routesOf(settings: StationModelsSettings, scope: 'consult' | Station): readonly string[] {
-  return scope === 'consult' ? settings.consult : settings.stations[scope]
+export function normalizeConfigInjected(props: A2d2ConfigSectionProps): A2d2ConfigInjected {
+  return {
+    fetch: props.fetch ?? fetch,
+    loadModelRoutes: props.loadModelRoutes ?? DEFAULT_LOAD_MODEL_ROUTES,
+  }
 }
 
-function mainHighwayView(settings: StationModelsSettings) {
+export function configHighwayView(settings: StationModelsSettings): HighwayView {
   return {
-    stations: MAIN_STATIONS.map(station => ({
+    aside: '服务区、匝道、路基、独立区均为 Matt 流程的一部分；匝道并入点由插件固定。',
+    stations: CONFIG_MODEL_ROW_ORDER.map((station): HighwayViewStation => ({
       id: station,
-      role: MAIN_STATION_ROLES[station],
-      models: shortModelRoute(settings.stations[station][0] ?? ''),
+      role: stationRole(station),
+      models: stationModelSummary(settings, station),
       state: 'ahead' as const,
     })),
   }
+}
+
+export function configModelRows(settings: StationModelsSettings): readonly ConfigModelRow[] {
+  return [
+    {
+      kind: 'editable',
+      scope: 'consult',
+      label: '咨询',
+      group: '下一步咨询',
+      routes: settings.consult,
+    },
+    ...CONFIG_MODEL_ROW_ORDER.map((station): ConfigModelRow => {
+      if (isEditableStation(station)) {
+        return {
+          kind: 'editable',
+          scope: station,
+          label: STATION_LABELS[station],
+          group: groupLabel(station),
+          routes: settings.stations[station],
+        }
+      }
+      return {
+        kind: 'fixed',
+        scope: station,
+        label: STATION_LABELS[station],
+        group: groupLabel(station),
+        routes: [],
+      }
+    }),
+  ]
+}
+
+function stationRole(station: ConfigStationId): string {
+  if (MAIN_STATION_SET.has(station)) return MAIN_STATION_ROLES[station as keyof typeof MAIN_STATION_ROLES]
+  if (station === 'prototype') return '服务区：原型验证'
+  if (station === 'handoff') return '服务区：交接'
+  if (station === 'domain-modeling') return '路基：领域建模'
+  if (station === 'codebase-design') return '路基：模块设计'
+  if (station === 'standalone') return '独立区：其他 skill'
+  return `匝道，并入 ${RAMP_MERGES[station as keyof typeof RAMP_MERGES]}`
+}
+
+function stationModelSummary(settings: StationModelsSettings, station: ConfigStationId): string {
+  if (!isEditableStation(station)) return NO_SWITCH_MODEL
+  return shortModelRoute(settings.stations[station][0] ?? '') || NO_SWITCH_MODEL
+}
+
+function isEditableStation(station: ConfigStationId): station is Station {
+  return station in DEFAULT_STATION_MODELS.stations
 }
 
 function probeLabel(status: ProbeResult['status']): string {
@@ -144,15 +237,18 @@ function probeLabel(status: ProbeResult['status']): string {
   }
 }
 
-function groupLabel(station: Station): string {
+function groupLabel(station: ConfigStationId): string {
   if (MAIN_STATION_SET.has(station)) return '主干'
-  if (station === 'prototype') return '服务区'
+  if ((SERVICE_STATIONS as readonly string[]).includes(station)) return '服务区'
+  if ((ROADBED_STATIONS as readonly string[]).includes(station)) return '路基'
+  if (station === 'standalone') return '独立区'
   return '匝道'
 }
 
 export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
-  const fetchImpl = props.fetch ?? fetch
-  const loadRoutes = props.loadModelRoutes ?? (async () => [])
+  const injected = useMemo(() => normalizeConfigInjected(props), [props.fetch, props.loadModelRoutes])
+  const fetchImpl = injected.fetch
+  const loadRoutes = injected.loadModelRoutes
   const [snapshot, setSnapshot] = useState<ConfigSnapshot | null>(null)
   const [draft, setDraft] = useState<StationModelsSettings>(() => cloneSettings(DEFAULT_STATION_MODELS))
   const [catalog, setCatalog] = useState<readonly string[]>([])
@@ -161,6 +257,7 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
   const [probes, setProbes] = useState<Readonly<Record<string, ProbeResult | undefined>>>(EMPTY_PROBES)
   const [selected, setSelected] = useState<Record<string, string>>({})
   const warnings = useMemo(() => stationModelWarnings(draft), [draft])
+  const rows = useMemo(() => configModelRows(draft), [draft])
 
   useEffect(() => {
     let alive = true
@@ -189,12 +286,13 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
     setDraft(current => replaceList(current, scope, routes))
   }
   const save = async (): Promise<void> => {
+    if (snapshot?.revision === undefined) return
     setSaving(true)
     setStatus('保存中')
     try {
       const saved = await callConfig<ConfigSnapshot>(fetchImpl, 'settings.update', {
         settings: draft,
-        expectedRevision: snapshot?.revision,
+        expectedRevision: snapshot.revision,
       })
       setSnapshot(saved)
       setDraft(cloneSettings(saved.settings))
@@ -226,8 +324,10 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
     }
   }
 
-  const renderRoutes = (scope: 'consult' | Station): ReactNode => {
-    const routes = routesOf(draft, scope)
+  const renderRoutes = (row: ConfigModelRow): ReactNode => {
+    if (row.kind === 'fixed') return createElement('div', { className: css.configNoSwitch }, NO_SWITCH_MODEL)
+    const scope = row.scope
+    const routes = row.routes
     const available = catalog.filter(route => !routes.includes(route))
     const selectedRoute = selected[scope] ?? available[0] ?? ''
     return createElement('div', { className: css.configRoutes },
@@ -294,32 +394,19 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
         createElement('h2', { className: css.configTitle }, 'A2D2 配置'),
         createElement('p', { className: css.configSubtitle }, `状态：${status}`),
       ),
-      createElement('button', { className: css.configSave, type: 'button', disabled: saving, onClick: () => { void save() } }, '保存'),
+      createElement('button', { className: css.configSave, type: 'button', disabled: saving || snapshot?.revision === undefined, onClick: () => { void save() } }, '保存'),
     ),
     createElement('section', { className: css.configSection },
       createElement('h3', { className: css.configSectionTitle }, 'Matt 流程'),
-      createElement(HighwayMap, { view: mainHighwayView(draft), mode: 'editable' }),
+      createElement(HighwayMap, { view: configHighwayView(draft), mode: 'editable' }),
       warnings.length === 0 ? null : createElement('div', { className: css.configWarning }, warnings.join('\n')),
-      createElement('div', { className: css.configRoadExtras },
-        createElement('span', null, `服务区：${SERVICE_STATIONS.join(' / ')}`),
-        createElement('span', null, `路基：${ROADBED_STATIONS.join(' / ')}`),
-        createElement('span', null, `匝道：${Object.entries(RAMP_MERGES).map(([station, merge]) => `${station} → ${merge}`).join(' / ')}`),
-        createElement('span', null, '独立区：任意独立 skill'),
-      ),
       createElement('div', { className: css.configRows },
-        createElement('article', { className: css.configRow },
+        ...rows.map(row => createElement('article', { className: css.configRow, key: row.scope },
           createElement('div', { className: css.configRowHead },
-            createElement('strong', null, '咨询'),
-            createElement('span', null, '下一步咨询自身使用的模型候选'),
+            createElement('strong', null, row.label),
+            createElement('span', null, row.group),
           ),
-          renderRoutes('consult'),
-        ),
-        ...STATION_MODEL_STATIONS.map(station => createElement('article', { className: css.configRow, key: station },
-          createElement('div', { className: css.configRowHead },
-            createElement('strong', null, STATION_LABELS[station]),
-            createElement('span', null, groupLabel(station)),
-          ),
-          renderRoutes(station),
+          renderRoutes(row),
         )),
       ),
     ),

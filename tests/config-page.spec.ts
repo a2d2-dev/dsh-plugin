@@ -70,6 +70,48 @@ async function send(
   }
 }
 
+async function sendRaw(
+  handler: (request: IncomingMessage, response: ServerResponse) => Promise<void>,
+  body: string,
+  headers: Record<string, string> = { host: '10.126.126.12:30710' },
+): Promise<HttpResult> {
+  const server = createServer((request, response) => {
+    void handler(request, response)
+  })
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  const port = (server.address() as AddressInfo).port
+  try {
+    return await new Promise<HttpResult>((resolve, reject) => {
+      const request = httpRequest({
+        hostname: '127.0.0.1',
+        port,
+        method: 'POST',
+        path: CONFIG_ROUTE_PATH,
+        headers: {
+          ...headers,
+          'content-type': 'application/json',
+          'content-length': Buffer.byteLength(body).toString(),
+        },
+      }, (response) => {
+        const chunks: Buffer[] = []
+        response.on('data', chunk => { chunks.push(Buffer.from(chunk)) })
+        response.on('end', () => {
+          resolve({
+            status: response.statusCode ?? 0,
+            json: JSON.parse(Buffer.concat(chunks).toString('utf8')),
+          })
+        })
+      })
+      request.once('error', reject)
+      request.end(body)
+    })
+  } finally {
+    server.close()
+    await once(server, 'close')
+  }
+}
+
 function handler(options: {
   value?: StationModelsSettings
   revision?: number
@@ -167,6 +209,37 @@ describe('A2D2 config settings route', () => {
       },
     })
   })
+
+  it('rejects settings updates that omit expectedRevision before writing', async () => {
+    let writes = 0
+    const result = await send(handler({
+      update: async value => {
+        writes += 1
+        return { value, revision: 8 }
+      },
+    }), {
+      method: 'settings.update',
+      payload: { settings: DEFAULT_STATION_MODELS },
+    })
+
+    expect(result).toMatchObject({
+      status: 400,
+      json: { ok: false, error: { code: 'missing-revision' } },
+    })
+    expect(writes).toBe(0)
+  })
+
+  it('rejects invalid JSON and oversized request bodies before dispatching', async () => {
+    expect(await sendRaw(handler(), '{"method":')).toMatchObject({
+      status: 400,
+      json: { ok: false, error: { code: 'bad-json' } },
+    })
+
+    expect(await sendRaw(handler(), ' '.repeat(64 * 1024 + 1))).toMatchObject({
+      status: 413,
+      json: { ok: false, error: { code: 'payload-too-large' } },
+    })
+  })
 })
 
 describe('model probe', () => {
@@ -190,6 +263,11 @@ describe('model probe', () => {
       route: 'provider/error',
       stream: () => output('', { kind: 'error', failure: { message: 'adapter unavailable', code: 'NO_ADAPTER' } } as FinishReason),
     })).resolves.toEqual({ status: 'error', reason: 'adapter unavailable' })
+
+    await expect(classifyModelProbe({
+      route: 'provider/empty',
+      stream: () => output('   '),
+    })).resolves.toEqual({ status: 'error', reason: '空输出' })
   })
 
   it('probes only provider/model routes that are configured or present in the catalog', async () => {

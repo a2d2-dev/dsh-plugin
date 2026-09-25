@@ -34,6 +34,7 @@ const JSON_HEADERS = {
 } as const
 
 const PROBE_MAX_OUTPUT_TOKENS = 8
+const CONFIG_BODY_LIMIT_BYTES = 64 * 1024
 const ROUTE_PATTERN = /^[^/\s]+\/[^/\s]+$/u
 
 export type ConfigMethod = 'settings.get' | 'settings.update' | 'probe'
@@ -94,6 +95,12 @@ function isRateLimit(error: Error & { code?: unknown; status?: unknown }): boole
   return code.includes('rate') || code.includes('429') || error.status === 429 || /(^|\D)429(\D|$)|rate limit|too many requests/iu.test(error.message)
 }
 
+class PayloadTooLargeError extends Error {
+  constructor() {
+    super(`Request body must be ${CONFIG_BODY_LIMIT_BYTES} bytes or smaller.`)
+  }
+}
+
 /**
  * Run the tiny user-triggered model probe and classify provider outcomes.
  *
@@ -140,7 +147,8 @@ export async function classifyModelProbe(options: {
       .map(block => block.text)
       .join('')
       .trim()
-    return { status: 'normal', reason: text.length === 0 ? 'empty response' : text }
+    if (text.length === 0) return { status: 'error', reason: '空输出' }
+    return { status: 'normal', reason: text }
   } catch (error) {
     const err = error instanceof Error ? error as Error & { code?: string; status?: number } : new Error(String(error))
     return { status: isRateLimit(err) ? 'rate-limited' : 'error', reason: reasonOf(err) }
@@ -148,8 +156,18 @@ export async function classifyModelProbe(options: {
 }
 
 async function readJson(request: IncomingMessage): Promise<unknown> {
+  const declaredLength = request.headers['content-length']
+  if (typeof declaredLength === 'string' && Number.parseInt(declaredLength, 10) > CONFIG_BODY_LIMIT_BYTES) {
+    throw new PayloadTooLargeError()
+  }
   const chunks: Buffer[] = []
-  for await (const chunk of request) chunks.push(Buffer.from(chunk))
+  let size = 0
+  for await (const chunk of request) {
+    const buffer = Buffer.from(chunk)
+    size += buffer.byteLength
+    if (size > CONFIG_BODY_LIMIT_BYTES) throw new PayloadTooLargeError()
+    chunks.push(buffer)
+  }
   const body = Buffer.concat(chunks).toString('utf8')
   if (body.trim() === '') return {}
   return JSON.parse(body)
@@ -186,6 +204,10 @@ export function createConfigHandler(
     try {
       body = await readJson(request)
     } catch (error) {
+      if (error instanceof PayloadTooLargeError) {
+        fail(response, 413, 'payload-too-large', error.message)
+        return
+      }
       fail(response, 400, 'bad-json', reasonOf(error))
       return
     }
@@ -201,7 +223,11 @@ export function createConfigHandler(
           return
         }
         case 'settings.update': {
-          const expectedRevision = typeof payload.expectedRevision === 'number' ? payload.expectedRevision : undefined
+          if (typeof payload.expectedRevision !== 'number') {
+            fail(response, 400, 'missing-revision', 'settings.update requires expectedRevision.')
+            return
+          }
+          const expectedRevision = payload.expectedRevision
           let next: StationModelsSettings
           try {
             next = validateStationModelsSettings(payload.settings)

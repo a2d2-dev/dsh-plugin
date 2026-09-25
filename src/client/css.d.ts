@@ -97,6 +97,7 @@ declare module '*.module.css' {
     readonly configRoute: string
     readonly configRouteName: string
     readonly configProbe: string
+    readonly configNoSwitch: string
     readonly configAddRow: string
     readonly configSelect: string
   }

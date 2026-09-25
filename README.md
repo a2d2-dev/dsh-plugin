@@ -62,11 +62,11 @@ a2d2-station-models:
 
 ### A2D2 configuration page
 
-The browser bundle registers an independent DSH settings section, **A2D2 配置**. Its first block, **Matt 流程**, reuses the highway map drawing and shows the main road, ramps, service areas, roadbed, and standalone area, then lets the user edit each station's ordered model candidates plus the separate `consult` row.
+The browser bundle registers an independent DSH settings section, **A2D2 配置**. Its first block, **Matt 流程**, reuses the highway map drawing and shows the main road, ramps, service areas, roadbed, and standalone area. The model table then lets the user edit ordered candidates for configurable stations plus the separate `consult` row; `handoff`, roadbed stations, and standalone skills are shown as `不切模型`.
 
-The page never writes arbitrary settings namespaces from the browser. It calls this plugin's own trusted route, `/a2d2/api/config`, which uses the same host/origin/fetch trust fence as the next-step consult route and exposes only `a2d2-station-models`. Reads return the current settings revision. Saves replace the whole station model table with that revision; a stale save is rejected as a conflict, the page reloads the latest value, and schema failures such as an empty list or malformed route are reported without persisting anything.
+The page never writes arbitrary settings namespaces from the browser. It calls this plugin's own trusted route, `/a2d2/api/config`, which uses the same host/origin/fetch trust fence as the next-step consult route and exposes only `a2d2-station-models`. Requests are capped at 64 KiB, invalid JSON is rejected, and writes must include the revision returned by a completed read. Saves replace the whole station model table with that revision; a missing revision is rejected without writing, a stale save is rejected as a conflict, the page reloads the latest value, and schema failures such as an empty list or malformed route are reported without persisting anything.
 
-Model candidates are added from DSH's host model catalog (`llm.models`) so the page cannot create a typo-only route. Each existing candidate has a **Test** action that performs exactly one tiny host-side call (`reply OK`, small output budget) and classifies the result as normal, refusal, rate-limited, or error with the reason. There is no background probing.
+Model candidates are added from DSH's host model catalog (`llm.models`) so the page cannot create a typo-only route. Each existing candidate has a **Test** action that performs exactly one tiny host-side call (`reply OK`, small output budget) and classifies the result as normal, refusal, rate-limited, or error with the reason; an empty response is reported as error. There is no background probing.
 
 ## Task documents
 
