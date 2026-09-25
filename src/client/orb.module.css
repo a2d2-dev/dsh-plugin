@@ -442,6 +442,15 @@
   overflow-wrap: anywhere;
 }
 
+.chipEffect {
+  display: block;
+  margin-top: 2px;
+  color: rgba(242, 245, 248, 0.66);
+  font-size: 10px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
 .chip:hover,
 .chip:focus-visible {
   border-color: #8dc0ff;

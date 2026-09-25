@@ -47,6 +47,55 @@ export interface ConsultNext {
   readonly reason: string
 }
 
+export interface ClientModelSelection {
+  readonly provider: string
+  readonly model: string
+  readonly reasoningEffort?: string
+}
+
+export interface ClientModelProviderGroup {
+  readonly id: string
+  readonly models: readonly { readonly id: string }[]
+}
+
+export interface ClientModelDirectorySnapshot {
+  readonly current: ClientModelSelection
+  readonly groups?: readonly ClientModelProviderGroup[]
+  readonly catalog?: readonly string[]
+}
+
+export interface ClientModelDirectoryStoreSnapshot {
+  readonly current: ClientModelSelection | null
+  readonly groups?: readonly ClientModelProviderGroup[]
+  readonly catalog?: readonly string[]
+}
+
+export interface ClientModelDirectory {
+  readonly store?: {
+    getSnapshot(): ClientModelDirectoryStoreSnapshot
+    subscribe(listener: () => void): () => void
+  }
+  load(): Promise<ClientModelDirectorySnapshot>
+  select(selection: ClientModelSelection): Promise<void>
+}
+
+export interface ClientModelDirectoryService {
+  directoryFor(sessionId: string): ClientModelDirectory
+}
+
+export type StationRouteDecision =
+  | {
+      readonly kind: 'switch'
+      readonly route: string
+      readonly selection: ClientModelSelection
+      readonly label: string
+    }
+  | {
+      readonly kind: 'keep'
+      readonly route?: string
+      readonly label: string
+    }
+
 /** The complete state of the next-step card. */
 export type ConsultPhase =
   | { readonly kind: 'idle' }
@@ -85,6 +134,13 @@ export interface ConsultSelectionDeps {
   readonly focusComposer: () => void
   readonly closeConsult: () => void
   readonly openHandoff: (focus: string) => void
+  readonly modelDirectories?: ClientModelDirectoryService
+  readonly notify?: (message: string) => void
+}
+
+export interface ConsultSelectionContext {
+  readonly sessionId?: string
+  readonly phase?: ConsultPhase
 }
 
 export type OtherMove = Exclude<Move, 'continue'>
@@ -324,6 +380,52 @@ function shortRoute(route: string): string {
   return slash < 0 ? route : route.slice(slash + 1)
 }
 
+function routeOf(selection: ClientModelSelection | undefined): string | undefined {
+  return selection === undefined ? undefined : `${selection.provider}/${selection.model}`
+}
+
+function splitRoute(route: string): ClientModelSelection {
+  const slash = route.indexOf('/')
+  return { provider: route.slice(0, slash), model: route.slice(slash + 1) }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * Pick the station route that is available in the session model directory.
+ *
+ * The host returns the station model table unchanged. The browser decides
+ * against the session directory because catalog membership is per session.
+ */
+export function stationRouteDecision(input: {
+  readonly station?: string
+  readonly stationModels?: Readonly<Record<string, readonly string[]>>
+  readonly catalog: readonly string[]
+  readonly current?: ClientModelSelection
+}): StationRouteDecision {
+  const currentRoute = routeOf(input.current)
+  const routes = input.station === undefined ? undefined : input.stationModels?.[input.station]
+  const available = routes?.find(route => input.catalog.includes(route))
+  if (available === undefined) {
+    return {
+      kind: 'keep',
+      ...(currentRoute === undefined ? {} : { route: currentRoute }),
+      label: '保持当前模型',
+    }
+  }
+  if (available === currentRoute) {
+    return { kind: 'keep', route: available, label: '保持当前模型' }
+  }
+  return {
+    kind: 'switch',
+    route: available,
+    selection: splitRoute(available),
+    label: `切到 ${shortRoute(available)}`,
+  }
+}
+
 function displayReason(reason: string): string {
   return /refus/u.test(reason) || /拒/u.test(reason)
     ? '拒答'
@@ -338,6 +440,84 @@ export function consultAttributionLine(phase: ConsultPhase): string | undefined 
   return `由 ${answered} 生成（${shortRoute(fallback.route)} ${displayReason(fallback.reason)}，改用 ${answered}）`
 }
 
+export function modelCatalogRoutes(directory: ClientModelDirectorySnapshot | undefined): readonly string[] {
+  if (directory === undefined) return []
+  if (directory.catalog !== undefined) return directory.catalog
+  return directory.groups?.flatMap(group => group.models.map(model => `${group.id}/${model.id}`)) ?? []
+}
+
+export function candidateStation(candidate: ConsultCandidate, phase: ConsultPhase | undefined): string | undefined {
+  if (candidate.station !== undefined) return candidate.station
+  return candidate.move === 'continue' || candidate.move === 'subagent'
+    ? phase?.kind === 'ready' ? phase.next?.station : undefined
+    : undefined
+}
+
+export function candidateModelEffect(
+  candidate: ConsultCandidate,
+  phase: ConsultPhase | undefined,
+  directory: ClientModelDirectorySnapshot | undefined,
+): string | undefined {
+  if (candidate.move !== 'continue') return undefined
+  const station = candidateStation(candidate, phase)
+  if (station === undefined || phase?.kind !== 'ready') return undefined
+  if (directory === undefined) return '保持当前模型'
+  return stationRouteDecision({
+    station,
+    stationModels: phase.stationModels,
+    catalog: modelCatalogRoutes(directory),
+    current: directory.current,
+  }).label
+}
+
+function subagentInput(input: string, route: string | undefined): string {
+  if (route === undefined || /子代理使用\s+\S+/u.test(input)) return input
+  return `${input}\n\n子代理使用 ${route}`
+}
+
+async function prepareCandidateInput(
+  deps: ConsultSelectionDeps,
+  candidate: ConsultCandidate,
+  context: ConsultSelectionContext | undefined,
+): Promise<string> {
+  if (candidate.move !== 'continue' && candidate.move !== 'subagent') return candidate.input
+  const phase = context?.phase
+  const station = candidateStation(candidate, phase)
+  if (station === undefined || phase?.kind !== 'ready' || phase.stationModels === undefined) return candidate.input
+  const sessionId = context?.sessionId
+  if (sessionId === undefined || deps.modelDirectories === undefined) {
+    deps.notify?.('模型目录服务不可用，已只填入输入框')
+    return candidate.input
+  }
+
+  let directory: ClientModelDirectorySnapshot
+  let face: ClientModelDirectory
+  try {
+    face = deps.modelDirectories.directoryFor(sessionId)
+    directory = await face.load()
+  } catch (error) {
+    deps.notify?.(`读取模型目录失败：${errorMessage(error)}`)
+    return candidate.input
+  }
+
+  const decision = stationRouteDecision({
+    station,
+    stationModels: phase.stationModels,
+    catalog: modelCatalogRoutes(directory),
+    current: directory.current,
+  })
+
+  if (candidate.move === 'subagent') return subagentInput(candidate.input, decision.route)
+  if (decision.kind === 'switch') {
+    try {
+      await face.select(decision.selection)
+    } catch (error) {
+      deps.notify?.(`切换模型失败：${errorMessage(error)}`)
+    }
+  }
+  return candidate.input
+}
+
 /**
  * Apply one candidate without ever sending it.
  *
@@ -348,19 +528,22 @@ export function consultAttributionLine(phase: ConsultPhase): string | undefined 
 export function selectConsultCandidate(
   deps: ConsultSelectionDeps,
   candidate: ConsultCandidate,
-): boolean {
+  context?: ConsultSelectionContext,
+): Promise<boolean> {
   if (candidate.move === 'handoff') {
     deps.openHandoff(candidate.input)
-    return true
+    return Promise.resolve(true)
   }
   if (candidate.move === 'compact') {
     deps.openHandoff(compactFocus(candidate.input))
-    return true
+    return Promise.resolve(true)
   }
-  if (!deps.appendToDraft(candidate.input)) return false
-  deps.closeConsult()
-  deps.focusComposer()
-  return true
+  return prepareCandidateInput(deps, candidate, context).then((input) => {
+    if (!deps.appendToDraft(input)) return false
+    deps.closeConsult()
+    deps.focusComposer()
+    return true
+  })
 }
 
 export function selectOtherMove(
