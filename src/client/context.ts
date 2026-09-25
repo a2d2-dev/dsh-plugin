@@ -206,7 +206,11 @@ export interface ClientSessionListStore {
 /** The published session list, narrowed to the two maps the subagent list reads. */
 export interface ClientSessionListSnapshot {
   /** Every host row keyed by id, each carrying its display title and the projections the host folded for it. */
-  readonly byId: Readonly<Record<string, (SubagentSessionSummary & { readonly title?: string }) | undefined>>
+  readonly byId: Readonly<Record<string, (SubagentSessionSummary & {
+    readonly title?: string | null
+    readonly sessionListMetadata?: { readonly blank?: boolean }
+    readonly sessionStats?: { readonly turns?: number }
+  }) | undefined>>
   /** Direct catalogs, keyed by the parent address they were requested for. */
   readonly subagentsByParent: Readonly<Record<string, (SubagentCatalog & { readonly state?: string; readonly error?: unknown; readonly parentAvailable?: boolean }) | undefined>>
 }

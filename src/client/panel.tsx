@@ -7,8 +7,25 @@
 import { createElement, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { A2d2ClientContext, ClientSessionListSnapshot, ClientSessionListStore, ClientSessionsService } from './context.ts'
 import { fetchPanel } from './panel-api.ts'
-import { handoffForest, nextPanelState, panelLoadState, panelTally, panelTaskRows } from './panel-model.ts'
-import type { PanelClientState, PanelMemberRow, PanelMemberTreeNode, PanelTaskRow } from './panel-model.ts'
+import {
+  createSessionTitleLoader,
+  handoffForest,
+  nextPanelState,
+  panelLoadState,
+  panelSessionTitles,
+  panelTally,
+  panelTaskRows,
+  panelTitleReadCandidates,
+} from './panel-model.ts'
+import type {
+  PanelClientState,
+  PanelMemberRow,
+  PanelMemberTreeNode,
+  PanelTaskRow,
+  SessionTitleHistoryApi,
+  SessionTitleHistoryRead,
+  SessionTitleLoader,
+} from './panel-model.ts'
 import { SubagentModelTab } from './subagent-tab.tsx'
 import css from './panel.module.css'
 
@@ -30,7 +47,6 @@ function stateClass(state: PanelTaskRow['state']): string {
 
 function MemberLine({ row, ctx }: { readonly row: PanelMemberRow; readonly ctx: A2d2ClientContext }): ReturnType<typeof createElement> {
   const sessions = ctx.get('sessions') as ClientSessionsService | undefined
-  const label = row.title ?? row.shortId
   const open = (): void => {
     if (!row.openable) return
     try {
@@ -51,7 +67,7 @@ function MemberLine({ row, ctx }: { readonly row: PanelMemberRow; readonly ctx: 
         disabled: !row.openable,
         onClick: open,
       },
-      label,
+      row.label,
     ),
     row.current ? createElement('span', { className: css.current }, '当前') : null,
     row.handoffFromLabel === undefined
@@ -106,6 +122,7 @@ function TaskCard({ row, ctx }: { readonly row: PanelTaskRow; readonly ctx: A2d2
 
 export function A2d2Panel({ ctx, sessionId, visible }: A2d2PanelProps): ReturnType<typeof createElement> {
   const sessions = ctx.get('sessions') as ClientSessionsService | undefined
+  const connection = ctx.get('connection') as { readonly api?: SessionTitleHistoryApi } | undefined
   const fallback = useMemo<ClientSessionListStore>(() => ({
     getSnapshot: () => NO_LIST,
     subscribe: () => () => {},
@@ -116,6 +133,11 @@ export function A2d2Panel({ ctx, sessionId, visible }: A2d2PanelProps): ReturnTy
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
   const [panel, setPanel] = useState<PanelClientState>({ payload: undefined, failure: undefined })
+  const [titleReads, setTitleReads] = useState<Readonly<Record<string, SessionTitleHistoryRead | undefined>>>({})
+  const titleLoader = useMemo<SessionTitleLoader | undefined>(
+    () => connection?.api === undefined ? undefined : createSessionTitleLoader(connection.api),
+    [connection?.api],
+  )
 
   useEffect(() => {
     if (visible === false) return undefined
@@ -135,13 +157,42 @@ export function A2d2Panel({ ctx, sessionId, visible }: A2d2PanelProps): ReturnTy
     }
   }, [sessionId, visible])
 
-  const titles = useMemo(() => {
-    const map: Record<string, string | undefined> = {}
-    for (const [id, row] of Object.entries(state.byId)) map[id] = row?.title
-    return map
-  }, [state])
-  const openable = useCallback((id: string) => state.byId[id] !== undefined, [state])
+  useEffect(() => {
+    return () => { titleLoader?.dispose() }
+  }, [titleLoader])
+
+  useEffect(() => {
+    if (titleLoader === undefined) return undefined
+    const publishSnapshot = (): void => {
+      setTitleReads({ ...titleLoader.snapshot() })
+    }
+    publishSnapshot()
+    return titleLoader.subscribe(publishSnapshot)
+  }, [titleLoader])
+
   const { payload, failure } = panel
+  const titleReadCandidates = useMemo(
+    () => panelTitleReadCandidates(payload, state.byId, titleReads),
+    [payload, state.byId, titleReads],
+  )
+  const effectiveTitleReads = useMemo(() => {
+    if (titleLoader !== undefined) return titleReads
+    const reads: Record<string, SessionTitleHistoryRead | undefined> = { ...titleReads }
+    for (const id of titleReadCandidates) reads[id] = { kind: 'failed' }
+    return reads
+  }, [titleLoader, titleReads, titleReadCandidates])
+
+  useEffect(() => {
+    if (titleLoader === undefined) return undefined
+    if (visible === false) return undefined
+    titleLoader.load(titleReadCandidates)
+    return undefined
+  }, [titleLoader, titleReadCandidates, visible])
+
+  const titles = useMemo(() => {
+    return panelSessionTitles(state.byId, effectiveTitleReads, titleReadCandidates)
+  }, [state.byId, effectiveTitleReads, titleReadCandidates])
+  const openable = useCallback((id: string) => state.byId[id] !== undefined, [state])
   const rows = payload === undefined ? [] : panelTaskRows(payload, titles, openable, sessionId)
   const tally = panelTally(rows)
   const load = panelLoadState(payload, failure)

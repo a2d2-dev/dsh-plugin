@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import {
+  EMPTY_SESSION_TITLE,
+  createSessionTitleLoader,
   handoffForest,
   nextPanelState,
   panelLoadState,
+  panelSessionTitles,
   panelTally,
   panelTaskRows,
   parsePanelPayload,
   shortSessionId,
   stateLabel,
+  type SessionTitleHistoryRead,
 } from '../../src/client/panel-model.ts'
 import type { PanelPayload } from '../../src/panel-types.ts'
 
@@ -27,6 +31,33 @@ function payload(overrides: Partial<PanelPayload> = {}): PanelPayload {
     }],
     ...overrides,
   }
+}
+
+function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void; readonly reject: (error: unknown) => void } {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((innerResolve, innerReject) => {
+    resolve = innerResolve
+    reject = innerReject
+  })
+  return { promise, resolve, reject }
+}
+
+function historyTitle(title: string | undefined): SessionTitleHistoryRead {
+  return title === undefined ? { kind: 'loaded' } : { kind: 'loaded', title }
+}
+
+function historyResponse(title: string | undefined) {
+  return {
+    result: {
+      ok: true,
+      value: {
+        projections: {
+          values: title === undefined ? {} : { title },
+        },
+      },
+    },
+  } as const
 }
 
 describe('panel task view model', () => {
@@ -68,6 +99,86 @@ describe('panel task view model', () => {
       openable: false,
       handoffFromLabel: 'Original session',
     })
+  })
+
+  it('prefers list titles, then cold-read titles, before blank placeholders', () => {
+    const rows = panelTaskRows(
+      payload(),
+      panelSessionTitles(
+        {
+          'session-aaaa1111': {
+            title: '  List title  ',
+            sessionListMetadata: { blank: true },
+            sessionStats: { turns: 0 },
+          },
+          'session-bbbb2222': { title: null },
+        },
+        {
+          'session-aaaa1111': historyTitle('History title'),
+          'session-bbbb2222': historyTitle('Cold title'),
+        },
+      ),
+      () => true,
+      'session-bbbb2222',
+    )
+
+    expect(rows[0]?.members.map(member => member.label)).toEqual(['List title', 'Cold title'])
+    expect(rows[0]?.members[1]?.handoffFromLabel).toBe('List title')
+  })
+
+  it('shows a readable placeholder for blank sessions with no title', () => {
+    const task = payload().tasks[0]!
+    const rows = panelTaskRows(
+      payload({
+        tasks: [{
+          ...task,
+          members: [
+            { sessionId: 'session-blank' },
+            { sessionId: 'session-zero' },
+          ],
+        }],
+      }),
+      panelSessionTitles(
+        {
+          'session-blank': { title: null, sessionListMetadata: { blank: true }, sessionStats: { turns: 0 } },
+          'session-zero': { sessionStats: { turns: 0 } },
+        },
+        {
+          'session-blank': historyTitle(undefined),
+          'session-zero': historyTitle(undefined),
+        },
+      ),
+      () => true,
+      'session-zero',
+    )
+
+    expect(rows[0]?.members.map(member => member.label)).toEqual([EMPTY_SESSION_TITLE, EMPTY_SESSION_TITLE])
+  })
+
+  it('falls back to the short id after a title cold read fails', () => {
+    const [row] = panelTaskRows(
+      payload(),
+      panelSessionTitles(
+        { 'session-aaaa1111': { title: null } },
+        { 'session-aaaa1111': { kind: 'failed' } },
+      ),
+      () => true,
+      'session-bbbb2222',
+    )
+
+    expect(row?.members[0]?.label).toBe('aaaa1111')
+    expect(row?.members[0]?.title).toBeUndefined()
+  })
+
+  it('keeps a pending cold-read candidate off the short-id fallback', () => {
+    const [row] = panelTaskRows(
+      payload(),
+      panelSessionTitles({}, {}, ['session-aaaa1111']),
+      () => true,
+      'session-bbbb2222',
+    )
+
+    expect(row?.members[0]?.label).toBe('读取标题中')
   })
 
   it('builds task members into a handoff forest and roots orphans', () => {
@@ -178,6 +289,61 @@ describe('panel task view model', () => {
     const rows = panelTaskRows(payload(), {}, () => true, 'session-other')
 
     expect(panelTally(rows)).toEqual({ total: 1, active: 1, members: 2 })
+  })
+})
+
+describe('createSessionTitleLoader', () => {
+  it('keeps an in-flight title read alive and deduplicated when the same ids arrive as a new array', async () => {
+    const pending = deferred<ReturnType<typeof historyResponse>>()
+    const signals: AbortSignal[] = []
+    const calls: unknown[] = []
+    const loader = createSessionTitleLoader({
+      sessions: {
+        history: (payload, signal) => {
+          calls.push(payload)
+          if (signal !== undefined) signals.push(signal)
+          return pending.promise
+        },
+      },
+    })
+
+    loader.load(['session-aaaa1111'])
+    loader.load(['session-aaaa1111'])
+
+    expect(calls).toEqual([{ sessionId: 'session-aaaa1111', maxMessages: 1 }])
+    expect(signals).toHaveLength(1)
+    expect(signals[0]?.aborted).toBe(false)
+
+    pending.resolve(historyResponse('Cold title'))
+    await pending.promise
+    await Promise.resolve()
+
+    expect(loader.snapshot()).toEqual({ 'session-aaaa1111': { kind: 'loaded', title: 'Cold title' } })
+
+    loader.load(['session-aaaa1111'])
+    expect(calls).toHaveLength(1)
+    loader.dispose()
+  })
+
+  it('isolates failed title reads and records a fallback state', async () => {
+    const loader = createSessionTitleLoader({
+      sessions: {
+        history: async (payload) => {
+          if (payload.sessionId === 'session-bad') throw new Error('history unavailable')
+          return historyResponse(`Title ${payload.sessionId}`)
+        },
+      },
+    })
+
+    loader.load(['session-bad', 'session-good'])
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(loader.snapshot()).toEqual({
+      'session-bad': { kind: 'failed' },
+      'session-good': { kind: 'loaded', title: 'Title session-good' },
+    })
+    loader.dispose()
   })
 })
 
