@@ -10,23 +10,27 @@
  *
  * Every field is a host fold this component only reads: child lists from the
  * session list's per-parent subagent catalogs, and each route from that
- * session's own `a2d2Indicator` projection. Only the catalogs need asking for,
- * because the host publishes them lazily per selected parent; projection
- * updates reach the tree on their own.
+ * session's own `a2d2Indicator` projection. Catalogs are published lazily per
+ * selected parent; route projections come from the list store when present and
+ * otherwise from the child's non-activating history projection baseline.
  *
  * @module @deepseek-ai/dsh-a2d2/client/subagent-tab
  */
 
-import { createElement, useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { createElement, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type {
   A2d2ClientContext, ClientSessionListSnapshot, ClientSessionListStore,
   ClientSessionsService,
 } from './context.ts'
 import {
   formatRoute,
+  loadSubagentRouteSources,
   subagentRouteHeader,
   subagentRouteTree,
+  type SubagentRouteAddress,
   type SubagentRouteRoot,
+  type SubagentRouteHistoryApi,
+  type SubagentRouteSource,
   type SubagentRouteTreeNode,
 } from './subagent-model.ts'
 import css from './subagent-tab.module.css'
@@ -84,6 +88,22 @@ function collectCatalogParents(rootId: string | undefined, nodes: readonly Subag
   }
   for (const node of nodes) visit(node)
   return [...ids]
+}
+
+function addressKey(address: SubagentRouteAddress): string {
+  return `${address.parentSessionId}\u0000${address.childSessionId}\u0000${address.mode}`
+}
+
+function collectRouteAddresses(nodes: readonly SubagentRouteTreeNode[]): readonly SubagentRouteAddress[] {
+  const addresses: SubagentRouteAddress[] = []
+  const visit = (node: SubagentRouteTreeNode): void => {
+    if (node.model === undefined && node.mode !== undefined) {
+      addresses.push({ parentSessionId: node.parentId, childSessionId: node.id, mode: node.mode })
+    }
+    for (const child of node.children) visit(child)
+  }
+  for (const node of nodes) visit(node)
+  return addresses
 }
 
 /** Render the root card. */
@@ -159,7 +179,11 @@ function NodeCard({
  */
 export function SubagentModelTab({ ctx, sessionId, visible }: SubagentModelTabProps): ReturnType<typeof createElement> {
   const sessions = ctx.get('sessions') as ClientSessionsService | undefined
+  const connection = ctx.get('connection') as { readonly api?: SubagentRouteHistoryApi } | undefined
   const inflightRef = useRef(new Set<string>())
+  const routeInflightRef = useRef(new Set<string>())
+  const routeRequestedRef = useRef(new Set<string>())
+  const [historySources, setHistorySources] = useState<Readonly<Record<string, SubagentRouteSource | undefined>>>({})
   // A stable no-op store stands in while the sessions service is absent, keeping
   // the hook count constant across a deployment that mounts no session list.
   const fallback = useMemo<ClientSessionListStore>(() => ({
@@ -172,14 +196,17 @@ export function SubagentModelTab({ ctx, sessionId, visible }: SubagentModelTabPr
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
   const tree = useMemo(
-    () => subagentRouteTree(state.byId, state.subagentsByParent, sessionId),
-    [state, sessionId],
+    () => subagentRouteTree(state.byId, state.subagentsByParent, sessionId, historySources),
+    [state, sessionId, historySources],
   )
   const catalogParents = useMemo(
     () => collectCatalogParents(tree.rootId, tree.children),
     [tree.rootId, tree.children],
   )
-
+  const routeAddresses = useMemo(
+    () => collectRouteAddresses(tree.children),
+    [tree.children],
+  )
   const refreshCatalog = useCallback((parentId: string): void => {
     if (sessions === undefined) return
     if (inflightRef.current.has(parentId)) return
@@ -208,6 +235,39 @@ export function SubagentModelTab({ ctx, sessionId, visible }: SubagentModelTabPr
       for (const parentId of catalogParents) sessions.setSubagentCatalogOpen?.(parentId, false)
     }
   }, [sessions, visible, catalogParents])
+
+  useEffect(() => {
+    const api = connection?.api
+    if (api === undefined) return undefined
+    if (visible === false) return undefined
+    const addresses = routeAddresses.filter((address) => {
+      const key = addressKey(address)
+      return !routeRequestedRef.current.has(key) && !routeInflightRef.current.has(key)
+    })
+    if (addresses.length === 0) return undefined
+    for (const address of addresses) routeInflightRef.current.add(addressKey(address))
+    const controller = new AbortController()
+    void loadSubagentRouteSources(api, addresses, controller.signal)
+      .then((sources) => {
+        for (const address of addresses) routeRequestedRef.current.add(addressKey(address))
+        setHistorySources((current) => {
+          let changed = false
+          const next: Record<string, SubagentRouteSource | undefined> = { ...current }
+          for (const [id, source] of Object.entries(sources)) {
+            if (source === undefined) continue
+            if (current[id] === source) continue
+            next[id] = source
+            changed = true
+          }
+          return changed ? next : current
+        })
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        for (const address of addresses) routeInflightRef.current.delete(addressKey(address))
+      })
+    return () => { controller.abort() }
+  }, [connection?.api, routeAddresses, visible])
 
   const openRoot = useCallback((id: string): void => {
     try {

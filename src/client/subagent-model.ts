@@ -22,6 +22,34 @@ export interface SubagentRouteSource {
   readonly route?: { readonly provider: string; readonly model: string }
 }
 
+/** Durable child address accepted by the host's subagent history API. */
+export interface SubagentRouteAddress {
+  readonly parentSessionId: string
+  readonly childSessionId: string
+  readonly mode: 'one-shot' | 'continuable'
+}
+
+/** The narrow host API face used to cold-read a child session's projection baseline. */
+export interface SubagentRouteHistoryApi {
+  readonly subagents: {
+    history(
+      payload: SubagentRouteAddress & { readonly maxMessages: number },
+      signal?: AbortSignal,
+    ): Promise<{
+      readonly result:
+        | {
+          readonly ok: true
+          readonly value: {
+            readonly projections?: {
+              readonly values?: Readonly<Record<string, unknown>>
+            }
+          }
+        }
+        | { readonly ok: false }
+    }>
+  }
+}
+
 /** One entry of the host-published subagent catalog for a parent session. */
 export interface CatalogEntry {
   /** `child` for a session-backed subagent; `diagnostic` for an unreadable one. */
@@ -129,9 +157,11 @@ function routeChanged(
 
 function sourceOf(
   summary: SubagentSessionSummary | undefined,
+  sources: Readonly<Record<string, SubagentRouteSource | undefined>> = {},
+  id?: string,
   projectionKey = INDICATOR_KEY,
 ): SubagentRouteSource | undefined {
-  return summary?.projectionValues?.[projectionKey]
+  return summary?.projectionValues?.[projectionKey] ?? (id === undefined ? undefined : sources[id])
 }
 
 function catalogMode(entry: CatalogEntry): 'one-shot' | 'continuable' | undefined {
@@ -142,6 +172,39 @@ function catalogMode(entry: CatalogEntry): 'one-shot' | 'continuable' | undefine
 function summaryLabel(summary: SubagentSessionSummary | undefined, id: string): string {
   const label = summary?.title ?? summary?.displayTitle
   return label === undefined || label === '' ? id.slice(0, SHORT_ID_LENGTH) : label
+}
+
+function routeSourceFromProjection(value: unknown): SubagentRouteSource | undefined {
+  if (value === null || typeof value !== 'object') return undefined
+  const route = (value as { readonly route?: unknown }).route
+  if (route === undefined) return {}
+  if (route === null || typeof route !== 'object') return undefined
+  const provider = (route as { readonly provider?: unknown }).provider
+  const model = (route as { readonly model?: unknown }).model
+  if (typeof provider !== 'string' || typeof model !== 'string') return undefined
+  return { route: { provider, model } }
+}
+
+/**
+ * Read the host-computed route projection for inactive catalog children.
+ *
+ * The tail history page is the supported non-activating read path for subagent
+ * sessions; it carries the same projections block a normal session open uses to
+ * seed its projection store.
+ */
+export async function loadSubagentRouteSources(
+  api: SubagentRouteHistoryApi | undefined,
+  addresses: readonly SubagentRouteAddress[],
+  signal?: AbortSignal,
+): Promise<Record<string, SubagentRouteSource | undefined>> {
+  if (api === undefined || addresses.length === 0) return {}
+  const pairs = await Promise.all(addresses.map(async (address) => {
+    const response = await api.subagents.history({ ...address, maxMessages: 1 }, signal)
+    if (!response.result.ok) return [address.childSessionId, undefined] as const
+    const value = response.result.value.projections?.values?.[INDICATOR_KEY]
+    return [address.childSessionId, routeSourceFromProjection(value)] as const
+  }))
+  return Object.fromEntries(pairs)
 }
 
 /**
@@ -198,6 +261,7 @@ export function rootAncestor(
 function buildChildTree(
   byId: Readonly<Record<string, SubagentSessionSummary | undefined>>,
   catalogs: Readonly<Record<string, SubagentCatalog | undefined>>,
+  sources: Readonly<Record<string, SubagentRouteSource | undefined>>,
   parentId: string,
   parentRoute: SubagentRouteSource['route'] | undefined,
   currentSessionId: string,
@@ -212,7 +276,7 @@ function buildChildTree(
   for (const entry of catalog.entries) {
     if (entry.kind !== 'child') continue
     const summary = byId[entry.id]
-    const source = sourceOf(summary)
+    const source = sourceOf(summary, sources, entry.id)
     const route = source?.route
     const drifted = routeChanged(parentRoute, route)
     const running = entry.activity === 'running'
@@ -233,7 +297,7 @@ function buildChildTree(
       current: entry.id === currentSessionId,
       hasChildren: entry.hasChildren === true,
       children: canRecurse
-        ? buildChildTree(byId, catalogs, entry.id, route, currentSessionId, tally, nextPath)
+        ? buildChildTree(byId, catalogs, sources, entry.id, route, currentSessionId, tally, nextPath)
         : [],
     })
   }
@@ -250,15 +314,16 @@ export function subagentRouteTree(
   byId: Readonly<Record<string, SubagentSessionSummary | undefined>>,
   catalogs: Readonly<Record<string, SubagentCatalog | undefined>>,
   currentSessionId: string,
+  sources: Readonly<Record<string, SubagentRouteSource | undefined>> = {},
 ): SubagentRouteTree {
   const rootId = rootAncestor(byId, currentSessionId)
   const rootSummary = rootId === undefined ? undefined : byId[rootId]
-  const rootSource = sourceOf(rootSummary)
+  const rootSource = sourceOf(rootSummary, sources, rootId)
   const rootRoute = rootSource?.route
   const tally = { total: 0, running: 0, drifted: 0 }
   const children = rootId === undefined
     ? []
-    : buildChildTree(byId, catalogs, rootId, rootRoute, currentSessionId, tally, new Set())
+    : buildChildTree(byId, catalogs, sources, rootId, rootRoute, currentSessionId, tally, new Set())
   return {
     rootId,
     root: rootId === undefined
