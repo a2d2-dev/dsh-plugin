@@ -34,6 +34,8 @@ export interface CatalogEntry {
   readonly mode?: string
   /** `running` while the child is live in the session store, else `inactive`. */
   readonly activity?: string
+  /** Whether the child has durable subagent children of its own. */
+  readonly hasChildren?: boolean
 }
 
 /** One row the list draws. */
@@ -60,6 +62,49 @@ export interface SubagentRouteRow {
   readonly drifted: boolean
 }
 
+/** One host-published session summary row the tree builder reads. */
+export interface SubagentSessionSummary {
+  readonly id: string
+  readonly title?: string
+  readonly displayTitle?: string
+  readonly origin?: 'subagent'
+  readonly parentId?: string
+  readonly running?: boolean
+  readonly projectionValues?: Readonly<Record<string, SubagentRouteSource | undefined>>
+}
+
+/** One host-published direct-child catalog. */
+export interface SubagentCatalog {
+  readonly entries: readonly CatalogEntry[]
+}
+
+/** Root node of the subagent route tree. */
+export interface SubagentRouteRoot {
+  readonly id: string
+  readonly label: string
+  readonly running: boolean
+  readonly provider?: string
+  readonly model?: string
+  readonly current: boolean
+}
+
+/** One child node in the subagent route tree. */
+export interface SubagentRouteTreeNode extends SubagentRouteRow {
+  readonly parentId: string
+  readonly mode?: 'one-shot' | 'continuable'
+  readonly current: boolean
+  readonly hasChildren: boolean
+  readonly children: readonly SubagentRouteTreeNode[]
+}
+
+/** Complete route tree rooted at the main session. */
+export interface SubagentRouteTree {
+  readonly rootId: string | undefined
+  readonly root: SubagentRouteRoot | undefined
+  readonly children: readonly SubagentRouteTreeNode[]
+  readonly tally: SubagentRouteTally
+}
+
 /** How many children a session has, and how many of them run on another route. */
 export interface SubagentRouteTally {
   /** Direct children the catalog reports. */
@@ -72,6 +117,32 @@ export interface SubagentRouteTally {
 
 /** Characters of a child id shown when the host published no label. */
 const SHORT_ID_LENGTH = 8
+const INDICATOR_KEY = 'a2d2Indicator'
+
+function routeChanged(
+  parentRoute: SubagentRouteSource['route'] | undefined,
+  childRoute: SubagentRouteSource['route'] | undefined,
+): boolean {
+  return parentRoute !== undefined && childRoute !== undefined
+    && (parentRoute.provider !== childRoute.provider || parentRoute.model !== childRoute.model)
+}
+
+function sourceOf(
+  summary: SubagentSessionSummary | undefined,
+  projectionKey = INDICATOR_KEY,
+): SubagentRouteSource | undefined {
+  return summary?.projectionValues?.[projectionKey]
+}
+
+function catalogMode(entry: CatalogEntry): 'one-shot' | 'continuable' | undefined {
+  if (entry.mode === 'one-shot' || entry.mode === 'continuable') return entry.mode
+  return undefined
+}
+
+function summaryLabel(summary: SubagentSessionSummary | undefined, id: string): string {
+  const label = summary?.title ?? summary?.displayTitle
+  return label === undefined || label === '' ? id.slice(0, SHORT_ID_LENGTH) : label
+}
 
 /**
  * Project the catalog and the route projections into the list's rows.
@@ -96,10 +167,112 @@ export function subagentRouteRows(
       continuable: entry.mode === 'continuable',
       running: entry.activity === 'running',
       ...route === undefined ? {} : { provider: route.provider, model: route.model },
-      drifted: route === undefined || parentRoute === undefined ? false : route.model !== parentRoute.model,
+      drifted: routeChanged(parentRoute, route),
     })
   }
   return rows
+}
+
+/**
+ * Walk a durable subagent parent chain to the main session.
+ *
+ * Broken or cyclic chains degrade to the requested session itself.
+ */
+export function rootAncestor(
+  byId: Readonly<Record<string, SubagentSessionSummary | undefined>>,
+  sessionId: string | undefined,
+): string | undefined {
+  if (sessionId === undefined) return undefined
+  const seen = new Set<string>()
+  let current = byId[sessionId]
+  while (current !== undefined && current.origin === 'subagent' && current.parentId !== undefined) {
+    if (seen.has(current.id)) return sessionId
+    seen.add(current.id)
+    const parent = byId[current.parentId]
+    if (parent === undefined) return sessionId
+    current = parent
+  }
+  return current?.id ?? sessionId
+}
+
+function buildChildTree(
+  byId: Readonly<Record<string, SubagentSessionSummary | undefined>>,
+  catalogs: Readonly<Record<string, SubagentCatalog | undefined>>,
+  parentId: string,
+  parentRoute: SubagentRouteSource['route'] | undefined,
+  currentSessionId: string,
+  tally: { total: number; running: number; drifted: number },
+  path: ReadonlySet<string>,
+): readonly SubagentRouteTreeNode[] {
+  const catalog = catalogs[parentId]
+  if (catalog === undefined) return []
+  const nextPath = new Set(path)
+  nextPath.add(parentId)
+  const nodes: SubagentRouteTreeNode[] = []
+  for (const entry of catalog.entries) {
+    if (entry.kind !== 'child') continue
+    const summary = byId[entry.id]
+    const source = sourceOf(summary)
+    const route = source?.route
+    const drifted = routeChanged(parentRoute, route)
+    const running = entry.activity === 'running'
+    tally.total += 1
+    if (running) tally.running += 1
+    if (drifted) tally.drifted += 1
+    const canRecurse = entry.hasChildren === true && !nextPath.has(entry.id)
+    const mode = catalogMode(entry)
+    nodes.push({
+      id: entry.id,
+      parentId,
+      label: entry.label === undefined || entry.label === '' ? summaryLabel(summary, entry.id) : entry.label,
+      continuable: entry.mode === 'continuable',
+      ...(mode === undefined ? {} : { mode }),
+      running,
+      ...route === undefined ? {} : { provider: route.provider, model: route.model },
+      drifted,
+      current: entry.id === currentSessionId,
+      hasChildren: entry.hasChildren === true,
+      children: canRecurse
+        ? buildChildTree(byId, catalogs, entry.id, route, currentSessionId, tally, nextPath)
+        : [],
+    })
+  }
+  return nodes
+}
+
+/**
+ * Build the full currently-known subagent route tree.
+ *
+ * Catalogs are lazy; a child marked `hasChildren` may have no children here
+ * until its own parent catalog has been refreshed.
+ */
+export function subagentRouteTree(
+  byId: Readonly<Record<string, SubagentSessionSummary | undefined>>,
+  catalogs: Readonly<Record<string, SubagentCatalog | undefined>>,
+  currentSessionId: string,
+): SubagentRouteTree {
+  const rootId = rootAncestor(byId, currentSessionId)
+  const rootSummary = rootId === undefined ? undefined : byId[rootId]
+  const rootSource = sourceOf(rootSummary)
+  const rootRoute = rootSource?.route
+  const tally = { total: 0, running: 0, drifted: 0 }
+  const children = rootId === undefined
+    ? []
+    : buildChildTree(byId, catalogs, rootId, rootRoute, currentSessionId, tally, new Set())
+  return {
+    rootId,
+    root: rootId === undefined
+      ? undefined
+      : {
+        id: rootId,
+        label: summaryLabel(rootSummary, rootId),
+        running: rootSummary?.running === true,
+        ...rootRoute === undefined ? {} : { provider: rootRoute.provider, model: rootRoute.model },
+        current: rootId === currentSessionId,
+      },
+    children,
+    tally,
+  }
 }
 
 /**

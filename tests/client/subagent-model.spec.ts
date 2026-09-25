@@ -3,8 +3,10 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { indicatorProjectionDefinition, indicatorProjectionSchema } from '../../src/indicator-projection.ts'
 import {
   formatRoute,
+  rootAncestor,
   subagentRouteRows,
   subagentRouteHeader,
+  subagentRouteTree,
   subagentRouteTally,
   type CatalogEntry,
 } from '../../src/client/subagent-model.ts'
@@ -140,6 +142,90 @@ describe('subagentRouteTally', () => {
 
   it('is all zeroes for an empty list', () => {
     expect(subagentRouteTally([])).toEqual({ total: 0, running: 0, drifted: 0 })
+  })
+})
+
+describe('rootAncestor', () => {
+  it('walks durable subagent parent links to the main session', () => {
+    expect(rootAncestor({
+      root: { id: 'root', displayTitle: 'Main', running: false },
+      child: { id: 'child', displayTitle: 'Child', origin: 'subagent', parentId: 'root', running: false },
+      grandchild: { id: 'grandchild', displayTitle: 'Grandchild', origin: 'subagent', parentId: 'child', running: true },
+    }, 'grandchild')).toBe('root')
+  })
+
+  it('falls back to the requested session for missing parents and cycles', () => {
+    expect(rootAncestor({
+      child: { id: 'child', displayTitle: 'Child', origin: 'subagent', parentId: 'missing', running: false },
+    }, 'child')).toBe('child')
+    expect(rootAncestor({
+      a: { id: 'a', displayTitle: 'A', origin: 'subagent', parentId: 'b', running: false },
+      b: { id: 'b', displayTitle: 'B', origin: 'subagent', parentId: 'a', running: false },
+    }, 'a')).toBe('a')
+  })
+})
+
+describe('subagentRouteTree', () => {
+  it('roots at the main session, nests recursive children, and counts whole-tree drift against each parent', () => {
+    const tree = subagentRouteTree(
+      {
+        root: {
+          id: 'root',
+          displayTitle: 'Main',
+          running: false,
+          projectionValues: { a2d2Indicator: { route: { provider: 'claude', model: 'opus' } } },
+        },
+        child: {
+          id: 'child',
+          displayTitle: 'Child title',
+          origin: 'subagent',
+          parentId: 'root',
+          running: true,
+          projectionValues: { a2d2Indicator: { route: { provider: 'claude', model: 'opus' } } },
+        },
+        grandchild: {
+          id: 'grandchild',
+          displayTitle: 'Grandchild title',
+          origin: 'subagent',
+          parentId: 'child',
+          running: false,
+          projectionValues: { a2d2Indicator: { route: { provider: 'codex', model: 'gpt-5.5' } } },
+        },
+        sibling: {
+          id: 'sibling',
+          displayTitle: 'Sibling title',
+          origin: 'subagent',
+          parentId: 'root',
+          running: true,
+          projectionValues: { a2d2Indicator: { route: { provider: 'claude', model: 'fable' } } },
+        },
+      },
+      {
+        root: {
+          entries: [
+            childEntry('child', { label: 'Design', activity: 'running', hasChildren: true }),
+            childEntry('sibling', { label: 'Review', activity: 'running' }),
+          ],
+        },
+        child: {
+          entries: [
+            childEntry('grandchild', { label: 'Implement', activity: 'inactive' }),
+          ],
+        },
+      },
+      'grandchild',
+    )
+
+    expect(tree.root?.id).toBe('root')
+    expect(tree.children.map(node => ({
+      id: node.id,
+      drifted: node.drifted,
+      children: node.children.map(child => ({ id: child.id, drifted: child.drifted })),
+    }))).toEqual([
+      { id: 'child', drifted: false, children: [{ id: 'grandchild', drifted: true }] },
+      { id: 'sibling', drifted: true, children: [] },
+    ])
+    expect(tree.tally).toEqual({ total: 3, running: 2, drifted: 2 })
   })
 })
 
