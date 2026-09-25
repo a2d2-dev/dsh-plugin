@@ -100,6 +100,23 @@ function skillBody(markdown: string): string {
   return frontMatter === null ? markdown : markdown.slice(frontMatter[0].length)
 }
 
+/**
+ * The skill's own one-line `description` from its front matter, unchanged.
+ *
+ * Callers that only need to know what an installed skill is for quote this
+ * line instead of paraphrasing it, so the skill stays the single source.
+ * @returns the description, or `undefined` when the front matter has none.
+ */
+export function skillDescription(markdown: string): string | undefined {
+  const frontMatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u.exec(markdown)
+  if (frontMatter === null) return undefined
+  const line = /^description:[ \t]*(.+)$/mu.exec(frontMatter[1] ?? '')
+  const raw = line?.[1]?.trim()
+  if (raw === undefined || raw === '') return undefined
+  const quoted = /^(["'])([\s\S]*)\1$/u.exec(raw)
+  return quoted === null ? raw : quoted[2]
+}
+
 /** Find explicit local markdown links in declaration order. */
 function declaredMarkdownResources(markdown: string): readonly string[] {
   const references: string[] = []

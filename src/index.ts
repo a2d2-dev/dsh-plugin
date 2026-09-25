@@ -76,6 +76,7 @@ export {
   generateConsultWithFallback,
   generateConsultOutput,
   isTrustedConsultRequest,
+  loadOrchestratorSkill,
   parseConsultOutput,
   statusOf,
 } from './consult.ts'
@@ -94,6 +95,7 @@ export type {
   ConsultRoute,
   ConsultSession,
   ConsultValue,
+  OrchestratorSkill,
 } from './consult.ts'
 export {
   CODING_MODEL_ROUTES,
@@ -135,7 +137,7 @@ export {
 } from './handoff-document.ts'
 export type { HandoffDocument, HandoffDocumentErrorCode, HandoffFacts } from './handoff-document.ts'
 export { HANDOFF_SUMMARY_MAX_CHARS, handoffInstruction } from './handoff-instruction.ts'
-export { DEFAULT_SKILLS_ROOT, readSkillSource } from './skill-source.ts'
+export { DEFAULT_SKILLS_ROOT, readSkillSource, skillDescription } from './skill-source.ts'
 export type { LoadedSkillSource, MissingSkillSource, SkillResource, SkillSource } from './skill-source.ts'
 export { handoffPrompt } from './handoff-prompt.ts'
 export {
@@ -509,6 +511,12 @@ export class A2d2Service extends Service {
         listTasks: cwd => this.store.list(cwd),
         projectRoot: cwd => resolveProjectRoot(cwd, this.projectMarkers),
         readAskMatt: () => readSkillSource('ask-matt', this.skillsRoot),
+        readOrchestrator: async () => {
+          const current = await readSkillSource('a2d2-orchestrator', this.skillsRoot)
+          return current.status === 'loaded'
+            ? current
+            : await readSkillSource('ceo-team', this.skillsRoot)
+        },
         getStationModels: () => this.stationModels,
         contextFacts: (session) => {
           const projections = getService<ProjectionReader>('sessionProjections')

@@ -24,6 +24,7 @@ import {
   currentConsultRoute,
   generateConsultOutput,
   isTrustedConsultRequest,
+  loadOrchestratorSkill,
   parseConsultOutput,
 } from '../src/consult.ts'
 import type { ConsultDependencies, ConsultSession } from '../src/consult.ts'
@@ -386,6 +387,91 @@ describe('consult material and route', () => {
 
       </ask-matt-resource>"
     `)
+  })
+})
+
+describe('a2d2-orchestrator candidates', () => {
+  const orchestrateCandidates = [
+    { label: '逐张实施 #12', input: '/implement #12', move: 'continue', station: 'implement' },
+    { label: '编排实施全部工单', input: '用 a2d2-orchestrator 把 #12-#18 全部实施', move: 'continue', station: 'implement' },
+  ]
+  const orchestrateJson = JSON.stringify({ position: '工单 #12-#18 已拆完。', location, next: { station: 'implement', move: 'continue', reason: 'ready-for-agent 工单可直接实施' }, candidates: orchestrateCandidates })
+  const orchestratorSkill: SkillSource = {
+    status: 'loaded',
+    skill: '---\nname: a2d2-orchestrator\ndescription: A2D2 多 agent 编排契约。\n---\n\n# body rules\n',
+    resources: [],
+  }
+
+  it('quotes only the installed skill description and asks for a continue-move orchestrate chip once tickets are ready', async () => {
+    const orchestrator = await loadOrchestratorSkill(async () => orchestratorSkill)
+    expect(orchestrator).toEqual({ description: 'A2D2 多 agent 编排契约。' })
+
+    const prompt = buildConsultPrompt({ messages: [], tasks: [] }, { status: 'missing' }, orchestrator)
+
+    expect(prompt).toContain('<a2d2-orchestrator-description>A2D2 多 agent 编排契约。</a2d2-orchestrator-description>')
+    expect(prompt).toContain('ready-for-agent')
+    expect(prompt).toContain('"move":"continue|clear|handoff|subagent|compact"')
+    expect(prompt).toContain('the a2d2-orchestrator chip uses move "continue"')
+    expect(prompt).not.toContain('# body rules')
+    expect(prompt).not.toContain('"kind"')
+  })
+
+  it('leaves the envelope untouched when the orchestrator is absent, unreadable, or undescribed', async () => {
+    expect(await loadOrchestratorSkill(undefined)).toBeUndefined()
+    expect(await loadOrchestratorSkill(async () => ({ status: 'missing' }))).toBeUndefined()
+    expect(await loadOrchestratorSkill(async () => { throw new Error('broken resource') })).toBeUndefined()
+    expect(await loadOrchestratorSkill(async () => ({ status: 'loaded', skill: '# no front matter', resources: [] }))).toBeUndefined()
+    expect(buildConsultPrompt({ messages: [], tasks: [] }, { status: 'missing' })).not.toContain('orchestrator')
+  })
+
+  it('returns the orchestrate chip through the route when the skill is installed', async () => {
+    const deps = dependencies({
+      readOrchestrator: async () => orchestratorSkill,
+      stream: (options) => {
+        deps.calls.push(options)
+        return output(orchestrateJson)
+      },
+    })
+
+    const result = await send(createConsultHandler(deps))
+
+    expect(result).toMatchObject({ status: 200, json: { ok: true, value: { candidates: orchestrateCandidates } } })
+    expect(deps.calls[0]?.messages[0]?.content[0]).toMatchObject({
+      text: expect.stringContaining('<a2d2-orchestrator-description>'),
+    })
+  })
+
+  it('keeps setup first and the candidate cap when an orchestrate chip is present', async () => {
+    const deps = dependencies({
+      readOrchestrator: async () => orchestratorSkill,
+      checkPreconditions: async () => ({
+        missing: [{
+          id: 'issue-tracker',
+          label: 'docs/agents/issue-tracker.md',
+          paths: ['docs/agents/issue-tracker.md'],
+        }],
+      }),
+      stream: () => output(JSON.stringify({
+        position,
+        location,
+        next: { station: 'implement', move: 'continue', reason: 'ready-for-agent 工单可实施' },
+        candidates: [
+          { label: '逐张实施 #12', input: '/implement #12', move: 'continue', station: 'implement' },
+          { label: '编排实施全部工单', input: '用 a2d2-orchestrator 把 #12-#18 全部实施', move: 'continue', station: 'implement' },
+          { label: '派代理复核', input: '让子代理复核工单依赖', move: 'subagent', station: 'implement' },
+          { label: '交接实施', input: 'handoff implementation', move: 'handoff', station: 'handoff' },
+        ],
+      })),
+    })
+
+    const result = await send(createConsultHandler(deps))
+
+    expect((result.json as { value?: { candidates?: unknown[] } }).value?.candidates).toEqual([
+      { label: '首次使用前：/setup-matt-pocock-skills', input: '/setup-matt-pocock-skills', move: 'continue' },
+      { label: '逐张实施 #12', input: '/implement #12', move: 'continue', station: 'implement' },
+      { label: '编排实施全部工单', input: '用 a2d2-orchestrator 把 #12-#18 全部实施', move: 'continue', station: 'implement' },
+      { label: '派代理复核', input: '让子代理复核工单依赖', move: 'subagent', station: 'implement' },
+    ])
   })
 })
 
