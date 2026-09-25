@@ -16,6 +16,7 @@
  */
 
 import { createElement } from 'react'
+import { A2d2ConfigSection, loadModelRouteCatalog } from './config-page.tsx'
 import { HandoffOrb } from './orb.tsx'
 import { SubagentModelTab } from './subagent-tab.tsx'
 import type { A2d2ClientContext, ClientSidebarService } from './context.ts'
@@ -56,6 +57,20 @@ export function apply(ctx: A2d2ClientContext): void {
   }, function OrbEntry(props): ReturnType<typeof createElement> | null {
     return createElement(HandoffOrb, { ctx, sessionId: props.sessionId })
   })), 'a2d2 handoff orb')
+
+  ctx.effect(() => ctx.slots.inject('settings.section', () => ctx.slots.register({
+    name: 'settings.section',
+    id: 'a2d2-config',
+    order: 60,
+    label: () => 'A2D2 配置',
+    inject: () => {
+      const connection = ctx.get('connection') as { api?: Parameters<typeof loadModelRouteCatalog>[0] } | undefined
+      return {
+        fetch: globalThis.fetch.bind(globalThis),
+        loadModelRoutes: () => loadModelRouteCatalog(connection?.api),
+      }
+    },
+  }, A2d2ConfigSection)), 'a2d2 config settings section')
 
   const sidebar = ctx.get('betterSidebar') as ClientSidebarService | undefined
   if (sidebar === undefined) return

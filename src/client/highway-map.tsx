@@ -13,7 +13,7 @@ import type { HighwayView } from './highway-view.ts'
 
 export interface HighwayMapProps {
   readonly view: HighwayView
-  readonly mode?: 'readonly'
+  readonly mode?: 'readonly' | 'editable'
 }
 
 export function HighwayMap(props: HighwayMapProps): ReturnType<typeof createElement> {

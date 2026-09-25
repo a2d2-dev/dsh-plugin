@@ -60,6 +60,14 @@ a2d2-station-models:
 
 `consult` 与每个站点条目都是有序的 `provider/model` 候选列表。空列表和格式错误的 route 会被 settings schema 拒绝。思考类站点（`grill`、`to-spec`、`to-tickets`、`code-review`、`triage`、`wayfinder`、`improve-codebase-architecture`）默认是 `claude-bray/claude-fable-5-1` 再到 `codex/gpt-6`；写代码类站点（`implement`、`prototype`、`diagnosing-bugs`）默认是 `codex/gpt-5.5` 再到 `claude-bray/claude-opus-5-5`。`handoff`、路基和独立技能刻意不列入，因为本票不负责为它们切模型。若 `code-review` 与 `implement` 的首个候选相同，宿主会记录告警，但不会拒绝该设置。
 
+### A2D2 配置页
+
+浏览器 bundle 会向 DSH 设置导航注册一个独立 section：**A2D2 配置**。首块 **Matt 流程** 复用公路图绘制，展示主干、匝道、服务区、路基与独立区；随后可以编辑可配置站点的有序模型候选列表，并单独编辑 `consult` 这一行。`handoff`、路基站点和独立技能显示为「不切模型」。
+
+页面不会从浏览器直接写任意 settings 命名空间。它调用本插件自己的受信任路由 `/a2d2/api/config`，该路由复用下一步咨询的 host / origin / fetch 信任判据，并且只暴露 `a2d2-station-models`。请求体上限是 64 KiB，JSON 解析失败会被拒绝；读取会返回当前 settings revision，保存必须带着该 revision 整体替换站点模型表。缺 revision 不会写入；若保存时 revision 已过期，路由拒绝写入并返回最新值，页面重新读取；空列表、格式错误 route 等 schema 失败会直接回显原因，且不会落盘。
+
+新增候选只能从 DSH 宿主模型目录（`llm.models`）选择，因此页面不会制造拼写错误的 route。每个已有候选旁都有 **测试** 动作：点击时宿主只发一次极小调用（`reply OK`，小输出预算），并把结果分类为正常、拒答、限流或报错，同时显示原因；空输出按报错处理。没有后台轮询探测。
+
 ## 任务文档
 
 一个任务一个 YAML 文档，位于 `<projectRoot>/.dsh/a2d2/tasks/<id>.yaml`。`<projectRoot>/.dsh/` 是既有的项目本地根——与 `skill-filesystem` 使用 `.dsh/skills` 的锚点相同——插件短名给该存储划出命名空间，使它即使将来承载更多种类的状态，足迹仍是一个目录。

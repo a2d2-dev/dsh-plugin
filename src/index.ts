@@ -19,6 +19,7 @@ import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { TaskId } from './brand.ts'
+import { CONFIG_ROUTE_PATH, createConfigHandler } from './config-page.ts'
 import { CONSULT_ROUTE_PATH, consultContextFactsFromProjectionValues, createConsultHandler } from './consult.ts'
 import { handedOff, memberOf, successorsOf } from './derive.ts'
 import type { HandoffDocument, HandoffFacts } from './handoff-document.ts'
@@ -55,6 +56,12 @@ import type { CreateTaskRequest, Task } from './types.ts'
 
 export { TaskId } from './brand.ts'
 export type { TaskId as TaskIdType } from './brand.ts'
+export {
+  CONFIG_ROUTE_PATH,
+  classifyModelProbe,
+  createConfigHandler,
+} from './config-page.ts'
+export type { ConfigDependencies, ConfigMethod, ConfigSettingsView, ModelProbeResult, ModelProbeStatus } from './config-page.ts'
 export {
   CONSULT_MAX_OUTPUT_TOKENS,
   CONSULT_MESSAGE_LIMIT,
@@ -330,6 +337,7 @@ export class A2d2Service extends Service {
     this.publishStationModels()
     this.publishIndicator()
     this.publishConsult()
+    this.publishConfig()
     // Stated once at load: whether the browser half received these is otherwise
     // only visible by looking at the indicator, which never reports absence.
     this.ctx.logger.info(
@@ -515,6 +523,77 @@ export class A2d2Service extends Service {
       routeCtx.effect(
         () => server.register({ kind: 'exact', path: CONSULT_ROUTE_PATH, handler }),
         'a2d2 consult route',
+      )
+    })
+  }
+
+  /** Publish the trusted browser route backing the A2D2 settings page. */
+  private publishConfig(): void {
+    this.ctx.inject(['webServer'], (routeCtx) => {
+      type WebServer = {
+        register(route: {
+          kind: 'exact'
+          path: string
+          handler: ReturnType<typeof createConfigHandler>
+        }): () => void
+      }
+      type WebRuntime = { readonly trustedHosts: readonly string[] }
+      type LlmModel = { readonly id: string }
+      type LlmProvider = { readonly id: string }
+      type LlmRuntime = {
+        listProviders(): readonly LlmProvider[]
+        listModels(provider: string): Promise<readonly LlmModel[]>
+        stream(options: Parameters<Parameters<typeof createConfigHandler>[0]['stream']>[0]): ReturnType<Parameters<typeof createConfigHandler>[0]['stream']>
+      }
+      type SettingsRuntime = {
+        describe(): readonly { readonly ns: string; readonly value: unknown; readonly revision: number }[]
+        replace(ns: string, section: object, expectedRevision?: number): Promise<void>
+      }
+      const getService = <T>(name: string): T | undefined => (
+        (routeCtx.get as unknown as (name: string) => T | undefined).call(routeCtx, name)
+      )
+      const server = getService<WebServer>('webServer')
+      if (server === undefined) return
+      const ns = settingsNamespace(STATION_MODEL_SETTINGS_NAMESPACE)
+      const readSettings = () => {
+        const settings = getService<SettingsRuntime>('settings')
+        const descriptor = settings?.describe().find(entry => entry.ns === ns)
+        if (descriptor === undefined) return { value: this.stationModels, revision: undefined }
+        return {
+          value: validateStationModelsSettings(descriptor.value),
+          revision: descriptor.revision,
+        }
+      }
+      const handler = createConfigHandler({
+        trustedHosts: () => getService<WebRuntime>('webRuntime')?.trustedHosts ?? [],
+        getSettings: readSettings,
+        updateSettings: async (value, expectedRevision) => {
+          const settings = getService<SettingsRuntime>('settings')
+          if (settings === undefined) throw new Error('a2d2: settings service is unavailable')
+          await settings.replace(ns, value as unknown as object, expectedRevision)
+          return readSettings()
+        },
+        modelRoutes: async () => {
+          const llm = getService<LlmRuntime>('llm')
+          if (llm === undefined) return []
+          const routes = await Promise.all(llm.listProviders().map(async provider => {
+            try {
+              return (await llm.listModels(provider.id)).map(model => `${provider.id}/${model.id}`)
+            } catch {
+              return []
+            }
+          }))
+          return routes.flat()
+        },
+        stream: (options) => {
+          const llm = getService<LlmRuntime>('llm')
+          if (llm === undefined) throw new Error('a2d2: llm service is unavailable')
+          return llm.stream(options)
+        },
+      })
+      routeCtx.effect(
+        () => server.register({ kind: 'exact', path: CONFIG_ROUTE_PATH, handler }),
+        'a2d2 config route',
       )
     })
   }

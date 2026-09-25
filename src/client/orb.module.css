@@ -600,3 +600,227 @@
   opacity: 0.9;
   overflow-wrap: anywhere;
 }
+
+.configPage {
+  box-sizing: border-box;
+  max-width: 960px;
+  padding: 20px;
+  color: #1b2430;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.configHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.configTitle {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.configSubtitle {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #5c6673;
+}
+
+.configSave,
+.configButton,
+.configIconButton {
+  box-sizing: border-box;
+  border: 1px solid #c8d1dc;
+  background: #ffffff;
+  color: #1b2430;
+  font: inherit;
+  cursor: pointer;
+}
+
+.configSave {
+  min-width: 86px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: #205f46;
+  border-color: #205f46;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.configButton {
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.configIconButton {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.configSave:disabled,
+.configButton:disabled,
+.configIconButton:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.configSection {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.configSectionTitle {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.configWarning {
+  white-space: pre-wrap;
+  border: 1px solid #e0b24d;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff8e6;
+  color: #6a4b00;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.configRoadExtras {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+  font-size: 12px;
+  color: #46515f;
+}
+
+.configRoadExtras span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.configRows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.configRow {
+  border: 1px solid #d7dee8;
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.configRowHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.configRowHead strong,
+.configRowHead span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.configRowHead span {
+  color: #667180;
+  font-size: 12px;
+}
+
+.configRoutes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.configRoute {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 28px 28px auto 28px minmax(120px, 1fr);
+  gap: 6px;
+  align-items: center;
+}
+
+.configRouteName {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+
+.configProbe {
+  min-width: 0;
+  color: #46515f;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.configNoSwitch {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px 10px;
+  border: 1px solid #d7dee8;
+  border-radius: 6px;
+  background: #f6f8fb;
+  color: #46515f;
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.configAddRow {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.configSelect {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid #c8d1dc;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #1b2430;
+  font: inherit;
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .configPage {
+    padding: 14px;
+  }
+
+  .configHeader,
+  .configRowHead {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .configRoute {
+    grid-template-columns: 1fr 28px 28px 64px 28px;
+  }
+
+  .configProbe {
+    grid-column: 1 / -1;
+  }
+}

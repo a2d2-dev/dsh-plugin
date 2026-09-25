@@ -8,6 +8,7 @@
  */
 
 import {
+  type ClosedHighwayStation,
   MAIN_STATION_ROLES,
   MAIN_STATIONS,
   RAMP_MERGES,
@@ -18,7 +19,7 @@ import type { ConsultLocation, ConsultNext, ConsultPhase } from './consult-actio
 export type HighwayStationState = 'passed' | 'current' | 'next' | 'ahead'
 
 export interface HighwayViewStation {
-  readonly id: MainStation
+  readonly id: ClosedHighwayStation | 'standalone'
   readonly role: string
   readonly models?: string
   readonly state: HighwayStationState
