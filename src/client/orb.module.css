@@ -90,7 +90,7 @@
 .tokens {
   font-size: 15px;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .cost {
@@ -275,6 +275,139 @@
   line-height: 1.35;
 }
 
+.highwayMap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.highwayPlacard,
+.highwayAside {
+  padding: 7px 9px;
+  border-left: 3px solid #d69a3a;
+  background: #2a2216;
+  color: #ffd99a;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.highwayStations {
+  position: relative;
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.highwayStations::before {
+  content: '';
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 9px;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.highwayStation {
+  position: relative;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  color: rgba(242, 245, 248, 0.72);
+}
+
+.highwayMarker {
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  box-sizing: border-box;
+  border: 2px solid rgba(255, 255, 255, 0.24);
+  border-radius: 50%;
+  background: #1b2430;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.highwayText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.highwayName {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.highwayRole {
+  font-size: 10px;
+  line-height: 1.25;
+  opacity: 0.72;
+  overflow-wrap: anywhere;
+}
+
+.highwayModel {
+  max-width: 96px;
+  padding: 3px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 7px;
+  background: #101823;
+  color: rgba(242, 245, 248, 0.9);
+  font-size: 10px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.highwayPassed .highwayMarker {
+  border-color: #64c08a;
+  background: #2f7d5a;
+}
+
+.highwayCurrent {
+  color: #ffffff;
+}
+
+.highwayCurrent .highwayMarker {
+  border-color: #8dc0ff;
+  background: #1f5f99;
+}
+
+.highwayNext {
+  color: #ffffff;
+}
+
+.highwayNext .highwayMarker {
+  border-color: #ffd99a;
+  background: #b3751f;
+}
+
+.highwayAhead .highwayMarker {
+  background: #101823;
+}
+
+.nextLine {
+  padding: 8px 9px;
+  border: 1px solid rgba(141, 192, 255, 0.24);
+  border-radius: 8px;
+  background: #101823;
+  color: #f2f5f8;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -295,6 +428,18 @@
   text-align: left;
   overflow-wrap: anywhere;
   cursor: pointer;
+}
+
+.chipMove {
+  display: inline-block;
+  margin-right: 6px;
+  color: #8dc0ff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.chipLabel {
+  overflow-wrap: anywhere;
 }
 
 .chip:hover,

@@ -34,8 +34,25 @@ declare module '*.module.css' {
     readonly actions: string
     readonly degraded: string
     readonly attribution: string
+    readonly highwayMap: string
+    readonly highwayPlacard: string
+    readonly highwayAside: string
+    readonly highwayStations: string
+    readonly highwayStation: string
+    readonly highwayMarker: string
+    readonly highwayText: string
+    readonly highwayName: string
+    readonly highwayRole: string
+    readonly highwayModel: string
+    readonly highwayPassed: string
+    readonly highwayCurrent: string
+    readonly highwayNext: string
+    readonly highwayAhead: string
+    readonly nextLine: string
     readonly chips: string
     readonly chip: string
+    readonly chipMove: string
+    readonly chipLabel: string
     readonly position: string
     readonly statusBlock: string
     readonly statusHeadline: string
