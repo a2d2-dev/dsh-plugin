@@ -18,6 +18,7 @@
 
 import { createElement } from 'react'
 import { A2d2ConfigSection, loadModelRouteCatalog } from './config-page.tsx'
+import { IconA2d2AgentsOutline16 } from './icons.tsx'
 import { HandoffOrb } from './orb.tsx'
 import { A2d2Panel } from './panel.tsx'
 import type { A2d2ClientContext, ClientSidebarService } from './context.ts'
@@ -31,6 +32,8 @@ const A2D2_PANEL_TAB = {
   id: 'a2d2-panel',
   /** Menu title, in the language the indicator's own copy uses. */
   title: 'A²D²',
+  /** Sidebar/menu glyph matching the host's 16px outline tab icon style. */
+  icon: (size: number) => createElement(IconA2d2AgentsOutline16, { size }),
   /** Menu position, after the sidebar's own browsing tabs. */
   order: 40,
 } as const

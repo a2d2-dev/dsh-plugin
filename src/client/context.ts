@@ -12,6 +12,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import type { ReactNode } from 'react'
 // Value-free imports of the declaration merges: they type `ctx.slots` and
 // `ctx.sessions`. Only the types travel — the bundle reaches both as cordis
 // services at runtime, because a cross-plugin value import is forbidden.
@@ -210,6 +211,8 @@ export interface ClientTabDescriptor {
   readonly id: string
   /** Tab title in the sidebar's `+` menu. */
   readonly title: string
+  /** Tab glyph in the sidebar rail and `+` menu. */
+  readonly icon?: ReactNode | ((size: number) => ReactNode)
   /** Position among the `+` menu entries, ascending. */
   readonly order?: number
   /** Whether opening focuses an existing tab of this type instead of adding another. */

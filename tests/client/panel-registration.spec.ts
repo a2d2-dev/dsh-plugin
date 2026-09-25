@@ -1,4 +1,5 @@
 import { Context, Service } from '@deepseek-ai/cordis'
+import { isValidElement } from 'react'
 import { describe, expect, it } from 'vitest'
 import { apply, inject } from '../../src/client/index.tsx'
 
@@ -21,6 +22,7 @@ interface RegisteredTab {
   readonly title: string
   readonly order?: number
   readonly single?: boolean
+  readonly icon?: unknown
   readonly component: unknown
 }
 
@@ -61,6 +63,15 @@ describe('A²D² panel tab registration', () => {
       order: 40,
       single: true,
     })
+  })
+
+  it('registers a renderable icon for the A²D² panel tab', async () => {
+    const { sidebar } = await mount(true)
+
+    const icon = sidebar?.tabs[0]?.icon
+
+    expect(icon).toEqual(expect.any(Function))
+    expect(isValidElement((icon as (size: number) => unknown)(20))).toBe(true)
   })
 
   it('skips the tab when better-sidebar is absent', async () => {
