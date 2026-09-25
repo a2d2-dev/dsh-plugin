@@ -10,7 +10,8 @@
  * package.
  *
  * The sidebar is an optional peer: a deployment without it gets the indicator
- * alone, and the tab registration is skipped rather than failing the bundle.
+ * alone, and the tab registration waits for the service rather than failing the
+ * bundle.
  *
  * @module @deepseek-ai/dsh-a2d2/client
  */
@@ -72,17 +73,19 @@ export function apply(ctx: A2d2ClientContext): void {
     },
   }, A2d2ConfigSection)), 'a2d2 config settings section')
 
-  const sidebar = ctx.get('betterSidebar') as ClientSidebarService | undefined
-  if (sidebar === undefined) return
-  ctx.effect(() => sidebar.registerTab({
-    ...A2D2_PANEL_TAB,
-    single: true,
-    component: function A2d2PanelEntry(props): ReturnType<typeof createElement> {
-      return createElement(A2d2Panel, {
-        ctx,
-        sessionId: props.scope.sessionId,
-        visible: props.visible,
-      })
-    },
-  }), 'a2d2 panel tab')
+  ctx.inject(['betterSidebar'], (sidebarCtx) => {
+    const sidebar = sidebarCtx.get('betterSidebar') as ClientSidebarService | undefined
+    if (sidebar === undefined) return
+    sidebarCtx.effect(() => sidebar.registerTab({
+      ...A2D2_PANEL_TAB,
+      single: true,
+      component: function A2d2PanelEntry(props): ReturnType<typeof createElement> {
+        return createElement(A2d2Panel, {
+          ctx,
+          sessionId: props.scope.sessionId,
+          visible: props.visible,
+        })
+      },
+    }), 'a2d2 panel tab')
+  })
 }
