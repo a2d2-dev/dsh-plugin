@@ -14,6 +14,7 @@ import type {
   ConsultPhase,
   ConsultSelectionDeps,
 } from '../../src/client/consult-actions.ts'
+import type { ClientSessionsService, ClientWorkspacesService } from '../../src/client/context.ts'
 
 function jsonResponse(value: unknown): { json(): Promise<unknown> } {
   return { json: async () => value }
@@ -197,7 +198,7 @@ describe('consult attribution line', () => {
 function selectionDoubles() {
   return {
     command: vi.fn(),
-    appendToDraft: vi.fn(() => true),
+    appendToDraft: vi.fn((_input: string, _sessionId?: string) => true),
     focusComposer: vi.fn(),
     closeConsult: vi.fn(),
     openHandoff: vi.fn(),
@@ -252,6 +253,24 @@ function failingModelDirectory(
 function routeSelection(route: string): { provider: string; model: string } {
   const slash = route.indexOf('/')
   return { provider: route.slice(0, slash), model: route.slice(slash + 1) }
+}
+
+function clearSessionDeps(events: string[], connect: () => Promise<string> = async () => 'session-new'): {
+  readonly sessions: ClientSessionsService
+  readonly workspaces: ClientWorkspacesService
+} {
+  return {
+    sessions: {
+      open: (id: string) => { events.push(`open:${id}`) },
+    } as unknown as ClientSessionsService,
+    workspaces: {
+      list: { getSnapshot: () => ({ items: [{ workspaceId: 'workspace-1', sessionIds: ['session-a'] }] }) },
+      connectWorkspace: async (workspaceId: string) => {
+        events.push(`connect:${workspaceId}`)
+        return await connect()
+      },
+    },
+  }
 }
 
 const readyWithModels: Extract<ConsultPhase, { kind: 'ready' }> = {
@@ -309,12 +328,31 @@ describe('candidate model effect', () => {
       catalog: ['codex/gpt-6'],
     })).toBe('保持当前模型')
   })
+
+  it('previews a clear chip as a new session with the target station model', () => {
+    expect(candidateModelEffect({ label: '实现', input: '/implement #15', move: 'clear', station: 'implement' }, {
+      ...readyWithModels,
+      stationModels: { implement: ['codex/gpt-5.5', 'claude-bray/claude-opus-5-5'] },
+    }, {
+      current: routeSelection('claude-bray/claude-fable-5-1'),
+      catalog: ['codex/gpt-5.5', 'claude-bray/claude-fable-5-1'],
+    })).toBe('新会话 · gpt-5.5')
+  })
+
+  it('previews a clear chip as default model when no station candidate is available', () => {
+    expect(candidateModelEffect({ label: '实现', input: '/implement #15', move: 'clear', station: 'implement' }, {
+      ...readyWithModels,
+      stationModels: { implement: ['codex/gpt-5.5'] },
+    }, {
+      current: routeSelection('claude-bray/claude-fable-5-1'),
+      catalog: ['claude-bray/claude-fable-5-1'],
+    })).toBe('新会话 · 默认模型')
+  })
 })
 
 describe.each<ConsultCandidate>([
   { label: '留在当前会话', input: '继续实现客户端', move: 'continue' },
   { label: '派子代理', input: '让子代理评审当前分支', move: 'subagent' },
-  { label: '开空会话', input: '/implement #10', move: 'clear' },
 ])('$move candidate selection', (candidate) => {
   it('only fills and focuses the composer, leaving send to the user', async () => {
     const deps = selectionDoubles()
@@ -360,9 +398,9 @@ describe.each([
   ['clear', '开空会话继续：'],
   ['subagent', '派子代理处理：'],
 ] as const)('%s other move selection', (move, input) => {
-  it('fills and focuses the composer without sending anything', () => {
+  it('fills and focuses the composer without sending anything', async () => {
     const deps = selectionDoubles()
-    expect(selectOtherMove(deps, move)).toBe(true)
+    await expect(selectOtherMove(deps, move)).resolves.toBe(true)
     expect(deps.appendToDraft).toHaveBeenCalledWith(input)
     expect(deps.focusComposer).toHaveBeenCalledOnce()
     expect(deps.closeConsult).toHaveBeenCalledOnce()
@@ -375,9 +413,9 @@ describe.each([
   ['compact', '保留什么：'],
   ['handoff', ''],
 ] as const)('%s other move selection', (move, focus) => {
-  it('opens the handoff card without sending anything', () => {
+  it('opens the handoff card without sending anything', async () => {
     const deps = selectionDoubles()
-    expect(selectOtherMove(deps, move)).toBe(true)
+    await expect(selectOtherMove(deps, move)).resolves.toBe(true)
     expect(deps.openHandoff).toHaveBeenCalledWith(focus)
     expect(deps.appendToDraft).not.toHaveBeenCalled()
     expect(deps.focusComposer).not.toHaveBeenCalled()
@@ -387,6 +425,104 @@ describe.each([
 })
 
 describe('model-aware candidate selection', () => {
+  it('creates a clear successor, selects its station model, opens it, and fills its draft without sending', async () => {
+    const events: string[] = []
+    const deps = {
+      ...selectionDoubles(),
+      ...clearSessionDeps(events),
+      appendToDraft: vi.fn((input: string, target?: string) => {
+        events.push(`draft:${target ?? 'current'}:${input}`)
+        return true
+      }),
+      focusComposer: vi.fn(() => { events.push('focus') }),
+      modelDirectories: modelDirectory(
+        'claude-bray/claude-fable-5-1',
+        ['codex/gpt-5.5', 'claude-bray/claude-fable-5-1'],
+        events,
+      ),
+    }
+
+    await expect(selectConsultCandidate(deps, {
+      label: '实现',
+      input: '/implement #15',
+      move: 'clear',
+      station: 'implement',
+    }, {
+      sessionId: 'session-a',
+      phase: {
+        ...readyWithModels,
+        stationModels: { implement: ['codex/gpt-5.5', 'claude-bray/claude-opus-5-5'] },
+      },
+    })).resolves.toBe(true)
+
+    expect(events).toEqual([
+      'connect:workspace-1',
+      'load',
+      'select:codex/gpt-5.5',
+      'open:session-new',
+      'draft:session-new:/implement #15',
+      'focus',
+    ])
+    expect(deps.closeConsult).toHaveBeenCalledOnce()
+    expect(deps.notify).not.toHaveBeenCalled()
+    expect(deps.command).not.toHaveBeenCalled()
+  })
+
+  it('falls back to this session draft when clear cannot create a successor', async () => {
+    const events: string[] = []
+    const deps = {
+      ...selectionDoubles(),
+      ...clearSessionDeps(events, async () => { throw new Error('workspace unavailable') }),
+      appendToDraft: vi.fn((input: string, target?: string) => {
+        events.push(`draft:${target ?? 'current'}:${input}`)
+        return true
+      }),
+      modelDirectories: modelDirectory('codex/gpt-6', ['codex/gpt-6'], events),
+    }
+
+    await expect(selectConsultCandidate(deps, {
+      label: '新会话',
+      input: '/implement #15',
+      move: 'clear',
+      station: 'implement',
+    }, {
+      sessionId: 'session-a',
+      phase: {
+        ...readyWithModels,
+        stationModels: { implement: ['codex/gpt-5.5'] },
+      },
+    })).resolves.toBe(true)
+
+    expect(events).toEqual(['connect:workspace-1', 'draft:current:/implement #15'])
+    expect(deps.notify).toHaveBeenCalledWith('创建新会话失败：workspace unavailable，已只填入本会话输入框')
+    expect(deps.command).not.toHaveBeenCalled()
+  })
+
+  it('creates a clear successor without selecting a model when no station is known', async () => {
+    const events: string[] = []
+    const deps = {
+      ...selectionDoubles(),
+      ...clearSessionDeps(events),
+      appendToDraft: vi.fn((input: string, target?: string) => {
+        events.push(`draft:${target ?? 'current'}:${input}`)
+        return true
+      }),
+      focusComposer: vi.fn(() => { events.push('focus') }),
+      modelDirectories: modelDirectory('codex/gpt-6', ['codex/gpt-6'], events),
+    }
+
+    await expect(selectOtherMove(deps, 'clear', { sessionId: 'session-a' })).resolves.toBe(true)
+
+    expect(events).toEqual([
+      'connect:workspace-1',
+      'open:session-new',
+      'draft:session-new:开空会话继续：',
+      'focus',
+    ])
+    expect(deps.notify).not.toHaveBeenCalled()
+    expect(deps.command).not.toHaveBeenCalled()
+  })
+
   it('does not switch before filling when the available station model is already current', async () => {
     const events: string[] = []
     const deps = {

@@ -22,6 +22,14 @@ import type {
   ClientSessionsService,
   ClientWorkspacesService,
 } from './context.ts'
+import {
+  modelCatalogRoutes,
+  stationRouteDecision,
+} from './consult-actions.ts'
+import type {
+  ClientModelDirectoryService,
+  ConsultNewSessionModelTarget,
+} from './consult-actions.ts'
 
 /** What one confirmed handoff produced, or where it stopped. */
 export type OrbHandoffOutcome =
@@ -53,6 +61,12 @@ export interface OrbHandoffDeps {
   readonly startTimeoutMs?: number
   /** Milliseconds to wait for the writing turn to end once it started. */
   readonly turnTimeoutMs?: number
+  /** Optional shared model directory service for selecting the successor's next-station model. */
+  readonly modelDirectories?: ClientModelDirectoryService
+  /** The next-station model target that should be selected on the successor before take. */
+  readonly successorModel?: ConsultNewSessionModelTarget
+  /** Non-fatal user-facing status reporter. */
+  readonly notify?: (message: string) => void
 }
 
 /** How a wait for the writing turn ended. */
@@ -191,6 +205,8 @@ export async function runOrbHandoff(
     return { ok: false, stage: 'create', error: 'the successor session was created but is not yet addressable' }
   }
 
+  await selectSuccessorModel(deps, successor)
+
   // Focus the successor before it runs the take, so the user watches the
   // handoff land in the session they were switched to.
   deps.sessions.open(successor)
@@ -224,6 +240,28 @@ export async function runOrbHandoff(
   }
 
   return { ok: true, successor }
+}
+
+async function selectSuccessorModel(deps: OrbHandoffDeps, successor: string): Promise<void> {
+  const target = deps.successorModel
+  if (target?.station === undefined || target.stationModels === undefined) return
+  if (deps.modelDirectories === undefined) {
+    deps.notify?.('选择后继会话模型失败：模型目录服务不可用')
+    return
+  }
+  try {
+    const face = deps.modelDirectories.directoryFor(successor)
+    const directory = await face.load()
+    const decision = stationRouteDecision({
+      station: target.station,
+      stationModels: target.stationModels,
+      catalog: modelCatalogRoutes(directory),
+      current: directory.current,
+    })
+    if (decision.kind === 'switch') await face.select(decision.selection)
+  } catch (error) {
+    deps.notify?.(`选择后继会话模型失败：${messageOf(error)}`)
+  }
 }
 
 /** The message one ended-not-finished wait reports. */

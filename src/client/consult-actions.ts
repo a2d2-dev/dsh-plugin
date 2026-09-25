@@ -17,6 +17,7 @@ import {
   isServiceStation,
 } from '../highway.ts'
 import type { HighwayZone, MainStation, Move } from '../highway.ts'
+import type { ClientSessionsService, ClientWorkspacesService } from './context.ts'
 
 /** Exact host route used for next-step consultation. */
 export const CONSULT_ROUTE_PATH = '/a2d2/api/consult'
@@ -130,10 +131,12 @@ export interface ConsultRequestDeps {
 
 /** Capabilities a chip may invoke. Deliberately excludes session commands. */
 export interface ConsultSelectionDeps {
-  readonly appendToDraft: (input: string) => boolean
+  readonly appendToDraft: (input: string, sessionId?: string) => boolean
   readonly focusComposer: () => void
   readonly closeConsult: () => void
-  readonly openHandoff: (focus: string) => void
+  readonly openHandoff: (focus: string, target?: ConsultNewSessionModelTarget) => void
+  readonly sessions?: ClientSessionsService
+  readonly workspaces?: ClientWorkspacesService
   readonly modelDirectories?: ClientModelDirectoryService
   readonly notify?: (message: string) => void
 }
@@ -141,6 +144,11 @@ export interface ConsultSelectionDeps {
 export interface ConsultSelectionContext {
   readonly sessionId?: string
   readonly phase?: ConsultPhase
+}
+
+export interface ConsultNewSessionModelTarget {
+  readonly station?: string
+  readonly stationModels?: Readonly<Record<string, readonly string[]>>
 }
 
 export type OtherMove = Exclude<Move, 'continue'>
@@ -448,9 +456,37 @@ export function modelCatalogRoutes(directory: ClientModelDirectorySnapshot | und
 
 export function candidateStation(candidate: ConsultCandidate, phase: ConsultPhase | undefined): string | undefined {
   if (candidate.station !== undefined) return candidate.station
-  return candidate.move === 'continue' || candidate.move === 'subagent'
-    ? phase?.kind === 'ready' ? phase.next?.station : undefined
-    : undefined
+  return phase?.kind === 'ready' ? phase.next?.station : undefined
+}
+
+function newSessionModelTarget(
+  candidate: ConsultCandidate,
+  phase: ConsultPhase | undefined,
+): ConsultNewSessionModelTarget | undefined {
+  const station = candidateStation(candidate, phase)
+  if (phase?.kind !== 'ready') return station === undefined ? undefined : { station }
+  const target = {
+    ...(station === undefined ? {} : { station }),
+    ...(phase.stationModels === undefined ? {} : { stationModels: phase.stationModels }),
+  }
+  return target.station === undefined && target.stationModels === undefined ? undefined : target
+}
+
+function newSessionEffectLabel(
+  candidate: ConsultCandidate,
+  phase: ConsultPhase | undefined,
+  directory: ClientModelDirectorySnapshot | undefined,
+): string {
+  if (directory === undefined) return '新会话 · 默认模型'
+  const station = candidateStation(candidate, phase)
+  if (station === undefined || phase?.kind !== 'ready') return '新会话 · 默认模型'
+  const decision = stationRouteDecision({
+    station,
+    stationModels: phase.stationModels,
+    catalog: modelCatalogRoutes(directory),
+    current: undefined,
+  })
+  return decision.route === undefined ? '新会话 · 默认模型' : `新会话 · ${shortRoute(decision.route)}`
 }
 
 export function candidateModelEffect(
@@ -458,6 +494,7 @@ export function candidateModelEffect(
   phase: ConsultPhase | undefined,
   directory: ClientModelDirectorySnapshot | undefined,
 ): string | undefined {
+  if (candidate.move === 'clear') return newSessionEffectLabel(candidate, phase, directory)
   if (candidate.move !== 'continue') return undefined
   const station = candidateStation(candidate, phase)
   if (station === undefined || phase?.kind !== 'ready') return undefined
@@ -473,6 +510,89 @@ export function candidateModelEffect(
 function subagentInput(input: string, route: string | undefined): string {
   if (route === undefined || /子代理使用\s+\S+/u.test(input)) return input
   return `${input}\n\n子代理使用 ${route}`
+}
+
+function workspaceOf(workspaces: ClientWorkspacesService, sessionId: string): string | undefined {
+  return workspaces.list.getSnapshot().items.find(item => item.sessionIds.includes(sessionId))?.workspaceId
+}
+
+function targetNeedsModelSelection(target: ConsultNewSessionModelTarget | undefined): boolean {
+  return target?.station !== undefined && target.stationModels?.[target.station] !== undefined
+}
+
+async function selectNewSessionModel(
+  deps: Pick<ConsultSelectionDeps, 'modelDirectories' | 'notify'>,
+  sessionId: string,
+  target: ConsultNewSessionModelTarget | undefined,
+  messagePrefix: string,
+): Promise<void> {
+  if (target?.station === undefined || target.stationModels === undefined) return
+  if (target.stationModels[target.station] === undefined) return
+  if (deps.modelDirectories === undefined) {
+    deps.notify?.(`${messagePrefix}模型目录服务不可用`)
+    return
+  }
+  try {
+    const face = deps.modelDirectories.directoryFor(sessionId)
+    const directory = await face.load()
+    const decision = stationRouteDecision({
+      station: target.station,
+      stationModels: target.stationModels,
+      catalog: modelCatalogRoutes(directory),
+      current: directory.current,
+    })
+    if (decision.kind === 'switch') await face.select(decision.selection)
+  } catch (error) {
+    deps.notify?.(`${messagePrefix}${errorMessage(error)}`)
+  }
+}
+
+function fillCurrentSession(
+  deps: ConsultSelectionDeps,
+  input: string,
+): boolean {
+  if (!deps.appendToDraft(input)) return false
+  deps.closeConsult()
+  deps.focusComposer()
+  return true
+}
+
+async function selectClearCandidate(
+  deps: ConsultSelectionDeps,
+  input: string,
+  context: ConsultSelectionContext | undefined,
+  target: ConsultNewSessionModelTarget | undefined,
+): Promise<boolean> {
+  const sessionId = context?.sessionId
+  if (sessionId === undefined || deps.sessions === undefined || deps.workspaces === undefined) {
+    deps.notify?.('创建新会话能力不可用，已只填入本会话输入框')
+    return fillCurrentSession(deps, input)
+  }
+  if (targetNeedsModelSelection(target) && deps.modelDirectories === undefined) {
+    deps.notify?.('模型目录服务不可用，已只填入本会话输入框')
+    return fillCurrentSession(deps, input)
+  }
+
+  const workspaceId = workspaceOf(deps.workspaces, sessionId)
+  if (workspaceId === undefined) {
+    deps.notify?.('当前会话不属于任何工作区，已只填入本会话输入框')
+    return fillCurrentSession(deps, input)
+  }
+
+  let successor: string
+  try {
+    successor = await deps.workspaces.connectWorkspace(workspaceId)
+  } catch (error) {
+    deps.notify?.(`创建新会话失败：${errorMessage(error)}，已只填入本会话输入框`)
+    return fillCurrentSession(deps, input)
+  }
+
+  await selectNewSessionModel(deps, successor, target, '选择新会话模型失败：')
+  deps.sessions.open(successor)
+  if (!deps.appendToDraft(input, successor)) return false
+  deps.closeConsult()
+  deps.focusComposer()
+  return true
 }
 
 async function prepareCandidateInput(
@@ -531,37 +651,40 @@ export function selectConsultCandidate(
   context?: ConsultSelectionContext,
 ): Promise<boolean> {
   if (candidate.move === 'handoff') {
-    deps.openHandoff(candidate.input)
+    const target = newSessionModelTarget(candidate, context?.phase)
+    if (target === undefined) deps.openHandoff(candidate.input)
+    else deps.openHandoff(candidate.input, target)
     return Promise.resolve(true)
   }
   if (candidate.move === 'compact') {
-    deps.openHandoff(compactFocus(candidate.input))
+    const target = newSessionModelTarget(candidate, context?.phase)
+    if (target === undefined) deps.openHandoff(compactFocus(candidate.input))
+    else deps.openHandoff(compactFocus(candidate.input), target)
     return Promise.resolve(true)
   }
+  if (candidate.move === 'clear') {
+    return selectClearCandidate(deps, candidate.input, context, newSessionModelTarget(candidate, context?.phase))
+  }
   return prepareCandidateInput(deps, candidate, context).then((input) => {
-    if (!deps.appendToDraft(input)) return false
-    deps.closeConsult()
-    deps.focusComposer()
-    return true
+    return fillCurrentSession(deps, input)
   })
 }
 
 export function selectOtherMove(
   deps: ConsultSelectionDeps,
   move: OtherMove,
-): boolean {
+  context?: ConsultSelectionContext,
+): Promise<boolean> {
   if (move === 'handoff') {
     deps.openHandoff('')
-    return true
+    return Promise.resolve(true)
   }
   if (move === 'compact') {
     deps.openHandoff(COMPACT_FOCUS_PREFIX)
-    return true
+    return Promise.resolve(true)
   }
-  if (!deps.appendToDraft(OTHER_MOVE_INPUTS[move])) return false
-  deps.closeConsult()
-  deps.focusComposer()
-  return true
+  if (move === 'clear') return selectClearCandidate(deps, OTHER_MOVE_INPUTS.clear, context, undefined)
+  return Promise.resolve(fillCurrentSession(deps, OTHER_MOVE_INPUTS[move]))
 }
 
 function compactFocus(input: string): string {
