@@ -68,4 +68,35 @@ describe('A²D² panel tab registration', () => {
 
     expect(sidebar).toBeUndefined()
   })
+
+  it('registers the A²D² panel tab when better-sidebar is provided after apply', async () => {
+    const { ctx } = await mount(false)
+
+    const sidebarFiber = ctx.plugin(StubSidebar)
+    await sidebarFiber.await()
+    await Promise.resolve()
+    const sidebar = ctx.get('betterSidebar') as unknown as StubSidebar | undefined
+
+    expect(sidebar?.tabs).toHaveLength(1)
+    expect(sidebar?.tabs[0]).toMatchObject({
+      id: 'a2d2-panel',
+      title: 'A²D²',
+      order: 40,
+      single: true,
+    })
+  })
+
+  it('unregisters the A²D² panel tab when better-sidebar is withdrawn', async () => {
+    const { ctx } = await mount(false)
+    const sidebarFiber = ctx.plugin(StubSidebar)
+    await sidebarFiber.await()
+    await Promise.resolve()
+    const sidebar = ctx.get('betterSidebar') as unknown as StubSidebar | undefined
+
+    expect(sidebar?.tabs).toHaveLength(1)
+
+    await sidebarFiber.dispose()
+
+    expect(sidebar?.tabs).toEqual([])
+  })
 })
