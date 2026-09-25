@@ -23,6 +23,7 @@ import {
   workspaceOf,
 } from '../../src/client/orb-actions.ts'
 import type { OrbHandoffDeps } from '../../src/client/orb-actions.ts'
+import type { ClientModelDirectoryService } from '../../src/client/consult-actions.ts'
 import type {
   ClientCommandResult,
   ClientSessionFace,
@@ -166,6 +167,31 @@ function workspaces(
   }
 }
 
+function successorModelDirectory(
+  events: string[],
+  options: { readonly select?: (route: string) => Promise<void> } = {},
+): ClientModelDirectoryService {
+  return {
+    directoryFor: (sessionId: string) => {
+      events.push(`directory:${sessionId}`)
+      return {
+        load: async () => {
+          events.push('load')
+          return {
+            current: { provider: 'claude-bray', model: 'claude-fable-5-1' },
+            catalog: ['codex/gpt-5.5', 'claude-bray/claude-fable-5-1'],
+          }
+        },
+        select: async (selection) => {
+          const route = `${selection.provider}/${selection.model}`
+          events.push(`select:${route}`)
+          await options.select?.(route)
+        },
+      }
+    },
+  }
+}
+
 /** Let the microtasks of a wait settle before a test observes the face again. */
 async function flush(): Promise<void> {
   for (let tick = 0; tick < 10; tick += 1) await Promise.resolve()
@@ -264,6 +290,92 @@ describe('runOrbHandoff', () => {
     expect(current.commands).toEqual(['/handoff finish the store'])
     expect(connect).toHaveBeenCalledWith(WORKSPACE)
     expect(log).toEqual(['connect', `open ${SUCCESSOR}`, `take /handoff take ${CURRENT}`])
+  })
+
+  it('selects the successor station model after create and before take', async () => {
+    const log: string[] = []
+    const current = writingSession()
+    const successor = fakeSession({
+      command: async (line) => {
+        log.push(`take ${line}`)
+        return accepted
+      },
+    })
+    const connect = vi.fn(async () => {
+      log.push('connect')
+      return SUCCESSOR
+    })
+
+    const outcome = await runOrbHandoff(
+      {
+        sessions: sessions({ [CURRENT]: current, [SUCCESSOR]: successor }, log),
+        workspaces: workspaces({ connect }),
+        modelDirectories: successorModelDirectory(log),
+        successorModel: {
+          station: 'implement',
+          stationModels: { implement: ['codex/gpt-5.5'] },
+        },
+        ...QUICK,
+      },
+      CURRENT,
+      'implement #15',
+    )
+
+    expect(outcome).toEqual({ ok: true, successor: SUCCESSOR })
+    expect(log).toEqual([
+      'connect',
+      `directory:${SUCCESSOR}`,
+      'load',
+      'select:codex/gpt-5.5',
+      `open ${SUCCESSOR}`,
+      `take /handoff take ${CURRENT}`,
+    ])
+  })
+
+  it('reports successor model selection failure and still takes the handoff', async () => {
+    const log: string[] = []
+    const notify = vi.fn((message: string) => { log.push(`notify:${message}`) })
+    const current = writingSession()
+    const successor = fakeSession({
+      command: async (line) => {
+        log.push(`take ${line}`)
+        return accepted
+      },
+    })
+    const connect = vi.fn(async () => {
+      log.push('connect')
+      return SUCCESSOR
+    })
+
+    const outcome = await runOrbHandoff(
+      {
+        sessions: sessions({ [CURRENT]: current, [SUCCESSOR]: successor }, log),
+        workspaces: workspaces({ connect }),
+        modelDirectories: successorModelDirectory(log, {
+          select: async () => { throw new Error('adapter rejected the model') },
+        }),
+        successorModel: {
+          station: 'implement',
+          stationModels: { implement: ['codex/gpt-5.5'] },
+        },
+        notify,
+        ...QUICK,
+      },
+      CURRENT,
+      'implement #15',
+    )
+
+    expect(outcome).toEqual({ ok: true, successor: SUCCESSOR })
+    expect(notify).toHaveBeenCalledWith('选择后继会话模型失败：adapter rejected the model')
+    expect(log).toEqual([
+      'connect',
+      `directory:${SUCCESSOR}`,
+      'load',
+      'select:codex/gpt-5.5',
+      'notify:选择后继会话模型失败：adapter rejected the model',
+      `open ${SUCCESSOR}`,
+      `take /handoff take ${CURRENT}`,
+    ])
   })
 
   it('asks for a generic handoff when the focus is blank', async () => {

@@ -39,6 +39,7 @@ import type {
   ClientModelDirectoryService,
   ClientModelDirectorySnapshot,
   ClientModelDirectoryStoreSnapshot,
+  ConsultNewSessionModelTarget,
   ConsultCandidate,
   ConsultPhase,
 } from './consult-actions.ts'
@@ -274,6 +275,7 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
   const status = useSessionStatus(ctx, sessionId, consult.kind !== 'idle')
   const modelDirectory = useModelDirectory(ctx, sessionId, consult.kind === 'ready')
   const [focus, setFocus] = useState('')
+  const [handoffModelTarget, setHandoffModelTarget] = useState<ConsultNewSessionModelTarget | undefined>(undefined)
   const rootRef = useRef<HTMLButtonElement | null>(null)
   const consultRequestRef = useRef(0)
 
@@ -296,28 +298,37 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
     }
     setPhase({ kind: 'running' })
     const trimmed = focus.trim()
+    const modelDirectories = ctx.get('modelDirectories') as ClientModelDirectoryService | undefined
     const outcome: OrbHandoffOutcome = await runOrbHandoff(
-      { sessions, workspaces },
+      {
+        sessions,
+        workspaces,
+        ...(handoffModelTarget === undefined ? {} : { successorModel: handoffModelTarget }),
+        ...(modelDirectories === undefined ? {} : { modelDirectories }),
+        notify: message => { setFailure(message) },
+      },
       sessionId,
       trimmed === '' ? undefined : trimmed,
     )
     if (outcome.ok) {
       setPhase({ kind: 'closed' })
       setFocus('')
+      setHandoffModelTarget(undefined)
       setHovering(false)
     } else {
       setPhase({ kind: 'error', message: outcome.error })
     }
-  }, [ctx, sessionId, focus, fillDraft])
+  }, [ctx, sessionId, focus, fillDraft, handoffModelTarget])
 
   const closeConsult = useCallback((): void => {
     consultRequestRef.current += 1
     setConsult({ kind: 'idle' })
   }, [])
 
-  const openHandoff = useCallback((nextFocus = ''): void => {
+  const openHandoff = useCallback((nextFocus = '', target?: ConsultNewSessionModelTarget): void => {
     closeConsult()
     setFocus(nextFocus)
+    setHandoffModelTarget(target)
     setPhase({ kind: 'open' })
   }, [closeConsult])
 
@@ -326,6 +337,7 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
     consultRequestRef.current = requestId
     setPhase({ kind: 'closed' })
     setFocus('')
+    setHandoffModelTarget(undefined)
     void requestConsult({
       fetch: (input, init) => fetch(input, init),
       setPhase: next => {
@@ -337,10 +349,12 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
   const selectCandidate = useCallback((candidate: ConsultCandidate): void => {
     const modelDirectories = ctx.get('modelDirectories') as ClientModelDirectoryService | undefined
     void selectConsultCandidate({
-      appendToDraft: input => appendToDraft(ctx, sessionId, input),
+      appendToDraft: (input, targetSessionId) => appendToDraft(ctx, targetSessionId ?? sessionId, input),
       focusComposer: () => { focusComposer(rootRef.current) },
       closeConsult,
       openHandoff,
+      sessions: ctx.get('sessions') as ClientSessionsService | undefined,
+      workspaces: ctx.get('workspaces') as ClientWorkspacesService | undefined,
       ...(modelDirectories === undefined ? {} : { modelDirectories }),
       notify: message => { setFailure(message) },
     }, candidate, {
@@ -352,13 +366,18 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
   }, [ctx, sessionId, closeConsult, openHandoff, consult])
 
   const selectOther = useCallback((move: typeof OTHER_MOVE_OPTIONS[number]['move']): void => {
-    const selected = selectOtherMove({
-      appendToDraft: input => appendToDraft(ctx, sessionId, input),
+    void selectOtherMove({
+      appendToDraft: (input, targetSessionId) => appendToDraft(ctx, targetSessionId ?? sessionId, input),
       focusComposer: () => { focusComposer(rootRef.current) },
       closeConsult,
       openHandoff,
-    }, move)
-    if (!selected) setFailure(INSERT_FAILED)
+      sessions: ctx.get('sessions') as ClientSessionsService | undefined,
+      workspaces: ctx.get('workspaces') as ClientWorkspacesService | undefined,
+      modelDirectories: ctx.get('modelDirectories') as ClientModelDirectoryService | undefined,
+      notify: message => { setFailure(message) },
+    }, move, { sessionId, phase: consult }).then((ok) => {
+      if (!ok) setFailure(INSERT_FAILED)
+    })
   }, [ctx, sessionId, closeConsult, openHandoff])
 
   useEffect(() => {
@@ -439,7 +458,7 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
         type: 'button',
         className: `${css.cardButton} ${css.cancel}`,
         disabled: running,
-        onClick: () => { setPhase({ kind: 'closed' }); setFocus('') },
+        onClick: () => { setPhase({ kind: 'closed' }); setFocus(''); setHandoffModelTarget(undefined) },
       }, '取消'),
       createElement('button', {
         type: 'button',
