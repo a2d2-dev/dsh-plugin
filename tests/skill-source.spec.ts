@@ -7,6 +7,7 @@ import {
   defaultSkillsRootCandidates,
   readSkillSource,
   resolveSkillsRoot,
+  skillDescription,
 } from '../src/skill-source.ts'
 
 const roots: string[] = []
@@ -22,6 +23,16 @@ afterEach(async () => {
 })
 
 describe('skill source', () => {
+  it('reads the front-matter description verbatim, unquoting a quoted value', () => {
+    expect(skillDescription('---\nname: x\ndescription: 编排契约。\n---\nbody')).toBe('编排契约。')
+    expect(skillDescription('---\ndescription: "Quoted: yes"\n---\n')).toBe('Quoted: yes')
+  })
+
+  it('returns undefined without front matter or a description', () => {
+    expect(skillDescription('description: not front matter')).toBeUndefined()
+    expect(skillDescription('---\nname: x\n---\ndescription: body')).toBeUndefined()
+  })
+
   it('orders environment and conventional skill-root candidates', () => {
     expect(defaultSkillsRootCandidates({
       DSH_SKILLS_ROOT: '/skills/environment',
