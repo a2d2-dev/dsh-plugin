@@ -3,8 +3,11 @@
  * context occupancy, turning warning-colored as the context approaches the
  * configured smart-zone threshold.
  *
- * Hovering the orb reveals peer "压缩" (compress and open a new context) and "下一步" actions. The first opens a
- * confirm card where the user writes the focus and confirms. Confirming runs the one-click
+ * Hovering the orb reveals three peer actions ordered from lightest to heaviest:
+ * "现状" (what is this session doing right now — facts only, no model call),
+ * "下一步" (a one-off consultation proposing where to go), and "交接" (move the
+ * work to a successor session). 交接 opens a confirm card where the user writes
+ * the focus and confirms. Confirming runs the one-click
  * handoff — this session's own agent writes the summary, the browser waits for
  * that turn to finish, creates the successor session, focuses it, and has it take
  * the handoff — so the whole "fill the command, then press send" sequence
@@ -27,6 +30,8 @@ import { HANDOFF_DRAFT, appendToDraft, focusComposer } from './composer.ts'
 import { requestConsult, selectConsultCandidate } from './consult-actions.ts'
 import type { ConsultCandidate, ConsultPhase } from './consult-actions.ts'
 import { runOrbHandoff } from './orb-actions.ts'
+import { sessionStatus } from './status-model.ts'
+import type { SessionStatus, StatusKind } from './status-model.ts'
 import type { OrbHandoffOutcome } from './orb-actions.ts'
 import type {
   A2d2ClientContext,
@@ -45,7 +50,6 @@ import {
 } from './orb-model.ts'
 import type { OrbLevel, OrbOccupancy } from './orb-model.ts'
 
-const boundaryCss = css as typeof css & Record<'actions' | 'degraded' | 'chips' | 'chip', string>
 
 /** What the user is told when the draft could not be written. */
 const INSERT_FAILED = '无法写入输入框（会话未就绪）'
@@ -96,6 +100,44 @@ function useOccupancy(
     occupancy: orbOccupancy(pressure.getSnapshot() as never),
     host: indicator.getSnapshot() as HostIndicatorProjection | undefined,
   }
+}
+
+/**
+ * How often an open 现状 card re-reads the clock, in ms.
+ *
+ * The snapshot subscription already re-renders on every conversation change;
+ * this tick only keeps elapsed times ("已 3 分钟") and the stall tier honest
+ * while nothing is happening, which is exactly the case the card is for.
+ */
+const STATUS_TICK_MS = 15_000
+
+/**
+ * One session's live status while the 现状 card is open.
+ *
+ * Subscribes to the conversation snapshot only while `active`, so a closed card
+ * costs nothing.
+ * @param ctx - the client context carrying the sessions service.
+ * @param sessionId - the session the orb sits on.
+ * @param active - whether the card is open.
+ * @returns the resolved status, or `undefined` while closed or unavailable.
+ */
+function useSessionStatus(ctx: A2d2ClientContext, sessionId: string, active: boolean): SessionStatus | undefined {
+  const [status, setStatus] = useState<SessionStatus | undefined>(undefined)
+  useEffect(() => {
+    if (!active) { setStatus(undefined); return }
+    const sessions = ctx.get('sessions') as ClientSessionsService | undefined
+    const session = sessions?.binding(sessionId)?.session
+    if (session === undefined) {
+      setStatus({ kind: 'unavailable', headline: '读不到会话状态', facts: [] })
+      return
+    }
+    const read = (): void => { setStatus(sessionStatus(session.getSnapshot(), Date.now())) }
+    read()
+    const dispose = session.subscribe(read)
+    const timer = setInterval(read, STATUS_TICK_MS)
+    return () => { dispose(); clearInterval(timer) }
+  }, [ctx, sessionId, active])
+  return status
 }
 
 /**
@@ -156,6 +198,9 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
   const [hovering, setHovering] = useState(false)
   const [phase, setPhase] = useState<CardPhase>({ kind: 'closed' })
   const [consult, setConsult] = useState<ConsultPhase>({ kind: 'idle' })
+  // The next-step card leads with the session's status, which is instant, so
+  // the card is useful while the consultation is still being generated.
+  const status = useSessionStatus(ctx, sessionId, consult.kind !== 'idle')
   const [focus, setFocus] = useState('')
   const rootRef = useRef<HTMLButtonElement | null>(null)
   const consultRequestRef = useRef(0)
@@ -280,22 +325,16 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
     ),
   )
 
-  // Both boundary actions appear together and yield the surface to an open card.
+  // The peer actions appear together and yield the surface to an open card.
+  // They stack above the orb, so DOM order is reversed: the lighter action
+  // (下一步) sits nearest the circle and the heavier (交接) on top.
   const showAction = hovering && !cardOpen
+  const actionButton = (label: string, hint: string, onClick: () => void): ReturnType<typeof createElement> =>
+    createElement('button', { type: 'button', className: css.action, title: hint, 'aria-label': `${label}：${hint}`, onClick }, label)
   const action = showAction
-    ? createElement('div', { className: boundaryCss.actions },
-      createElement('button', {
-        type: 'button',
-        className: css.action,
-        title: '压缩并且开启新上下文',
-        'aria-label': '压缩并且开启新上下文',
-        onClick: () => { openHandoff() },
-      }, '压缩'),
-      createElement('button', {
-        type: 'button',
-        className: css.action,
-        onClick: consultNext,
-      }, '下一步'),
+    ? createElement('div', { className: css.actions },
+      actionButton('交接', '换个会话接着做：压缩当前上下文，开启新会话', () => { openHandoff() }),
+      actionButton('下一步', '它现在在干嘛、做到哪了、接下来去哪？', consultNext),
     )
     : null
 
@@ -328,8 +367,22 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
     ),
   ) : null
 
+  const occupancyLine = `上下文 ${tokens}${capacity === undefined ? '' : ` / ${capacity}`}（${String(occupancy.percent)}%）`
+    + (cost === undefined ? '' : ` · 约 ${host?.currency ?? ''}${formatCost(cost)}`)
+  const statusBlock = createElement('div', { className: css.statusBlock, role: 'status' },
+    createElement('div', { className: `${css.statusHeadline} ${statusClassName(status?.kind)}` },
+      createElement('span', { className: css.statusDot, 'aria-hidden': true }),
+      status?.headline ?? '读取中…',
+    ),
+    createElement('ul', { className: css.statusFacts },
+      ...(status?.facts ?? []).map((fact, index) => createElement('li', { key: String(index) }, fact)),
+      createElement('li', { key: 'occupancy' }, occupancyLine),
+    ),
+  )
+
   const consultCard = consultOpen ? createElement('div', { className: css.card },
     createElement('div', { className: css.cardTitle }, '下一步'),
+    statusBlock,
     consult.kind === 'loading'
       ? createElement('div', { className: css.cardBusy }, '正在咨询下一步…')
       : null,
@@ -337,13 +390,16 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
       ? createElement('div', { className: css.cardError }, consult.message)
       : null,
     consult.kind === 'ready' && consult.degraded
-      ? createElement('div', { className: boundaryCss.degraded }, '未读到 ask-matt skill，以下为降级候选。')
+      ? createElement('div', { className: css.degraded }, '未读到 ask-matt skill，以下为降级候选。')
+      : null,
+    consult.kind === 'ready' && consult.position !== undefined
+      ? createElement('div', { className: css.position }, `当前位置：${consult.position}`)
       : null,
     consult.kind === 'ready'
-      ? createElement('div', { className: boundaryCss.chips },
+      ? createElement('div', { className: css.chips },
         ...consult.candidates.map((candidate, index) => createElement('button', {
           type: 'button',
-          className: boundaryCss.chip,
+          className: css.chip,
           key: `${candidate.kind}-${String(index)}`,
           title: candidate.input,
           onClick: () => { selectCandidate(candidate) },
@@ -392,6 +448,18 @@ const PANEL_GAP_PX = 12
  * number is a layout choice of this component, not a deployment setting.
  */
 const READOUT_INVERT_AT = 55
+
+/** The status tier's CSS-module class; the card's own colors, never the orb's smart-zone tiers. */
+function statusClassName(kind: StatusKind | undefined): string {
+  switch (kind) {
+    case 'waiting': return css.statusWaiting
+    case 'stalled':
+    case 'error':
+    case 'removed': return css.statusAlert
+    case 'running': return css.statusRunning
+    default: return css.statusQuiet
+  }
+}
 
 /** The level's CSS-module class, resolved without a lookup table that could drift. */
 function levelClassName(level: OrbLevel): string {

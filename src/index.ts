@@ -54,9 +54,9 @@ export {
   collectConsultMaterial,
   createConsultHandler,
   currentConsultRoute,
-  generateConsultCandidates,
+  generateConsultOutput,
   isTrustedConsultRequest,
-  parseConsultCandidates,
+  parseConsultOutput,
   statusOf,
 } from './consult.ts'
 export type {
@@ -65,6 +65,7 @@ export type {
   ConsultErrorCode,
   ConsultMaterial,
   ConsultMessageExcerpt,
+  ConsultOutput,
   ConsultRoute,
   ConsultSession,
   ConsultValue,

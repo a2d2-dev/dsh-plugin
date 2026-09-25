@@ -19,6 +19,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-runtime/client'
 // The conversation shell declares the slot this bundle registers into.
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { StatusSource } from './status-model.ts'
 import type { CatalogEntry } from './subagent-model.ts'
 
 /** The composer draft face reached through `ctx.conversation.input`. */
@@ -73,8 +74,12 @@ export type ClientCommandResult =
  * over the session transport rather than inferred from the DOM: the orb uses it
  * to know when the handoff summary has been written, and a signal read from
  * another plugin's rendered markup would break with that plugin's UI.
+ *
+ * The remaining fields feed the 现状 card and are read through the same
+ * snapshot; each is optional there so an older runtime degrades the card
+ * rather than breaking it.
  */
-export interface ClientConversationState {
+export interface ClientConversationState extends StatusSource {
   readonly running: boolean
 }
 

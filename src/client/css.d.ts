@@ -31,6 +31,19 @@ declare module '*.module.css' {
     readonly confirm: string
     readonly cardError: string
     readonly cardBusy: string
+    readonly actions: string
+    readonly degraded: string
+    readonly chips: string
+    readonly chip: string
+    readonly position: string
+    readonly statusBlock: string
+    readonly statusHeadline: string
+    readonly statusDot: string
+    readonly statusFacts: string
+    readonly statusWaiting: string
+    readonly statusAlert: string
+    readonly statusRunning: string
+    readonly statusQuiet: string
     readonly header: string
     readonly own: string
     readonly list: string

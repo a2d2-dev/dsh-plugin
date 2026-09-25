@@ -21,7 +21,13 @@ export interface ConsultCandidate {
 export type ConsultPhase =
   | { readonly kind: 'idle' }
   | { readonly kind: 'loading' }
-  | { readonly kind: 'ready'; readonly candidates: readonly ConsultCandidate[]; readonly degraded: boolean }
+  | {
+      readonly kind: 'ready'
+      /** Where the work stands, shown above the chips; absent from an older host. */
+      readonly position?: string
+      readonly candidates: readonly ConsultCandidate[]
+      readonly degraded: boolean
+    }
   | { readonly kind: 'error'; readonly message: string }
 
 /** The small response face needed from an injected fetch implementation. */
@@ -50,6 +56,7 @@ type ConsultResponse =
   | {
       readonly ok: true
       readonly value: {
+        readonly position?: string
         readonly candidates: readonly ConsultCandidate[]
         readonly degraded: boolean
       }
@@ -85,6 +92,10 @@ export function parseConsultResponse(value: unknown): ConsultResponse {
   if (!isRecord(value.value) || !Array.isArray(value.value.candidates) || typeof value.value.degraded !== 'boolean') {
     throw new Error('下一步咨询返回了无效响应')
   }
+  const position = value.value.position
+  if (position !== undefined && typeof position !== 'string') {
+    throw new Error('下一步咨询返回了无效响应')
+  }
   const candidates = value.value.candidates.map(parseCandidate)
   if (candidates.some(candidate => candidate === undefined)) {
     throw new Error('下一步咨询返回了无效响应')
@@ -92,6 +103,7 @@ export function parseConsultResponse(value: unknown): ConsultResponse {
   return {
     ok: true,
     value: {
+      ...(position === undefined || position.trim() === '' ? {} : { position: position.trim() }),
       candidates: candidates as ConsultCandidate[],
       degraded: value.value.degraded,
     },
@@ -113,6 +125,7 @@ export async function requestConsult(deps: ConsultRequestDeps, sessionId: string
     }
     deps.setPhase({
       kind: 'ready',
+      ...(result.value.position === undefined ? {} : { position: result.value.position }),
       candidates: result.value.candidates,
       degraded: result.value.degraded,
     })

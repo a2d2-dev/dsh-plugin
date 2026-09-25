@@ -18,9 +18,9 @@ import {
   collectConsultMaterial,
   createConsultHandler,
   currentConsultRoute,
-  generateConsultCandidates,
+  generateConsultOutput,
   isTrustedConsultRequest,
-  parseConsultCandidates,
+  parseConsultOutput,
 } from '../src/consult.ts'
 import type { ConsultDependencies, ConsultSession } from '../src/consult.ts'
 import type { SkillSource } from '../src/skill-source.ts'
@@ -53,10 +53,12 @@ class StubWebServer extends Service {
 }
 
 const sessionId = SessionId('session-consult')
-const candidatesJson = JSON.stringify([
+const candidates = [
   { label: 'Keep going', input: 'Continue this implementation.', kind: 'stay' },
   { label: 'Hand off', input: 'Hand off the completed phase.', kind: 'handoff' },
-])
+]
+const position = 'Implementation is finished; verification has not started.'
+const candidatesJson = JSON.stringify({ position, candidates })
 
 function event<T extends SessionEvent>(value: Omit<T, 'ignorable'>): T {
   return value as T
@@ -273,21 +275,24 @@ describe('consult material and route', () => {
       "<situation-envelope>
       This is a next-step consultation at a phase boundary.
       The result will be shown as candidate chips. A chip only fills an input; it does not execute or send anything.
-      Return only a JSON array containing 2 to 4 objects with exactly this shape:
-      {\"label\":\"short visible label\",\"input\":\"complete editable command or instruction\",\"kind\":\"stay|handoff|other\"}
-      Choose kind \"stay\" when the action remains in this session, \"handoff\" when it opens a handoff, and \"other\" otherwise.
+      Return only a JSON object with exactly this shape:
+      {"position":"one sentence: where this session's work stands now","candidates":[2 to 4 candidates]}
+      Each candidate has exactly this shape:
+      {"label":"short visible label","input":"complete editable command or instruction","kind":"stay|handoff|other"}
+      Write "position" in the language the session uses; it is shown above the chips as the basis for them.
+      Choose kind "stay" when the action remains in this session, "handoff" when it opens a handoff, and "other" otherwise.
       Session and project material follows as JSON data:
-      {\"messages\":[{\"seq\":7,\"text\":\"Implementation is done.\"}],\"tasks\":[{\"id\":\"consult-route\",\"name\":\"Consult route\",\"goal\":\"Offer next-step chips\",\"state\":\"active\",\"createdAt\":\"2026-09-24T00:00:00.000Z\",\"members\":[{\"sessionId\":\"session-consult\"}]}]}
+      {"messages":[{"seq":7,"text":"Implementation is done."}],"tasks":[{"id":"consult-route","name":"Consult route","goal":"Offer next-step chips","state":"active","createdAt":"2026-09-24T00:00:00.000Z","members":[{"sessionId":"session-consult"}]}]}
       </situation-envelope>
 
-      <ask-matt-source path=\"SKILL.md\">
+      <ask-matt-source path="SKILL.md">
       # ASK-MATT-RAW
 
       Continue or hand off according to the tree.
 
       </ask-matt-source>
 
-      <ask-matt-resource path=\"PHASE-BOUNDARIES.md\">
+      <ask-matt-resource path="PHASE-BOUNDARIES.md">
       # PHASE-RAW
 
       Five exact questions.
@@ -298,18 +303,33 @@ describe('consult material and route', () => {
 })
 
 describe('candidate parsing', () => {
-  it('accepts a complete valid array', () => {
-    expect(parseConsultCandidates(candidatesJson)).toEqual(JSON.parse(candidatesJson))
+  it('accepts a complete valid answer', () => {
+    expect(parseConsultOutput(candidatesJson)).toEqual({ position, candidates })
+  })
+
+  it('trims the position line', () => {
+    expect(parseConsultOutput(JSON.stringify({ position: `  ${position}\n`, candidates })).position).toBe(position)
   })
 
   it.each([
-    ['not JSON', '```json\n[]\n```'],
-    ['not an array', '{}'],
-    ['too few candidates', '[{"label":"x","input":"y","kind":"stay"}]'],
-    ['missing field', '[{"label":"x","kind":"stay"},{"label":"z","input":"y","kind":"other"}]'],
-    ['invalid kind', '[{"label":"x","input":"y","kind":"leave"},{"label":"z","input":"y","kind":"other"}]'],
+    ['a json fence', `\`\`\`json\n${candidatesJson}\n\`\`\``],
+    ['a bare fence with surrounding whitespace', `\n\`\`\`\n${candidatesJson}\n\`\`\`\n`],
+  ])('unwraps %s around the whole answer', (_name, value) => {
+    expect(parseConsultOutput(value)).toEqual({ position, candidates })
+  })
+
+  it.each([
+    ['not JSON', 'Here you go.'],
+    ['prose around a fence', `Sure:\n\`\`\`json\n${candidatesJson}\n\`\`\``],
+    ['a bare candidate array', JSON.stringify(candidates)],
+    ['no position', JSON.stringify({ candidates })],
+    ['a blank position', JSON.stringify({ position: '  ', candidates })],
+    ['no candidates', JSON.stringify({ position })],
+    ['too few candidates', JSON.stringify({ position, candidates: candidates.slice(0, 1) })],
+    ['missing field', JSON.stringify({ position, candidates: [{ label: 'x', kind: 'stay' }, candidates[1]] })],
+    ['invalid kind', JSON.stringify({ position, candidates: [{ label: 'x', input: 'y', kind: 'leave' }, candidates[1]] })],
   ])('rejects %s without returning a partial result', (_name, value) => {
-    expect(() => parseConsultCandidates(value)).toThrow(/a2d2 consult/)
+    expect(() => parseConsultOutput(value)).toThrow(/a2d2 consult/)
   })
 })
 
@@ -320,7 +340,7 @@ describe('consult generation finishes', () => {
     ['max-tokens', { kind: 'max-tokens' }, /token limit/u],
     ['tool-calls', { kind: 'tool-calls' }, /requested a tool/u],
   ] satisfies ReadonlyArray<readonly [string, FinishReason, RegExp]>)('rejects a %s finish', async (_name, reason, message) => {
-    await expect(generateConsultCandidates({
+    await expect(generateConsultOutput({
       stream: () => output(candidatesJson, reason),
       route: { provider: 'provider-a', model: 'model-a' },
       sessionId,
@@ -422,13 +442,21 @@ describe('consult HTTP route', () => {
     const readFailure = dependencies({ listTasks: async () => { throw new Error('broken ledger') } })
     expect(await send(createConsultHandler(readFailure))).toMatchObject({
       status: 500,
-      json: { ok: false, error: { code: 'consult-failed', message: expect.any(String) } },
+      json: { ok: false, error: { code: 'consult-failed', message: 'The consultation could not be generated: broken ledger' } },
     })
 
     const malformed = dependencies({ stream: () => output('{"label":"partial"}') })
     expect(await send(createConsultHandler(malformed))).toMatchObject({
       status: 502,
-      json: { ok: false, error: { code: 'malformed-candidates', message: expect.any(String) } },
+      json: { ok: false, error: { code: 'malformed-candidates', message: 'The model returned malformed candidates: model output has no non-empty position' } },
+    })
+
+    const rateLimited = dependencies({
+      stream: () => output('', { kind: 'error', failure: { message: 'Concurrency limit exceeded for user, please retry later', code: 'RATE_LIMIT' } } as FinishReason),
+    })
+    expect(await send(createConsultHandler(rateLimited))).toMatchObject({
+      status: 500,
+      json: { ok: false, error: { code: 'consult-failed', message: 'The consultation could not be generated: Concurrency limit exceeded for user, please retry later' } },
     })
 
     const noRoute = dependencies({ getSession: () => session({ events: [userEvent(0, 'No route yet.')] }) })
@@ -448,7 +476,8 @@ describe('consult HTTP route', () => {
       json: {
         ok: true,
         value: {
-          candidates: JSON.parse(candidatesJson),
+          position,
+          candidates,
           degraded: true,
         },
       },
