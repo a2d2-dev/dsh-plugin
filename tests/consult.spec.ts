@@ -31,6 +31,8 @@ import { DEFAULT_STATION_MODELS } from '../src/station-models.ts'
 import type { SkillSource } from '../src/skill-source.ts'
 import type { Task } from '../src/types.ts'
 
+const anthropicUsagePolicyRefusal = "This request triggered restrictions on violative cyber content and was blocked under Anthropic's Usage Policy. To learn more, see https://platform.claude.com/docs/en/build-with-claude/refusals-and-fallback."
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     webServer: StubWebServer
@@ -781,11 +783,11 @@ describe('consult HTTP route', () => {
     expect(prompt).not.toContain('"criticalTokens":1000000')
   })
 
-  it('falls back on call failure, refusal, and empty output, carrying every reason', async () => {
+  it('falls back on call failure, refusal, and empty output, carrying every reason kind', async () => {
     const deps = dependencies({
       getStationModels: () => ({
         ...DEFAULT_STATION_MODELS,
-        consult: ['primary/model-a', 'primary/model-b', 'primary/model-c', 'backup/model-ok'],
+        consult: ['primary/model-a', 'primary/model-b', 'primary/model-c', 'primary/model-d', 'backup/model-ok'],
       }),
       stream: (options) => {
         deps.calls.push(options)
@@ -793,7 +795,10 @@ describe('consult HTTP route', () => {
           return output('', { kind: 'error', failure: { message: '429 rate limit', code: 'RATE_LIMIT' } } as FinishReason)
         }
         if (options.model === 'model-b') return output('', { kind: 'refusal' } as unknown as FinishReason)
-        if (options.model === 'model-c') return output('   ')
+        if (options.model === 'model-c') {
+          return output('', { kind: 'error', failure: { message: anthropicUsagePolicyRefusal, code: 'PI_AI_ERROR' } } as FinishReason)
+        }
+        if (options.model === 'model-d') return output('   ')
         return output(candidatesJson)
       },
     })
@@ -805,9 +810,10 @@ describe('consult HTTP route', () => {
         value: {
           answeredBy: 'backup/model-ok',
           fallbacks: [
-            { route: 'primary/model-a', reason: '429 rate limit' },
-            { route: 'primary/model-b', reason: 'model refused the consultation' },
-            { route: 'primary/model-c', reason: 'model returned no text' },
+            { route: 'primary/model-a', kind: 'rate-limited', reason: '429 rate limit' },
+            { route: 'primary/model-b', kind: 'refusal', reason: 'model refused the consultation' },
+            { route: 'primary/model-c', kind: 'refusal', reason: anthropicUsagePolicyRefusal },
+            { route: 'primary/model-d', kind: 'empty', reason: 'model returned no text' },
           ],
         },
       },
@@ -816,6 +822,7 @@ describe('consult HTTP route', () => {
       'primary/model-a',
       'primary/model-b',
       'primary/model-c',
+      'primary/model-d',
       'backup/model-ok',
     ])
   })

@@ -95,7 +95,7 @@ describe('requestConsult', () => {
           candidates: [{ label: '验证', input: '跑一遍测试', move: 'subagent' }],
           degraded: false,
           answeredBy: 'codex/gpt-6',
-          fallbacks: [{ route: 'claude-bray/claude-fable-5-1', reason: 'model refused the consultation' }],
+          fallbacks: [{ route: 'claude-bray/claude-fable-5-1', kind: 'refusal', reason: 'policy text without legacy keyword' }],
           stationModels: { grill: ['claude-bray/claude-fable-5-1', 'codex/gpt-6'] },
         },
       }),
@@ -109,7 +109,7 @@ describe('requestConsult', () => {
       candidates: [{ label: '验证', input: '跑一遍测试', move: 'subagent' }],
       degraded: false,
       answeredBy: 'codex/gpt-6',
-      fallbacks: [{ route: 'claude-bray/claude-fable-5-1', reason: 'model refused the consultation' }],
+      fallbacks: [{ route: 'claude-bray/claude-fable-5-1', kind: 'refusal', reason: 'policy text without legacy keyword' }],
       stationModels: { grill: ['claude-bray/claude-fable-5-1', 'codex/gpt-6'] },
     })
   })
@@ -231,6 +231,16 @@ describe('consult attribution line', () => {
   })
 
   it('names the answering model and the fallback reason', () => {
+    expect(consultAttributionLine({
+      kind: 'ready',
+      candidates: [],
+      degraded: false,
+      answeredBy: 'codex/gpt-6',
+      fallbacks: [{ route: 'claude-bray/claude-fable-5-1', kind: 'refusal', reason: 'policy text without legacy keyword' }],
+    })).toBe('由 gpt-6 生成（claude-fable-5-1 拒答，改用 gpt-6）')
+  })
+
+  it('keeps legacy fallback reason sniffing for older hosts', () => {
     expect(consultAttributionLine({
       kind: 'ready',
       candidates: [],

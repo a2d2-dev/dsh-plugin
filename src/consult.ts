@@ -39,6 +39,8 @@ import {
 } from './highway.ts'
 import type { HighwayZone, MainStation, Move } from './highway.ts'
 import type { HandoffThresholds } from './indicator-projection.ts'
+import { classifyFailureKind } from './refusal.ts'
+import type { FailureKind } from './refusal.ts'
 import type { SkillSource } from './skill-source.ts'
 import { DEFAULT_STATION_MODELS, splitModelRoute } from './station-models.ts'
 import type { StationModelsSettings } from './station-models.ts'
@@ -150,6 +152,7 @@ export interface ConsultRoute {
 
 export interface ConsultFallback {
   readonly route: string
+  readonly kind: FailureKind
   readonly reason: string
 }
 
@@ -577,25 +580,55 @@ function parseNext(value: unknown): ConsultNext {
   return { station: next.station, move: next.move, reason: next.reason.trim() }
 }
 
+type ClassifiedError = Error & {
+  readonly code?: string
+  readonly status?: number
+  readonly failureKind?: FailureKind
+}
+
+function classifiedError(message: string, kind: FailureKind, extras: { readonly code?: string; readonly status?: number } = {}): ClassifiedError {
+  const error = new Error(message) as Error & {
+    code?: string
+    status?: number
+    failureKind?: FailureKind
+  }
+  error.failureKind = kind
+  if (extras.code !== undefined) error.code = extras.code
+  if (extras.status !== undefined) error.status = extras.status
+  return error
+}
+
+function failureStatus(failure: { readonly status?: unknown }): number | undefined {
+  return typeof failure.status === 'number' ? failure.status : undefined
+}
+
 function finishFailure(finish: FinishReason): Error | undefined {
   switch (finish.kind) {
     case 'stop':
       return undefined
     case 'error':
     case 'aborted': {
-      const error = new Error(finish.failure.message) as Error & { code?: string }
-      error.code = finish.failure.code
-      return error
+      const failure = finish.failure as { readonly message: string; readonly code?: string; readonly status?: unknown }
+      const status = failureStatus(failure)
+      return classifiedError(failure.message, classifyFailureKind({
+        finishKind: finish.kind,
+        message: failure.message,
+        code: failure.code,
+        status,
+      }), {
+        code: failure.code,
+        ...(status === undefined ? {} : { status }),
+      })
     }
     case 'max-tokens':
-      return new Error('a2d2 consult: model output reached the token limit')
+      return classifiedError('a2d2 consult: model output reached the token limit', 'error')
     case 'tool-calls':
-      return new Error('a2d2 consult: model unexpectedly requested a tool')
+      return classifiedError('a2d2 consult: model unexpectedly requested a tool', 'error')
     default:
       if ((finish as { kind?: unknown }).kind === 'refusal') {
-        return new Error('a2d2 consult: model refused the consultation')
+        return classifiedError('a2d2 consult: model refused the consultation', 'refusal')
       }
-      return new Error(`a2d2 consult: unsupported finish reason "${String((finish as { kind?: unknown }).kind)}"`)
+      return classifiedError(`a2d2 consult: unsupported finish reason "${String((finish as { kind?: unknown }).kind)}"`, 'error')
   }
 }
 
@@ -626,14 +659,29 @@ export async function generateConsultOutput(options: {
   if (terminalError !== undefined) throw terminalError
   const blocks = assembler.blocks()
   if (blocks.some(block => block.type === 'tool-call')) {
-    throw new Error('a2d2 consult: model output must contain text only')
+    throw classifiedError('a2d2 consult: model output must contain text only', 'error')
   }
   const text = blocks
     .filter((block): block is Extract<(typeof blocks)[number], { type: 'text' }> => block.type === 'text')
     .map(block => block.text)
     .join('')
-  if (text.trim().length === 0) throw new Error('a2d2 consult: model returned no text')
+  if (text.trim().length === 0) throw classifiedError('a2d2 consult: model returned no text', 'empty')
   return parseConsultOutput(text)
+}
+
+function fallbackKindOf(error: unknown): FailureKind {
+  const classified = error as { readonly failureKind?: unknown; readonly code?: unknown; readonly status?: unknown }
+  if (classified.failureKind === 'refusal'
+    || classified.failureKind === 'rate-limited'
+    || classified.failureKind === 'empty'
+    || classified.failureKind === 'error') {
+    return classified.failureKind
+  }
+  return classifyFailureKind({
+    message: reasonOf(error),
+    code: classified.code,
+    status: classified.status,
+  })
 }
 
 export async function generateConsultWithFallback(options: {
@@ -656,7 +704,7 @@ export async function generateConsultWithFallback(options: {
       return { ...output, answeredBy: route, fallbacks }
     } catch (error) {
       if (error instanceof MalformedCandidatesError) throw error
-      fallbacks.push({ route, reason: reasonOf(error) })
+      fallbacks.push({ route, kind: fallbackKindOf(error), reason: reasonOf(error) })
     }
   }
   const reasons = fallbacks.map(item => `${item.route}: ${item.reason}`).join('; ')

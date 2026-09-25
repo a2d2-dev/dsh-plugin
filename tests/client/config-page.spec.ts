@@ -10,6 +10,7 @@ import {
   configModelRows,
   loadModelRouteCatalog,
   normalizeConfigInjected,
+  probeResultText,
 } from '../../src/client/config-page.tsx'
 import { DEFAULT_STATION_MODELS } from '../../src/station-model-data.ts'
 
@@ -188,5 +189,11 @@ describe('A2D2 config page view model', () => {
 
   it('uses a stable default model-route loader across renders', () => {
     expect(normalizeConfigInjected({}).loadModelRoutes).toBe(normalizeConfigInjected({}).loadModelRoutes)
+  })
+
+  it('renders the model probe pending state without pretending it is normal', () => {
+    expect(probeResultText({ status: 'pending', reason: '测试中' })).toBe('测试中…')
+    expect(probeResultText({ status: 'normal', reason: 'OK' })).toBe('正常 · OK')
+    expect(probeResultText({ status: 'refusal', reason: 'policy block' })).toBe('拒答 · policy block')
   })
 })
