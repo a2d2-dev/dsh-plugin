@@ -17,11 +17,68 @@ const STATE_LABELS: Readonly<Record<PanelTask['state'], string>> = {
 }
 
 const SHORT_ID_LENGTH = 8
+export const EMPTY_SESSION_TITLE = '空会话（未开始）'
+export const PENDING_SESSION_TITLE = '读取标题中'
+
+/** One session-list row field set used to decide a task member label. */
+export interface PanelSessionTitleSummary {
+  readonly title?: string | null
+  readonly sessionListMetadata?: { readonly blank?: boolean }
+  readonly sessionStats?: { readonly turns?: number }
+}
+
+/** Cold-read result for a session title history baseline. */
+export type SessionTitleHistoryRead =
+  | { readonly kind: 'loaded'; readonly title?: string }
+  | { readonly kind: 'failed' }
+
+/** Resolved display label for one member session. */
+export interface PanelSessionTitle {
+  readonly label: string
+  readonly title?: string
+}
+
+/** The narrow host API face used to cold-read a session's projection baseline. */
+export interface SessionTitleHistoryApi {
+  readonly sessions: {
+    history(
+      payload: { readonly sessionId: string; readonly maxMessages: number },
+      signal?: AbortSignal,
+    ): Promise<{
+      readonly result:
+        | {
+          readonly ok: true
+          readonly value: {
+            readonly projections?: {
+              readonly values?: Readonly<Record<string, unknown>>
+            }
+          }
+        }
+        | { readonly ok: false }
+    }>
+  }
+}
+
+/** Subscriber called when a session title loader publishes newly-read titles. */
+export type SessionTitleLoaderListener = () => void
+
+/** React-independent lifecycle for cold-reading session title projection baselines. */
+export interface SessionTitleLoader {
+  /** Submit session ids whose title baselines should be loaded. Already-finished and in-flight ids are ignored. */
+  readonly load: (sessionIds: readonly string[]) => void
+  /** Read every completed title baseline or failed read, keyed by session id. */
+  readonly snapshot: () => Readonly<Record<string, SessionTitleHistoryRead | undefined>>
+  /** Subscribe to later snapshot changes. */
+  readonly subscribe: (listener: SessionTitleLoaderListener) => () => void
+  /** Abort in-flight reads and stop accepting work. */
+  readonly dispose: () => void
+}
 
 /** One member row in the task list. */
 export interface PanelMemberRow {
   readonly sessionId: string
   readonly shortId: string
+  readonly label: string
   readonly title?: string
   readonly handoffFrom?: string
   readonly handoffFromLabel?: string
@@ -85,6 +142,136 @@ export function shortSessionId(id: string): string {
   return unique.length <= SHORT_ID_LENGTH ? unique : unique.slice(0, SHORT_ID_LENGTH)
 }
 
+function cleanTitle(value: string | null | undefined): string | undefined {
+  const title = value?.trim()
+  return title === undefined || title === '' ? undefined : title
+}
+
+function blankSession(row: PanelSessionTitleSummary | undefined): boolean {
+  return row?.sessionListMetadata?.blank === true || row?.sessionStats?.turns === 0
+}
+
+function titleFromProjection(value: unknown): string | undefined {
+  return typeof value === 'string' ? cleanTitle(value) : undefined
+}
+
+function titleEntry(
+  id: string,
+  list: PanelSessionTitleSummary | undefined,
+  history: SessionTitleHistoryRead | undefined,
+): PanelSessionTitle {
+  const listTitle = cleanTitle(list?.title)
+  if (listTitle !== undefined) return { label: listTitle, title: listTitle }
+  const historyTitle = history?.kind === 'loaded' ? cleanTitle(history.title) : undefined
+  if (historyTitle !== undefined) return { label: historyTitle, title: historyTitle }
+  if (blankSession(list)) return { label: EMPTY_SESSION_TITLE, title: EMPTY_SESSION_TITLE }
+  if (history?.kind === 'failed') return { label: shortSessionId(id) }
+  return { label: PENDING_SESSION_TITLE }
+}
+
+/**
+ * Resolve every known session title source into a member label.
+ *
+ * List titles win because they are already the shell's live display value.
+ * History titles repair older list rows that lack projections. Blank sessions
+ * get a human label, and only a failed cold read falls through to the short id.
+ */
+export function panelSessionTitles(
+  byId: Readonly<Record<string, PanelSessionTitleSummary | undefined>>,
+  history: Readonly<Record<string, SessionTitleHistoryRead | undefined>> = {},
+  pendingSessionIds: readonly string[] = [],
+): Readonly<Record<string, PanelSessionTitle | undefined>> {
+  const ids = new Set([...Object.keys(byId), ...Object.keys(history), ...pendingSessionIds])
+  const titles: Record<string, PanelSessionTitle> = {}
+  for (const id of ids) titles[id] = titleEntry(id, byId[id], history[id])
+  return titles
+}
+
+/** List task member ids whose title still needs one history cold read. */
+export function panelTitleReadCandidates(
+  payload: PanelPayload | undefined,
+  byId: Readonly<Record<string, PanelSessionTitleSummary | undefined>>,
+  history: Readonly<Record<string, SessionTitleHistoryRead | undefined>> = {},
+): readonly string[] {
+  if (payload === undefined) return []
+  const seen = new Set<string>()
+  const ids: string[] = []
+  for (const task of payload.tasks) {
+    for (const member of task.members) {
+      if (seen.has(member.sessionId)) continue
+      seen.add(member.sessionId)
+      if (cleanTitle(byId[member.sessionId]?.title) !== undefined) continue
+      if (history[member.sessionId] !== undefined) continue
+      ids.push(member.sessionId)
+    }
+  }
+  return ids
+}
+
+/** Create a deduplicating loader for session title baselines. */
+export function createSessionTitleLoader(api: SessionTitleHistoryApi): SessionTitleLoader {
+  const reads: Record<string, SessionTitleHistoryRead | undefined> = {}
+  const completed = new Set<string>()
+  const inflight = new Map<string, AbortController>()
+  const listeners = new Set<SessionTitleLoaderListener>()
+  let disposed = false
+
+  const emit = (): void => {
+    for (const listener of listeners) listener()
+  }
+
+  const finish = (sessionId: string, read: SessionTitleHistoryRead): void => {
+    if (disposed) return
+    reads[sessionId] = read
+    completed.add(sessionId)
+    emit()
+  }
+
+  const loadOne = async (sessionId: string, controller: AbortController): Promise<void> => {
+    try {
+      const response = await api.sessions.history({ sessionId, maxMessages: 1 }, controller.signal)
+      if (disposed || controller.signal.aborted) return
+      if (!response.result.ok) {
+        finish(sessionId, { kind: 'failed' })
+        return
+      }
+      const title = titleFromProjection(response.result.value.projections?.values?.title)
+      finish(sessionId, title === undefined ? { kind: 'loaded' } : { kind: 'loaded', title })
+    } catch {
+      if (!disposed && !controller.signal.aborted) finish(sessionId, { kind: 'failed' })
+    } finally {
+      inflight.delete(sessionId)
+    }
+  }
+
+  return {
+    load(sessionIds) {
+      if (disposed) return
+      for (const sessionId of sessionIds) {
+        if (completed.has(sessionId) || inflight.has(sessionId)) continue
+        const controller = new AbortController()
+        inflight.set(sessionId, controller)
+        void loadOne(sessionId, controller)
+      }
+    },
+    snapshot() {
+      return reads
+    },
+    subscribe(listener) {
+      if (disposed) return () => {}
+      listeners.add(listener)
+      return () => { listeners.delete(listener) }
+    },
+    dispose() {
+      if (disposed) return
+      disposed = true
+      for (const controller of inflight.values()) controller.abort()
+      inflight.clear()
+      listeners.clear()
+    },
+  }
+}
+
 function createdDate(value: string): string {
   const index = value.indexOf('T')
   return index < 0 ? value : value.slice(0, index)
@@ -92,16 +279,20 @@ function createdDate(value: string): string {
 
 function memberRow(
   member: PanelMember,
-  titles: Readonly<Record<string, string | undefined>>,
+  titles: Readonly<Record<string, PanelSessionTitle | string | undefined>>,
   openable: (id: string) => boolean,
   currentSessionId: string,
 ): PanelMemberRow {
-  const title = titles[member.sessionId]
+  const ownTitle = titles[member.sessionId]
+  const title = typeof ownTitle === 'string' ? cleanTitle(ownTitle) : ownTitle?.title
+  const label = typeof ownTitle === 'string' ? (cleanTitle(ownTitle) ?? shortSessionId(member.sessionId)) : (ownTitle?.label ?? shortSessionId(member.sessionId))
   const from = member.handoffFrom
-  const fromTitle = from === undefined ? undefined : titles[from]
+  const fromTitleEntry = from === undefined ? undefined : titles[from]
+  const fromTitle = typeof fromTitleEntry === 'string' ? cleanTitle(fromTitleEntry) : fromTitleEntry?.label
   return {
     sessionId: member.sessionId,
     shortId: shortSessionId(member.sessionId),
+    label,
     ...(title === undefined ? {} : { title }),
     ...(from === undefined ? {} : { handoffFrom: from }),
     ...(from === undefined ? {} : { handoffFromLabel: fromTitle ?? (from === currentSessionId ? '当前会话' : shortSessionId(from)) }),
@@ -112,7 +303,7 @@ function memberRow(
 
 function taskRow(
   task: PanelTask,
-  titles: Readonly<Record<string, string | undefined>>,
+  titles: Readonly<Record<string, PanelSessionTitle | string | undefined>>,
   openable: (id: string) => boolean,
   currentSessionId: string,
 ): PanelTaskRow {
@@ -133,7 +324,7 @@ function taskRow(
 /** Fold a payload into task rows. */
 export function panelTaskRows(
   payload: PanelPayload,
-  titles: Readonly<Record<string, string | undefined>>,
+  titles: Readonly<Record<string, PanelSessionTitle | string | undefined>>,
   openable: (id: string) => boolean,
   currentSessionId: string,
 ): readonly PanelTaskRow[] {

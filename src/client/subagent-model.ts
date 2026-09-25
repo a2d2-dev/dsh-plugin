@@ -108,7 +108,7 @@ export interface SubagentRouteRow {
 /** One host-published session summary row the tree builder reads. */
 export interface SubagentSessionSummary {
   readonly id: string
-  readonly title?: string
+  readonly title?: string | null
   readonly displayTitle?: string
   readonly origin?: 'subagent'
   readonly parentId?: string
