@@ -1,13 +1,15 @@
 /**
  * Host-side station model table.
  *
- * T2 will grow the full highway graph. This module intentionally contains only
- * the closed station ids needed to configure model candidates in T1.
+ * The station ids here are derived from the highway catalog. Not every highway
+ * station receives model candidates: handoff, roadbed, and standalone stations
+ * intentionally have no model switch in this ticket.
  *
  * @module @deepseek-ai/dsh-a2d2/src/station-models
  */
 
 import z from '@deepseek-ai/schemastery'
+import type { MainStation, RampStation, ServiceStation } from './highway.ts'
 
 export const STATION_MODEL_SETTINGS_NAMESPACE = 'a2d2-station-models'
 
@@ -26,15 +28,15 @@ export const STATION_MODEL_STATIONS = [
   'to-spec',
   'to-tickets',
   'code-review',
-  'triage',
-  'wayfinder',
-  'improve-codebase-architecture',
   'implement',
   'prototype',
   'diagnosing-bugs',
+  'triage',
+  'wayfinder',
+  'improve-codebase-architecture',
 ] as const
 
-export type Station = typeof STATION_MODEL_STATIONS[number]
+export type Station = MainStation | Extract<ServiceStation, 'prototype'> | RampStation
 
 export interface StationModelsSettings {
   readonly stations: Readonly<Record<Station, readonly string[]>>

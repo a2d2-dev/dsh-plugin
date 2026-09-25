@@ -7,6 +7,17 @@
  * @module @deepseek-ai/dsh-a2d2/client/consult-actions
  */
 
+import {
+  isClosedHighwayStation,
+  isHighwayZone,
+  isMainStation,
+  isMove,
+  isRampStation,
+  isRoadbedStation,
+  isServiceStation,
+} from '../highway.ts'
+import type { HighwayZone, MainStation, Move } from '../highway.ts'
+
 /** Exact host route used for next-step consultation. */
 export const CONSULT_ROUTE_PATH = '/a2d2/api/consult'
 
@@ -14,11 +25,25 @@ export const CONSULT_ROUTE_PATH = '/a2d2/api/consult'
 export interface ConsultCandidate {
   readonly label: string
   readonly input: string
-  readonly kind: 'stay' | 'handoff' | 'other'
+  readonly move: Move
+  readonly station?: string
 }
 
 export interface ConsultFallback {
   readonly route: string
+  readonly reason: string
+}
+
+export interface ConsultLocation {
+  readonly zone: HighwayZone
+  readonly station?: string
+  readonly returnTo?: MainStation
+  readonly phaseDone: boolean
+}
+
+export interface ConsultNext {
+  readonly station: string
+  readonly move: Move
   readonly reason: string
 }
 
@@ -30,6 +55,8 @@ export type ConsultPhase =
       readonly kind: 'ready'
       /** Where the work stands, shown above the chips; absent from an older host. */
       readonly position?: string
+      readonly location?: ConsultLocation
+      readonly next?: ConsultNext
       readonly candidates: readonly ConsultCandidate[]
       readonly degraded: boolean
       readonly answeredBy?: string
@@ -65,6 +92,8 @@ type ConsultResponse =
       readonly ok: true
       readonly value: {
         readonly position?: string
+        readonly location?: ConsultLocation
+        readonly next?: ConsultNext
         readonly candidates: readonly ConsultCandidate[]
         readonly degraded: boolean
         readonly answeredBy?: string
@@ -81,12 +110,78 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
+const LEGACY_KIND_MOVES = {
+  stay: 'continue',
+  handoff: 'handoff',
+  other: 'continue',
+} as const
+
+function parseMove(value: unknown, legacyKind?: unknown): Move | undefined {
+  if (typeof value === 'string') return isMove(value) ? value : undefined
+  if (typeof legacyKind === 'string' && legacyKind in LEGACY_KIND_MOVES) {
+    return LEGACY_KIND_MOVES[legacyKind as keyof typeof LEGACY_KIND_MOVES]
+  }
+  return undefined
+}
+
 function parseCandidate(value: unknown): ConsultCandidate | undefined {
   if (!isRecord(value)) return undefined
   if (typeof value.label !== 'string' || value.label.trim() === '') return undefined
   if (typeof value.input !== 'string' || value.input.trim() === '') return undefined
-  if (value.kind !== 'stay' && value.kind !== 'handoff' && value.kind !== 'other') return undefined
-  return { label: value.label, input: value.input, kind: value.kind }
+  const move = parseMove(value.move, value.kind)
+  if (move === undefined) return undefined
+  if (value.station !== undefined && (typeof value.station !== 'string' || !isClosedHighwayStation(value.station))) return undefined
+  return {
+    label: value.label,
+    input: value.input,
+    move,
+    ...(value.station === undefined ? {} : { station: value.station.trim() }),
+  }
+}
+
+function parseLocation(value: unknown): ConsultLocation | undefined {
+  if (value === undefined) return undefined
+  if (!isRecord(value)) return undefined
+  if (typeof value.zone !== 'string' || !isHighwayZone(value.zone)) return undefined
+  if (typeof value.phaseDone !== 'boolean') return undefined
+  const station = value.station
+  const returnTo = value.returnTo
+  if (returnTo !== undefined && (typeof returnTo !== 'string' || !isMainStation(returnTo))) return undefined
+  switch (value.zone) {
+    case 'main':
+      if (typeof station !== 'string' || !isMainStation(station) || returnTo !== undefined) return undefined
+      break
+    case 'service':
+      if (typeof station !== 'string' || !isServiceStation(station) || returnTo === undefined) return undefined
+      break
+    case 'ramp':
+      if (typeof station !== 'string' || !isRampStation(station) || returnTo !== undefined) return undefined
+      break
+    case 'standalone':
+      if (typeof station !== 'string' || station.trim() === '' || returnTo !== undefined) return undefined
+      break
+    case 'roadbed':
+      if (typeof station !== 'string' || !isRoadbedStation(station) || returnTo !== undefined) return undefined
+      break
+    case 'off-road':
+      if (station !== undefined || returnTo !== undefined) return undefined
+      break
+  }
+  return {
+    zone: value.zone,
+    ...(station === undefined ? {} : { station: station.trim() }),
+    ...(returnTo === undefined ? {} : { returnTo }),
+    phaseDone: value.phaseDone,
+  }
+}
+
+function parseNext(value: unknown): ConsultNext | undefined {
+  if (value === undefined) return undefined
+  if (!isRecord(value)) return undefined
+  if (typeof value.station !== 'string' || !isClosedHighwayStation(value.station)) return undefined
+  if (typeof value.move !== 'string' || !isMove(value.move)) return undefined
+  if (typeof value.reason !== 'string' || value.reason.trim() === '') return undefined
+  return { station: value.station.trim(), move: value.move, reason: value.reason.trim() }
 }
 
 function parseFallback(value: unknown): ConsultFallback | undefined {
@@ -127,6 +222,14 @@ export function parseConsultResponse(value: unknown): ConsultResponse {
   if (position !== undefined && typeof position !== 'string') {
     throw new Error('下一步咨询返回了无效响应')
   }
+  const location = parseLocation(value.value.location)
+  if (value.value.location !== undefined && location === undefined) {
+    throw new Error('下一步咨询返回了无效响应')
+  }
+  const next = parseNext(value.value.next)
+  if (value.value.next !== undefined && next === undefined) {
+    throw new Error('下一步咨询返回了无效响应')
+  }
   const answeredBy = value.value.answeredBy
   if (answeredBy !== undefined && (typeof answeredBy !== 'string' || answeredBy.trim() === '')) {
     throw new Error('下一步咨询返回了无效响应')
@@ -151,6 +254,8 @@ export function parseConsultResponse(value: unknown): ConsultResponse {
     ok: true,
     value: {
       ...(position === undefined || position.trim() === '' ? {} : { position: position.trim() }),
+      ...(location === undefined ? {} : { location }),
+      ...(next === undefined ? {} : { next }),
       candidates: candidates as ConsultCandidate[],
       degraded: value.value.degraded,
       ...(answeredBy === undefined ? {} : { answeredBy: answeredBy.trim() }),
@@ -176,6 +281,8 @@ export async function requestConsult(deps: ConsultRequestDeps, sessionId: string
     deps.setPhase({
       kind: 'ready',
       ...(result.value.position === undefined ? {} : { position: result.value.position }),
+      ...(result.value.location === undefined ? {} : { location: result.value.location }),
+      ...(result.value.next === undefined ? {} : { next: result.value.next }),
       candidates: result.value.candidates,
       degraded: result.value.degraded,
       ...(result.value.answeredBy === undefined ? {} : { answeredBy: result.value.answeredBy }),
@@ -212,7 +319,7 @@ export function consultAttributionLine(phase: ConsultPhase): string | undefined 
 /**
  * Apply one candidate without ever sending it.
  *
- * Stay/other candidates only write and focus the composer. Handoff candidates
+ * Non-handoff candidates only write and focus the composer. Handoff candidates
  * only open the existing confirmation card with their input as its focus.
  * @returns whether the requested UI transition was completed.
  */
@@ -220,7 +327,7 @@ export function selectConsultCandidate(
   deps: ConsultSelectionDeps,
   candidate: ConsultCandidate,
 ): boolean {
-  if (candidate.kind === 'handoff') {
+  if (candidate.move === 'handoff') {
     deps.openHandoff(candidate.input)
     return true
   }

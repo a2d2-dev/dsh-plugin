@@ -29,6 +29,8 @@ import css from './orb.module.css'
 import { HANDOFF_DRAFT, appendToDraft, focusComposer } from './composer.ts'
 import { consultAttributionLine, requestConsult, selectConsultCandidate } from './consult-actions.ts'
 import type { ConsultCandidate, ConsultPhase } from './consult-actions.ts'
+import { HighwayMap } from './highway-map.tsx'
+import { highwayView } from './highway-view.ts'
 import { runOrbHandoff } from './orb-actions.ts'
 import { sessionStatus } from './status-model.ts'
 import type { SessionStatus, StatusKind } from './status-model.ts'
@@ -370,6 +372,9 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
   const occupancyLine = `上下文 ${tokens}${capacity === undefined ? '' : ` / ${capacity}`}（${String(occupancy.percent)}%）`
     + (cost === undefined ? '' : ` · 约 ${host?.currency ?? ''}${formatCost(cost)}`)
   const attribution = consultAttributionLine(consult)
+  const highway = consult.kind === 'ready' && consult.location !== undefined
+    ? highwayView(consult)
+    : undefined
   const statusBlock = createElement('div', { className: css.statusBlock, role: 'status' },
     createElement('div', { className: `${css.statusHeadline} ${statusClassName(status?.kind)}` },
       createElement('span', { className: css.statusDot, 'aria-hidden': true }),
@@ -393,18 +398,23 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
     consult.kind === 'ready' && consult.degraded
       ? createElement('div', { className: css.degraded }, '未读到 ask-matt skill，以下为降级候选。')
       : null,
-    consult.kind === 'ready' && consult.position !== undefined
+    consult.kind === 'ready' && highway === undefined && consult.position !== undefined
       ? createElement('div', { className: css.position }, `当前位置：${consult.position}`)
       : null,
+    highway === undefined ? null : createElement(HighwayMap, { view: highway, mode: 'readonly' }),
+    highway?.nextLine === undefined ? null : createElement('div', { className: css.nextLine }, highway.nextLine),
     consult.kind === 'ready'
       ? createElement('div', { className: css.chips },
         ...consult.candidates.map((candidate, index) => createElement('button', {
           type: 'button',
           className: css.chip,
-          key: `${candidate.kind}-${String(index)}`,
+          key: `${candidate.move}-${String(index)}`,
           title: candidate.input,
           onClick: () => { selectCandidate(candidate) },
-        }, candidate.label)),
+        },
+          createElement('span', { className: css.chipMove }, chipMoveLabel(candidate.move)),
+          createElement('span', { className: css.chipLabel }, candidate.label),
+        )),
       )
       : null,
     attribution === undefined ? null : createElement('div', { className: css.attribution }, attribution),
@@ -460,6 +470,16 @@ function statusClassName(kind: StatusKind | undefined): string {
     case 'removed': return css.statusAlert
     case 'running': return css.statusRunning
     default: return css.statusQuiet
+  }
+}
+
+function chipMoveLabel(move: ConsultCandidate['move']): string {
+  switch (move) {
+    case 'continue': return '继续'
+    case 'clear': return '新会话'
+    case 'handoff': return '交接'
+    case 'subagent': return '子代理'
+    case 'compact': return '压缩'
   }
 }
 

@@ -19,7 +19,7 @@ import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { TaskId } from './brand.ts'
-import { CONSULT_ROUTE_PATH, createConsultHandler } from './consult.ts'
+import { CONSULT_ROUTE_PATH, consultContextFactsFromProjectionValues, createConsultHandler } from './consult.ts'
 import { handedOff, memberOf, successorsOf } from './derive.ts'
 import type { HandoffDocument, HandoffFacts } from './handoff-document.ts'
 import {
@@ -61,6 +61,7 @@ export {
   MalformedCandidatesError,
   buildConsultPrompt,
   collectConsultMaterial,
+  consultContextFactsFromProjectionValues,
   createConsultHandler,
   currentConsultRoute,
   generateConsultWithFallback,
@@ -71,6 +72,7 @@ export {
 } from './consult.ts'
 export type {
   ConsultCandidate,
+  ConsultContextFacts,
   ConsultDependencies,
   ConsultErrorCode,
   ConsultFallback,
@@ -483,12 +485,19 @@ export class A2d2Service extends Service {
       )
       const server = getService<WebServer>('webServer')
       if (server === undefined) return
+      type ProjectionReader = {
+        snapshot(session: unknown): { readonly values: Readonly<Record<string, unknown>> }
+      }
       const handler = createConsultHandler({
         trustedHosts: () => getService<WebRuntime>('webRuntime')?.trustedHosts ?? [],
         getSession: id => routeCtx.get('sessions')?.get(id),
         listTasks: cwd => this.store.list(cwd),
         readAskMatt: () => readSkillSource('ask-matt', this.skillsRoot),
         getStationModels: () => this.stationModels,
+        contextFacts: (session) => {
+          const projections = getService<ProjectionReader>('sessionProjections')
+          return consultContextFactsFromProjectionValues(projections?.snapshot(session).values, this.thresholds)
+        },
         stream: (options) => {
           const llm = routeCtx.get('llm')
           if (llm === undefined) throw new Error('a2d2 consult: llm service is unavailable')

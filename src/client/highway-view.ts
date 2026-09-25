@@ -1,0 +1,129 @@
+/**
+ * Client-side projection from a consult response to the read-only mini highway.
+ *
+ * It is a pure function so the boundary card and the future settings page can
+ * reuse the same highway semantics without sharing React state.
+ *
+ * @module @deepseek-ai/dsh-a2d2/client/highway-view
+ */
+
+import {
+  MAIN_STATION_ROLES,
+  MAIN_STATIONS,
+  RAMP_MERGES,
+} from '../highway.ts'
+import type { MainStation, Move } from '../highway.ts'
+import type { ConsultLocation, ConsultNext, ConsultPhase } from './consult-actions.ts'
+
+export type HighwayStationState = 'passed' | 'current' | 'next' | 'ahead'
+
+export interface HighwayViewStation {
+  readonly id: MainStation
+  readonly role: string
+  readonly models?: string
+  readonly state: HighwayStationState
+}
+
+export interface HighwayView {
+  readonly stations: readonly HighwayViewStation[]
+  readonly aside?: string
+  readonly placard?: string
+  readonly nextLine?: string
+}
+
+type ReadyConsult = Extract<ConsultPhase, { readonly kind: 'ready' }>
+
+const MOVE_LABELS: Readonly<Record<Move, string>> = {
+  continue: 'Continue',
+  clear: 'Clear',
+  handoff: 'Handoff',
+  subagent: 'Subagent',
+  compact: 'Compact',
+}
+
+export function highwayView(
+  response: ReadyConsult,
+  catalog?: readonly string[],
+): HighwayView {
+  const location = response.location
+  const next = response.next
+  const stations = MAIN_STATIONS.map((station): HighwayViewStation => ({
+    id: station,
+    role: MAIN_STATION_ROLES[station],
+    ...modelField(response.stationModels?.[station], catalog),
+    state: stationState(station, location, next),
+  }))
+  return {
+    stations,
+    ...noteField(location),
+    ...nextLineField(response, catalog),
+  }
+}
+
+function stationState(
+  station: MainStation,
+  location: ConsultLocation | undefined,
+  next: ConsultNext | undefined,
+): HighwayStationState {
+  if (location?.zone !== 'main') return 'ahead'
+  if (station === location.station) return 'current'
+  const currentIndex = MAIN_STATIONS.indexOf(location.station as MainStation)
+  const stationIndex = MAIN_STATIONS.indexOf(station)
+  if (stationIndex >= 0 && currentIndex >= 0 && stationIndex < currentIndex) return 'passed'
+  if (location.phaseDone && next?.station === station) return 'next'
+  return 'ahead'
+}
+
+function noteField(location: ConsultLocation | undefined): Pick<HighwayView, 'aside' | 'placard'> {
+  if (location === undefined) return {}
+  if (location.zone === 'service' && location.station !== undefined && location.returnTo !== undefined) {
+    return { aside: `绕道中：${location.station}，完成后 handoff 回 ${location.returnTo}` }
+  }
+  if (location.zone === 'ramp' && location.station !== undefined && location.station in RAMP_MERGES) {
+    return { aside: `匝道：${location.station}，并入 ${RAMP_MERGES[location.station as keyof typeof RAMP_MERGES]}` }
+  }
+  if (location.zone === 'standalone' && location.station !== undefined) {
+    return { placard: `独立：${location.station}` }
+  }
+  if (location.zone === 'roadbed' && location.station !== undefined) {
+    return { placard: `路基：${location.station}` }
+  }
+  if (location.zone === 'off-road') return { placard: '不在公路上' }
+  return {}
+}
+
+function nextLineField(
+  response: ReadyConsult,
+  catalog: readonly string[] | undefined,
+): Pick<HighwayView, 'nextLine'> {
+  if (response.location?.phaseDone === false) return { nextLine: '本阶段未完成 · 继续' }
+  const next = response.next
+  if (next === undefined) return {}
+  const model = selectModel(response.stationModels?.[next.station], catalog)
+  return {
+    nextLine: `→ /${next.station} · ${MOVE_LABELS[next.move]}（${next.reason}）${model === undefined ? '' : `· ${model}`}`,
+  }
+}
+
+function modelField(
+  routes: readonly string[] | undefined,
+  catalog: readonly string[] | undefined,
+): Pick<HighwayViewStation, 'models'> {
+  const model = selectModel(routes, catalog)
+  return model === undefined ? {} : { models: model }
+}
+
+function selectModel(
+  routes: readonly string[] | undefined,
+  catalog: readonly string[] | undefined,
+): string | undefined {
+  if (routes === undefined || routes.length === 0) return undefined
+  if (catalog === undefined) return shortRoute(routes[0] ?? '')
+  const selected = routes.find(route => catalog.includes(route))
+  return selected === undefined ? '保持当前模型' : shortRoute(selected)
+}
+
+function shortRoute(route: string): string {
+  const slash = route.indexOf('/')
+  return slash < 0 ? route : route.slice(slash + 1)
+}

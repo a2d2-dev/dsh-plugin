@@ -22,7 +22,21 @@ import type {
   StreamChunk,
 } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, SessionHeader, SessionId, SessionSurface } from '@deepseek-ai/dsh-session'
+import { contextOccupancy } from './context-occupancy.ts'
+import type { ContextPressureProjection } from './context-occupancy.ts'
 import { parseSessionId } from './handoff.ts'
+import {
+  HIGHWAY_PROMPT_CATALOG,
+  isClosedHighwayStation,
+  isHighwayZone,
+  isMainStation,
+  isMove,
+  isRampStation,
+  isRoadbedStation,
+  isServiceStation,
+} from './highway.ts'
+import type { HighwayZone, MainStation, Move } from './highway.ts'
+import type { HandoffThresholds } from './indicator-projection.ts'
 import type { SkillSource } from './skill-source.ts'
 import { DEFAULT_STATION_MODELS, splitModelRoute } from './station-models.ts'
 import type { StationModelsSettings } from './station-models.ts'
@@ -50,19 +64,39 @@ const JSON_HEADERS = {
   'content-type': 'application/json; charset=utf-8',
 } as const
 
-const CANDIDATE_KINDS = new Set(['stay', 'handoff', 'other'])
+const LEGACY_KIND_MOVES = {
+  stay: 'continue',
+  handoff: 'handoff',
+  other: 'continue',
+} as const
+
+export interface ConsultLocation {
+  readonly zone: HighwayZone
+  readonly station?: string
+  readonly returnTo?: MainStation
+  readonly phaseDone: boolean
+}
+
+export interface ConsultNext {
+  readonly station: string
+  readonly move: Move
+  readonly reason: string
+}
 
 /** A model-proposed action rendered by the client as a chip. */
 export interface ConsultCandidate {
   readonly label: string
   readonly input: string
-  readonly kind: 'stay' | 'handoff' | 'other'
+  readonly move: Move
+  readonly station?: string
 }
 
 /** The model's complete answer: where the work stands, then where it can go. */
 export interface ConsultOutput {
   /** One sentence naming where this session's work currently stands. */
   readonly position: string
+  readonly location: ConsultLocation
+  readonly next?: ConsultNext
   readonly candidates: readonly ConsultCandidate[]
 }
 
@@ -70,6 +104,8 @@ export interface ConsultOutput {
 export interface ConsultValue {
   /** One sentence naming where this session's work currently stands. */
   readonly position: string
+  readonly location: ConsultLocation
+  readonly next?: ConsultNext
   readonly candidates: readonly ConsultCandidate[]
   readonly degraded: boolean
   /** Provider/model route that produced this answer. Absent only from older hosts. */
@@ -107,10 +143,20 @@ export interface ConsultMessageExcerpt {
   readonly text: string
 }
 
+/** Model-visible current context and smart-zone facts supplied by the host. */
+export interface ConsultContextFacts {
+  readonly status: 'available' | 'unavailable'
+  readonly usedTokens?: number
+  readonly percent?: number
+  readonly contextWindow?: number
+  readonly smartZone?: { readonly warnTokens: number; readonly criticalTokens: number }
+}
+
 /** Model-visible data gathered without mutating its session. */
 export interface ConsultMaterial {
   readonly messages: readonly ConsultMessageExcerpt[]
   readonly tasks: readonly Task[]
+  readonly context?: ConsultContextFacts
 }
 
 /** Minimal live-session surface needed by the route. */
@@ -128,6 +174,7 @@ export interface ConsultDependencies {
   readonly listTasks: (cwd: string) => Promise<readonly Task[]>
   readonly readAskMatt: () => Promise<SkillSource>
   readonly getStationModels?: () => StationModelsSettings
+  readonly contextFacts?: (session: ConsultSession) => ConsultContextFacts | undefined
   readonly stream: (options: GenerateOptions) => AsyncIterable<StreamChunk>
   readonly collectMaterial?: (
     events: readonly SessionEvent[],
@@ -188,6 +235,62 @@ export function collectConsultMaterial(
   }
 }
 
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function readNonNegativeInteger(value: unknown): number | undefined {
+  return Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : undefined
+}
+
+function readPositiveInteger(value: unknown): number | undefined {
+  return Number.isSafeInteger(value) && Number(value) > 0 ? Number(value) : undefined
+}
+
+function readContextPressure(value: unknown): ContextPressureProjection | undefined {
+  if (!isRecord(value)) return undefined
+  const pressureTokens = readNonNegativeInteger(value.pressureTokens)
+  const projectedTokens = readNonNegativeInteger(value.projectedTokens)
+  const contextWindow = readPositiveInteger(value.contextWindow)
+  if (pressureTokens === undefined && projectedTokens === undefined && contextWindow === undefined) return undefined
+  return {
+    ...(pressureTokens === undefined ? {} : { pressureTokens }),
+    ...(projectedTokens === undefined ? {} : { projectedTokens }),
+    ...(contextWindow === undefined ? {} : { contextWindow }),
+  }
+}
+
+function readContextWindow(value: unknown): number | undefined {
+  return isRecord(value) ? readPositiveInteger(value.contextWindow) : undefined
+}
+
+/**
+ * Build consult context facts from the same projections the orb reads.
+ *
+ * @param values - a session-projection snapshot's value map.
+ * @param thresholds - this service's configured handoff thresholds.
+ * @returns factual context status plus configured smart-zone thresholds.
+ */
+export function consultContextFactsFromProjectionValues(
+  values: Readonly<Record<string, unknown>> | undefined,
+  thresholds: HandoffThresholds,
+): ConsultContextFacts {
+  const pressure = readContextPressure(values?.contextPressure)
+  const indicatorWindow = readContextWindow(values?.a2d2Indicator)
+  const pressureWithWindow = pressure === undefined && indicatorWindow === undefined
+    ? undefined
+    : { ...pressure, contextWindow: pressure?.contextWindow ?? indicatorWindow }
+  const occupancy = contextOccupancy(pressureWithWindow)
+  return {
+    status: occupancy === null ? 'unavailable' : 'available',
+    ...(occupancy === null ? {} : occupancy),
+    smartZone: {
+      warnTokens: thresholds.warnAtTokens,
+      criticalTokens: thresholds.criticalAtTokens,
+    },
+  }
+}
+
 function renderSkillSource(source: SkillSource): string {
   if (source.status === 'missing') {
     return '<ask-matt-source status="missing" />'
@@ -207,16 +310,22 @@ function renderSkillSource(source: SkillSource): string {
  * workflow rules.
  */
 export function buildConsultPrompt(material: ConsultMaterial, skillSource: SkillSource): string {
+  const contextFacts = material.context ?? {
+    status: 'unavailable',
+  }
   const envelope = [
     '<situation-envelope>',
     'This is a next-step consultation at a phase boundary.',
     'The result will be shown as candidate chips. A chip only fills an input; it does not execute or send anything.',
     'Return only a JSON object with exactly this shape:',
-    '{"position":"one sentence: where this session\'s work stands now","candidates":[2 to 4 candidates]}',
+    '{"position":"one sentence: where this session\'s work stands now","location":{"zone":"main|service|ramp|standalone|roadbed|off-road","station":"station id except off-road","returnTo":"main station, required only for service","phaseDone":true},"next":{"station":"next station id","move":"continue|clear|handoff|subagent|compact","reason":"why this move fits"},"candidates":[2 to 4 candidates]}',
     'Each candidate has exactly this shape:',
-    '{"label":"short visible label","input":"complete editable command or instruction","kind":"stay|handoff|other"}',
+    '{"label":"short visible label","input":"complete editable command or instruction","move":"continue|clear|handoff|subagent|compact","station":"optional target station id"}',
     'Write "position" in the language the session uses; it is shown above the chips as the basis for them.',
-    'Choose kind "stay" when the action remains in this session, "handoff" when it opens a handoff, and "other" otherwise.',
+    'Location values are closed except standalone station names. Use the highway catalog exactly as listed here:',
+    JSON.stringify(HIGHWAY_PROMPT_CATALOG),
+    'Current context and smart zone facts:',
+    JSON.stringify(contextFacts),
     'Session and project material follows as JSON data:',
     JSON.stringify(material),
     '</situation-envelope>',
@@ -247,9 +356,17 @@ export function parseConsultOutput(text: string): ConsultOutput {
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new MalformedCandidatesError('model output must be an object')
   }
-  const { position, candidates: rawCandidates } = parsed as Record<string, unknown>
+  const { position, location: rawLocation, next: rawNext, candidates: rawCandidates } = parsed as Record<string, unknown>
   if (typeof position !== 'string' || position.trim().length === 0) {
     throw new MalformedCandidatesError('model output has no non-empty position')
+  }
+  const location = parseLocation(rawLocation)
+  const next = rawNext === undefined ? undefined : parseNext(rawNext)
+  if (location.zone !== 'off-road' && next === undefined) {
+    throw new MalformedCandidatesError('model output has no next station')
+  }
+  if (location.zone === 'off-road' && rawNext !== undefined && next === undefined) {
+    throw new MalformedCandidatesError('model output has an invalid next station')
   }
   if (!Array.isArray(rawCandidates) || rawCandidates.length < 2 || rawCandidates.length > 4) {
     throw new MalformedCandidatesError('model output must carry an array of 2 to 4 candidates')
@@ -265,16 +382,119 @@ export function parseConsultOutput(text: string): ConsultOutput {
     if (typeof value.input !== 'string' || value.input.trim().length === 0) {
       throw new MalformedCandidatesError(`candidate ${String(index)} has no non-empty input`)
     }
-    if (typeof value.kind !== 'string' || !CANDIDATE_KINDS.has(value.kind)) {
-      throw new MalformedCandidatesError(`candidate ${String(index)} has an invalid kind`)
+    const move = parseMove(value.move, value.kind)
+    if (move === undefined) {
+      throw new MalformedCandidatesError(`candidate ${String(index)} has an invalid move`)
+    }
+    const station = value.station
+    if (station !== undefined && (typeof station !== 'string' || station.trim() === '' || !isClosedHighwayStation(station))) {
+      throw new MalformedCandidatesError(`candidate ${String(index)} has an invalid station`)
     }
     return {
       label: value.label,
       input: value.input,
-      kind: value.kind as ConsultCandidate['kind'],
+      move,
+      ...(station === undefined ? {} : { station: station.trim() }),
     }
   })
-  return deepFreeze({ position: position.trim(), candidates })
+  if (location.phaseDone === false) {
+    const allowed = new Set<Move>(['continue', 'subagent'])
+    if (next !== undefined && !allowed.has(next.move)) {
+      throw new MalformedCandidatesError('phaseDone false only allows continue or subagent next moves')
+    }
+    for (const [index, candidate] of candidates.entries()) {
+      if (!allowed.has(candidate.move)) {
+        throw new MalformedCandidatesError(`phaseDone false only allows continue or subagent candidate moves; candidate ${String(index)} was ${candidate.move}`)
+      }
+    }
+  }
+  if (next !== undefined && candidates[0]?.move !== next.move) {
+    throw new MalformedCandidatesError('first candidate move must match next.move')
+  }
+  return deepFreeze({
+    position: position.trim(),
+    location,
+    ...(next === undefined ? {} : { next }),
+    candidates,
+  })
+}
+
+function parseLocation(value: unknown): ConsultLocation {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new MalformedCandidatesError('model output has no location object')
+  }
+  const location = value as Record<string, unknown>
+  if (typeof location.zone !== 'string' || !isHighwayZone(location.zone)) {
+    throw new MalformedCandidatesError('location has an invalid zone')
+  }
+  if (typeof location.phaseDone !== 'boolean') {
+    throw new MalformedCandidatesError('location has no boolean phaseDone')
+  }
+  const station = location.station
+  const returnTo = location.returnTo
+  switch (location.zone) {
+    case 'main':
+      if (typeof station !== 'string' || !isMainStation(station)) {
+        throw new MalformedCandidatesError('main location has an invalid station')
+      }
+      if (returnTo !== undefined) throw new MalformedCandidatesError('main location must not carry returnTo')
+      return { zone: location.zone, station, phaseDone: location.phaseDone }
+    case 'service':
+      if (typeof station !== 'string' || !isServiceStation(station)) {
+        throw new MalformedCandidatesError('service location has an invalid station')
+      }
+      if (typeof returnTo !== 'string' || !isMainStation(returnTo)) {
+        throw new MalformedCandidatesError('service location requires a valid returnTo')
+      }
+      return { zone: location.zone, station, returnTo, phaseDone: location.phaseDone }
+    case 'ramp':
+      if (typeof station !== 'string' || !isRampStation(station)) {
+        throw new MalformedCandidatesError('ramp location has an invalid station')
+      }
+      if (returnTo !== undefined) throw new MalformedCandidatesError('ramp location must not carry returnTo')
+      return { zone: location.zone, station, phaseDone: location.phaseDone }
+    case 'standalone':
+      if (typeof station !== 'string' || station.trim() === '') {
+        throw new MalformedCandidatesError('standalone location requires a non-empty station')
+      }
+      if (returnTo !== undefined) throw new MalformedCandidatesError('standalone location must not carry returnTo')
+      return { zone: location.zone, station: station.trim(), phaseDone: location.phaseDone }
+    case 'roadbed':
+      if (typeof station !== 'string' || !isRoadbedStation(station)) {
+        throw new MalformedCandidatesError('roadbed location has an invalid station')
+      }
+      if (returnTo !== undefined) throw new MalformedCandidatesError('roadbed location must not carry returnTo')
+      return { zone: location.zone, station, phaseDone: location.phaseDone }
+    case 'off-road':
+      if (station !== undefined) throw new MalformedCandidatesError('off-road location must not carry station')
+      if (returnTo !== undefined) throw new MalformedCandidatesError('off-road location must not carry returnTo')
+      return { zone: location.zone, phaseDone: location.phaseDone }
+  }
+}
+
+function parseMove(value: unknown, legacyKind?: unknown): Move | undefined {
+  if (typeof value === 'string') return isMove(value) ? value : undefined
+  if (typeof legacyKind === 'string' && legacyKind in LEGACY_KIND_MOVES) {
+    return LEGACY_KIND_MOVES[legacyKind as keyof typeof LEGACY_KIND_MOVES]
+  }
+  return undefined
+}
+
+function parseNext(value: unknown): ConsultNext {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new MalformedCandidatesError('next is not an object')
+  }
+  const next = value as Record<string, unknown>
+  if (typeof next.station !== 'string' || !isClosedHighwayStation(next.station)) {
+    throw new MalformedCandidatesError('next has an invalid station')
+  }
+  if (typeof next.move !== 'string' || !isMove(next.move)) {
+    throw new MalformedCandidatesError('next has an invalid move')
+  }
+  if (typeof next.reason !== 'string' || next.reason.trim() === '') {
+    throw new MalformedCandidatesError('next has no non-empty reason')
+  }
+  return { station: next.station, move: next.move, reason: next.reason.trim() }
 }
 
 function finishFailure(finish: FinishReason): Error | undefined {
@@ -537,9 +757,11 @@ export function createConsultHandler(
       ])
       const collectMaterial = dependencies.collectMaterial ?? collectConsultMaterial
       const buildPrompt = dependencies.buildPrompt ?? buildConsultPrompt
-      const prompt = buildPrompt(collectMaterial(session.events, session.surface.nodes, tasks), skillSource)
+      const material = collectMaterial(session.events, session.surface.nodes, tasks)
+      const context = dependencies.contextFacts?.(session)
+      const prompt = buildPrompt(context === undefined ? material : { ...material, context }, skillSource)
       const stationModels = dependencies.getStationModels?.() ?? DEFAULT_STATION_MODELS
-      const { position, candidates, answeredBy, fallbacks } = await generateConsultWithFallback({
+      const { position, location, next, candidates, answeredBy, fallbacks } = await generateConsultWithFallback({
         stream: dependencies.stream,
         routes: stationModels.consult,
         sessionId,
@@ -550,6 +772,8 @@ export function createConsultHandler(
         ok: true,
         value: {
           position,
+          location,
+          ...(next === undefined ? {} : { next }),
           candidates,
           degraded: skillSource.status === 'missing',
           answeredBy,

@@ -55,11 +55,13 @@ class StubWebServer extends Service {
 
 const sessionId = SessionId('session-consult')
 const candidates = [
-  { label: 'Keep going', input: 'Continue this implementation.', kind: 'stay' },
-  { label: 'Hand off', input: 'Hand off the completed phase.', kind: 'handoff' },
+  { label: 'Keep going', input: 'Continue this implementation.', move: 'continue', station: 'to-spec' },
+  { label: 'Review elsewhere', input: 'Ask a reviewer subagent.', move: 'subagent', station: 'code-review' },
 ]
 const position = 'Implementation is finished; verification has not started.'
-const candidatesJson = JSON.stringify({ position, candidates })
+const location = { zone: 'main', station: 'grill', phaseDone: true }
+const next = { station: 'to-spec', move: 'continue', reason: 'the spec needs current context' }
+const candidatesJson = JSON.stringify({ position, location, next, candidates })
 
 function event<T extends SessionEvent>(value: Omit<T, 'ignorable'>): T {
   return value as T
@@ -278,11 +280,14 @@ describe('consult material and route', () => {
       This is a next-step consultation at a phase boundary.
       The result will be shown as candidate chips. A chip only fills an input; it does not execute or send anything.
       Return only a JSON object with exactly this shape:
-      {"position":"one sentence: where this session's work stands now","candidates":[2 to 4 candidates]}
+      {"position":"one sentence: where this session's work stands now","location":{"zone":"main|service|ramp|standalone|roadbed|off-road","station":"station id except off-road","returnTo":"main station, required only for service","phaseDone":true},"next":{"station":"next station id","move":"continue|clear|handoff|subagent|compact","reason":"why this move fits"},"candidates":[2 to 4 candidates]}
       Each candidate has exactly this shape:
-      {"label":"short visible label","input":"complete editable command or instruction","kind":"stay|handoff|other"}
+      {"label":"short visible label","input":"complete editable command or instruction","move":"continue|clear|handoff|subagent|compact","station":"optional target station id"}
       Write "position" in the language the session uses; it is shown above the chips as the basis for them.
-      Choose kind "stay" when the action remains in this session, "handoff" when it opens a handoff, and "other" otherwise.
+      Location values are closed except standalone station names. Use the highway catalog exactly as listed here:
+      {"zones":["main","service","ramp","standalone","roadbed","off-road"],"main":["grill","to-spec","to-tickets","implement","code-review"],"service":["prototype","handoff"],"ramp":{"triage":"implement","diagnosing-bugs":"implement","wayfinder":"to-spec","improve-codebase-architecture":"grill"},"roadbed":["domain-modeling","codebase-design"]}
+      Current context and smart zone facts:
+      {"status":"unavailable"}
       Session and project material follows as JSON data:
       {"messages":[{"seq":7,"text":"Implementation is done."}],"tasks":[{"id":"consult-route","name":"Consult route","goal":"Offer next-step chips","state":"active","createdAt":"2026-09-24T00:00:00.000Z","members":[{"sessionId":"session-consult"}]}]}
       </situation-envelope>
@@ -306,18 +311,33 @@ describe('consult material and route', () => {
 
 describe('candidate parsing', () => {
   it('accepts a complete valid answer', () => {
-    expect(parseConsultOutput(candidatesJson)).toEqual({ position, candidates })
+    expect(parseConsultOutput(candidatesJson)).toEqual({ position, location, next, candidates })
   })
 
   it('trims the position line', () => {
-    expect(parseConsultOutput(JSON.stringify({ position: `  ${position}\n`, candidates })).position).toBe(position)
+    expect(parseConsultOutput(JSON.stringify({ position: `  ${position}\n`, location, next, candidates })).position).toBe(position)
   })
 
   it.each([
     ['a json fence', `\`\`\`json\n${candidatesJson}\n\`\`\``],
     ['a bare fence with surrounding whitespace', `\n\`\`\`\n${candidatesJson}\n\`\`\`\n`],
   ])('unwraps %s around the whole answer', (_name, value) => {
-    expect(parseConsultOutput(value)).toEqual({ position, candidates })
+    expect(parseConsultOutput(value)).toEqual({ position, location, next, candidates })
+  })
+
+  it('maps legacy candidate kind values for one compatibility version', () => {
+    expect(parseConsultOutput(JSON.stringify({
+      position,
+      location,
+      next: { station: 'to-spec', move: 'continue', reason: 'continue in place' },
+      candidates: [
+        { label: 'Stay', input: 'Keep going.', kind: 'stay', station: 'to-spec' },
+        { label: 'Other', input: 'Keep going differently.', kind: 'other', station: 'to-spec' },
+      ],
+    })).candidates).toEqual([
+      { label: 'Stay', input: 'Keep going.', move: 'continue', station: 'to-spec' },
+      { label: 'Other', input: 'Keep going differently.', move: 'continue', station: 'to-spec' },
+    ])
   })
 
   it.each([
@@ -325,11 +345,19 @@ describe('candidate parsing', () => {
     ['prose around a fence', `Sure:\n\`\`\`json\n${candidatesJson}\n\`\`\``],
     ['a bare candidate array', JSON.stringify(candidates)],
     ['no position', JSON.stringify({ candidates })],
-    ['a blank position', JSON.stringify({ position: '  ', candidates })],
-    ['no candidates', JSON.stringify({ position })],
-    ['too few candidates', JSON.stringify({ position, candidates: candidates.slice(0, 1) })],
-    ['missing field', JSON.stringify({ position, candidates: [{ label: 'x', kind: 'stay' }, candidates[1]] })],
-    ['invalid kind', JSON.stringify({ position, candidates: [{ label: 'x', input: 'y', kind: 'leave' }, candidates[1]] })],
+    ['a blank position', JSON.stringify({ position: '  ', location, next, candidates })],
+    ['no location', JSON.stringify({ position, next, candidates })],
+    ['invalid zone', JSON.stringify({ position, location: { zone: 'space', station: 'grill', phaseDone: true }, next, candidates })],
+    ['invalid main station', JSON.stringify({ position, location: { zone: 'main', station: 'prototype', phaseDone: true }, next, candidates })],
+    ['service without returnTo', JSON.stringify({ position, location: { zone: 'service', station: 'prototype', phaseDone: true }, next, candidates })],
+    ['invalid returnTo', JSON.stringify({ position, location: { zone: 'service', station: 'prototype', returnTo: 'prototype', phaseDone: true }, next, candidates })],
+    ['invalid move', JSON.stringify({ position, location, next: { station: 'to-spec', move: 'teleport', reason: 'x' }, candidates })],
+    ['phase not done with boundary next', JSON.stringify({ position, location: { ...location, phaseDone: false }, next: { station: 'to-spec', move: 'handoff', reason: 'x' }, candidates: [{ ...candidates[0], move: 'handoff' }, candidates[1]] })],
+    ['phase not done with boundary candidate', JSON.stringify({ position, location: { ...location, phaseDone: false }, next: { station: 'to-spec', move: 'continue', reason: 'x' }, candidates: [candidates[0], { ...candidates[1], move: 'clear' }] })],
+    ['first candidate disagrees with next move', JSON.stringify({ position, location, next: { station: 'to-spec', move: 'subagent', reason: 'x' }, candidates })],
+    ['no candidates', JSON.stringify({ position, location, next })],
+    ['too few candidates', JSON.stringify({ position, location, next, candidates: candidates.slice(0, 1) })],
+    ['missing field', JSON.stringify({ position, location, next, candidates: [{ label: 'x', move: 'continue' }, candidates[1]] })],
   ])('rejects %s without returning a partial result', (_name, value) => {
     expect(() => parseConsultOutput(value)).toThrow(/a2d2 consult/)
   })
@@ -514,6 +542,40 @@ describe('consult HTTP route', () => {
     })
     expect(deps.session.events).toBe(eventsBefore)
     expect(deps.session.append).not.toHaveBeenCalled()
+  })
+
+  it('puts injected context occupancy and configured smart-zone thresholds in the prompt', async () => {
+    const deps = dependencies({
+      contextFacts: () => ({
+        status: 'available',
+        usedTokens: 120_320,
+        percent: 47,
+        contextWindow: 256_000,
+        smartZone: { warnTokens: 111_000, criticalTokens: 777_000 },
+      }),
+    })
+
+    await send(createConsultHandler(deps))
+
+    expect(deps.calls[0]?.messages[0]?.content[0]).toMatchObject({
+      type: 'text',
+      text: expect.stringContaining(
+        '"context":{"status":"available","usedTokens":120320,"percent":47,"contextWindow":256000,"smartZone":{"warnTokens":111000,"criticalTokens":777000}}',
+      ),
+    })
+  })
+
+  it('reports unavailable context facts without hard-coded smart-zone thresholds when no dependency is injected', async () => {
+    const deps = dependencies()
+
+    await send(createConsultHandler(deps))
+
+    const prompt = deps.calls[0]?.messages[0]?.content[0]?.type === 'text'
+      ? deps.calls[0].messages[0].content[0].text
+      : ''
+    expect(prompt).toContain('Current context and smart zone facts:\n{"status":"unavailable"}')
+    expect(prompt).not.toContain('"warnTokens":150000')
+    expect(prompt).not.toContain('"criticalTokens":1000000')
   })
 
   it('falls back on call failure, refusal, and empty output, carrying every reason', async () => {
