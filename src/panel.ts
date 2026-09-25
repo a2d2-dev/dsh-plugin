@@ -9,9 +9,8 @@
  */
 
 import type { IncomingHttpHeaders } from 'node:http'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { isTrustedConsultRequest } from './consult.ts'
-import { parseSessionId } from './handoff.ts'
 import { PANEL_ROUTE_PATH } from './panel-types.ts'
 import type { PanelErrorCode, PanelPayload, PanelResponse, PanelTask } from './panel-types.ts'
 import type { Task } from './types.ts'
@@ -23,6 +22,8 @@ const JSON_HEADERS = {
   'cache-control': 'no-store',
   'content-type': 'application/json; charset=utf-8',
 } as const
+const MAX_PANEL_SESSION_ID_LENGTH = 128
+const PANEL_SESSION_ID = /^[A-Za-z0-9-]+$/u
 
 /** Minimal live-session face needed by the route. */
 export interface PanelSession {
@@ -98,10 +99,18 @@ function reasonOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+function parsePanelSessionId(value: string): SessionId | undefined {
+  return value.length > 0
+    && value.length <= MAX_PANEL_SESSION_ID_LENGTH
+    && PANEL_SESSION_ID.test(value)
+    ? SessionId(value)
+    : undefined
+}
+
 function sessionIdOf(url: string | undefined): SessionId | undefined {
   const values = new URL(url ?? PANEL_ROUTE_PATH, 'http://a2d2.invalid')
     .searchParams.getAll('session')
-  return values.length === 1 ? parseSessionId(values[0]!) : undefined
+  return values.length === 1 ? parsePanelSessionId(values[0]!) : undefined
 }
 
 /**

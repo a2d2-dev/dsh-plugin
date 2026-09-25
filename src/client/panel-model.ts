@@ -9,6 +9,7 @@
  */
 
 import type { PanelMember, PanelPayload, PanelTask } from '../panel-types.ts'
+import { rootAncestor, type SubagentSessionSummary } from './subagent-model.ts'
 
 const STATE_LABELS: Readonly<Record<PanelTask['state'], string>> = {
   active: '进行中',
@@ -124,6 +125,14 @@ export type PanelLoadState =
 export interface PanelClientState {
   readonly payload: PanelPayload | undefined
   readonly failure: string | undefined
+}
+
+/** The session identities the task half should use for one opened panel. */
+export interface PanelSessionTarget {
+  readonly querySessionId: string
+  readonly currentMemberSessionId: string
+  readonly openedSessionId: string
+  readonly openedAsSubagent: boolean
 }
 
 /** Result of one host task read, as observed by the panel state machine. */
@@ -329,6 +338,27 @@ export function panelTaskRows(
   currentSessionId: string,
 ): readonly PanelTaskRow[] {
   return payload.tasks.map(task => taskRow(task, titles, openable, currentSessionId))
+}
+
+/**
+ * Resolve which session owns task membership for the opened panel session.
+ *
+ * Task ownership is main-session scoped. While the host list has not published
+ * enough durable parent rows to walk a subagent back to its root, the panel keeps
+ * using the opened id and naturally switches when the parent chain arrives.
+ */
+export function panelSessionTarget(
+  byId: Readonly<Record<string, SubagentSessionSummary | undefined>>,
+  openedSessionId: string,
+): PanelSessionTarget {
+  const rootId = rootAncestor(byId, openedSessionId) ?? openedSessionId
+  const openedAsSubagent = rootId !== openedSessionId && byId[openedSessionId]?.origin === 'subagent'
+  return {
+    querySessionId: rootId,
+    currentMemberSessionId: rootId,
+    openedSessionId,
+    openedAsSubagent,
+  }
 }
 
 /**
