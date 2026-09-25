@@ -3,6 +3,7 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { indicatorProjectionDefinition, indicatorProjectionSchema } from '../../src/indicator-projection.ts'
 import {
   formatRoute,
+  loadSubagentRouteSources,
   rootAncestor,
   subagentRouteRows,
   subagentRouteHeader,
@@ -166,6 +167,30 @@ describe('rootAncestor', () => {
 })
 
 describe('subagentRouteTree', () => {
+  it('can fill an inactive catalog child route from a host history projection', () => {
+    const tree = subagentRouteTree(
+      {
+        root: {
+          id: 'root',
+          displayTitle: 'Main',
+          running: false,
+          projectionValues: { a2d2Indicator: { route: { provider: 'claude-bray', model: 'claude-opus-5-5' } } },
+        },
+      },
+      {
+        root: {
+          entries: [
+            childEntry('child', { label: 'Review', activity: 'inactive', mode: 'continuable' }),
+          ],
+        },
+      },
+      'root',
+      { child: { route: { provider: 'claude-bray', model: 'claude-opus-5-5' } } },
+    )
+
+    expect(tree.children[0]?.model).toBe('claude-opus-5-5')
+  })
+
   it('roots at the main session, nests recursive children, and counts whole-tree drift against each parent', () => {
     const tree = subagentRouteTree(
       {
@@ -226,6 +251,37 @@ describe('subagentRouteTree', () => {
       { id: 'sibling', drifted: true, children: [] },
     ])
     expect(tree.tally).toEqual({ total: 3, running: 2, drifted: 2 })
+  })
+})
+
+describe('loadSubagentRouteSources', () => {
+  it('reads child route sources from subagent history projection baselines', async () => {
+    const calls: unknown[] = []
+    const sources = await loadSubagentRouteSources({
+      subagents: {
+        history: async (payload: unknown) => {
+          calls.push(payload)
+          return {
+            result: {
+              ok: true,
+              value: {
+                events: [],
+                hasMore: false,
+                projections: {
+                  asOfSeq: 7,
+                  values: {
+                    a2d2Indicator: { route: { provider: 'claude-bray', model: 'claude-opus-5-5' } },
+                  },
+                },
+              },
+            },
+          }
+        },
+      },
+    }, [{ parentSessionId: 'root', childSessionId: 'child', mode: 'continuable' }])
+
+    expect(calls).toEqual([{ parentSessionId: 'root', childSessionId: 'child', mode: 'continuable', maxMessages: 1 }])
+    expect(sources).toEqual({ child: { route: { provider: 'claude-bray', model: 'claude-opus-5-5' } } })
   })
 })
 
