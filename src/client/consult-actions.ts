@@ -17,6 +17,7 @@ import {
   isServiceStation,
 } from '../highway.ts'
 import type { HighwayZone, MainStation, Move } from '../highway.ts'
+import type { FailureKind } from '../refusal.ts'
 import type { ClientSessionsService, ClientWorkspacesService } from './context.ts'
 
 /** Exact host route used for next-step consultation. */
@@ -32,6 +33,7 @@ export interface ConsultCandidate {
 
 export interface ConsultFallback {
   readonly route: string
+  readonly kind?: FailureKind
   readonly reason: string
 }
 
@@ -288,7 +290,16 @@ function parseFallback(value: unknown): ConsultFallback | undefined {
   if (!isRecord(value)) return undefined
   if (typeof value.route !== 'string' || value.route.trim() === '') return undefined
   if (typeof value.reason !== 'string' || value.reason.trim() === '') return undefined
-  return { route: value.route, reason: value.reason }
+  if (value.kind !== undefined
+    && value.kind !== 'refusal'
+    && value.kind !== 'rate-limited'
+    && value.kind !== 'empty'
+    && value.kind !== 'error') return undefined
+  return {
+    route: value.route,
+    ...(value.kind === undefined ? {} : { kind: value.kind }),
+    reason: value.reason,
+  }
 }
 
 function parseStationModels(value: unknown): Readonly<Record<string, readonly string[]>> | undefined {
@@ -475,7 +486,10 @@ export function stationRouteDecision(input: {
   }
 }
 
-function displayReason(reason: string): string {
+function displayReason(reason: string, kind?: FailureKind): string {
+  if (kind === 'refusal') return '拒答'
+  if (kind === 'rate-limited') return '限流'
+  if (kind === 'empty') return '空输出'
   return /refus/u.test(reason) || /拒/u.test(reason)
     ? '拒答'
     : reason
@@ -486,7 +500,7 @@ export function consultAttributionLine(phase: ConsultPhase): string | undefined 
   const answered = shortRoute(phase.answeredBy)
   const fallback = phase.fallbacks?.[0]
   if (fallback === undefined) return `由 ${answered} 生成`
-  return `由 ${answered} 生成（${shortRoute(fallback.route)} ${displayReason(fallback.reason)}，改用 ${answered}）`
+  return `由 ${answered} 生成（${shortRoute(fallback.route)} ${displayReason(fallback.reason, fallback.kind)}，改用 ${answered}）`
 }
 
 export function modelCatalogRoutes(directory: ClientModelDirectorySnapshot | undefined): readonly string[] {
