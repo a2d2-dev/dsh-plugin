@@ -11,10 +11,12 @@
 |---|---|---|
 | 1 | #9/#10/#12 | 通过 |
 | 2 | #12 | 通过 |
-| 3 | #11/#9 | 不通过 |
-| 4 | #13 | 未验证 |
-| 5 | #14 | 未验证 |
-| 6 | #15 | 未验证 |
+| 3 | #11/#9 | 首轮不通过 → CEO 复核后通过（拒答分类缺陷经 PR #24 修复） |
+| 4 | #13 | 首轮未验证 → CEO 复核通过 |
+| 5 | #14 | 首轮未验证 → CEO 复核通过 |
+| 6 | #15 | 首轮未验证 → CEO 复核部分通过（建会话+填框通过；新会话选站点模型仅单测覆盖） |
+
+> 以上首轮结论由 codex（gpt-5.5，agent-browser）产出；「CEO 复核」一节记录复核依据，结论以复核为准。
 
 ## 用例 1：下一步入口与公路图卡片
 
@@ -148,3 +150,53 @@
 
 - `http://10.126.126.12:3181/` 上目录选择器显示 `crypto.randomUUID is not a function`，Open disabled；切换到任务允许的 `http://127.0.0.1:3181/` 后目录选择器正常。这看起来与浏览器安全上下文/`crypto.randomUUID` 可用性有关，不在本次 #8 功能结论内。
 - `codex/gpt-5.5` 探测和空项目下一步咨询均可能真实调用模型；实际等待时间超过 2 分钟仍未完成。
+
+
+## CEO 复核（2026-09-25）
+
+复核环境：同一验收实例，插件更新到 origin/main `870b2d8`（含 PR #24 拒答分类修复）后重启。操作通过 ego-browser 读取渲染后 DOM 文字，并直接调用插件路由佐证。
+
+### D1 探测「无超时卡住」—— 驳回（环境问题，非产品缺陷）
+
+- 实验目的：确认「测试」按钮是否真的卡在宿主侧。
+- 步骤：`POST /a2d2/api/config {"method":"probe","payload":{"route":"codex/gpt-5.5"}}`；在配置页点前两个「测试」按钮，并计时。
+- 记录：路由调用 2.3s 返回 `{"status":"normal","reason":"OK"}`；页面上两个探测 4.0s 内都出结果（`报错 · …Usage Policy…`、`正常 · OK`）。
+- 结论：卡住是 agent-browser 守护进程出现 `Resource temporarily unavailable` 导致的，不是插件问题。给客户端加超时的加固另开票记账（#25）。
+
+### 复核中发现的真缺陷：拒答被归为「报错」—— 已修（PR #24）
+
+- 记录：`claude-bray/claude-fable-5` 的探测返回 `status:error`，原文是 "…blocked under Anthropic's Usage Policy…"。DSH 的 pi-ai 适配器把拒答映射成 `{kind:'error', code:'PI_AI_ERROR'}`，不会产出 `refusal` finish。
+- 修复：`src/refusal.ts` 统一识别拒答；探测显示「拒答」；咨询回落记录 `kind`。修复后路由返回 `{"status":"refusal",…}`；`codex/gpt-5.5` 仍返回 `normal`。
+- 附带观察：`claude-fable-5-1` 对 "reply OK" 探测同样拒答，但真实咨询（9–12s）由它正常作答（`answeredBy: claude-bray/claude-fable-5-1`，fallbacks 为空）。这属于上游对极短探测的误判，按设计显示为「拒答」即可。
+
+### 用例 3（#11）其余项 —— 通过
+
+- 读写：`settings.get` 取到 rev 0；`settings.update` 改 implement 首选为 `claude-bray/claude-opus-5-5` 成功（rev 1）。用旧 revision 再写一次返回 `settings-conflict`，并附最新值。
+- 热生效：不重启，紧接着的咨询响应里 `stationModels.implement = [claude-opus-5-5, gpt-5.5]`；配置页公路图 implement 站标签显示 `claude-opus-5-5`。
+- 告警：code-review 首选也设为 `claude-opus-5-5` 后，页内出现 "a2d2: code-review and implement both prefer claude-bray/claude-opus-5-5; …"（告警是英文，中文化记账到 #26）。
+- 复原：已写回出厂默认（rev 2，warnings 为空）。
+
+### D2 咨询无客户端超时 —— 驳回为缺陷，记账为加固
+
+- 记录：直接调用咨询路由，空项目会话 9.1s 返回、已配置项目会话 11.7s 返回，宿主正常。长时间 loading 同样是 agent-browser 失效所致。客户端超时的加固记账到 #25。
+
+### 用例 4（#13）前置条件路牌 —— 通过
+
+- 路由：空项目会话的 `preconditions.missing` = [CONTEXT.md or CONTEXT-MAP.md, docs/agents/issue-tracker.md]，首颗芯片 `/setup-matt-pocock-skills`。已配置项目会话 `missing: []`，没有该芯片。
+- GUI（空项目会话点指示球）：卡片顶部渲染「首次使用前：/setup-matt-pocock-skills」并列出两项缺失；公路图标「不在公路上」；下一站行、芯片、「其他走法」、卡底「由 claude-fable-5-1 生成」都在。
+
+### 用例 5（#14）continue 芯片切模型 —— 通过
+
+- 步骤：在上面的卡片里点 continue 芯片「Grill 定目标（切到 claude-fable-5-1）」。
+- 记录：模型选择器从 `Select model, current claude-opus-5-5` 变成 `current claude-fable-5-1`；输入框已填 `/grill-with-docs 我想在这个空项目里做：…`；会话轮数仍是 1，没有发送。
+
+### 用例 6（#15）新会话走法 —— 部分通过
+
+- 步骤：卡片 →「其他走法」→「新会话」。
+- 记录：页面标题从「空项目下一步规划」变为新的空会话；新会话输入框已填「开空会话继续：」；没有任何轮次（未发送）；无报错。
+- 未验证：clear 芯片在新会话上选站点模型。原因是本轮咨询没有给出 clear 走法（阶段未完成，按规则只给 continue/subagent）。这条链路由 `tests/client/consult-actions.spec.ts` 与 `orb-actions.spec.ts` 的注入式测试覆盖，和用例 5 共用 `stationRouteDecision`。
+
+### 访问入口
+
+- `http://10.126.126.12:3181/`：非 localhost 的 http 不是 secure context，DSH 前端的 `crypto.randomUUID` 不可用，添加工作区会失败（首轮报告中的现象）。这是 DSH 前端的问题，不属于本插件。
+- 已新增 `https://10.126.126.12:3182/`（Caddy `tls internal`，签发方是 Caddy Local Authority，与 dsh.a2d2.dev 相同）。浏览器信任该本地根证书后即为 secure context。
