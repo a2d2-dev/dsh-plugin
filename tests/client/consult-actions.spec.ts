@@ -47,6 +47,36 @@ describe('requestConsult', () => {
     })
   })
 
+  it('carries the position line into the ready card', async () => {
+    const setPhase = vi.fn<(phase: ConsultPhase) => void>()
+    await requestConsult({
+      fetch: async () => jsonResponse({
+        ok: true,
+        value: {
+          position: ' 实现已完成，尚未验证。 ',
+          candidates: [{ label: '验证', input: '跑一遍测试', kind: 'stay' }],
+          degraded: false,
+        },
+      }),
+      setPhase,
+    }, 'session-a')
+    expect(setPhase).toHaveBeenLastCalledWith({
+      kind: 'ready',
+      position: '实现已完成，尚未验证。',
+      candidates: [{ label: '验证', input: '跑一遍测试', kind: 'stay' }],
+      degraded: false,
+    })
+  })
+
+  it('rejects a non-string position', async () => {
+    const setPhase = vi.fn<(phase: ConsultPhase) => void>()
+    await requestConsult({
+      fetch: async () => jsonResponse({ ok: true, value: { position: 3, candidates: [], degraded: false } }),
+      setPhase,
+    }, 'session-a')
+    expect(setPhase).toHaveBeenLastCalledWith({ kind: 'error', message: '下一步咨询返回了无效响应' })
+  })
+
   it('shows the route error message unchanged', async () => {
     const setPhase = vi.fn<(phase: ConsultPhase) => void>()
     await requestConsult({

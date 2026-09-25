@@ -310,3 +310,72 @@
 .critical .water {
   background-color: #b03a35;
 }
+
+/*
+ * The status block leading the 下一步 card. Its tier colors belong to the card
+ * only: the orb's water keeps the smart-zone tiers, so run state and context
+ * pressure never share a color.
+ */
+.statusBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.position {
+  padding: 7px 9px;
+  border-left: 3px solid #5d8fd6;
+  background: #16202e;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.statusHeadline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.statusDot {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 50%;
+  background: #8a96a6;
+}
+
+.statusRunning .statusDot {
+  background: #58a6ff;
+  animation: a2d2-pulse 1.4s ease-in-out infinite;
+}
+
+.statusWaiting .statusDot {
+  background: #e3b341;
+  animation: a2d2-pulse 1s ease-in-out infinite;
+}
+
+.statusAlert .statusDot {
+  background: #ff7b72;
+}
+
+.statusQuiet .statusDot {
+  background: #8a96a6;
+}
+
+@keyframes a2d2-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.statusFacts {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.5;
+  opacity: 0.9;
+  overflow-wrap: anywhere;
+}

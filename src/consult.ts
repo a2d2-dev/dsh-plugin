@@ -29,8 +29,16 @@ import type { Task } from './types.ts'
 /** Number of newest current-surface messages supplied to one consultation. */
 export const CONSULT_MESSAGE_LIMIT = 12
 
-/** Output budget for the small JSON candidate array. */
-export const CONSULT_MAX_OUTPUT_TOKENS = 768
+/**
+ * Output budget for the small JSON answer.
+ *
+ * The answer itself is a few hundred tokens, but a route whose model thinks by
+ * default spends its reasoning from the same budget (a live claude-opus route
+ * used ~320 thinking tokens for ~300 of JSON), and there is no provider-neutral
+ * way to switch reasoning off for one call. A tight budget therefore failed as
+ * `max-tokens` whenever the model thought a little longer.
+ */
+export const CONSULT_MAX_OUTPUT_TOKENS = 4096
 
 /** Exact HTTP pathname owned by this plugin. */
 export const CONSULT_ROUTE_PATH = '/a2d2/api/consult'
@@ -49,8 +57,17 @@ export interface ConsultCandidate {
   readonly kind: 'stay' | 'handoff' | 'other'
 }
 
+/** The model's complete answer: where the work stands, then where it can go. */
+export interface ConsultOutput {
+  /** One sentence naming where this session's work currently stands. */
+  readonly position: string
+  readonly candidates: readonly ConsultCandidate[]
+}
+
 /** The successful route payload. */
 export interface ConsultValue {
+  /** One sentence naming where this session's work currently stands. */
+  readonly position: string
   readonly candidates: readonly ConsultCandidate[]
   readonly degraded: boolean
 }
@@ -180,8 +197,11 @@ export function buildConsultPrompt(material: ConsultMaterial, skillSource: Skill
     '<situation-envelope>',
     'This is a next-step consultation at a phase boundary.',
     'The result will be shown as candidate chips. A chip only fills an input; it does not execute or send anything.',
-    'Return only a JSON array containing 2 to 4 objects with exactly this shape:',
+    'Return only a JSON object with exactly this shape:',
+    '{"position":"one sentence: where this session\'s work stands now","candidates":[2 to 4 candidates]}',
+    'Each candidate has exactly this shape:',
     '{"label":"short visible label","input":"complete editable command or instruction","kind":"stay|handoff|other"}',
+    'Write "position" in the language the session uses; it is shown above the chips as the basis for them.',
     'Choose kind "stay" when the action remains in this session, "handoff" when it opens a handoff, and "other" otherwise.',
     'Session and project material follows as JSON data:',
     JSON.stringify(material),
@@ -190,18 +210,37 @@ export function buildConsultPrompt(material: ConsultMaterial, skillSource: Skill
   return `${envelope}\n\n${renderSkillSource(skillSource)}`
 }
 
-/** Parse and validate the whole candidate array, rejecting every partial shape. */
-export function parseConsultCandidates(text: string): readonly ConsultCandidate[] {
+/**
+ * Unwrap one markdown code fence around the whole answer.
+ *
+ * Models routinely fence JSON even when told not to. Only a fence enclosing the
+ * entire text is removed; prose around the JSON is still rejected, so this
+ * never guesses which part of a chatty answer was meant.
+ */
+function unfence(text: string): string {
+  const match = /^```[a-zA-Z]*[ \t]*\r?\n([\s\S]*?)\r?\n?```$/u.exec(text.trim())
+  return match === null ? text : match[1] ?? ''
+}
+
+/** Parse and validate the whole model answer, rejecting every partial shape. */
+export function parseConsultOutput(text: string): ConsultOutput {
   let parsed: unknown
   try {
-    parsed = JSON.parse(text)
+    parsed = JSON.parse(unfence(text))
   } catch (error) {
     throw new MalformedCandidatesError('model output is not JSON', { cause: error })
   }
-  if (!Array.isArray(parsed) || parsed.length < 2 || parsed.length > 4) {
-    throw new MalformedCandidatesError('model output must be an array of 2 to 4 candidates')
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new MalformedCandidatesError('model output must be an object')
   }
-  const candidates = parsed.map((candidate, index): ConsultCandidate => {
+  const { position, candidates: rawCandidates } = parsed as Record<string, unknown>
+  if (typeof position !== 'string' || position.trim().length === 0) {
+    throw new MalformedCandidatesError('model output has no non-empty position')
+  }
+  if (!Array.isArray(rawCandidates) || rawCandidates.length < 2 || rawCandidates.length > 4) {
+    throw new MalformedCandidatesError('model output must carry an array of 2 to 4 candidates')
+  }
+  const candidates = rawCandidates.map((candidate, index): ConsultCandidate => {
     if (candidate === null || typeof candidate !== 'object' || Array.isArray(candidate)) {
       throw new MalformedCandidatesError(`candidate ${String(index)} is not an object`)
     }
@@ -221,7 +260,7 @@ export function parseConsultCandidates(text: string): readonly ConsultCandidate[
       kind: value.kind as ConsultCandidate['kind'],
     }
   })
-  return deepFreeze(candidates)
+  return deepFreeze({ position: position.trim(), candidates })
 }
 
 function finishFailure(finish: FinishReason): Error | undefined {
@@ -244,13 +283,13 @@ function finishFailure(finish: FinishReason): Error | undefined {
 }
 
 /** Run one hand-built auxiliary model call and validate its complete output. */
-export async function generateConsultCandidates(options: {
+export async function generateConsultOutput(options: {
   readonly stream: ConsultDependencies['stream']
   readonly route: ConsultRoute
   readonly sessionId: SessionId
   readonly prompt: string
   readonly signal: AbortSignal
-}): Promise<readonly ConsultCandidate[]> {
+}): Promise<ConsultOutput> {
   const messages: Message[] = [createUserMessage({
     content: [{ type: 'text', text: options.prompt }],
     source: { kind: 'plugin', plugin: 'dsh-a2d2' },
@@ -276,7 +315,7 @@ export async function generateConsultCandidates(options: {
     .filter((block): block is Extract<(typeof blocks)[number], { type: 'text' }> => block.type === 'text')
     .map(block => block.text)
     .join('')
-  return parseConsultCandidates(text)
+  return parseConsultOutput(text)
 }
 
 function header(headers: IncomingHttpHeaders, name: string): string | undefined {
@@ -394,6 +433,22 @@ function respond(
   response.end(JSON.stringify(body))
 }
 
+/** Longest failure reason echoed to the card. */
+const REASON_LIMIT = 300
+
+/**
+ * The human-readable cause of a failure, for the card.
+ *
+ * The route is loopback- or trust-fenced and the reason comes from this module
+ * or the provider adapter (rate limits, token limits, shape errors), so showing
+ * it is what lets a user tell "retry in a moment" from "this route cannot work".
+ */
+function reasonOf(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error)
+  const reason = raw.replace(/^a2d2 consult: /u, '').trim() || 'unknown error'
+  return reason.length > REASON_LIMIT ? `${reason.slice(0, REASON_LIMIT)}…` : reason
+}
+
 function fail(response: ServerResponse, code: ConsultErrorCode, message: string): void {
   respond(response, statusOf(code), { ok: false, error: { code, message } })
 }
@@ -442,7 +497,7 @@ export function createConsultHandler(
       const collectMaterial = dependencies.collectMaterial ?? collectConsultMaterial
       const buildPrompt = dependencies.buildPrompt ?? buildConsultPrompt
       const prompt = buildPrompt(collectMaterial(session.events, session.surface.nodes, tasks), skillSource)
-      const candidates = await generateConsultCandidates({
+      const { position, candidates } = await generateConsultOutput({
         stream: dependencies.stream,
         route,
         sessionId,
@@ -452,16 +507,17 @@ export function createConsultHandler(
       respond(response, 200, {
         ok: true,
         value: {
+          position,
           candidates,
           degraded: skillSource.status === 'missing',
         },
       })
     } catch (error) {
       if (error instanceof MalformedCandidatesError) {
-        fail(response, 'malformed-candidates', 'The model returned malformed candidates.')
+        fail(response, 'malformed-candidates', `The model returned malformed candidates: ${reasonOf(error)}`)
         return
       }
-      fail(response, 'consult-failed', 'The consultation could not be generated.')
+      fail(response, 'consult-failed', `The consultation could not be generated: ${reasonOf(error)}`)
     }
   }
 }
