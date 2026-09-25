@@ -57,6 +57,8 @@ import type {
 } from './context.ts'
 import {
   DEFAULT_ORB_THRESHOLDS,
+  ORB_GAP_PX,
+  anchorRightOffset,
   costOf,
   formatCost,
   formatTokenCount,
@@ -213,39 +215,64 @@ function useModelDirectory(
 }
 
 /**
- * How much room the shell's details panel takes at the right of the viewport.
+ * The layout region the indicator is laid out in.
  *
- * The indicator is fixed to the viewport so it stays out of the composer's
- * layout, which means the layout cannot move it; measuring the panel and
- * shifting the anchor left by its width is what makes the indicator get out of
- * the way when the panel opens instead of being covered by it. A
- * `ResizeObserver` follows a drag-resize, and a slow interval covers the panel
- * mounting or collapsing after this one.
- *
- * The column is found by a class fragment rather than an exact name because its
- * generated prefix is not part of any contract; a class the build renames simply
- * leaves the inset at zero, which is the panel-closed case. Only the right panel
- * needs shifting: the left sidebar sits outside the composer's column, so the
- * circle never reaches it.
- * @returns the details panel's width in px.
+ * The orb is fixed to the viewport, but it is still mounted inside the shell's
+ * conversation column, so its ancestors' boxes say where that column ends. The
+ * topmost ancestor below `<body>` is the region: a shell that pushes its content
+ * aside for a right-hand panel leaves this element as wide as the space the
+ * panel did not take, which is what makes the measurement independent of whose
+ * panel is open and of that panel's class names.
+ * @param from - the orb element, or `null` before it is mounted.
+ * @returns the region element, or `null` when the orb is detached.
  */
-function useDetailsInset(): number {
-  const [inset, setInset] = useState(0)
+function layoutRegion(from: Element | null): Element | null {
+  let node = from
+  while (node !== null && node.parentElement !== null && node.parentElement !== document.body) {
+    node = node.parentElement
+  }
+  return node
+}
+
+/**
+ * The `right` offset keeping the orb and its card out of the shell's right panel.
+ *
+ * The panel is measured, not assumed: {@link anchorRightOffset} combines the
+ * region's leftover space with the shell's own details column, so a shell that
+ * pushes its content and a shell that keeps a measured column both move the
+ * anchor. A `ResizeObserver` follows a drag-resize and the panel opening or
+ * closing, and a slow interval covers a region that is remounted (switching
+ * sidebar tabs replaces it) without re-running this effect.
+ *
+ * Only the right panel needs shifting: the left sidebar sits outside this
+ * region, so the circle never reaches it.
+ * @param rootRef - the orb's own element, the anchor for the region walk.
+ * @returns the offset from the viewport's right edge, in px.
+ */
+function useAnchorRightOffset(rootRef: { readonly current: Element | null }): number {
+  const [offset, setOffset] = useState(ORB_GAP_PX)
   useEffect(() => {
-    const panel = (): Element | null => document.querySelector("[class*='detailsCol']")
+    const details = (): Element | null => document.querySelector("[class*='detailsCol']")
     const measure = (): void => {
-      const element = panel()
-      const width = element === null ? 0 : Math.round(element.getBoundingClientRect().width)
-      setInset(current => (current === width ? current : width))
+      const region = layoutRegion(rootRef.current)
+      const rect = region === null ? undefined : region.getBoundingClientRect()
+      const column = details()
+      const next = anchorRightOffset({
+        viewportWidth: document.documentElement.clientWidth,
+        regionRight: rect?.right,
+        detailsWidth: column === null ? 0 : column.getBoundingClientRect().width,
+      })
+      setOffset(current => (current === next ? current : next))
     }
     measure()
     const timer = setInterval(measure, 500)
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
-    const element = panel()
-    if (observer !== null && element !== null) observer.observe(element)
+    for (const element of [layoutRegion(rootRef.current), details()]) {
+      if (observer !== null && element !== null) observer.observe(element)
+    }
     return () => { observer?.disconnect(); clearInterval(timer) }
-  }, [])
-  return inset
+  }, [rootRef])
+  return offset
 }
 
 /** The confirm card's own state: what the user has typed and where the flow is. */
@@ -264,7 +291,8 @@ type CardPhase =
 export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string }): ReturnType<typeof createElement> | null {
   const { ctx, sessionId } = props
   const { occupancy, host } = useOccupancy(ctx, sessionId)
-  const detailsInset = useDetailsInset()
+  const rootRef = useRef<HTMLButtonElement | null>(null)
+  const anchorRight = useAnchorRightOffset(rootRef)
   const thresholds = host?.thresholds ?? DEFAULT_ORB_THRESHOLDS
   const [failure, setFailure] = useState<string | null>(null)
   const [hovering, setHovering] = useState(false)
@@ -276,7 +304,6 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
   const modelDirectory = useModelDirectory(ctx, sessionId, consult.kind === 'ready')
   const [focus, setFocus] = useState('')
   const [handoffModelTarget, setHandoffModelTarget] = useState<ConsultNewSessionModelTarget | undefined>(undefined)
-  const rootRef = useRef<HTMLButtonElement | null>(null)
   const consultRequestRef = useRef(0)
 
   // The draft-fill fallback: used only when the one-click flow cannot run.
@@ -558,7 +585,7 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
     'div',
     {
       className: css.anchor,
-      style: { right: `${PANEL_GAP_PX + detailsInset}px` },
+      style: { right: `${String(anchorRight)}px` },
       onMouseEnter: () => { setHovering(true) },
       onMouseLeave: () => { setHovering(false) },
     },
@@ -568,9 +595,6 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
     orb,
   )
 }
-
-/** Distance between the indicator and a shell panel, in px. */
-const PANEL_GAP_PX = 12
 
 /**
  * Fill share above which the readout moves up, in whole percent.
