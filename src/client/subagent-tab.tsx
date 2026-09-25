@@ -110,9 +110,9 @@ export function SubagentModelTab({ ctx, sessionId, visible }: SubagentModelTabPr
 
   useEffect(() => {
     if (sessions === undefined) return undefined
+    if (visible === false) return undefined
     const refresh = (): void => { void sessions.refreshSubagents(sessionId).catch(() => undefined) }
     refresh()
-    if (visible === false) return undefined
     const timer = window.setInterval(refresh, CATALOG_REFRESH_MS)
     return () => { window.clearInterval(timer) }
   }, [sessions, sessionId, visible])
