@@ -182,6 +182,32 @@ function NodeCard({
   )
 }
 
+/** Render the root and the first child generation as one tree. */
+function RootNode({
+  row,
+  children,
+  openRoot,
+  openNode,
+}: {
+  readonly row: SubagentRouteRoot
+  readonly children: readonly SubagentRouteTreeNode[]
+  readonly openRoot: (id: string) => void
+  readonly openNode: (row: SubagentRouteTreeNode) => void
+}): ReturnType<typeof createElement> {
+  return createElement(
+    'div',
+    { className: css.node },
+    createElement(RootCard, { row, open: openRoot }),
+    children.length === 0
+      ? null
+      : createElement(
+        'div',
+        { className: css.children },
+        children.map(child => createElement(NodeCard, { key: child.id, row: child, open: openNode })),
+      ),
+  )
+}
+
 /**
  * Draw the open session's main-session subagent topology and its routes.
  * @param props - the client context, the session to list, and its visibility.
@@ -299,13 +325,9 @@ export function SubagentModelTab({ ctx, sessionId, visible }: SubagentModelTabPr
     ),
     tree.root === undefined
       ? null
-      : createElement(RootCard, { row: tree.root, open: openRoot }),
+      : createElement(RootNode, { row: tree.root, children: tree.children, openRoot, openNode }),
     tree.children.length === 0
       ? createElement('div', { className: css.empty }, '本会话没有子代理')
-      : createElement(
-        'div',
-        { className: css.list },
-        tree.children.map(row => createElement(NodeCard, { key: row.id, row, open: openNode })),
-      ),
+      : null,
   )
 }
