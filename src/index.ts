@@ -32,6 +32,7 @@ import { handoffInstruction } from './handoff-instruction.ts'
 import { handoffPrompt } from './handoff-prompt.ts'
 import { indicatorProjectionDefinition } from './indicator-projection.ts'
 import type { HandoffThresholds, ModelPrice } from './indicator-projection.ts'
+import { PANEL_ROUTE_PATH, createPanelHandler } from './panel.ts'
 import { parseSessionId, redactText } from './handoff.ts'
 import { DEFAULT_SKILLS_ROOT, readSkillSource, resolveSkillsRoot } from './skill-source.ts'
 import {
@@ -149,6 +150,22 @@ export {
 } from './handoff.ts'
 export type { HandoffCommand, RedactedText, RedactionLabel } from './handoff.ts'
 export type { TaskDocumentStoreConfig } from './store.ts'
+export {
+  PANEL_ROUTE_PATH,
+  createPanelHandler,
+  panelPayload,
+} from './panel.ts'
+export type {
+  PanelDependencies,
+  PanelErrorCode,
+  PanelMember,
+  PanelPayload,
+  PanelRequest,
+  PanelResponse,
+  PanelResponseWriter,
+  PanelSession,
+  PanelTask,
+} from './panel.ts'
 export {
   TASK_DOCUMENT_VERSION,
   TaskDocumentError,
@@ -340,6 +357,7 @@ export class A2d2Service extends Service {
     this.publishIndicator()
     this.publishConsult()
     this.publishConfig()
+    this.publishPanel()
     // Stated once at load: whether the browser half received these is otherwise
     // only visible by looking at the indicator, which never reports absence.
     this.ctx.logger.info(
@@ -602,6 +620,35 @@ export class A2d2Service extends Service {
       routeCtx.effect(
         () => server.register({ kind: 'exact', path: CONFIG_ROUTE_PATH, handler }),
         'a2d2 config route',
+      )
+    })
+  }
+
+  /** Publish the optional Web host's trusted read route for the A²D² panel. */
+  private publishPanel(): void {
+    this.ctx.inject(['webServer'], (routeCtx) => {
+      type WebServer = {
+        register(route: {
+          kind: 'exact'
+          path: string
+          handler: ReturnType<typeof createPanelHandler>
+        }): () => void
+      }
+      type WebRuntime = { readonly trustedHosts: readonly string[] }
+      const getService = <T>(name: string): T | undefined => (
+        (routeCtx.get as unknown as (name: string) => T | undefined).call(routeCtx, name)
+      )
+      const server = getService<WebServer>('webServer')
+      if (server === undefined) return
+      const handler = createPanelHandler({
+        trustedHosts: () => getService<WebRuntime>('webRuntime')?.trustedHosts ?? [],
+        getSession: id => routeCtx.get('sessions')?.get(id),
+        listTasks: cwd => this.store.list(cwd),
+        projectRoot: cwd => this.store.projectRoot(cwd),
+      })
+      routeCtx.effect(
+        () => server.register({ kind: 'exact', path: PANEL_ROUTE_PATH, handler }),
+        'a2d2 panel route',
       )
     })
   }

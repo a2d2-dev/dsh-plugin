@@ -117,6 +117,11 @@ export function subagentRouteTally(rows: readonly SubagentRouteRow[]): SubagentR
   return { total: rows.length, running, drifted }
 }
 
+/** Render the subagent list header. */
+export function subagentRouteHeader(tally: SubagentRouteTally): string {
+  return `${String(tally.total)} 个子代理 · ${String(tally.running)} 运行中 · ${String(tally.drifted)} 个与主会话不一致`
+}
+
 /**
  * Render one route for display.
  * @param row - the row whose route to render.

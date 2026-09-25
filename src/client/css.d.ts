@@ -73,8 +73,28 @@ declare module '*.module.css' {
     readonly header: string
     readonly own: string
     readonly list: string
+    readonly section: string
+    readonly rootPath: string
+    readonly failure: string
+    readonly loading: string
     readonly label: string
     readonly meta: string
+    readonly cardCurrent: string
+    readonly cardHead: string
+    readonly name: string
+    readonly state: string
+    readonly stateActive: string
+    readonly statePaused: string
+    readonly stateDone: string
+    readonly goal: string
+    readonly members: string
+    readonly member: string
+    readonly memberEmpty: string
+    readonly memberButton: string
+    readonly memberStatic: string
+    readonly current: string
+    readonly edge: string
+    readonly divider: string
     readonly route: string
     readonly routeDrifted: string
     readonly routeUnknown: string

@@ -18,18 +18,18 @@
 import { createElement } from 'react'
 import { A2d2ConfigSection, loadModelRouteCatalog } from './config-page.tsx'
 import { HandoffOrb } from './orb.tsx'
-import { SubagentModelTab } from './subagent-tab.tsx'
+import { A2d2Panel } from './panel.tsx'
 import type { A2d2ClientContext, ClientSidebarService } from './context.ts'
 
 /** Services this bundle needs before it can mount anything. */
 export const inject = ['slots', 'sessions']
 
 /** The sidebar tab this bundle contributes, in the fields the sidebar's `+` menu reads. */
-const SUBAGENT_TAB = {
+const A2D2_PANEL_TAB = {
   /** Stable tab type id; the sidebar keys deduplication and activation on it. */
-  id: 'a2d2-subagent-models',
+  id: 'a2d2-panel',
   /** Menu title, in the language the indicator's own copy uses. */
-  title: '任务管理 plus',
+  title: 'A²D²',
   /** Menu position, after the sidebar's own browsing tabs. */
   order: 40,
 } as const
@@ -75,14 +75,14 @@ export function apply(ctx: A2d2ClientContext): void {
   const sidebar = ctx.get('betterSidebar') as ClientSidebarService | undefined
   if (sidebar === undefined) return
   ctx.effect(() => sidebar.registerTab({
-    ...SUBAGENT_TAB,
+    ...A2D2_PANEL_TAB,
     single: true,
-    component: function SubagentModelEntry(props): ReturnType<typeof createElement> {
-      return createElement(SubagentModelTab, {
+    component: function A2d2PanelEntry(props): ReturnType<typeof createElement> {
+      return createElement(A2d2Panel, {
         ctx,
         sessionId: props.scope.sessionId,
         visible: props.visible,
       })
     },
-  }), 'a2d2 subagent model tab')
+  }), 'a2d2 panel tab')
 }
