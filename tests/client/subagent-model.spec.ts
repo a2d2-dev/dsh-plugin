@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { indicatorProjectionDefinition, indicatorProjectionSchema } from '../../src/indicator-projection.ts'
 import {
+  createRouteSourceLoader,
   formatRoute,
   loadSubagentRouteSources,
   rootAncestor,
@@ -10,6 +11,7 @@ import {
   subagentRouteTree,
   subagentRouteTally,
   type CatalogEntry,
+  type SubagentRouteAddress,
 } from '../../src/client/subagent-model.ts'
 
 /** One `request/header` event carrying the route a session was served by. */
@@ -25,6 +27,35 @@ function headerEvent(provider: string, model: string): SessionEvent {
 /** One catalog entry as the host publishes it for a direct child. */
 function childEntry(id: string, overrides: Partial<CatalogEntry> = {}): CatalogEntry {
   return { kind: 'child', id, label: `label ${id}`, mode: 'continuable', activity: 'running', ...overrides }
+}
+
+function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void; readonly reject: (error: unknown) => void } {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((innerResolve, innerReject) => {
+    resolve = innerResolve
+    reject = innerReject
+  })
+  return { promise, resolve, reject }
+}
+
+function routeHistoryResponse(provider: string, model: string) {
+  return {
+    result: {
+      ok: true,
+      value: {
+        projections: {
+          values: {
+            a2d2Indicator: { route: { provider, model } },
+          },
+        },
+      },
+    },
+  } as const
+}
+
+function address(childSessionId: string): SubagentRouteAddress {
+  return { parentSessionId: 'root', childSessionId, mode: 'continuable' }
 }
 
 describe('the indicator projection publishes the route', () => {
@@ -282,6 +313,76 @@ describe('loadSubagentRouteSources', () => {
 
     expect(calls).toEqual([{ parentSessionId: 'root', childSessionId: 'child', mode: 'continuable', maxMessages: 1 }])
     expect(sources).toEqual({ child: { route: { provider: 'claude-bray', model: 'claude-opus-5-5' } } })
+  })
+})
+
+describe('createRouteSourceLoader', () => {
+  it('keeps an in-flight cold read alive and deduplicated when the same addresses arrive as a new array', async () => {
+    const pending = deferred<ReturnType<typeof routeHistoryResponse>>()
+    const signals: AbortSignal[] = []
+    const calls: unknown[] = []
+    const loader = createRouteSourceLoader({
+      subagents: {
+        history: (payload, signal) => {
+          calls.push(payload)
+          if (signal !== undefined) signals.push(signal)
+          return pending.promise
+        },
+      },
+    })
+
+    loader.load([address('child')])
+    loader.load([address('child')])
+
+    expect(calls).toEqual([{ parentSessionId: 'root', childSessionId: 'child', mode: 'continuable', maxMessages: 1 }])
+    expect(signals).toHaveLength(1)
+    expect(signals[0]?.aborted).toBe(false)
+
+    pending.resolve(routeHistoryResponse('claude-bray', 'claude-opus-5-5'))
+    await pending.promise
+    await Promise.resolve()
+
+    expect(loader.snapshot()).toEqual({ child: { route: { provider: 'claude-bray', model: 'claude-opus-5-5' } } })
+
+    loader.load([address('child')])
+    expect(calls).toHaveLength(1)
+    loader.dispose()
+  })
+
+  it('publishes other address results when one cold read fails', async () => {
+    const loader = createRouteSourceLoader({
+      subagents: {
+        history: async (payload) => {
+          if (payload.childSessionId === 'bad') throw new Error('history unavailable')
+          return routeHistoryResponse('claude-bray', `model-${payload.childSessionId}`)
+        },
+      },
+    })
+
+    loader.load([address('bad'), address('good')])
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(loader.snapshot()).toEqual({ good: { route: { provider: 'claude-bray', model: 'model-good' } } })
+    loader.dispose()
+  })
+
+  it('aborts in-flight cold reads when disposed', () => {
+    const pending = deferred<ReturnType<typeof routeHistoryResponse>>()
+    let signal: AbortSignal | undefined
+    const loader = createRouteSourceLoader({
+      subagents: {
+        history: (_payload, nextSignal) => {
+          signal = nextSignal
+          return pending.promise
+        },
+      },
+    })
+
+    loader.load([address('child')])
+    loader.dispose()
+
+    expect(signal?.aborted).toBe(true)
   })
 })
 

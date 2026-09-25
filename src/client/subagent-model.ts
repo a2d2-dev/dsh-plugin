@@ -50,6 +50,21 @@ export interface SubagentRouteHistoryApi {
   }
 }
 
+/** Subscriber called when a route source loader publishes newly-read sources. */
+export type RouteSourceLoaderListener = () => void
+
+/** React-independent lifecycle for cold-reading child route projection baselines. */
+export interface RouteSourceLoader {
+  /** Submit candidate addresses whose sources should be loaded. Already-finished and in-flight addresses are ignored. */
+  readonly load: (addresses: readonly SubagentRouteAddress[]) => void
+  /** Read every successfully loaded source, keyed by child session id. */
+  readonly snapshot: () => Readonly<Record<string, SubagentRouteSource | undefined>>
+  /** Subscribe to later snapshot changes. */
+  readonly subscribe: (listener: RouteSourceLoaderListener) => () => void
+  /** Abort in-flight reads and stop accepting work. */
+  readonly dispose: () => void
+}
+
 /** One entry of the host-published subagent catalog for a parent session. */
 export interface CatalogEntry {
   /** `child` for a session-backed subagent; `diagnostic` for an unreadable one. */
@@ -147,6 +162,10 @@ export interface SubagentRouteTally {
 const SHORT_ID_LENGTH = 8
 const INDICATOR_KEY = 'a2d2Indicator'
 
+function routeAddressKey(address: SubagentRouteAddress): string {
+  return `${address.parentSessionId}\u0000${address.childSessionId}\u0000${address.mode}`
+}
+
 function routeChanged(
   parentRoute: SubagentRouteSource['route'] | undefined,
   childRoute: SubagentRouteSource['route'] | undefined,
@@ -198,13 +217,78 @@ export async function loadSubagentRouteSources(
   signal?: AbortSignal,
 ): Promise<Record<string, SubagentRouteSource | undefined>> {
   if (api === undefined || addresses.length === 0) return {}
-  const pairs = await Promise.all(addresses.map(async (address) => {
+  const settled = await Promise.allSettled(addresses.map(async (address) => {
     const response = await api.subagents.history({ ...address, maxMessages: 1 }, signal)
     if (!response.result.ok) return [address.childSessionId, undefined] as const
     const value = response.result.value.projections?.values?.[INDICATOR_KEY]
     return [address.childSessionId, routeSourceFromProjection(value)] as const
   }))
+  const pairs = settled.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
   return Object.fromEntries(pairs)
+}
+
+/**
+ * Create a deduplicating loader for inactive subagent route baselines.
+ *
+ * The loader owns AbortControllers for its full lifecycle so React dependency
+ * churn can submit the same addresses without canceling useful in-flight reads.
+ */
+export function createRouteSourceLoader(api: SubagentRouteHistoryApi): RouteSourceLoader {
+  const sources: Record<string, SubagentRouteSource | undefined> = {}
+  const completed = new Set<string>()
+  const inflight = new Map<string, AbortController>()
+  const listeners = new Set<RouteSourceLoaderListener>()
+  let disposed = false
+
+  const emit = (): void => {
+    for (const listener of listeners) listener()
+  }
+
+  const loadOne = async (address: SubagentRouteAddress, key: string, controller: AbortController): Promise<void> => {
+    try {
+      const response = await api.subagents.history({ ...address, maxMessages: 1 }, controller.signal)
+      if (disposed || controller.signal.aborted) return
+      completed.add(key)
+      if (!response.result.ok) return
+      const source = routeSourceFromProjection(response.result.value.projections?.values?.[INDICATOR_KEY])
+      if (source === undefined) return
+      if (sources[address.childSessionId] === source) return
+      sources[address.childSessionId] = source
+      emit()
+    } catch {
+      // A failed address remains retryable and must not affect other reads.
+    } finally {
+      inflight.delete(key)
+    }
+  }
+
+  return {
+    load(addresses) {
+      if (disposed) return
+      for (const address of addresses) {
+        const key = routeAddressKey(address)
+        if (completed.has(key) || inflight.has(key)) continue
+        const controller = new AbortController()
+        inflight.set(key, controller)
+        void loadOne(address, key, controller)
+      }
+    },
+    snapshot() {
+      return sources
+    },
+    subscribe(listener) {
+      if (disposed) return () => {}
+      listeners.add(listener)
+      return () => { listeners.delete(listener) }
+    },
+    dispose() {
+      if (disposed) return
+      disposed = true
+      for (const controller of inflight.values()) controller.abort()
+      inflight.clear()
+      listeners.clear()
+    },
+  }
 }
 
 /**

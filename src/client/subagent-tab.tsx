@@ -23,13 +23,14 @@ import type {
   ClientSessionsService,
 } from './context.ts'
 import {
+  createRouteSourceLoader,
   formatRoute,
-  loadSubagentRouteSources,
   subagentRouteHeader,
   subagentRouteTree,
   type SubagentRouteAddress,
   type SubagentRouteRoot,
   type SubagentRouteHistoryApi,
+  type RouteSourceLoader,
   type SubagentRouteSource,
   type SubagentRouteTreeNode,
 } from './subagent-model.ts'
@@ -90,10 +91,6 @@ function collectCatalogParents(rootId: string | undefined, nodes: readonly Subag
   return [...ids]
 }
 
-function addressKey(address: SubagentRouteAddress): string {
-  return `${address.parentSessionId}\u0000${address.childSessionId}\u0000${address.mode}`
-}
-
 function collectRouteAddresses(nodes: readonly SubagentRouteTreeNode[]): readonly SubagentRouteAddress[] {
   const addresses: SubagentRouteAddress[] = []
   const visit = (node: SubagentRouteTreeNode): void => {
@@ -104,6 +101,19 @@ function collectRouteAddresses(nodes: readonly SubagentRouteTreeNode[]): readonl
   }
   for (const node of nodes) visit(node)
   return addresses
+}
+
+function sourcesChanged(
+  left: Readonly<Record<string, SubagentRouteSource | undefined>>,
+  right: Readonly<Record<string, SubagentRouteSource | undefined>>,
+): boolean {
+  const leftKeys = Object.keys(left)
+  const rightKeys = Object.keys(right)
+  if (leftKeys.length !== rightKeys.length) return true
+  for (const key of leftKeys) {
+    if (left[key] !== right[key]) return true
+  }
+  return false
 }
 
 /** Render the root card. */
@@ -181,8 +191,6 @@ export function SubagentModelTab({ ctx, sessionId, visible }: SubagentModelTabPr
   const sessions = ctx.get('sessions') as ClientSessionsService | undefined
   const connection = ctx.get('connection') as { readonly api?: SubagentRouteHistoryApi } | undefined
   const inflightRef = useRef(new Set<string>())
-  const routeInflightRef = useRef(new Set<string>())
-  const routeRequestedRef = useRef(new Set<string>())
   const [historySources, setHistorySources] = useState<Readonly<Record<string, SubagentRouteSource | undefined>>>({})
   // A stable no-op store stands in while the sessions service is absent, keeping
   // the hook count constant across a deployment that mounts no session list.
@@ -206,6 +214,10 @@ export function SubagentModelTab({ ctx, sessionId, visible }: SubagentModelTabPr
   const routeAddresses = useMemo(
     () => collectRouteAddresses(tree.children),
     [tree.children],
+  )
+  const routeLoader = useMemo<RouteSourceLoader | undefined>(
+    () => connection?.api === undefined ? undefined : createRouteSourceLoader(connection.api),
+    [connection?.api],
   )
   const refreshCatalog = useCallback((parentId: string): void => {
     if (sessions === undefined) return
@@ -237,37 +249,25 @@ export function SubagentModelTab({ ctx, sessionId, visible }: SubagentModelTabPr
   }, [sessions, visible, catalogParents])
 
   useEffect(() => {
-    const api = connection?.api
-    if (api === undefined) return undefined
+    return () => { routeLoader?.dispose() }
+  }, [routeLoader])
+
+  useEffect(() => {
+    if (routeLoader === undefined) return undefined
+    const publishSnapshot = (): void => {
+      const snapshot = routeLoader.snapshot()
+      setHistorySources((current) => sourcesChanged(current, snapshot) ? { ...snapshot } : current)
+    }
+    publishSnapshot()
+    return routeLoader.subscribe(publishSnapshot)
+  }, [routeLoader])
+
+  useEffect(() => {
+    if (routeLoader === undefined) return undefined
     if (visible === false) return undefined
-    const addresses = routeAddresses.filter((address) => {
-      const key = addressKey(address)
-      return !routeRequestedRef.current.has(key) && !routeInflightRef.current.has(key)
-    })
-    if (addresses.length === 0) return undefined
-    for (const address of addresses) routeInflightRef.current.add(addressKey(address))
-    const controller = new AbortController()
-    void loadSubagentRouteSources(api, addresses, controller.signal)
-      .then((sources) => {
-        for (const address of addresses) routeRequestedRef.current.add(addressKey(address))
-        setHistorySources((current) => {
-          let changed = false
-          const next: Record<string, SubagentRouteSource | undefined> = { ...current }
-          for (const [id, source] of Object.entries(sources)) {
-            if (source === undefined) continue
-            if (current[id] === source) continue
-            next[id] = source
-            changed = true
-          }
-          return changed ? next : current
-        })
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        for (const address of addresses) routeInflightRef.current.delete(addressKey(address))
-      })
-    return () => { controller.abort() }
-  }, [connection?.api, routeAddresses, visible])
+    routeLoader.load(routeAddresses)
+    return undefined
+  }, [routeLoader, routeAddresses, visible])
 
   const openRoot = useCallback((id: string): void => {
     try {
