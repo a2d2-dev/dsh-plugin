@@ -53,6 +53,7 @@ declare module '*.module.css' {
     readonly chip: string
     readonly chipMove: string
     readonly chipLabel: string
+    readonly chipEffect: string
     readonly otherMoves: string
     readonly otherMovesSummary: string
     readonly otherMoveGrid: string
