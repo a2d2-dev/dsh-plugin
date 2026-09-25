@@ -145,6 +145,8 @@ sessions:
 
 同时，卡片会针对当前会话发起一次不进入会话历史的咨询。新宿主返回公路图坐标（`zone`、`station`、`phaseDone`，服务区另带 `returnTo`）、推荐下一站与走法，以及 2-4 颗带走法的候选芯片。卡片先显示现状区块，再画一条竖向迷你公路：主干 `grill` -> `to-spec` -> `to-tickets` -> `implement` -> `code-review`，标出已过 / 当前 / 下一站 / 未到站，并显示每站中文职责，以及该站候选中第一个出现在本会话 DSH 模型目录里的模型。服务区与匝道显示旁注，例如「绕道中：prototype，完成后 handoff 回 grill」或「匝道：wayfinder，并入 to-spec」；独立区和不在公路上显示路牌，不高亮主干。公路图下方的下一站行形如 `→ /to-spec · Continue（理由）· fable-5-1`；`phaseDone` 为 false 时显示「本阶段未完成 · 继续」。旧宿主不返回 `location` 时仍退化为旧的 **当前位置** 一句话加芯片。
 
+宿主在询问模型前，还会检查会话 cwd 所属项目的首次使用前置条件：必须存在 `CONTEXT.md` 或 `CONTEXT-MAP.md`，并且必须存在 `docs/agents/issue-tracker.md`。响应带 `preconditions.missing`，prompt 信封也写入同一份宿主事实，避免让模型猜配置状态。只要有缺失，卡片顶部显示「首次使用前：/setup-matt-pocock-skills」路牌，并列出缺失项。宿主还会在解析模型输出之后把 `/setup-matt-pocock-skills` 强制置为首颗芯片；模型已经给出时就移动到首位，否则补上一颗，芯片总数仍最多四颗。已配置项目、以及没有 `preconditions` 字段的旧宿主，都不显示该路牌。
+
 咨询不再沿用当前会话 route，而是按 `a2d2-station-models.consult` 候选顺序尝试；提供方错误、限流、拒答或空输出会换下一个候选。非空但畸形的 JSON 不重试，因为这是协议失败，不是 route 可用性问题。响应会带回 `answeredBy`、`fallbacks` 和当前站点模型表；卡底显示「由 X 生成」，发生回落时注明原因。continue 芯片会预先显示副作用：当目标站首个目录内候选不同于本会话当前模型时显示「切到 X」，否则显示「保持当前模型」。点击后通过共享的 DSH `modelDirectories` 服务先切本会话模型，再填草稿并聚焦；若服务缺失或切换失败，仍填草稿并提示原因。subagent 芯片不切本会话模型，但目录能解析目标站模型时，会在填入的指令末尾追加「子代理使用 X」。clear 芯片把对应 input 追加进现有草稿并聚焦输入框；compact 与 handoff 芯片打开既有交接卡，其中 compact 使用「保留什么」提示预填 focus。芯片绝不调用会话命令面，也不代用户发送。
 
 边界卡底部有一行始终可用的 **其他走法** 折叠入口，列出 continue 之外的通用走法：clear、subagent、compact、handoff。clear 与 subagent 准备一段可编辑的输入框文本；compact 与 handoff 打开交接卡。这样想手动交接时仍能从卡片里找到入口，但球上不会再把交接放回 **下一步** 的平级位置。

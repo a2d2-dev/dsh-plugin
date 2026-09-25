@@ -37,6 +37,7 @@ declare module '*.module.css' {
     readonly highwayMap: string
     readonly highwayPlacard: string
     readonly highwayAside: string
+    readonly preconditionMissing: string
     readonly highwayStations: string
     readonly highwayStation: string
     readonly highwayMarker: string

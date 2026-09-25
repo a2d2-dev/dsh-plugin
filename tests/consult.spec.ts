@@ -1,8 +1,11 @@
 import { once } from 'node:events'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createServer, request as httpRequest } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { describe, expect, it, vi } from 'vitest'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { FinishReason, GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
@@ -15,6 +18,7 @@ import {
   CONSULT_MAX_OUTPUT_TOKENS,
   CONSULT_MESSAGE_LIMIT,
   buildConsultPrompt,
+  checkProjectPreconditions,
   collectConsultMaterial,
   createConsultHandler,
   currentConsultRoute,
@@ -53,6 +57,31 @@ class StubWebServer extends Service {
   }
 }
 
+class StubSessions extends Service {
+  live: ConsultSession | undefined
+
+  constructor(ctx: Context) {
+    super(ctx, 'sessions')
+  }
+
+  get(id: SessionId): ConsultSession | undefined {
+    return id === sessionId ? this.live : undefined
+  }
+}
+
+class StubLlm extends Service {
+  readonly calls: GenerateOptions[] = []
+
+  constructor(ctx: Context) {
+    super(ctx, 'llm')
+  }
+
+  stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+    this.calls.push(options)
+    return output(candidatesJson)
+  }
+}
+
 const sessionId = SessionId('session-consult')
 const candidates = [
   { label: 'Keep going', input: 'Continue this implementation.', move: 'continue', station: 'to-spec' },
@@ -62,6 +91,23 @@ const position = 'Implementation is finished; verification has not started.'
 const location = { zone: 'main', station: 'grill', phaseDone: true }
 const next = { station: 'to-spec', move: 'continue', reason: 'the spec needs current context' }
 const candidatesJson = JSON.stringify({ position, location, next, candidates })
+const roots: string[] = []
+
+async function tempRoot(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), 'a2d2-consult-'))
+  roots.push(root)
+  return root
+}
+
+async function writeProjectFile(root: string, path: string): Promise<void> {
+  const filename = join(root, path)
+  await mkdir(dirname(filename), { recursive: true })
+  await writeFile(filename, 'ok\n')
+}
+
+afterEach(async () => {
+  await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })))
+})
 
 function event<T extends SessionEvent>(value: Omit<T, 'ignorable'>): T {
   return value as T
@@ -154,6 +200,8 @@ function dependencies(
     trustedHosts: () => ['10.126.126.12', 'trusted.example:3710'],
     getSession: id => id === sessionId ? live : undefined,
     listTasks: async () => [task],
+    projectRoot: async cwd => cwd,
+    checkPreconditions: async () => ({ missing: [] }),
     readAskMatt: async () => ({ status: 'missing' }),
     getStationModels: () => DEFAULT_STATION_MODELS,
     stream: (options) => {
@@ -259,6 +307,27 @@ describe('consult material and route', () => {
     ])
   })
 
+  it.each([
+    ['both missing', false, false, ['context', 'issue-tracker']],
+    ['only context present', true, false, ['issue-tracker']],
+    ['only issue tracker present', false, true, ['context']],
+    ['both present', true, true, []],
+  ])('checks Matt setup preconditions for %s', async (_name, hasContext, hasIssueTracker, missing) => {
+    const root = await tempRoot()
+    if (hasContext) await writeProjectFile(root, 'CONTEXT.md')
+    if (hasIssueTracker) await writeProjectFile(root, 'docs/agents/issue-tracker.md')
+
+    expect((await checkProjectPreconditions(root)).missing.map(item => item.id)).toEqual(missing)
+  })
+
+  it('accepts CONTEXT-MAP.md as the context precondition', async () => {
+    const root = await tempRoot()
+    await writeProjectFile(root, 'CONTEXT-MAP.md')
+    await writeProjectFile(root, 'docs/agents/issue-tracker.md')
+
+    expect(await checkProjectPreconditions(root)).toEqual({ missing: [] })
+  })
+
   it('snapshots the factual envelope and preserves injected skill sources verbatim', () => {
     const skillSource: SkillSource = {
       status: 'loaded',
@@ -268,6 +337,13 @@ describe('consult material and route', () => {
     const prompt = buildConsultPrompt({
       messages: [{ seq: 7, text: 'Implementation is done.' }],
       tasks: [task],
+      preconditions: {
+        missing: [{
+          id: 'context',
+          label: 'CONTEXT.md or CONTEXT-MAP.md',
+          paths: ['CONTEXT.md', 'CONTEXT-MAP.md'],
+        }],
+      },
     }, skillSource)
     const envelope = prompt.slice(0, prompt.indexOf('<ask-matt-source'))
 
@@ -288,8 +364,10 @@ describe('consult material and route', () => {
       {"zones":["main","service","ramp","standalone","roadbed","off-road"],"main":["grill","to-spec","to-tickets","implement","code-review"],"service":["prototype","handoff"],"ramp":{"triage":"implement","diagnosing-bugs":"implement","wayfinder":"to-spec","improve-codebase-architecture":"grill"},"roadbed":["domain-modeling","codebase-design"]}
       Current context and smart zone facts:
       {"status":"unavailable"}
+      Project preconditions checked by the host:
+      {"missing":[{"id":"context","label":"CONTEXT.md or CONTEXT-MAP.md","paths":["CONTEXT.md","CONTEXT-MAP.md"]}]}
       Session and project material follows as JSON data:
-      {"messages":[{"seq":7,"text":"Implementation is done."}],"tasks":[{"id":"consult-route","name":"Consult route","goal":"Offer next-step chips","state":"active","createdAt":"2026-09-24T00:00:00.000Z","members":[{"sessionId":"session-consult"}]}]}
+      {"messages":[{"seq":7,"text":"Implementation is done."}],"tasks":[{"id":"consult-route","name":"Consult route","goal":"Offer next-step chips","state":"active","createdAt":"2026-09-24T00:00:00.000Z","members":[{"sessionId":"session-consult"}]}],"preconditions":{"missing":[{"id":"context","label":"CONTEXT.md or CONTEXT-MAP.md","paths":["CONTEXT.md","CONTEXT-MAP.md"]}]}}
       </situation-envelope>
 
       <ask-matt-source path="SKILL.md">
@@ -446,6 +524,41 @@ describe('consult HTTP route', () => {
     }
   })
 
+  it('checks preconditions in the cwd project even when task storage has a fixed root', async () => {
+    const fixedRoot = await tempRoot()
+    const projectRoot = await tempRoot()
+    await mkdir(join(projectRoot, '.git'), { recursive: true })
+    await writeProjectFile(projectRoot, 'CONTEXT.md')
+    await writeProjectFile(projectRoot, 'docs/agents/issue-tracker.md')
+    const cwd = join(projectRoot, 'nested')
+    await mkdir(cwd, { recursive: true })
+    const ctx = new Context()
+    try {
+      await ctx.plugin(StubWebServer)
+      await ctx.plugin(StubSessions)
+      await ctx.plugin(StubLlm)
+      ;(ctx.get('sessions') as unknown as StubSessions).live = session({ header: { version: 0, id: sessionId, createdAt: 1, cwd } })
+      await ctx.plugin(A2d2Service, { root: fixedRoot })
+
+      const handler = ctx.webServer.routes[0]?.handler
+      expect(handler).toBeDefined()
+      const result = await send(handler as (request: IncomingMessage, response: ServerResponse) => Promise<void>)
+
+      expect(result).toMatchObject({
+        status: 200,
+        json: {
+          ok: true,
+          value: {
+            preconditions: { missing: [] },
+            candidates,
+          },
+        },
+      })
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it.each([
     ['method-not-allowed', { method: 'GET' }, 405, 'method-not-allowed'],
     ['untrusted', { headers: { host: 'evil.example' } }, 403, 'untrusted'],
@@ -528,6 +641,7 @@ describe('consult HTTP route', () => {
         value: {
           position,
           candidates,
+          preconditions: { missing: [] },
           degraded: true,
           answeredBy: 'claude-bray/claude-fable-5-1',
           fallbacks: [],
@@ -548,6 +662,89 @@ describe('consult HTTP route', () => {
     })
     expect(deps.session.events).toBe(eventsBefore)
     expect(deps.session.append).not.toHaveBeenCalled()
+  })
+
+  it('adds preconditions to the response and prompt, and forces the setup chip to the top when anything is missing', async () => {
+    const deps = dependencies({
+      projectRoot: async () => '/project-root',
+      checkPreconditions: async () => ({
+        missing: [{
+          id: 'issue-tracker',
+          label: 'docs/agents/issue-tracker.md',
+          paths: ['docs/agents/issue-tracker.md'],
+        }],
+      }),
+      stream: (options) => {
+        deps.calls.push(options)
+        return output(JSON.stringify({
+          position,
+          location,
+          next: { station: 'to-spec', move: 'clear', reason: '需要干净会话' },
+          candidates: [
+            { label: '开 spec 会话', input: '/to-spec', move: 'clear', station: 'to-spec' },
+            { label: '派代理', input: '整理验收', move: 'subagent', station: 'to-spec' },
+            { label: '交接', input: 'handoff spec', move: 'handoff', station: 'handoff' },
+            { label: '压缩', input: 'compact spec', move: 'compact', station: 'to-spec' },
+          ],
+        }))
+      },
+    })
+
+    const result = await send(createConsultHandler(deps))
+
+    expect(result).toMatchObject({
+      status: 200,
+      json: {
+        ok: true,
+        value: {
+          preconditions: {
+            missing: [{ id: 'issue-tracker', label: 'docs/agents/issue-tracker.md', paths: ['docs/agents/issue-tracker.md'] }],
+          },
+          candidates: [
+            { label: '首次使用前：/setup-matt-pocock-skills', input: '/setup-matt-pocock-skills', move: 'continue' },
+            { label: '开 spec 会话', input: '/to-spec', move: 'clear', station: 'to-spec' },
+            { label: '派代理', input: '整理验收', move: 'subagent', station: 'to-spec' },
+            { label: '交接', input: 'handoff spec', move: 'handoff', station: 'handoff' },
+          ],
+        },
+      },
+    })
+    const prompt = deps.calls[0]?.messages[0]?.content[0]?.type === 'text'
+      ? deps.calls[0].messages[0].content[0].text
+      : ''
+    expect(prompt).toContain('"preconditions":{"missing":[{"id":"issue-tracker","label":"docs/agents/issue-tracker.md","paths":["docs/agents/issue-tracker.md"]}]}')
+  })
+
+  it('moves an existing setup chip to the top and keeps the candidate cap', async () => {
+    const deps = dependencies({
+      checkPreconditions: async () => ({
+        missing: [{
+          id: 'context',
+          label: 'CONTEXT.md or CONTEXT-MAP.md',
+          paths: ['CONTEXT.md', 'CONTEXT-MAP.md'],
+        }],
+      }),
+      stream: () => output(JSON.stringify({
+        position,
+        location,
+        next,
+        candidates: [
+          { label: '继续', input: '/to-spec', move: 'continue', station: 'to-spec' },
+          { label: '设置 skills', input: '/setup-matt-pocock-skills', move: 'clear', station: 'to-spec' },
+          { label: '派代理', input: '整理验收', move: 'subagent', station: 'to-spec' },
+          { label: '交接', input: 'handoff spec', move: 'handoff', station: 'handoff' },
+        ],
+      })),
+    })
+
+    const result = await send(createConsultHandler(deps))
+
+    expect((result.json as { value?: { candidates?: unknown[] } }).value?.candidates).toEqual([
+      { label: '设置 skills', input: '/setup-matt-pocock-skills', move: 'continue', station: 'to-spec' },
+      { label: '继续', input: '/to-spec', move: 'continue', station: 'to-spec' },
+      { label: '派代理', input: '整理验收', move: 'subagent', station: 'to-spec' },
+      { label: '交接', input: 'handoff spec', move: 'handoff', station: 'handoff' },
+    ])
   })
 
   it('puts injected context occupancy and configured smart-zone thresholds in the prompt', async () => {
