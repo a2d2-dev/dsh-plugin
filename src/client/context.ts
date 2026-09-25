@@ -22,6 +22,13 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { StatusSource } from './status-model.ts'
 import type { CatalogEntry } from './subagent-model.ts'
 
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface SlotMap {
+    /** DSH settings page contributed by this plugin when the settings shell is present. */
+    'settings.section': { kind: 'list'; scope: 'root'; owner: { close: () => void } }
+  }
+}
+
 /** The composer draft face reached through `ctx.conversation.input`. */
 export interface ComposerInput {
   /** The live input store, read for the current draft. */

@@ -429,12 +429,18 @@ describe('consult HTTP route', () => {
       await ctx.plugin(StubWebServer)
       await ctx.plugin(A2d2Service, { root: '/project' })
 
-      expect(ctx.webServer.routes).toHaveLength(1)
-      expect(ctx.webServer.routes[0]).toMatchObject({
-        kind: 'exact',
-        path: '/a2d2/api/consult',
-        handler: expect.any(Function),
-      })
+      expect(ctx.webServer.routes).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'exact',
+          path: '/a2d2/api/consult',
+          handler: expect.any(Function),
+        }),
+        expect.objectContaining({
+          kind: 'exact',
+          path: '/a2d2/api/config',
+          handler: expect.any(Function),
+        }),
+      ]))
     } finally {
       await ctx.fiber.dispose()
     }

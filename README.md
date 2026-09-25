@@ -60,6 +60,14 @@ a2d2-station-models:
 
 `consult` and every station entry are ordered `provider/model` candidate lists. Empty lists and malformed routes are rejected by the settings schema. Thinking stations (`grill`, `to-spec`, `to-tickets`, `code-review`, `triage`, `wayfinder`, `improve-codebase-architecture`) default to `claude-bray/claude-fable-5-1` then `codex/gpt-6`; coding stations (`implement`, `prototype`, `diagnosing-bugs`) default to `codex/gpt-5.5` then `claude-bray/claude-opus-5-5`. `handoff`, roadbed, and standalone skills are intentionally not listed because this ticket does not switch models for them. If `code-review` and `implement` share the same first candidate the host logs a warning, but keeps the setting.
 
+### A2D2 configuration page
+
+The browser bundle registers an independent DSH settings section, **A2D2 配置**. Its first block, **Matt 流程**, reuses the highway map drawing and shows the main road, ramps, service areas, roadbed, and standalone area, then lets the user edit each station's ordered model candidates plus the separate `consult` row.
+
+The page never writes arbitrary settings namespaces from the browser. It calls this plugin's own trusted route, `/a2d2/api/config`, which uses the same host/origin/fetch trust fence as the next-step consult route and exposes only `a2d2-station-models`. Reads return the current settings revision. Saves replace the whole station model table with that revision; a stale save is rejected as a conflict, the page reloads the latest value, and schema failures such as an empty list or malformed route are reported without persisting anything.
+
+Model candidates are added from DSH's host model catalog (`llm.models`) so the page cannot create a typo-only route. Each existing candidate has a **Test** action that performs exactly one tiny host-side call (`reply OK`, small output budget) and classifies the result as normal, refusal, rate-limited, or error with the reason. There is no background probing.
+
 ## Task documents
 
 One YAML document per task, under `<projectRoot>/.dsh/a2d2/tasks/<id>.yaml`. `<projectRoot>/.dsh/` is the established project-local root — the same anchor `skill-filesystem` uses for `.dsh/skills` — and the plugin's short name namespaces this store, keeping the plugin's footprint one directory even when it later owns further kinds of state.

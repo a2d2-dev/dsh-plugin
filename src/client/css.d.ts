@@ -78,6 +78,26 @@ declare module '*.module.css' {
     readonly routeDrifted: string
     readonly routeUnknown: string
     readonly empty: string
+    readonly configPage: string
+    readonly configHeader: string
+    readonly configTitle: string
+    readonly configSubtitle: string
+    readonly configSave: string
+    readonly configButton: string
+    readonly configIconButton: string
+    readonly configSection: string
+    readonly configSectionTitle: string
+    readonly configWarning: string
+    readonly configRoadExtras: string
+    readonly configRows: string
+    readonly configRow: string
+    readonly configRowHead: string
+    readonly configRoutes: string
+    readonly configRoute: string
+    readonly configRouteName: string
+    readonly configProbe: string
+    readonly configAddRow: string
+    readonly configSelect: string
   }
   export default classes
 }
