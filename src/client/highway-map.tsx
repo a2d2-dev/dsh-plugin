@@ -19,6 +19,12 @@ export interface HighwayMapProps {
 export function HighwayMap(props: HighwayMapProps): ReturnType<typeof createElement> {
   const { view } = props
   return createElement('div', { className: css.highwayMap, 'data-a2d2-highway-mode': props.mode ?? 'readonly' },
+    view.preconditionPlacard === undefined ? null : createElement('div', { className: css.highwayPlacard },
+      createElement('div', null, view.preconditionPlacard.title),
+      createElement('ul', { className: css.preconditionMissing },
+        ...view.preconditionPlacard.missing.map(item => createElement('li', { key: item }, item)),
+      ),
+    ),
     view.placard === undefined ? null : createElement('div', { className: css.highwayPlacard }, view.placard),
     view.aside === undefined ? null : createElement('div', { className: css.highwayAside }, view.aside),
     createElement('ol', { className: css.highwayStations },

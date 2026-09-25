@@ -291,6 +291,11 @@
   line-height: 1.4;
 }
 
+.preconditionMissing {
+  margin: 4px 0 0;
+  padding-left: 16px;
+}
+
 .highwayStations {
   position: relative;
   display: grid;

@@ -25,6 +25,10 @@ export interface HighwayViewStation {
 }
 
 export interface HighwayView {
+  readonly preconditionPlacard?: {
+    readonly title: string
+    readonly missing: readonly string[]
+  }
   readonly stations: readonly HighwayViewStation[]
   readonly aside?: string
   readonly placard?: string
@@ -54,9 +58,21 @@ export function highwayView(
     state: stationState(station, location, next),
   }))
   return {
+    ...preconditionPlacardField(response),
     stations,
     ...noteField(location),
     ...nextLineField(response, catalog),
+  }
+}
+
+function preconditionPlacardField(response: ReadyConsult): Pick<HighwayView, 'preconditionPlacard'> {
+  const missing = response.preconditions?.missing
+  if (missing === undefined || missing.length === 0) return {}
+  return {
+    preconditionPlacard: {
+      title: '首次使用前：/setup-matt-pocock-skills',
+      missing: missing.map(item => item.label),
+    },
   }
 }
 
