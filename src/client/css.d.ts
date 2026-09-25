@@ -33,6 +33,7 @@ declare module '*.module.css' {
     readonly cardBusy: string
     readonly actions: string
     readonly degraded: string
+    readonly attribution: string
     readonly chips: string
     readonly chip: string
     readonly position: string

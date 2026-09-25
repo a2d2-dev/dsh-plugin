@@ -17,6 +17,11 @@ export interface ConsultCandidate {
   readonly kind: 'stay' | 'handoff' | 'other'
 }
 
+export interface ConsultFallback {
+  readonly route: string
+  readonly reason: string
+}
+
 /** The complete state of the next-step card. */
 export type ConsultPhase =
   | { readonly kind: 'idle' }
@@ -27,6 +32,9 @@ export type ConsultPhase =
       readonly position?: string
       readonly candidates: readonly ConsultCandidate[]
       readonly degraded: boolean
+      readonly answeredBy?: string
+      readonly fallbacks?: readonly ConsultFallback[]
+      readonly stationModels?: Readonly<Record<string, readonly string[]>>
     }
   | { readonly kind: 'error'; readonly message: string }
 
@@ -59,6 +67,9 @@ type ConsultResponse =
         readonly position?: string
         readonly candidates: readonly ConsultCandidate[]
         readonly degraded: boolean
+        readonly answeredBy?: string
+        readonly fallbacks?: readonly ConsultFallback[]
+        readonly stationModels?: Readonly<Record<string, readonly string[]>>
       }
     }
   | {
@@ -76,6 +87,26 @@ function parseCandidate(value: unknown): ConsultCandidate | undefined {
   if (typeof value.input !== 'string' || value.input.trim() === '') return undefined
   if (value.kind !== 'stay' && value.kind !== 'handoff' && value.kind !== 'other') return undefined
   return { label: value.label, input: value.input, kind: value.kind }
+}
+
+function parseFallback(value: unknown): ConsultFallback | undefined {
+  if (!isRecord(value)) return undefined
+  if (typeof value.route !== 'string' || value.route.trim() === '') return undefined
+  if (typeof value.reason !== 'string' || value.reason.trim() === '') return undefined
+  return { route: value.route, reason: value.reason }
+}
+
+function parseStationModels(value: unknown): Readonly<Record<string, readonly string[]>> | undefined {
+  if (value === undefined) return undefined
+  if (!isRecord(value)) return undefined
+  const result: Record<string, readonly string[]> = {}
+  for (const [station, routes] of Object.entries(value)) {
+    if (!Array.isArray(routes) || routes.some(route => typeof route !== 'string' || route.trim() === '')) {
+      return undefined
+    }
+    result[station] = routes
+  }
+  return result
 }
 
 /** Parse the route's discriminated response before it reaches rendering state. */
@@ -96,6 +127,22 @@ export function parseConsultResponse(value: unknown): ConsultResponse {
   if (position !== undefined && typeof position !== 'string') {
     throw new Error('下一步咨询返回了无效响应')
   }
+  const answeredBy = value.value.answeredBy
+  if (answeredBy !== undefined && (typeof answeredBy !== 'string' || answeredBy.trim() === '')) {
+    throw new Error('下一步咨询返回了无效响应')
+  }
+  const fallbacks = value.value.fallbacks
+  if (fallbacks !== undefined && !Array.isArray(fallbacks)) {
+    throw new Error('下一步咨询返回了无效响应')
+  }
+  const parsedFallbacks = fallbacks?.map(parseFallback)
+  if (parsedFallbacks?.some(fallback => fallback === undefined)) {
+    throw new Error('下一步咨询返回了无效响应')
+  }
+  const stationModels = parseStationModels(value.value.stationModels)
+  if (value.value.stationModels !== undefined && stationModels === undefined) {
+    throw new Error('下一步咨询返回了无效响应')
+  }
   const candidates = value.value.candidates.map(parseCandidate)
   if (candidates.some(candidate => candidate === undefined)) {
     throw new Error('下一步咨询返回了无效响应')
@@ -106,6 +153,9 @@ export function parseConsultResponse(value: unknown): ConsultResponse {
       ...(position === undefined || position.trim() === '' ? {} : { position: position.trim() }),
       candidates: candidates as ConsultCandidate[],
       degraded: value.value.degraded,
+      ...(answeredBy === undefined ? {} : { answeredBy: answeredBy.trim() }),
+      ...(parsedFallbacks === undefined ? {} : { fallbacks: parsedFallbacks as ConsultFallback[] }),
+      ...(stationModels === undefined ? {} : { stationModels }),
     },
   }
 }
@@ -128,6 +178,9 @@ export async function requestConsult(deps: ConsultRequestDeps, sessionId: string
       ...(result.value.position === undefined ? {} : { position: result.value.position }),
       candidates: result.value.candidates,
       degraded: result.value.degraded,
+      ...(result.value.answeredBy === undefined ? {} : { answeredBy: result.value.answeredBy }),
+      ...(result.value.fallbacks === undefined ? {} : { fallbacks: result.value.fallbacks }),
+      ...(result.value.stationModels === undefined ? {} : { stationModels: result.value.stationModels }),
     })
   } catch (error) {
     deps.setPhase({
@@ -135,6 +188,25 @@ export async function requestConsult(deps: ConsultRequestDeps, sessionId: string
       message: error instanceof Error ? error.message : '下一步咨询失败',
     })
   }
+}
+
+function shortRoute(route: string): string {
+  const slash = route.indexOf('/')
+  return slash < 0 ? route : route.slice(slash + 1)
+}
+
+function displayReason(reason: string): string {
+  return /refus/u.test(reason) || /拒/u.test(reason)
+    ? '拒答'
+    : reason
+}
+
+export function consultAttributionLine(phase: ConsultPhase): string | undefined {
+  if (phase.kind !== 'ready' || phase.answeredBy === undefined) return undefined
+  const answered = shortRoute(phase.answeredBy)
+  const fallback = phase.fallbacks?.[0]
+  if (fallback === undefined) return `由 ${answered} 生成`
+  return `由 ${answered} 生成（${shortRoute(fallback.route)} ${displayReason(fallback.reason)}，改用 ${answered}）`
 }
 
 /**

@@ -15,6 +15,7 @@
 
 import { basename, isAbsolute } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
+import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { TaskId } from './brand.ts'
@@ -32,6 +33,14 @@ import { indicatorProjectionDefinition } from './indicator-projection.ts'
 import type { HandoffThresholds, ModelPrice } from './indicator-projection.ts'
 import { parseSessionId, redactText } from './handoff.ts'
 import { DEFAULT_SKILLS_ROOT, readSkillSource, resolveSkillsRoot } from './skill-source.ts'
+import {
+  DEFAULT_STATION_MODELS,
+  STATION_MODEL_SETTINGS_NAMESPACE,
+  StationModelsSettingsSchema,
+  stationModelWarnings,
+  validateStationModelsSettings,
+} from './station-models.ts'
+import type { StationModelsSettings } from './station-models.ts'
 import {
   DEFAULT_PROJECT_MARKERS,
   TaskDocumentStore,
@@ -54,6 +63,7 @@ export {
   collectConsultMaterial,
   createConsultHandler,
   currentConsultRoute,
+  generateConsultWithFallback,
   generateConsultOutput,
   isTrustedConsultRequest,
   parseConsultOutput,
@@ -63,6 +73,7 @@ export type {
   ConsultCandidate,
   ConsultDependencies,
   ConsultErrorCode,
+  ConsultFallback,
   ConsultMaterial,
   ConsultMessageExcerpt,
   ConsultOutput,
@@ -70,13 +81,26 @@ export type {
   ConsultSession,
   ConsultValue,
 } from './consult.ts'
+export {
+  CODING_MODEL_ROUTES,
+  DEFAULT_STATION_MODELS,
+  STATION_MODEL_SETTINGS_NAMESPACE,
+  STATION_MODEL_STATIONS,
+  StationModelsSettingsSchema,
+  THINKING_MODEL_ROUTES,
+  shortModelRoute,
+  splitModelRoute,
+  stationModelWarnings,
+  validateStationModelsSettings,
+} from './station-models.ts'
+export type { Station, StationModelsSettings } from './station-models.ts'
 export { handedOff, memberOf, successorsOf } from './derive.ts'
 export {
   DEFAULT_PROJECT_MARKERS,
   HANDOFFS_DIRECTORY_SEGMENTS,
   TASKS_DIRECTORY_SEGMENTS,
-  TASK_DOCUMENT_EXTENSION,
-  TaskDocumentStore,
+    TASK_DOCUMENT_EXTENSION,
+    TaskDocumentStore,
   handoffsDirectory,
   readHandoffDocument,
   resolveProjectRoot,
@@ -247,6 +271,7 @@ export class A2d2Service extends Service {
   private readonly thresholds: HandoffThresholds
   private readonly prices: ReadonlyMap<string, ModelPrice>
   private readonly currency: string
+  private stationModels: StationModelsSettings = DEFAULT_STATION_MODELS
 
   /**
    * Create the service over a resolved store configuration.
@@ -293,6 +318,7 @@ export class A2d2Service extends Service {
       }
     }
     this.currency = config.currency ?? DEFAULT_CURRENCY
+    this.publishStationModels()
     this.publishIndicator()
     this.publishConsult()
     // Stated once at load: whether the browser half received these is otherwise
@@ -419,6 +445,28 @@ export class A2d2Service extends Service {
     })
   }
 
+  /** Register and watch the live station model table settings namespace. */
+  private publishStationModels(): void {
+    this.ctx.inject(['settings'], (settingsCtx) => {
+      const ns = settingsNamespace(STATION_MODEL_SETTINGS_NAMESPACE)
+      const scope = settingsCtx.settings.register(ns, StationModelsSettingsSchema, {
+        validate: validateStationModelsSettings,
+      }) as {
+        get(): StationModelsSettings
+        watch(callback: (next: StationModelsSettings, prev: StationModelsSettings) => void): () => void
+      }
+      const publish = (next: StationModelsSettings): void => {
+        this.stationModels = next
+        for (const warning of stationModelWarnings(next)) this.ctx.logger.warn(warning)
+      }
+      publish(scope.get())
+      settingsCtx.effect(
+        () => scope.watch(next => { publish(next) }),
+        'a2d2 station model settings',
+      )
+    })
+  }
+
   /** Publish the optional Web host's one-shot next-step consultation route. */
   private publishConsult(): void {
     this.ctx.inject(['webServer'], (routeCtx) => {
@@ -440,6 +488,7 @@ export class A2d2Service extends Service {
         getSession: id => routeCtx.get('sessions')?.get(id),
         listTasks: cwd => this.store.list(cwd),
         readAskMatt: () => readSkillSource('ask-matt', this.skillsRoot),
+        getStationModels: () => this.stationModels,
         stream: (options) => {
           const llm = routeCtx.get('llm')
           if (llm === undefined) throw new Error('a2d2 consult: llm service is unavailable')

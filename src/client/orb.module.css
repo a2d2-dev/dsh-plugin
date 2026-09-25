@@ -269,6 +269,12 @@
   line-height: 1.4;
 }
 
+.attribution {
+  color: rgba(242, 245, 248, 0.64);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;
