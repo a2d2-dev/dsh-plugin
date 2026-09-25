@@ -33,17 +33,82 @@
 .list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 2px;
 }
 
-.card {
+.node {
+  position: relative;
+  min-width: 0;
+}
+
+.children {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-left: 18px;
+  padding-left: 4px;
+}
+
+.children::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: -26px;
+  height: 26px;
+  border-left: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.42));
+}
+
+.children > .node::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  border-left: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.42));
+}
+
+.children > .node:last-child::before {
+  bottom: auto;
+  height: 17px;
+}
+
+.children > .node > .card::before {
+  content: '';
+  position: absolute;
+  top: 16px;
+  left: -4px;
+  width: 14px;
+  border-top: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.42));
+}
+
+.card,
+.cardCurrent {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 50px;
   padding: 8px;
-  border: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.3));
-  border-radius: 6px;
-  background: var(--dsw-alias-bg-layer-2, rgba(128, 128, 128, 0.08));
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary, #e6e6e6);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.card:hover,
+.cardCurrent:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.12));
+}
+
+.cardCurrent,
+.cardCurrent:hover {
+  background: var(--dsw-alias-interactive-bg-active, rgba(63, 166, 107, 0.14));
 }
 
 .label {

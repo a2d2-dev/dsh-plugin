@@ -88,13 +88,18 @@ declare module '*.module.css' {
     readonly stateDone: string
     readonly goal: string
     readonly members: string
+    readonly memberNode: string
+    readonly memberChildren: string
     readonly member: string
     readonly memberEmpty: string
+    readonly memberCurrent: string
     readonly memberButton: string
     readonly memberStatic: string
     readonly current: string
     readonly edge: string
     readonly divider: string
+    readonly node: string
+    readonly children: string
     readonly route: string
     readonly routeDrifted: string
     readonly routeUnknown: string

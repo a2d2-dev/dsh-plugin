@@ -21,7 +21,7 @@ import type {} from '@deepseek-ai/dsh-client-runtime/client'
 // The conversation shell declares the slot this bundle registers into.
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { StatusSource } from './status-model.ts'
-import type { CatalogEntry } from './subagent-model.ts'
+import type { SubagentCatalog, SubagentSessionSummary } from './subagent-model.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
@@ -156,6 +156,15 @@ export interface ClientSessionsService {
    */
   open(id: string): void
   /**
+   * Open a catalog child through its exact durable parent address, when the
+   * runtime exposes subagent-aware navigation.
+   */
+  openSubagent?(address: {
+    readonly parentSessionId: string
+    readonly childSessionId: string
+    readonly mode: 'one-shot' | 'continuable'
+  }): void
+  /**
    * The session list store: every host row with the projection values the host
    * folded for it, plus each selected parent's direct subagent catalog.
    *
@@ -165,6 +174,11 @@ export interface ClientSessionsService {
    * host enumerates, children included.
    */
   readonly list: ClientSessionListStore
+  /**
+   * Mark a lazy subagent catalog as visibly consumed so the host can keep its
+   * live membership fresh while the panel is open.
+   */
+  setSubagentCatalogOpen?(parentSessionId: string, open: boolean): void
   /**
    * Re-request the direct subagent catalog for one parent.
    *
@@ -192,9 +206,9 @@ export interface ClientSessionListStore {
 /** The published session list, narrowed to the two maps the subagent list reads. */
 export interface ClientSessionListSnapshot {
   /** Every host row keyed by id, each carrying its display title and the projections the host folded for it. */
-  readonly byId: Readonly<Record<string, { readonly title?: string; readonly projectionValues?: Readonly<Record<string, ClientRouteSource | undefined>> } | undefined>>
+  readonly byId: Readonly<Record<string, (SubagentSessionSummary & { readonly title?: string }) | undefined>>
   /** Direct catalogs, keyed by the parent address they were requested for. */
-  readonly subagentsByParent: Readonly<Record<string, { readonly entries: readonly CatalogEntry[] } | undefined>>
+  readonly subagentsByParent: Readonly<Record<string, (SubagentCatalog & { readonly state?: string; readonly error?: unknown; readonly parentAvailable?: boolean }) | undefined>>
 }
 
 /** Props the sidebar hands one tab component (the subset this bundle reads). */

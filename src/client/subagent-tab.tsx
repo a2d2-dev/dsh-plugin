@@ -1,6 +1,6 @@
 /**
- * The subagent model list: every direct child of the open session, with the
- * route each is actually being served by.
+ * The subagent model tree: the main session for the open conversation, every
+ * loaded descendant, and the route each is actually being served by.
  *
  * The list exists because a child's route is otherwise invisible. The session's
  * own model is the one the user picked; a delegated child's is whatever the
@@ -8,25 +8,28 @@
  * subagent UI surfaces it — so children pinned to another model spend that
  * model's budget unobserved.
  *
- * Every field is a host fold this component only reads: the child list from the
- * session list's subagent catalog, and each route from that session's own
- * `a2d2Indicator` projection. Only the catalog needs asking for, because the
- * host publishes it per selected parent rather than streaming it; projection
- * updates reach the list on their own.
+ * Every field is a host fold this component only reads: child lists from the
+ * session list's per-parent subagent catalogs, and each route from that
+ * session's own `a2d2Indicator` projection. Only the catalogs need asking for,
+ * because the host publishes them lazily per selected parent; projection
+ * updates reach the tree on their own.
  *
  * @module @deepseek-ai/dsh-a2d2/client/subagent-tab
  */
 
-import { createElement, useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
+import { createElement, useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import type {
-  A2d2ClientContext, ClientRouteSource, ClientSessionListSnapshot, ClientSessionListStore,
+  A2d2ClientContext, ClientSessionListSnapshot, ClientSessionListStore,
   ClientSessionsService,
 } from './context.ts'
-import { formatRoute, subagentRouteHeader, subagentRouteRows, subagentRouteTally, type SubagentRouteRow } from './subagent-model.ts'
+import {
+  formatRoute,
+  subagentRouteHeader,
+  subagentRouteTree,
+  type SubagentRouteRoot,
+  type SubagentRouteTreeNode,
+} from './subagent-model.ts'
 import css from './subagent-tab.module.css'
-
-/** The projection key every route below is read from. */
-const INDICATOR_KEY = 'a2d2Indicator'
 
 /**
  * How often the visible tab re-requests the catalog, in milliseconds.
@@ -44,15 +47,23 @@ const NO_LIST: ClientSessionListSnapshot = { byId: {}, subagentsByParent: {} }
 export interface SubagentModelTabProps {
   /** The client context carrying the sessions service. */
   readonly ctx: A2d2ClientContext
-  /** The session whose direct children to list. */
+  /** The session whose main-session subagent tree to show. */
   readonly sessionId: string
   /** Whether this tab is the active one; absent counts as visible, so a host that publishes no flag still refreshes. */
   readonly visible?: boolean
 }
 
-/** Render one child's route line. */
-function RouteLine({ row }: { readonly row: SubagentRouteRow }): ReturnType<typeof createElement> {
-  const route = formatRoute(row)
+/** Render one node's route line. */
+function RouteLine({ row }: { readonly row: Pick<SubagentRouteTreeNode | SubagentRouteRoot, 'provider' | 'model'> & { readonly drifted?: boolean } }): ReturnType<typeof createElement> {
+  const route = formatRoute({
+    id: '',
+    label: '',
+    continuable: false,
+    running: false,
+    drifted: row.drifted === true,
+    ...(row.provider === undefined ? {} : { provider: row.provider }),
+    ...(row.model === undefined ? {} : { model: row.model }),
+  })
   if (route === undefined) {
     return createElement('div', { className: css.routeUnknown }, '路由未知（尚未发起请求）')
   }
@@ -64,30 +75,91 @@ function RouteLine({ row }: { readonly row: SubagentRouteRow }): ReturnType<type
   )
 }
 
-/** Render one child card. */
-function Card({ row }: { readonly row: SubagentRouteRow }): ReturnType<typeof createElement> {
+function collectCatalogParents(rootId: string | undefined, nodes: readonly SubagentRouteTreeNode[]): readonly string[] {
+  if (rootId === undefined) return []
+  const ids = new Set<string>([rootId])
+  const visit = (node: SubagentRouteTreeNode): void => {
+    if (node.hasChildren) ids.add(node.id)
+    for (const child of node.children) visit(child)
+  }
+  for (const node of nodes) visit(node)
+  return [...ids]
+}
+
+/** Render the root card. */
+function RootCard({
+  row,
+  open,
+}: {
+  readonly row: SubagentRouteRoot
+  readonly open: (id: string) => void
+}): ReturnType<typeof createElement> {
   return createElement(
-    'div',
-    { className: css.card },
+    'button',
+    {
+      type: 'button',
+      className: row.current ? `${css.card} ${css.cardCurrent}` : css.card,
+      title: row.id,
+      onClick: () => { open(row.id) },
+    },
     createElement('div', { className: css.label }, row.label),
     createElement(
       'div',
       { className: css.meta },
-      row.continuable ? '可续接' : '一次性',
-      ' · ',
+      '主会话 · ',
       row.running ? '运行中' : '空闲',
     ),
     createElement(RouteLine, { row }),
   )
 }
 
+/** Render one child node and its descendants. */
+function NodeCard({
+  row,
+  open,
+}: {
+  readonly row: SubagentRouteTreeNode
+  readonly open: (row: SubagentRouteTreeNode) => void
+}): ReturnType<typeof createElement> {
+  return createElement(
+    'div',
+    { className: css.node },
+    createElement(
+      'button',
+      {
+        type: 'button',
+        className: row.current ? `${css.card} ${css.cardCurrent}` : css.card,
+        title: row.id,
+        onClick: () => { open(row) },
+      },
+      createElement('div', { className: css.label }, row.label),
+      createElement(
+        'div',
+        { className: css.meta },
+        row.continuable ? '可续接' : '一次性',
+        ' · ',
+        row.running ? '运行中' : '空闲',
+      ),
+      createElement(RouteLine, { row }),
+    ),
+    row.children.length === 0
+      ? null
+      : createElement(
+        'div',
+        { className: css.children },
+        row.children.map(child => createElement(NodeCard, { key: child.id, row: child, open })),
+      ),
+  )
+}
+
 /**
- * Draw the open session's direct subagents and their routes.
+ * Draw the open session's main-session subagent topology and its routes.
  * @param props - the client context, the session to list, and its visibility.
  * @returns the rendered list.
  */
 export function SubagentModelTab({ ctx, sessionId, visible }: SubagentModelTabProps): ReturnType<typeof createElement> {
   const sessions = ctx.get('sessions') as ClientSessionsService | undefined
+  const inflightRef = useRef(new Set<string>())
   // A stable no-op store stands in while the sessions service is absent, keeping
   // the hook count constant across a deployment that mounts no session list.
   const fallback = useMemo<ClientSessionListStore>(() => ({
@@ -99,24 +171,63 @@ export function SubagentModelTab({ ctx, sessionId, visible }: SubagentModelTabPr
   const subscribe = useCallback((listener: () => void) => list.subscribe(listener), [list])
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
+  const tree = useMemo(
+    () => subagentRouteTree(state.byId, state.subagentsByParent, sessionId),
+    [state, sessionId],
+  )
+  const catalogParents = useMemo(
+    () => collectCatalogParents(tree.rootId, tree.children),
+    [tree.rootId, tree.children],
+  )
+
+  const refreshCatalog = useCallback((parentId: string): void => {
+    if (sessions === undefined) return
+    if (inflightRef.current.has(parentId)) return
+    inflightRef.current.add(parentId)
+    void sessions.refreshSubagents(parentId)
+      .catch(() => undefined)
+      .finally(() => { inflightRef.current.delete(parentId) })
+  }, [sessions])
+
   useEffect(() => {
     if (sessions === undefined) return undefined
     if (visible === false) return undefined
-    const refresh = (): void => { void sessions.refreshSubagents(sessionId).catch(() => undefined) }
+    const refresh = (): void => {
+      for (const parentId of catalogParents) refreshCatalog(parentId)
+    }
     refresh()
     const timer = window.setInterval(refresh, CATALOG_REFRESH_MS)
     return () => { window.clearInterval(timer) }
-  }, [sessions, sessionId, visible])
+  }, [sessions, visible, catalogParents, refreshCatalog])
 
-  const entries = state.subagentsByParent[sessionId]?.entries ?? []
-  const sources = useMemo(() => {
-    const selected: Record<string, ClientRouteSource | undefined> = {}
-    for (const entry of entries) selected[entry.id] = state.byId[entry.id]?.projectionValues?.[INDICATOR_KEY]
-    return selected
-  }, [entries, state])
-  const own = state.byId[sessionId]?.projectionValues?.[INDICATOR_KEY]?.route
-  const rows = subagentRouteRows(state.byId[sessionId]?.projectionValues?.[INDICATOR_KEY], entries, sources)
-  const tally = subagentRouteTally(rows)
+  useEffect(() => {
+    if (sessions === undefined) return undefined
+    if (visible === false) return undefined
+    for (const parentId of catalogParents) sessions.setSubagentCatalogOpen?.(parentId, true)
+    return () => {
+      for (const parentId of catalogParents) sessions.setSubagentCatalogOpen?.(parentId, false)
+    }
+  }, [sessions, visible, catalogParents])
+
+  const openRoot = useCallback((id: string): void => {
+    try {
+      sessions?.open(id)
+    } catch {
+      // The row can disappear between render and click.
+    }
+  }, [sessions])
+
+  const openNode = useCallback((row: SubagentRouteTreeNode): void => {
+    try {
+      if (row.mode !== undefined && sessions?.openSubagent !== undefined) {
+        sessions.openSubagent({ parentSessionId: row.parentId, childSessionId: row.id, mode: row.mode })
+        return
+      }
+      sessions?.open(row.id)
+    } catch {
+      // The row can disappear between render and click.
+    }
+  }, [sessions])
 
   return createElement(
     'div',
@@ -124,20 +235,17 @@ export function SubagentModelTab({ ctx, sessionId, visible }: SubagentModelTabPr
     createElement(
       'div',
       { className: css.header },
-      subagentRouteHeader(tally),
+      subagentRouteHeader(tree.tally),
     ),
-    createElement(
-      'div',
-      { className: css.own },
-      '主会话 ',
-      own === undefined ? '路由未知' : `${own.provider}/${own.model}`,
-    ),
-    rows.length === 0
+    tree.root === undefined
+      ? null
+      : createElement(RootCard, { row: tree.root, open: openRoot }),
+    tree.children.length === 0
       ? createElement('div', { className: css.empty }, '本会话没有子代理')
       : createElement(
         'div',
         { className: css.list },
-        rows.map(row => createElement(Card, { key: row.id, row })),
+        tree.children.map(row => createElement(NodeCard, { key: row.id, row, open: openNode })),
       ),
   )
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  handoffForest,
   nextPanelState,
   panelLoadState,
   panelTally,
@@ -67,6 +68,72 @@ describe('panel task view model', () => {
       openable: false,
       handoffFromLabel: 'Original session',
     })
+  })
+
+  it('builds task members into a handoff forest and roots orphans', () => {
+    const task = payload().tasks[0]!
+    const [row] = panelTaskRows(
+      payload({
+        tasks: [{
+          ...task,
+          members: [
+            { sessionId: 'session-root' },
+            { sessionId: 'session-child', handoffFrom: 'session-root' },
+            { sessionId: 'session-grandchild', handoffFrom: 'session-child' },
+            { sessionId: 'session-orphan', handoffFrom: 'session-missing' },
+          ],
+        }],
+      }),
+      {},
+      () => true,
+      'session-grandchild',
+    )
+
+    expect(handoffForest(row?.members ?? []).map(node => ({
+      id: node.row.sessionId,
+      children: node.children.map(child => ({
+        id: child.row.sessionId,
+        children: child.children.map(grandchild => grandchild.row.sessionId),
+      })),
+    }))).toEqual([
+      {
+        id: 'session-root',
+        children: [{ id: 'session-child', children: ['session-grandchild'] }],
+      },
+      { id: 'session-orphan', children: [] },
+    ])
+  })
+
+  it('breaks handoff cycles without dropping members', () => {
+    const task = payload().tasks[0]!
+    const [row] = panelTaskRows(
+      payload({
+        tasks: [{
+          ...task,
+          members: [
+            { sessionId: 'session-a', handoffFrom: 'session-c' },
+            { sessionId: 'session-b', handoffFrom: 'session-a' },
+            { sessionId: 'session-c', handoffFrom: 'session-b' },
+          ],
+        }],
+      }),
+      {},
+      () => true,
+      'session-b',
+    )
+
+    expect(handoffForest(row?.members ?? []).map(node => ({
+      id: node.row.sessionId,
+      children: node.children.map(child => ({
+        id: child.row.sessionId,
+        children: child.children.map(grandchild => grandchild.row.sessionId),
+      })),
+    }))).toEqual([
+      {
+        id: 'session-a',
+        children: [{ id: 'session-b', children: ['session-c'] }],
+      },
+    ])
   })
 
   it('falls back to current-session and short-id labels for handoff edges', () => {
