@@ -53,6 +53,12 @@ declare module '*.module.css' {
     readonly chip: string
     readonly chipMove: string
     readonly chipLabel: string
+    readonly otherMoves: string
+    readonly otherMovesSummary: string
+    readonly otherMoveGrid: string
+    readonly otherMoveButton: string
+    readonly otherMoveLabel: string
+    readonly otherMoveHint: string
     readonly position: string
     readonly statusBlock: string
     readonly statusHeadline: string

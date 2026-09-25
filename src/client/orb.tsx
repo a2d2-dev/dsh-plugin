@@ -3,11 +3,10 @@
  * context occupancy, turning warning-colored as the context approaches the
  * configured smart-zone threshold.
  *
- * Hovering the orb reveals three peer actions ordered from lightest to heaviest:
- * "现状" (what is this session doing right now — facts only, no model call),
- * "下一步" (a one-off consultation proposing where to go), and "交接" (move the
- * work to a successor session). 交接 opens a confirm card where the user writes
- * the focus and confirms. Confirming runs the one-click
+ * Hovering the orb reveals one action: "下一步" (a one-off consultation
+ * proposing where to go). Handoff remains available inside that boundary card
+ * as one of the "other moves". The handoff card collects focus and confirms.
+ * Confirming runs the one-click
  * handoff — this session's own agent writes the summary, the browser waits for
  * that turn to finish, creates the successor session, focuses it, and has it take
  * the handoff — so the whole "fill the command, then press send" sequence
@@ -27,7 +26,13 @@
 import { createElement, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import css from './orb.module.css'
 import { HANDOFF_DRAFT, appendToDraft, focusComposer } from './composer.ts'
-import { consultAttributionLine, requestConsult, selectConsultCandidate } from './consult-actions.ts'
+import {
+  OTHER_MOVE_OPTIONS,
+  consultAttributionLine,
+  requestConsult,
+  selectConsultCandidate,
+  selectOtherMove,
+} from './consult-actions.ts'
 import type { ConsultCandidate, ConsultPhase } from './consult-actions.ts'
 import { HighwayMap } from './highway-map.tsx'
 import { highwayView } from './highway-view.ts'
@@ -274,6 +279,16 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
     setFailed(!selected)
   }, [ctx, sessionId, closeConsult, openHandoff])
 
+  const selectOther = useCallback((move: typeof OTHER_MOVE_OPTIONS[number]['move']): void => {
+    const selected = selectOtherMove({
+      appendToDraft: input => appendToDraft(ctx, sessionId, input),
+      focusComposer: () => { focusComposer(rootRef.current) },
+      closeConsult,
+      openHandoff,
+    }, move)
+    setFailed(!selected)
+  }, [ctx, sessionId, closeConsult, openHandoff])
+
   useEffect(() => {
     if (!failed) return
     const timer = setTimeout(() => { setFailed(false) }, 4000)
@@ -310,10 +325,7 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
       'aria-label': failed ? INSERT_FAILED : `${tokens} tokens，${occupancy.percent}% 已用。接近 smart zone；到下个相位边界做五选一，交接只是其一`,
       'data-a2d2-orb': level,
       'data-a2d2-level': String(filled),
-      onClick: () => {
-        if (phase.kind === 'closed') openHandoff()
-        else { setPhase({ kind: 'closed' }); setFocus('') }
-      },
+      onClick: consultNext,
     },
     createElement('span', { className: css.water, style: { '--a2d2-level': `${filled}%` } as never, 'aria-hidden': true }),
     createElement('span', {
@@ -327,15 +339,12 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
     ),
   )
 
-  // The peer actions appear together and yield the surface to an open card.
-  // They stack above the orb, so DOM order is reversed: the lighter action
-  // (下一步) sits nearest the circle and the heavier (交接) on top.
+  // The boundary action yields the surface to an open card.
   const showAction = hovering && !cardOpen
   const actionButton = (label: string, hint: string, onClick: () => void): ReturnType<typeof createElement> =>
     createElement('button', { type: 'button', className: css.action, title: hint, 'aria-label': `${label}：${hint}`, onClick }, label)
   const action = showAction
     ? createElement('div', { className: css.actions },
-      actionButton('交接', '换个会话接着做：压缩当前上下文，开启新会话', () => { openHandoff() }),
       actionButton('下一步', '它现在在干嘛、做到哪了、接下来去哪？', consultNext),
     )
     : null
@@ -417,6 +426,21 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
         )),
       )
       : null,
+    createElement('details', { className: css.otherMoves },
+      createElement('summary', { className: css.otherMovesSummary }, '其他走法'),
+      createElement('div', { className: css.otherMoveGrid },
+        ...OTHER_MOVE_OPTIONS.map(option => createElement('button', {
+          type: 'button',
+          className: css.otherMoveButton,
+          key: option.move,
+          title: option.hint,
+          onClick: () => { selectOther(option.move) },
+        },
+          createElement('span', { className: css.otherMoveLabel }, option.label),
+          createElement('span', { className: css.otherMoveHint }, option.hint),
+        )),
+      ),
+    ),
     attribution === undefined ? null : createElement('div', { className: css.attribution }, attribution),
     createElement('div', { className: css.cardRow },
       consult.kind === 'error'
