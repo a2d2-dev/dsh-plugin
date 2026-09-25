@@ -87,6 +87,28 @@ export interface ConsultSelectionDeps {
   readonly openHandoff: (focus: string) => void
 }
 
+export type OtherMove = Exclude<Move, 'continue'>
+
+export interface OtherMoveOption {
+  readonly move: OtherMove
+  readonly label: string
+  readonly hint: string
+}
+
+const COMPACT_FOCUS_PREFIX = '保留什么：'
+
+const OTHER_MOVE_INPUTS: Readonly<Record<Exclude<OtherMove, 'compact' | 'handoff'>, string>> = {
+  clear: '开空会话继续：',
+  subagent: '派子代理处理：',
+}
+
+export const OTHER_MOVE_OPTIONS: readonly OtherMoveOption[] = [
+  { move: 'clear', label: '新会话', hint: '开一条空会话承接下一步' },
+  { move: 'subagent', label: '子代理', hint: '把一段独立工作交给子代理' },
+  { move: 'compact', label: '压缩', hint: '先保留关键状态，再用交接序列开新会话' },
+  { move: 'handoff', label: '交接', hint: '打开交接卡，填写 focus 后确认' },
+]
+
 type ConsultResponse =
   | {
       readonly ok: true
@@ -331,8 +353,35 @@ export function selectConsultCandidate(
     deps.openHandoff(candidate.input)
     return true
   }
+  if (candidate.move === 'compact') {
+    deps.openHandoff(compactFocus(candidate.input))
+    return true
+  }
   if (!deps.appendToDraft(candidate.input)) return false
   deps.closeConsult()
   deps.focusComposer()
   return true
+}
+
+export function selectOtherMove(
+  deps: ConsultSelectionDeps,
+  move: OtherMove,
+): boolean {
+  if (move === 'handoff') {
+    deps.openHandoff('')
+    return true
+  }
+  if (move === 'compact') {
+    deps.openHandoff(COMPACT_FOCUS_PREFIX)
+    return true
+  }
+  if (!deps.appendToDraft(OTHER_MOVE_INPUTS[move])) return false
+  deps.closeConsult()
+  deps.focusComposer()
+  return true
+}
+
+function compactFocus(input: string): string {
+  const trimmed = input.trim()
+  return trimmed === '' ? COMPACT_FOCUS_PREFIX : `${COMPACT_FOCUS_PREFIX}${trimmed}`
 }
