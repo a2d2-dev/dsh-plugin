@@ -28,12 +28,20 @@ import css from './orb.module.css'
 import { HANDOFF_DRAFT, appendToDraft, focusComposer } from './composer.ts'
 import {
   OTHER_MOVE_OPTIONS,
+  candidateModelEffect,
   consultAttributionLine,
+  modelCatalogRoutes,
   requestConsult,
   selectConsultCandidate,
   selectOtherMove,
 } from './consult-actions.ts'
-import type { ConsultCandidate, ConsultPhase } from './consult-actions.ts'
+import type {
+  ClientModelDirectoryService,
+  ClientModelDirectorySnapshot,
+  ClientModelDirectoryStoreSnapshot,
+  ConsultCandidate,
+  ConsultPhase,
+} from './consult-actions.ts'
 import { HighwayMap } from './highway-map.tsx'
 import { highwayView } from './highway-view.ts'
 import { runOrbHandoff } from './orb-actions.ts'
@@ -147,6 +155,62 @@ function useSessionStatus(ctx: A2d2ClientContext, sessionId: string, active: boo
   return status
 }
 
+function normalizeModelDirectory(
+  snapshot: ClientModelDirectoryStoreSnapshot,
+): ClientModelDirectorySnapshot | undefined {
+  if (snapshot.current === null) return undefined
+  return {
+    current: snapshot.current,
+    ...(snapshot.groups === undefined ? {} : { groups: snapshot.groups }),
+    ...(snapshot.catalog === undefined ? {} : { catalog: snapshot.catalog }),
+  }
+}
+
+function useModelDirectory(
+  ctx: A2d2ClientContext,
+  sessionId: string,
+  active: boolean,
+): ClientModelDirectorySnapshot | undefined {
+  const [directory, setDirectory] = useState<ClientModelDirectorySnapshot | undefined>(undefined)
+  useEffect(() => {
+    if (!active) {
+      setDirectory(undefined)
+      return
+    }
+    const modelDirectories = ctx.get('modelDirectories') as ClientModelDirectoryService | undefined
+    if (modelDirectories === undefined) {
+      setDirectory(undefined)
+      return
+    }
+    let disposed = false
+    let disposeStore: (() => void) | undefined
+    try {
+      const face = modelDirectories.directoryFor(sessionId)
+      const publish = (): void => {
+        const snapshot = face.store?.getSnapshot()
+        if (snapshot !== undefined) setDirectory(normalizeModelDirectory(snapshot))
+      }
+      publish()
+      disposeStore = face.store?.subscribe(publish)
+      void face.load().then(
+        next => {
+          if (!disposed) setDirectory(next)
+        },
+        () => {
+          if (!disposed) setDirectory(undefined)
+        },
+      )
+    } catch {
+      setDirectory(undefined)
+    }
+    return () => {
+      disposed = true
+      disposeStore?.()
+    }
+  }, [ctx, sessionId, active])
+  return directory
+}
+
 /**
  * How much room the shell's details panel takes at the right of the viewport.
  *
@@ -201,13 +265,14 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
   const { occupancy, host } = useOccupancy(ctx, sessionId)
   const detailsInset = useDetailsInset()
   const thresholds = host?.thresholds ?? DEFAULT_ORB_THRESHOLDS
-  const [failed, setFailed] = useState(false)
+  const [failure, setFailure] = useState<string | null>(null)
   const [hovering, setHovering] = useState(false)
   const [phase, setPhase] = useState<CardPhase>({ kind: 'closed' })
   const [consult, setConsult] = useState<ConsultPhase>({ kind: 'idle' })
   // The next-step card leads with the session's status, which is instant, so
   // the card is useful while the consultation is still being generated.
   const status = useSessionStatus(ctx, sessionId, consult.kind !== 'idle')
+  const modelDirectory = useModelDirectory(ctx, sessionId, consult.kind === 'ready')
   const [focus, setFocus] = useState('')
   const rootRef = useRef<HTMLButtonElement | null>(null)
   const consultRequestRef = useRef(0)
@@ -215,7 +280,7 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
   // The draft-fill fallback: used only when the one-click flow cannot run.
   const fillDraft = useCallback((): void => {
     const written = appendToDraft(ctx, sessionId, HANDOFF_DRAFT)
-    setFailed(!written)
+    setFailure(written ? null : INSERT_FAILED)
     if (written) focusComposer(rootRef.current)
   }, [ctx, sessionId])
 
@@ -270,14 +335,21 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
   }, [sessionId])
 
   const selectCandidate = useCallback((candidate: ConsultCandidate): void => {
-    const selected = selectConsultCandidate({
+    const modelDirectories = ctx.get('modelDirectories') as ClientModelDirectoryService | undefined
+    void selectConsultCandidate({
       appendToDraft: input => appendToDraft(ctx, sessionId, input),
       focusComposer: () => { focusComposer(rootRef.current) },
       closeConsult,
       openHandoff,
-    }, candidate)
-    setFailed(!selected)
-  }, [ctx, sessionId, closeConsult, openHandoff])
+      ...(modelDirectories === undefined ? {} : { modelDirectories }),
+      notify: message => { setFailure(message) },
+    }, candidate, {
+      sessionId,
+      phase: consult,
+    }).then((selected) => {
+      if (!selected) setFailure(INSERT_FAILED)
+    })
+  }, [ctx, sessionId, closeConsult, openHandoff, consult])
 
   const selectOther = useCallback((move: typeof OTHER_MOVE_OPTIONS[number]['move']): void => {
     const selected = selectOtherMove({
@@ -286,14 +358,14 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
       closeConsult,
       openHandoff,
     }, move)
-    setFailed(!selected)
+    if (!selected) setFailure(INSERT_FAILED)
   }, [ctx, sessionId, closeConsult, openHandoff])
 
   useEffect(() => {
-    if (!failed) return
-    const timer = setTimeout(() => { setFailed(false) }, 4000)
+    if (failure === null) return
+    const timer = setTimeout(() => { setFailure(null) }, 4000)
     return () => { clearTimeout(timer) }
-  }, [failed])
+  }, [failure])
 
   if (occupancy === null) return null
   const level = orbLevel(occupancy.usedTokens, thresholds)
@@ -321,8 +393,8 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
       type: 'button',
       ref: rootRef,
       className: `${css.root} ${levelClassName(level)}`,
-      title: failed ? INSERT_FAILED : detail,
-      'aria-label': failed ? INSERT_FAILED : `${tokens} tokens，${occupancy.percent}% 已用。接近 smart zone；到下个相位边界做五选一，交接只是其一`,
+      title: failure ?? detail,
+      'aria-label': failure ?? `${tokens} tokens，${occupancy.percent}% 已用。接近 smart zone；到下个相位边界做五选一，交接只是其一`,
       'data-a2d2-orb': level,
       'data-a2d2-level': String(filled),
       onClick: consultNext,
@@ -381,8 +453,9 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
   const occupancyLine = `上下文 ${tokens}${capacity === undefined ? '' : ` / ${capacity}`}（${String(occupancy.percent)}%）`
     + (cost === undefined ? '' : ` · 约 ${host?.currency ?? ''}${formatCost(cost)}`)
   const attribution = consultAttributionLine(consult)
+  const modelCatalog = modelDirectory === undefined ? undefined : modelCatalogRoutes(modelDirectory)
   const highway = consult.kind === 'ready' && consult.location !== undefined
-    ? highwayView(consult)
+    ? highwayView(consult, modelCatalog)
     : undefined
   const statusBlock = createElement('div', { className: css.statusBlock, role: 'status' },
     createElement('div', { className: `${css.statusHeadline} ${statusClassName(status?.kind)}` },
@@ -414,16 +487,20 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
     highway?.nextLine === undefined ? null : createElement('div', { className: css.nextLine }, highway.nextLine),
     consult.kind === 'ready'
       ? createElement('div', { className: css.chips },
-        ...consult.candidates.map((candidate, index) => createElement('button', {
-          type: 'button',
-          className: css.chip,
-          key: `${candidate.move}-${String(index)}`,
-          title: candidate.input,
-          onClick: () => { selectCandidate(candidate) },
-        },
-          createElement('span', { className: css.chipMove }, chipMoveLabel(candidate.move)),
-          createElement('span', { className: css.chipLabel }, candidate.label),
-        )),
+        ...consult.candidates.map((candidate, index) => {
+          const effect = candidateModelEffect(candidate, consult, modelDirectory)
+          return createElement('button', {
+            type: 'button',
+            className: css.chip,
+            key: `${candidate.move}-${String(index)}`,
+            title: effect === undefined ? candidate.input : `${candidate.input}\n${effect}`,
+            onClick: () => { selectCandidate(candidate) },
+          },
+            createElement('span', { className: css.chipMove }, chipMoveLabel(candidate.move)),
+            createElement('span', { className: css.chipLabel }, candidate.label),
+            effect === undefined ? null : createElement('span', { className: css.chipEffect }, effect),
+          )
+        }),
       )
       : null,
     createElement('details', { className: css.otherMoves },
