@@ -47,6 +47,7 @@ import {
   handoffsDirectory,
   newTask,
   readHandoffDocument,
+  resolveProjectRoot,
   withMember,
   writeHandoffDocument,
 } from './store.ts'
@@ -60,6 +61,7 @@ export {
   CONSULT_ROUTE_PATH,
   MalformedCandidatesError,
   buildConsultPrompt,
+  checkProjectPreconditions,
   collectConsultMaterial,
   consultContextFactsFromProjectionValues,
   createConsultHandler,
@@ -79,6 +81,9 @@ export type {
   ConsultMaterial,
   ConsultMessageExcerpt,
   ConsultOutput,
+  ConsultPreconditionId,
+  ConsultPreconditionMissing,
+  ConsultPreconditions,
   ConsultRoute,
   ConsultSession,
   ConsultValue,
@@ -269,6 +274,7 @@ export class A2d2Service extends Service {
   })
 
   private readonly store: TaskDocumentStore
+  private readonly projectMarkers: readonly string[]
   private readonly skillsRoot: string
   private readonly thresholds: HandoffThresholds
   private readonly prices: ReadonlyMap<string, ModelPrice>
@@ -312,6 +318,7 @@ export class A2d2Service extends Service {
       ...(root === undefined ? {} : { root }),
       projectMarkers: [...projectMarkers],
     })
+    this.projectMarkers = [...projectMarkers]
     this.prices = new Map(Object.entries(config.modelPrices ?? {}))
     for (const [route, price] of this.prices) {
       if (!Number.isFinite(price.inputPerMillion) || price.inputPerMillion < 0
@@ -492,6 +499,7 @@ export class A2d2Service extends Service {
         trustedHosts: () => getService<WebRuntime>('webRuntime')?.trustedHosts ?? [],
         getSession: id => routeCtx.get('sessions')?.get(id),
         listTasks: cwd => this.store.list(cwd),
+        projectRoot: cwd => resolveProjectRoot(cwd, this.projectMarkers),
         readAskMatt: () => readSkillSource('ask-matt', this.skillsRoot),
         getStationModels: () => this.stationModels,
         contextFacts: (session) => {

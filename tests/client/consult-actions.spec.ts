@@ -114,6 +114,52 @@ describe('requestConsult', () => {
     })
   })
 
+  it('carries setup preconditions into the ready card', async () => {
+    const setPhase = vi.fn<(phase: ConsultPhase) => void>()
+    await requestConsult({
+      fetch: async () => jsonResponse({
+        ok: true,
+        value: {
+          position: '新项目还未配置 Matt skills。',
+          location: { zone: 'main', station: 'grill', phaseDone: true },
+          next: { station: 'to-spec', move: 'continue', reason: '先补前置条件' },
+          candidates: [{ label: '首次使用前：/setup-matt-pocock-skills', input: '/setup-matt-pocock-skills', move: 'continue' }],
+          degraded: false,
+          preconditions: {
+            missing: [
+              { id: 'context', label: 'CONTEXT.md or CONTEXT-MAP.md', paths: ['CONTEXT.md', 'CONTEXT-MAP.md'] },
+              { id: 'issue-tracker', label: 'docs/agents/issue-tracker.md', paths: ['docs/agents/issue-tracker.md'] },
+            ],
+          },
+        },
+      }),
+      setPhase,
+    }, 'session-a')
+    expect(setPhase).toHaveBeenLastCalledWith({
+      kind: 'ready',
+      position: '新项目还未配置 Matt skills。',
+      location: { zone: 'main', station: 'grill', phaseDone: true },
+      next: { station: 'to-spec', move: 'continue', reason: '先补前置条件' },
+      candidates: [{ label: '首次使用前：/setup-matt-pocock-skills', input: '/setup-matt-pocock-skills', move: 'continue' }],
+      degraded: false,
+      preconditions: {
+        missing: [
+          { id: 'context', label: 'CONTEXT.md or CONTEXT-MAP.md', paths: ['CONTEXT.md', 'CONTEXT-MAP.md'] },
+          { id: 'issue-tracker', label: 'docs/agents/issue-tracker.md', paths: ['docs/agents/issue-tracker.md'] },
+        ],
+      },
+    })
+  })
+
+  it('rejects malformed preconditions', async () => {
+    const setPhase = vi.fn<(phase: ConsultPhase) => void>()
+    await requestConsult({
+      fetch: async () => jsonResponse({ ok: true, value: { candidates: [], degraded: false, preconditions: { missing: ['context'] } } }),
+      setPhase,
+    }, 'session-a')
+    expect(setPhase).toHaveBeenLastCalledWith({ kind: 'error', message: '下一步咨询返回了无效响应' })
+  })
+
   it('rejects a non-string position', async () => {
     const setPhase = vi.fn<(phase: ConsultPhase) => void>()
     await requestConsult({
