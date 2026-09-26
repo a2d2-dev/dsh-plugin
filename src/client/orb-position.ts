@@ -44,6 +44,18 @@ export const ORB_BOTTOM_PX = 108
  */
 export const ORB_DRAG_THRESHOLD_PX = 4
 
+/**
+ * How far a finished gesture may have travelled and still count as a click, in px.
+ *
+ * A trackpad click is never perfectly still: the pointer commonly drifts several
+ * pixels between press and release. Following the pointer at
+ * {@link ORB_DRAG_THRESHOLD_PX} and then committing whatever that drift left
+ * would both creep the circle across the screen and swallow the click that opens
+ * the card — so a gesture that ends this close to where it started is a click,
+ * and the circle goes back where it was.
+ */
+export const ORB_CLICK_SLOP_PX = 12
+
 /** Where a dragged point is remembered. Versioned, so a changed shape can be retired. */
 export const ORB_POSITION_KEY = 'dsh-a2d2:v1:orb-position'
 
@@ -165,7 +177,25 @@ export function clampOrbPoint(point: OrbPoint, viewport: OrbViewport): OrbPoint 
  * @returns true once the gesture is a drag rather than a click.
  */
 export function isDragGesture(from: OrbPoint, to: OrbPoint): boolean {
-  return Math.hypot(to.x - from.x, to.y - from.y) >= ORB_DRAG_THRESHOLD_PX
+  return distance(from, to) >= ORB_DRAG_THRESHOLD_PX
+}
+
+/**
+ * Whether a finished gesture should be taken as a click on the circle.
+ *
+ * The circle may have followed the pointer a few pixels on the way, so a click
+ * also means "put it back": the caller commits a move only when this is false.
+ * @param from - where the press started, in viewport coordinates.
+ * @param to - where the pointer was released.
+ * @returns true when the gesture was a click, not a move.
+ */
+export function isClickGesture(from: OrbPoint, to: OrbPoint): boolean {
+  return distance(from, to) < ORB_CLICK_SLOP_PX
+}
+
+/** Distance between two viewport points, in px. */
+function distance(from: OrbPoint, to: OrbPoint): number {
+  return Math.hypot(to.x - from.x, to.y - from.y)
 }
 
 /**

@@ -32,6 +32,7 @@ declare module '*.module.css' {
     readonly cancel: string
     readonly confirm: string
     readonly cardReset: string
+    readonly cardActions: string
     readonly cardError: string
     readonly cardBusy: string
     readonly actions: string

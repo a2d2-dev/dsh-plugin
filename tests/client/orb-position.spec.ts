@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import {
   ORB_BOTTOM_PX,
+  ORB_CLICK_SLOP_PX,
   ORB_CARD_WIDTH_PX,
   ORB_GAP_PX,
+  ORB_DRAG_THRESHOLD_PX,
   ORB_POSITION_KEY,
   ORB_SIZE_PX,
   ORB_STACK_GAP_PX,
   anchorRightOffset,
   clampOrbPoint,
   defaultOrbPoint,
+  isClickGesture,
   isDragGesture,
   orbPlacement,
   parseOrbPoint,
@@ -95,6 +98,21 @@ describe('telling a drag from a click', () => {
   it('counts once the pointer has travelled far enough', () => {
     expect(isDragGesture({ x: 100, y: 100 }, { x: 100, y: 105 })).toBe(true)
     expect(isDragGesture({ x: 100, y: 100 }, { x: 104, y: 100 })).toBe(true)
+  })
+
+  it('reads a release near the press as a click, not a move', () => {
+    // A trackpad click drifts several pixels. Following the pointer on that
+    // drift must not commit a position or eat the click that opens the card.
+    expect(isClickGesture({ x: 596, y: 448 }, { x: 596, y: 448 })).toBe(true)
+    expect(isClickGesture({ x: 596, y: 448 }, { x: 602, y: 451 })).toBe(true)
+    expect(isClickGesture({ x: 596, y: 448 }, { x: 620, y: 448 })).toBe(false)
+  })
+
+  it('covers every drift a drag threshold lets through, and then some', () => {
+    // Anything below the drag threshold is a click by construction; the slop is
+    // wider so a gesture that began following the pointer still counts as one.
+    expect(ORB_CLICK_SLOP_PX).toBeGreaterThan(ORB_DRAG_THRESHOLD_PX)
+    expect(isClickGesture({ x: 0, y: 0 }, { x: ORB_DRAG_THRESHOLD_PX, y: 0 })).toBe(true)
   })
 })
 

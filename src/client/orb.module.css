@@ -222,7 +222,9 @@
   max-height: var(--a2d2-card-max, calc(100vh - 200px));
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 14px;
+  /* No bottom padding: the pinned action block owns that inset, so no strip of
+     scrolled-through content shows beside it. */
+  padding: 14px 14px 0;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 12px;
   background: #1b2430;
@@ -515,6 +517,34 @@
   border-color: #8dc0ff;
   background: #17263a;
   outline: none;
+}
+
+/*
+ * The moves and the controls, pinned to the card's bottom edge.
+ *
+ * The card is capped by the room beside the circle, and in a short window the
+ * status and the highway map alone can exceed that cap — so without this the
+ * chips, 其他走法 and 关闭 would all sit below the fold, which is where the hand
+ * expects the buttons to be. The reference material scrolls under an opaque
+ * block instead. When the block itself is taller than the card (a card opened
+ * near a viewport edge, or 其他走法 expanded) it stops sticking and simply
+ * scrolls, so nothing becomes unreachable.
+ */
+.cardActions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* Bleeds into the card's own padding so nothing shows through beside it; the
+     card's overflow clips the bleed to its rounded corners. The rule and the
+     shadow are what make a half-scrolled row above read as "more above this"
+     rather than as a clipped one. */
+  margin: 0 -14px;
+  padding: 10px 14px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  background: #1b2430;
+  box-shadow: 0 -10px 14px rgba(0, 0, 0, 0.32);
 }
 
 .otherMoves {

@@ -72,6 +72,7 @@ import {
   ORB_STACK_GAP_PX,
   anchorRightOffset,
   clampOrbPoint,
+  isClickGesture,
   isDragGesture,
   orbPlacement,
   parseOrbPoint,
@@ -324,6 +325,14 @@ interface OrbDrag {
   readonly from: OrbPoint
   /** Where the circle was when the press started, in viewport coordinates. */
   readonly origin: OrbPoint
+  /**
+   * The point to restore if the gesture turns out to be a click.
+   *
+   * Captured at the press, not read at the release: the circle follows the
+   * pointer in between, so by then the live point is the drifted one this is
+   * meant to undo.
+   */
+  readonly before: OrbPoint | undefined
   /** Whether the gesture has passed the drag threshold. */
   moved: boolean
 }
@@ -499,20 +508,22 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
    *
    * The gesture is captured so a fast drag that outruns the pointer keeps
    * following it, and the press is not yet a drag: `draggedRef` stays false
-   * until the threshold is passed, so a plain click still opens the card.
+   * until the threshold is passed, so a plain click still opens the card. The
+   * circle's own point is the origin rather than its measured box, which the
+   * hover lift scales away from it.
    */
   const startOrbDrag = useCallback((event: { pointerId: number; button: number; clientX: number; clientY: number; currentTarget: HTMLButtonElement }): void => {
     if (event.button !== 0) return
-    const rect = event.currentTarget.getBoundingClientRect()
     dragRef.current = {
       pointerId: event.pointerId,
       from: { x: event.clientX, y: event.clientY },
-      origin: { x: rect.left, y: rect.top },
+      origin: placement.point,
+      before: moved,
       moved: false,
     }
     draggedRef.current = false
     event.currentTarget.setPointerCapture(event.pointerId)
-  }, [])
+  }, [placement.point, moved])
 
   /** Move the circle with the pointer, once the gesture has earned it. */
   const moveOrbDrag = useCallback((event: { pointerId: number; clientX: number; clientY: number }): void => {
@@ -530,7 +541,13 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
     }, currentViewport()))
   }, [])
 
-  /** Drop the circle where the pointer left it, and remember the point. */
+  /**
+   * Drop the circle where the pointer left it, and remember the point.
+   *
+   * A release that barely moved from the press is a click on the circle, not a
+   * move: the drift it left behind is undone and the click is left to open the
+   * card, which is what a trackpad click expects.
+   */
   const endOrbDrag = useCallback((event: { pointerId: number; clientX: number; clientY: number; currentTarget: HTMLButtonElement }): void => {
     const drag = dragRef.current
     dragRef.current = null
@@ -540,9 +557,14 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
     }
     setDragging(false)
     if (!drag.moved) return
+    const released = { x: event.clientX, y: event.clientY }
+    if (isClickGesture(drag.from, released)) {
+      setMoved(drag.before)
+      return
+    }
     const point = clampOrbPoint({
-      x: drag.origin.x + (event.clientX - drag.from.x),
-      y: drag.origin.y + (event.clientY - drag.from.y),
+      x: drag.origin.x + (released.x - drag.from.x),
+      y: drag.origin.y + (released.y - drag.from.y),
     }, currentViewport())
     draggedRef.current = true
     setMoved(point)
@@ -635,19 +657,21 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
     }),
     phase.kind === 'error' ? createElement('div', { className: css.cardError }, phase.message) : null,
     running ? createElement('div', { className: css.cardBusy }, '本会话正在撰写交接摘要，随后自动创建并切换后继会话…') : null,
-    createElement('div', { className: css.cardRow },
-      createElement('button', {
-        type: 'button',
-        className: `${css.cardButton} ${css.cancel}`,
-        disabled: running,
-        onClick: () => { setPhase({ kind: 'closed' }); setFocus(''); setHandoffModelTarget(undefined) },
-      }, '取消'),
-      createElement('button', {
-        type: 'button',
-        className: `${css.cardButton} ${css.confirm}`,
-        disabled: running,
-        onClick: () => { void confirm() },
-      }, '创建并交接'),
+    createElement('div', { className: css.cardActions },
+      createElement('div', { className: css.cardRow },
+        createElement('button', {
+          type: 'button',
+          className: `${css.cardButton} ${css.cancel}`,
+          disabled: running,
+          onClick: () => { setPhase({ kind: 'closed' }); setFocus(''); setHandoffModelTarget(undefined) },
+        }, '取消'),
+        createElement('button', {
+          type: 'button',
+          className: `${css.cardButton} ${css.confirm}`,
+          disabled: running,
+          onClick: () => { void confirm() },
+        }, '创建并交接'),
+      ),
     ),
   ) : null
 
@@ -686,61 +710,67 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
       : null,
     highway === undefined ? null : createElement(HighwayMap, { view: highway, mode: 'readonly' }),
     highway?.nextLine === undefined ? null : createElement('div', { className: css.nextLine }, highway.nextLine),
-    consult.kind === 'ready'
-      ? createElement('div', { className: css.chips },
-        ...consult.candidates.map((candidate, index) => {
-          const effect = candidateModelEffect(candidate, consult, modelDirectory)
-          return createElement('button', {
-            type: 'button',
-            className: css.chip,
-            key: `${candidate.move}-${String(index)}`,
-            title: effect === undefined ? candidate.input : `${candidate.input}\n${effect}`,
-            onClick: () => { selectCandidate(candidate) },
-          },
-            createElement('span', { className: css.chipMove }, chipMoveLabel(candidate.move)),
-            createElement('span', { className: css.chipLabel }, candidate.label),
-            effect === undefined ? null : createElement('span', { className: css.chipEffect }, effect),
-          )
-        }),
-      )
-      : null,
-    createElement('details', { className: css.otherMoves },
-      createElement('summary', { className: css.otherMovesSummary }, '其他走法'),
-      createElement('div', { className: css.otherMoveGrid },
-        ...OTHER_MOVE_OPTIONS.map(option => createElement('button', {
-          type: 'button',
-          className: css.otherMoveButton,
-          key: option.move,
-          title: option.hint,
-          onClick: () => { selectOther(option.move) },
-        },
-          createElement('span', { className: css.otherMoveLabel }, option.label),
-          createElement('span', { className: css.otherMoveHint }, option.hint),
-        )),
-      ),
-    ),
-    attribution === undefined ? null : createElement('div', { className: css.attribution }, attribution),
-    createElement('div', { className: css.cardRow },
-      moved === undefined
-        ? null
-        : createElement('button', {
-          type: 'button',
-          className: `${css.cardButton} ${css.cancel} ${css.cardReset}`,
-          title: '把指示球放回原来的角落',
-          onClick: resetOrb,
-        }, '复位'),
-      consult.kind === 'error'
-        ? createElement('button', {
-          type: 'button',
-          className: `${css.cardButton} ${css.confirm}`,
-          onClick: consultNext,
-        }, '重试')
+    // Everything from the chips down is pinned to the card's bottom: the card is
+    // capped by the room beside the circle, and a small window leaves the status
+    // and the highway map more than the whole cap — so the reference scrolls and
+    // the moves stay where the hand already is.
+    createElement('div', { className: css.cardActions },
+      consult.kind === 'ready'
+        ? createElement('div', { className: css.chips },
+          ...consult.candidates.map((candidate, index) => {
+            const effect = candidateModelEffect(candidate, consult, modelDirectory)
+            return createElement('button', {
+              type: 'button',
+              className: css.chip,
+              key: `${candidate.move}-${String(index)}`,
+              title: effect === undefined ? candidate.input : `${candidate.input}\n${effect}`,
+              onClick: () => { selectCandidate(candidate) },
+            },
+              createElement('span', { className: css.chipMove }, chipMoveLabel(candidate.move)),
+              createElement('span', { className: css.chipLabel }, candidate.label),
+              effect === undefined ? null : createElement('span', { className: css.chipEffect }, effect),
+            )
+          }),
+        )
         : null,
-      createElement('button', {
-        type: 'button',
-        className: `${css.cardButton} ${css.cancel}`,
-        onClick: closeConsult,
-      }, '关闭'),
+      createElement('details', { className: css.otherMoves },
+        createElement('summary', { className: css.otherMovesSummary }, '其他走法'),
+        createElement('div', { className: css.otherMoveGrid },
+          ...OTHER_MOVE_OPTIONS.map(option => createElement('button', {
+            type: 'button',
+            className: css.otherMoveButton,
+            key: option.move,
+            title: option.hint,
+            onClick: () => { selectOther(option.move) },
+          },
+            createElement('span', { className: css.otherMoveLabel }, option.label),
+            createElement('span', { className: css.otherMoveHint }, option.hint),
+          )),
+        ),
+      ),
+      attribution === undefined ? null : createElement('div', { className: css.attribution }, attribution),
+      createElement('div', { className: css.cardRow },
+        moved === undefined
+          ? null
+          : createElement('button', {
+            type: 'button',
+            className: `${css.cardButton} ${css.cancel} ${css.cardReset}`,
+            title: '把指示球放回原来的角落',
+            onClick: resetOrb,
+          }, '复位'),
+        consult.kind === 'error'
+          ? createElement('button', {
+            type: 'button',
+            className: `${css.cardButton} ${css.confirm}`,
+            onClick: consultNext,
+          }, '重试')
+          : null,
+        createElement('button', {
+          type: 'button',
+          className: `${css.cardButton} ${css.cancel}`,
+          onClick: closeConsult,
+        }, '关闭'),
+      ),
     ),
   ) : null
 
