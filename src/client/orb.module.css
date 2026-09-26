@@ -143,6 +143,11 @@
 /*
  * The card and the hover action, right-aligned to the circle, opening above it
  * or below it depending on which side has room.
+ *
+ * The box reaches the circle's own box and the visual gap comes from padding,
+ * not from an offset: a strip that belongs to neither box is a strip the pointer
+ * crosses on the way to the hover action, and crossing it fires the anchor's
+ * `mouseleave` and unmounts the very button being reached for.
  */
 .stack {
   position: absolute;
@@ -151,6 +156,16 @@
   align-items: flex-end;
   gap: var(--a2d2-stack-gap, 8px);
   width: var(--a2d2-card-width, 288px);
+}
+
+.stackAbove {
+  bottom: 100%;
+  padding-bottom: var(--a2d2-stack-gap, 8px);
+}
+
+.stackBelow {
+  top: 100%;
+  padding-top: var(--a2d2-stack-gap, 8px);
 }
 
 /* Inside the anchor the orb is placed by this box instead of the viewport, but it

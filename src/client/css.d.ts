@@ -22,6 +22,8 @@ declare module '*.module.css' {
     readonly anchor: string
     readonly dragging: string
     readonly stack: string
+    readonly stackAbove: string
+    readonly stackBelow: string
     readonly action: string
     readonly card: string
     readonly cardTitle: string

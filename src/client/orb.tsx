@@ -793,12 +793,9 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
     createElement(
       'div',
       {
-        className: css.stack,
+        className: placement.card.above ? `${css.stack} ${css.stackAbove}` : `${css.stack} ${css.stackBelow}`,
         style: {
           left: `${String(placement.card.left)}px`,
-          ...(placement.card.above
-            ? { bottom: `calc(100% + ${String(ORB_STACK_GAP_PX)}px)` }
-            : { top: `calc(100% + ${String(ORB_STACK_GAP_PX)}px)` }),
           '--a2d2-card-max': `${String(placement.card.maxHeight)}px`,
         } as never,
       },
