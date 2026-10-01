@@ -217,11 +217,12 @@ function RootNode({
  * @returns the rendered list.
  */
 export function SubagentModelTab({ ctx, sessionId, visible }: SubagentModelTabProps): ReturnType<typeof createElement> {
-  // `ctx.get` returns a fresh traceable proxy per call; read the services once
-  // per context so the loaders and effects keyed on them are not rebuilt (and
-  // their in-flight reads cancelled) on every render.
+  // `ctx.get` returns a fresh traceable proxy per call; read the stateful
+  // services once per context so the loaders and effects keyed on them are not
+  // rebuilt (and their in-flight reads cancelled) on every render. `uiWorkspace`
+  // is intentionally read at click time because it is not injected by this
+  // plugin and can arrive or restart while the tab stays mounted.
   const sessions = useMemo(() => ctx.get('sessions') as ClientSessionsService | undefined, [ctx])
-  const navigation = useMemo(() => ctx.get('uiWorkspace') as ClientWorkspaceNavigation | undefined, [ctx])
   const remote = useMemo(() => ctx.get('remote') as SubagentRouteHistoryApi | undefined, [ctx])
   const inflightRef = useRef(new Set<string>())
   const [historySources, setHistorySources] = useState<Readonly<Record<string, SubagentRouteSource | undefined>>>({})
@@ -295,21 +296,23 @@ export function SubagentModelTab({ ctx, sessionId, visible }: SubagentModelTabPr
 
   const openRoot = useCallback((id: string): void => {
     try {
+      const navigation = ctx.get('uiWorkspace') as ClientWorkspaceNavigation | undefined
       navigation?.openSession(id)
     } catch {
       // The row can disappear between render and click.
     }
-  }, [navigation])
+  }, [ctx])
 
   const openNode = useCallback((row: SubagentRouteTreeNode): void => {
     try {
+      const navigation = ctx.get('uiWorkspace') as ClientWorkspaceNavigation | undefined
       navigation?.openSession(row.mode === undefined
         ? row.id
         : { parentSessionId: row.parentId, childSessionId: row.id, mode: row.mode })
     } catch {
       // The row can disappear between render and click.
     }
-  }, [navigation])
+  }, [ctx])
 
   return createElement(
     'div',
