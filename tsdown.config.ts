@@ -7,6 +7,7 @@
  *   because cordis loads a plugin only once its declared services exist).
  * - `lib/tools.js` is the model tools plugin (its own mount row, for the same
  *   reason: it declares `tools`).
+ * - `lib/ceo-prompt.js` is the scoped CEO prompt plugin for main sessions.
  * - `lib/invariant.js` is the package invariant companion the harness probes.
  * - `lib/client.js` is the browser half: a classic script registering a CJS
  *   closure factory with `window.__ModuleLoader__`, whose id equals the package
@@ -142,7 +143,7 @@ function cssPlugin(): BuildPlugin {
 
 export default [
   {
-    entry: { index: 'src/index.ts', command: 'src/command.ts', tools: 'src/tools.ts', invariant: 'src/invariant.ts' },
+    entry: { index: 'src/index.ts', command: 'src/command.ts', tools: 'src/tools.ts', 'ceo-prompt': 'src/ceo-prompt.ts', invariant: 'src/invariant.ts' },
     outDir: 'lib',
     format: ['esm'],
     platform: 'node',

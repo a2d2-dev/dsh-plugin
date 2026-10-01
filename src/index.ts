@@ -181,6 +181,11 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     a2d2: A2d2Service
   }
+
+  interface Events {
+    /** Emitted after a session has become the main session of a task issue. */
+    'a2d2/main-session-bound'(payload: { cwd: string; projectRoot: string; issue: number; mainSession: SessionId }): void
+  }
 }
 
 /** @deprecated Handoff documents no longer render suggested skills. */
@@ -461,6 +466,7 @@ export class A2d2Service extends Service {
         const named = (parent: number | undefined): string => (parent === undefined ? 'none' : `#${parent}`)
         throw new Error(`a2d2: task issue #${issue} records parent ${named(bound.parent)}, not ${named(parentIssue)}`)
       }
+      await this.emitMainSessionBound(cwd, issue, mainSession)
       return { ...existing, issue: bound }
     }
     // One task per main session keeps "which task does this session execute"
@@ -479,6 +485,7 @@ export class A2d2Service extends Service {
       members: [{ sessionId: mainSession }],
     }
     await this.store.write(cwd, task)
+    await this.emitMainSessionBound(cwd, issue, mainSession)
     return task
   }
 
@@ -501,6 +508,15 @@ export class A2d2Service extends Service {
    */
   async mainSessionOfIssue(cwd: string, issue: number): Promise<SessionId | undefined> {
     return (await this.store.read(cwd, taskIdForIssue(issue)))?.issue?.mainSession
+  }
+
+  /**
+   * Resolve the project root that owns a session cwd.
+   * @param cwd - absolute session working directory.
+   * @returns the owning project root.
+   */
+  async projectRoot(cwd: string): Promise<string> {
+    return await this.store.projectRoot(cwd)
   }
 
   /**
@@ -891,6 +907,16 @@ export class A2d2Service extends Service {
       )
     }
     return found
+  }
+
+  /** Notify optional integrations that a main session is now bound. */
+  private async emitMainSessionBound(cwd: string, issue: number, mainSession: SessionId): Promise<void> {
+    this.ctx.emit('a2d2/main-session-bound', {
+      cwd,
+      projectRoot: await this.store.projectRoot(cwd),
+      issue,
+      mainSession,
+    })
   }
 
   /** The named task, or a loud failure naming it. */
