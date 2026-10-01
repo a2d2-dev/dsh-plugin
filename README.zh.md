@@ -230,11 +230,11 @@ sessions:
 
 #### What the model sees
 
-只有任务 issue 的主会话会收到作用域内的 `a2d2:ceo` 系统提示段。主会话 Agent 创建或恢复时会安装；运行中的会话通过 `bind_main_session` 绑定为主会话时也会安装。段内容由随包发布的 `AGENTS.md`、`WAKE.md`、全局 SOUL（`~/.dsh/a2d2/SOUL.md`）和项目 SOUL（`<projectRoot>/.dsh/a2d2/SOUL.md`）组装。项目 SOUL 放在最后，并标明优先于全局 SOUL。缺失的 SOUL 文件会在段内点名，而不是静默跳过。
+只有任务 issue 的主会话会收到作用域内的 `a2d2:ceo` 系统提示段。主会话 Agent 创建或恢复时会安装；运行中的会话通过 `bind_main_session` 绑定为主会话时也会安装。段内容由随包发布的 `ceo/AGENTS.md`、`ceo/WAKE.md`、全局 SOUL（`~/.dsh/a2d2/SOUL.md`）和项目 SOUL（`<projectRoot>/.dsh/a2d2/SOUL.md`）组装。项目 SOUL 放在最后，并标明优先于全局 SOUL。缺失的 SOUL 文件会在段内点名，而不是静默跳过。
 
 #### Token effect
 
-主会话 CEO 的每次请求都会携带渲染后的这一段。`AGENTS.md`、`WAKE.md` 与两份 SOUL 都在每次组装时现读，所以修改 SOUL 文件会改变下一次请求的 token。普通会话没有这一段。
+主会话 CEO 的每次请求都会携带渲染后的这一段。`ceo/AGENTS.md`、`ceo/WAKE.md` 与两份 SOUL 都在每次组装时现读，所以修改 SOUL 文件会改变下一次请求的 token。普通会话没有这一段。
 
 #### KV Cache effect
 

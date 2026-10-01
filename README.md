@@ -230,11 +230,11 @@ None. No request content changes, so no cache entry is invalidated.
 
 #### What the model sees
 
-Only a task issue's main session receives the scoped `a2d2:ceo` system prompt section. The section is installed when the main-session Agent is created or resumed, and also when a running session is bound through `bind_main_session`. Its text is assembled from packaged `AGENTS.md` and `WAKE.md`, global SOUL at `~/.dsh/a2d2/SOUL.md`, and project SOUL at `<projectRoot>/.dsh/a2d2/SOUL.md`. Project SOUL is rendered last and labelled as priority over global SOUL. Missing SOUL files are named in the section instead of being skipped.
+Only a task issue's main session receives the scoped `a2d2:ceo` system prompt section. The section is installed when the main-session Agent is created or resumed, and also when a running session is bound through `bind_main_session`. Its text is assembled from packaged `ceo/AGENTS.md` and `ceo/WAKE.md`, global SOUL at `~/.dsh/a2d2/SOUL.md`, and project SOUL at `<projectRoot>/.dsh/a2d2/SOUL.md`. Project SOUL is rendered last and labelled as priority over global SOUL. Missing SOUL files are named in the section instead of being skipped.
 
 #### Token effect
 
-Every request from a main-session CEO carries the rendered section. `AGENTS.md`, `WAKE.md`, and both SOUL files are reread on each assembly, so editing a SOUL file changes the next request's tokens. Ordinary sessions receive none of this section.
+Every request from a main-session CEO carries the rendered section. `ceo/AGENTS.md`, `ceo/WAKE.md`, and both SOUL files are reread on each assembly, so editing a SOUL file changes the next request's tokens. Ordinary sessions receive none of this section.
 
 #### KV Cache effect
 
