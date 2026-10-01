@@ -13,7 +13,7 @@ A²D²（Agentic Agile Driven Development）的载体：方法论词汇、CEO �
 _Avoid_: 工作区（DSH 的 workspace 是界面分组）
 
 **任务（Task）**:
-一件要达成的事，承载意图与验收。项目拆成多个任务，任务还可以再拆成更小的任务，形成任务树。任务按 Matt 工作流推进。
+一件要达成的事，承载意图与验收。项目拆成多个任务；CEO 判断一个任务需要拆分时，拆出的子任务同样以 issue 开始，由 CEO 新开一个主会话专注它，再走一遍 grill → to-spec → to-tickets，形成任务树。任务按 Matt 工作流推进。
 _Avoid_: 目标（DSH 的 Goal 是续跑条件，属执行层）、会话组（会话只是任务的执行轨迹）、story
 
 **Agent**:
