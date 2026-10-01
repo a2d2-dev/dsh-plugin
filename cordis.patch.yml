@@ -22,9 +22,11 @@
 # `a2d2`, so only a profile that composes both gets the model tools
 # (`bind_main_session`). The open-subtask tools row also declares `agents` and
 # `llm`, because `open_subtask` creates a root session and selects the grill
-# station model; the CEO prompt row declares `agents`, `systemPrompt`, and
-# `a2d2`, so only a profile with live Agents and system prompt assembly gets
-# scoped main-session CEO guidance. The floating orb needs no row of its own: it
+# station model; the complete-task tools row declares `agents`, because
+# `complete_task` may resume the parent task's main session before sending the
+# child-completed notification; the CEO prompt row declares `agents`,
+# `systemPrompt`, and `a2d2`, so only a profile with live Agents and system
+# prompt assembly gets scoped main-session CEO guidance. The floating orb needs
 # drives that same command through the session it already sits on.
 - insert:
     - id: a2d2
@@ -35,5 +37,7 @@
       name: 'dsh-a2d2/tools'
     - id: a2d2-open-subtask-tools
       name: 'dsh-a2d2/open-subtask-tools'
+    - id: a2d2-complete-task-tools
+      name: 'dsh-a2d2/complete-task-tools'
     - id: a2d2-ceo-prompt
       name: 'dsh-a2d2/ceo-prompt'

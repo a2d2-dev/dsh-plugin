@@ -22,6 +22,10 @@
       "types": "./lib/types/open-subtask-tools.d.ts",
       "default": "./lib/open-subtask-tools.js"
     },
+    "./complete-task-tools": {
+      "types": "./lib/types/complete-task-tools.d.ts",
+      "default": "./lib/complete-task-tools.js"
+    },
     "./ceo-prompt": {
       "types": "./lib/types/ceo-prompt.d.ts",
       "default": "./lib/ceo-prompt.js"
