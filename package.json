@@ -54,13 +54,7 @@
     }
   },
   "files": [
-    "lib/index.js",
-    "lib/command.js",
-    "lib/tools.js",
-    "lib/open-subtask-tools.js",
-    "lib/complete-task-tools.js",
-    "lib/ceo-prompt.js",
-    "lib/invariant.js",
+    "lib/*.js",
     "lib/types/**/*.d.ts",
     "cordis.patch.yml",
     "dsh.plugin.json",
@@ -75,6 +69,7 @@
     "build": "node -e \"require('node:fs').rmSync('lib',{recursive:true,force:true})\" && tsc -p tsconfig.build.json && tsc -p tsconfig.build.client.json && tsdown",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.client.json",
     "test": "vitest run",
+    "verify:pack-exports": "pnpm build && node scripts/verify-pack-exports.mjs",
     "prepublishOnly": "pnpm build"
   },
   "license": "MIT",

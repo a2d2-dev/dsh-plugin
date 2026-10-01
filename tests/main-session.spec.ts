@@ -11,7 +11,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import A2d2Service from '../src/index.ts'
@@ -123,15 +123,45 @@ describe('bindMainSession', () => {
     expect(await service.readTask(root, TaskId('issue-45'))).toEqual(bound)
   })
 
+  it('lets only one concurrent binding become the task issue main session and emits one change', async () => {
+    const root = await tempRoot()
+    const ctx = new Context()
+    await ctx.plugin(A2d2Service, { root })
+    const changed = vi.fn()
+    ctx.on('a2d2/main-session-changed', changed)
+
+    const outcomes = await Promise.all([
+      ctx.a2d2.bindMainSession({ cwd: root, issue: 45, mainSession: sessionA, now: new Date('2026-10-01T10:00:00.000Z') })
+        .then(value => ({ status: 'fulfilled' as const, value }), reason => ({ status: 'rejected' as const, reason })),
+      ctx.a2d2.bindMainSession({ cwd: root, issue: 45, mainSession: sessionB, now: new Date('2026-10-01T10:00:00.000Z') })
+        .then(value => ({ status: 'fulfilled' as const, value }), reason => ({ status: 'rejected' as const, reason })),
+    ])
+
+    const fulfilled = outcomes.filter((outcome): outcome is { status: 'fulfilled', value: Awaited<ReturnType<A2d2Service['bindMainSession']>> } => outcome.status === 'fulfilled')
+    const rejected = outcomes.filter((outcome): outcome is { status: 'rejected', reason: unknown } => outcome.status === 'rejected')
+    expect(fulfilled).toHaveLength(1)
+    expect(rejected).toHaveLength(1)
+    expect(rejected[0]?.reason).toBeInstanceOf(Error)
+    expect((rejected[0]?.reason as Error).message).toMatch(/task issue #45 already has main session ".*".*handoff/)
+    expect(await ctx.a2d2.readTask(root, TaskId('issue-45'))).toEqual(fulfilled[0]?.value)
+    expect(changed).toHaveBeenCalledTimes(1)
+    expect(changed).toHaveBeenCalledWith(expect.objectContaining({ issue: 45, mainSession: fulfilled[0]?.value.issue.mainSession }))
+  })
+
   it('accepts the same main session binding again and leaves the document as it was', async () => {
     const root = await tempRoot()
-    const service = await mount(root)
-    const bound = await service.bindMainSession({ cwd: root, issue: 45, parentIssue: 41, mainSession: sessionA, now: new Date('2026-10-01T10:00:00.000Z') })
+    const ctx = new Context()
+    await ctx.plugin(A2d2Service, { root })
+    const changed = vi.fn()
+    ctx.on('a2d2/main-session-changed', changed)
+    const bound = await ctx.a2d2.bindMainSession({ cwd: root, issue: 45, parentIssue: 41, mainSession: sessionA, now: new Date('2026-10-01T10:00:00.000Z') })
+    changed.mockClear()
 
-    const again = await service.bindMainSession({ cwd: root, issue: 45, parentIssue: 41, mainSession: sessionA, now: new Date('2026-10-02T10:00:00.000Z') })
+    const again = await ctx.a2d2.bindMainSession({ cwd: root, issue: 45, parentIssue: 41, mainSession: sessionA, now: new Date('2026-10-02T10:00:00.000Z') })
 
     expect(again).toEqual(bound)
-    expect(await service.readTask(root, TaskId('issue-45'))).toEqual(bound)
+    expect(await ctx.a2d2.readTask(root, TaskId('issue-45'))).toEqual(bound)
+    expect(changed).not.toHaveBeenCalled()
   })
 
   it('refuses a binding again that names a different parent task issue', async () => {
