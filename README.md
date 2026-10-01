@@ -21,6 +21,8 @@ The rest of this document is the plugin's behavior contract and known limits, ke
 
 The package contributes five mount rows. `ctx.a2d2` is the task store and declares no service, so it loads in any profile; the command row declares `commands` and `a2d2`, so only a profile that composes both gets `/handoff`; the base tools row declares `tools` and `a2d2`, so only a profile that composes both gets `bind_main_session` and `dispatch_subagent`; the open-subtask tools row additionally declares `agents` and `llm`, because `open_subtask` creates a root session and selects the grill station model; the CEO prompt row declares `agents`, `systemPrompt`, and `a2d2`, so only a profile that composes live Agents and system prompt assembly gets scoped main-session guidance. The dispatch tool looks up `subagents` only when it runs, so profiles without the subagent service still load the base tools row and keep `bind_main_session` available. Cordis refuses to load a plugin whose declared services are absent, which is why the rows are split rather than registered conditionally from one row. The floating orb needs no row of its own: it drives that same command through the session it already sits on.
 
+Before publishing, run `pnpm verify:pack-exports`. It builds the package, packs the tarball, installs that tarball into an empty temporary project, and imports every Node entry declared in `package.json` exports. The check catches missing hashed build chunks such as the shared handoff chunk before a release is cut.
+
 ```yaml
 - id: a2d2
   name: '@deepseek-ai/dsh-a2d2'

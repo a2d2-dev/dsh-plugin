@@ -21,6 +21,8 @@
 
 本包贡献五个挂载行。`ctx.a2d2` 是任务存储，不声明任何服务，因此在任何 profile 中都会加载；命令行声明了 `commands` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `/handoff`；基础工具行声明了 `tools` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `bind_main_session` 与 `dispatch_subagent`；开子任务工具行额外声明 `agents` 与 `llm`，因为 `open_subtask` 要创建根会话并选择 grill 站模型；CEO 提示段行声明了 `agents`、`systemPrompt` 与 `a2d2`，所以只有同时组合 live Agents 与系统提示词组装的 profile 才得到主会话作用域指导。`dispatch_subagent` 只在实际运行时查找 `subagents`，因此没有子代理服务的 profile 仍能加载基础工具行，`bind_main_session` 照常可用。Cordis 对"声明了却缺失的服务"是拒绝加载，这正是把它们拆成多行、而不是从一行里条件式注册的原因。悬浮球不需要自己的一行：它通过自己已经身处的那个会话驱动同一条命令。
 
+发布前运行 `pnpm verify:pack-exports`。它会构建包、打出 tarball、把 tarball 安装到一个空的临时项目里，并逐个导入 `package.json` exports 声明的每个 Node 入口。这个检查会在发版前发现遗漏的 hash 构建分块，例如共享的交接分块。
+
 ```yaml
 - id: a2d2
   name: '@deepseek-ai/dsh-a2d2'
