@@ -12,6 +12,7 @@
 - **会话交接**——`/handoff` 把工作从一条又长又贵的会话搬到一条干净的新会话而不丢失脉络：交接出去的会话写下有界的接续内容，后继会话据此继续。
 - **指示球**——输入框旁一枚可一眼看清上下文长度与花费的小球；会话接近 smart zone 时告警，提醒在下个相位边界决定去向。
 - **A²D² 面板**——better-sidebar 里的侧边栏 Tab，展示当前会话所属项目的任务、成员交接树，以及主会话子代理路由树。
+- **GitHub 关注**——`github_watch` 让会话不用轮询就能等一个 PR：PR 合并、关闭、CI 出结果或有了 review 结论时，会话会收到一条消息，空闲中的会话也会被唤醒。
 
 > `A²D²` 是品牌与展示写法；`a2d2` 是技术标识——包名、目录、服务名都用它，因为 `²` 不能进 npm 包名。包名为 `@deepseek-ai/dsh-a2d2`。
 
@@ -19,7 +20,7 @@
 
 ## 插件（namespace：`a2d2`）
 
-本包贡献六个挂载行。`ctx.a2d2` 是任务存储，不声明任何服务，因此在任何 profile 中都会加载；命令行声明了 `commands` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `/handoff`；基础工具行声明了 `tools` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `bind_main_session` 与 `dispatch_subagent`；开子任务工具行额外声明 `agents` 与 `llm`，因为 `open_subtask` 要创建根会话并选择 grill 站模型；完成任务工具行声明 `agents`，因为 `complete_task` 可能需要先恢复父任务主会话再发送通知；CEO 提示段行声明了 `agents`、`systemPrompt` 与 `a2d2`，所以只有同时组合 live Agents 与系统提示词组装的 profile 才得到主会话作用域指导。`dispatch_subagent` 只在实际运行时查找 `subagents`，因此没有子代理服务的 profile 仍能加载基础工具行，`bind_main_session` 照常可用。Cordis 对"声明了却缺失的服务"是拒绝加载，这正是把它们拆成多行、而不是从一行里条件式注册的原因。悬浮球不需要自己的一行：它通过自己已经身处的那个会话驱动同一条命令。
+本包贡献七个挂载行。`ctx.a2d2` 是任务存储，不声明任何服务，因此在任何 profile 中都会加载；命令行声明了 `commands` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `/handoff`；基础工具行声明了 `tools` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `bind_main_session` 与 `dispatch_subagent`；开子任务工具行额外声明 `agents` 与 `llm`，因为 `open_subtask` 要创建根会话并选择 grill 站模型；完成任务工具行声明 `agents`，因为 `complete_task` 可能需要先恢复父任务主会话再发送通知；CEO 提示段行声明了 `agents`、`systemPrompt` 与 `a2d2`，所以只有同时组合 live Agents 与系统提示词组装的 profile 才得到主会话作用域指导；GitHub 关注行声明了 `tools`、`agents`、`sessions` 与 `sessionController`，所以只有能唤醒会话的 profile 才得到 `github_watch`。`dispatch_subagent` 只在实际运行时查找 `subagents`，因此没有子代理服务的 profile 仍能加载基础工具行，`bind_main_session` 照常可用。Cordis 对"声明了却缺失的服务"是拒绝加载，这正是把它们拆成多行、而不是从一行里条件式注册的原因。悬浮球不需要自己的一行：它通过自己已经身处的那个会话驱动同一条命令。
 
 发布前运行 `pnpm verify:pack-exports`。它会构建包、打出 tarball、把 tarball 安装到一个空的临时项目里，并逐个导入 `package.json` exports 声明的每个 Node 入口。这个检查会在发版前发现遗漏的 hash 构建分块，例如共享的交接分块。
 
@@ -36,6 +37,8 @@
   name: '@deepseek-ai/dsh-a2d2/complete-task-tools'
 - id: a2d2-ceo-prompt
   name: '@deepseek-ai/dsh-a2d2/ceo-prompt'
+- id: a2d2-github-watch
+  name: '@deepseek-ai/dsh-a2d2/github-watch'
 ```
 
 | 键 | 默认值 | 约定 |
@@ -139,6 +142,22 @@ sessions:
 - 模型取站点模型表里该站第一个存在于 DSH 宿主模型目录的 `provider/model` 候选；派发时现读，因此 settings 改动影响下一次调用。
 - 特殊 Agent `agent` 从 `<项目根>/.dsh/a2d2/agents/<agent>.md` 读取，并作为子代理 persona 传入。特殊 Agent 缺失或为空都会报错，绝不回退默认 Agent。
 - 返回值给出子代理会话 id、实际 `provider/model` 与所用 Agent。
+
+## GitHub 关注
+
+`github_watch` 的参数是 `pr` 和可选的 `repo`（`owner/name`）。省略 `repo` 时，取会话工作目录的 `github.com` origin。PR 状态来自 A²D² hooks 服务 `https://hooks.a2d2.dev`（仓库 a2d2-dev/a2d2-services）。服务以 a2d2-bot GitHub App 的身份读 GitHub，每个事件只为所有订阅者读一次；PR 状态一变，就通过出站 WebSocket 推送过来。所以插件不需要公网地址，不用配置 webhook，也从不轮询 GitHub。它对 GitHub 的唯一调用是领取 ticket，请求里带用户的 `gh auth token`（或 `GH_TOKEN` / `GITHUB_TOKEN`），供服务检查读权限。
+
+- 调用会返回 PR 的当前状态：open/closed/merged、CI 汇总和 review 结论。PR 若已合并或关闭，关注当场结束。
+- 关注列表和"每个会话上次被告知的状态"存在 `~/.dsh/a2d2/github-watches.json`。之后收到的每个状态都和该会话上次被告知的比较，只有不同才注入消息。消息是持久的 user 角色 notice，source 为 `{ kind: 'a2d2-github-watch', repo, pr }`，并带一行摘要，例如 `a2d2-dev/x#7: merged, CI passed`。注入会唤醒空闲的会话。
+- DSH 重启后，所有已存的关注会重新连接。服务返回的快照会和上次告知的状态比较：DSH 停机期间发生的变化补报一次；什么都没变就不报。
+- 已合并、已关闭或不存在的状态告知之后，关注结束。会话不存在了，关注也会结束。
+- 仓库没装 a2d2-bot 时，调用返回 `not_installed` 和安装链接（`https://github.com/apps/a2d2-bot/installations/new`），不保留关注。App 之后被卸载的话，正在关注的会话会收到一次通知，关注随之结束。
+- 服务连不上时会退避重连（1 秒起，最长 60 秒）。服务 20 秒内没有回应时，调用返回 `pending`，第一个状态之后以消息形式送达。
+
+| 键（`a2d2-github-watch` 行） | 默认 | 约定 |
+|---|---|---|
+| `relayUrl` | `https://hooks.a2d2.dev` | hooks 服务的基础 URL。 |
+| `homeDir` | `~/.dsh/a2d2` | `github-watches.json` 所在目录。 |
 
 ## `/handoff`
 
@@ -325,6 +344,20 @@ sessions:
 #### KV Cache effect
 
 新增工具会让组合基础工具行的 profile 的工具列表前缀变化一次。站点模型 settings 与特殊 Agent 文件内容在工具运行时读取，不嵌进父会话请求前缀，因此它们变化本身不会让父会话缓存失效。
+
+### `github_watch`
+
+#### What the model sees
+
+组合了 GitHub 关注行的 profile 中，agent 的每次请求多一个工具定义。调用结果是一句话：当前状态和"之后会收到消息"，或者安装链接，或者 PR 已经结束。之后被关注的 PR 每有一次变化，就往该会话加一条 user 角色 notice：几行文字，说明发生了什么变化、PR 链接、当前状态、关注是否继续。不关注任何 PR 的会话不受影响。
+
+#### Token effect
+
+工具定义约 590 个字符的 JSON，按每 4 个字符 1 个 token 估算约 150 token，出现在组合了该行的 profile 的每次请求里。每条 notice 约 300–450 个字符（≈ 75–110 token），只在状态真正变化时出现一次。重复和无变化的投递先被服务丢弃，插件比较时再过滤一次。
+
+#### KV Cache effect
+
+加入这个工具会让组合该行的 profile 的工具列表前缀变化一次。notice 和普通 user 消息一样追加在对话末尾，不会使已缓存的前缀失效。
 
 ### `/handoff`
 

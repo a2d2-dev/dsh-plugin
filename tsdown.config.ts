@@ -14,6 +14,8 @@
  *   and may resume a parent main session; it needs `tools`, `a2d2`, and `agents`,
  *   so it has its own mount row.
  * - `lib/ceo-prompt.js` is the scoped CEO prompt plugin for main sessions.
+ * - `lib/github-watch.js` is the GitHub watch plugin (`github_watch` tool and
+ *   the hooks.a2d2.dev client); its own row because it needs live sessions.
  * - `lib/invariant.js` is the package invariant companion the harness probes.
  * - `lib/client.js` is the browser half: a classic script registering a CJS
  *   closure factory with `window.__ModuleLoader__`, whose id equals the package
@@ -149,7 +151,7 @@ function cssPlugin(): BuildPlugin {
 
 export default [
   {
-    entry: { index: 'src/index.ts', command: 'src/command.ts', tools: 'src/tools.ts', 'open-subtask-tools': 'src/open-subtask-tools.ts', 'complete-task-tools': 'src/complete-task-tools.ts', 'ceo-prompt': 'src/ceo-prompt.ts', invariant: 'src/invariant.ts' },
+    entry: { index: 'src/index.ts', command: 'src/command.ts', tools: 'src/tools.ts', 'open-subtask-tools': 'src/open-subtask-tools.ts', 'complete-task-tools': 'src/complete-task-tools.ts', 'ceo-prompt': 'src/ceo-prompt.ts', 'github-watch': 'src/github-watch.ts', invariant: 'src/invariant.ts' },
     outDir: 'lib',
     format: ['esm'],
     platform: 'node',

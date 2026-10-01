@@ -26,7 +26,9 @@
 # `complete_task` may resume the parent task's main session before sending the
 # child-completed notification; the CEO prompt row declares `agents`,
 # `systemPrompt`, and `a2d2`, so only a profile with live Agents and system
-# prompt assembly gets scoped main-session CEO guidance. The floating orb needs
+# prompt assembly gets scoped main-session CEO guidance; the GitHub watch row
+# declares `tools`, `agents`, `sessions`, and `sessionController`, so only a
+# profile that can wake sessions gets `github_watch`. The floating orb needs
 # drives that same command through the session it already sits on.
 - insert:
     - id: a2d2
@@ -41,3 +43,5 @@
       name: 'dsh-a2d2/complete-task-tools'
     - id: a2d2-ceo-prompt
       name: 'dsh-a2d2/ceo-prompt'
+    - id: a2d2-github-watch
+      name: 'dsh-a2d2/github-watch'
