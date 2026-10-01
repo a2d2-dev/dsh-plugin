@@ -274,8 +274,12 @@ describe('CEO prompt section', () => {
     await ctx.a2d2.bindMainSession({ cwd: root, issue: 46, mainSession: main.id, now: new Date() })
 
     const section = main.prompt.render('a2d2:ceo')
-    expect(section).toContain('A2D2 CEO placeholder')
-    expect(section).toContain('placeholder wake checklist content')
+    expect(section).toContain('CEO Duties')
+    expect(section).toContain('Wake Checklist')
+    for (const tool of ['bind_main_session', 'dispatch_subagent', 'open_subtask', 'complete_task']) {
+      expect(section).toContain(tool)
+    }
+    expect(section).not.toMatch(/claude|codex|gpt|sonnet|opus|fable/i)
     expect(section).not.toContain('Issue tracker')
   })
 
