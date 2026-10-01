@@ -37,8 +37,14 @@ export interface Config {
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
-    /** Emitted after a session has become the main session of a task issue. */
-    'a2d2/main-session-bound'(payload: { cwd: string; projectRoot: string; issue: number; mainSession: SessionId }): void
+    /** Emitted after a task issue's main session is bound or moved to another session. */
+    'a2d2/main-session-changed'(payload: {
+      cwd: string
+      projectRoot: string
+      issue: number
+      previousMainSession?: SessionId
+      mainSession: SessionId
+    }): void
   }
 }
 
@@ -112,6 +118,13 @@ export function apply(ctx: Context, config: Config = {}): void {
     installed.set(agent, install(agent, projectRoot, agentFilesDir, globalSoulDir))
   }
 
+  const uninstallSession = (sessionId: SessionId): void => {
+    const agent = agents.list().find(candidate => candidate.id === sessionId)
+    if (agent === undefined) return
+    installed.get(agent)?.()
+    installed.delete(agent)
+  }
+
   const maybeInstall = async (agent: Agent): Promise<void> => {
     if (installed.has(agent)) return
     const cwd = sessionCwd(agent)
@@ -130,7 +143,8 @@ export function apply(ctx: Context, config: Config = {}): void {
     installed.get(agent)?.()
     installed.delete(agent)
   })
-  ctx.on('a2d2/main-session-bound', ({ mainSession, projectRoot }) => {
+  ctx.on('a2d2/main-session-changed', ({ previousMainSession, mainSession, projectRoot }) => {
+    if (previousMainSession !== undefined && previousMainSession !== mainSession) uninstallSession(previousMainSession)
     const agent = agents.list().find(candidate => candidate.id === mainSession)
     if (agent !== undefined) installOnce(agent, projectRoot)
   })

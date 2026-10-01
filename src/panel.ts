@@ -62,6 +62,7 @@ function taskView(task: Task): PanelTask {
             number: issue.number,
             ...(issue.parent === undefined ? {} : { parent: issue.parent }),
             mainSession: issue.mainSession,
+            ...(issue.handoff === undefined ? {} : { handoff: { source: issue.handoff.source } }),
           },
         }),
     name: task.name,

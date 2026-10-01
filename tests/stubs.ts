@@ -17,6 +17,28 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import { vi } from 'vitest'
 
+interface StubLlmProvider {
+  readonly id: string
+}
+
+interface StubLlmModel {
+  readonly provider: string
+  readonly id: string
+  readonly name: string
+}
+
+interface StubContinuableStartSpec {
+  readonly provider: string
+  readonly label: string
+  readonly request: {
+    readonly prompt: readonly unknown[]
+    readonly parent: Agent
+    readonly agentOptions?: { readonly provider?: string; readonly model?: string }
+    readonly persona?: string
+  }
+  readonly signal: AbortSignal
+}
+
 /** A `commands` registry that records what a plugin registers and returns real disposers. */
 export class StubCommands extends Service {
   private readonly definitions: CommandDefinition[] = []
@@ -93,6 +115,47 @@ export class StubTools extends Service {
    */
   find(name: string): ToolDefinition | undefined {
     return this.definitions.find(definition => definition.name === name)
+  }
+}
+
+/** An `llm` service whose model catalog is configured by exact `provider/model` routes. */
+export class StubLlm extends Service {
+  private routes: string[]
+
+  constructor(ctx: Context, config: { readonly routes?: readonly string[] } = {}) {
+    super(ctx, 'llm')
+    this.routes = [...config.routes ?? []]
+  }
+
+  setRoutes(routes: readonly string[]): void {
+    this.routes = [...routes]
+  }
+
+  listProviders(): readonly StubLlmProvider[] {
+    return [...new Set(this.routes.map(route => route.slice(0, route.indexOf('/'))))]
+      .filter(id => id.length > 0)
+      .map(id => ({ id }))
+  }
+
+  async listModels(provider: string): Promise<readonly StubLlmModel[]> {
+    return this.routes
+      .filter(route => route.startsWith(`${provider}/`))
+      .map(route => {
+        const id = route.slice(provider.length + 1)
+        return { provider, id, name: id }
+      })
+  }
+}
+
+/** A `subagents` service that records continuable starts without creating DSH children. */
+export class StubSubagents extends Service {
+  readonly startContinuable = vi.fn(async (_spec: StubContinuableStartSpec) => ({
+    childId: 'session-child' as SessionId,
+    messageId: 'message-child',
+  }))
+
+  constructor(ctx: Context) {
+    super(ctx, 'subagents')
   }
 }
 

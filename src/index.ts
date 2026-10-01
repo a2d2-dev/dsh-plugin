@@ -13,9 +13,11 @@
  * @module @deepseek-ai/dsh-a2d2
  */
 
-import { basename, isAbsolute } from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { basename, isAbsolute, join } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { Fiber, Volatile } from '@deepseek-ai/cordis'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -40,10 +42,11 @@ import {
   DEFAULT_STATION_MODELS,
   STATION_MODEL_SETTINGS_NAMESPACE,
   StationModelsSettingsSchema,
+  splitModelRoute,
   stationModelWarnings,
   validateStationModelsSettings,
 } from './station-models.ts'
-import type { StationModelsSettings } from './station-models.ts'
+import type { Station, StationModelsSettings } from './station-models.ts'
 import {
   DEFAULT_PROJECT_MARKERS,
   TaskDocumentStore,
@@ -183,8 +186,14 @@ declare module '@deepseek-ai/cordis' {
   }
 
   interface Events {
-    /** Emitted after a session has become the main session of a task issue. */
-    'a2d2/main-session-bound'(payload: { cwd: string; projectRoot: string; issue: number; mainSession: SessionId }): void
+    /** Emitted after a task issue's main session is bound or moved to another session. */
+    'a2d2/main-session-changed'(payload: {
+      cwd: string
+      projectRoot: string
+      issue: number
+      previousMainSession?: SessionId
+      mainSession: SessionId
+    }): void
   }
 }
 
@@ -302,6 +311,53 @@ export interface BindMainSessionRequest {
   readonly mainSession: SessionId
   /** Injection point for a new task's creation timestamp. */
   readonly now: Date
+}
+
+/** Input of {@link A2d2Service.dispatchSubagent}. */
+export interface DispatchSubagentRequest {
+  /** The calling session's working directory, which locates the project. */
+  readonly cwd: string
+  /** Matt highway station whose station model table chooses the child model. */
+  readonly station: Station
+  /** Special Agent name from `<project>/.dsh/a2d2/agents/<name>.md`; absent means the default Agent. */
+  readonly agentName?: string
+  /** Task issue number the child is dispatched to implement or review. */
+  readonly issue: number
+  /** Prompt delivered as the child subagent's initial user message. */
+  readonly prompt: string
+  /** The live main-session Agent dispatching the child. */
+  readonly parent: Agent
+  /** Caller cancellation before DSH accepts the continuable child prompt. */
+  readonly signal: AbortSignal
+}
+
+/** Result of one subagent dispatch. */
+export interface DispatchedSubagent {
+  /** Durable child session id returned by DSH. */
+  readonly session: SessionId
+  /** Effective `provider/model` route selected from the station model table. */
+  readonly model: string
+  /** The special Agent used, or `default` when no special Agent was requested. */
+  readonly agent: string
+}
+
+type LlmRuntime = {
+  listProviders(): readonly { readonly id: string }[]
+  listModels(provider: string): Promise<readonly { readonly id: string }[]>
+}
+
+type SubagentsRuntime = {
+  startContinuable(spec: {
+    readonly provider: string
+    readonly label: string
+    readonly request: {
+      readonly prompt: readonly { readonly type: 'text'; readonly text: string }[]
+      readonly parent: Agent
+      readonly agentOptions: { readonly provider: string; readonly model: string }
+      readonly persona?: string
+    }
+    readonly signal: AbortSignal
+  }): Promise<{ readonly childId: SessionId }>
 }
 
 /**
@@ -466,7 +522,7 @@ export class A2d2Service extends Service {
         const named = (parent: number | undefined): string => (parent === undefined ? 'none' : `#${parent}`)
         throw new Error(`a2d2: task issue #${issue} records parent ${named(bound.parent)}, not ${named(parentIssue)}`)
       }
-      await this.emitMainSessionBound(cwd, issue, mainSession)
+      await this.emitMainSessionChanged(cwd, issue, mainSession)
       return { ...existing, issue: bound }
     }
     // One task per main session keeps "which task does this session execute"
@@ -485,7 +541,7 @@ export class A2d2Service extends Service {
       members: [{ sessionId: mainSession }],
     }
     await this.store.write(cwd, task)
-    await this.emitMainSessionBound(cwd, issue, mainSession)
+    await this.emitMainSessionChanged(cwd, issue, mainSession)
     return task
   }
 
@@ -517,6 +573,42 @@ export class A2d2Service extends Service {
    */
   async projectRoot(cwd: string): Promise<string> {
     return await this.store.projectRoot(cwd)
+  }
+
+  /**
+   * Dispatch a continuable child subagent from a task's main session.
+   * @param request - station, target task issue, optional special Agent, and parent Agent.
+   * @returns the child session id plus the effective model and Agent identity.
+   */
+  async dispatchSubagent(request: DispatchSubagentRequest): Promise<DispatchedSubagent> {
+    const { cwd, issue, parent } = request
+    if (cwd === '') {
+      throw new Error('a2d2: the dispatching session records no working directory, so no project holds its task')
+    }
+    taskIdForIssue(issue)
+    const task = await this.taskOfMainSession(cwd, parent.id)
+    if (task === undefined) {
+      throw new Error(`a2d2: session "${parent.id}" is not the main session of a task issue and cannot dispatch subagents`)
+    }
+    const candidates = this.stationModels.stations[request.station]
+    if (candidates === undefined) throw new Error(`a2d2: unknown station "${request.station}"`)
+    const model = await this.selectStationModel(request.station, candidates)
+    const route = splitModelRoute(model)
+    const persona = await this.readSpecialAgentPersona(cwd, request.agentName)
+    const subagents = this.getService<SubagentsRuntime>('subagents')
+    if (subagents === undefined) throw new Error('a2d2: subagents service is unavailable')
+    const started = await subagents.startContinuable({
+      provider: 'spawn',
+      label: `${request.station} #${issue}`,
+      request: {
+        prompt: [{ type: 'text', text: request.prompt }],
+        parent,
+        agentOptions: { provider: route.provider, model: route.model },
+        ...(persona === undefined ? {} : { persona }),
+      },
+      signal: request.signal,
+    })
+    return { session: started.childId, model, agent: request.agentName ?? 'default' }
   }
 
   /**
@@ -607,6 +699,52 @@ export class A2d2Service extends Service {
   private get stationModels(): StationModelsSettings {
     if (this.stationModelsConfig === undefined) return DEFAULT_STATION_MODELS
     return validateStationModelsSettings(this.stationModelsConfig.get())
+  }
+
+  private getService<T>(name: string): T | undefined {
+    return (this.ctx.get as unknown as (name: string) => T | undefined).call(this.ctx, name)
+  }
+
+  private async selectStationModel(station: Station, candidates: readonly string[]): Promise<string> {
+    const llm = this.getService<LlmRuntime>('llm')
+    if (llm === undefined) throw new Error('a2d2: llm service is unavailable')
+    const providers = new Set(llm.listProviders().map(provider => provider.id))
+    const modelCache = new Map<string, readonly { readonly id: string }[]>()
+    for (const candidate of candidates) {
+      const route = splitModelRoute(candidate)
+      if (!providers.has(route.provider)) continue
+      let models = modelCache.get(route.provider)
+      if (models === undefined) {
+        try {
+          models = await llm.listModels(route.provider)
+        } catch {
+          models = []
+        }
+        modelCache.set(route.provider, models)
+      }
+      if (models.some(model => model.id === route.model)) return candidate
+    }
+    throw new Error(`a2d2: station "${station}" has no model candidate present in the model catalog`)
+  }
+
+  private async readSpecialAgentPersona(cwd: string, agentName: string | undefined): Promise<string | undefined> {
+    if (agentName === undefined) return undefined
+    if (agentName.trim() === '' || agentName !== basename(agentName) || agentName.includes('/') || agentName.includes('\\')) {
+      throw new Error(`a2d2: special Agent "${agentName}" is not a usable Agent file name`)
+    }
+    const projectRoot = await this.store.projectRoot(cwd)
+    const path = join(projectRoot, '.dsh', 'a2d2', 'agents', `${agentName}.md`)
+    let persona: string
+    try {
+      persona = await readFile(path, 'utf8')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        throw new Error(`a2d2: special Agent "${agentName}" does not exist at ${path}`)
+      }
+      throw error
+    }
+    if (persona.trim() === '') throw new Error(`a2d2: special Agent "${agentName}" is empty at ${path}`)
+    return persona
   }
 
   /**
@@ -827,9 +965,13 @@ export class A2d2Service extends Service {
       ? await this.resolveOrCreateTask(cwd, request)
       : await this.existingTask(cwd, request.taskId)
     const registered = await this.registerMember(cwd, task.id, source)
+    const preparedTask = registered.issue?.mainSession === source
+      ? { ...registered, issue: { ...registered.issue, handoff: { source } } }
+      : registered
+    if (preparedTask !== registered) await this.store.write(cwd, preparedTask)
     const facts: HandoffFacts = {
       source,
-      task: registered.id,
+      task: preparedTask.id,
       createdAt: request.now.toISOString(),
       focus: request.focus,
       ...(skillSource.status === 'missing' ? { skillSource: 'unavailable' as const } : {}),
@@ -840,7 +982,7 @@ export class A2d2Service extends Service {
       source,
       renderHandoffSkeleton(facts),
     )
-    return { task: registered, source, path, instruction: handoffInstruction(path, request.focus, skillSource) }
+    return { task: preparedTask, source, path, instruction: handoffInstruction(path, request.focus, skillSource) }
   }
 
   /**
@@ -879,7 +1021,17 @@ export class A2d2Service extends Service {
       request.successor,
       request.source,
     )
-    return { task: registered, document, prompt: handoffPrompt(document) }
+    const issue = registered.issue
+    const takenTask = issue?.mainSession === request.source && issue.handoff?.source === request.source
+      ? { ...registered, issue: { ...issue, mainSession: request.successor, handoff: undefined } }
+      : registered
+    if (takenTask !== registered) {
+      await this.store.write(request.cwd, takenTask)
+      if (takenTask.issue !== undefined) {
+        await this.emitMainSessionChanged(request.cwd, takenTask.issue.number, request.successor, request.source)
+      }
+    }
+    return { task: takenTask, document, prompt: handoffPrompt(document) }
   }
 
   /**
@@ -909,12 +1061,18 @@ export class A2d2Service extends Service {
     return found
   }
 
-  /** Notify optional integrations that a main session is now bound. */
-  private async emitMainSessionBound(cwd: string, issue: number, mainSession: SessionId): Promise<void> {
-    this.ctx.emit('a2d2/main-session-bound', {
+  /** Notify optional integrations that a task issue's main session is now this session. */
+  private async emitMainSessionChanged(
+    cwd: string,
+    issue: number,
+    mainSession: SessionId,
+    previousMainSession?: SessionId,
+  ): Promise<void> {
+    this.ctx.emit('a2d2/main-session-changed', {
       cwd,
       projectRoot: await this.store.projectRoot(cwd),
       issue,
+      ...(previousMainSession === undefined ? {} : { previousMainSession }),
       mainSession,
     })
   }

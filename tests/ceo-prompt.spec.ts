@@ -14,6 +14,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import A2d2Service from '../src/index.ts'
 import * as ceoPromptPlugin from '../src/ceo-prompt.ts'
+import { HANDOFF_SUMMARY_PLACEHOLDER } from '../src/handoff-document.ts'
 
 const roots: string[] = []
 
@@ -143,6 +144,45 @@ describe('CEO prompt section', () => {
     expect(second).not.toContain('Global principle v1')
     expect(second).not.toContain('Project principle v1')
     expect(await readFile(join(root, '.dsh', 'a2d2', 'tasks', 'issue-46.yaml'), 'utf8')).toContain('mainSession: session-main')
+  })
+
+
+  it('moves the CEO prompt section when handoff take changes the main session', async () => {
+    const root = await tempRoot()
+    const { agentFilesDir, globalSoulDir } = await writeAgentFiles(root, {
+      agents: 'CEO duties after take',
+      wake: 'Wake checklist after take',
+      globalSoul: 'Global principle after take',
+      projectSoul: 'Project principle after take',
+    })
+    const ctx = new Context()
+    await ctx.plugin(StubSystemPrompt)
+    await ctx.plugin(StubAgents)
+    await ctx.plugin(A2d2Service, { root })
+    await ctx.plugin(ceoPromptPlugin, { agentFilesDir, globalSoulDir })
+    const source = agent(root, 'session-source')
+    const successor = agent(root, 'session-successor')
+    ;(ctx.get('agents') as unknown as StubAgents).add(source)
+    ;(ctx.get('agents') as unknown as StubAgents).add(successor)
+
+    await ctx.a2d2.bindMainSession({ cwd: root, issue: 46, mainSession: source.id, now: new Date('2026-10-01T10:00:00.000Z') })
+    expect(source.prompt.render('a2d2:ceo')).toContain('CEO duties after take')
+    expect(successor.prompt.render('a2d2:ceo')).toBeUndefined()
+
+    const prepared = await ctx.a2d2.prepareHandoff({
+      source: source.id,
+      cwd: root,
+      focus: 'continue as CEO',
+      taskId: undefined,
+      now: new Date('2026-10-01T10:05:00.000Z'),
+    })
+    const skeleton = await readFile(prepared.path, 'utf8')
+    await writeFile(prepared.path, skeleton.replace(HANDOFF_SUMMARY_PLACEHOLDER, 'Continue as the CEO of task issue #46.'), 'utf8')
+
+    await ctx.a2d2.takeHandoff({ source: source.id, successor: successor.id, cwd: root })
+
+    expect(successor.prompt.render('a2d2:ceo')).toContain('CEO duties after take')
+    expect(source.prompt.render('a2d2:ceo')).toBeUndefined()
   })
 
   it('installs when a main-session Agent is created after the task was already bound', async () => {

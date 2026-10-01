@@ -8,7 +8,7 @@ This repository holds the **A²D² DeepSeek Harness plugin**: the components tha
 
 What the plugin gives DSH today:
 
-- **Task aggregation** — a task groups the sessions belonging to one piece of work and records the handoff edges between them, so related sessions keep a relationship a person can read, review, and commit. The data lives in project-local documents, and no session's durable format changes to carry it. A task bound to a task issue also records its main session — the one session executing it — which a session sets with the `bind_main_session` tool.
+- **Task aggregation** — a task groups the sessions belonging to one piece of work and records the handoff edges between them, so related sessions keep a relationship a person can read, review, and commit. The data lives in project-local documents, and no session's durable format changes to carry it. A task bound to a task issue also records its main session — the one session executing it — which a session sets with the `bind_main_session` tool. A main session can dispatch continuable subagents with `dispatch_subagent`, using the station model table and optional project-local special Agent personas.
 - **Session handoff** — `/handoff` moves work from a long, expensive session to a fresh one without losing the thread: the handing-off session writes bounded continuation content, and the successor continues from it.
 - **A floating indicator** — an at-a-glance orb by the composer that tracks context length and cost, and warns when a session approaches the smart zone so the next phase boundary can choose its outcome.
 - **A²D² panel** — a better-sidebar tab for the open session's project tasks, member handoff tree, and main-session subagent route tree.
@@ -19,7 +19,7 @@ The rest of this document is the plugin's behavior contract and known limits, ke
 
 ## Plugin (namespace: `a2d2`)
 
-The package contributes four mount rows. `ctx.a2d2` is the task store and declares no service, so it loads in any profile; the command row declares `commands` and `a2d2`, so only a profile that composes both gets `/handoff`; the tools row declares `tools` and `a2d2`, so only a profile that composes both gets the model tools (today `bind_main_session`); the CEO prompt row declares `agents`, `systemPrompt`, and `a2d2`, so only a profile that composes live Agents and system prompt assembly gets scoped main-session guidance. Cordis refuses to load a plugin whose declared services are absent, which is why the rows are split rather than registered conditionally from one row. The floating orb needs no row of its own: it drives that same command through the session it already sits on.
+The package contributes four mount rows. `ctx.a2d2` is the task store and declares no service, so it loads in any profile; the command row declares `commands` and `a2d2`, so only a profile that composes both gets `/handoff`; the tools row declares `tools` and `a2d2`, so only a profile that composes both gets the model tools (`bind_main_session` and `dispatch_subagent`); the CEO prompt row declares `agents`, `systemPrompt`, and `a2d2`, so only a profile that composes live Agents and system prompt assembly gets scoped main-session guidance. The dispatch tool looks up `subagents` only when it runs, so profiles without the subagent service still load the tools row and keep `bind_main_session` available. Cordis refuses to load a plugin whose declared services are absent, which is why the rows are split rather than registered conditionally from one row. The floating orb needs no row of its own: it drives that same command through the session it already sits on.
 
 ```yaml
 - id: a2d2
@@ -112,6 +112,14 @@ Writes are atomic and serialized through the document's own file lock. `create` 
 - When the CEO prompt row is composed, a successful binding also installs the scoped `a2d2:ceo` system prompt section on a running Agent for that main session; Agents created or resumed later get the same section when their session is already the task issue's main session.
 - A task bound to no task issue that already uses the `issue-<number>` id is refused rather than taken over, and so is a session that records no working directory.
 
+`dispatch_subagent` dispatches a continuable child subagent from the calling main session. Its parameters are `station`, optional `agent` (`default` or omitted means the default Agent), `issue`, and `prompt`; the parent Agent, session id, cwd, and cancellation signal come from the tool execution context. The tool only hands these to `ctx.a2d2.dispatchSubagent`, which owns the rules:
+
+- Only a task issue's current main session can dispatch; ordinary sessions are refused.
+- The child uses DSH's fresh `spawn` continuable provider.
+- The model is the station model table's first `provider/model` candidate that is present in DSH's host model catalog, read at dispatch time so a settings change affects the next call.
+- A special Agent named `agent` is read from `<projectRoot>/.dsh/a2d2/agents/<agent>.md` and passed as the child's persona. A missing or empty special Agent is an error and never falls back to the default Agent.
+- The result returns the child session id, the actual `provider/model`, and the Agent used.
+
 ## `/handoff`
 
 One command name covers both sides of the handoff, because the successor's session id exists only once that session exists.
@@ -133,6 +141,8 @@ Preparing is two steps, because only the handing-off session holds the state tha
 The source side resolves the project's newest `active` task and creates one when the project has none, naming it after the focus (or the project directory when there is no focus). The task document is compiled into the project, so a handoff needs a task to belong to; requiring a person to write that file by hand first would make the command unusable until they did.
 
 The source session joins the task immediately. The successor joins when it takes the handoff, because a session that is never opened leaves nothing to point at — the document stays the only record of the intent. Both registrations are idempotent, so a retried command neither duplicates a member nor replaces the edge the first attempt recorded.
+
+When the source session is a task issue's `mainSession`, prepare also marks the task issue as handing off by writing `issue.handoff.source` while keeping `issue.mainSession` on the source. A task that was prepared but never taken therefore keeps its CEO. A successful `take` moves `issue.mainSession` to the successor, clears `issue.handoff`, and still records the ordinary member `handoffFrom` edge. If the source session is not a task issue's main session, handoff behavior is unchanged.
 
 Malformed input fails loudly rather than degrading into a focus: an unknown option (`--fucos`), an option left without a value, an option given twice, a task id that is not a document id, and a `take` invocation missing an argument or carrying a third one each return an error with the usage line.
 
@@ -202,7 +212,7 @@ The same browser bundle also registers a better-sidebar tab with id `a2d2-panel`
 
 The upper half reads `/a2d2/api/tasks?session=<id>` and shows the tasks in the project that owns the open session's cwd. The browser never sends a path; the host looks up the session, resolves its cwd to a project root with the plugin's normal store rules, and returns `{ root, tasks }`. The route is read-only, GET-only, guarded by the same host/origin/fetch trust fence as the consult and config routes, and every failure is a JSON body (`400` invalid session id, `403` untrusted, `404` unknown session, `405` non-GET, `409` no working directory, `500` read failure).
 
-Task rows show state, goal, member sessions, and incoming handoff edges. A task bound to a task issue also shows a line with its issue number, its kind — main task (主任务) when it has no parent, subtask (子任务, with the parent's number) when it has one — and its main session, which opens the same way a member does. A task bound to no task issue shows no such line. Members are shaped into a tree from `handoffFrom`; missing parents, non-member parents, and cycle-closing edges become roots rather than hiding a session. The row containing the open session is marked as current. Member titles and clickability come from the shell's session list: a member id present in the list can be opened with `sessions.open`, while a missing one is rendered as a short id and stays inert. A successful empty read says the project has no tasks; a route/read failure is rendered as a failure row.
+Task rows show state, goal, member sessions, and incoming handoff edges. A task bound to a task issue also shows a line with its issue number, its kind — main task (主任务) when it has no parent, subtask (子任务, with the parent's number) when it has one — and its main session, which opens the same way a member does; while `issue.handoff` is present, the same line carries a **交接中** marker. A task bound to no task issue shows no such line. Members are shaped into a tree from `handoffFrom`; missing parents, non-member parents, and cycle-closing edges become roots rather than hiding a session. The row containing the open session is marked as current. Member titles and clickability come from the shell's session list: a member id present in the list can be opened with `sessions.open`, while a missing one is rendered as a short id and stays inert. A successful empty read says the project has no tasks; a route/read failure is rendered as a failure row.
 
 The lower half shows the subagent model topology rooted at the main session for the currently open session's durable parent chain. It expands known subagent catalogs recursively, so opening a child still shows its siblings, descendants, and main session. It exists because a child's route is otherwise invisible. A session's own model is the one the user picked; a delegated child runs whatever the composition in force when it was created declared, and nothing in the shell surfaces it — so children pinned to another model spend that model's budget unobserved.
 
@@ -230,7 +240,7 @@ None. No request content changes, so no cache entry is invalidated.
 
 #### What the model sees
 
-Only a task issue's main session receives the scoped `a2d2:ceo` system prompt section. The section is installed when the main-session Agent is created or resumed, and also when a running session is bound through `bind_main_session`. Its text is assembled from packaged `ceo/AGENTS.md` and `ceo/WAKE.md`, global SOUL at `~/.dsh/a2d2/SOUL.md`, and project SOUL at `<projectRoot>/.dsh/a2d2/SOUL.md`. Project SOUL is rendered last and labelled as priority over global SOUL. Missing SOUL files are named in the section instead of being skipped.
+Only a task issue's main session receives the scoped `a2d2:ceo` system prompt section. The section is installed when the main-session Agent is created or resumed, and also when a running session is bound through `bind_main_session`. When `/handoff take` promotes a successor, the successor's live Agent receives the section immediately and the source Agent's section is removed. Its text is assembled from packaged `ceo/AGENTS.md` and `ceo/WAKE.md`, global SOUL at `~/.dsh/a2d2/SOUL.md`, and project SOUL at `<projectRoot>/.dsh/a2d2/SOUL.md`. Project SOUL is rendered last and labelled as priority over global SOUL. Missing SOUL files are named in the section instead of being skipped.
 
 #### Token effect
 
@@ -253,6 +263,20 @@ The definition is about 685 characters of JSON, roughly 170 tokens by the four-c
 #### KV Cache effect
 
 The tool list is part of the request prefix, so composing the tools row changes that prefix once. The definition carries no per-session or per-turn content, so later requests reuse the cache as before.
+
+### `dispatch_subagent`
+
+#### What the model sees
+
+One additional tool definition in every request of an agent whose profile composes the tools row. A call result names the child session id, actual `provider/model`, and Agent (`default` or the special Agent name). Refusals, such as a non-main session caller, no catalog-present station model, or a missing/empty special Agent, return as tool errors. The special Agent persona is sent only to the child subagent; it is not injected into the parent session.
+
+#### Token effect
+
+The definition is about 950 characters of JSON, roughly 240 tokens by the four-characters-per-token estimate, on every request in a tools-row profile. Each call adds its arguments and compact result to the parent session history; the child receives the supplied `prompt` as its first user message.
+
+#### KV Cache effect
+
+Adding the tool changes the tool-list prefix once for profiles that compose the tools row. Station model settings and special Agent file contents are read when the tool runs, not embedded in the parent request prefix, so changing them does not invalidate the parent's cache by itself.
 
 ### `/handoff`
 
@@ -291,7 +315,7 @@ None. No session's request content changes.
 - **`create` can mint an `issue-<number>` id** — a task named "Issue 45" gets the id `issue-45`, after which binding task issue #45 fails loudly instead of taking that task over.
 - **Recency is approximated** — `resolve` returns the newest `active` task, because a document carries no activity timestamp of its own. Deriving recency from member sessions is the intended refinement.
 - **Members are never verified** — the store records session ids and never checks that a session exists, because a document is committable and crosses machines. A consumer must render a member whose session is missing rather than failing on it.
-- **A handoff is not discoverable from the task** — `take` needs only the handed-off session id, which the source side prints, but nothing lists a task's open handoffs or reports that one is still unwritten.
+- **Ordinary handoffs are not discoverable from the task** — a task issue can show that its main session is handing off, but `take` still needs the handed-off session id, which the source side prints. No interface lists every non-main handoff for a task or reports whether a handoff document is still unwritten.
 - **Host filesystem only** — project-root discovery and document I/O use Node filesystem calls directly rather than `ctx.fs`, so a deployment whose workspace lives behind a provider is not covered yet.
 - **Project-root resolution is duplicated** — `resolveProjectRoot` repeats the marker walk that `agent-instructions` already exports as `findProjectRoot`; importing it would drag that package's agent, tool, and LLM dependencies into a store that needs none. Consolidating the walk into a shared utility is the intended follow-up.
 - **The subagent list depends on better-sidebar** — the tab can only register into a sidebar that accepts one, so a deployment without better-sidebar has no list at all while the indicator is unaffected. Mounting the same reading on a native DSH seat is the intended follow-up.

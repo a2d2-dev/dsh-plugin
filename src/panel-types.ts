@@ -13,12 +13,19 @@ import type { Task } from './types.ts'
 /** Exact path owned by the panel task read. */
 export const PANEL_ROUTE_PATH = '/a2d2/api/tasks'
 
+/** The prepared main-session handoff a task issue is carrying. */
+export interface PanelTaskIssueHandoff {
+  readonly source: string
+}
+
 /** The task issue a task is bound to, as the browser reads it. */
 export interface PanelTaskIssue {
   readonly number: number
   /** Present when the task is a subtask. */
   readonly parent?: number
   readonly mainSession: string
+  /** Present while the task issue is handing off. */
+  readonly handoff?: PanelTaskIssueHandoff
 }
 
 /** One task as the browser reads it. */
