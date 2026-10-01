@@ -811,9 +811,13 @@ export class A2d2Service extends Service {
       ? await this.resolveOrCreateTask(cwd, request)
       : await this.existingTask(cwd, request.taskId)
     const registered = await this.registerMember(cwd, task.id, source)
+    const preparedTask = registered.issue?.mainSession === source
+      ? { ...registered, issue: { ...registered.issue, handoff: { source } } }
+      : registered
+    if (preparedTask !== registered) await this.store.write(cwd, preparedTask)
     const facts: HandoffFacts = {
       source,
-      task: registered.id,
+      task: preparedTask.id,
       createdAt: request.now.toISOString(),
       focus: request.focus,
       ...(skillSource.status === 'missing' ? { skillSource: 'unavailable' as const } : {}),
@@ -824,7 +828,7 @@ export class A2d2Service extends Service {
       source,
       renderHandoffSkeleton(facts),
     )
-    return { task: registered, source, path, instruction: handoffInstruction(path, request.focus, skillSource) }
+    return { task: preparedTask, source, path, instruction: handoffInstruction(path, request.focus, skillSource) }
   }
 
   /**
