@@ -30,6 +30,10 @@
       "types": "./lib/types/ceo-prompt.d.ts",
       "default": "./lib/ceo-prompt.js"
     },
+    "./github-watch": {
+      "types": "./lib/types/github-watch.d.ts",
+      "default": "./lib/github-watch.js"
+    },
     "./invariant": {
       "types": "./lib/types/invariant.d.ts",
       "default": "./lib/invariant.js"

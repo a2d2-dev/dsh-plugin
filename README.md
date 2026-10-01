@@ -12,6 +12,7 @@ What the plugin gives DSH today:
 - **Session handoff** — `/handoff` moves work from a long, expensive session to a fresh one without losing the thread: the handing-off session writes bounded continuation content, and the successor continues from it.
 - **A floating indicator** — an at-a-glance orb by the composer that tracks context length and cost, and warns when a session approaches the smart zone so the next phase boundary can choose its outcome.
 - **A²D² panel** — a better-sidebar tab for the open session's project tasks, member handoff tree, and main-session subagent route tree.
+- **GitHub watch** — `github_watch` lets a session wait on a pull request without polling: when the PR merges, closes, finishes CI, or gets a review decision, the session receives a message, even if it was idle.
 
 > `A²D²` is the brand and display form; `a2d2` is the technical identifier — package name, directories, and service names all use it, because `²` cannot appear in an npm package name. The package is `@deepseek-ai/dsh-a2d2`.
 
@@ -19,7 +20,7 @@ The rest of this document is the plugin's behavior contract and known limits, ke
 
 ## Plugin (namespace: `a2d2`)
 
-The package contributes six mount rows. `ctx.a2d2` is the task store and declares no service, so it loads in any profile; the command row declares `commands` and `a2d2`, so only a profile that composes both gets `/handoff`; the base tools row declares `tools` and `a2d2`, so only a profile that composes both gets `bind_main_session` and `dispatch_subagent`; the open-subtask tools row additionally declares `agents` and `llm`, because `open_subtask` creates a root session and selects the grill station model; the complete-task tools row declares `agents`, because `complete_task` may resume a parent task's main session before sending the notification; the CEO prompt row declares `agents`, `systemPrompt`, and `a2d2`, so only a profile that composes live Agents and system prompt assembly gets scoped main-session guidance. The dispatch tool looks up `subagents` only when it runs, so profiles without the subagent service still load the base tools row and keep `bind_main_session` available. Cordis refuses to load a plugin whose declared services are absent, which is why the rows are split rather than registered conditionally from one row. The floating orb needs no row of its own: it drives that same command through the session it already sits on.
+The package contributes seven mount rows. `ctx.a2d2` is the task store and declares no service, so it loads in any profile; the command row declares `commands` and `a2d2`, so only a profile that composes both gets `/handoff`; the base tools row declares `tools` and `a2d2`, so only a profile that composes both gets `bind_main_session` and `dispatch_subagent`; the open-subtask tools row additionally declares `agents` and `llm`, because `open_subtask` creates a root session and selects the grill station model; the complete-task tools row declares `agents`, because `complete_task` may resume a parent task's main session before sending the notification; the CEO prompt row declares `agents`, `systemPrompt`, and `a2d2`, so only a profile that composes live Agents and system prompt assembly gets scoped main-session guidance; the GitHub watch row declares `tools`, `agents`, `sessions`, and `sessionController`, so only a profile that can wake sessions gets `github_watch`. The dispatch tool looks up `subagents` only when it runs, so profiles without the subagent service still load the base tools row and keep `bind_main_session` available. Cordis refuses to load a plugin whose declared services are absent, which is why the rows are split rather than registered conditionally from one row. The floating orb needs no row of its own: it drives that same command through the session it already sits on.
 
 Before publishing, run `pnpm verify:pack-exports`. It builds the package, packs the tarball, installs that tarball into an empty temporary project, and imports every Node entry declared in `package.json` exports. The check catches missing hashed build chunks such as the shared handoff chunk before a release is cut.
 
@@ -36,6 +37,8 @@ Before publishing, run `pnpm verify:pack-exports`. It builds the package, packs 
   name: '@deepseek-ai/dsh-a2d2/complete-task-tools'
 - id: a2d2-ceo-prompt
   name: '@deepseek-ai/dsh-a2d2/ceo-prompt'
+- id: a2d2-github-watch
+  name: '@deepseek-ai/dsh-a2d2/github-watch'
 ```
 
 | Key | Default | Contract |
@@ -139,6 +142,22 @@ Only the task issue's current main session can complete it. If the task has no p
 - The model is the station model table's first `provider/model` candidate that is present in DSH's host model catalog, read at dispatch time so a settings change affects the next call.
 - A special Agent named `agent` is read from `<projectRoot>/.dsh/a2d2/agents/<agent>.md` and passed as the child's persona. A missing or empty special Agent is an error and never falls back to the default Agent.
 - The result returns the child session id, the actual `provider/model`, and the Agent used.
+
+## GitHub watch
+
+`github_watch` takes `pr` and an optional `repo` (`owner/name`). When `repo` is omitted, it uses the `github.com` origin of the session's working directory. The PR states come from the A²D² hooks service at `https://hooks.a2d2.dev` (repository a2d2-dev/a2d2-services). The service reads GitHub as the a2d2-bot GitHub App, once per event for every subscriber, and pushes a PR's state over an outbound WebSocket whenever that state changes. The plugin therefore needs no public address, no webhook configuration, and never polls GitHub. Its only GitHub call is the ticket request, which sends the user's `gh auth token` (or `GH_TOKEN` / `GITHUB_TOKEN`) so the service can check read access.
+
+- The call returns the PR's current state: open/closed/merged, CI rollup, and review decision. A PR that is already merged or closed ends the watch at once.
+- The watch list and the state each session was last told live in `~/.dsh/a2d2/github-watches.json`. Each later state is compared with what that session was last told; only a difference injects a message. The message is a durable user-role notice with source `{ kind: 'a2d2-github-watch', repo, pr }` and a one-line summary such as `a2d2-dev/x#7: merged, CI passed`. Injection wakes an idle session.
+- After DSH restarts, every stored watch reconnects. The snapshot the service returns is compared with the last-told state, so a change that happened while DSH was down is reported once, and nothing is reported when nothing changed.
+- A watch ends after a merged, closed, or not-found state has been told. It also ends if its session no longer exists.
+- On a repository without a2d2-bot, the call returns `not_installed` with the install link (`https://github.com/apps/a2d2-bot/installations/new`) and keeps no watch. If the app is removed later, watching sessions are told once and their watches end.
+- When the service is unreachable, the connection retries with backoff (1 s up to 60 s). If the service has not answered within 20 s, the call returns `pending`, and the first state then arrives as a message.
+
+| Key (row `a2d2-github-watch`) | Default | Contract |
+|---|---|---|
+| `relayUrl` | `https://hooks.a2d2.dev` | Base URL of the hooks service. |
+| `homeDir` | `~/.dsh/a2d2` | Directory of `github-watches.json`. |
 
 ## `/handoff`
 
@@ -325,6 +344,20 @@ The definition is about 950 characters of JSON, roughly 240 tokens by the four-c
 #### KV Cache effect
 
 Adding the tool changes the tool-list prefix once for profiles that compose the base tools row. Station model settings and special Agent file contents are read when the tool runs, not embedded in the parent request prefix, so changing them does not invalidate the parent's cache by itself.
+
+### `github_watch`
+
+#### What the model sees
+
+One additional tool definition in every request of an agent whose profile composes the GitHub watch row. A call result is one sentence: the current state and that a message will follow, or the install link, or that the PR is already finished. Each later change of a watched PR adds one user-role notice to that session: a few lines naming the change, the PR URL, the current state, and whether the watch continues. Nothing reaches sessions that watch nothing.
+
+#### Token effect
+
+The definition is about 590 characters of JSON, roughly 150 tokens by the four-characters-per-token estimate, on every request in a profile with the row. Each notice is about 300–450 characters (≈ 75–110 tokens), once per actual state change. Duplicate and no-op deliveries are dropped by the service and again by the plugin's comparison.
+
+#### KV Cache effect
+
+Adding the tool changes the tool-list prefix once for profiles that compose the row. A notice is appended at the end of the conversation like any user message, so it does not invalidate the cached prefix.
 
 ### `/handoff`
 

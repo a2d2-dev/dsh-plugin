@@ -8,7 +8,7 @@
   },
   "contributes": {
     "commands": ["handoff"],
-    "tools": ["bind_main_session", "open_subtask"],
+    "tools": ["bind_main_session", "open_subtask", "github_watch"],
     "skills": []
   }
 }
