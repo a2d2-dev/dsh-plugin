@@ -19,7 +19,7 @@
 
 ## 插件（namespace：`a2d2`）
 
-本包贡献三个挂载行。`ctx.a2d2` 是任务存储，不声明任何服务，因此在任何 profile 中都会加载；命令行声明了 `commands` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `/handoff`；工具行声明了 `tools` 与 `a2d2`，所以只有组合了两者的 profile 才得到模型工具（`bind_main_session` 与 `dispatch_subagent`）。`dispatch_subagent` 只在实际运行时查找 `subagents`，因此没有子代理服务的 profile 仍能加载工具行，`bind_main_session` 照常可用。Cordis 对"声明了却缺失的服务"是拒绝加载，这正是把它们拆成多行、而不是从一行里条件式注册的原因。悬浮球不需要自己的一行：它通过自己已经身处的那个会话驱动同一条命令。
+本包贡献四个挂载行。`ctx.a2d2` 是任务存储，不声明任何服务，因此在任何 profile 中都会加载；命令行声明了 `commands` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `/handoff`；工具行声明了 `tools` 与 `a2d2`，所以只有组合了两者的 profile 才得到模型工具（`bind_main_session` 与 `dispatch_subagent`）；CEO 提示段行声明了 `agents`、`systemPrompt` 与 `a2d2`，所以只有同时组合 live Agents 与系统提示词组装的 profile 才得到主会话作用域指导。`dispatch_subagent` 只在实际运行时查找 `subagents`，因此没有子代理服务的 profile 仍能加载工具行，`bind_main_session` 照常可用。Cordis 对"声明了却缺失的服务"是拒绝加载，这正是把它们拆成多行、而不是从一行里条件式注册的原因。悬浮球不需要自己的一行：它通过自己已经身处的那个会话驱动同一条命令。
 
 ```yaml
 - id: a2d2
@@ -28,6 +28,8 @@
   name: '@deepseek-ai/dsh-a2d2/command'
 - id: a2d2-tools
   name: '@deepseek-ai/dsh-a2d2/tools'
+- id: a2d2-ceo-prompt
+  name: '@deepseek-ai/dsh-a2d2/ceo-prompt'
 ```
 
 | 键 | 默认值 | 约定 |
@@ -107,6 +109,7 @@ sessions:
 - 一个任务 issue 同一时刻只有一条主会话：另一条会话来绑定会被拒绝，并说明当前主会话是哪条；后继只能经交接接任。
 - 一条会话至多是一个任务 issue 的主会话，所以"这条会话在执行哪个任务"只有一个答案。
 - 以相同参数再次绑定，返回已记录的任务、不做改动；父任务 issue 不同则拒绝。
+- 当组合了 CEO 提示段行时，绑定成功还会把作用域内的 `a2d2:ceo` 系统提示段装到这条主会话正在运行的 Agent 上；之后创建或恢复的 Agent，如果其会话已经是该任务 issue 的主会话，也会得到同一段。
 - 已有一份占用 `issue-<编号>` 这个 id 的未绑定任务时拒绝，而不是把它接管；会话没有工作目录时同样拒绝。
 
 `dispatch_subagent` 从调用它的主会话派出一个可续跑子代理。参数是 `station`、可选 `agent`（省略或填 `default` 表示默认 Agent）、`issue` 与 `prompt`；父 Agent、会话 id、cwd 与取消信号取自工具执行上下文。工具只把这些转交给 `ctx.a2d2.dispatchSubagent`，规则都在服务里：
@@ -223,7 +226,7 @@ sessions:
 
 #### What the model sees
 
-除下面的 `bind_main_session` 工具外什么都没有。任务、成员关系与交接边不会进入任何提示词或提供方请求；模型无法观察到自己的会话属于哪个任务。
+普通会话除下面的 `bind_main_session` 工具外什么都没有。任务、成员关系与交接边本身不会进入任何提示词或提供方请求。组合了 CEO 提示段行的主会话不同：见 `a2d2:ceo`。
 
 #### Token effect
 
@@ -232,6 +235,20 @@ sessions:
 #### KV Cache effect
 
 无。请求内容不变，因此不会使任何缓存条目失效。
+
+### `a2d2:ceo`
+
+#### What the model sees
+
+只有任务 issue 的主会话会收到作用域内的 `a2d2:ceo` 系统提示段。主会话 Agent 创建或恢复时会安装；运行中的会话通过 `bind_main_session` 绑定为主会话时也会安装。`/handoff take` 把后继会话提升为主会话时，后继的 live Agent 会立即得到这一段，源会话 Agent 上的这一段会被移除。段内容由随包发布的 `ceo/AGENTS.md`、`ceo/WAKE.md`、全局 SOUL（`~/.dsh/a2d2/SOUL.md`）和项目 SOUL（`<projectRoot>/.dsh/a2d2/SOUL.md`）组装。项目 SOUL 放在最后，并标明优先于全局 SOUL。缺失的 SOUL 文件会在段内点名，而不是静默跳过。
+
+#### Token effect
+
+主会话 CEO 的每次请求都会携带渲染后的这一段。`ceo/AGENTS.md`、`ceo/WAKE.md` 与两份 SOUL 都在每次组装时现读，所以修改 SOUL 文件会改变下一次请求的 token。普通会话没有这一段。
+
+#### KV Cache effect
+
+这一段会改变主会话的系统提示词前缀。SOUL 是动态内容，因此任一 SOUL 文件变更都会让主会话下一次请求使用新的前缀；文件稳定后仍可正常缓存。普通会话保持原前缀。
 
 ### `bind_main_session`
 

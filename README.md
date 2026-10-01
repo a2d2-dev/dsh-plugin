@@ -19,7 +19,7 @@ The rest of this document is the plugin's behavior contract and known limits, ke
 
 ## Plugin (namespace: `a2d2`)
 
-The package contributes three mount rows. `ctx.a2d2` is the task store and declares no service, so it loads in any profile; the command row declares `commands` and `a2d2`, so only a profile that composes both gets `/handoff`; the tools row declares `tools` and `a2d2`, so only a profile that composes both gets the model tools (`bind_main_session` and `dispatch_subagent`). The dispatch tool looks up `subagents` only when it runs, so profiles without the subagent service still load the tools row and keep `bind_main_session` available. Cordis refuses to load a plugin whose declared services are absent, which is why the rows are split rather than registered conditionally from one row. The floating orb needs no row of its own: it drives that same command through the session it already sits on.
+The package contributes four mount rows. `ctx.a2d2` is the task store and declares no service, so it loads in any profile; the command row declares `commands` and `a2d2`, so only a profile that composes both gets `/handoff`; the tools row declares `tools` and `a2d2`, so only a profile that composes both gets the model tools (`bind_main_session` and `dispatch_subagent`); the CEO prompt row declares `agents`, `systemPrompt`, and `a2d2`, so only a profile that composes live Agents and system prompt assembly gets scoped main-session guidance. The dispatch tool looks up `subagents` only when it runs, so profiles without the subagent service still load the tools row and keep `bind_main_session` available. Cordis refuses to load a plugin whose declared services are absent, which is why the rows are split rather than registered conditionally from one row. The floating orb needs no row of its own: it drives that same command through the session it already sits on.
 
 ```yaml
 - id: a2d2
@@ -28,6 +28,8 @@ The package contributes three mount rows. `ctx.a2d2` is the task store and decla
   name: '@deepseek-ai/dsh-a2d2/command'
 - id: a2d2-tools
   name: '@deepseek-ai/dsh-a2d2/tools'
+- id: a2d2-ceo-prompt
+  name: '@deepseek-ai/dsh-a2d2/ceo-prompt'
 ```
 
 | Key | Default | Contract |
@@ -107,6 +109,7 @@ Writes are atomic and serialized through the document's own file lock. `create` 
 - A task issue has one main session at a time: another session's binding is refused, naming the current main session; a successor takes over only through a handoff.
 - A session is the main session of at most one task issue, so "which task does this session execute" has one answer.
 - Binding again with the same arguments returns the recorded task unchanged; naming a different parent is refused.
+- When the CEO prompt row is composed, a successful binding also installs the scoped `a2d2:ceo` system prompt section on a running Agent for that main session; Agents created or resumed later get the same section when their session is already the task issue's main session.
 - A task bound to no task issue that already uses the `issue-<number>` id is refused rather than taken over, and so is a session that records no working directory.
 
 `dispatch_subagent` dispatches a continuable child subagent from the calling main session. Its parameters are `station`, optional `agent` (`default` or omitted means the default Agent), `issue`, and `prompt`; the parent Agent, session id, cwd, and cancellation signal come from the tool execution context. The tool only hands these to `ctx.a2d2.dispatchSubagent`, which owns the rules:
@@ -223,7 +226,7 @@ The panel re-reads the task route and the expanded subagent catalogs every five 
 
 #### What the model sees
 
-Nothing beyond the `bind_main_session` tool below. Tasks, membership, and handoff edges reach no prompt or provider request; the model cannot observe which task its session belongs to.
+Nothing beyond the `bind_main_session` tool below for ordinary sessions. Tasks, membership, and handoff edges reach no prompt or provider request by themselves. Main sessions are different when the CEO prompt row is composed: see `a2d2:ceo`.
 
 #### Token effect
 
@@ -232,6 +235,20 @@ None. Aggregation writes files and reads them back; it adds no tokens to any req
 #### KV Cache effect
 
 None. No request content changes, so no cache entry is invalidated.
+
+### `a2d2:ceo`
+
+#### What the model sees
+
+Only a task issue's main session receives the scoped `a2d2:ceo` system prompt section. The section is installed when the main-session Agent is created or resumed, and also when a running session is bound through `bind_main_session`. When `/handoff take` promotes a successor, the successor's live Agent receives the section immediately and the source Agent's section is removed. Its text is assembled from packaged `ceo/AGENTS.md` and `ceo/WAKE.md`, global SOUL at `~/.dsh/a2d2/SOUL.md`, and project SOUL at `<projectRoot>/.dsh/a2d2/SOUL.md`. Project SOUL is rendered last and labelled as priority over global SOUL. Missing SOUL files are named in the section instead of being skipped.
+
+#### Token effect
+
+Every request from a main-session CEO carries the rendered section. `ceo/AGENTS.md`, `ceo/WAKE.md`, and both SOUL files are reread on each assembly, so editing a SOUL file changes the next request's tokens. Ordinary sessions receive none of this section.
+
+#### KV Cache effect
+
+The section changes the main session's system prompt prefix. Because SOUL is dynamic, editing either SOUL file invalidates the previous prefix for the next main-session request; stable files then cache normally. Ordinary sessions keep their previous prefix.
 
 ### `bind_main_session`
 

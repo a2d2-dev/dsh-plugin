@@ -184,6 +184,17 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     a2d2: A2d2Service
   }
+
+  interface Events {
+    /** Emitted after a task issue's main session is bound or moved to another session. */
+    'a2d2/main-session-changed'(payload: {
+      cwd: string
+      projectRoot: string
+      issue: number
+      previousMainSession?: SessionId
+      mainSession: SessionId
+    }): void
+  }
 }
 
 /** @deprecated Handoff documents no longer render suggested skills. */
@@ -511,6 +522,7 @@ export class A2d2Service extends Service {
         const named = (parent: number | undefined): string => (parent === undefined ? 'none' : `#${parent}`)
         throw new Error(`a2d2: task issue #${issue} records parent ${named(bound.parent)}, not ${named(parentIssue)}`)
       }
+      await this.emitMainSessionChanged(cwd, issue, mainSession)
       return { ...existing, issue: bound }
     }
     // One task per main session keeps "which task does this session execute"
@@ -529,6 +541,7 @@ export class A2d2Service extends Service {
       members: [{ sessionId: mainSession }],
     }
     await this.store.write(cwd, task)
+    await this.emitMainSessionChanged(cwd, issue, mainSession)
     return task
   }
 
@@ -551,6 +564,15 @@ export class A2d2Service extends Service {
    */
   async mainSessionOfIssue(cwd: string, issue: number): Promise<SessionId | undefined> {
     return (await this.store.read(cwd, taskIdForIssue(issue)))?.issue?.mainSession
+  }
+
+  /**
+   * Resolve the project root that owns a session cwd.
+   * @param cwd - absolute session working directory.
+   * @returns the owning project root.
+   */
+  async projectRoot(cwd: string): Promise<string> {
+    return await this.store.projectRoot(cwd)
   }
 
   /**
@@ -1003,7 +1025,12 @@ export class A2d2Service extends Service {
     const takenTask = issue?.mainSession === request.source && issue.handoff?.source === request.source
       ? { ...registered, issue: { ...issue, mainSession: request.successor, handoff: undefined } }
       : registered
-    if (takenTask !== registered) await this.store.write(request.cwd, takenTask)
+    if (takenTask !== registered) {
+      await this.store.write(request.cwd, takenTask)
+      if (takenTask.issue !== undefined) {
+        await this.emitMainSessionChanged(request.cwd, takenTask.issue.number, request.successor, request.source)
+      }
+    }
     return { task: takenTask, document, prompt: handoffPrompt(document) }
   }
 
@@ -1032,6 +1059,22 @@ export class A2d2Service extends Service {
       )
     }
     return found
+  }
+
+  /** Notify optional integrations that a task issue's main session is now this session. */
+  private async emitMainSessionChanged(
+    cwd: string,
+    issue: number,
+    mainSession: SessionId,
+    previousMainSession?: SessionId,
+  ): Promise<void> {
+    this.ctx.emit('a2d2/main-session-changed', {
+      cwd,
+      projectRoot: await this.store.projectRoot(cwd),
+      issue,
+      ...(previousMainSession === undefined ? {} : { previousMainSession }),
+      mainSession,
+    })
   }
 
   /** The named task, or a loud failure naming it. */
