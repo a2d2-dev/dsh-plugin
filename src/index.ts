@@ -867,7 +867,12 @@ export class A2d2Service extends Service {
       request.successor,
       request.source,
     )
-    return { task: registered, document, prompt: handoffPrompt(document) }
+    const issue = registered.issue
+    const takenTask = issue?.mainSession === request.source && issue.handoff?.source === request.source
+      ? { ...registered, issue: { ...issue, mainSession: request.successor, handoff: undefined } }
+      : registered
+    if (takenTask !== registered) await this.store.write(request.cwd, takenTask)
+    return { task: takenTask, document, prompt: handoffPrompt(document) }
   }
 
   /**

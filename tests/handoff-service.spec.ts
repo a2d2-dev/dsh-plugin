@@ -285,6 +285,27 @@ describe('the skeleton a handoff starts from', () => {
 })
 
 describe('takeHandoff', () => {
+  it('moves the task issue main session to the successor and clears the handoff marker', async () => {
+    const root = await tempRoot()
+    const service = await mount(root)
+    await service.bindMainSession({ cwd: root, issue: 45, parentIssue: 41, mainSession: source, now: new Date('2026-10-01T10:00:00.000Z') })
+    const prepared = await service.prepareHandoff(request(root))
+    await writeSummary(prepared.path, 'continue as the CEO of task issue #45')
+
+    const taken = await service.takeHandoff({ source, successor, cwd: root })
+
+    expect(taken.task.issue).toEqual({ number: 45, parent: 41, mainSession: successor })
+    expect(taken.task.members).toEqual([
+      { sessionId: source },
+      { sessionId: successor, handoffFrom: source },
+    ])
+    expect((await service.readTask(root, taken.task.id))?.issue).toEqual({
+      number: 45,
+      parent: 41,
+      mainSession: successor,
+    })
+  })
+
   it('records the successor with a handoff edge from the source', async () => {
     const root = await tempRoot()
     const service = await mount(root)
