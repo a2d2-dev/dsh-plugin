@@ -46,6 +46,8 @@ async function mount(withSidebar: boolean): Promise<{ ctx: Context; sidebar?: St
   const ctx = new Context()
   await ctx.plugin(StubSlots).await()
   ctx.provide('sessions', {} as never)
+  ctx.provide('remote', { session: {} } as never)
+  ctx.provide('remote.session', {} as never)
   if (withSidebar) await ctx.plugin(StubSidebar).await()
   await ctx.plugin({ inject: [...inject], apply }).await()
   await Promise.resolve()

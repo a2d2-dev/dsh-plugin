@@ -25,7 +25,10 @@ import { A2d2Panel } from './panel.tsx'
 import type { A2d2ClientContext, ClientSidebarService } from './context.ts'
 
 /** Services this bundle needs before it can mount anything. */
-export const inject = ['slots', 'sessions']
+// `remote.session` is guarded by cordis: reading it from a fiber that did not
+// inject it throws "cannot get property … without inject" (title, route and
+// model-catalog reads all go through it).
+export const inject = ['slots', 'sessions', 'remote', 'remote.session']
 
 /** The sidebar tab this bundle contributes, in the fields the sidebar's `+` menu reads. */
 const A2D2_PANEL_TAB = {

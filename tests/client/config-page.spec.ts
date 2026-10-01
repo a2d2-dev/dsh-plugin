@@ -82,9 +82,9 @@ async function bench() {
       failures: [],
     },
   }))
-  ctx.provide('remote', {
-    session: { modelCatalog: models },
-  } as never)
+  const session = { modelCatalog: models }
+  ctx.provide('remote', { session } as never)
+  ctx.provide('remote.session', session as never)
   return { ctx, slots: ctx.get('slots') as unknown as StubSlots, models }
 }
 
@@ -100,7 +100,7 @@ function declareSettings(slots: StubSlots): () => void {
 
 describe('A2D2 config client registration', () => {
   it('keeps the existing client dependencies and registers the settings section lazily', async () => {
-    expect(inject).toEqual(['slots', 'sessions'])
+    expect(inject).toEqual(['slots', 'sessions', 'remote', 'remote.session'])
     const b = await bench()
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     expect(b.slots.entries('settings.section')).toHaveLength(0)

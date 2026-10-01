@@ -124,8 +124,11 @@ function TaskCard({ row, ctx }: { readonly row: PanelTaskRow; readonly ctx: A2d2
 }
 
 export function A2d2Panel({ ctx, sessionId, visible }: A2d2PanelProps): ReturnType<typeof createElement> {
-  const sessions = ctx.get('sessions') as ClientSessionsService | undefined
-  const remote = ctx.get('remote') as SessionTitleHistoryApi | undefined
+  // `ctx.get` returns a fresh traceable proxy per call; read the services once
+  // per context so hook dependencies stay stable — an unstable `remote`
+  // recreated the title loader every render and cancelled its own reads.
+  const sessions = useMemo(() => ctx.get('sessions') as ClientSessionsService | undefined, [ctx])
+  const remote = useMemo(() => ctx.get('remote') as SessionTitleHistoryApi | undefined, [ctx])
   const fallback = useMemo<ClientSessionListStore>(() => ({
     getSnapshot: () => NO_LIST,
     subscribe: () => () => {},
