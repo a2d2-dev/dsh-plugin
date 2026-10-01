@@ -29,6 +29,18 @@ GitHub shares one number space across issues and PRs, so a bare `#42` may be eit
 
 Create a GitHub issue.
 
+## A²D² task labels
+
+Every A²D² task issue carries exactly one label that tells how it is executed (see `CONTEXT.md` → 任务 issue):
+
+| Label | Meaning | Executed by |
+|---|---|---|
+| `a2d2:main` | 主任务: a top-level task of the project | its own main session (CEO) |
+| `a2d2:sub` | 子任务 that still needs grill → to-spec → to-tickets; also a GitHub sub-issue of its parent | its own root main session (CEO) |
+| `ready-for-agent` | 子任务 that is ready to implement (what `/to-tickets` produces); also a sub-issue of its parent | a subagent dispatched by the parent's main session |
+
+The current station and main session live in the issue body's 现状 block, not in labels.
+
 ## When a skill says "fetch the relevant ticket"
 
 Run `gh issue view <number> --comments`.
