@@ -18,6 +18,7 @@ LF 管理 AI 编程时的四个痛点：
 - **两层词汇**：目标层是项目、任务、Agent；执行层是会话、主会话、子代理、交接、续跑条件。执行层的东西不用来定义目标层的东西。
 - **任务树**：一个项目拆成多个任务，任务还可以再拆成更小的任务。任务以 tracker 为准；插件只记 tracker 不知道的部分：每个任务的主会话与交接边。
 - **一个任务一个主会话，主会话的 Agent 是 CEO**：仿照 Paperclip 的 CEO 角色（`server/src/onboarding-assets/ceo/`）。CEO 按 Matt 工作流推进任务：该换会话时交接，该执行时派子代理。DSH 的 `/goal`（续跑条件）可以用来让 CEO 持续推进；任务完成以任务验收为准，不以续跑条件为准。
+- **主会话绑定任务 issue，并把主要问题和结论同步进去**：每个任务在 tracker 上有一个 issue，主会话启动时绑定它。会话会换，issue 不会，所以 issue 是任务进展的持久记录，也是交接时接续内容指向的地方。
 - **Agent 由文件定义**：CEO 由 AGENTS.md（职责）、SOUL.md（原则）、HEARTBEAT.md（每次唤醒的清单）定义，不设 TOOLS.md。子代理以默认 Agent（不带额外配置）或特殊 Agent（为某类任务带特定上下文）的身份执行，派哪一种由 CEO 判断。
 - **子代理由插件自己创建**：插件直接调用 `ctx.subagents.startContinuable`，按站传入模型、按 Agent 传入 persona，不依赖实验性的智能体团队。子代理结束时 DSH 会自动通知父会话，CEO 由此被唤醒；另设低频兜底唤醒，只查疑似卡住的子代理。
 - **原则在 SOUL，不在技能**：SOUL 由 LF 维护。CEO 的 SOUL 分全局（`~/.dsh/a2d2/SOUL.md`）与项目（`<项目>/.dsh/a2d2/SOUL.md`，随项目提交）两层，项目层优先。AGENTS.md 与 HEARTBEAT.md 属于方法，随插件发布。
