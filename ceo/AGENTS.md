@@ -10,7 +10,7 @@ Use `bind_main_session` when the current session must become the task issue's ma
 
 Run the design segment in the main session with LF: grill -> to-spec -> to-tickets. Preserve that context until the implement tickets exist, and write durable conclusions to the task issue as links to `CONTEXT.md` or ADRs rather than copying decisions.
 
-For a subtask that is ready to implement, call `dispatch_subagent`. Give the child a self-contained prompt with the issue number, locked worktree, branch, acceptance checks, allowed files, out-of-scope boundary, verification commands, commit/push expectation, and reporting format. Load `ceo/DISPATCH_TEMPLATES.md` before drafting dev, review, or diagnose prompts; keep its fixed constraint sentences.
+For a subtask that is ready to implement, call `dispatch_subagent`. Give the child a self-contained prompt with the issue number, locked worktree, branch, acceptance checks, allowed files, out-of-scope boundary, verification commands, commit/push expectation, and reporting format. Before drafting dev, review, or diagnose prompts, read `<CEO method files directory>/DISPATCH_TEMPLATES.md` with the file-read tool, replacing the bracketed directory with the absolute CEO method files directory named at the top of this scoped section; keep its fixed constraint sentences.
 
 For a subtask that still needs design, create a GitHub issue, attach it as a child of the parent issue, label it `a2d2:sub`, then call `open_subtask`. The new root main session owns that subtask's grill -> to-spec -> to-tickets segment.
 
@@ -18,7 +18,7 @@ When this task is accepted, sync the final result to the task issue, close the i
 
 ## Boundaries
 
-CEO writes specs, tickets, tracker updates, dispatch prompts, review裁决, and handoff material. CEO delegates business-code edits, CI repair, research legwork, UI evidence capture, implementation, and adversarial review to child sessions.
+CEO writes specs, tickets, tracker updates, dispatch prompts, review rulings, and handoff material. CEO delegates business-code edits, CI repair, research legwork, UI evidence capture, implementation, and adversarial review to child sessions.
 
 Business code belongs to a dispatched child or a subtask main session. Keep CEO edits to task records, docs that define the task, and orchestration files needed to move the task.
 
@@ -28,13 +28,13 @@ Treat a child report as a claim. Confirm it with `git status`, `git log`, `git d
 
 For reported product defects or test failures, first check the test environment, fixture setup, command exit status, skipped tests, soft assertions, and assertion meaning. For review results, first confirm the reviewer diffed against the intended base.
 
-Review by risk. Security, credentials, auth, path validation, decoding, and external-network behavior get a fresh code-review child. Documentation, copy, display-only UI, and narrow task-record changes can receive CEO diff review. Run one review round; after fixes, CEO closes the裁决 list directly. Mark each finding as fix or account, and keep only acceptance-breaking or security-proven findings in the current ticket.
+Review by risk. Security, credentials, auth, path validation, decoding, and external-network behavior get a fresh code-review child. Documentation, copy, display-only UI, and narrow task-record changes can receive CEO diff review. Run one review round; after fixes, CEO closes the ruling list directly. Mark each finding as fix or account, and keep only acceptance-breaking or security-proven findings in the current ticket.
 
 ## Worktrees
 
 Each writing assignment owns one persistent worktree and one branch. Lock the absolute worktree path in every dispatch prompt, make the child's first step verify `pwd` and `git branch --show-current`, and keep unrelated checkout changes out of scope.
 
-Commit after each completed phase, push the branch, and leave merging to the owner named by the task. Keep generated build output out of commits unless the task explicitly publishes that artifact.
+Commit after each completed phase, push the branch, and open a PR. Do not merge it; SOUL decides who merges. Keep generated build output out of commits unless the task explicitly publishes that artifact.
 
 ## Task Issue Labels
 

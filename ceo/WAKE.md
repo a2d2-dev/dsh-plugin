@@ -18,7 +18,7 @@ Read the task issue with `gh issue view <issue> --comments`. Use the body status
 
 Read child issue state with `gh` for every child relevant to the current step. Check labels to distinguish `a2d2:sub` root subtasks from `ready-for-agent` implementation subtasks.
 
-Read the project A2D2 task documents or panel state for the recorded main session, parent issue, handoff edge, task completion state, and known subagent sessions. Inspect the relevant child session/report when the wake source names one.
+Read the project A2D2 task document at `.dsh/a2d2/tasks/issue-<issue>.yaml` for the recorded main session, parent issue, handoff edge, task completion state, and known subagent sessions. Inspect the relevant child session/report when the wake source names one.
 
 Completion: current station, parent/child issue state, main session, handoff state, active delegates, and next unblocked work are known from durable sources.
 
@@ -50,7 +50,7 @@ Completion: the body status and any needed timeline comment match the durable st
 
 Continue design work in the main session while the task is in grill, to-spec, or to-tickets.
 
-For a ready implementation/review/diagnosis child, call `dispatch_subagent` with a prompt built from `ceo/DISPATCH_TEMPLATES.md` and the current issue evidence.
+For a ready implementation/review/diagnosis child, call `dispatch_subagent` with a prompt built from `<CEO method files directory>/DISPATCH_TEMPLATES.md` and the current issue evidence, replacing the bracketed directory with the absolute CEO method files directory named at the top of this scoped section and reading the file with the file-read tool.
 
 For a child that still needs design, create the GitHub issue, attach it under the parent, label it `a2d2:sub`, comment the parent handoff/spec pointer as needed, then call `open_subtask`.
 

@@ -11,7 +11,7 @@
 
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -78,6 +78,8 @@ function renderCeoPrompt(agentFilesDir: string, globalSoulDir: string, projectRo
   return [
     '# A2D2 CEO',
     'This scoped section applies only when this session is the main session of a task issue.',
+    `CEO method files directory: ${agentFilesDir}`,
+    'When AGENTS.md or WAKE.md names another CEO method file, read it with the file-read tool from that absolute directory.',
     requiredFile('AGENTS.md', join(agentFilesDir, 'AGENTS.md')),
     requiredFile('WAKE.md', join(agentFilesDir, 'WAKE.md')),
     soulFile('Global SOUL', join(globalSoulDir, 'SOUL.md')),
@@ -108,8 +110,8 @@ function install(agent: Agent, projectRoot: string, agentFilesDir: string, globa
  * @param config - optional file locations for tests and deployments.
  */
 export function apply(ctx: Context, config: Config = {}): void {
-  const agentFilesDir = config.agentFilesDir ?? DEFAULT_AGENT_FILES_DIR
-  const globalSoulDir = config.globalSoulDir ?? DEFAULT_GLOBAL_SOUL_DIR
+  const agentFilesDir = resolve(config.agentFilesDir ?? DEFAULT_AGENT_FILES_DIR)
+  const globalSoulDir = resolve(config.globalSoulDir ?? DEFAULT_GLOBAL_SOUL_DIR)
   const installed = new Map<Agent, () => void>()
   const agents = ctx.get('agents') as unknown as AgentsService
 

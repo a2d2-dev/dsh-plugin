@@ -47,7 +47,7 @@ Use these templates when drafting `dispatch_subagent` prompts. Fill every placeh
 不接受 “looks good”：如果真的没问题，需说明你验证了哪些点、如何排除的。
 ```
 
-Pin the base in the prompt. CEO checks the base first when裁决 review results; a review against the wrong base is unusable.
+Pin the base in the prompt. CEO checks the base first when ruling on review results; a review against the wrong base is unusable.
 
 ## Diagnose: root cause
 

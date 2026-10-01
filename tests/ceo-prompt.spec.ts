@@ -170,6 +170,28 @@ describe('CEO prompt section', () => {
     expect(await readFile(join(root, '.dsh', 'a2d2', 'tasks', 'issue-46.yaml'), 'utf8')).toContain('mainSession: session-main')
   })
 
+  it('exposes the absolute CEO method directory that contains dispatch templates', async () => {
+    const root = await tempRoot()
+    const { agentFilesDir, globalSoulDir } = await writeAgentFiles(root, {
+      agents: 'CEO duties with dispatch pointer',
+      wake: 'Wake checklist with dispatch pointer',
+    })
+    await writeFile(join(agentFilesDir, 'DISPATCH_TEMPLATES.md'), 'Dispatch prompt templates', 'utf8')
+    const ctx = new Context()
+    await ctx.plugin(StubSystemPrompt)
+    await ctx.plugin(StubAgents)
+    await ctx.plugin(A2d2Service, { root })
+    await ctx.plugin(ceoPromptPlugin, { agentFilesDir, globalSoulDir })
+    const main = agent(root, 'session-main')
+    ;(ctx.get('agents') as unknown as StubAgents).add(main)
+
+    await ctx.a2d2.bindMainSession({ cwd: root, issue: 46, mainSession: main.id, now: new Date() })
+
+    const section = main.prompt.render('a2d2:ceo')
+    expect(section).toContain(agentFilesDir)
+    expect(await readFile(join(agentFilesDir, 'DISPATCH_TEMPLATES.md'), 'utf8')).toBe('Dispatch prompt templates')
+  })
+
   it('installs on a subtask main session opened through openSubtask', async () => {
     const root = await tempRoot()
     const { agentFilesDir, globalSoulDir } = await writeAgentFiles(root, {
