@@ -11,9 +11,10 @@ import { createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { FinishReason, GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { foldSurface } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import { SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import { TaskId } from '../src/brand.ts'
 import A2d2Service from '../src/index.ts'
+import { A2D2_MESSAGE_SOURCE } from '../src/message-source.ts'
 import {
   CONSULT_MAX_OUTPUT_TOKENS,
   CONSULT_MESSAGE_LIMIT,
@@ -119,14 +120,12 @@ function event<T extends SessionEvent>(value: Omit<T, 'ignorable'>): T {
 function userEvent(seq: number, text: string, source: 'user' | 'plugin' = 'user'): SessionEvent {
   const message = createUserMessage({
     content: [{ type: 'text', text }],
-    source: source === 'user'
-      ? { kind: 'user' }
-      : { kind: 'plugin', plugin: 'test' },
+    source: source === 'user' ? { kind: 'user' } : A2D2_MESSAGE_SOURCE,
   })
   return event({
     type: 'user/message',
     data: message,
-    seq,
+    seq: SessionSeq(seq),
     time: seq,
     surfaceOp: 'append',
   } as SessionEvent<'user/message'>)
@@ -143,7 +142,7 @@ function assistantEvent(seq: number, text: string): SessionEvent {
         source: { provider: 'provider-a', model: 'model-a' },
       }),
     },
-    seq,
+    seq: SessionSeq(seq),
     time: seq,
     surfaceOp: 'append',
   } as SessionEvent<'assistant/message'>)
@@ -153,22 +152,22 @@ function routeEvent(seq: number, provider: string, model: string): SessionEvent 
   return event({
     type: 'request/header',
     data: { header: { config: { provider, model } }, reason: 'initial' },
-    seq,
+    seq: SessionSeq(seq),
     time: seq,
   } as unknown as SessionEvent<'request/header'>)
 }
 
+function header(fields: { readonly cwd?: string } = {}): SessionHeader {
+  return { version: 4, id: sessionId, createdAt: 1, isSeeded: false, ...fields }
+}
+
 function session(overrides: Partial<ConsultSession> = {}): ConsultSession & { append: ReturnType<typeof vi.fn> } {
+  const events = [userEvent(0, 'We finished the implementation.'), routeEvent(1, 'provider-a', 'model-a')]
   return {
     id: sessionId,
-    header: {
-      version: 0,
-      id: sessionId,
-      createdAt: 1,
-      cwd: '/project',
-    } satisfies SessionHeader,
-    events: [userEvent(0, 'We finished the implementation.'), routeEvent(1, 'provider-a', 'model-a')],
-    surface: { nodes: [0] },
+    header: header({ cwd: '/project' }),
+    eventAt: seq => events[seq],
+    surface: { nodes: [SessionSeq(0)] },
     append: vi.fn(),
     ...overrides,
   }
@@ -276,7 +275,7 @@ describe('consult material and route', () => {
     const surfaceNodes = events
       .filter(item => item.type === 'user/message' && item.data.source.kind === 'user')
       .map(item => item.seq)
-    const material = collectConsultMaterial(events, surfaceNodes, [task])
+    const material = collectConsultMaterial(seq => events[seq], surfaceNodes, [task])
     expect(material.messages).toHaveLength(CONSULT_MESSAGE_LIMIT)
     expect(material.messages[0]?.text).toBe('human-2')
     expect(material.messages.at(-1)?.text).toBe(`human-${String(CONSULT_MESSAGE_LIMIT + 1)}`)
@@ -289,12 +288,12 @@ describe('consult material and route', () => {
     const oldAssistant = assistantEvent(1, 'old assistant response')
     const summary = {
       ...userEvent(2, 'current compacted summary', 'plugin'),
-      surfaceOp: { op: 'replace' as const, start: 0, end: 1 },
-      sourceEventSeqs: [0, 1],
+      surfaceOp: { op: 'replace' as const, startSeq: SessionSeq(0), endSeq: SessionSeq(1) },
+      sourceEventSeqs: [SessionSeq(0), SessionSeq(1)],
     } as SessionEvent
     const events = [oldUser, oldAssistant, summary]
 
-    const material = collectConsultMaterial(events, foldSurface(events).nodes, [])
+    const material = collectConsultMaterial(seq => events[seq], foldSurface(events).nodes, [])
 
     expect(material.messages).toEqual([{ seq: 2, text: 'current compacted summary' }])
     expect(JSON.stringify(material)).not.toContain('private detail from the old user message')
@@ -304,7 +303,7 @@ describe('consult material and route', () => {
   it('includes assistant text that remains on the current surface', () => {
     const events = [userEvent(0, 'current user'), assistantEvent(1, 'current assistant')]
 
-    expect(collectConsultMaterial(events, [0, 1], []).messages).toEqual([
+    expect(collectConsultMaterial(seq => events[seq], [SessionSeq(0), SessionSeq(1)], []).messages).toEqual([
       { seq: 0, text: 'current user' },
       { seq: 1, text: 'current assistant' },
     ])
@@ -625,7 +624,7 @@ describe('consult HTTP route', () => {
       await ctx.plugin(StubWebServer)
       await ctx.plugin(StubSessions)
       await ctx.plugin(StubLlm)
-      ;(ctx.get('sessions') as unknown as StubSessions).live = session({ header: { version: 0, id: sessionId, createdAt: 1, cwd } })
+      ;(ctx.get('sessions') as unknown as StubSessions).live = session({ header: header({ cwd }) })
       await ctx.plugin(A2d2Service, { root: fixedRoot })
 
       const handler = ctx.webServer.routes[0]?.handler
@@ -667,7 +666,7 @@ describe('consult HTTP route', () => {
       json: { ok: false, error: { code: 'unknown-session', message: expect.any(String) } },
     })
 
-    const withoutCwd = session({ header: { version: 0, id: sessionId, createdAt: 1 } })
+    const withoutCwd = session({ header: header() })
     const missingCwd = dependencies({ getSession: () => withoutCwd })
     expect(await send(createConsultHandler(missingCwd))).toMatchObject({
       status: 409,
@@ -719,7 +718,6 @@ describe('consult HTTP route', () => {
 
   it('uses the consult route list, marks missing ask-matt as degraded, and never appends history', async () => {
     const deps = dependencies()
-    const eventsBefore = deps.session.events
     const result = await send(createConsultHandler(deps))
 
     expect(result).toMatchObject({
@@ -748,7 +746,6 @@ describe('consult HTTP route', () => {
       type: 'text',
       text: expect.stringContaining('<ask-matt-source status="missing" />'),
     })
-    expect(deps.session.events).toBe(eventsBefore)
     expect(deps.session.append).not.toHaveBeenCalled()
   })
 

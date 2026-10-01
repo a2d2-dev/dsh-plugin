@@ -15,7 +15,8 @@
 
 import { basename, isAbsolute } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
+import type { Fiber, Volatile } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { TaskId } from './brand.ts'
@@ -228,6 +229,12 @@ export interface Config {
   modelPrices?: Record<string, { inputPerMillion: number; outputPerMillion: number }>
   /** Currency the rates are quoted in, shown beside the computed cost. */
   currency?: string
+  /**
+   * Model routes per highway station and for the next-step consult. A volatile
+   * field: edits through the settings service apply without a reload. Absent
+   * only where no loader composes the plugin (tests), which reads the defaults.
+   */
+  stationModels?: Volatile<StationModelsSettings>
 }
 
 /** Everything one prepared handoff produced. */
@@ -297,7 +304,8 @@ export class A2d2Service extends Service {
       outputPerMillion: z.number(),
     })).default({}),
     currency: z.string().default(DEFAULT_CURRENCY),
-  })
+    stationModels: StationModelsSettingsSchema.volatile(),
+  }) as z<Config>
 
   private readonly store: TaskDocumentStore
   private readonly projectMarkers: readonly string[]
@@ -305,7 +313,8 @@ export class A2d2Service extends Service {
   private readonly thresholds: HandoffThresholds
   private readonly prices: ReadonlyMap<string, ModelPrice>
   private readonly currency: string
-  private stationModels: StationModelsSettings = DEFAULT_STATION_MODELS
+  private readonly stationModelsConfig: Volatile<StationModelsSettings> | undefined
+  private readonly entryFiber: Fiber
 
   /**
    * Create the service over a resolved store configuration.
@@ -353,6 +362,8 @@ export class A2d2Service extends Service {
       }
     }
     this.currency = config.currency ?? DEFAULT_CURRENCY
+    this.stationModelsConfig = config.stationModels
+    this.entryFiber = ctx.fiber
     this.publishStationModels()
     this.publishIndicator()
     this.publishConsult()
@@ -482,24 +493,25 @@ export class A2d2Service extends Service {
     })
   }
 
-  /** Register and watch the live station model table settings namespace. */
+  /**
+   * The live station model table, validated on every read: the volatile field
+   * changes in place when the settings service writes it.
+   */
+  private get stationModels(): StationModelsSettings {
+    if (this.stationModelsConfig === undefined) return DEFAULT_STATION_MODELS
+    return validateStationModelsSettings(this.stationModelsConfig.get())
+  }
+
+  /**
+   * State the table's warnings once at load, and turn off the generated
+   * settings page: the plugin contributes its own station model page.
+   */
   private publishStationModels(): void {
+    for (const warning of stationModelWarnings(this.stationModels)) this.ctx.logger.warn(warning)
     this.ctx.inject(['settings'], (settingsCtx) => {
-      const ns = settingsNamespace(STATION_MODEL_SETTINGS_NAMESPACE)
-      const scope = settingsCtx.settings.register(ns, StationModelsSettingsSchema, {
-        validate: validateStationModelsSettings,
-      }) as {
-        get(): StationModelsSettings
-        watch(callback: (next: StationModelsSettings, prev: StationModelsSettings) => void): () => void
-      }
-      const publish = (next: StationModelsSettings): void => {
-        this.stationModels = next
-        for (const warning of stationModelWarnings(next)) this.ctx.logger.warn(warning)
-      }
-      publish(scope.get())
       settingsCtx.effect(
-        () => scope.watch(next => { publish(next) }),
-        'a2d2 station model settings',
+        () => settingsCtx.settings.configure({ auto: false }, this.entryFiber),
+        'a2d2 settings presentation',
       )
     })
   }
@@ -571,6 +583,8 @@ export class A2d2Service extends Service {
         listModels(provider: string): Promise<readonly LlmModel[]>
         stream(options: Parameters<Parameters<typeof createConfigHandler>[0]['stream']>[0]): ReturnType<Parameters<typeof createConfigHandler>[0]['stream']>
       }
+      // Settings are keyed by the plugin's profile entry id; the form value
+      // holds only the volatile Config fields.
       type SettingsRuntime = {
         describe(): readonly { readonly ns: string; readonly value: unknown; readonly revision: number }[]
         replace(ns: string, section: object, expectedRevision?: number): Promise<void>
@@ -580,13 +594,14 @@ export class A2d2Service extends Service {
       )
       const server = getService<WebServer>('webServer')
       if (server === undefined) return
-      const ns = settingsNamespace(STATION_MODEL_SETTINGS_NAMESPACE)
+      // The loader stamps its entry on the fiber (a type merge this plugin does not import).
+      const ns = (this.entryFiber as { readonly entry?: { readonly id: string } }).entry?.id
       const readSettings = () => {
         const settings = getService<SettingsRuntime>('settings')
-        const descriptor = settings?.describe().find(entry => entry.ns === ns)
+        const descriptor = ns === undefined ? undefined : settings?.describe().find(entry => entry.ns === ns)
         if (descriptor === undefined) return { value: this.stationModels, revision: undefined }
         return {
-          value: validateStationModelsSettings(descriptor.value),
+          value: validateStationModelsSettings((descriptor.value as { stationModels?: unknown }).stationModels),
           revision: descriptor.revision,
         }
       }
@@ -596,7 +611,8 @@ export class A2d2Service extends Service {
         updateSettings: async (value, expectedRevision) => {
           const settings = getService<SettingsRuntime>('settings')
           if (settings === undefined) throw new Error('a2d2: settings service is unavailable')
-          await settings.replace(ns, value as unknown as object, expectedRevision)
+          if (ns === undefined) throw new Error('a2d2: no profile entry to store settings in')
+          await settings.replace(ns, { stationModels: validateStationModelsSettings(value) }, expectedRevision)
           return readSettings()
         },
         modelRoutes: async () => {

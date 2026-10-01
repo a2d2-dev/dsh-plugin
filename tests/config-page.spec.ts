@@ -3,7 +3,8 @@ import { createServer, request as httpRequest } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { describe, expect, it } from 'vitest'
-import { SettingsConflictError, settingsNamespace } from '@deepseek-ai/dsh-settings'
+import { SettingsConflictError } from '@deepseek-ai/dsh-settings'
+import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import type { FinishReason, GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import {
   CONFIG_ROUTE_PATH,
@@ -128,7 +129,7 @@ function handler(options: {
     getSettings: () => ({ value, revision }),
     updateSettings: options.update ?? (async (next, expectedRevision) => {
       if (expectedRevision !== undefined && expectedRevision !== revision) {
-        throw new SettingsConflictError(settingsNamespace('a2d2-station-models'), expectedRevision, revision)
+        throw new SettingsConflictError('a2d2' as SettingsNamespace, expectedRevision, revision)
       }
       value = next
       revision += 1

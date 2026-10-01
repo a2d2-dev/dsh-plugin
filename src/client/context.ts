@@ -17,7 +17,6 @@ import type { ReactNode } from 'react'
 // `ctx.sessions`. Only the types travel — the bundle reaches both as cordis
 // services at runtime, because a cross-plugin value import is forbidden.
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
-import type {} from '@deepseek-ai/dsh-client-runtime/client'
 // The conversation shell declares the slot this bundle registers into.
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { StatusSource } from './status-model.ts'
