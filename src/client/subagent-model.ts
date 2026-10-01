@@ -29,25 +29,68 @@ export interface SubagentRouteAddress {
   readonly mode: 'one-shot' | 'continuable'
 }
 
-/** The narrow host API face used to cold-read a child session's projection baseline. */
+/** The narrow `remote` face used to cold-read a child session's projection baseline. */
 export interface SubagentRouteHistoryApi {
-  readonly subagents: {
-    history(
-      payload: SubagentRouteAddress & { readonly maxMessages: number },
+  readonly session: {
+    projections(
+      payload: { readonly sessionId: string },
       signal?: AbortSignal,
-    ): Promise<{
-      readonly result:
-        | {
-          readonly ok: true
-          readonly value: {
-            readonly projections?: {
-              readonly values?: Readonly<Record<string, unknown>>
-            }
-          }
-        }
-        | { readonly ok: false }
-    }>
+    ): Promise<
+      | { readonly ok: true; readonly value: { readonly values?: Readonly<Record<string, unknown>> } | null }
+      | { readonly ok: false }
+    >
   }
+}
+
+/** One `subagentCatalog` projection row, as DSH 0.2 publishes it on the parent session. */
+export interface ProjectedCatalogEntry {
+  readonly id: string
+  readonly mode: 'one-shot' | 'continuable' | 'unknown'
+  readonly label?: string
+}
+
+/** The two list-store maps the catalog view is derived from. */
+export interface ProjectedCatalogSource {
+  readonly byId: Readonly<Record<string, SubagentSessionSummary | undefined>>
+  readonly projectionsBySession: Readonly<Record<string, {
+    readonly values: { readonly subagentCatalog?: readonly ProjectedCatalogEntry[] }
+    readonly state: string
+    readonly error: unknown
+  } | undefined>>
+}
+
+/**
+ * Derive every loaded parent's direct-child catalog from the list store.
+ *
+ * DSH 0.2 publishes the catalog as the parent's `subagentCatalog` projection
+ * and no longer reports a child's activity or whether it has children of its
+ * own: activity comes from the child's list row, and a child whose own
+ * baseline is not loaded yet counts as possibly having children so the reader
+ * asks for it — an empty answer then drops it.
+ * @param source - the list snapshot's row and projection maps.
+ * @returns catalogs keyed by parent session id, with the parent's load state.
+ */
+export function projectedSubagentCatalogs(
+  source: ProjectedCatalogSource,
+): Record<string, SubagentCatalog & { readonly state: string; readonly error: unknown }> {
+  const catalogs: Record<string, SubagentCatalog & { readonly state: string; readonly error: unknown }> = {}
+  for (const [parentId, projection] of Object.entries(source.projectionsBySession)) {
+    if (projection === undefined) continue
+    const entries = (projection.values.subagentCatalog ?? []).map((entry): CatalogEntry => {
+      const own = source.projectionsBySession[entry.id]
+      const ownCatalog = own?.state === 'ready' ? own.values.subagentCatalog : undefined
+      return {
+        kind: 'child',
+        id: entry.id,
+        ...(entry.label === undefined ? {} : { label: entry.label }),
+        ...(entry.mode === 'unknown' ? {} : { mode: entry.mode }),
+        activity: source.byId[entry.id]?.running === true ? 'running' : 'inactive',
+        hasChildren: ownCatalog === undefined ? own?.state !== 'error' : ownCatalog.length > 0,
+      }
+    })
+    catalogs[parentId] = { entries, state: projection.state, error: projection.error }
+  }
+  return catalogs
 }
 
 /** Subscriber called when a route source loader publishes newly-read sources. */
@@ -207,9 +250,8 @@ function routeSourceFromProjection(value: unknown): SubagentRouteSource | undefi
 /**
  * Read the host-computed route projection for inactive catalog children.
  *
- * The tail history page is the supported non-activating read path for subagent
- * sessions; it carries the same projections block a normal session open uses to
- * seed its projection store.
+ * The session projections read is the non-activating path: it returns the
+ * same baseline a normal session open seeds its projection store with.
  */
 export async function loadSubagentRouteSources(
   api: SubagentRouteHistoryApi | undefined,
@@ -218,9 +260,9 @@ export async function loadSubagentRouteSources(
 ): Promise<Record<string, SubagentRouteSource | undefined>> {
   if (api === undefined || addresses.length === 0) return {}
   const settled = await Promise.allSettled(addresses.map(async (address) => {
-    const response = await api.subagents.history({ ...address, maxMessages: 1 }, signal)
-    if (!response.result.ok) return [address.childSessionId, undefined] as const
-    const value = response.result.value.projections?.values?.[INDICATOR_KEY]
+    const response = await api.session.projections({ sessionId: address.childSessionId }, signal)
+    if (!response.ok) return [address.childSessionId, undefined] as const
+    const value = response.value?.values?.[INDICATOR_KEY]
     return [address.childSessionId, routeSourceFromProjection(value)] as const
   }))
   const pairs = settled.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
@@ -246,11 +288,11 @@ export function createRouteSourceLoader(api: SubagentRouteHistoryApi): RouteSour
 
   const loadOne = async (address: SubagentRouteAddress, key: string, controller: AbortController): Promise<void> => {
     try {
-      const response = await api.subagents.history({ ...address, maxMessages: 1 }, controller.signal)
+      const response = await api.session.projections({ sessionId: address.childSessionId }, controller.signal)
       if (disposed || controller.signal.aborted) return
       completed.add(key)
-      if (!response.result.ok) return
-      const source = routeSourceFromProjection(response.result.value.projections?.values?.[INDICATOR_KEY])
+      if (!response.ok) return
+      const source = routeSourceFromProjection(response.value?.values?.[INDICATOR_KEY])
       if (source === undefined) return
       if (sources[address.childSessionId] === source) return
       sources[address.childSessionId] = source

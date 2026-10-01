@@ -24,8 +24,10 @@ export const PENDING_SESSION_TITLE = '读取标题中'
 /** One session-list row field set used to decide a task member label. */
 export interface PanelSessionTitleSummary {
   readonly title?: string | null
-  readonly sessionListMetadata?: { readonly blank?: boolean }
-  readonly sessionStats?: { readonly turns?: number }
+  /** Host-derived "nothing has happened in this session yet". */
+  readonly blank?: boolean
+  /** Projection values the list row carries; `sessionStats.turns` is read when present. */
+  readonly projectionValues?: Readonly<Record<string, unknown>>
 }
 
 /** Cold-read result for a session title history baseline. */
@@ -39,24 +41,16 @@ export interface PanelSessionTitle {
   readonly title?: string
 }
 
-/** The narrow host API face used to cold-read a session's projection baseline. */
+/** The narrow `remote` face used to cold-read a session's projection baseline. */
 export interface SessionTitleHistoryApi {
-  readonly sessions: {
-    history(
-      payload: { readonly sessionId: string; readonly maxMessages: number },
+  readonly session: {
+    projections(
+      payload: { readonly sessionId: string },
       signal?: AbortSignal,
-    ): Promise<{
-      readonly result:
-        | {
-          readonly ok: true
-          readonly value: {
-            readonly projections?: {
-              readonly values?: Readonly<Record<string, unknown>>
-            }
-          }
-        }
-        | { readonly ok: false }
-    }>
+    ): Promise<
+      | { readonly ok: true; readonly value: { readonly values?: Readonly<Record<string, unknown>> } | null }
+      | { readonly ok: false }
+    >
   }
 }
 
@@ -157,7 +151,8 @@ function cleanTitle(value: string | null | undefined): string | undefined {
 }
 
 function blankSession(row: PanelSessionTitleSummary | undefined): boolean {
-  return row?.sessionListMetadata?.blank === true || row?.sessionStats?.turns === 0
+  const stats = row?.projectionValues?.sessionStats as { readonly turns?: unknown } | undefined
+  return row?.blank === true || stats?.turns === 0
 }
 
 function titleFromProjection(value: unknown): string | undefined {
@@ -238,13 +233,13 @@ export function createSessionTitleLoader(api: SessionTitleHistoryApi): SessionTi
 
   const loadOne = async (sessionId: string, controller: AbortController): Promise<void> => {
     try {
-      const response = await api.sessions.history({ sessionId, maxMessages: 1 }, controller.signal)
+      const response = await api.session.projections({ sessionId }, controller.signal)
       if (disposed || controller.signal.aborted) return
-      if (!response.result.ok) {
+      if (!response.ok) {
         finish(sessionId, { kind: 'failed' })
         return
       }
-      const title = titleFromProjection(response.result.value.projections?.values?.title)
+      const title = titleFromProjection(response.value?.values?.title)
       finish(sessionId, title === undefined ? { kind: 'loaded' } : { kind: 'loaded', title })
     } catch {
       if (!disposed && !controller.signal.aborted) finish(sessionId, { kind: 'failed' })

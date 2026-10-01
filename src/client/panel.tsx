@@ -5,7 +5,9 @@
  */
 
 import { createElement, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import type { A2d2ClientContext, ClientSessionListSnapshot, ClientSessionListStore, ClientSessionsService } from './context.ts'
+import type {
+  A2d2ClientContext, ClientSessionListSnapshot, ClientSessionListStore, ClientSessionsService, ClientWorkspaceNavigation,
+} from './context.ts'
 import { fetchPanel } from './panel-api.ts'
 import {
   createSessionTitleLoader,
@@ -32,7 +34,7 @@ import css from './panel.module.css'
 
 const PANEL_REFRESH_MS = 5_000
 
-const NO_LIST: ClientSessionListSnapshot = { byId: {}, subagentsByParent: {} }
+const NO_LIST: ClientSessionListSnapshot = { byId: {}, projectionsBySession: {} }
 
 export interface A2d2PanelProps {
   readonly ctx: A2d2ClientContext
@@ -47,11 +49,11 @@ function stateClass(state: PanelTaskRow['state']): string {
 }
 
 function MemberLine({ row, ctx }: { readonly row: PanelMemberRow; readonly ctx: A2d2ClientContext }): ReturnType<typeof createElement> {
-  const sessions = ctx.get('sessions') as ClientSessionsService | undefined
+  const navigation = ctx.get('uiWorkspace') as ClientWorkspaceNavigation | undefined
   const open = (): void => {
     if (!row.openable) return
     try {
-      sessions?.open(row.sessionId)
+      navigation?.openSession(row.sessionId)
     } catch {
       // The list may have changed between render and click; the next list
       // snapshot makes the stale row non-openable.
@@ -123,7 +125,7 @@ function TaskCard({ row, ctx }: { readonly row: PanelTaskRow; readonly ctx: A2d2
 
 export function A2d2Panel({ ctx, sessionId, visible }: A2d2PanelProps): ReturnType<typeof createElement> {
   const sessions = ctx.get('sessions') as ClientSessionsService | undefined
-  const connection = ctx.get('connection') as { readonly api?: SessionTitleHistoryApi } | undefined
+  const remote = ctx.get('remote') as SessionTitleHistoryApi | undefined
   const fallback = useMemo<ClientSessionListStore>(() => ({
     getSnapshot: () => NO_LIST,
     subscribe: () => () => {},
@@ -140,8 +142,8 @@ export function A2d2Panel({ ctx, sessionId, visible }: A2d2PanelProps): ReturnTy
   const [panel, setPanel] = useState<PanelClientState>({ payload: undefined, failure: undefined })
   const [titleReads, setTitleReads] = useState<Readonly<Record<string, SessionTitleHistoryRead | undefined>>>({})
   const titleLoader = useMemo<SessionTitleLoader | undefined>(
-    () => connection?.api === undefined ? undefined : createSessionTitleLoader(connection.api),
-    [connection?.api],
+    () => remote === undefined ? undefined : createSessionTitleLoader(remote),
+    [remote],
   )
 
   useEffect(() => {

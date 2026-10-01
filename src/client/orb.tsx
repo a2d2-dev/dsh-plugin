@@ -47,11 +47,15 @@ import { HighwayMap } from './highway-map.tsx'
 import { highwayView } from './highway-view.ts'
 import { runOrbHandoff } from './orb-actions.ts'
 import { sessionStatus } from './status-model.ts'
-import type { SessionStatus, StatusKind } from './status-model.ts'
+import type { SessionStatus, StatusKind, StatusSource } from './status-model.ts'
 import type { OrbHandoffOutcome } from './orb-actions.ts'
 import type {
   A2d2ClientContext,
+  ClientConversationState,
+  ClientPendingInteraction,
   ClientSessionsService,
+  ClientUiSessionService,
+  ClientWorkspaceNavigation,
   ClientWorkspacesService,
   HostIndicatorProjection,
 } from './context.ts'
@@ -143,17 +147,64 @@ function useOccupancy(
 const STATUS_TICK_MS = 15_000
 
 /**
+ * The live-turn facts DSH 0.2 keeps in the Chat store rather than the session
+ * snapshot — the `legacy` slice a session-scoped slot reads through `useChat`.
+ */
+export interface OrbChatFacts {
+  readonly turnTimings: ReadonlyMap<number, { readonly startTime: number; readonly endTime?: number }>
+  readonly partial: unknown
+  readonly runningCalls: readonly { readonly name: string; readonly time: number }[]
+}
+
+/**
+ * Fold the three 0.2 sources of one session's status into the card's input:
+ * the session snapshot, the Chat store's live-turn facts, and the pending
+ * interaction `uiSession` reports.
+ * @param snapshot - the session snapshot.
+ * @param chat - the Chat store's live-turn facts, absent outside a Chat-composed shell.
+ * @param pending - the interaction awaiting the user, if any.
+ * @returns the status-model input.
+ */
+export function orbStatusSource(
+  snapshot: ClientConversationState,
+  chat: OrbChatFacts | undefined,
+  pending: ClientPendingInteraction | undefined,
+): StatusSource {
+  return {
+    running: snapshot.running,
+    ...(snapshot.removed === undefined ? {} : { removed: snapshot.removed }),
+    ...(snapshot.openState === undefined ? {} : { openState: snapshot.openState }),
+    ...(snapshot.blank === undefined ? {} : { blank: snapshot.blank }),
+    ...(snapshot.lastAgentError === undefined ? {} : { lastAgentError: snapshot.lastAgentError }),
+    ...(snapshot.promptError === undefined ? {} : { promptError: snapshot.promptError }),
+    ...(snapshot.pendingSubmissions === undefined ? {} : { queue: snapshot.pendingSubmissions }),
+    ...(chat === undefined ? {} : { turnTimings: chat.turnTimings, partial: chat.partial, runningCalls: chat.runningCalls }),
+    ...(pending === undefined
+      ? {}
+      : { pending: [{ kind: pending.kind, payload: { toolName: pending.toolName, reason: pending.reason } }] }),
+  }
+}
+
+/**
  * One session's live status while the 现状 card is open.
  *
- * Subscribes to the conversation snapshot only while `active`, so a closed card
- * costs nothing.
+ * Subscribes to the conversation snapshot and the `uiSession` status only while
+ * `active`, so a closed card costs nothing; a change of the Chat facts re-reads.
  * @param ctx - the client context carrying the sessions service.
  * @param sessionId - the session the orb sits on.
  * @param active - whether the card is open.
  * @returns the resolved status, or `undefined` while closed or unavailable.
  */
-function useSessionStatus(ctx: A2d2ClientContext, sessionId: string, active: boolean): SessionStatus | undefined {
+function useSessionStatus(
+  ctx: A2d2ClientContext,
+  sessionId: string,
+  active: boolean,
+  chat: OrbChatFacts | undefined,
+): SessionStatus | undefined {
   const [status, setStatus] = useState<SessionStatus | undefined>(undefined)
+  const chatRef = useRef(chat)
+  chatRef.current = chat
+  const readRef = useRef<(() => void) | undefined>(undefined)
   useEffect(() => {
     if (!active) { setStatus(undefined); return }
     const sessions = ctx.get('sessions') as ClientSessionsService | undefined
@@ -162,12 +213,19 @@ function useSessionStatus(ctx: A2d2ClientContext, sessionId: string, active: boo
       setStatus({ kind: 'unavailable', headline: '读不到会话状态', facts: [] })
       return
     }
-    const read = (): void => { setStatus(sessionStatus(session.getSnapshot(), Date.now())) }
+    const uiSession = ctx.get('uiSession') as ClientUiSessionService | undefined
+    const read = (): void => {
+      const pending = uiSession?.sessionStatus.getSnapshot().get(sessionId)?.pendingInteraction
+      setStatus(sessionStatus(orbStatusSource(session.getSnapshot(), chatRef.current, pending), Date.now()))
+    }
+    readRef.current = read
     read()
     const dispose = session.subscribe(read)
+    const disposeStatus = uiSession?.sessionStatus.subscribe(read)
     const timer = setInterval(read, STATUS_TICK_MS)
-    return () => { dispose(); clearInterval(timer) }
+    return () => { readRef.current = undefined; dispose(); disposeStatus?.(); clearInterval(timer) }
   }, [ctx, sessionId, active])
+  useEffect(() => { readRef.current?.() }, [chat])
   return status
 }
 
@@ -371,8 +429,13 @@ type CardPhase =
  * `sessionId` is required: this component renders inside a session-scoped slot,
  * which is what supplies it, so there is no session-less case to guard.
  */
-export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string }): ReturnType<typeof createElement> | null {
-  const { ctx, sessionId } = props
+export function HandoffOrb(props: {
+  ctx: A2d2ClientContext
+  sessionId: string
+  /** The Chat store's live-turn facts for this session, when the shell composes Chat. */
+  chat?: OrbChatFacts
+}): ReturnType<typeof createElement> | null {
+  const { ctx, sessionId, chat } = props
   const { occupancy, host } = useOccupancy(ctx, sessionId)
   const rootRef = useRef<HTMLButtonElement | null>(null)
   // The point a drag left the circle at, restored from the last visit. `undefined`
@@ -390,7 +453,7 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
   const [consult, setConsult] = useState<ConsultPhase>({ kind: 'idle' })
   // The next-step card leads with the session's status, which is instant, so
   // the card is useful while the consultation is still being generated.
-  const status = useSessionStatus(ctx, sessionId, consult.kind !== 'idle')
+  const status = useSessionStatus(ctx, sessionId, consult.kind !== 'idle', chat)
   const modelDirectory = useModelDirectory(ctx, sessionId, consult.kind === 'ready')
   const [focus, setFocus] = useState('')
   const [handoffModelTarget, setHandoffModelTarget] = useState<ConsultNewSessionModelTarget | undefined>(undefined)
@@ -406,7 +469,8 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
   const confirm = useCallback(async (): Promise<void> => {
     const sessions = ctx.get('sessions') as ClientSessionsService | undefined
     const workspaces = ctx.get('workspaces') as ClientWorkspacesService | undefined
-    if (sessions === undefined || workspaces === undefined) {
+    const navigation = ctx.get('uiWorkspace') as ClientWorkspaceNavigation | undefined
+    if (sessions === undefined || workspaces === undefined || navigation === undefined) {
       // No session/workspace service: fall back to filling the draft, which is
       // the older behavior and still lets the user hand off manually.
       setPhase({ kind: 'closed' })
@@ -420,6 +484,7 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
       {
         sessions,
         workspaces,
+        navigation,
         ...(handoffModelTarget === undefined ? {} : { successorModel: handoffModelTarget }),
         ...(modelDirectories === undefined ? {} : { modelDirectories }),
         notify: message => { setFailure(message) },
@@ -472,6 +537,7 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
       openHandoff,
       sessions: ctx.get('sessions') as ClientSessionsService | undefined,
       workspaces: ctx.get('workspaces') as ClientWorkspacesService | undefined,
+      navigation: ctx.get('uiWorkspace') as ClientWorkspaceNavigation | undefined,
       ...(modelDirectories === undefined ? {} : { modelDirectories }),
       notify: message => { setFailure(message) },
     }, candidate, {
@@ -490,6 +556,7 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
       openHandoff,
       sessions: ctx.get('sessions') as ClientSessionsService | undefined,
       workspaces: ctx.get('workspaces') as ClientWorkspacesService | undefined,
+      navigation: ctx.get('uiWorkspace') as ClientWorkspaceNavigation | undefined,
       modelDirectories: ctx.get('modelDirectories') as ClientModelDirectoryService | undefined,
       notify: message => { setFailure(message) },
     }, move, { sessionId, phase: consult }).then((ok) => {
