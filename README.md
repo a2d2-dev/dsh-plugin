@@ -115,7 +115,7 @@ Writes are atomic and serialized through the document's own file lock. `create` 
 
 `open_subtask` lets a task issue's main session open a subtask issue as its own root main session (ADR 0007). Its only parameter is `issue`, the already-created subtask issue number. The caller's own task issue becomes the parent issue.
 
-The service selects the first `grill` station candidate from `a2d2-station-models` that appears in the live DSH model directory, creates a new root Agent in the same project cwd with that provider/model, sends exactly one first prompt containing the subtask issue link, the parent task issue link, and the instruction to use `/grill-with-docs` as that task's main session, then reuses `bindMainSession` to record the new session as the subtask's main session. It refuses calls from sessions that are not task issue main sessions, and refuses a subtask issue that already has a main session.
+The service selects the first `grill` station candidate from `a2d2-station-models` that appears in the live DSH model directory, creates a new root Agent in the same project cwd with that provider/model, sends exactly one first prompt containing the subtask issue reference, the parent task issue reference, per-reference `gh issue view <number> --comments` read commands to run in the project directory, and the instruction to use `/grill-with-docs` as that task's main session, then reuses `bindMainSession` to record the new session as the subtask's main session. It refuses calls from sessions that are not task issue main sessions, and refuses a subtask issue that already has a main session.
 
 ## Dispatch subagent
 
@@ -261,7 +261,7 @@ The tool list is part of the request prefix, so composing the tools row changes 
 
 #### What the model sees
 
-Profiles that compose the open-subtask tools row add one tool definition named `open_subtask` to agents that also have `tools`, `a2d2`, `agents`, and `llm`. A successful call returns the new root session id, task issue, parent issue, and selected `provider/model`. The created subtask session receives one ordinary first prompt with only the subtask issue link, the parent task issue link, and the `/grill-with-docs` main-session instruction.
+Profiles that compose the open-subtask tools row add one tool definition named `open_subtask` to agents that also have `tools`, `a2d2`, `agents`, and `llm`. A successful call returns the new root session id, task issue, parent issue, and selected `provider/model`. The created subtask session receives one ordinary first prompt with only the subtask issue reference, the parent task issue reference, per-reference `gh issue view <number> --comments` read commands to run in the project directory, and the `/grill-with-docs` main-session instruction.
 
 #### Token effect
 

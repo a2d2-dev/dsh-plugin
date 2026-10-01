@@ -33,7 +33,7 @@ afterEach(async () => {
 
 class StubAgents extends Service {
   readonly created: CreateAgentOptions[] = []
-  readonly followups: Array<{ readonly sessionId: SessionId; readonly text: string }> = []
+  readonly followups: Array<{ readonly sessionId: SessionId; readonly text: string; readonly sourceKind: string }> = []
 
   constructor(ctx: Context) {
     super(ctx, 'agents')
@@ -45,9 +45,9 @@ class StubAgents extends Service {
       id: options.sessionId,
       options: options.agentOptions ?? {},
       session: { header: { version: 0, id: options.sessionId, createdAt: 1_758_412_800_000, cwd: options.meta?.cwd }, id: options.sessionId },
-      followup: vi.fn((message: { readonly content: readonly { readonly type: string; readonly text?: string }[] }) => {
+      followup: vi.fn((message: { readonly content: readonly { readonly type: string; readonly text?: string }[]; readonly source: { readonly kind: string } }) => {
         const text = message.content.map(part => part.type === 'text' ? part.text ?? '' : '').join('')
-        this.followups.push({ sessionId: options.sessionId, text })
+        this.followups.push({ sessionId: options.sessionId, text, sourceKind: message.source.kind })
       }),
     } as unknown as Agent
     return { agent, dispose: async () => {} }
@@ -79,7 +79,7 @@ async function mount(root: string): Promise<{ readonly ctx: Context; readonly se
 }
 
 describe('openSubtask', () => {
-  it('creates a root session in the project on the first available grill model, sends only issue links and the instruction, and binds it as subtask main session', async () => {
+  it('creates a root session in the project on the first available grill model, sends only issue references with gh read commands and the instruction, and binds it as subtask main session', async () => {
     const root = await tempRoot()
     const { service, agents } = await mount(root)
     await service.bindMainSession({ cwd: root, issue: 41, mainSession: parentSession, now: new Date('2026-10-01T10:00:00.000Z') })
@@ -96,13 +96,15 @@ describe('openSubtask', () => {
     expect(agents.created[0]).not.toHaveProperty('parentAgent')
     expect(agents.followups).toEqual([{
       sessionId: opened.session,
+      sourceKind: 'a2d2-open-subtask',
       text: [
-        '子任务 issue：https://github.com/a2d2-dev/dsh-plugin/issues/49',
-        '父任务 issue（spec 在其中）：https://github.com/a2d2-dev/dsh-plugin/issues/41',
+        '子任务 issue：#49（在本项目目录里用 `gh issue view 49 --comments` 读取）',
+        '父任务 issue（spec 在其中）：#41（在本项目目录里用 `gh issue view 41 --comments` 读取）',
         '',
         '用 /grill-with-docs 推进；你是该任务的主会话。',
       ].join('\n'),
     }])
+    expect(agents.followups[0]?.text).not.toContain('https://')
     expect(agents.followups[0]?.text).not.toContain('Problem Statement')
     expect(agents.followups[0]?.text).not.toContain('Implementation Decisions')
 

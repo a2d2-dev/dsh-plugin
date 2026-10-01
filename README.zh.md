@@ -115,7 +115,7 @@ sessions:
 
 `open_subtask` 让一个任务 issue 的主会话把某个子任务 issue 开成它自己的根主会话（ADR 0007）。唯一参数是 `issue`，也就是已经建好并挂到父任务下的子任务 issue 编号。调用方自己的任务 issue 会成为父 issue。
 
-服务会从 `a2d2-station-models` 的 `grill` 站候选中，选择第一个出现在 DSH 实时模型目录里的 `provider/model`；随后在同一项目 cwd 下创建一条新的根 Agent 会话，给它设置该模型，只投递一条首条 prompt：子任务 issue 链接、父任务 issue（spec 在其中）链接，以及“用 `/grill-with-docs` 推进、你是该任务的主会话”的指令；最后复用 `bindMainSession` 把新会话记录为子任务主会话。非任务 issue 主会话调用会被拒绝；子任务 issue 已有主会话时也会被拒绝。
+服务会从 `a2d2-station-models` 的 `grill` 站候选中，选择第一个出现在 DSH 实时模型目录里的 `provider/model`；随后在同一项目 cwd 下创建一条新的根 Agent 会话，给它设置该模型，只投递一条首条 prompt：子任务 issue 编号引用、父任务 issue（spec 在其中）编号引用、在本项目目录运行的逐条 `gh issue view <编号> --comments` 读取命令，以及“用 `/grill-with-docs` 推进、你是该任务的主会话”的指令；最后复用 `bindMainSession` 把新会话记录为子任务主会话。非任务 issue 主会话调用会被拒绝；子任务 issue 已有主会话时也会被拒绝。
 
 ## 派子代理
 
@@ -261,7 +261,7 @@ sessions:
 
 #### What the model sees
 
-组合了开子任务工具行的 profile 中，同时拥有 `tools`、`a2d2`、`agents`、`llm` 的 agent 会多一份名为 `open_subtask` 的工具定义。调用成功时，结果返回新根会话 id、任务 issue、父 issue 与实际选择的 `provider/model`。被创建的子任务会话会收到一条普通首条 prompt，只包含子任务 issue 链接、父任务 issue 链接与 `/grill-with-docs` 主会话指令。
+组合了开子任务工具行的 profile 中，同时拥有 `tools`、`a2d2`、`agents`、`llm` 的 agent 会多一份名为 `open_subtask` 的工具定义。调用成功时，结果返回新根会话 id、任务 issue、父 issue 与实际选择的 `provider/model`。被创建的子任务会话会收到一条普通首条 prompt，只包含子任务 issue 编号引用、父任务 issue 编号引用、在本项目目录运行的逐条 `gh issue view <编号> --comments` 读取命令与 `/grill-with-docs` 主会话指令。
 
 #### Token effect
 

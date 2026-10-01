@@ -20,6 +20,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Agent, AgentRegistry } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed, MessageSource } from '@deepseek-ai/dsh-llm'
 import type { Fiber, Volatile } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
@@ -183,6 +184,12 @@ export {
 export type { TaskDocumentErrorCode } from './document.ts'
 export type { BoundTask, CreateTaskRequest, Task, TaskIssue, TaskIssueHandoff, TaskMember, TaskState } from './types.ts'
 
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'a2d2-open-subtask': { kind: 'a2d2-open-subtask' } & ContextFormed
+  }
+}
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     a2d2: A2d2Service
@@ -209,16 +216,12 @@ export const DEFAULT_HANDOFF_CRITICAL_TOKENS = 1_000_000
 /** Currency the indicator quotes a configured rate in, when a deployment configures none. */
 export const DEFAULT_CURRENCY = '¥'
 
-const TASK_ISSUE_BASE_URL = 'https://github.com/a2d2-dev/dsh-plugin/issues/'
-
-function taskIssueUrl(issue: number): string {
-  return `${TASK_ISSUE_BASE_URL}${String(issue)}`
-}
+const A2D2_OPEN_SUBTASK_MESSAGE_SOURCE: MessageSource = { kind: 'a2d2-open-subtask' }
 
 function openSubtaskPrompt(issue: number, parentIssue: number): string {
   return [
-    `子任务 issue：${taskIssueUrl(issue)}`,
-    `父任务 issue（spec 在其中）：${taskIssueUrl(parentIssue)}`,
+    `子任务 issue：#${String(issue)}（在本项目目录里用 \`gh issue view ${String(issue)} --comments\` 读取）`,
+    `父任务 issue（spec 在其中）：#${String(parentIssue)}（在本项目目录里用 \`gh issue view ${String(parentIssue)} --comments\` 读取）`,
     '',
     '用 /grill-with-docs 推进；你是该任务的主会话。',
   ].join('\n')
@@ -636,7 +639,7 @@ export class A2d2Service extends Service {
     })
     handle.agent.followup(createUserMessage({
       content: [{ type: 'text', text: openSubtaskPrompt(request.issue, parent.issue.number) }],
-      source: { kind: 'user' },
+      source: A2D2_OPEN_SUBTASK_MESSAGE_SOURCE,
     }))
     return { session, model, task }
   }
