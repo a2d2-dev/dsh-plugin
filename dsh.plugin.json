@@ -8,7 +8,7 @@
   },
   "contributes": {
     "commands": ["handoff"],
-    "tools": [],
+    "tools": ["bind_main_session"],
     "skills": []
   }
 }

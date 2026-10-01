@@ -69,6 +69,9 @@ export interface Task {
   readonly members: readonly TaskMember[]
 }
 
+/** A task bound to a task issue. */
+export type BoundTask = Task & { readonly issue: TaskIssue }
+
 /** Caller-supplied facts for a new task. */
 export interface CreateTaskRequest {
   /** Human-facing name; must be non-empty after trimming. */

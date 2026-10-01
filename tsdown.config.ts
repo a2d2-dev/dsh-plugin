@@ -5,6 +5,8 @@
  * - `lib/index.js` is the plugin and its `ctx.a2d2` service.
  * - `lib/command.js` is the `/handoff` command plugin (its own mount row,
  *   because cordis loads a plugin only once its declared services exist).
+ * - `lib/tools.js` is the model tools plugin (its own mount row, for the same
+ *   reason: it declares `tools`).
  * - `lib/invariant.js` is the package invariant companion the harness probes.
  * - `lib/client.js` is the browser half: a classic script registering a CJS
  *   closure factory with `window.__ModuleLoader__`, whose id equals the package
@@ -140,7 +142,7 @@ function cssPlugin(): BuildPlugin {
 
 export default [
   {
-    entry: { index: 'src/index.ts', command: 'src/command.ts', invariant: 'src/invariant.ts' },
+    entry: { index: 'src/index.ts', command: 'src/command.ts', tools: 'src/tools.ts', invariant: 'src/invariant.ts' },
     outDir: 'lib',
     format: ['esm'],
     platform: 'node',

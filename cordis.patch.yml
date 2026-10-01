@@ -15,13 +15,17 @@
 # the A²D² mainline skill suggestions, an empty price table, and the 200k / 1M
 # context lengths the floating indicator warns and turns critical at).
 #
-# Two rows, because cordis loads a plugin only once its declared services
+# Three rows, because cordis loads a plugin only once its declared services
 # exist. The task store declares none, so `ctx.a2d2` is available in any
 # profile; the command row declares `commands` and `a2d2`, so only a profile
-# that composes both gets `/handoff`. The floating orb needs no row of its own:
-# it drives that same command through the session it already sits on.
+# that composes both gets `/handoff`; the tools row declares `tools` and
+# `a2d2`, so only a profile that composes both gets the model tools
+# (`bind_main_session`). The floating orb needs no row of its own: it drives
+# that same command through the session it already sits on.
 - insert:
     - id: a2d2
       name: 'dsh-a2d2'
     - id: a2d2-command
       name: 'dsh-a2d2/command'
+    - id: a2d2-tools
+      name: 'dsh-a2d2/tools'

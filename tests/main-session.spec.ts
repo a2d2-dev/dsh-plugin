@@ -17,6 +17,8 @@ import { SessionId } from '@deepseek-ai/dsh-session/types'
 import A2d2Service from '../src/index.ts'
 import { TaskId } from '../src/brand.ts'
 import { tasksDirectory } from '../src/store.ts'
+import * as toolsPlugin from '../src/tools.ts'
+import { StubTools, stubAgent, toolRunContext } from './stubs.ts'
 
 const roots: string[] = []
 const sessionA = SessionId('session-a')
@@ -198,6 +200,28 @@ describe('main session queries', () => {
     expect(await service.mainSessionOfIssue(root, 41)).toBe(sessionB)
     expect(await service.mainSessionOfIssue(root, 45)).toBe('session-c')
     expect(await service.mainSessionOfIssue(root, 46)).toBeUndefined()
+  })
+})
+
+describe('bind_main_session tool', () => {
+  it('hands issue, parent_issue, and title to the service with the calling session as the main session', async () => {
+    const root = await tempRoot()
+    const ctx = new Context()
+    await ctx.plugin(StubTools)
+    await ctx.plugin(A2d2Service, { root })
+    await ctx.plugin(toolsPlugin)
+    const tool = (ctx.get('tools') as unknown as StubTools).find('bind_main_session')
+    if (tool === undefined) throw new Error('the tool did not register')
+    const args = { issue: 45, parent_issue: 41, title: 'Bind the main session' }
+
+    const value = await tool.execute(args, toolRunContext(stubAgent(root, sessionA), tool.name, args))
+
+    expect(value).toEqual({ task: 'issue-45', issue: 45, parent_issue: 41, main_session: 'session-a' })
+    expect(await ctx.a2d2.taskOfMainSession(root, sessionA)).toMatchObject({
+      id: 'issue-45',
+      name: 'Bind the main session',
+      issue: { number: 45, parent: 41, mainSession: sessionA },
+    })
   })
 })
 
