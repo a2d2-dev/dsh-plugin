@@ -74,10 +74,10 @@ export function apply(ctx: A2d2ClientContext): void {
     order: 60,
     label: () => 'A2D2 配置',
     inject: () => {
-      const connection = ctx.get('connection') as { api?: Parameters<typeof loadModelRouteCatalog>[0] } | undefined
+      const remote = ctx.get('remote') as Parameters<typeof loadModelRouteCatalog>[0] | undefined
       return {
         fetch: globalThis.fetch.bind(globalThis),
-        loadModelRoutes: () => loadModelRouteCatalog(connection?.api),
+        loadModelRoutes: () => loadModelRouteCatalog(remote),
       }
     },
   }, A2d2ConfigSection)), 'a2d2 config settings section')

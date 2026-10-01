@@ -204,14 +204,9 @@ export async function runOrbHandoff(
     return { ok: false, stage: 'create', error: messageOf(error) }
   }
 
-  await selectSuccessorModel(deps, successor)
-
-  // Focus the successor before it runs the take, so the user watches the
-  // handoff land in the session they were switched to.
-  deps.navigation.openSession(successor)
-
-  // A binding exists only while something retains the session; hold the
-  // successor for the rename and the take instead of borrowing one.
+  // A binding exists only while something retains the session: hold the
+  // successor for the rest of the handoff, and fail at create — before focus
+  // moves — when it cannot be opened.
   try {
     return await deps.sessions.using(
       successor,
@@ -223,13 +218,19 @@ export async function runOrbHandoff(
   }
 }
 
-/** Carry the title over and run the take on the opened successor. */
+/** Select the model, focus, carry the title over, and run the take on the opened successor. */
 async function takeOnSuccessor(
   deps: OrbHandoffDeps,
   binding: { readonly session: ClientSessionFace },
   sessionId: string,
   successor: string,
 ): Promise<OrbHandoffOutcome> {
+  await selectSuccessorModel(deps, successor)
+
+  // Focus the successor before it runs the take, so the user watches the
+  // handoff land in the session they were switched to.
+  deps.navigation.openSession(successor)
+
   // Carry the handing-off session's title to the successor so a handoff chain
   // reads as one named piece of work. Non-fatal: a session with no title, or a
   // rejected rename, leaves the successor on its automatic title rather than

@@ -78,14 +78,16 @@ export function projectedSubagentCatalogs(
     if (projection === undefined) continue
     const entries = (projection.values.subagentCatalog ?? []).map((entry): CatalogEntry => {
       const own = source.projectionsBySession[entry.id]
-      const ownCatalog = own?.state === 'ready' ? own.values.subagentCatalog : undefined
+      const hasChildren = own?.state === 'ready'
+        ? (own.values.subagentCatalog?.length ?? 0) > 0
+        : own?.state !== 'error'
       return {
         kind: 'child',
         id: entry.id,
         ...(entry.label === undefined ? {} : { label: entry.label }),
         ...(entry.mode === 'unknown' ? {} : { mode: entry.mode }),
         activity: source.byId[entry.id]?.running === true ? 'running' : 'inactive',
-        hasChildren: ownCatalog === undefined ? own?.state !== 'error' : ownCatalog.length > 0,
+        hasChildren,
       }
     })
     catalogs[parentId] = { entries, state: projection.state, error: projection.error }
