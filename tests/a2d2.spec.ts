@@ -249,6 +249,17 @@ describe('a2d2 service', () => {
     expect(await service.list(root)).toEqual([created])
   })
 
+  it('does not create an unbound task with a task issue identity', async () => {
+    const root = await tempRoot()
+    const service = await mount(root)
+
+    const created = await service.create(root, { name: 'Issue 45' })
+
+    expect(created.id).not.toBe('issue-45')
+    expect(created.id).toBe('issue-45-2')
+    expect(created).not.toHaveProperty('issue')
+  })
+
   it('resolves the newest active task and ignores non-active ones', async () => {
     const root = await tempRoot()
     const service = await mount(root)

@@ -548,44 +548,44 @@ export class A2d2Service extends Service {
     }
     const id = taskIdForIssue(issue)
     if (parentIssue !== undefined) taskIdForIssue(parentIssue)
-    const existing = await this.store.read(cwd, id)
-    if (existing !== undefined) {
-      const bound = existing.issue
-      if (bound === undefined) {
-        throw new Error(`a2d2: task "${id}" exists but is bound to no task issue; rename its document before binding task issue #${issue}`)
+    const updated = await this.store.updateLocked(cwd, id, async existing => {
+      if (existing !== undefined) {
+        const bound = existing.issue
+        if (bound === undefined) {
+          throw new Error(`a2d2: task "${id}" exists but is bound to no task issue; rename its document before binding task issue #${issue}`)
+        }
+        const current = bound.mainSession
+        if (current !== mainSession) {
+          throw new Error(
+            `a2d2: task issue #${issue} already has main session "${current}"; `
+            + 'a task issue has one main session at a time, and another session takes over only through a handoff',
+          )
+        }
+        if (bound.parent !== parentIssue) {
+          const named = (parent: number | undefined): string => (parent === undefined ? 'none' : `#${parent}`)
+          throw new Error(`a2d2: task issue #${issue} records parent ${named(bound.parent)}, not ${named(parentIssue)}`)
+        }
+        return { task: { ...existing, issue: bound }, write: false }
       }
-      const current = bound.mainSession
-      if (current !== mainSession) {
-        throw new Error(
-          `a2d2: task issue #${issue} already has main session "${current}"; `
-          + 'a task issue has one main session at a time, and another session takes over only through a handoff',
-        )
+      // One task per main session keeps "which task does this session execute"
+      // a single answer.
+      const held = await this.taskOfMainSession(cwd, mainSession)
+      if (held !== undefined) {
+        throw new Error(`a2d2: session "${mainSession}" is already the main session of task issue #${held.issue.number}`)
       }
-      if (bound.parent !== parentIssue) {
-        const named = (parent: number | undefined): string => (parent === undefined ? 'none' : `#${parent}`)
-        throw new Error(`a2d2: task issue #${issue} records parent ${named(bound.parent)}, not ${named(parentIssue)}`)
+      const name = request.title?.trim() || `Task issue #${issue}`
+      const task: BoundTask = {
+        id,
+        issue: { number: issue, ...(parentIssue === undefined ? {} : { parent: parentIssue }), mainSession },
+        name,
+        state: 'active',
+        createdAt: request.now.toISOString(),
+        members: [{ sessionId: mainSession }],
       }
-      await this.emitMainSessionChanged(cwd, issue, mainSession)
-      return { ...existing, issue: bound }
-    }
-    // One task per main session keeps "which task does this session execute"
-    // a single answer.
-    const held = await this.taskOfMainSession(cwd, mainSession)
-    if (held !== undefined) {
-      throw new Error(`a2d2: session "${mainSession}" is already the main session of task issue #${held.issue.number}`)
-    }
-    const name = request.title?.trim() || `Task issue #${issue}`
-    const task: BoundTask = {
-      id,
-      issue: { number: issue, ...(parentIssue === undefined ? {} : { parent: parentIssue }), mainSession },
-      name,
-      state: 'active',
-      createdAt: request.now.toISOString(),
-      members: [{ sessionId: mainSession }],
-    }
-    await this.store.write(cwd, task)
-    await this.emitMainSessionChanged(cwd, issue, mainSession)
-    return task
+      return { task, write: true }
+    })
+    if (updated.written) await this.emitMainSessionChanged(cwd, issue, mainSession)
+    return updated.task as BoundTask
   }
 
   /**
