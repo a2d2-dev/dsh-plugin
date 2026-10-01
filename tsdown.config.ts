@@ -10,6 +10,7 @@
  * - `lib/open-subtask-tools.js` is the model tool that creates subtask main
  *   sessions; it needs `tools`, `a2d2`, `agents`, and `llm`, so it has its own
  *   mount row.
+ * - `lib/ceo-prompt.js` is the scoped CEO prompt plugin for main sessions.
  * - `lib/invariant.js` is the package invariant companion the harness probes.
  * - `lib/client.js` is the browser half: a classic script registering a CJS
  *   closure factory with `window.__ModuleLoader__`, whose id equals the package
@@ -145,7 +146,7 @@ function cssPlugin(): BuildPlugin {
 
 export default [
   {
-    entry: { index: 'src/index.ts', command: 'src/command.ts', tools: 'src/tools.ts', 'open-subtask-tools': 'src/open-subtask-tools.ts', invariant: 'src/invariant.ts' },
+    entry: { index: 'src/index.ts', command: 'src/command.ts', tools: 'src/tools.ts', 'open-subtask-tools': 'src/open-subtask-tools.ts', 'ceo-prompt': 'src/ceo-prompt.ts', invariant: 'src/invariant.ts' },
     outDir: 'lib',
     format: ['esm'],
     platform: 'node',

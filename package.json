@@ -22,6 +22,10 @@
       "types": "./lib/types/open-subtask-tools.d.ts",
       "default": "./lib/open-subtask-tools.js"
     },
+    "./ceo-prompt": {
+      "types": "./lib/types/ceo-prompt.d.ts",
+      "default": "./lib/ceo-prompt.js"
+    },
     "./invariant": {
       "types": "./lib/types/invariant.d.ts",
       "default": "./lib/invariant.js"
@@ -50,10 +54,13 @@
     "lib/command.js",
     "lib/tools.js",
     "lib/open-subtask-tools.js",
+    "lib/ceo-prompt.js",
     "lib/invariant.js",
     "lib/types/**/*.d.ts",
     "cordis.patch.yml",
     "dsh.plugin.json",
+    "ceo/AGENTS.md",
+    "ceo/WAKE.md",
     "README.md",
     "README.zh.md",
     "lib/client.js",
