@@ -14,7 +14,9 @@ import type { Agent, AgentHandle, CreateAgentOptions } from '@deepseek-ai/dsh-ag
 import type { LlmModelInfo, LlmProviderInfo } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import A2d2Service from '../src/index.ts'
+import * as openSubtaskToolsPlugin from '../src/open-subtask-tools.ts'
 import { tasksDirectory } from '../src/store.ts'
+import { StubTools, stubAgent, toolRunContext } from './stubs.ts'
 
 const roots: string[] = []
 const parentSession = SessionId('session-parent')
@@ -131,5 +133,37 @@ describe('openSubtask', () => {
     await expect(service.openSubtask({ cwd: root, caller: parentSession, issue: 49, now: new Date() }))
       .rejects.toThrow(/task issue #49 already has main session "session-existing"/)
     expect(agents.created).toEqual([])
+  })
+})
+
+describe('open_subtask tool', () => {
+  it('hands the subtask issue to the service with the calling main session and returns the new session and model', async () => {
+    const root = await tempRoot()
+    const ctx = new Context()
+    await ctx.plugin(StubTools)
+    await ctx.plugin(StubAgents)
+    await ctx.plugin(StubLlm)
+    await ctx.plugin(A2d2Service, { root })
+    await ctx.plugin(openSubtaskToolsPlugin)
+    await ctx.a2d2.bindMainSession({ cwd: root, issue: 41, mainSession: parentSession, now: new Date('2026-10-01T10:00:00.000Z') })
+    const tool = (ctx.get('tools') as unknown as StubTools).find('open_subtask')
+    if (tool === undefined) throw new Error('the tool did not register')
+    const args = { issue: 49 }
+
+    const value = await tool.execute(args, toolRunContext(stubAgent(root, parentSession), tool.name, args)) as {
+      readonly session: string
+      readonly issue: number
+      readonly parent_issue: number
+      readonly provider: string
+      readonly model: string
+      readonly task: string
+    }
+
+    expect(value).toMatchObject({ issue: 49, parent_issue: 41, provider: 'codex', model: 'gpt-6' })
+    expect(typeof value.session).toBe('string')
+    expect(await ctx.a2d2.taskOfMainSession(root, SessionId(value.session))).toMatchObject({
+      id: 'issue-49',
+      issue: { number: 49, parent: 41, mainSession: value.session },
+    })
   })
 })
