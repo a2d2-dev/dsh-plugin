@@ -112,6 +112,33 @@
   background: rgba(128, 128, 128, 0.14);
 }
 
+.issue {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--dsw-alias-label-secondary, #a0a0a0);
+}
+
+.issueNumber {
+  flex: 0 0 auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--dsw-alias-label-primary, #e6e6e6);
+}
+
+.kind {
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(128, 128, 128, 0.14);
+}
+
+.issueLabel {
+  flex: 0 0 auto;
+}
+
 .goal {
   color: var(--dsw-alias-label-primary, #e6e6e6);
   overflow-wrap: anywhere;

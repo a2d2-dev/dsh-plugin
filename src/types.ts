@@ -1,7 +1,8 @@
 /**
  * The task document vocabulary. A task aggregates related sessions in one
  * project; membership and handoff edges live here rather than on the session, so
- * a session's durable format stays untouched.
+ * a session's durable format stays untouched. A task bound to a task issue also
+ * records its main session (ADR 0007).
  * @module @deepseek-ai/dsh-a2d2/src/types
  */
 
@@ -25,21 +26,51 @@ export interface TaskMember {
   readonly handoffFrom?: SessionId
 }
 
+/**
+ * A main-session handoff that was prepared but not taken yet: the task is
+ * "handing off" (交接中), and its main session is still the source.
+ */
+export interface TaskIssueHandoff {
+  /** The main session that prepared the handoff. */
+  readonly source: SessionId
+}
+
+/**
+ * What the plugin records about a task issue that the tracker does not know:
+ * which session executes it now. Everything else about the task issue lives on
+ * the tracker.
+ */
+export interface TaskIssue {
+  /** The task issue number; it is also the task's identity (`issue-<number>`). */
+  readonly number: number
+  /** The parent task issue number, present when this task is a subtask. */
+  readonly parent?: number
+  /** The one session executing the task issue; always one of the task's member sessions. */
+  readonly mainSession: SessionId
+  /** Present while a main-session handoff is prepared and not yet taken. */
+  readonly handoff?: TaskIssueHandoff
+}
+
 /** One task: its own facts plus the sessions that belong to it. */
 export interface Task {
   /** Document id, equal to the file basename. */
   readonly id: TaskId
+  /** The task issue this task is bound to; absent for a task bound to none. */
+  readonly issue?: TaskIssue
   /** Human-facing name. */
   readonly name: string
   /** Optional statement of what the task is for. */
   readonly goal?: string
-  /** Document-declared lifecycle. */
+  /** Document-declared lifecycle; `done` is the task's completion state. */
   readonly state: TaskState
   /** Creation timestamp, ISO-8601. */
   readonly createdAt: string
   /** Member sessions in document order, which is also display order. */
   readonly members: readonly TaskMember[]
 }
+
+/** A task bound to a task issue. */
+export type BoundTask = Task & { readonly issue: TaskIssue }
 
 /** Caller-supplied facts for a new task. */
 export interface CreateTaskRequest {

@@ -13,9 +13,19 @@ import type { Task } from './types.ts'
 /** Exact path owned by the panel task read. */
 export const PANEL_ROUTE_PATH = '/a2d2/api/tasks'
 
+/** The task issue a task is bound to, as the browser reads it. */
+export interface PanelTaskIssue {
+  readonly number: number
+  /** Present when the task is a subtask. */
+  readonly parent?: number
+  readonly mainSession: string
+}
+
 /** One task as the browser reads it. */
 export interface PanelTask {
   readonly id: string
+  /** Absent for a task bound to no task issue. */
+  readonly issue?: PanelTaskIssue
   readonly name: string
   readonly goal?: string
   readonly state: Task['state']

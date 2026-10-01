@@ -75,9 +75,9 @@ describe('task document validation', () => {
     expect(() => parseTaskDocument('a: [', TaskId('demo'))).toThrow(/not valid YAML/)
   })
 
-  it('rejects an unsupported version, naming both versions', () => {
-    const text = renderTaskDocument(taskWith([])).replace('version: 1', 'version: 2')
-    expect(() => parseTaskDocument(text, TaskId('demo'))).toThrow(/version 2.*version 1/)
+  it('rejects an unsupported version, naming the declared and the readable versions', () => {
+    const text = renderTaskDocument(taskWith([])).replace('version: 2', 'version: 3')
+    expect(() => parseTaskDocument(text, TaskId('demo'))).toThrow(/version 3.*version 2 or 1/)
   })
 
   it('rejects an id that disagrees with the filename', () => {

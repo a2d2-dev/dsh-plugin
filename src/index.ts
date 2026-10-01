@@ -19,7 +19,7 @@ import type { Fiber, Volatile } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { TaskId } from './brand.ts'
+import { TaskId, taskIdForIssue } from './brand.ts'
 import { CONFIG_ROUTE_PATH, createConfigHandler } from './config-page.ts'
 import { CONSULT_ROUTE_PATH, consultContextFactsFromProjectionValues, createConsultHandler } from './consult.ts'
 import { handedOff, memberOf, successorsOf } from './derive.ts'
@@ -54,9 +54,9 @@ import {
   withMember,
   writeHandoffDocument,
 } from './store.ts'
-import type { CreateTaskRequest, Task } from './types.ts'
+import type { BoundTask, CreateTaskRequest, Task } from './types.ts'
 
-export { TaskId } from './brand.ts'
+export { TaskId, taskIdForIssue } from './brand.ts'
 export type { TaskId as TaskIdType } from './brand.ts'
 export {
   CONFIG_ROUTE_PATH,
@@ -164,8 +164,10 @@ export type {
   PanelResponseWriter,
   PanelSession,
   PanelTask,
+  PanelTaskIssue,
 } from './panel.ts'
 export {
+  LEGACY_TASK_DOCUMENT_VERSION,
   TASK_DOCUMENT_VERSION,
   TaskDocumentError,
   parseTaskDocument,
@@ -173,7 +175,7 @@ export {
   taskIdFromFilename,
 } from './document.ts'
 export type { TaskDocumentErrorCode } from './document.ts'
-export type { CreateTaskRequest, Task, TaskMember, TaskState } from './types.ts'
+export type { BoundTask, CreateTaskRequest, Task, TaskIssue, TaskIssueHandoff, TaskMember, TaskState } from './types.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -279,6 +281,22 @@ export interface TakeHandoffRequest {
   readonly successor: SessionId
   /** The successor's working directory, which locates the project. */
   readonly cwd: string
+}
+
+/** Input of {@link A2d2Service.bindMainSession}. */
+export interface BindMainSessionRequest {
+  /** The binding session's working directory, which locates the project. */
+  readonly cwd: string
+  /** The task issue number the session will execute. */
+  readonly issue: number
+  /** The parent task issue number, when the task issue is a subtask. */
+  readonly parentIssue?: number
+  /** The task issue's title, which names a newly created task. */
+  readonly title?: string
+  /** The session becoming the task issue's main session. */
+  readonly mainSession: SessionId
+  /** Injection point for a new task's creation timestamp. */
+  readonly now: Date
 }
 
 /**
@@ -408,6 +426,81 @@ export class A2d2Service extends Service {
     const task = newTask(id, request, new Date())
     await this.store.write(cwd, task)
     return task
+  }
+
+  /**
+   * Bind a session as the main session of a task issue.
+   *
+   * The task issue's task is identified by the issue number, so a project holds
+   * at most one task document per task issue; the main session joins it as a
+   * member, keeping the handoff edges recorded the way any member's are.
+   * @param request - the task issue, its optional parent, and the binding session.
+   * @returns the task as persisted after the call.
+   */
+  async bindMainSession(request: BindMainSessionRequest): Promise<BoundTask> {
+    const { cwd, issue, parentIssue, mainSession } = request
+    if (cwd === '') {
+      throw new Error('a2d2: the binding session records no working directory, so no project holds its task')
+    }
+    const id = taskIdForIssue(issue)
+    if (parentIssue !== undefined) taskIdForIssue(parentIssue)
+    const existing = await this.store.read(cwd, id)
+    if (existing !== undefined) {
+      const bound = existing.issue
+      if (bound === undefined) {
+        throw new Error(`a2d2: task "${id}" exists but is bound to no task issue; rename its document before binding task issue #${issue}`)
+      }
+      const current = bound.mainSession
+      if (current !== mainSession) {
+        throw new Error(
+          `a2d2: task issue #${issue} already has main session "${current}"; `
+          + 'a task issue has one main session at a time, and another session takes over only through a handoff',
+        )
+      }
+      if (bound.parent !== parentIssue) {
+        const named = (parent: number | undefined): string => (parent === undefined ? 'none' : `#${parent}`)
+        throw new Error(`a2d2: task issue #${issue} records parent ${named(bound.parent)}, not ${named(parentIssue)}`)
+      }
+      return { ...existing, issue: bound }
+    }
+    // One task per main session keeps "which task does this session execute"
+    // a single answer.
+    const held = await this.taskOfMainSession(cwd, mainSession)
+    if (held !== undefined) {
+      throw new Error(`a2d2: session "${mainSession}" is already the main session of task issue #${held.issue.number}`)
+    }
+    const name = request.title?.trim() || `Task issue #${issue}`
+    const task: BoundTask = {
+      id,
+      issue: { number: issue, ...(parentIssue === undefined ? {} : { parent: parentIssue }), mainSession },
+      name,
+      state: 'active',
+      createdAt: request.now.toISOString(),
+      members: [{ sessionId: mainSession }],
+    }
+    await this.store.write(cwd, task)
+    return task
+  }
+
+  /**
+   * The task a session is the main session of.
+   * @param cwd - absolute session working directory.
+   * @param sessionId - the session to look up.
+   * @returns the task whose task issue it executes, or `undefined` when it is no main session.
+   */
+  async taskOfMainSession(cwd: string, sessionId: SessionId): Promise<BoundTask | undefined> {
+    return (await this.store.list(cwd))
+      .find((task): task is BoundTask => task.issue?.mainSession === sessionId)
+  }
+
+  /**
+   * The main session of a task issue.
+   * @param cwd - absolute session working directory.
+   * @param issue - the task issue number.
+   * @returns the main session, or `undefined` when no task is bound to that task issue.
+   */
+  async mainSessionOfIssue(cwd: string, issue: number): Promise<SessionId | undefined> {
+    return (await this.store.read(cwd, taskIdForIssue(issue)))?.issue?.mainSession
   }
 
   /**

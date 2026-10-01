@@ -24,6 +24,7 @@ import type {
   PanelClientState,
   PanelMemberRow,
   PanelMemberTreeNode,
+  PanelTaskIssueRow,
   PanelTaskRow,
   SessionTitleHistoryApi,
   SessionTitleHistoryRead,
@@ -48,7 +49,8 @@ function stateClass(state: PanelTaskRow['state']): string {
   return css.stateDone
 }
 
-function MemberLine({ row, ctx }: { readonly row: PanelMemberRow; readonly ctx: A2d2ClientContext }): ReturnType<typeof createElement> {
+/** A session label that opens the session when the shell's list holds it. */
+function SessionButton({ row, ctx }: { readonly row: PanelMemberRow; readonly ctx: A2d2ClientContext }): ReturnType<typeof createElement> {
   const navigation = ctx.get('uiWorkspace') as ClientWorkspaceNavigation | undefined
   const open = (): void => {
     if (!row.openable) return
@@ -60,18 +62,40 @@ function MemberLine({ row, ctx }: { readonly row: PanelMemberRow; readonly ctx: 
     }
   }
   return createElement(
+    'button',
+    {
+      type: 'button',
+      className: row.openable ? css.memberButton : css.memberStatic,
+      disabled: !row.openable,
+      title: row.sessionId,
+      onClick: open,
+    },
+    row.label,
+  )
+}
+
+/** The task issue line: number, main task or subtask, and the main session. */
+function IssueLine({ issue, ctx }: { readonly issue: PanelTaskIssueRow; readonly ctx: A2d2ClientContext }): ReturnType<typeof createElement> {
+  return createElement(
+    'div',
+    { className: css.issue },
+    createElement('span', { className: css.issueNumber }, `#${String(issue.number)}`),
+    createElement(
+      'span',
+      { className: css.kind },
+      issue.parent === undefined ? issue.kindLabel : `${issue.kindLabel} · 父 #${String(issue.parent)}`,
+    ),
+    createElement('span', { className: css.issueLabel }, '主会话'),
+    createElement(SessionButton, { row: issue.mainSession, ctx }),
+    issue.mainSession.current ? createElement('span', { className: css.current }, '当前') : null,
+  )
+}
+
+function MemberLine({ row, ctx }: { readonly row: PanelMemberRow; readonly ctx: A2d2ClientContext }): ReturnType<typeof createElement> {
+  return createElement(
     'div',
     { className: row.current ? `${css.member} ${css.memberCurrent}` : css.member, title: row.sessionId },
-    createElement(
-      'button',
-      {
-        type: 'button',
-        className: row.openable ? css.memberButton : css.memberStatic,
-        disabled: !row.openable,
-        onClick: open,
-      },
-      row.label,
-    ),
+    createElement(SessionButton, { row, ctx }),
     row.current ? createElement('span', { className: css.current }, '当前') : null,
     row.handoffFromLabel === undefined
       ? null
@@ -105,6 +129,7 @@ function TaskCard({ row, ctx }: { readonly row: PanelTaskRow; readonly ctx: A2d2
       createElement('div', { className: css.name, title: row.id }, row.name),
       createElement('span', { className: `${css.state} ${stateClass(row.state)}` }, row.stateLabel),
     ),
+    row.issue === undefined ? null : createElement(IssueLine, { issue: row.issue, ctx }),
     row.goal === undefined ? null : createElement('div', { className: css.goal }, row.goal),
     createElement(
       'div',
