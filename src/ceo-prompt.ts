@@ -29,7 +29,7 @@ export const CEO_PROMPT_SECTION = 'a2d2:ceo'
 
 /** Plugin configuration for the CEO prompt mount row. */
 export interface Config {
-  /** Directory containing the shipped CEO AGENTS.md and WAKE.md files. */
+  /** Directory containing the shipped CEO method AGENTS.md and WAKE.md files. */
   readonly agentFilesDir?: string
   /** Directory containing the global CEO SOUL.md; defaults to ~/.dsh/a2d2. */
   readonly globalSoulDir?: string
@@ -52,6 +52,7 @@ interface ScopedSystemPrompt {
 }
 
 const PACKAGE_ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
+const DEFAULT_AGENT_FILES_DIR = join(PACKAGE_ROOT, 'ceo')
 const DEFAULT_GLOBAL_SOUL_DIR = join(homedir(), '.dsh', 'a2d2')
 
 function readExisting(path: string): string | undefined {
@@ -101,7 +102,7 @@ function install(agent: Agent, projectRoot: string, agentFilesDir: string, globa
  * @param config - optional file locations for tests and deployments.
  */
 export function apply(ctx: Context, config: Config = {}): void {
-  const agentFilesDir = config.agentFilesDir ?? PACKAGE_ROOT
+  const agentFilesDir = config.agentFilesDir ?? DEFAULT_AGENT_FILES_DIR
   const globalSoulDir = config.globalSoulDir ?? DEFAULT_GLOBAL_SOUL_DIR
   const installed = new Map<Agent, () => void>()
   const agents = ctx.get('agents') as unknown as AgentsService
