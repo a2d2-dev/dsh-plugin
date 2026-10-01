@@ -92,6 +92,13 @@ function slugify(name: string): string {
     .replace(/^-+|-+$/g, '')
 }
 
+const TASK_ISSUE_ID_PATTERN = /^issue-[1-9][0-9]*$/
+
+/** Whether a task id is reserved for a tracker task issue. */
+function isTaskIssueId(id: string): boolean {
+  return TASK_ISSUE_ID_PATTERN.test(id)
+}
+
 /** Configuration of a {@link TaskDocumentStore}. */
 export interface TaskDocumentStoreConfig {
   /** Fixed project root; when set, the session cwd is ignored. */
@@ -178,12 +185,28 @@ export class TaskDocumentStore {
    */
   async write(cwd: string, task: Task): Promise<void> {
     const filename = this.filename(await this.projectRoot(cwd), task.id)
-    const text = renderTaskDocument(task)
-    // The lock file sits beside the document, so the directory must exist before
-    // the lock is taken; writeFileAtomic's own parent creation runs too late.
+    await this.writeFilename(filename, task)
+  }
+
+  /**
+   * Read and possibly write one task document while holding that document's lock.
+   * @param cwd - absolute session working directory.
+   * @param id - the task document id whose lock is held.
+   * @param update - produces the task to return and whether it must be persisted.
+   * @returns the returned task and whether this call wrote it.
+   */
+  async updateLocked(
+    cwd: string,
+    id: TaskId,
+    update: (existing: Task | undefined) => Promise<{ readonly task: Task, readonly write: boolean }>,
+  ): Promise<{ readonly task: Task, readonly written: boolean }> {
+    const filename = this.filename(await this.projectRoot(cwd), id)
     await mkdir(dirname(filename), { recursive: true })
-    await withFileLock(filename, async () => {
-      await writeFileAtomic(filename, text, { mode: 0o600, dirMode: 0o700 })
+    return await withFileLock(filename, async () => {
+      const existing = await this.readFilename(filename, id)
+      const next = await update(existing)
+      if (next.write) await writeFileAtomic(filename, renderTaskDocument(next.task), { mode: 0o600, dirMode: 0o700 })
+      return { task: next.task, written: next.write }
     })
   }
 
@@ -203,12 +226,34 @@ export class TaskDocumentStore {
     const stem = slug === '' ? `task-${Date.now().toString(36)}` : slug
     for (let attempt = 1; ; attempt += 1) {
       const candidate = attempt === 1 ? stem : `${stem}-${attempt}`
+      if (isTaskIssueId(candidate)) continue
       try {
         await stat(join(directory, candidate + TASK_DOCUMENT_EXTENSION))
       } catch {
         return TaskId(candidate)
       }
     }
+  }
+
+  private async readFilename(filename: string, id: TaskId): Promise<Task | undefined> {
+    let text: string
+    try {
+      text = await readFile(filename, 'utf8')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+      throw error
+    }
+    return parseTaskDocument(text, id)
+  }
+
+  private async writeFilename(filename: string, task: Task): Promise<void> {
+    const text = renderTaskDocument(task)
+    // The lock file sits beside the document, so the directory must exist before
+    // the lock is taken; writeFileAtomic's own parent creation runs too late.
+    await mkdir(dirname(filename), { recursive: true })
+    await withFileLock(filename, async () => {
+      await writeFileAtomic(filename, text, { mode: 0o600, dirMode: 0o700 })
+    })
   }
 
   private filename(projectRoot: string, id: TaskId): string {
