@@ -60,6 +60,7 @@
     "dsh.plugin.json",
     "ceo/AGENTS.md",
     "ceo/WAKE.md",
+    "ceo/DISPATCH_TEMPLATES.md",
     "README.md",
     "README.zh.md",
     "lib/client.js",
