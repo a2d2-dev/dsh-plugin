@@ -8,7 +8,7 @@ This repository holds the **A²D² DeepSeek Harness plugin**: the components tha
 
 What the plugin gives DSH today:
 
-- **Task aggregation** — a task groups the sessions belonging to one piece of work and records the handoff edges between them, so related sessions keep a relationship a person can read, review, and commit. The data lives in project-local documents, and no session's durable format changes to carry it. A task bound to a task issue also records its main session — the one session executing it — which a session sets with the `bind_main_session` tool. A main session can open design-heavy subtasks as root main sessions with `open_subtask`, or dispatch continuable subagents with `dispatch_subagent`, using the station model table and optional project-local special Agent personas.
+- **Task aggregation** — a task groups the sessions belonging to one piece of work and records the handoff edges between them, so related sessions keep a relationship a person can read, review, and commit. The data lives in project-local documents, and no session's durable format changes to carry it. A task bound to a task issue also records its main session — the one session executing it — which a session sets with the `bind_main_session` tool. A main session can open design-heavy subtasks as root main sessions with `open_subtask`, dispatch continuable subagents with `dispatch_subagent`, or declare its own task done with `complete_task`, using the station model table and optional project-local special Agent personas where those apply.
 - **Session handoff** — `/handoff` moves work from a long, expensive session to a fresh one without losing the thread: the handing-off session writes bounded continuation content, and the successor continues from it.
 - **A floating indicator** — an at-a-glance orb by the composer that tracks context length and cost, and warns when a session approaches the smart zone so the next phase boundary can choose its outcome.
 - **A²D² panel** — a better-sidebar tab for the open session's project tasks, member handoff tree, and main-session subagent route tree.
@@ -19,7 +19,7 @@ The rest of this document is the plugin's behavior contract and known limits, ke
 
 ## Plugin (namespace: `a2d2`)
 
-The package contributes five mount rows. `ctx.a2d2` is the task store and declares no service, so it loads in any profile; the command row declares `commands` and `a2d2`, so only a profile that composes both gets `/handoff`; the base tools row declares `tools` and `a2d2`, so only a profile that composes both gets `bind_main_session` and `dispatch_subagent`; the open-subtask tools row additionally declares `agents` and `llm`, because `open_subtask` creates a root session and selects the grill station model; the CEO prompt row declares `agents`, `systemPrompt`, and `a2d2`, so only a profile that composes live Agents and system prompt assembly gets scoped main-session guidance. The dispatch tool looks up `subagents` only when it runs, so profiles without the subagent service still load the base tools row and keep `bind_main_session` available. Cordis refuses to load a plugin whose declared services are absent, which is why the rows are split rather than registered conditionally from one row. The floating orb needs no row of its own: it drives that same command through the session it already sits on.
+The package contributes six mount rows. `ctx.a2d2` is the task store and declares no service, so it loads in any profile; the command row declares `commands` and `a2d2`, so only a profile that composes both gets `/handoff`; the base tools row declares `tools` and `a2d2`, so only a profile that composes both gets `bind_main_session` and `dispatch_subagent`; the open-subtask tools row additionally declares `agents` and `llm`, because `open_subtask` creates a root session and selects the grill station model; the complete-task tools row declares `agents`, because `complete_task` may resume a parent task's main session before sending the notification; the CEO prompt row declares `agents`, `systemPrompt`, and `a2d2`, so only a profile that composes live Agents and system prompt assembly gets scoped main-session guidance. The dispatch tool looks up `subagents` only when it runs, so profiles without the subagent service still load the base tools row and keep `bind_main_session` available. Cordis refuses to load a plugin whose declared services are absent, which is why the rows are split rather than registered conditionally from one row. The floating orb needs no row of its own: it drives that same command through the session it already sits on.
 
 ```yaml
 - id: a2d2
@@ -30,6 +30,8 @@ The package contributes five mount rows. `ctx.a2d2` is the task store and declar
   name: '@deepseek-ai/dsh-a2d2/tools'
 - id: a2d2-open-subtask-tools
   name: '@deepseek-ai/dsh-a2d2/open-subtask-tools'
+- id: a2d2-complete-task-tools
+  name: '@deepseek-ai/dsh-a2d2/complete-task-tools'
 - id: a2d2-ceo-prompt
   name: '@deepseek-ai/dsh-a2d2/ceo-prompt'
 ```
@@ -45,7 +47,7 @@ The package contributes five mount rows. `ctx.a2d2` is the task store and declar
 | `modelPrices` | `{}` | Per-million-token rates the indicator's cost line uses, keyed `provider/model` and then bare `model`. A negative or non-finite rate fails at load. |
 | `currency` | `¥` | Currency symbol the rates are quoted in. |
 
-The configuration keys belong to the `a2d2` row. Every method takes the caller's session cwd and resolves the project root itself, so callers carry no project bookkeeping. `list` reads the project's tasks, `resolve` returns the task a new session inherits, `create` mints an id and writes a document, `registerMember` records a session as a member with an optional handoff edge, `prepareHandoff` / `takeHandoff` write and consume a handoff document, `bindMainSession` binds a session as the main session of a task issue, `openSubtask` opens a subtask issue as a new root main session, and `taskOfMainSession` / `mainSessionOfIssue` answer which task a session is the main session of and which session is a task issue's main session.
+The configuration keys belong to the `a2d2` row. Every method takes the caller's session cwd and resolves the project root itself, so callers carry no project bookkeeping. `list` reads the project's tasks, `resolve` returns the task a new session inherits, `create` mints an id and writes a document, `registerMember` records a session as a member with an optional handoff edge, `prepareHandoff` / `takeHandoff` write and consume a handoff document, `bindMainSession` binds a session as the main session of a task issue, `openSubtask` opens a subtask issue as a new root main session, `completeTask` marks a task issue done and notifies its parent main session when one exists, and `taskOfMainSession` / `mainSessionOfIssue` answer which task a session is the main session of and which session is a task issue's main session.
 
 ### Station model settings
 
@@ -119,6 +121,12 @@ Writes are atomic and serialized through the document's own file lock. `create` 
 `open_subtask` lets a task issue's main session open a subtask issue as its own root main session (ADR 0007). Its only parameter is `issue`, the already-created subtask issue number. The caller's own task issue becomes the parent issue.
 
 The service selects the first `grill` station candidate from `a2d2-station-models` that appears in the live DSH model directory, creates a new root Agent in the same project cwd with that provider/model, sends exactly one first prompt containing the subtask issue reference, the parent task issue reference, per-reference `gh issue view <number> --comments` read commands to run in the project directory, and the instruction to use `/grill-with-docs` as that task's main session, then reuses `bindMainSession` to record the new session as the subtask's main session. It refuses calls from sessions that are not task issue main sessions, and refuses a subtask issue that already has a main session.
+
+## Complete task
+
+`complete_task` lets a task issue's main session declare its own task done after acceptance. Its parameter is `summary`, the completion summary that a parent CEO should receive. The plugin writes only the project-local task document (`state: done`); it never calls GitHub, and closing the task issue remains the CEO's job.
+
+Only the task issue's current main session can complete it. If the task has no parent issue, completion stops after the document write. If the task has a parent issue and that parent task has a main session, the plugin sends that parent main session one notification from the `a2d2-complete-task` source. The notification names only the child task issue (`#<number>`) and the completion summary, with no URL. When the parent main session is already loaded, the plugin calls `followup` on that live Agent; when it is not loaded, the plugin first calls DSH `agents.resume({ resumeSessionId })`, then calls `followup` on the resumed Agent.
 
 ## Dispatch subagent
 
@@ -287,6 +295,20 @@ The tool definition is part of the caller's request prefix when the row is compo
 #### KV Cache effect
 
 Composing the open-subtask tools row changes the caller's tool-list prefix once. The new root session has its own prompt history and therefore its own cache path.
+
+### `complete_task`
+
+#### What the model sees
+
+Profiles that compose the complete-task tools row add one tool definition named `complete_task` to agents that also have `tools`, `a2d2`, and `agents`. A successful call returns the task document id, task issue number, `done` state, whether a parent was notified, and, when applicable, the parent issue/main session and whether that parent was resumed. If a parent main session exists, that session receives one ordinary notification containing only the child task issue number and the completion summary.
+
+#### Token effect
+
+The tool definition is part of the caller's request prefix when the row is composed. A successful call adds its arguments and compact result to the caller's history; a notified parent session receives the short notification as ordinary conversation history.
+
+#### KV Cache effect
+
+Composing the complete-task tools row changes the caller's tool-list prefix once. The notification changes the parent main session's future prompt history; the task document write does not affect any request prefix by itself.
 
 ### `dispatch_subagent`
 

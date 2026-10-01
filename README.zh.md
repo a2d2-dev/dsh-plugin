@@ -8,7 +8,7 @@
 
 插件当前给 DSH 带来的能力：
 
-- **任务聚合**——一个任务把属于同一件工作的会话归到一起，并记录它们之间的交接边，使相关会话保留一段可阅读、可评审、可提交的关系。数据存放在项目本地文档中，且不为承载它而修改任何会话的持久格式。绑定了任务 issue 的任务还记着它的主会话——此刻执行它的那一条会话，由会话用 `bind_main_session` 工具绑定。主会话可以用 `open_subtask` 把设计较重的子任务开成根主会话，也可以用 `dispatch_subagent` 派出可续跑子代理，按站点模型表选模型，并可带项目本地特殊 Agent persona。
+- **任务聚合**——一个任务把属于同一件工作的会话归到一起，并记录它们之间的交接边，使相关会话保留一段可阅读、可评审、可提交的关系。数据存放在项目本地文档中，且不为承载它而修改任何会话的持久格式。绑定了任务 issue 的任务还记着它的主会话——此刻执行它的那一条会话，由会话用 `bind_main_session` 工具绑定。主会话可以用 `open_subtask` 把设计较重的子任务开成根主会话，也可以用 `dispatch_subagent` 派出可续跑子代理，或用 `complete_task` 宣告自己的任务完成；涉及模型与特殊 Agent 的动作按站点模型表选模型，并可带项目本地特殊 Agent persona。
 - **会话交接**——`/handoff` 把工作从一条又长又贵的会话搬到一条干净的新会话而不丢失脉络：交接出去的会话写下有界的接续内容，后继会话据此继续。
 - **指示球**——输入框旁一枚可一眼看清上下文长度与花费的小球；会话接近 smart zone 时告警，提醒在下个相位边界决定去向。
 - **A²D² 面板**——better-sidebar 里的侧边栏 Tab，展示当前会话所属项目的任务、成员交接树，以及主会话子代理路由树。
@@ -19,7 +19,7 @@
 
 ## 插件（namespace：`a2d2`）
 
-本包贡献五个挂载行。`ctx.a2d2` 是任务存储，不声明任何服务，因此在任何 profile 中都会加载；命令行声明了 `commands` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `/handoff`；基础工具行声明了 `tools` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `bind_main_session` 与 `dispatch_subagent`；开子任务工具行额外声明 `agents` 与 `llm`，因为 `open_subtask` 要创建根会话并选择 grill 站模型；CEO 提示段行声明了 `agents`、`systemPrompt` 与 `a2d2`，所以只有同时组合 live Agents 与系统提示词组装的 profile 才得到主会话作用域指导。`dispatch_subagent` 只在实际运行时查找 `subagents`，因此没有子代理服务的 profile 仍能加载基础工具行，`bind_main_session` 照常可用。Cordis 对"声明了却缺失的服务"是拒绝加载，这正是把它们拆成多行、而不是从一行里条件式注册的原因。悬浮球不需要自己的一行：它通过自己已经身处的那个会话驱动同一条命令。
+本包贡献六个挂载行。`ctx.a2d2` 是任务存储，不声明任何服务，因此在任何 profile 中都会加载；命令行声明了 `commands` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `/handoff`；基础工具行声明了 `tools` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `bind_main_session` 与 `dispatch_subagent`；开子任务工具行额外声明 `agents` 与 `llm`，因为 `open_subtask` 要创建根会话并选择 grill 站模型；完成任务工具行声明 `agents`，因为 `complete_task` 可能需要先恢复父任务主会话再发送通知；CEO 提示段行声明了 `agents`、`systemPrompt` 与 `a2d2`，所以只有同时组合 live Agents 与系统提示词组装的 profile 才得到主会话作用域指导。`dispatch_subagent` 只在实际运行时查找 `subagents`，因此没有子代理服务的 profile 仍能加载基础工具行，`bind_main_session` 照常可用。Cordis 对"声明了却缺失的服务"是拒绝加载，这正是把它们拆成多行、而不是从一行里条件式注册的原因。悬浮球不需要自己的一行：它通过自己已经身处的那个会话驱动同一条命令。
 
 ```yaml
 - id: a2d2
@@ -30,6 +30,8 @@
   name: '@deepseek-ai/dsh-a2d2/tools'
 - id: a2d2-open-subtask-tools
   name: '@deepseek-ai/dsh-a2d2/open-subtask-tools'
+- id: a2d2-complete-task-tools
+  name: '@deepseek-ai/dsh-a2d2/complete-task-tools'
 - id: a2d2-ceo-prompt
   name: '@deepseek-ai/dsh-a2d2/ceo-prompt'
 ```
@@ -45,7 +47,7 @@
 | `modelPrices` | `{}` | 悬浮球花费行用的每百万 token 费率，键先看 `provider/model`、再看裸 `model`。负数或非有限值在加载时失败。 |
 | `currency` | `¥` | 费率所标价的货币符号。 |
 
-这些配置键属于 `a2d2` 那一行。每个方法都接收调用方的会话 cwd 并自行推导项目根，因此调用方不携带任何项目簿记。`list` 读取该项目的任务，`resolve` 返回新会话继承的任务，`create` 生成 id 并写入文档，`registerMember` 把一个会话登记为成员并可选地记录交接边，`prepareHandoff` / `takeHandoff` 分别写入与消费交接文档，`bindMainSession` 把一条会话绑定为某任务 issue 的主会话，`openSubtask` 把一个子任务 issue 开成新的根主会话，`taskOfMainSession` / `mainSessionOfIssue` 分别回答"这条会话是哪个任务的主会话"与"这个任务 issue 的主会话是哪条"。
+这些配置键属于 `a2d2` 那一行。每个方法都接收调用方的会话 cwd 并自行推导项目根，因此调用方不携带任何项目簿记。`list` 读取该项目的任务，`resolve` 返回新会话继承的任务，`create` 生成 id 并写入文档，`registerMember` 把一个会话登记为成员并可选地记录交接边，`prepareHandoff` / `takeHandoff` 分别写入与消费交接文档，`bindMainSession` 把一条会话绑定为某任务 issue 的主会话，`openSubtask` 把一个子任务 issue 开成新的根主会话，`completeTask` 把任务 issue 标成完成并在有父主会话时通知它，`taskOfMainSession` / `mainSessionOfIssue` 分别回答"这条会话是哪个任务的主会话"与"这个任务 issue 的主会话是哪条"。
 
 ### 站点模型 settings
 
@@ -119,6 +121,12 @@ sessions:
 `open_subtask` 让一个任务 issue 的主会话把某个子任务 issue 开成它自己的根主会话（ADR 0007）。唯一参数是 `issue`，也就是已经建好并挂到父任务下的子任务 issue 编号。调用方自己的任务 issue 会成为父 issue。
 
 服务会从 `a2d2-station-models` 的 `grill` 站候选中，选择第一个出现在 DSH 实时模型目录里的 `provider/model`；随后在同一项目 cwd 下创建一条新的根 Agent 会话，给它设置该模型，只投递一条首条 prompt：子任务 issue 编号引用、父任务 issue（spec 在其中）编号引用、在本项目目录运行的逐条 `gh issue view <编号> --comments` 读取命令，以及“用 `/grill-with-docs` 推进、你是该任务的主会话”的指令；最后复用 `bindMainSession` 把新会话记录为子任务主会话。非任务 issue 主会话调用会被拒绝；子任务 issue 已有主会话时也会被拒绝。
+
+## 宣告完成
+
+`complete_task` 让任务 issue 的主会话在验收完成后宣告自己的任务已完成。参数是 `summary`，即要交给父任务 CEO 的完成说明。插件只写项目本地任务文档（`state: done`）；它不调用 GitHub，关闭任务 issue 仍由 CEO 自己完成。
+
+只有任务 issue 当前主会话能完成该任务。任务没有父 issue 时，写完文档即结束。任务有父 issue 且父任务有主会话时，插件用 `a2d2-complete-task` 来源向父主会话发送一条通知。通知只写子任务 issue（`#<编号>`）与完成说明，不拼 URL。父主会话已加载时，插件直接对 live Agent 调用 `followup`；未加载时，插件先调用 DSH `agents.resume({ resumeSessionId })`，再对恢复出的 Agent 调用 `followup`。
 
 ## 派子代理
 
@@ -287,6 +295,20 @@ sessions:
 #### KV Cache effect
 
 组合开子任务工具行会让调用方的工具列表前缀变化一次。新的根会话有自己的对话历史，因此也有自己的缓存路径。
+
+### `complete_task`
+
+#### What the model sees
+
+组合了完成任务工具行的 profile 中，同时拥有 `tools`、`a2d2`、`agents` 的 agent 会多一份名为 `complete_task` 的工具定义。调用成功时，结果返回任务文档 id、任务 issue 编号、`done` 状态、是否通知了父任务，以及在适用时返回父 issue、父主会话和是否恢复过父主会话。若存在父主会话，该会话会收到一条普通通知，只包含子任务 issue 编号与完成说明。
+
+#### Token effect
+
+该工具定义在对应挂载行存在时进入调用方的请求前缀。成功调用会把参数和紧凑结果加入调用方历史；被通知的父主会话会把那条短通知作为普通对话历史接收。
+
+#### KV Cache effect
+
+组合完成任务工具行会让调用方的工具列表前缀变化一次。通知会改变父主会话后续请求的对话历史；任务文档写入本身不会改变任何请求前缀。
 
 ### `dispatch_subagent`
 
