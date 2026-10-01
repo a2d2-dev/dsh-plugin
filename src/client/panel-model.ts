@@ -95,6 +95,12 @@ const KIND_LABELS: Readonly<Record<PanelTaskKind, string>> = {
   sub: '子任务',
 }
 
+/** The task issue handoff marker of a bound task row. */
+export interface PanelTaskIssueHandoffRow {
+  readonly label: string
+  readonly source: PanelMemberRow
+}
+
 /** The task issue line of a bound task row. */
 export interface PanelTaskIssueRow {
   readonly number: number
@@ -103,6 +109,8 @@ export interface PanelTaskIssueRow {
   readonly kindLabel: string
   /** The main session, labelled and openable the way member rows are. */
   readonly mainSession: PanelMemberRow
+  /** Present while the task issue is handing off. */
+  readonly handoff?: PanelTaskIssueHandoffRow
 }
 
 /** One task row in the panel. */
@@ -338,6 +346,9 @@ function issueRow(
     kind,
     kindLabel: KIND_LABELS[kind],
     mainSession: memberRow({ sessionId: issue.mainSession }, titles, openable, currentSessionId),
+    ...(issue.handoff === undefined
+      ? {}
+      : { handoff: { label: '交接中', source: memberRow({ sessionId: issue.handoff.source }, titles, openable, currentSessionId) } }),
   }
 }
 
@@ -490,12 +501,19 @@ function isIssueNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
 }
 
+function isPanelTaskIssueHandoff(value: unknown): value is PanelTaskIssue['handoff'] {
+  if (typeof value !== 'object' || value === null) return false
+  const handoff = value as Partial<NonNullable<PanelTaskIssue['handoff']>>
+  return typeof handoff.source === 'string'
+}
+
 function isPanelTaskIssue(value: unknown): value is PanelTaskIssue {
   if (typeof value !== 'object' || value === null) return false
   const issue = value as Partial<PanelTaskIssue>
   return isIssueNumber(issue.number)
     && (issue.parent === undefined || isIssueNumber(issue.parent))
     && typeof issue.mainSession === 'string'
+    && (issue.handoff === undefined || isPanelTaskIssueHandoff(issue.handoff))
 }
 
 function isPanelTask(value: unknown): value is PanelTask {

@@ -87,6 +87,15 @@ describe('panel payload', () => {
     })
   })
 
+  it('serves a task issue handoff marker for the browser', () => {
+    expect(panelPayload('/tmp/project', [task({
+      id: TaskId('issue-45'),
+      issue: { number: 45, parent: 41, mainSession: sessionA, handoff: { source: sessionA } },
+    })])).toMatchObject({
+      tasks: [{ issue: { number: 45, parent: 41, mainSession: 'session-a', handoff: { source: 'session-a' } } }],
+    })
+  })
+
   it('omits optional goal and serves an empty project as an empty list', () => {
     expect(panelPayload('/tmp/project', [task()]).tasks[0]).not.toHaveProperty('goal')
     expect(panelPayload('/tmp/project', []).tasks).toEqual([])
