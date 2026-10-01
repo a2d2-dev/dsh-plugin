@@ -187,6 +187,7 @@ export type { BoundTask, CreateTaskRequest, Task, TaskIssue, TaskIssueHandoff, T
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
     'a2d2-open-subtask': { kind: 'a2d2-open-subtask' } & ContextFormed
+    'a2d2-complete-task': { kind: 'a2d2-complete-task' } & ContextFormed
   }
 }
 
@@ -228,6 +229,11 @@ export const DEFAULT_HANDOFF_CRITICAL_TOKENS = 1_000_000
 export const DEFAULT_CURRENCY = '¥'
 
 const A2D2_OPEN_SUBTASK_MESSAGE_SOURCE: MessageSource = { kind: 'a2d2-open-subtask' }
+const A2D2_COMPLETE_TASK_MESSAGE_SOURCE: MessageSource = { kind: 'a2d2-complete-task' }
+
+function completeTaskNotification(issue: number, summary: string): string {
+  return `子任务 #${String(issue)} 已完成。\n\n完成说明：${summary}`
+}
 
 function openSubtaskPrompt(issue: number, parentIssue: number): string {
   return [
@@ -354,6 +360,30 @@ export interface OpenedSubtask {
   readonly model: { readonly provider: string; readonly model: string }
   /** The persisted task document bound to the subtask issue. */
   readonly task: BoundTask
+}
+
+/** Input of {@link A2d2Service.completeTask}. */
+export interface CompleteTaskRequest {
+  /** The caller session's working directory, which locates the project. */
+  readonly cwd: string
+  /** The session declaring its task complete; it must be that task issue's main session. */
+  readonly caller: SessionId
+  /** Completion summary delivered to the parent task's main session when one exists. */
+  readonly summary: string
+}
+
+/** Result of completing a task issue. */
+export interface CompletedTask {
+  /** The persisted task document after its state became done. */
+  readonly task: BoundTask
+  /** Parent task issue number, when this completed task is a subtask. */
+  readonly parentIssue?: number
+  /** Parent main session that received the completion notification, when any. */
+  readonly parentMainSession?: SessionId
+  /** Whether a parent main session was notified. */
+  readonly notifiedParent: boolean
+  /** Whether the parent main session had to be resumed before notification. */
+  readonly resumedParent: boolean
 }
 
 /** Input of {@link A2d2Service.dispatchSubagent}. */
@@ -655,6 +685,53 @@ export class A2d2Service extends Service {
       source: A2D2_OPEN_SUBTASK_MESSAGE_SOURCE,
     }))
     return { session, model, task }
+  }
+
+  /**
+   * Mark the caller's task issue done and wake the parent task's main session.
+   *
+   * ADR 0007 keeps tracker changes in the CEO's hands: this method writes only
+   * the project-local task document and sends the parent notification, never the
+   * GitHub issue.
+   * @param request - caller main session and completion summary.
+   * @returns the completed task plus notification details.
+   */
+  async completeTask(request: CompleteTaskRequest): Promise<CompletedTask> {
+    if (request.cwd === '') {
+      throw new Error('a2d2: the completing session records no working directory, so no project holds its task')
+    }
+    const summary = request.summary.trim()
+    if (summary === '') throw new Error('a2d2: complete_task requires a non-empty completion summary')
+    const task = await this.taskOfMainSession(request.cwd, request.caller)
+    if (task === undefined) {
+      throw new Error('a2d2: only a task issue main session can complete its task')
+    }
+
+    const completed: BoundTask = task.state === 'done' ? task : { ...task, state: 'done' }
+    if (completed !== task) await this.store.write(request.cwd, completed)
+
+    const parentIssue = completed.issue.parent
+    if (parentIssue === undefined) {
+      return { task: completed, notifiedParent: false, resumedParent: false }
+    }
+    const parentMainSession = await this.mainSessionOfIssue(request.cwd, parentIssue)
+    if (parentMainSession === undefined) {
+      return { task: completed, parentIssue, notifiedParent: false, resumedParent: false }
+    }
+
+    const agents = this.ctx.get('agents') as AgentRegistry | undefined
+    if (agents === undefined) throw new Error('a2d2: agents service is unavailable, so no parent main session can be notified')
+    let parentAgent = agents.get(parentMainSession)
+    let resumedParent = false
+    if (parentAgent === undefined) {
+      parentAgent = (await agents.resume({ resumeSessionId: parentMainSession })).agent
+      resumedParent = true
+    }
+    parentAgent.followup(createUserMessage({
+      content: [{ type: 'text', text: completeTaskNotification(completed.issue.number, summary) }],
+      source: A2D2_COMPLETE_TASK_MESSAGE_SOURCE,
+    }))
+    return { task: completed, parentIssue, parentMainSession, notifiedParent: true, resumedParent }
   }
 
   /**
