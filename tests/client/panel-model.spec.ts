@@ -50,14 +50,8 @@ function historyTitle(title: string | undefined): SessionTitleHistoryRead {
 
 function historyResponse(title: string | undefined) {
   return {
-    result: {
-      ok: true,
-      value: {
-        projections: {
-          values: title === undefined ? {} : { title },
-        },
-      },
-    },
+    ok: true,
+    value: { values: title === undefined ? {} : { title } },
   } as const
 }
 
@@ -109,8 +103,8 @@ describe('panel task view model', () => {
         {
           'session-aaaa1111': {
             title: '  List title  ',
-            sessionListMetadata: { blank: true },
-            sessionStats: { turns: 0 },
+            blank: true,
+            projectionValues: { sessionStats: { turns: 0 } },
           },
           'session-bbbb2222': { title: null },
         },
@@ -141,8 +135,8 @@ describe('panel task view model', () => {
       }),
       panelSessionTitles(
         {
-          'session-blank': { title: null, sessionListMetadata: { blank: true }, sessionStats: { turns: 0 } },
-          'session-zero': { sessionStats: { turns: 0 } },
+          'session-blank': { title: null, blank: true, projectionValues: { sessionStats: { turns: 0 } } },
+          'session-zero': { projectionValues: { sessionStats: { turns: 0 } } },
         },
         {
           'session-blank': historyTitle(undefined),
@@ -334,8 +328,8 @@ describe('createSessionTitleLoader', () => {
     const signals: AbortSignal[] = []
     const calls: unknown[] = []
     const loader = createSessionTitleLoader({
-      sessions: {
-        history: (payload, signal) => {
+      session: {
+        projections: (payload, signal) => {
           calls.push(payload)
           if (signal !== undefined) signals.push(signal)
           return pending.promise
@@ -346,7 +340,7 @@ describe('createSessionTitleLoader', () => {
     loader.load(['session-aaaa1111'])
     loader.load(['session-aaaa1111'])
 
-    expect(calls).toEqual([{ sessionId: 'session-aaaa1111', maxMessages: 1 }])
+    expect(calls).toEqual([{ sessionId: 'session-aaaa1111' }])
     expect(signals).toHaveLength(1)
     expect(signals[0]?.aborted).toBe(false)
 
@@ -363,9 +357,9 @@ describe('createSessionTitleLoader', () => {
 
   it('isolates failed title reads and records a fallback state', async () => {
     const loader = createSessionTitleLoader({
-      sessions: {
-        history: async (payload) => {
-          if (payload.sessionId === 'session-bad') throw new Error('history unavailable')
+      session: {
+        projections: async (payload) => {
+          if (payload.sessionId === 'session-bad') throw new Error('projections unavailable')
           return historyResponse(`Title ${payload.sessionId}`)
         },
       },

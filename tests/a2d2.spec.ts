@@ -13,34 +13,20 @@ import {
   renderTaskDocument,
   taskIdFromFilename,
 } from '../src/document.ts'
-import { DEFAULT_STATION_MODELS, STATION_MODEL_SETTINGS_NAMESPACE } from '../src/station-models.ts'
+import { DEFAULT_STATION_MODELS, validateStationModelsSettings } from '../src/station-models.ts'
 import { TaskDocumentStore, newTask, resolveProjectRoot, tasksDirectory, withMember } from '../src/store.ts'
 import type { Task } from '../src/types.ts'
 
 class StubSettings extends Service {
-  readonly registrations: Array<{
-    readonly ns: string
-    readonly schema: (value?: unknown) => unknown
-    readonly options?: {
-      readonly validate?: (value: unknown) => void
-    }
-  }> = []
+  readonly presentations: Array<{ readonly auto?: boolean }> = []
 
   constructor(ctx: Context) {
     super(ctx, 'settings')
   }
 
-  register(
-    ns: string,
-    schema: (value?: unknown) => unknown,
-    options?: { readonly validate?: (value: unknown) => void },
-  ): { get(): unknown; watch(callback: (next: unknown, prev: unknown) => void): () => void } {
-    this.registrations.push({ ns, schema, options })
-    options?.validate?.(schema())
-    return {
-      get: () => DEFAULT_STATION_MODELS,
-      watch: () => () => {},
-    }
+  configure(presentation: { auto?: boolean }): () => void {
+    this.presentations.push(presentation)
+    return () => {}
   }
 }
 
@@ -323,20 +309,23 @@ describe('a2d2 service', () => {
     await expect(ctx.plugin(A2d2Service, { projectMarkers: [] })).rejects.toThrow(/at least one/)
   })
 
-  it('registers the live station model settings namespace', async () => {
+  it('declares the station model table as a volatile Config field with the package defaults', () => {
+    const field = A2d2Service.Config.dict?.stationModels
+    expect(field?.meta.volatile).toBe(true)
+    expect(A2d2Service.Config({}).stationModels?.get()).toEqual(DEFAULT_STATION_MODELS)
+    expect(() => validateStationModelsSettings({
+      ...DEFAULT_STATION_MODELS,
+      consult: [],
+    })).toThrow(/array length >= 1/u)
+  })
+
+  it('turns off the generated settings page in favour of its own station model page', async () => {
     const root = await tempRoot()
     const ctx = new Context()
     await ctx.plugin(StubSettings)
     await ctx.plugin(A2d2Service, { root })
     const settings = ctx.get('settings') as unknown as StubSettings
-    expect(settings.registrations).toHaveLength(1)
-    const registration = settings.registrations[0]
-    expect(registration?.ns).toBe(STATION_MODEL_SETTINGS_NAMESPACE)
-    expect(registration?.schema()).toEqual(DEFAULT_STATION_MODELS)
-    expect(() => registration?.options?.validate?.({
-      ...DEFAULT_STATION_MODELS,
-      consult: [],
-    })).toThrow(/array length >= 1/u)
+    expect(settings.presentations).toEqual([{ auto: false }])
   })
 })
 

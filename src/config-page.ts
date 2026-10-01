@@ -12,11 +12,12 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import {
   BlockAssembler,
   createUserMessage,
-  deepFreeze,
 } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { SettingsConflictError } from '@deepseek-ai/dsh-settings'
+import { deepFreeze } from '@deepseek-ai/dsh-util-values'
 import { isTrustedConsultRequest } from './consult.ts'
+import { A2D2_MESSAGE_SOURCE } from './message-source.ts'
 import { classifyFailureKind } from './refusal.ts'
 import {
   DEFAULT_STATION_MODELS,
@@ -114,7 +115,7 @@ export async function classifyModelProbe(options: {
     model: route.model,
     messages: [createUserMessage({
       content: [{ type: 'text', text: 'reply OK' }],
-      source: { kind: 'plugin', plugin: 'dsh-a2d2' },
+      source: A2D2_MESSAGE_SOURCE,
     })],
     system: 'Reply with exactly OK.',
     maxTokens: PROBE_MAX_OUTPUT_TOKENS,

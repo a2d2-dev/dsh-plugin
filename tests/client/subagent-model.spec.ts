@@ -5,6 +5,7 @@ import {
   createRouteSourceLoader,
   formatRoute,
   loadSubagentRouteSources,
+  projectedSubagentCatalogs,
   rootAncestor,
   subagentRouteRows,
   subagentRouteHeader,
@@ -41,16 +42,8 @@ function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value
 
 function routeHistoryResponse(provider: string, model: string) {
   return {
-    result: {
-      ok: true,
-      value: {
-        projections: {
-          values: {
-            a2d2Indicator: { route: { provider, model } },
-          },
-        },
-      },
-    },
+    ok: true,
+    value: { values: { a2d2Indicator: { route: { provider, model } } } },
   } as const
 }
 
@@ -285,25 +278,75 @@ describe('subagentRouteTree', () => {
   })
 })
 
+describe('projectedSubagentCatalogs', () => {
+  it('derives each loaded parent catalog from its subagentCatalog projection and the list rows', () => {
+    const catalogs = projectedSubagentCatalogs({
+      byId: { a: { id: 'a', running: true }, b: { id: 'b', running: false } },
+      projectionsBySession: {
+        root: {
+          values: {
+            subagentCatalog: [
+              { id: 'a', mode: 'continuable', label: 'worker a' },
+              { id: 'b', mode: 'one-shot' },
+              { id: 'c', mode: 'unknown' },
+            ],
+          },
+          state: 'ready',
+          error: null,
+        },
+        a: { values: { subagentCatalog: [{ id: 'a1', mode: 'one-shot' }] }, state: 'ready', error: null },
+        b: { values: {}, state: 'ready', error: null },
+        c: { values: {}, state: 'error', error: 'gone' },
+      },
+    })
+
+    expect(catalogs.root).toEqual({
+      entries: [
+        { kind: 'child', id: 'a', label: 'worker a', mode: 'continuable', activity: 'running', hasChildren: true },
+        { kind: 'child', id: 'b', mode: 'one-shot', activity: 'inactive', hasChildren: false },
+        { kind: 'child', id: 'c', activity: 'inactive', hasChildren: false },
+      ],
+      state: 'ready',
+      error: null,
+    })
+    expect(catalogs.a?.entries.map(entry => entry.id)).toEqual(['a1'])
+  })
+
+  it('treats a child whose own baseline is not loaded as possibly having children, so the reader asks', () => {
+    const catalogs = projectedSubagentCatalogs({
+      byId: {},
+      projectionsBySession: {
+        root: { values: { subagentCatalog: [{ id: 'x', mode: 'continuable', label: 'x' }] }, state: 'ready', error: null },
+        x: { values: {}, state: 'loading', error: null },
+      },
+    })
+
+    expect(catalogs.root?.entries[0]?.hasChildren).toBe(true)
+  })
+
+  it('carries a parent read that is still loading or failed', () => {
+    const catalogs = projectedSubagentCatalogs({
+      byId: {},
+      projectionsBySession: { root: { values: {}, state: 'error', error: 'read failed' } },
+    })
+
+    expect(catalogs.root).toEqual({ entries: [], state: 'error', error: 'read failed' })
+  })
+})
+
 describe('loadSubagentRouteSources', () => {
-  it('reads child route sources from subagent history projection baselines', async () => {
+  it('reads child route sources from the child session projection baselines', async () => {
     const calls: unknown[] = []
     const sources = await loadSubagentRouteSources({
-      subagents: {
-        history: async (payload: unknown) => {
+      session: {
+        projections: async (payload: unknown) => {
           calls.push(payload)
           return {
-            result: {
-              ok: true,
-              value: {
-                events: [],
-                hasMore: false,
-                projections: {
-                  asOfSeq: 7,
-                  values: {
-                    a2d2Indicator: { route: { provider: 'claude-bray', model: 'claude-opus-5-5' } },
-                  },
-                },
+            ok: true,
+            value: {
+              asOfSeq: 7,
+              values: {
+                a2d2Indicator: { route: { provider: 'claude-bray', model: 'claude-opus-5-5' } },
               },
             },
           }
@@ -311,7 +354,7 @@ describe('loadSubagentRouteSources', () => {
       },
     }, [{ parentSessionId: 'root', childSessionId: 'child', mode: 'continuable' }])
 
-    expect(calls).toEqual([{ parentSessionId: 'root', childSessionId: 'child', mode: 'continuable', maxMessages: 1 }])
+    expect(calls).toEqual([{ sessionId: 'child' }])
     expect(sources).toEqual({ child: { route: { provider: 'claude-bray', model: 'claude-opus-5-5' } } })
   })
 })
@@ -322,8 +365,8 @@ describe('createRouteSourceLoader', () => {
     const signals: AbortSignal[] = []
     const calls: unknown[] = []
     const loader = createRouteSourceLoader({
-      subagents: {
-        history: (payload, signal) => {
+      session: {
+        projections: (payload, signal) => {
           calls.push(payload)
           if (signal !== undefined) signals.push(signal)
           return pending.promise
@@ -334,7 +377,7 @@ describe('createRouteSourceLoader', () => {
     loader.load([address('child')])
     loader.load([address('child')])
 
-    expect(calls).toEqual([{ parentSessionId: 'root', childSessionId: 'child', mode: 'continuable', maxMessages: 1 }])
+    expect(calls).toEqual([{ sessionId: 'child' }])
     expect(signals).toHaveLength(1)
     expect(signals[0]?.aborted).toBe(false)
 
@@ -351,10 +394,10 @@ describe('createRouteSourceLoader', () => {
 
   it('publishes other address results when one cold read fails', async () => {
     const loader = createRouteSourceLoader({
-      subagents: {
-        history: async (payload) => {
-          if (payload.childSessionId === 'bad') throw new Error('history unavailable')
-          return routeHistoryResponse('claude-bray', `model-${payload.childSessionId}`)
+      session: {
+        projections: async (payload) => {
+          if (payload.sessionId === 'bad') throw new Error('projections unavailable')
+          return routeHistoryResponse('claude-bray', `model-${payload.sessionId}`)
         },
       },
     })
@@ -371,8 +414,8 @@ describe('createRouteSourceLoader', () => {
     const pending = deferred<ReturnType<typeof routeHistoryResponse>>()
     let signal: AbortSignal | undefined
     const loader = createRouteSourceLoader({
-      subagents: {
-        history: (_payload, nextSignal) => {
+      session: {
+        projections: (_payload, nextSignal) => {
           signal = nextSignal
           return pending.promise
         },

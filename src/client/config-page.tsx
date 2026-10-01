@@ -44,13 +44,13 @@ interface ConfigSnapshot {
 
 export type ProbeResult = { readonly status: 'pending' | 'normal' | 'refusal' | 'rate-limited' | 'error'; readonly reason: string }
 
+/** The narrow `remote` face that lists the host's model catalog. */
 interface ModelCatalogApi {
-  readonly llm: {
-    models(payload: Record<string, never>): Promise<{
-      readonly result:
-        | { readonly ok: true; readonly value: { readonly groups: readonly { readonly id: string; readonly models: readonly { readonly id: string }[] }[] } }
-        | { readonly ok: false; readonly error: { readonly message: string } }
-    }>
+  readonly session: {
+    modelCatalog(): Promise<
+      | { readonly ok: true; readonly value: { readonly groups: readonly { readonly id: string; readonly models: readonly { readonly id: string }[] }[] } }
+      | { readonly ok: false; readonly error: { readonly message: string } }
+    >
   }
 }
 
@@ -131,9 +131,9 @@ async function callConfig<T>(fetchImpl: typeof fetch, method: string, payload: u
 
 export async function loadModelRouteCatalog(api: ModelCatalogApi | undefined): Promise<readonly string[]> {
   if (api === undefined) return []
-  const response = await api.llm.models({})
-  if (!response.result.ok) throw new Error(response.result.error.message)
-  return response.result.value.groups.flatMap(group => group.models.map(model => `${group.id}/${model.id}`))
+  const response = await api.session.modelCatalog()
+  if (!response.ok) throw new Error(response.error.message)
+  return response.value.groups.flatMap(group => group.models.map(model => `${group.id}/${model.id}`))
 }
 
 function cloneSettings(settings: StationModelsSettings): StationModelsSettings {

@@ -6,6 +6,7 @@ import {
   consultAttributionLine,
   requestConsult,
   selectConsultCandidate,
+  selectModel,
   selectOtherMove,
   stationRouteDecision,
 } from '../../src/client/consult-actions.ts'
@@ -14,7 +15,7 @@ import type {
   ConsultPhase,
   ConsultSelectionDeps,
 } from '../../src/client/consult-actions.ts'
-import type { ClientSessionsService, ClientWorkspacesService } from '../../src/client/context.ts'
+import type { ClientSessionsService, ClientWorkspaceNavigation, ClientWorkspacesService } from '../../src/client/context.ts'
 
 function jsonResponse(value: unknown): { json(): Promise<unknown> } {
   return { json: async () => value }
@@ -314,13 +315,15 @@ function routeSelection(route: string): { provider: string; model: string } {
 function clearSessionDeps(events: string[], connect: () => Promise<string> = async () => 'session-new'): {
   readonly sessions: ClientSessionsService
   readonly workspaces: ClientWorkspacesService
+  readonly navigation: ClientWorkspaceNavigation
 } {
   return {
-    sessions: {
-      open: (id: string) => { events.push(`open:${id}`) },
-    } as unknown as ClientSessionsService,
+    sessions: {} as unknown as ClientSessionsService,
     workspaces: {
       list: { getSnapshot: () => ({ items: [{ workspaceId: 'workspace-1', sessionIds: ['session-a'] }] }) },
+    },
+    navigation: {
+      openSession: (target) => { events.push(`open:${typeof target === 'string' ? target : target.childSessionId}`) },
       connectWorkspace: async (workspaceId: string) => {
         events.push(`connect:${workspaceId}`)
         return await connect()
@@ -340,6 +343,21 @@ const readyWithModels: Extract<ConsultPhase, { kind: 'ready' }> = {
     'code-review': ['claude-bray/claude-fable-5-1'],
   },
 }
+
+describe('selectModel', () => {
+  const selection = { provider: 'codex', model: 'gpt-6' }
+  const face = (result: unknown) => ({ load: vi.fn(), select: vi.fn(async () => result) })
+
+  it('treats a resolved { ok: false } selection as a failure', async () => {
+    await expect(selectModel(face({ ok: false, error: { message: 'route unavailable' } }), selection))
+      .rejects.toThrow('route unavailable')
+  })
+
+  it('accepts an { ok: true } result and an older void resolution', async () => {
+    await expect(selectModel(face({ ok: true, value: undefined }), selection)).resolves.toBeUndefined()
+    await expect(selectModel(face(undefined), selection)).resolves.toBeUndefined()
+  })
+})
 
 describe('station route decision', () => {
   it('chooses the first station candidate present in the session catalog', () => {

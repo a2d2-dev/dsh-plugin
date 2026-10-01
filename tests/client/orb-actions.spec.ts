@@ -133,7 +133,7 @@ function sessions(
   faces: Readonly<Record<string, FakeSession>>,
   log: string[] = [],
   titles: Readonly<Record<string, string>> = {},
-): ClientSessionsService & { readonly opened: string[] } {
+): ClientSessionsService & { readonly opened: string[]; open(id: string): void } {
   const opened: string[] = []
   const byId = Object.fromEntries(
     Object.keys(faces).map(id => [id, titles[id] === undefined ? {} : { title: titles[id] }]),
@@ -144,13 +144,18 @@ function sessions(
       return fake === undefined ? undefined : { session: fake.face }
     },
     scope: () => undefined,
+    using: async (id: string, _options: unknown, operation: (reference: { binding: { session: FakeSession['face'] } }) => unknown) => {
+      const fake = faces[id]
+      if (fake === undefined) throw new Error(`session ${id} is not available`)
+      return await operation({ binding: { session: fake.face } })
+    },
     open: (id: string) => {
       log.push(`open ${id}`)
       opened.push(id)
     },
-    list: { getSnapshot: () => ({ byId, subagentsByParent: {} }), subscribe: () => () => {} },
+    list: { getSnapshot: () => ({ byId, projectionsBySession: {} }), subscribe: () => () => {} },
     opened,
-  } as unknown as ClientSessionsService & { readonly opened: string[] }
+  } as unknown as ClientSessionsService & { readonly opened: string[]; open(id: string): void }
 }
 
 /** A workspaces double whose list accounts the current session under one workspace. */
@@ -159,11 +164,26 @@ function workspaces(
     items: { workspaceId: string; sessionIds: string[] }[]
     connect: (id: string) => Promise<string>
   }> = {},
-): ClientWorkspacesService {
+): ClientWorkspacesService & { connectWorkspace(id: string): Promise<string> } {
   const items = overrides.items ?? [{ workspaceId: WORKSPACE, sessionIds: [CURRENT] }]
   return {
     list: { getSnapshot: () => ({ items }) },
     connectWorkspace: overrides.connect ?? (async () => SUCCESSOR),
+  }
+}
+
+/** The handoff's service triple: `uiWorkspace` navigation records into the sessions double and connects through the workspaces double. */
+function handoffDeps(
+  s: ClientSessionsService & { open(id: string): void },
+  w: ClientWorkspacesService & { connectWorkspace(id: string): Promise<string> },
+): Pick<OrbHandoffDeps, 'sessions' | 'workspaces' | 'navigation'> {
+  return {
+    sessions: s,
+    workspaces: w,
+    navigation: {
+      openSession: (target) => { s.open(typeof target === 'string' ? target : target.childSessionId) },
+      connectWorkspace: id => w.connectWorkspace(id),
+    },
   }
 }
 
@@ -281,7 +301,7 @@ describe('runOrbHandoff', () => {
 
     const s = sessions({ [CURRENT]: current, [SUCCESSOR]: successor }, log)
     const outcome = await runOrbHandoff(
-      { sessions: s, workspaces: workspaces({ connect }), ...QUICK },
+      { ...handoffDeps(s, workspaces({ connect })), ...QUICK },
       CURRENT,
       'finish the store',
     )
@@ -308,8 +328,7 @@ describe('runOrbHandoff', () => {
 
     const outcome = await runOrbHandoff(
       {
-        sessions: sessions({ [CURRENT]: current, [SUCCESSOR]: successor }, log),
-        workspaces: workspaces({ connect }),
+        ...handoffDeps(sessions({ [CURRENT]: current, [SUCCESSOR]: successor }, log), workspaces({ connect })),
         modelDirectories: successorModelDirectory(log),
         successorModel: {
           station: 'implement',
@@ -349,8 +368,7 @@ describe('runOrbHandoff', () => {
 
     const outcome = await runOrbHandoff(
       {
-        sessions: sessions({ [CURRENT]: current, [SUCCESSOR]: successor }, log),
-        workspaces: workspaces({ connect }),
+        ...handoffDeps(sessions({ [CURRENT]: current, [SUCCESSOR]: successor }, log), workspaces({ connect })),
         modelDirectories: successorModelDirectory(log, {
           select: async () => { throw new Error('adapter rejected the model') },
         }),
@@ -381,7 +399,7 @@ describe('runOrbHandoff', () => {
   it('asks for a generic handoff when the focus is blank', async () => {
     const current = writingSession()
     const outcome = await runOrbHandoff(
-      { sessions: sessions({ [CURRENT]: current, [SUCCESSOR]: fakeSession() }), workspaces: workspaces(), ...QUICK },
+      { ...handoffDeps(sessions({ [CURRENT]: current, [SUCCESSOR]: fakeSession() }), workspaces()), ...QUICK },
       CURRENT,
       '   ',
     )
@@ -391,7 +409,7 @@ describe('runOrbHandoff', () => {
 
   it('stops at prepare when the session is not addressable', async () => {
     const outcome = await runOrbHandoff(
-      { sessions: sessions({}), workspaces: workspaces(), ...QUICK },
+      { ...handoffDeps(sessions({}), workspaces()), ...QUICK },
       CURRENT,
       undefined,
     )
@@ -401,7 +419,7 @@ describe('runOrbHandoff', () => {
   it('stops at prepare when the command throws', async () => {
     const current = fakeSession({ command: async () => { throw new Error('transport down') } })
     const outcome = await runOrbHandoff(
-      { sessions: sessions({ [CURRENT]: current }), workspaces: workspaces(), ...QUICK },
+      { ...handoffDeps(sessions({ [CURRENT]: current }), workspaces()), ...QUICK },
       CURRENT,
       undefined,
     )
@@ -412,7 +430,7 @@ describe('runOrbHandoff', () => {
     const current = fakeSession({ command: async () => ({ ok: false }) })
     const s = sessions({ [CURRENT]: current })
     const outcome = await runOrbHandoff(
-      { sessions: s, workspaces: workspaces(), ...QUICK },
+      { ...handoffDeps(s, workspaces()), ...QUICK },
       CURRENT,
       undefined,
     )
@@ -424,7 +442,7 @@ describe('runOrbHandoff', () => {
     const connect = vi.fn(async () => SUCCESSOR)
     const current = fakeSession({ command: async () => accepted })
     const outcome = await runOrbHandoff(
-      { sessions: sessions({ [CURRENT]: current }), workspaces: workspaces({ connect }), ...QUICK },
+      { ...handoffDeps(sessions({ [CURRENT]: current }), workspaces({ connect })), ...QUICK },
       CURRENT,
       undefined,
     )
@@ -446,7 +464,7 @@ describe('runOrbHandoff', () => {
       },
     })
     const outcome = await runOrbHandoff(
-      { sessions: sessions({ [CURRENT]: current }), workspaces: workspaces({ connect }), ...QUICK },
+      { ...handoffDeps(sessions({ [CURRENT]: current }), workspaces({ connect })), ...QUICK },
       CURRENT,
       undefined,
     )
@@ -463,8 +481,7 @@ describe('runOrbHandoff', () => {
     const current = writingSession()
     const outcome = await runOrbHandoff(
       {
-        sessions: sessions({ [CURRENT]: current }),
-        workspaces: workspaces({ items: [] }),
+        ...handoffDeps(sessions({ [CURRENT]: current }), workspaces({ items: [] })),
         ...QUICK,
       },
       CURRENT,
@@ -478,8 +495,7 @@ describe('runOrbHandoff', () => {
     const current = writingSession()
     const outcome = await runOrbHandoff(
       {
-        sessions: sessions({ [CURRENT]: current }),
-        workspaces: workspaces({ connect: async () => { throw new Error('connect failed') } }),
+        ...handoffDeps(sessions({ [CURRENT]: current }), workspaces({ connect: async () => { throw new Error('connect failed') } })),
         ...QUICK,
       },
       CURRENT,
@@ -488,18 +504,18 @@ describe('runOrbHandoff', () => {
     expect(outcome).toEqual({ ok: false, stage: 'create', error: 'connect failed' })
   })
 
-  it('stops at create when the successor is not yet addressable', async () => {
+  it('stops at create, without moving focus, when the successor cannot be opened', async () => {
     const current = writingSession()
     const s = sessions({ [CURRENT]: current })
     const outcome = await runOrbHandoff(
-      { sessions: s, workspaces: workspaces(), ...QUICK },
+      { ...handoffDeps(s, workspaces()), ...QUICK },
       CURRENT,
       undefined,
     )
     expect(outcome).toEqual({
       ok: false,
       stage: 'create',
-      error: 'the successor session was created but is not yet addressable',
+      error: `session ${SUCCESSOR} is not available`,
     })
     expect(s.opened).toEqual([])
   })
@@ -509,7 +525,7 @@ describe('runOrbHandoff', () => {
     const successor = fakeSession({ command: async () => ({ ok: false }) })
     const s = sessions({ [CURRENT]: current, [SUCCESSOR]: successor })
     const outcome = await runOrbHandoff(
-      { sessions: s, workspaces: workspaces(), ...QUICK },
+      { ...handoffDeps(s, workspaces()), ...QUICK },
       CURRENT,
       undefined,
     )
@@ -527,7 +543,7 @@ describe('runOrbHandoff', () => {
     const current = writingSession()
     const successor = fakeSession({ command: async () => { throw new Error('take transport down') } })
     const outcome = await runOrbHandoff(
-      { sessions: sessions({ [CURRENT]: current, [SUCCESSOR]: successor }), workspaces: workspaces(), ...QUICK },
+      { ...handoffDeps(sessions({ [CURRENT]: current, [SUCCESSOR]: successor }), workspaces()), ...QUICK },
       CURRENT,
       undefined,
     )
@@ -539,8 +555,7 @@ describe('runOrbHandoff', () => {
     const successor = fakeSession()
     const outcome = await runOrbHandoff(
       {
-        sessions: sessions({ [CURRENT]: current, [SUCCESSOR]: successor }, [], { [CURRENT]: 'Ship the store' }),
-        workspaces: workspaces(),
+        ...handoffDeps(sessions({ [CURRENT]: current, [SUCCESSOR]: successor }, [], { [CURRENT]: 'Ship the store' }), workspaces()),
         ...QUICK,
       },
       CURRENT,
@@ -554,7 +569,7 @@ describe('runOrbHandoff', () => {
     const current = writingSession()
     const successor = fakeSession()
     const outcome = await runOrbHandoff(
-      { sessions: sessions({ [CURRENT]: current, [SUCCESSOR]: successor }), workspaces: workspaces(), ...QUICK },
+      { ...handoffDeps(sessions({ [CURRENT]: current, [SUCCESSOR]: successor }), workspaces()), ...QUICK },
       CURRENT,
       undefined,
     )
@@ -567,8 +582,7 @@ describe('runOrbHandoff', () => {
     const successor = fakeSession({ rename: async () => ({ ok: false }) })
     const outcome = await runOrbHandoff(
       {
-        sessions: sessions({ [CURRENT]: current, [SUCCESSOR]: successor }, [], { [CURRENT]: 'Ship the store' }),
-        workspaces: workspaces(),
+        ...handoffDeps(sessions({ [CURRENT]: current, [SUCCESSOR]: successor }, [], { [CURRENT]: 'Ship the store' }), workspaces()),
         ...QUICK,
       },
       CURRENT,
@@ -583,8 +597,7 @@ describe('runOrbHandoff', () => {
     const successor = fakeSession({ rename: async () => { throw new Error('rename transport down') } })
     const outcome = await runOrbHandoff(
       {
-        sessions: sessions({ [CURRENT]: current, [SUCCESSOR]: successor }, [], { [CURRENT]: 'Ship the store' }),
-        workspaces: workspaces(),
+        ...handoffDeps(sessions({ [CURRENT]: current, [SUCCESSOR]: successor }, [], { [CURRENT]: 'Ship the store' }), workspaces()),
         ...QUICK,
       },
       CURRENT,

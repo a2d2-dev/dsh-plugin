@@ -47,11 +47,15 @@ import { HighwayMap } from './highway-map.tsx'
 import { highwayView } from './highway-view.ts'
 import { runOrbHandoff } from './orb-actions.ts'
 import { sessionStatus } from './status-model.ts'
-import type { SessionStatus, StatusKind } from './status-model.ts'
+import type { SessionStatus, StatusKind, StatusSource } from './status-model.ts'
 import type { OrbHandoffOutcome } from './orb-actions.ts'
 import type {
   A2d2ClientContext,
+  ClientConversationState,
+  ClientPendingInteraction,
   ClientSessionsService,
+  ClientUiSessionService,
+  ClientWorkspaceNavigation,
   ClientWorkspacesService,
   HostIndicatorProjection,
 } from './context.ts'
@@ -64,6 +68,21 @@ import {
   orbOccupancy,
   waterLevel,
 } from './orb-model.ts'
+import {
+  ORB_CARD_WIDTH_PX,
+  ORB_GAP_PX,
+  ORB_POSITION_KEY,
+  ORB_SIZE_PX,
+  ORB_STACK_GAP_PX,
+  anchorRightOffset,
+  clampOrbPoint,
+  isClickGesture,
+  isDragGesture,
+  orbPlacement,
+  parseOrbPoint,
+  serializeOrbPoint,
+} from './orb-position.ts'
+import type { OrbPlacement, OrbPoint, OrbViewport } from './orb-position.ts'
 import type { OrbLevel, OrbOccupancy } from './orb-model.ts'
 
 
@@ -128,17 +147,64 @@ function useOccupancy(
 const STATUS_TICK_MS = 15_000
 
 /**
+ * The live-turn facts DSH 0.2 keeps in the Chat store rather than the session
+ * snapshot — the `legacy` slice a session-scoped slot reads through `useChat`.
+ */
+export interface OrbChatFacts {
+  readonly turnTimings: ReadonlyMap<number, { readonly startTime: number; readonly endTime?: number }>
+  readonly partial: unknown
+  readonly runningCalls: readonly { readonly name: string; readonly time: number }[]
+}
+
+/**
+ * Fold the three 0.2 sources of one session's status into the card's input:
+ * the session snapshot, the Chat store's live-turn facts, and the pending
+ * interaction `uiSession` reports.
+ * @param snapshot - the session snapshot.
+ * @param chat - the Chat store's live-turn facts, absent outside a Chat-composed shell.
+ * @param pending - the interaction awaiting the user, if any.
+ * @returns the status-model input.
+ */
+export function orbStatusSource(
+  snapshot: ClientConversationState,
+  chat: OrbChatFacts | undefined,
+  pending: ClientPendingInteraction | undefined,
+): StatusSource {
+  return {
+    running: snapshot.running,
+    ...(snapshot.removed === undefined ? {} : { removed: snapshot.removed }),
+    ...(snapshot.openState === undefined ? {} : { openState: snapshot.openState }),
+    ...(snapshot.blank === undefined ? {} : { blank: snapshot.blank }),
+    ...(snapshot.lastAgentError === undefined ? {} : { lastAgentError: snapshot.lastAgentError }),
+    ...(snapshot.promptError === undefined ? {} : { promptError: snapshot.promptError }),
+    ...(snapshot.pendingSubmissions === undefined ? {} : { queue: snapshot.pendingSubmissions }),
+    ...(chat === undefined ? {} : { turnTimings: chat.turnTimings, partial: chat.partial, runningCalls: chat.runningCalls }),
+    ...(pending === undefined
+      ? {}
+      : { pending: [{ kind: pending.kind, payload: { toolName: pending.toolName, reason: pending.reason } }] }),
+  }
+}
+
+/**
  * One session's live status while the 现状 card is open.
  *
- * Subscribes to the conversation snapshot only while `active`, so a closed card
- * costs nothing.
+ * Subscribes to the conversation snapshot and the `uiSession` status only while
+ * `active`, so a closed card costs nothing; a change of the Chat facts re-reads.
  * @param ctx - the client context carrying the sessions service.
  * @param sessionId - the session the orb sits on.
  * @param active - whether the card is open.
  * @returns the resolved status, or `undefined` while closed or unavailable.
  */
-function useSessionStatus(ctx: A2d2ClientContext, sessionId: string, active: boolean): SessionStatus | undefined {
+function useSessionStatus(
+  ctx: A2d2ClientContext,
+  sessionId: string,
+  active: boolean,
+  chat: OrbChatFacts | undefined,
+): SessionStatus | undefined {
   const [status, setStatus] = useState<SessionStatus | undefined>(undefined)
+  const chatRef = useRef(chat)
+  chatRef.current = chat
+  const readRef = useRef<(() => void) | undefined>(undefined)
   useEffect(() => {
     if (!active) { setStatus(undefined); return }
     const sessions = ctx.get('sessions') as ClientSessionsService | undefined
@@ -147,12 +213,19 @@ function useSessionStatus(ctx: A2d2ClientContext, sessionId: string, active: boo
       setStatus({ kind: 'unavailable', headline: '读不到会话状态', facts: [] })
       return
     }
-    const read = (): void => { setStatus(sessionStatus(session.getSnapshot(), Date.now())) }
+    const uiSession = ctx.get('uiSession') as ClientUiSessionService | undefined
+    const read = (): void => {
+      const pending = uiSession?.sessionStatus.getSnapshot().get(sessionId)?.pendingInteraction
+      setStatus(sessionStatus(orbStatusSource(session.getSnapshot(), chatRef.current, pending), Date.now()))
+    }
+    readRef.current = read
     read()
     const dispose = session.subscribe(read)
+    const disposeStatus = uiSession?.sessionStatus.subscribe(read)
     const timer = setInterval(read, STATUS_TICK_MS)
-    return () => { dispose(); clearInterval(timer) }
+    return () => { readRef.current = undefined; dispose(); disposeStatus?.(); clearInterval(timer) }
   }, [ctx, sessionId, active])
+  useEffect(() => { readRef.current?.() }, [chat])
   return status
 }
 
@@ -213,39 +286,134 @@ function useModelDirectory(
 }
 
 /**
- * How much room the shell's details panel takes at the right of the viewport.
+ * The layout region the indicator is laid out in.
  *
- * The indicator is fixed to the viewport so it stays out of the composer's
- * layout, which means the layout cannot move it; measuring the panel and
- * shifting the anchor left by its width is what makes the indicator get out of
- * the way when the panel opens instead of being covered by it. A
- * `ResizeObserver` follows a drag-resize, and a slow interval covers the panel
- * mounting or collapsing after this one.
- *
- * The column is found by a class fragment rather than an exact name because its
- * generated prefix is not part of any contract; a class the build renames simply
- * leaves the inset at zero, which is the panel-closed case. Only the right panel
- * needs shifting: the left sidebar sits outside the composer's column, so the
- * circle never reaches it.
- * @returns the details panel's width in px.
+ * The orb is fixed to the viewport, but it is still mounted inside the shell's
+ * conversation column, so its ancestors' boxes say where that column ends. The
+ * topmost ancestor below `<body>` is the region: a shell that pushes its content
+ * aside for a right-hand panel leaves this element as wide as the space the
+ * panel did not take, which is what makes the measurement independent of whose
+ * panel is open and of that panel's class names.
+ * @param from - the orb element, or `null` before it is mounted.
+ * @returns the region element, or `null` when the orb is detached.
  */
-function useDetailsInset(): number {
-  const [inset, setInset] = useState(0)
+function layoutRegion(from: Element | null): Element | null {
+  let node = from
+  while (node !== null && node.parentElement !== null && node.parentElement !== document.body) {
+    node = node.parentElement
+  }
+  return node
+}
+
+/**
+ * The layout viewport a `position: fixed` element is measured against.
+ *
+ * The document element's client box, not `innerWidth`/`innerHeight`: a classic
+ * scrollbar lies outside the containing block, and counting it would place the
+ * circle a scrollbar's width short of where it was put.
+ * @returns the viewport size in px.
+ */
+function currentViewport(): OrbViewport {
+  return {
+    width: document.documentElement.clientWidth,
+    height: document.documentElement.clientHeight,
+  }
+}
+
+/**
+ * Where the circle sits and where its card opens, re-measured as the shell moves.
+ *
+ * The shell is measured, not assumed: {@link anchorRightOffset} combines the
+ * layout region's leftover space with the shell's own details column, so a shell
+ * that pushes its content and a shell that keeps a measured column both move the
+ * circle. A `ResizeObserver` follows a drag-resize and a panel opening or
+ * closing, and a slow interval covers a region that is remounted (switching
+ * sidebar tabs replaces it) and a viewport resized behind the observer, without
+ * re-running this effect.
+ * @param rootRef - the orb's own element, the anchor for the region walk.
+ * @param moved - the point a drag left the circle at, or `undefined` for the corner.
+ * @returns the placement to render.
+ */
+function useOrbPlacement(rootRef: { readonly current: Element | null }, moved: OrbPoint | undefined): OrbPlacement {
+  const [room, setRoom] = useState<{ readonly viewport: OrbViewport; readonly rightOffset: number }>(
+    () => ({ viewport: currentViewport(), rightOffset: ORB_GAP_PX }),
+  )
   useEffect(() => {
-    const panel = (): Element | null => document.querySelector("[class*='detailsCol']")
+    const details = (): Element | null => document.querySelector("[class*='detailsCol']")
     const measure = (): void => {
-      const element = panel()
-      const width = element === null ? 0 : Math.round(element.getBoundingClientRect().width)
-      setInset(current => (current === width ? current : width))
+      const region = layoutRegion(rootRef.current)
+      const rect = region === null ? undefined : region.getBoundingClientRect()
+      const viewport = currentViewport()
+      const column = details()
+      const next = {
+        viewport,
+        rightOffset: anchorRightOffset({
+          viewportWidth: viewport.width,
+          regionRight: rect?.right,
+          detailsWidth: column === null ? 0 : column.getBoundingClientRect().width,
+        }),
+      }
+      setRoom(current => (
+        current.rightOffset === next.rightOffset
+        && current.viewport.width === next.viewport.width
+        && current.viewport.height === next.viewport.height
+          ? current
+          : next
+      ))
     }
     measure()
     const timer = setInterval(measure, 500)
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
-    const element = panel()
-    if (observer !== null && element !== null) observer.observe(element)
+    for (const element of [layoutRegion(rootRef.current), details()]) {
+      if (observer !== null && element !== null) observer.observe(element)
+    }
     return () => { observer?.disconnect(); clearInterval(timer) }
-  }, [])
-  return inset
+  }, [rootRef])
+  return useMemo(
+    () => orbPlacement({ viewport: room.viewport, rightOffset: room.rightOffset, moved }),
+    [room, moved],
+  )
+}
+
+/** A press that may still turn into a drag. */
+interface OrbDrag {
+  /** The pointer this gesture belongs to; a second pointer is ignored. */
+  readonly pointerId: number
+  /** Where the press started, in viewport coordinates. */
+  readonly from: OrbPoint
+  /** Where the circle was when the press started, in viewport coordinates. */
+  readonly origin: OrbPoint
+  /**
+   * The point to restore if the gesture turns out to be a click.
+   *
+   * Captured at the press, not read at the release: the circle follows the
+   * pointer in between, so by then the live point is the drifted one this is
+   * meant to undo.
+   */
+  readonly before: OrbPoint | undefined
+  /** Whether the gesture has passed the drag threshold. */
+  moved: boolean
+}
+
+/** The remembered point, or `undefined` when this browser never stored one. */
+function storedOrbPoint(): OrbPoint | undefined {
+  try {
+    return parseOrbPoint(window.localStorage.getItem(ORB_POSITION_KEY))
+  } catch {
+    // A browser that refuses storage (private mode, blocked cookies) leaves the
+    // circle at its corner; the drag still works for this page.
+    return undefined
+  }
+}
+
+/** Remember a dragged point, or forget it when the circle returns to its corner. */
+function rememberOrbPoint(point: OrbPoint | undefined): void {
+  try {
+    if (point === undefined) window.localStorage.removeItem(ORB_POSITION_KEY)
+    else window.localStorage.setItem(ORB_POSITION_KEY, serializeOrbPoint(point))
+  } catch {
+    // Same as reading: the position is a convenience, never a precondition.
+  }
 }
 
 /** The confirm card's own state: what the user has typed and where the flow is. */
@@ -261,10 +429,23 @@ type CardPhase =
  * `sessionId` is required: this component renders inside a session-scoped slot,
  * which is what supplies it, so there is no session-less case to guard.
  */
-export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string }): ReturnType<typeof createElement> | null {
-  const { ctx, sessionId } = props
+export function HandoffOrb(props: {
+  ctx: A2d2ClientContext
+  sessionId: string
+  /** The Chat store's live-turn facts for this session, when the shell composes Chat. */
+  chat?: OrbChatFacts
+}): ReturnType<typeof createElement> | null {
+  const { ctx, sessionId, chat } = props
   const { occupancy, host } = useOccupancy(ctx, sessionId)
-  const detailsInset = useDetailsInset()
+  const rootRef = useRef<HTMLButtonElement | null>(null)
+  // The point a drag left the circle at, restored from the last visit. `undefined`
+  // means the user has never moved it, which is what keeps the panel-aware corner
+  // the default rather than a position someone happened to drop it in once.
+  const [moved, setMoved] = useState<OrbPoint | undefined>(storedOrbPoint)
+  const [dragging, setDragging] = useState(false)
+  const dragRef = useRef<OrbDrag | null>(null)
+  const draggedRef = useRef(false)
+  const placement = useOrbPlacement(rootRef, moved)
   const thresholds = host?.thresholds ?? DEFAULT_ORB_THRESHOLDS
   const [failure, setFailure] = useState<string | null>(null)
   const [hovering, setHovering] = useState(false)
@@ -272,11 +453,10 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
   const [consult, setConsult] = useState<ConsultPhase>({ kind: 'idle' })
   // The next-step card leads with the session's status, which is instant, so
   // the card is useful while the consultation is still being generated.
-  const status = useSessionStatus(ctx, sessionId, consult.kind !== 'idle')
+  const status = useSessionStatus(ctx, sessionId, consult.kind !== 'idle', chat)
   const modelDirectory = useModelDirectory(ctx, sessionId, consult.kind === 'ready')
   const [focus, setFocus] = useState('')
   const [handoffModelTarget, setHandoffModelTarget] = useState<ConsultNewSessionModelTarget | undefined>(undefined)
-  const rootRef = useRef<HTMLButtonElement | null>(null)
   const consultRequestRef = useRef(0)
 
   // The draft-fill fallback: used only when the one-click flow cannot run.
@@ -289,7 +469,8 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
   const confirm = useCallback(async (): Promise<void> => {
     const sessions = ctx.get('sessions') as ClientSessionsService | undefined
     const workspaces = ctx.get('workspaces') as ClientWorkspacesService | undefined
-    if (sessions === undefined || workspaces === undefined) {
+    const navigation = ctx.get('uiWorkspace') as ClientWorkspaceNavigation | undefined
+    if (sessions === undefined || workspaces === undefined || navigation === undefined) {
       // No session/workspace service: fall back to filling the draft, which is
       // the older behavior and still lets the user hand off manually.
       setPhase({ kind: 'closed' })
@@ -303,6 +484,7 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
       {
         sessions,
         workspaces,
+        navigation,
         ...(handoffModelTarget === undefined ? {} : { successorModel: handoffModelTarget }),
         ...(modelDirectories === undefined ? {} : { modelDirectories }),
         notify: message => { setFailure(message) },
@@ -355,6 +537,7 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
       openHandoff,
       sessions: ctx.get('sessions') as ClientSessionsService | undefined,
       workspaces: ctx.get('workspaces') as ClientWorkspacesService | undefined,
+      navigation: ctx.get('uiWorkspace') as ClientWorkspaceNavigation | undefined,
       ...(modelDirectories === undefined ? {} : { modelDirectories }),
       notify: message => { setFailure(message) },
     }, candidate, {
@@ -373,6 +556,7 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
       openHandoff,
       sessions: ctx.get('sessions') as ClientSessionsService | undefined,
       workspaces: ctx.get('workspaces') as ClientWorkspacesService | undefined,
+      navigation: ctx.get('uiWorkspace') as ClientWorkspaceNavigation | undefined,
       modelDirectories: ctx.get('modelDirectories') as ClientModelDirectoryService | undefined,
       notify: message => { setFailure(message) },
     }, move, { sessionId, phase: consult }).then((ok) => {
@@ -385,6 +569,80 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
     const timer = setTimeout(() => { setFailure(null) }, 4000)
     return () => { clearTimeout(timer) }
   }, [failure])
+
+  /**
+   * Take the circle under the pointer.
+   *
+   * The gesture is captured so a fast drag that outruns the pointer keeps
+   * following it, and the press is not yet a drag: `draggedRef` stays false
+   * until the threshold is passed, so a plain click still opens the card. The
+   * circle's own point is the origin rather than its measured box, which the
+   * hover lift scales away from it.
+   */
+  const startOrbDrag = useCallback((event: { pointerId: number; button: number; clientX: number; clientY: number; currentTarget: HTMLButtonElement }): void => {
+    if (event.button !== 0) return
+    dragRef.current = {
+      pointerId: event.pointerId,
+      from: { x: event.clientX, y: event.clientY },
+      origin: placement.point,
+      before: moved,
+      moved: false,
+    }
+    draggedRef.current = false
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }, [placement.point, moved])
+
+  /** Move the circle with the pointer, once the gesture has earned it. */
+  const moveOrbDrag = useCallback((event: { pointerId: number; clientX: number; clientY: number }): void => {
+    const drag = dragRef.current
+    if (drag === null || drag.pointerId !== event.pointerId) return
+    const to = { x: event.clientX, y: event.clientY }
+    if (!drag.moved) {
+      if (!isDragGesture(drag.from, to)) return
+      drag.moved = true
+      setDragging(true)
+    }
+    setMoved(clampOrbPoint({
+      x: drag.origin.x + (to.x - drag.from.x),
+      y: drag.origin.y + (to.y - drag.from.y),
+    }, currentViewport()))
+  }, [])
+
+  /**
+   * Drop the circle where the pointer left it, and remember the point.
+   *
+   * A release that barely moved from the press is a click on the circle, not a
+   * move: the drift it left behind is undone and the click is left to open the
+   * card, which is what a trackpad click expects.
+   */
+  const endOrbDrag = useCallback((event: { pointerId: number; clientX: number; clientY: number; currentTarget: HTMLButtonElement }): void => {
+    const drag = dragRef.current
+    dragRef.current = null
+    if (drag === null) return
+    if (event.currentTarget.hasPointerCapture(drag.pointerId)) {
+      event.currentTarget.releasePointerCapture(drag.pointerId)
+    }
+    setDragging(false)
+    if (!drag.moved) return
+    const released = { x: event.clientX, y: event.clientY }
+    if (isClickGesture(drag.from, released)) {
+      setMoved(drag.before)
+      return
+    }
+    const point = clampOrbPoint({
+      x: drag.origin.x + (released.x - drag.from.x),
+      y: drag.origin.y + (released.y - drag.from.y),
+    }, currentViewport())
+    draggedRef.current = true
+    setMoved(point)
+    rememberOrbPoint(point)
+  }, [])
+
+  /** Put the circle back in the corner the shell manages, and forget the drag. */
+  const resetOrb = useCallback((): void => {
+    setMoved(undefined)
+    rememberOrbPoint(undefined)
+  }, [])
 
   if (occupancy === null) return null
   const level = orbLevel(occupancy.usedTokens, thresholds)
@@ -412,11 +670,23 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
       type: 'button',
       ref: rootRef,
       className: `${css.root} ${levelClassName(level)}`,
-      title: failure ?? detail,
+      title: `${failure ?? detail}\n\n拖动可移动位置`,
       'aria-label': failure ?? `${tokens} tokens，${occupancy.percent}% 已用。接近 smart zone；到下个相位边界做五选一，交接只是其一`,
       'data-a2d2-orb': level,
       'data-a2d2-level': String(filled),
-      onClick: consultNext,
+      onPointerDown: startOrbDrag,
+      onPointerMove: moveOrbDrag,
+      onPointerUp: endOrbDrag,
+      onPointerCancel: endOrbDrag,
+      onClick: () => {
+        // A drag ends with a click on the element the pointer went down on, which
+        // would otherwise open the card every time the circle is moved.
+        if (draggedRef.current) {
+          draggedRef.current = false
+          return
+        }
+        consultNext()
+      },
     },
     createElement('span', { className: css.water, style: { '--a2d2-level': `${filled}%` } as never, 'aria-hidden': true }),
     createElement('span', {
@@ -430,8 +700,9 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
     ),
   )
 
-  // The boundary action yields the surface to an open card.
-  const showAction = hovering && !cardOpen
+  // The boundary action yields the surface to an open card, and to a drag: the
+  // pointer is on the circle to move it, not to ask what comes next.
+  const showAction = hovering && !cardOpen && !dragging
   const actionButton = (label: string, hint: string, onClick: () => void): ReturnType<typeof createElement> =>
     createElement('button', { type: 'button', className: css.action, title: hint, 'aria-label': `${label}：${hint}`, onClick }, label)
   const action = showAction
@@ -453,19 +724,21 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
     }),
     phase.kind === 'error' ? createElement('div', { className: css.cardError }, phase.message) : null,
     running ? createElement('div', { className: css.cardBusy }, '本会话正在撰写交接摘要，随后自动创建并切换后继会话…') : null,
-    createElement('div', { className: css.cardRow },
-      createElement('button', {
-        type: 'button',
-        className: `${css.cardButton} ${css.cancel}`,
-        disabled: running,
-        onClick: () => { setPhase({ kind: 'closed' }); setFocus(''); setHandoffModelTarget(undefined) },
-      }, '取消'),
-      createElement('button', {
-        type: 'button',
-        className: `${css.cardButton} ${css.confirm}`,
-        disabled: running,
-        onClick: () => { void confirm() },
-      }, '创建并交接'),
+    createElement('div', { className: css.cardActions },
+      createElement('div', { className: css.cardRow },
+        createElement('button', {
+          type: 'button',
+          className: `${css.cardButton} ${css.cancel}`,
+          disabled: running,
+          onClick: () => { setPhase({ kind: 'closed' }); setFocus(''); setHandoffModelTarget(undefined) },
+        }, '取消'),
+        createElement('button', {
+          type: 'button',
+          className: `${css.cardButton} ${css.confirm}`,
+          disabled: running,
+          onClick: () => { void confirm() },
+        }, '创建并交接'),
+      ),
     ),
   ) : null
 
@@ -504,73 +777,102 @@ export function HandoffOrb(props: { ctx: A2d2ClientContext; sessionId: string })
       : null,
     highway === undefined ? null : createElement(HighwayMap, { view: highway, mode: 'readonly' }),
     highway?.nextLine === undefined ? null : createElement('div', { className: css.nextLine }, highway.nextLine),
-    consult.kind === 'ready'
-      ? createElement('div', { className: css.chips },
-        ...consult.candidates.map((candidate, index) => {
-          const effect = candidateModelEffect(candidate, consult, modelDirectory)
-          return createElement('button', {
-            type: 'button',
-            className: css.chip,
-            key: `${candidate.move}-${String(index)}`,
-            title: effect === undefined ? candidate.input : `${candidate.input}\n${effect}`,
-            onClick: () => { selectCandidate(candidate) },
-          },
-            createElement('span', { className: css.chipMove }, chipMoveLabel(candidate.move)),
-            createElement('span', { className: css.chipLabel }, candidate.label),
-            effect === undefined ? null : createElement('span', { className: css.chipEffect }, effect),
-          )
-        }),
-      )
-      : null,
-    createElement('details', { className: css.otherMoves },
-      createElement('summary', { className: css.otherMovesSummary }, '其他走法'),
-      createElement('div', { className: css.otherMoveGrid },
-        ...OTHER_MOVE_OPTIONS.map(option => createElement('button', {
-          type: 'button',
-          className: css.otherMoveButton,
-          key: option.move,
-          title: option.hint,
-          onClick: () => { selectOther(option.move) },
-        },
-          createElement('span', { className: css.otherMoveLabel }, option.label),
-          createElement('span', { className: css.otherMoveHint }, option.hint),
-        )),
-      ),
-    ),
-    attribution === undefined ? null : createElement('div', { className: css.attribution }, attribution),
-    createElement('div', { className: css.cardRow },
-      consult.kind === 'error'
-        ? createElement('button', {
-          type: 'button',
-          className: `${css.cardButton} ${css.confirm}`,
-          onClick: consultNext,
-        }, '重试')
+    // Everything from the chips down is pinned to the card's bottom: the card is
+    // capped by the room beside the circle, and a small window leaves the status
+    // and the highway map more than the whole cap — so the reference scrolls and
+    // the moves stay where the hand already is.
+    createElement('div', { className: css.cardActions },
+      consult.kind === 'ready'
+        ? createElement('div', { className: css.chips },
+          ...consult.candidates.map((candidate, index) => {
+            const effect = candidateModelEffect(candidate, consult, modelDirectory)
+            return createElement('button', {
+              type: 'button',
+              className: css.chip,
+              key: `${candidate.move}-${String(index)}`,
+              title: effect === undefined ? candidate.input : `${candidate.input}\n${effect}`,
+              onClick: () => { selectCandidate(candidate) },
+            },
+              createElement('span', { className: css.chipMove }, chipMoveLabel(candidate.move)),
+              createElement('span', { className: css.chipLabel }, candidate.label),
+              effect === undefined ? null : createElement('span', { className: css.chipEffect }, effect),
+            )
+          }),
+        )
         : null,
-      createElement('button', {
-        type: 'button',
-        className: `${css.cardButton} ${css.cancel}`,
-        onClick: closeConsult,
-      }, '关闭'),
+      createElement('details', { className: css.otherMoves },
+        createElement('summary', { className: css.otherMovesSummary }, '其他走法'),
+        createElement('div', { className: css.otherMoveGrid },
+          ...OTHER_MOVE_OPTIONS.map(option => createElement('button', {
+            type: 'button',
+            className: css.otherMoveButton,
+            key: option.move,
+            title: option.hint,
+            onClick: () => { selectOther(option.move) },
+          },
+            createElement('span', { className: css.otherMoveLabel }, option.label),
+            createElement('span', { className: css.otherMoveHint }, option.hint),
+          )),
+        ),
+      ),
+      attribution === undefined ? null : createElement('div', { className: css.attribution }, attribution),
+      createElement('div', { className: css.cardRow },
+        moved === undefined
+          ? null
+          : createElement('button', {
+            type: 'button',
+            className: `${css.cardButton} ${css.cancel} ${css.cardReset}`,
+            title: '把指示球放回原来的角落',
+            onClick: resetOrb,
+          }, '复位'),
+        consult.kind === 'error'
+          ? createElement('button', {
+            type: 'button',
+            className: `${css.cardButton} ${css.confirm}`,
+            onClick: consultNext,
+          }, '重试')
+          : null,
+        createElement('button', {
+          type: 'button',
+          className: `${css.cardButton} ${css.cancel}`,
+          onClick: closeConsult,
+        }, '关闭'),
+      ),
     ),
   ) : null
 
   return createElement(
     'div',
     {
-      className: css.anchor,
-      style: { right: `${PANEL_GAP_PX + detailsInset}px` },
+      className: dragging ? `${css.anchor} ${css.dragging}` : css.anchor,
+      style: {
+        left: `${String(placement.point.x)}px`,
+        top: `${String(placement.point.y)}px`,
+        // The sheet geometry the stylesheet draws, published from the model the
+        // clamps are computed with, so the two cannot drift apart.
+        '--a2d2-orb-size': `${String(ORB_SIZE_PX)}px`,
+        '--a2d2-card-width': `${String(ORB_CARD_WIDTH_PX)}px`,
+        '--a2d2-stack-gap': `${String(ORB_STACK_GAP_PX)}px`,
+      } as never,
       onMouseEnter: () => { setHovering(true) },
       onMouseLeave: () => { setHovering(false) },
     },
-    handoffCard,
-    consultCard,
-    action,
+    createElement(
+      'div',
+      {
+        className: placement.card.above ? `${css.stack} ${css.stackAbove}` : `${css.stack} ${css.stackBelow}`,
+        style: {
+          left: `${String(placement.card.left)}px`,
+          '--a2d2-card-max': `${String(placement.card.maxHeight)}px`,
+        } as never,
+      },
+      handoffCard,
+      consultCard,
+      action,
+    ),
     orb,
   )
 }
-
-/** Distance between the indicator and a shell panel, in px. */
-const PANEL_GAP_PX = 12
 
 /**
  * Fill share above which the readout moves up, in whole percent.

@@ -8,11 +8,11 @@
  * subagent UI surfaces it — so children pinned to another model spend that
  * model's budget unobserved.
  *
- * Every field is a host fold this component only reads: child lists from the
- * session list's per-parent subagent catalogs, and each route from that
- * session's own `a2d2Indicator` projection. Catalogs are published lazily per
- * selected parent; route projections come from the list store when present and
- * otherwise from the child's non-activating history projection baseline.
+ * Every field is a host fold this component only reads: child lists from each
+ * parent's `subagentCatalog` projection in the session list store, and each
+ * route from that session's own `a2d2Indicator` projection. A parent's
+ * projections are read on demand; route projections come from the list store
+ * when present and otherwise from the child's non-activating projection read.
  *
  * @module @deepseek-ai/dsh-a2d2/client/subagent-tab
  */
@@ -20,11 +20,12 @@
 import { createElement, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type {
   A2d2ClientContext, ClientSessionListSnapshot, ClientSessionListStore,
-  ClientSessionsService,
+  ClientSessionsService, ClientWorkspaceNavigation,
 } from './context.ts'
 import {
   createRouteSourceLoader,
   formatRoute,
+  projectedSubagentCatalogs,
   subagentRouteHeader,
   subagentRouteTree,
   type SubagentRouteAddress,
@@ -37,16 +38,18 @@ import {
 import css from './subagent-tab.module.css'
 
 /**
- * How often the visible tab re-requests the catalog, in milliseconds.
+ * How often the visible tab re-asks for catalog baselines, in milliseconds.
  *
- * The catalog is a request/response, not a stream, so a child delegated while
- * the tab sits open appears only on the next ask. Five seconds is shorter than
- * the time it takes to read the list and longer than one host listing.
+ * A parent's projections load once per connection and then follow live frames,
+ * so a child delegated while the tab sits open appears without asking; the
+ * repeat only retries baselines that failed or are not loaded yet (including a
+ * child newly found to have children). Five seconds is shorter than the time it
+ * takes to read the list and longer than one host read.
  */
 const CATALOG_REFRESH_MS = 5_000
 
 /** The list a deployment without a sessions service reads: empty, and never updating. */
-const NO_LIST: ClientSessionListSnapshot = { byId: {}, subagentsByParent: {} }
+const NO_LIST: ClientSessionListSnapshot = { byId: {}, projectionsBySession: {} }
 
 /** Full props for the subagent model list. */
 export interface SubagentModelTabProps {
@@ -214,8 +217,13 @@ function RootNode({
  * @returns the rendered list.
  */
 export function SubagentModelTab({ ctx, sessionId, visible }: SubagentModelTabProps): ReturnType<typeof createElement> {
-  const sessions = ctx.get('sessions') as ClientSessionsService | undefined
-  const connection = ctx.get('connection') as { readonly api?: SubagentRouteHistoryApi } | undefined
+  // `ctx.get` returns a fresh traceable proxy per call; read the stateful
+  // services once per context so the loaders and effects keyed on them are not
+  // rebuilt (and their in-flight reads cancelled) on every render. `uiWorkspace`
+  // is intentionally read at click time because it is not injected by this
+  // plugin and can arrive or restart while the tab stays mounted.
+  const sessions = useMemo(() => ctx.get('sessions') as ClientSessionsService | undefined, [ctx])
+  const remote = useMemo(() => ctx.get('remote') as SubagentRouteHistoryApi | undefined, [ctx])
   const inflightRef = useRef(new Set<string>())
   const [historySources, setHistorySources] = useState<Readonly<Record<string, SubagentRouteSource | undefined>>>({})
   // A stable no-op store stands in while the sessions service is absent, keeping
@@ -230,7 +238,7 @@ export function SubagentModelTab({ ctx, sessionId, visible }: SubagentModelTabPr
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
   const tree = useMemo(
-    () => subagentRouteTree(state.byId, state.subagentsByParent, sessionId, historySources),
+    () => subagentRouteTree(state.byId, projectedSubagentCatalogs(state), sessionId, historySources),
     [state, sessionId, historySources],
   )
   const catalogParents = useMemo(
@@ -242,14 +250,14 @@ export function SubagentModelTab({ ctx, sessionId, visible }: SubagentModelTabPr
     [tree.children],
   )
   const routeLoader = useMemo<RouteSourceLoader | undefined>(
-    () => connection?.api === undefined ? undefined : createRouteSourceLoader(connection.api),
-    [connection?.api],
+    () => remote === undefined ? undefined : createRouteSourceLoader(remote),
+    [remote],
   )
   const refreshCatalog = useCallback((parentId: string): void => {
     if (sessions === undefined) return
     if (inflightRef.current.has(parentId)) return
     inflightRef.current.add(parentId)
-    void sessions.refreshSubagents(parentId)
+    void sessions.refreshProjections(parentId)
       .catch(() => undefined)
       .finally(() => { inflightRef.current.delete(parentId) })
   }, [sessions])
@@ -264,15 +272,6 @@ export function SubagentModelTab({ ctx, sessionId, visible }: SubagentModelTabPr
     const timer = window.setInterval(refresh, CATALOG_REFRESH_MS)
     return () => { window.clearInterval(timer) }
   }, [sessions, visible, catalogParents, refreshCatalog])
-
-  useEffect(() => {
-    if (sessions === undefined) return undefined
-    if (visible === false) return undefined
-    for (const parentId of catalogParents) sessions.setSubagentCatalogOpen?.(parentId, true)
-    return () => {
-      for (const parentId of catalogParents) sessions.setSubagentCatalogOpen?.(parentId, false)
-    }
-  }, [sessions, visible, catalogParents])
 
   useEffect(() => {
     return () => { routeLoader?.dispose() }
@@ -297,23 +296,23 @@ export function SubagentModelTab({ ctx, sessionId, visible }: SubagentModelTabPr
 
   const openRoot = useCallback((id: string): void => {
     try {
-      sessions?.open(id)
+      const navigation = ctx.get('uiWorkspace') as ClientWorkspaceNavigation | undefined
+      navigation?.openSession(id)
     } catch {
       // The row can disappear between render and click.
     }
-  }, [sessions])
+  }, [ctx])
 
   const openNode = useCallback((row: SubagentRouteTreeNode): void => {
     try {
-      if (row.mode !== undefined && sessions?.openSubagent !== undefined) {
-        sessions.openSubagent({ parentSessionId: row.parentId, childSessionId: row.id, mode: row.mode })
-        return
-      }
-      sessions?.open(row.id)
+      const navigation = ctx.get('uiWorkspace') as ClientWorkspaceNavigation | undefined
+      navigation?.openSession(row.mode === undefined
+        ? row.id
+        : { parentSessionId: row.parentId, childSessionId: row.id, mode: row.mode })
     } catch {
       // The row can disappear between render and click.
     }
-  }, [sessions])
+  }, [ctx])
 
   return createElement(
     'div',

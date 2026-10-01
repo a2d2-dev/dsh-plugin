@@ -13,15 +13,16 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { ReactNode } from 'react'
-// Value-free imports of the declaration merges: they type `ctx.slots` and
-// `ctx.sessions`. Only the types travel — the bundle reaches both as cordis
-// services at runtime, because a cross-plugin value import is forbidden.
+// Value-free imports of the declaration merges: they type `ctx.slots` and the
+// slot map. Only the types travel — the bundle reaches the services through
+// cordis at runtime, because a cross-plugin value import is forbidden.
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
-import type {} from '@deepseek-ai/dsh-client-runtime/client'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+// Session-scoped slots receive `sessionId` through ui-session's standard-props merge.
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 // The conversation shell declares the slot this bundle registers into.
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { StatusSource } from './status-model.ts'
-import type { SubagentCatalog, SubagentSessionSummary } from './subagent-model.ts'
+import type { SubagentSessionSummary } from './subagent-model.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
@@ -87,8 +88,15 @@ export type ClientCommandResult =
  * snapshot; each is optional there so an older runtime degrades the card
  * rather than breaking it.
  */
-export interface ClientConversationState extends StatusSource {
+export interface ClientConversationState {
   readonly running: boolean
+  readonly removed?: boolean
+  readonly openState?: string
+  readonly blank?: boolean
+  readonly lastAgentError?: string | null
+  readonly promptError?: { readonly op: string } | null
+  /** Local prompt-submission echoes; `queued` ones are the 现状 card's queue. */
+  readonly pendingSubmissions?: readonly { readonly placement: string }[]
 }
 
 /** The client session face this bundle needs. */
@@ -126,16 +134,60 @@ export interface ClientWorkspaceView {
   readonly sessionIds: readonly string[]
 }
 
-/** The workspaces-service face this bundle needs to create the successor session. */
+/** The workspaces-service face this bundle needs to find a session's workspace. */
 export interface ClientWorkspacesService {
   /** The workspace list, read to map the current session to its workspace id. */
   readonly list: { getSnapshot(): { readonly items: readonly ClientWorkspaceView[] } }
+}
+
+/** A durable direct-parent subagent address, as UI navigation accepts it. */
+export interface ClientSubagentAddress {
+  readonly parentSessionId: string
+  readonly childSessionId: string
+  readonly mode: 'one-shot' | 'continuable'
+}
+
+/** The `uiWorkspace` navigation face: the one owner of "show this session". */
+export interface ClientWorkspaceNavigation {
+  /**
+   * Select a session, or a subagent through its parent address, and show its conversation.
+   * @param target - a session id or a durable subagent address.
+   */
+  openSession(target: string | ClientSubagentAddress): void
   /**
    * Connect a workspace to its reusable or freshly created blank session.
    * @param workspaceId - the workspace the successor session is created under.
    * @returns the connected session id.
    */
   connectWorkspace(workspaceId: string): Promise<string>
+}
+
+/** One pending user interaction as `uiSession.sessionStatus` reports it (approval fields when an approval). */
+export interface ClientPendingInteraction {
+  readonly kind: string
+  readonly toolName?: string
+  readonly reason?: string
+}
+
+/** The `uiSession` face: per-session UI status, including the pending interaction. */
+export interface ClientUiSessionService {
+  readonly sessionStatus: {
+    getSnapshot(): ReadonlyMap<string, { readonly pendingInteraction?: ClientPendingInteraction }>
+    subscribe(listener: () => void): () => void
+  }
+}
+
+/** The `remote` face: one session's projection baseline, read without opening it. */
+export interface ClientProjectionsRemote {
+  readonly session: {
+    projections(
+      payload: { readonly sessionId: string },
+      signal?: AbortSignal,
+    ): Promise<
+      | { readonly ok: true; readonly value: { readonly values?: Readonly<Record<string, unknown>> } | null }
+      | { readonly ok: false }
+    >
+  }
 }
 
 /**
@@ -146,27 +198,23 @@ export interface ClientWorkspacesService {
  * only to turn that id into the faces the indicator reads.
  */
 export interface ClientSessionsService {
-  /** The session face for an id, or `undefined` when that session is unknown. */
+  /** The session face for an already-retained id, or `undefined` when nothing retains it. */
   binding(id: string): { readonly session: ClientSessionFace } | undefined
   /** The session-scoped context for an id, which the composer facade requires. */
   scope(id: string): Context | undefined
   /**
-   * Select a session as current, switching the shell's focus to it.
-   * @param id - the session to focus; it must already exist in the list store.
+   * Hold a session open for one operation: retain it under `source`, wait for
+   * its binding, run `operation`, and release.
    */
-  open(id: string): void
-  /**
-   * Open a catalog child through its exact durable parent address, when the
-   * runtime exposes subagent-aware navigation.
-   */
-  openSubagent?(address: {
-    readonly parentSessionId: string
-    readonly childSessionId: string
-    readonly mode: 'one-shot' | 'continuable'
-  }): void
+  using<T>(
+    target: string,
+    options: { readonly source: string },
+    operation: (reference: { readonly binding: { readonly session: ClientSessionFace } }) => T | Promise<T>,
+  ): Promise<T>
   /**
    * The session list store: every host row with the projection values the host
-   * folded for it, plus each selected parent's direct subagent catalog.
+   * folded for it, plus each loaded session's projection baseline — a parent's
+   * `subagentCatalog` among them.
    *
    * This is the only client-side source of ANOTHER session's route. `binding(id)`
    * answers for a session the shell holds a transport for, which a child the user
@@ -175,20 +223,13 @@ export interface ClientSessionsService {
    */
   readonly list: ClientSessionListStore
   /**
-   * Mark a lazy subagent catalog as visibly consumed so the host can keep its
-   * live membership fresh while the panel is open.
+   * Load one session's projection baseline once per connection, without opening
+   * it; live frames keep it current after that. A parent's direct subagent
+   * catalog arrives this way.
+   * @param sessionId - the session to read.
+   * @returns fulfillment after the store publishes the baseline, or after the read fails.
    */
-  setSubagentCatalogOpen?(parentSessionId: string, open: boolean): void
-  /**
-   * Re-request the direct subagent catalog for one parent.
-   *
-   * The catalog is requested per selected parent rather than streamed, so a
-   * reader that needs it first must ask; the store then carries the answer for
-   * every subscriber.
-   * @param parentSessionId - the parent whose direct children to refresh.
-   * @returns fulfillment after the store publishes the answer, or after the request fails.
-   */
-  refreshSubagents(parentSessionId: string): Promise<void>
+  refreshProjections(sessionId: string): Promise<void>
 }
 
 /** One session's route, as the `a2d2Indicator` projection publishes it. */
@@ -203,16 +244,29 @@ export interface ClientSessionListStore {
   subscribe(listener: () => void): () => void
 }
 
-/** The published session list, narrowed to the two maps the subagent list reads. */
+/** One `subagentCatalog` projection row: a direct child in parent catalog order. */
+export interface ClientSubagentCatalogEntry {
+  readonly id: string
+  readonly mode: 'one-shot' | 'continuable' | 'unknown'
+  readonly label?: string
+}
+
+/** One session's projection baseline in the list store. */
+export interface ClientSessionProjectionSnapshot {
+  readonly values: Readonly<{ readonly subagentCatalog?: readonly ClientSubagentCatalogEntry[] } & Record<string, unknown>>
+  readonly state: 'idle' | 'loading' | 'ready' | 'error'
+  readonly error: unknown
+}
+
+/** The published session list, narrowed to the two maps this bundle reads. */
 export interface ClientSessionListSnapshot {
   /** Every host row keyed by id, each carrying its display title and the projections the host folded for it. */
   readonly byId: Readonly<Record<string, (SubagentSessionSummary & {
     readonly title?: string | null
-    readonly sessionListMetadata?: { readonly blank?: boolean }
-    readonly sessionStats?: { readonly turns?: number }
+    readonly blank?: boolean
   }) | undefined>>
-  /** Direct catalogs, keyed by the parent address they were requested for. */
-  readonly subagentsByParent: Readonly<Record<string, (SubagentCatalog & { readonly state?: string; readonly error?: unknown; readonly parentAvailable?: boolean }) | undefined>>
+  /** Projection baselines of the sessions read so far, keyed by session id. */
+  readonly projectionsBySession: Readonly<Record<string, ClientSessionProjectionSnapshot | undefined>>
 }
 
 /** Props the sidebar hands one tab component (the subset this bundle reads). */

@@ -1,6 +1,7 @@
 /**
  * The floating handoff indicator's model: occupancy arithmetic and the alert
- * level that decides its color.
+ * level that decides its color. Where the circle sits is a separate model —
+ * `orb-position.ts` — so this one stays about what the circle says.
  *
  * Pure functions over plain values, so the arithmetic is testable without a
  * browser and the threshold that drives the color is data rather than a

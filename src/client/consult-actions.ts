@@ -18,7 +18,7 @@ import {
 } from '../highway.ts'
 import type { HighwayZone, MainStation, Move } from '../highway.ts'
 import type { FailureKind } from '../refusal.ts'
-import type { ClientSessionsService, ClientWorkspacesService } from './context.ts'
+import type { ClientSessionsService, ClientWorkspaceNavigation, ClientWorkspacesService } from './context.ts'
 
 /** Exact host route used for next-step consultation. */
 export const CONSULT_ROUTE_PATH = '/a2d2/api/consult'
@@ -91,7 +91,22 @@ export interface ClientModelDirectory {
     subscribe(listener: () => void): () => void
   }
   load(): Promise<ClientModelDirectorySnapshot>
-  select(selection: ClientModelSelection): Promise<void>
+  /** Resolves `{ ok: false, error }` for a refused selection (DSH 0.2) rather than rejecting; see {@link selectModel}. */
+  select(selection: ClientModelSelection): Promise<unknown>
+}
+
+/**
+ * Select a model and fail loudly: DSH 0.2 resolves a refused selection as a
+ * `{ ok: false, error }` result instead of rejecting, which an `await` alone
+ * would read as success.
+ * @param face - the session's model directory.
+ * @param selection - the route to select.
+ */
+export async function selectModel(face: ClientModelDirectory, selection: ClientModelSelection): Promise<void> {
+  const result = await face.select(selection)
+  if (result === null || typeof result !== 'object' || (result as { readonly ok?: unknown }).ok !== false) return
+  const message = (result as { readonly error?: { readonly message?: unknown } }).error?.message
+  throw new Error(typeof message === 'string' ? message : 'the model selection was refused')
 }
 
 export interface ClientModelDirectoryService {
@@ -152,6 +167,8 @@ export interface ConsultSelectionDeps {
   readonly openHandoff: (focus: string, target?: ConsultNewSessionModelTarget) => void
   readonly sessions?: ClientSessionsService
   readonly workspaces?: ClientWorkspacesService
+  /** `uiWorkspace`: creates the successor session and shows it. */
+  readonly navigation?: ClientWorkspaceNavigation
   readonly modelDirectories?: ClientModelDirectoryService
   readonly notify?: (message: string) => void
 }
@@ -596,7 +613,7 @@ async function selectNewSessionModel(
       catalog: modelCatalogRoutes(directory),
       current: directory.current,
     })
-    if (decision.kind === 'switch') await face.select(decision.selection)
+    if (decision.kind === 'switch') await selectModel(face, decision.selection)
   } catch (error) {
     deps.notify?.(`${messagePrefix}${errorMessage(error)}`)
   }
@@ -619,7 +636,7 @@ async function selectClearCandidate(
   target: ConsultNewSessionModelTarget | undefined,
 ): Promise<boolean> {
   const sessionId = context?.sessionId
-  if (sessionId === undefined || deps.sessions === undefined || deps.workspaces === undefined) {
+  if (sessionId === undefined || deps.navigation === undefined || deps.workspaces === undefined) {
     deps.notify?.('创建新会话能力不可用，已只填入本会话输入框')
     return fillCurrentSession(deps, input)
   }
@@ -636,14 +653,14 @@ async function selectClearCandidate(
 
   let successor: string
   try {
-    successor = await deps.workspaces.connectWorkspace(workspaceId)
+    successor = await deps.navigation.connectWorkspace(workspaceId)
   } catch (error) {
     deps.notify?.(`创建新会话失败：${errorMessage(error)}，已只填入本会话输入框`)
     return fillCurrentSession(deps, input)
   }
 
   await selectNewSessionModel(deps, successor, target, '选择新会话模型失败：')
-  deps.sessions.open(successor)
+  deps.navigation.openSession(successor)
   if (!deps.appendToDraft(input, successor)) return false
   deps.closeConsult()
   deps.focusComposer()
@@ -685,7 +702,7 @@ async function prepareCandidateInput(
   if (candidate.move === 'subagent') return subagentInput(candidate.input, decision.route)
   if (decision.kind === 'switch') {
     try {
-      await face.select(decision.selection)
+      await selectModel(face, decision.selection)
     } catch (error) {
       deps.notify?.(`切换模型失败：${errorMessage(error)}`)
     }

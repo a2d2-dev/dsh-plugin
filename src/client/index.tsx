@@ -20,11 +20,15 @@ import { createElement } from 'react'
 import { A2d2ConfigSection, loadModelRouteCatalog } from './config-page.tsx'
 import { IconA2d2AgentsOutline16 } from './icons.tsx'
 import { HandoffOrb } from './orb.tsx'
+import type { OrbChatFacts } from './orb.tsx'
 import { A2d2Panel } from './panel.tsx'
 import type { A2d2ClientContext, ClientSidebarService } from './context.ts'
 
 /** Services this bundle needs before it can mount anything. */
-export const inject = ['slots', 'sessions']
+// `remote.session` is guarded by cordis: reading it from a fiber that did not
+// inject it throws "cannot get property … without inject" (title, route and
+// model-catalog reads all go through it).
+export const inject = ['slots', 'sessions', 'remote', 'remote.session']
 
 /** The sidebar tab this bundle contributes, in the fields the sidebar's `+` menu reads. */
 const A2D2_PANEL_TAB = {
@@ -59,7 +63,12 @@ export function apply(ctx: A2d2ClientContext): void {
     id: 'a2d2-handoff-orb',
     order: 50,
   }, function OrbEntry(props): ReturnType<typeof createElement> | null {
-    return createElement(HandoffOrb, { ctx, sessionId: props.sessionId })
+    // ui-chat merges `useChat` into session-scoped slots; the Chat store, not the
+    // session snapshot, carries a turn's running calls and timings in DSH 0.2.
+    // Fixed per mount, so the hook call order never changes.
+    const { useChat } = props as { useChat?: (select: (chat: { readonly legacy: OrbChatFacts }) => OrbChatFacts) => OrbChatFacts }
+    const chat = useChat?.(snapshot => snapshot.legacy)
+    return createElement(HandoffOrb, { ctx, sessionId: props.sessionId, ...(chat === undefined ? {} : { chat }) })
   })), 'a2d2 handoff orb')
 
   ctx.effect(() => ctx.slots.inject('settings.section', () => ctx.slots.register({
@@ -68,10 +77,10 @@ export function apply(ctx: A2d2ClientContext): void {
     order: 60,
     label: () => 'A2D2 配置',
     inject: () => {
-      const connection = ctx.get('connection') as { api?: Parameters<typeof loadModelRouteCatalog>[0] } | undefined
+      const remote = ctx.get('remote') as Parameters<typeof loadModelRouteCatalog>[0] | undefined
       return {
         fetch: globalThis.fetch.bind(globalThis),
-        loadModelRoutes: () => loadModelRouteCatalog(connection?.api),
+        loadModelRoutes: () => loadModelRouteCatalog(remote),
       }
     },
   }, A2d2ConfigSection)), 'a2d2 config settings section')

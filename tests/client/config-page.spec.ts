@@ -73,20 +73,18 @@ async function bench() {
   await ctx.plugin(StubSlots).await()
   ctx.provide('sessions', {} as never)
   const models = vi.fn(async () => ({
-    result: {
-      ok: true as const,
-      value: {
-        groups: [
-          { id: 'codex', name: 'Codex', models: [{ id: 'gpt-6', name: 'GPT-6' }] },
-          { id: 'claude-bray', name: 'Claude Bray', models: [{ id: 'claude-fable-5-1', name: 'Fable 5.1' }] },
-        ],
-        failures: [],
-      },
+    ok: true as const,
+    value: {
+      groups: [
+        { id: 'codex', name: 'Codex', models: [{ id: 'gpt-6', name: 'GPT-6' }] },
+        { id: 'claude-bray', name: 'Claude Bray', models: [{ id: 'claude-fable-5-1', name: 'Fable 5.1' }] },
+      ],
+      failures: [],
     },
   }))
-  ctx.provide('connection', {
-    api: { llm: { models } },
-  } as never)
+  const session = { modelCatalog: models }
+  ctx.provide('remote', { session } as never)
+  ctx.provide('remote.session', session as never)
   return { ctx, slots: ctx.get('slots') as unknown as StubSlots, models }
 }
 
@@ -102,7 +100,7 @@ function declareSettings(slots: StubSlots): () => void {
 
 describe('A2D2 config client registration', () => {
   it('keeps the existing client dependencies and registers the settings section lazily', async () => {
-    expect(inject).toEqual(['slots', 'sessions'])
+    expect(inject).toEqual(['slots', 'sessions', 'remote', 'remote.session'])
     const b = await bench()
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     expect(b.slots.entries('settings.section')).toHaveLength(0)
@@ -122,23 +120,29 @@ describe('A2D2 config client registration', () => {
       'codex/gpt-6',
       'claude-bray/claude-fable-5-1',
     ])
-    expect(b.models).toHaveBeenCalledWith({})
+    expect(b.models).toHaveBeenCalledOnce()
   })
 
   it('turns the DSH host model catalog into provider/model routes', async () => {
     await expect(loadModelRouteCatalog({
-      llm: {
-        models: async () => ({
-          result: {
-            ok: true as const,
-            value: {
-              groups: [{ id: 'provider', name: 'Provider', models: [{ id: 'model-a', name: 'A' }, { id: 'model-b', name: 'B' }] }],
-              failures: [{ id: 'broken', name: 'Broken', message: 'down' }],
-            },
+      session: {
+        modelCatalog: async () => ({
+          ok: true as const,
+          value: {
+            groups: [{ id: 'provider', name: 'Provider', models: [{ id: 'model-a', name: 'A' }, { id: 'model-b', name: 'B' }] }],
+            failures: [{ id: 'broken', name: 'Broken', message: 'down' }],
           },
         }),
       },
     })).resolves.toEqual(['provider/model-a', 'provider/model-b'])
+  })
+
+  it('fails loudly when the host refuses the model catalog', async () => {
+    await expect(loadModelRouteCatalog({
+      session: {
+        modelCatalog: async () => ({ ok: false as const, error: { message: 'catalog unavailable' } }),
+      },
+    })).rejects.toThrow('catalog unavailable')
   })
 })
 

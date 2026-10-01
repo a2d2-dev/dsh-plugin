@@ -17,8 +17,8 @@
   bottom: 108px;
   z-index: 2147483000;
   box-sizing: border-box;
-  width: 64px;
-  height: 64px;
+  width: var(--a2d2-orb-size, 64px);
+  height: var(--a2d2-orb-size, 64px);
   padding: 0;
   overflow: hidden;
   display: block;
@@ -30,9 +30,16 @@
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   font-variant-numeric: tabular-nums;
   line-height: 1.05;
-  cursor: pointer;
+  /* The circle is dragged, so it must not scroll the page or select text under
+     the pointer; the grab cursor is the affordance that it can be moved. */
+  cursor: grab;
+  touch-action: none;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
   transition: transform 120ms ease, border-color 160ms ease;
+}
+
+.root:active {
+  cursor: grabbing;
 }
 
 .root:hover {
@@ -100,31 +107,73 @@
 }
 
 /*
- * The fixed anchor that positions the orb and its hover affordances together.
- * The orb itself is no longer `position: fixed`; this wrapper is, and the orb,
- * the hover action button, and the confirm card lay out relative to it, so the
- * card cannot drift away from the circle when the details panel resizes.
+ * The fixed box the indicator is placed in: the circle's own footprint, at the
+ * point the drag left it (or the corner the shell's measurements derive). The
+ * card and the hover action are absolutely positioned against it, so they follow
+ * the circle wherever it is dropped — its card off the side of the viewport
+ * would be a worse surface than no drag at all, which is what the `left` the
+ * model computes and the `--a2d2-card-max` height cap are for.
+ *
+ * The geometry the placement model clamps against arrives as custom properties
+ * from that model: the sheet draws what the arithmetic measured.
  */
 .anchor {
   position: fixed;
-  right: 16px;
-  bottom: 108px;
   z-index: 2147483000;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
+  box-sizing: border-box;
+  width: var(--a2d2-orb-size, 64px);
+  height: var(--a2d2-orb-size, 64px);
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  transition: left 160ms ease, top 160ms ease;
+}
+
+/* While dragging, the transition would lag the pointer and the hover lift would
+   fight the gesture. */
+.anchor.dragging {
+  transition: none;
+  user-select: none;
+}
+
+.anchor.dragging .root {
+  transform: none;
+  transition: none;
+  border-color: rgba(255, 255, 255, 0.85);
 }
 
 /*
- * Inside the anchor the orb is placed by the flex column instead of the
- * viewport, but it must stay a POSITIONED box: `.water` and `.readout` are
- * absolutely positioned against it, so `static` would let them escape the
- * circle and resolve their offsets against the anchor instead — which renders
- * the water as a full-width band and the readout over the card. `relative`
- * keeps the circle as their containing block while the anchor owns the fixing.
+ * The card and the hover action, right-aligned to the circle, opening above it
+ * or below it depending on which side has room.
+ *
+ * The box reaches the circle's own box and the visual gap comes from padding,
+ * not from an offset: a strip that belongs to neither box is a strip the pointer
+ * crosses on the way to the hover action, and crossing it fires the anchor's
+ * `mouseleave` and unmounts the very button being reached for.
  */
+.stack {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--a2d2-stack-gap, 8px);
+  width: var(--a2d2-card-width, 288px);
+}
+
+.stackAbove {
+  bottom: 100%;
+  padding-bottom: var(--a2d2-stack-gap, 8px);
+}
+
+.stackBelow {
+  top: 100%;
+  padding-top: var(--a2d2-stack-gap, 8px);
+}
+
+/* Inside the anchor the orb is placed by this box instead of the viewport, but it
+   must stay a POSITIONED box: `.water` and `.readout` are absolutely positioned
+   against it, so `static` would let them escape the circle and resolve their
+   offsets against the anchor instead — which renders the water as a full-width
+   band and the readout over the card. `relative` keeps the circle as their
+   containing block while the anchor owns the fixing. */
 .anchor .root {
   position: relative;
   right: auto;
@@ -173,8 +222,24 @@
  */
 .card {
   box-sizing: border-box;
-  width: 288px;
-  padding: 14px;
+  width: var(--a2d2-card-width, 288px);
+  /* A viewport too narrow for the card still keeps it on screen, at whatever
+     width is left; the placement model's clamp handles the usual case. */
+  max-width: calc(100vw - 24px);
+  /*
+   * The card hangs beside the circle and, when it opens above it, grows upward
+   * from a fixed point: a long one (a highway with many stations) would otherwise
+   * run past the top of the viewport, where its title and status block are
+   * unreachable rather than merely scrolled away. The cap is the room the
+   * placement model measured on the side the card opened, so the card scrolls
+   * inside itself instead; the fallback covers a render before that arrives.
+   */
+  max-height: var(--a2d2-card-max, calc(100vh - 200px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* No bottom padding: the pinned action block owns that inset, so no strip of
+     scrolled-through content shows beside it. */
+  padding: 14px 14px 0;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 12px;
   background: #1b2430;
@@ -236,6 +301,12 @@
 .cardButton:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+/* The reset sits on the card's own row, at the opposite end from its actions, so
+   a circle that was dragged somewhere inconvenient is one click from its corner. */
+.cardReset {
+  margin-right: auto;
 }
 
 .cancel {
@@ -461,6 +532,34 @@
   border-color: #8dc0ff;
   background: #17263a;
   outline: none;
+}
+
+/*
+ * The moves and the controls, pinned to the card's bottom edge.
+ *
+ * The card is capped by the room beside the circle, and in a short window the
+ * status and the highway map alone can exceed that cap — so without this the
+ * chips, 其他走法 and 关闭 would all sit below the fold, which is where the hand
+ * expects the buttons to be. The reference material scrolls under an opaque
+ * block instead. When the block itself is taller than the card (a card opened
+ * near a viewport edge, or 其他走法 expanded) it stops sticking and simply
+ * scrolls, so nothing becomes unreachable.
+ */
+.cardActions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* Bleeds into the card's own padding so nothing shows through beside it; the
+     card's overflow clips the bleed to its rounded corners. The rule and the
+     shadow are what make a half-scrolled row above read as "more above this"
+     rather than as a clipped one. */
+  margin: 0 -14px;
+  padding: 10px 14px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  background: #1b2430;
+  box-shadow: 0 -10px 14px rgba(0, 0, 0, 0.32);
 }
 
 .otherMoves {

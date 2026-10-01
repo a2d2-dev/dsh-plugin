@@ -2,7 +2,7 @@
  * Host-only next-step consultation over a live session and its A2D2 ledger.
  *
  * The model call is deliberately detached from the session log: this module
- * reads `session.events` and `session.surface`, calls the injected LLM stream,
+ * reads `session.surface` and the events behind it, calls the injected LLM stream,
  * and never appends an event. The resulting candidates enter history only if a
  * person later submits one through the ordinary composer.
  *
@@ -15,7 +15,6 @@ import { join } from 'node:path'
 import {
   BlockAssembler,
   createUserMessage,
-  deepFreeze,
 } from '@deepseek-ai/dsh-llm'
 import type {
   FinishReason,
@@ -24,9 +23,12 @@ import type {
   StreamChunk,
 } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, SessionHeader, SessionId, SessionSurface } from '@deepseek-ai/dsh-session'
+import type { SessionSeq } from '@deepseek-ai/dsh-session/types'
+import { deepFreeze } from '@deepseek-ai/dsh-util-values'
 import { contextOccupancy } from './context-occupancy.ts'
 import type { ContextPressureProjection } from './context-occupancy.ts'
 import { parseSessionId } from './handoff.ts'
+import { A2D2_MESSAGE_SOURCE } from './message-source.ts'
 import {
   HIGHWAY_PROMPT_CATALOG,
   isClosedHighwayStation,
@@ -190,8 +192,13 @@ export interface ConsultMaterial {
 export interface ConsultSession {
   readonly id: SessionId
   readonly header: SessionHeader
-  readonly events: readonly SessionEvent[]
   readonly surface: Pick<SessionSurface, 'nodes'>
+  /**
+   * The event at one surface position. DSH 0.2 deprecates synchronous history
+   * reads but ships no paged replacement yet; this reads only the surface
+   * nodes, and moves to the async reader once DSH provides one.
+   */
+  eventAt(seq: SessionSeq): SessionEvent | undefined
 }
 
 /** Injectable host capabilities used by the HTTP route. */
@@ -208,8 +215,8 @@ export interface ConsultDependencies {
   readonly contextFacts?: (session: ConsultSession) => ConsultContextFacts | undefined
   readonly stream: (options: GenerateOptions) => AsyncIterable<StreamChunk>
   readonly collectMaterial?: (
-    events: readonly SessionEvent[],
-    surfaceNodes: readonly number[],
+    eventAt: (seq: SessionSeq) => SessionEvent | undefined,
+    surfaceNodes: readonly SessionSeq[],
     tasks: readonly Task[],
   ) => ConsultMaterial
   readonly buildPrompt?: (material: ConsultMaterial, skillSource: SkillSource, orchestrator?: OrchestratorSkill) => string
@@ -277,14 +284,13 @@ export function currentConsultRoute(events: readonly SessionEvent[]): ConsultRou
  * are omitted because they are not conversational excerpts.
  */
 export function collectConsultMaterial(
-  events: readonly SessionEvent[],
-  surfaceNodes: readonly number[],
+  eventAt: (seq: SessionSeq) => SessionEvent | undefined,
+  surfaceNodes: readonly SessionSeq[],
   tasks: readonly Task[],
 ): ConsultMaterial {
   const messages: ConsultMessageExcerpt[] = []
-  const eventsBySeq = new Map(events.map(event => [event.seq, event]))
   for (const seq of surfaceNodes) {
-    const event = eventsBySeq.get(seq)
+    const event = eventAt(seq)
     if (event?.type !== 'user/message' && event?.type !== 'assistant/message') continue
     const content = event.type === 'user/message' ? event.data.content : event.data.message.content
     const text = content
@@ -679,7 +685,7 @@ export async function generateConsultOutput(options: {
 }): Promise<ConsultOutput> {
   const messages: Message[] = [createUserMessage({
     content: [{ type: 'text', text: options.prompt }],
-    source: { kind: 'plugin', plugin: 'dsh-a2d2' },
+    source: A2D2_MESSAGE_SOURCE,
   })]
   const generateOptions: GenerateOptions = deepFreeze({
     provider: options.route.provider,
@@ -925,7 +931,7 @@ export function createConsultHandler(
       const preconditions = await (dependencies.checkPreconditions ?? checkProjectPreconditions)(projectRoot)
       const collectMaterial = dependencies.collectMaterial ?? collectConsultMaterial
       const buildPrompt = dependencies.buildPrompt ?? buildConsultPrompt
-      const material = collectMaterial(session.events, session.surface.nodes, tasks)
+      const material = collectMaterial(seq => session.eventAt(seq), session.surface.nodes, tasks)
       const context = dependencies.contextFacts?.(session)
       const materialWithFacts = {
         ...material,

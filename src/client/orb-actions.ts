@@ -20,10 +20,12 @@ import type {
   ClientCommandResult,
   ClientSessionFace,
   ClientSessionsService,
+  ClientWorkspaceNavigation,
   ClientWorkspacesService,
 } from './context.ts'
 import {
   modelCatalogRoutes,
+  selectModel,
   stationRouteDecision,
 } from './consult-actions.ts'
 import type {
@@ -53,10 +55,12 @@ export const ORB_TURN_TIMEOUT_MS = 600_000
 
 /** The capabilities the orchestration needs, injected so tests supply doubles. */
 export interface OrbHandoffDeps {
-  /** The sessions service, for driving both sessions and switching focus. */
+  /** The sessions service, for driving both sessions. */
   readonly sessions: ClientSessionsService
-  /** The workspaces service, for finding the workspace and creating the successor. */
+  /** The workspaces service, for finding the session's workspace. */
   readonly workspaces: ClientWorkspacesService
+  /** `uiWorkspace`, for creating the successor and switching focus to it. */
+  readonly navigation: ClientWorkspaceNavigation
   /** Milliseconds to wait for the writing turn to start. */
   readonly startTimeoutMs?: number
   /** Milliseconds to wait for the writing turn to end once it started. */
@@ -195,21 +199,37 @@ export async function runOrbHandoff(
 
   let successor: string
   try {
-    successor = await deps.workspaces.connectWorkspace(workspaceId)
+    successor = await deps.navigation.connectWorkspace(workspaceId)
   } catch (error: unknown) {
     return { ok: false, stage: 'create', error: messageOf(error) }
   }
 
-  const binding = deps.sessions.binding(successor)
-  if (binding === undefined) {
-    return { ok: false, stage: 'create', error: 'the successor session was created but is not yet addressable' }
+  // A binding exists only while something retains the session: hold the
+  // successor for the rest of the handoff, and fail at create — before focus
+  // moves — when it cannot be opened.
+  try {
+    return await deps.sessions.using(
+      successor,
+      { source: 'a2d2' },
+      ({ binding }) => takeOnSuccessor(deps, binding, sessionId, successor),
+    )
+  } catch (error: unknown) {
+    return { ok: false, stage: 'create', error: messageOf(error) }
   }
+}
 
+/** Select the model, focus, carry the title over, and run the take on the opened successor. */
+async function takeOnSuccessor(
+  deps: OrbHandoffDeps,
+  binding: { readonly session: ClientSessionFace },
+  sessionId: string,
+  successor: string,
+): Promise<OrbHandoffOutcome> {
   await selectSuccessorModel(deps, successor)
 
   // Focus the successor before it runs the take, so the user watches the
   // handoff land in the session they were switched to.
-  deps.sessions.open(successor)
+  deps.navigation.openSession(successor)
 
   // Carry the handing-off session's title to the successor so a handoff chain
   // reads as one named piece of work. Non-fatal: a session with no title, or a
@@ -258,7 +278,7 @@ async function selectSuccessorModel(deps: OrbHandoffDeps, successor: string): Pr
       catalog: modelCatalogRoutes(directory),
       current: directory.current,
     })
-    if (decision.kind === 'switch') await face.select(decision.selection)
+    if (decision.kind === 'switch') await selectModel(face, decision.selection)
   } catch (error) {
     deps.notify?.(`选择后继会话模型失败：${messageOf(error)}`)
   }
