@@ -8,7 +8,7 @@ This repository holds the **A²D² DeepSeek Harness plugin**: the components tha
 
 What the plugin gives DSH today:
 
-- **Task aggregation** — a task groups the sessions belonging to one piece of work and records the handoff edges between them, so related sessions keep a relationship a person can read, review, and commit. The data lives in project-local documents, and no session's durable format changes to carry it. A task bound to a task issue also records its main session — the one session executing it — which a session sets with the `bind_main_session` tool.
+- **Task aggregation** — a task groups the sessions belonging to one piece of work and records the handoff edges between them, so related sessions keep a relationship a person can read, review, and commit. The data lives in project-local documents, and no session's durable format changes to carry it. A task bound to a task issue also records its main session — the one session executing it — which a session sets with the `bind_main_session` tool. A main session can dispatch continuable subagents with `dispatch_subagent`, using the station model table and optional project-local special Agent personas.
 - **Session handoff** — `/handoff` moves work from a long, expensive session to a fresh one without losing the thread: the handing-off session writes bounded continuation content, and the successor continues from it.
 - **A floating indicator** — an at-a-glance orb by the composer that tracks context length and cost, and warns when a session approaches the smart zone so the next phase boundary can choose its outcome.
 - **A²D² panel** — a better-sidebar tab for the open session's project tasks, member handoff tree, and main-session subagent route tree.
@@ -19,7 +19,7 @@ The rest of this document is the plugin's behavior contract and known limits, ke
 
 ## Plugin (namespace: `a2d2`)
 
-The package contributes three mount rows. `ctx.a2d2` is the task store and declares no service, so it loads in any profile; the command row declares `commands` and `a2d2`, so only a profile that composes both gets `/handoff`; the tools row declares `tools` and `a2d2`, so only a profile that composes both gets the model tools (today `bind_main_session`). Cordis refuses to load a plugin whose declared services are absent, which is why the rows are split rather than registered conditionally from one row. The floating orb needs no row of its own: it drives that same command through the session it already sits on.
+The package contributes three mount rows. `ctx.a2d2` is the task store and declares no service, so it loads in any profile; the command row declares `commands` and `a2d2`, so only a profile that composes both gets `/handoff`; the tools row declares `tools` and `a2d2`, so only a profile that composes both gets the model tools (`bind_main_session` and `dispatch_subagent`). The dispatch tool looks up `subagents` only when it runs, so profiles without the subagent service still load the tools row and keep `bind_main_session` available. Cordis refuses to load a plugin whose declared services are absent, which is why the rows are split rather than registered conditionally from one row. The floating orb needs no row of its own: it drives that same command through the session it already sits on.
 
 ```yaml
 - id: a2d2
@@ -108,6 +108,14 @@ Writes are atomic and serialized through the document's own file lock. `create` 
 - A session is the main session of at most one task issue, so "which task does this session execute" has one answer.
 - Binding again with the same arguments returns the recorded task unchanged; naming a different parent is refused.
 - A task bound to no task issue that already uses the `issue-<number>` id is refused rather than taken over, and so is a session that records no working directory.
+
+`dispatch_subagent` dispatches a continuable child subagent from the calling main session. Its parameters are `station`, optional `agent` (`default` or omitted means the default Agent), `issue`, and `prompt`; the parent Agent, session id, cwd, and cancellation signal come from the tool execution context. The tool only hands these to `ctx.a2d2.dispatchSubagent`, which owns the rules:
+
+- Only a task issue's current main session can dispatch; ordinary sessions are refused.
+- The child uses DSH's fresh `spawn` continuable provider.
+- The model is the station model table's first `provider/model` candidate that is present in DSH's host model catalog, read at dispatch time so a settings change affects the next call.
+- A special Agent named `agent` is read from `<projectRoot>/.dsh/a2d2/agents/<agent>.md` and passed as the child's persona. A missing or empty special Agent is an error and never falls back to the default Agent.
+- The result returns the child session id, the actual `provider/model`, and the Agent used.
 
 ## `/handoff`
 
@@ -236,6 +244,20 @@ The definition is about 685 characters of JSON, roughly 170 tokens by the four-c
 #### KV Cache effect
 
 The tool list is part of the request prefix, so composing the tools row changes that prefix once. The definition carries no per-session or per-turn content, so later requests reuse the cache as before.
+
+### `dispatch_subagent`
+
+#### What the model sees
+
+One additional tool definition in every request of an agent whose profile composes the tools row. A call result names the child session id, actual `provider/model`, and Agent (`default` or the special Agent name). Refusals, such as a non-main session caller, no catalog-present station model, or a missing/empty special Agent, return as tool errors. The special Agent persona is sent only to the child subagent; it is not injected into the parent session.
+
+#### Token effect
+
+The definition is about 950 characters of JSON, roughly 240 tokens by the four-characters-per-token estimate, on every request in a tools-row profile. Each call adds its arguments and compact result to the parent session history; the child receives the supplied `prompt` as its first user message.
+
+#### KV Cache effect
+
+Adding the tool changes the tool-list prefix once for profiles that compose the tools row. Station model settings and special Agent file contents are read when the tool runs, not embedded in the parent request prefix, so changing them does not invalidate the parent's cache by itself.
 
 ### `/handoff`
 
