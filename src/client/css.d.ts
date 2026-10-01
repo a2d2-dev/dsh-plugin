@@ -97,6 +97,7 @@ declare module '*.module.css' {
     readonly issue: string
     readonly issueNumber: string
     readonly kind: string
+    readonly handoff: string
     readonly issueLabel: string
     readonly goal: string
     readonly members: string

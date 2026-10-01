@@ -159,6 +159,23 @@ describe('panel task view model', () => {
     ])
   })
 
+  it('marks a task issue that is handing off', () => {
+    const task = payload().tasks[0]!
+    const rows = panelTaskRows(
+      payload({
+        tasks: [{ ...task, id: 'issue-45', issue: { number: 45, parent: 41, mainSession: 'session-aaaa1111', handoff: { source: 'session-aaaa1111' } } }],
+      }),
+      { 'session-aaaa1111': 'CEO of #45' },
+      id => id === 'session-aaaa1111',
+      'session-bbbb2222',
+    )
+
+    expect(rows[0]?.issue?.handoff).toEqual({
+      label: '交接中',
+      source: expect.objectContaining({ sessionId: 'session-aaaa1111', label: 'CEO of #45', openable: true }),
+    })
+  })
+
   it('prefers list titles, then cold-read titles, before blank placeholders', () => {
     const rows = panelTaskRows(
       payload(),

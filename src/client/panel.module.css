@@ -168,6 +168,14 @@
   background: rgba(128, 128, 128, 0.14);
 }
 
+.handoff {
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  border-radius: 5px;
+  color: var(--dsw-alias-state-warn-primary, #d99100);
+  background: rgba(217, 145, 0, 0.14);
+}
+
 .issueLabel {
   flex: 0 0 auto;
 }

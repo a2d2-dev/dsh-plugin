@@ -87,6 +87,9 @@ function IssueLine({ issue, ctx }: { readonly issue: PanelTaskIssueRow; readonly
       { className: css.kind },
       issue.parent === undefined ? issue.kindLabel : `${issue.kindLabel} · 父 #${String(issue.parent)}`,
     ),
+    issue.handoff === undefined
+      ? null
+      : createElement('span', { className: css.handoff, title: `源主会话：${issue.handoff.source.label}` }, issue.handoff.label),
     createElement('span', { className: css.issueLabel }, '主会话'),
     createElement(SessionButton, { row: issue.mainSession, ctx }),
     issue.mainSession.current ? createElement('span', { className: css.current }, '当前') : null,
