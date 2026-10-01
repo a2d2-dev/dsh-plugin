@@ -8,11 +8,17 @@
 
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
-import { TaskId } from './brand.ts'
-import type { Task, TaskMember, TaskState } from './types.ts'
+import { TaskId, taskIdForIssue } from './brand.ts'
+import type { Task, TaskIssue, TaskMember, TaskState } from './types.ts'
 
-/** The only document schema version this build reads and writes. */
-export const TASK_DOCUMENT_VERSION = 1
+/** The document schema version this build writes. */
+export const TASK_DOCUMENT_VERSION = 2
+
+/**
+ * The previous schema version, still read: a version 1 document predates task
+ * issues, so it reads as a task bound to none and is written back as version 2.
+ */
+export const LEGACY_TASK_DOCUMENT_VERSION = 1
 
 /** Expected failure classes while reading a task document. */
 export type TaskDocumentErrorCode = 'malformed' | 'unsupported-version' | 'id-mismatch'
@@ -65,6 +71,46 @@ function optionalString(record: Record<string, unknown>, field: string): string 
   return value
 }
 
+function positiveInteger(value: unknown, field: string): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
+    throw malformed(`${field} must be a positive integer`)
+  }
+  return value
+}
+
+/**
+ * Read the task issue binding of a version 2 document.
+ *
+ * The id and the member check keep the binding consistent with the rest of the
+ * document: a task issue's task is named after its number, and its main session
+ * executes the task, so it is one of the task's sessions.
+ */
+function parseIssue(value: unknown, id: TaskId, members: readonly TaskMember[]): TaskIssue {
+  const record = asRecord(value, 'issue')
+  const number = positiveInteger(record['number'], 'issue.number')
+  const expectedId = taskIdForIssue(number)
+  if (id !== expectedId) {
+    throw new TaskDocumentError(
+      'id-mismatch',
+      `document "${id}" is bound to task issue #${number}; task issue #${number} is identified as "${expectedId}"`,
+    )
+  }
+  const parent = record['parent'] === undefined ? undefined : positiveInteger(record['parent'], 'issue.parent')
+  const mainSession = SessionId(requiredString(record, 'mainSession'))
+  if (!members.some(member => member.sessionId === mainSession)) {
+    throw malformed(`document "${id}": main session "${mainSession}" is not one of its sessions`)
+  }
+  const handoff = record['handoff'] === undefined
+    ? undefined
+    : { source: SessionId(requiredString(asRecord(record['handoff'], 'issue.handoff'), 'source')) }
+  return {
+    number,
+    ...(parent === undefined ? {} : { parent }),
+    mainSession,
+    ...(handoff === undefined ? {} : { handoff }),
+  }
+}
+
 function parseMember(value: unknown, index: number): TaskMember {
   const record = asRecord(value, `sessions[${index}]`)
   const sessionId = SessionId(requiredString(record, 'id'))
@@ -94,10 +140,10 @@ export function parseTaskDocument(text: string, id: TaskId): Task {
   const record = asRecord(raw, 'document')
 
   const version = record['version']
-  if (version !== TASK_DOCUMENT_VERSION) {
+  if (version !== TASK_DOCUMENT_VERSION && version !== LEGACY_TASK_DOCUMENT_VERSION) {
     throw new TaskDocumentError(
       'unsupported-version',
-      `document "${id}" declares version ${String(version)}; this build reads version ${TASK_DOCUMENT_VERSION}`,
+      `document "${id}" declares version ${String(version)}; this build reads version ${TASK_DOCUMENT_VERSION} or ${LEGACY_TASK_DOCUMENT_VERSION}`,
     )
   }
 
@@ -120,9 +166,15 @@ export function parseTaskDocument(text: string, id: TaskId): Task {
   }
   const members = ((sessions ?? []) as unknown[]).map(parseMember)
 
+  // Version 1 predates task issues: such a document is a task bound to none.
+  const issue = version === LEGACY_TASK_DOCUMENT_VERSION || record['issue'] === undefined
+    ? undefined
+    : parseIssue(record['issue'], id, members)
+
   const goal = optionalString(record, 'goal')
   return {
     id,
+    ...(issue === undefined ? {} : { issue }),
     name: requiredString(record, 'name'),
     ...(goal === undefined ? {} : { goal }),
     state: state as TaskState,
@@ -140,8 +192,17 @@ export function renderTaskDocument(task: Task): string {
   const document: Record<string, unknown> = {
     version: TASK_DOCUMENT_VERSION,
     id: task.id,
-    name: task.name,
   }
+  if (task.issue !== undefined) {
+    const { number, parent, mainSession, handoff } = task.issue
+    document['issue'] = {
+      number,
+      ...(parent === undefined ? {} : { parent }),
+      mainSession,
+      ...(handoff === undefined ? {} : { handoff: { source: handoff.source } }),
+    }
+  }
+  document['name'] = task.name
   if (task.goal !== undefined) document['goal'] = task.goal
   document['state'] = task.state
   document['createdAt'] = task.createdAt

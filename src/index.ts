@@ -56,7 +56,7 @@ import {
 } from './store.ts'
 import type { CreateTaskRequest, Task } from './types.ts'
 
-export { TaskId } from './brand.ts'
+export { TaskId, taskIdForIssue } from './brand.ts'
 export type { TaskId as TaskIdType } from './brand.ts'
 export {
   CONFIG_ROUTE_PATH,
@@ -168,6 +168,7 @@ export type {
   PanelTask,
 } from './panel.ts'
 export {
+  LEGACY_TASK_DOCUMENT_VERSION,
   TASK_DOCUMENT_VERSION,
   TaskDocumentError,
   parseTaskDocument,
@@ -175,7 +176,7 @@ export {
   taskIdFromFilename,
 } from './document.ts'
 export type { TaskDocumentErrorCode } from './document.ts'
-export type { CreateTaskRequest, Task, TaskMember, TaskState } from './types.ts'
+export type { CreateTaskRequest, Task, TaskIssue, TaskIssueHandoff, TaskMember, TaskState } from './types.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {

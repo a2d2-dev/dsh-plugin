@@ -27,3 +27,16 @@ export function TaskId(value: string): TaskId {
   }
   return value as TaskId
 }
+
+/**
+ * The id of the task bound to a task issue: one task issue has at most one task
+ * document, so its number is the task's identity.
+ * @param issue - the task issue number.
+ * @returns `issue-<number>`, a safe document filename stem.
+ */
+export function taskIdForIssue(issue: number): TaskId {
+  if (!Number.isSafeInteger(issue) || issue <= 0) {
+    throw new Error(`a2d2: task issue number must be a positive integer, received ${String(issue)}`)
+  }
+  return TaskId(`issue-${issue}`)
+}
