@@ -139,6 +139,26 @@ describe('panel route wiring', () => {
     })
   })
 
+  it('serves a bound task\'s issue number, parent, and main session, and an unbound task without them', async () => {
+    const root = await tempRoot()
+    const { server, sessions, service } = await mount()
+    sessions.add(sessionA, root)
+    const unbound = await service.create(root, { name: 'Older task' })
+    const bound = await service.bindMainSession({ cwd: root, issue: 45, parentIssue: 41, mainSession: sessionA, now: new Date() })
+
+    const captured = record()
+    await server.handler(PANEL_ROUTE_PATH)?.({
+      method: 'GET',
+      url: `${PANEL_ROUTE_PATH}?session=${sessionA}`,
+      headers: { host: '10.126.126.12:3710' },
+    }, captured.response)
+
+    const body = JSON.parse(captured.body ?? 'null') as { value: { tasks: Array<Record<string, unknown>> } }
+    expect(body.value.tasks.find(task => task.id === bound.id)?.issue)
+      .toEqual({ number: 45, parent: 41, mainSession: 'session-a' })
+    expect(body.value.tasks.find(task => task.id === unbound.id)).not.toHaveProperty('issue')
+  })
+
   it('rejects duplicate session query parameters', async () => {
     const root = await tempRoot()
     const cwd = join(root, 'src')

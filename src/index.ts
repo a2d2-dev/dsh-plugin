@@ -166,6 +166,7 @@ export type {
   PanelResponseWriter,
   PanelSession,
   PanelTask,
+  PanelTaskIssue,
 } from './panel.ts'
 export {
   LEGACY_TASK_DOCUMENT_VERSION,

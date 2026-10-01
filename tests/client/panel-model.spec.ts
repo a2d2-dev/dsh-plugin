@@ -96,6 +96,37 @@ describe('panel task view model', () => {
     })
   })
 
+  it('shows a task issue\'s number, its kind by parent, and its openable main session; an unbound task shows none', () => {
+    const task = payload().tasks[0]!
+    const rows = panelTaskRows(
+      payload({
+        tasks: [
+          { ...task, id: 'issue-41', issue: { number: 41, mainSession: 'session-aaaa1111' } },
+          { ...task, id: 'issue-45', issue: { number: 45, parent: 41, mainSession: 'session-bbbb2222' } },
+          task,
+        ],
+      }),
+      { 'session-aaaa1111': 'CEO of #41' },
+      id => id === 'session-aaaa1111',
+      'session-aaaa1111',
+    )
+
+    expect(rows[0]?.issue).toEqual({
+      number: 41,
+      kind: 'main',
+      kindLabel: '主任务',
+      mainSession: expect.objectContaining({ sessionId: 'session-aaaa1111', label: 'CEO of #41', openable: true, current: true }),
+    })
+    expect(rows[1]?.issue).toEqual({
+      number: 45,
+      parent: 41,
+      kind: 'sub',
+      kindLabel: '子任务',
+      mainSession: expect.objectContaining({ sessionId: 'session-bbbb2222', label: 'bbbb2222', openable: false, current: false }),
+    })
+    expect(rows[2]).not.toHaveProperty('issue')
+  })
+
   it('prefers list titles, then cold-read titles, before blank placeholders', () => {
     const rows = panelTaskRows(
       payload(),
@@ -386,5 +417,13 @@ describe('panel payload parsing', () => {
     expect(parsePanelPayload({ root: '/tmp/project' })).toBeUndefined()
     expect(parsePanelPayload({ ...payload(), tasks: [{ ...payload().tasks[0], state: 'running' }] })).toBeUndefined()
     expect(parsePanelPayload({ ...payload(), tasks: [{ ...payload().tasks[0], members: [{ handoffFrom: 'x' }] }] })).toBeUndefined()
+  })
+
+  it('accepts a task issue and rejects a malformed one', () => {
+    const task = payload().tasks[0]!
+    const bound = payload({ tasks: [{ ...task, issue: { number: 45, parent: 41, mainSession: 'session-aaaa1111' } }] })
+    expect(parsePanelPayload(bound)).toEqual(bound)
+    expect(parsePanelPayload({ ...payload(), tasks: [{ ...task, issue: { number: '45', mainSession: 'session-a' } }] })).toBeUndefined()
+    expect(parsePanelPayload({ ...payload(), tasks: [{ ...task, issue: { number: 45 } }] })).toBeUndefined()
   })
 })

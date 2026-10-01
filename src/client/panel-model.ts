@@ -8,7 +8,7 @@
  * @module @deepseek-ai/dsh-a2d2/client/panel-model
  */
 
-import type { PanelMember, PanelPayload, PanelTask } from '../panel-types.ts'
+import type { PanelMember, PanelPayload, PanelTask, PanelTaskIssue } from '../panel-types.ts'
 import { rootAncestor, type SubagentSessionSummary } from './subagent-model.ts'
 
 const STATE_LABELS: Readonly<Record<PanelTask['state'], string>> = {
@@ -87,9 +87,29 @@ export interface PanelMemberTreeNode {
   readonly children: readonly PanelMemberTreeNode[]
 }
 
+/** Whether a task issue is a main task (no parent) or a subtask. */
+export type PanelTaskKind = 'main' | 'sub'
+
+const KIND_LABELS: Readonly<Record<PanelTaskKind, string>> = {
+  main: '主任务',
+  sub: '子任务',
+}
+
+/** The task issue line of a bound task row. */
+export interface PanelTaskIssueRow {
+  readonly number: number
+  readonly parent?: number
+  readonly kind: PanelTaskKind
+  readonly kindLabel: string
+  /** The main session, labelled and openable the way member rows are. */
+  readonly mainSession: PanelMemberRow
+}
+
 /** One task row in the panel. */
 export interface PanelTaskRow {
   readonly id: string
+  /** Absent for a task bound to no task issue. */
+  readonly issue?: PanelTaskIssueRow
   readonly name: string
   readonly goal?: string
   readonly state: PanelTask['state']
@@ -305,6 +325,22 @@ function memberRow(
   }
 }
 
+function issueRow(
+  issue: PanelTaskIssue,
+  titles: Readonly<Record<string, PanelSessionTitle | string | undefined>>,
+  openable: (id: string) => boolean,
+  currentSessionId: string,
+): PanelTaskIssueRow {
+  const kind: PanelTaskKind = issue.parent === undefined ? 'main' : 'sub'
+  return {
+    number: issue.number,
+    ...(issue.parent === undefined ? {} : { parent: issue.parent }),
+    kind,
+    kindLabel: KIND_LABELS[kind],
+    mainSession: memberRow({ sessionId: issue.mainSession }, titles, openable, currentSessionId),
+  }
+}
+
 function taskRow(
   task: PanelTask,
   titles: Readonly<Record<string, PanelSessionTitle | string | undefined>>,
@@ -312,8 +348,10 @@ function taskRow(
   currentSessionId: string,
 ): PanelTaskRow {
   const members = task.members.map(member => memberRow(member, titles, openable, currentSessionId))
+  const issue = task.issue
   return {
     id: task.id,
+    ...(issue === undefined ? {} : { issue: issueRow(issue, titles, openable, currentSessionId) }),
     name: task.name,
     ...(task.goal === undefined ? {} : { goal: task.goal }),
     state: task.state,
@@ -448,10 +486,23 @@ function isPanelMember(value: unknown): value is PanelMember {
     && (member.handoffFrom === undefined || typeof member.handoffFrom === 'string')
 }
 
+function isIssueNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+}
+
+function isPanelTaskIssue(value: unknown): value is PanelTaskIssue {
+  if (typeof value !== 'object' || value === null) return false
+  const issue = value as Partial<PanelTaskIssue>
+  return isIssueNumber(issue.number)
+    && (issue.parent === undefined || isIssueNumber(issue.parent))
+    && typeof issue.mainSession === 'string'
+}
+
 function isPanelTask(value: unknown): value is PanelTask {
   if (typeof value !== 'object' || value === null) return false
   const task = value as Partial<PanelTask>
   return typeof task.id === 'string'
+    && (task.issue === undefined || isPanelTaskIssue(task.issue))
     && typeof task.name === 'string'
     && (task.goal === undefined || typeof task.goal === 'string')
     && (task.state === 'active' || task.state === 'paused' || task.state === 'done')

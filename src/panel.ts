@@ -16,7 +16,7 @@ import type { PanelErrorCode, PanelPayload, PanelResponse, PanelTask } from './p
 import type { Task } from './types.ts'
 
 export { PANEL_ROUTE_PATH } from './panel-types.ts'
-export type { PanelErrorCode, PanelMember, PanelPayload, PanelResponse, PanelTask } from './panel-types.ts'
+export type { PanelErrorCode, PanelMember, PanelPayload, PanelResponse, PanelTask, PanelTaskIssue } from './panel-types.ts'
 
 const JSON_HEADERS = {
   'cache-control': 'no-store',
@@ -52,8 +52,18 @@ export interface PanelResponseWriter {
 }
 
 function taskView(task: Task): PanelTask {
+  const issue = task.issue
   return {
     id: task.id,
+    ...(issue === undefined
+      ? {}
+      : {
+          issue: {
+            number: issue.number,
+            ...(issue.parent === undefined ? {} : { parent: issue.parent }),
+            mainSession: issue.mainSession,
+          },
+        }),
     name: task.name,
     ...(task.goal === undefined ? {} : { goal: task.goal }),
     state: task.state,

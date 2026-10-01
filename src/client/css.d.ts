@@ -92,6 +92,10 @@ declare module '*.module.css' {
     readonly stateActive: string
     readonly statePaused: string
     readonly stateDone: string
+    readonly issue: string
+    readonly issueNumber: string
+    readonly kind: string
+    readonly issueLabel: string
     readonly goal: string
     readonly members: string
     readonly memberNode: string
