@@ -78,7 +78,6 @@ export {
   generateConsultWithFallback,
   generateConsultOutput,
   isTrustedConsultRequest,
-  loadOrchestratorSkill,
   parseConsultOutput,
   statusOf,
 } from './consult.ts'
@@ -97,7 +96,6 @@ export type {
   ConsultRoute,
   ConsultSession,
   ConsultValue,
-  OrchestratorSkill,
 } from './consult.ts'
 export {
   CODING_MODEL_ROUTES,
@@ -541,12 +539,6 @@ export class A2d2Service extends Service {
         listTasks: cwd => this.store.list(cwd),
         projectRoot: cwd => resolveProjectRoot(cwd, this.projectMarkers),
         readAskMatt: () => readSkillSource('ask-matt', this.skillsRoot),
-        readOrchestrator: async () => {
-          const current = await readSkillSource('a2d2-orchestrator', this.skillsRoot)
-          return current.status === 'loaded'
-            ? current
-            : await readSkillSource('ceo-team', this.skillsRoot)
-        },
         getStationModels: () => this.stationModels,
         contextFacts: (session) => {
           const projections = getService<ProjectionReader>('sessionProjections')
