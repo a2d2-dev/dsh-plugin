@@ -66,6 +66,12 @@ describe('parseGitHubRemote', () => {
 })
 
 describe('WatchStore', () => {
+  it('creates its directory on first write', async () => {
+    const dir = join(await tempDir(), 'not', 'yet')
+    await new WatchStore(dir).add({ repo: 'a/b', pr: 1, session: 's1', last: null, since: 't' })
+    expect(await new WatchStore(dir).list()).toHaveLength(1)
+  })
+
   it('persists watches and what each session was told', async () => {
     const dir = await tempDir()
     const store = new WatchStore(dir)

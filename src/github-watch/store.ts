@@ -10,8 +10,8 @@
  * @module @deepseek-ai/dsh-a2d2/src/github-watch/store
  */
 
-import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { mkdir, readFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { isPrState } from './state.ts'
 import type { PrState } from './state.ts'
@@ -71,6 +71,8 @@ export class WatchStore {
   }
 
   private async mutate(change: (watches: Watch[]) => Watch[]): Promise<void> {
+    // The lock file sits beside the list, so its directory must exist first.
+    await mkdir(dirname(this.file), { recursive: true, mode: 0o700 })
     await this.serial(() => withFileLock(this.file, async () => {
       this.cache = undefined
       const next = change(await this.load())
