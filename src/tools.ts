@@ -15,6 +15,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
+import type { Station } from './index.ts'
 import type {} from './index.ts'
 
 /** Cordis plugin name of the tools half. */
@@ -25,6 +26,9 @@ export const inject = ['tools', 'a2d2']
 
 /** Name of the tool that binds the calling session as a task issue's main session. */
 export const BIND_MAIN_SESSION_TOOL = 'bind_main_session'
+
+/** Name of the tool that dispatches a continuable child subagent from a main session. */
+export const DISPATCH_SUBAGENT_TOOL = 'dispatch_subagent'
 
 /** The calling session's agent, which every A²D² tool acts for. */
 function callingAgent(exec: ToolRunContext): NonNullable<ToolRunContext['agent']> {
@@ -85,4 +89,44 @@ export function apply(ctx: Context): void {
     },
     presentCall: args => ({ card: 'generic', title: `Bind main session of #${args.issue}`, kind: 'other', rawInput: args }),
   })), 'a2d2 model tools registration')
+
+  ctx.effect(() => ctx.tools.register(defineTool({
+    name: DISPATCH_SUBAGENT_TOOL,
+    description: 'Dispatch a continuable child subagent from this task issue main session. '
+      + 'The model is selected from the station model table and the optional special Agent loads its persona from the project agents directory.',
+    parameters: {
+      station: { type: 'string', required: true, description: 'Matt highway station whose station model table chooses the child model.' },
+      agent: { type: 'string', description: 'Special Agent name; omit or set "default" to use the default Agent with no persona.' },
+      issue: { type: 'integer', required: true, description: 'Task issue number assigned to the child subagent.' },
+      prompt: { type: 'string', required: true, description: 'Prompt delivered to the child subagent as its initial user message.' },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          session: { type: 'string', required: true },
+          model: { type: 'string', required: true },
+          agent: { type: 'string', required: true },
+        },
+      },
+      render: (_args, value) => [{
+        type: 'text',
+        text: `Dispatched subagent ${value.session} with ${value.model} as ${value.agent}`,
+      }],
+    },
+    async execute(args, exec) {
+      const agent = callingAgent(exec)
+      return await ctx.a2d2.dispatchSubagent({
+        cwd: agent.session.header.cwd ?? '',
+        station: args.station as Station,
+        ...(args.agent === undefined || args.agent === 'default' ? {} : { agentName: args.agent }),
+        issue: args.issue,
+        prompt: args.prompt,
+        parent: agent,
+        signal: exec.signal,
+      })
+    },
+    presentCall: args => ({ card: 'generic', title: `Dispatch ${args.station} subagent for #${args.issue}`, kind: 'other', rawInput: args }),
+  })), 'a2d2 dispatch_subagent tool registration')
 }
