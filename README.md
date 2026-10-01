@@ -8,7 +8,7 @@ This repository holds the **A²D² DeepSeek Harness plugin**: the components tha
 
 What the plugin gives DSH today:
 
-- **Task aggregation** — a task groups the sessions belonging to one piece of work and records the handoff edges between them, so related sessions keep a relationship a person can read, review, and commit. The data lives in project-local documents, and no session's durable format changes to carry it.
+- **Task aggregation** — a task groups the sessions belonging to one piece of work and records the handoff edges between them, so related sessions keep a relationship a person can read, review, and commit. The data lives in project-local documents, and no session's durable format changes to carry it. A task bound to a task issue also records its main session — the one session executing it — which a session sets with the `bind_main_session` tool.
 - **Session handoff** — `/handoff` moves work from a long, expensive session to a fresh one without losing the thread: the handing-off session writes bounded continuation content, and the successor continues from it.
 - **A floating indicator** — an at-a-glance orb by the composer that tracks context length and cost, and warns when a session approaches the smart zone so the next phase boundary can choose its outcome.
 - **A²D² panel** — a better-sidebar tab for the open session's project tasks, member handoff tree, and main-session subagent route tree.
@@ -19,13 +19,15 @@ The rest of this document is the plugin's behavior contract and known limits, ke
 
 ## Plugin (namespace: `a2d2`)
 
-The package contributes two mount rows. `ctx.a2d2` is the task store and declares no service, so it loads in any profile; the command row declares `commands` and `a2d2`, so only a profile that composes both gets `/handoff`. Cordis refuses to load a plugin whose declared services are absent, which is why the two are split rather than registered conditionally from one row. The floating orb needs no row of its own: it drives that same command through the session it already sits on.
+The package contributes three mount rows. `ctx.a2d2` is the task store and declares no service, so it loads in any profile; the command row declares `commands` and `a2d2`, so only a profile that composes both gets `/handoff`; the tools row declares `tools` and `a2d2`, so only a profile that composes both gets the model tools (today `bind_main_session`). Cordis refuses to load a plugin whose declared services are absent, which is why the rows are split rather than registered conditionally from one row. The floating orb needs no row of its own: it drives that same command through the session it already sits on.
 
 ```yaml
 - id: a2d2
   name: '@deepseek-ai/dsh-a2d2'
 - id: a2d2-command
   name: '@deepseek-ai/dsh-a2d2/command'
+- id: a2d2-tools
+  name: '@deepseek-ai/dsh-a2d2/tools'
 ```
 
 | Key | Default | Contract |
@@ -39,7 +41,7 @@ The package contributes two mount rows. `ctx.a2d2` is the task store and declare
 | `modelPrices` | `{}` | Per-million-token rates the indicator's cost line uses, keyed `provider/model` and then bare `model`. A negative or non-finite rate fails at load. |
 | `currency` | `¥` | Currency symbol the rates are quoted in. |
 
-The configuration keys belong to the `a2d2` row. Every method takes the caller's session cwd and resolves the project root itself, so callers carry no project bookkeeping. `list` reads the project's tasks, `resolve` returns the task a new session inherits, `create` mints an id and writes a document, `registerMember` records a session as a member with an optional handoff edge, and `prepareHandoff` / `takeHandoff` write and consume a handoff document.
+The configuration keys belong to the `a2d2` row. Every method takes the caller's session cwd and resolves the project root itself, so callers carry no project bookkeeping. `list` reads the project's tasks, `resolve` returns the task a new session inherits, `create` mints an id and writes a document, `registerMember` records a session as a member with an optional handoff edge, `prepareHandoff` / `takeHandoff` write and consume a handoff document, `bindMainSession` binds a session as the main session of a task issue, and `taskOfMainSession` / `mainSessionOfIssue` answer which task a session is the main session of and which session is a task issue's main session.
 
 ### Station model settings
 
@@ -74,21 +76,38 @@ Model candidates are added from DSH's host model catalog (`llm.models`) so the p
 One YAML document per task, under `<projectRoot>/.dsh/a2d2/tasks/<id>.yaml`. `<projectRoot>/.dsh/` is the established project-local root — the same anchor `skill-filesystem` uses for `.dsh/skills` — and the plugin's short name namespaces this store, keeping the plugin's footprint one directory even when it later owns further kinds of state.
 
 ```yaml
-version: 1
-id: ship-the-store
-name: Ship the store
-goal: land phase one
+version: 2
+id: issue-45
+issue:
+  number: 45
+  parent: 41
+  mainSession: session-b
+name: Bind the main session
 state: active
-createdAt: 2026-09-20T00:00:00.000Z
+createdAt: 2026-10-01T00:00:00.000Z
 sessions:
   - id: session-a
   - id: session-b
     handoffFrom: session-a
 ```
 
-A document is a file a person may hand-edit and commit, so validation runs at that boundary and fails loudly rather than degrading: an unsupported `version`, an `id` that disagrees with the filename, an unknown `state`, a blank name, or a non-sequence `sessions` each reject the document instead of yielding an empty task. A missing tasks directory is valid empty state, and `list` does not swallow a malformed document that a person can see in their own working tree.
+A task bound to a task issue is identified by the issue number — `issue-<number>.yaml`, so a project holds at most one document per task issue. Its `issue` mapping records the `number`, the `parent` task issue when the task is a subtask, the `mainSession`, and, while a main-session handoff is prepared but not yet taken, `handoff.source`. The task's completion is its `state: done`. A task bound to no task issue (for example one `/handoff` created) has no `issue` mapping and an id derived from its name.
+
+The document is version 2. A version 1 document predates task issues: it still reads, as a task bound to none, and the next write turns it into version 2.
+
+A document is a file a person may hand-edit and commit, so validation runs at that boundary and fails loudly rather than degrading: an unsupported `version`, an `id` that disagrees with the filename, an unknown `state`, a blank name, a non-sequence `sessions`, or an `issue` whose `number` or `parent` is not a positive integer, whose document id is not `issue-<number>`, or whose `mainSession` is not one of the `sessions` each reject the document instead of yielding an empty task. A missing tasks directory is valid empty state, and `list` does not swallow a malformed document that a person can see in their own working tree.
 
 Writes are atomic and serialized through the document's own file lock. `create` derives the id from the name; a name with no ASCII stem (for example a Chinese one) falls back to a timestamp stem, because the id only has to be unique and safe while the name a person reads lives in the document.
+
+## Main session
+
+`bind_main_session` binds the calling session as the main session of a task issue (ADR 0007). Its parameters are `issue`, `parent_issue` (set only for a subtask), and `title`, which names the task when it is first recorded (default `Task issue #<number>`); the session id and its cwd come from the calling agent. The tool only hands these to `ctx.a2d2.bindMainSession`, which owns the rules:
+
+- The first binding writes `issue-<number>.yaml` with the session as `mainSession` and as the first member.
+- A task issue has one main session at a time: another session's binding is refused, naming the current main session; a successor takes over only through a handoff.
+- A session is the main session of at most one task issue, so "which task does this session execute" has one answer.
+- Binding again with the same arguments returns the recorded task unchanged; naming a different parent is refused.
+- A task bound to no task issue that already uses the `issue-<number>` id is refused rather than taken over, and so is a session that records no working directory.
 
 ## `/handoff`
 
@@ -180,7 +199,7 @@ The same browser bundle also registers a better-sidebar tab with id `a2d2-panel`
 
 The upper half reads `/a2d2/api/tasks?session=<id>` and shows the tasks in the project that owns the open session's cwd. The browser never sends a path; the host looks up the session, resolves its cwd to a project root with the plugin's normal store rules, and returns `{ root, tasks }`. The route is read-only, GET-only, guarded by the same host/origin/fetch trust fence as the consult and config routes, and every failure is a JSON body (`400` invalid session id, `403` untrusted, `404` unknown session, `405` non-GET, `409` no working directory, `500` read failure).
 
-Task rows show state, goal, member sessions, and incoming handoff edges. Members are shaped into a tree from `handoffFrom`; missing parents, non-member parents, and cycle-closing edges become roots rather than hiding a session. The row containing the open session is marked as current. Member titles and clickability come from the shell's session list: a member id present in the list can be opened with `sessions.open`, while a missing one is rendered as a short id and stays inert. A successful empty read says the project has no tasks; a route/read failure is rendered as a failure row.
+Task rows show state, goal, member sessions, and incoming handoff edges. A task bound to a task issue also shows a line with its issue number, its kind — main task (主任务) when it has no parent, subtask (子任务, with the parent's number) when it has one — and its main session, which opens the same way a member does. A task bound to no task issue shows no such line. Members are shaped into a tree from `handoffFrom`; missing parents, non-member parents, and cycle-closing edges become roots rather than hiding a session. The row containing the open session is marked as current. Member titles and clickability come from the shell's session list: a member id present in the list can be opened with `sessions.open`, while a missing one is rendered as a short id and stays inert. A successful empty read says the project has no tasks; a route/read failure is rendered as a failure row.
 
 The lower half shows the subagent model topology rooted at the main session for the currently open session's durable parent chain. It expands known subagent catalogs recursively, so opening a child still shows its siblings, descendants, and main session. It exists because a child's route is otherwise invisible. A session's own model is the one the user picked; a delegated child runs whatever the composition in force when it was created declared, and nothing in the shell surfaces it — so children pinned to another model spend that model's budget unobserved.
 
@@ -194,7 +213,7 @@ The panel re-reads the task route and the expanded subagent catalogs every five 
 
 #### What the model sees
 
-Nothing. Tasks, membership, and handoff edges reach no prompt, tool schema, or provider request; the model cannot observe which task its session belongs to.
+Nothing beyond the `bind_main_session` tool below. Tasks, membership, and handoff edges reach no prompt or provider request; the model cannot observe which task its session belongs to.
 
 #### Token effect
 
@@ -203,6 +222,20 @@ None. Aggregation writes files and reads them back; it adds no tokens to any req
 #### KV Cache effect
 
 None. No request content changes, so no cache entry is invalidated.
+
+### `bind_main_session`
+
+#### What the model sees
+
+One tool definition — name, a three-sentence description, and the `issue`, `parent_issue`, and `title` parameters — in every request of an agent whose profile composes the tools row. A call's result is one line naming the task issue, its parent when there is one, and the task document path; a refused binding returns the refusal reason as the tool error.
+
+#### Token effect
+
+The definition is about 685 characters of JSON, roughly 170 tokens by the four-characters-per-token estimate, on every request. Each call adds its arguments and its one-line result to the session's history.
+
+#### KV Cache effect
+
+The tool list is part of the request prefix, so composing the tools row changes that prefix once. The definition carries no per-session or per-turn content, so later requests reuse the cache as before.
 
 ### `/handoff`
 
@@ -237,6 +270,8 @@ None. No session's request content changes.
 - **The indicator cannot place the caret** — it focuses the textarea and appends the command, but no sanctioned caret API exists for an out-of-tree plugin, so the caret position after insertion is the textarea's own.
 - **Continuation content is only as good as the turn that wrote it** — the plugin can verify that something was written, never that it is accurate, complete, or free of the secrets the patterns miss. A session that never runs the turn leaves a document `take` refuses.
 - **Documents are version 2** — a document written by an earlier build declares version `1`, carried a transcript projection instead of a summary, and is refused rather than read. An existing project has to run `/handoff` again before its handoff is takeable.
+- **Binding checks, then writes** — `bindMainSession` reads the project's documents and then writes one; the file lock covers the write but not the check, so two sessions binding the same task issue at the same instant can both pass the check. Holding one lock across both is the intended refinement.
+- **`create` can mint an `issue-<number>` id** — a task named "Issue 45" gets the id `issue-45`, after which binding task issue #45 fails loudly instead of taking that task over.
 - **Recency is approximated** — `resolve` returns the newest `active` task, because a document carries no activity timestamp of its own. Deriving recency from member sessions is the intended refinement.
 - **Members are never verified** — the store records session ids and never checks that a session exists, because a document is committable and crosses machines. A consumer must render a member whose session is missing rather than failing on it.
 - **A handoff is not discoverable from the task** — `take` needs only the handed-off session id, which the source side prints, but nothing lists a task's open handoffs or reports that one is still unwritten.
