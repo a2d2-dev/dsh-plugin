@@ -13,7 +13,7 @@ A²D²（Agentic Agile Driven Development）的载体：方法论词汇、CEO �
 _Avoid_: 工作区（DSH 的 workspace 是界面分组）
 
 **任务（Task）**:
-一件要达成的事，承载意图与验收，在 tracker 上是一个 issue。项目拆成多个任务，任务再拆成子任务，形成任务树；to-tickets 切出的工单也是子任务，同样是 issue。任务按 Matt 工作流推进。子任务的执行方式由 CEO 判断，分两种：还要走 grill → to-spec → to-tickets 的，以一个独立的根会话出现，作为它自己的主会话；已经可以直接实现的，由父任务的主会话派子代理执行。
+一件要达成的事，承载意图与验收，在 tracker 上是一个 issue。项目拆成多个任务（项目下的顶层任务叫主任务），任务再拆成子任务，形成任务树；to-tickets 切出的工单也是子任务，同样是 issue。任务按 Matt 工作流推进。子任务的执行方式由 CEO 判断，分两种：还要走 grill → to-spec → to-tickets 的，以一个独立的根会话出现，作为它自己的主会话；已经可以直接实现的，由父任务的主会话派子代理执行。
 _Avoid_: 目标（DSH 的 Goal 是续跑条件，属执行层）、会话组（会话只是任务的执行轨迹）、story、工单（工单就是子任务在 tracker 上的样子，不另立概念）
 
 **Agent**:
@@ -37,7 +37,7 @@ CEO 每次被唤醒都照着走一遍的清单，告诉它去哪里取什么信�
 _Avoid_: 心跳（DSH 里 heartbeat 指网络保活，且字面暗示定时）、轮询
 
 **任务 issue（Task issue）**:
-任务在 tracker 上的唯一 issue，是任务进展的持久记录。正文顶部是 CEO 随时覆盖的「现状」（当前站、主会话、未定问题）；评论区是时间线，只记五类：站间切换（站、理由、模型）、单向门问答、决定（只链接 CONTEXT.md / ADR，不复制）、交接（附交接文档）、子代理派发与结果（附 PR）。第一版全部由 CEO 用 `gh` 写。
+任务在 tracker 上的唯一 issue，是任务进展的持久记录。标签标明执行方式：`a2d2:main` 主任务、`a2d2:sub` 以独立根会话执行的子任务、`ready-for-agent` 由子代理执行的子任务（见 docs/agents/issue-tracker.md）；当前站与主会话只写在「现状」里，不进标签。正文顶部是 CEO 随时覆盖的「现状」（当前站、主会话、未定问题）；评论区是时间线，只记五类：站间切换（站、理由、模型）、单向门问答、决定（只链接 CONTEXT.md / ADR，不复制）、交接（附交接文档）、子代理派发与结果（附 PR）。第一版全部由 CEO 用 `gh` 写。
 _Avoid_: spec issue（spec 就写在任务 issue 里）、会话日志（过程闲聊与工具调用不同步）
 
 **单向门 / 双向门（One-way / two-way door）**:
