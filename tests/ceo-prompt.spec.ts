@@ -168,6 +168,26 @@ describe('CEO prompt section', () => {
     })
   })
 
+  it('loads packaged CEO method files from the dedicated directory by default, not repository guidance', async () => {
+    const root = await tempRoot()
+    const globalSoulDir = join(root, 'global-soul')
+    await mkdir(globalSoulDir, { recursive: true })
+    const ctx = new Context()
+    await ctx.plugin(StubSystemPrompt)
+    await ctx.plugin(StubAgents)
+    await ctx.plugin(A2d2Service, { root })
+    await ctx.plugin(ceoPromptPlugin, { globalSoulDir })
+    const main = agent(root, 'session-main')
+    ;(ctx.get('agents') as unknown as StubAgents).add(main)
+
+    await ctx.a2d2.bindMainSession({ cwd: root, issue: 46, mainSession: main.id, now: new Date() })
+
+    const section = main.prompt.render('a2d2:ceo')
+    expect(section).toContain('A2D2 CEO placeholder')
+    expect(section).toContain('placeholder wake checklist content')
+    expect(section).not.toContain('Issue tracker')
+  })
+
   it('names every missing SOUL file in the section instead of silently skipping it', async () => {
     const root = await tempRoot()
     const { agentFilesDir, globalSoulDir } = await writeAgentFiles(root, {
