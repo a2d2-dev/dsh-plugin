@@ -13,11 +13,15 @@
  * @module @deepseek-ai/dsh-a2d2
  */
 
+import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { basename, isAbsolute, join } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { Agent, AgentRegistry } from '@deepseek-ai/dsh-agent'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed, MessageSource } from '@deepseek-ai/dsh-llm'
 import type { Fiber, Volatile } from '@deepseek-ai/cordis'
-import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -180,6 +184,12 @@ export {
 export type { TaskDocumentErrorCode } from './document.ts'
 export type { BoundTask, CreateTaskRequest, Task, TaskIssue, TaskIssueHandoff, TaskMember, TaskState } from './types.ts'
 
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'a2d2-open-subtask': { kind: 'a2d2-open-subtask' } & ContextFormed
+  }
+}
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     a2d2: A2d2Service
@@ -216,6 +226,17 @@ export const DEFAULT_HANDOFF_CRITICAL_TOKENS = 1_000_000
 
 /** Currency the indicator quotes a configured rate in, when a deployment configures none. */
 export const DEFAULT_CURRENCY = '¥'
+
+const A2D2_OPEN_SUBTASK_MESSAGE_SOURCE: MessageSource = { kind: 'a2d2-open-subtask' }
+
+function openSubtaskPrompt(issue: number, parentIssue: number): string {
+  return [
+    `子任务 issue：#${String(issue)}（在本项目目录里用 \`gh issue view ${String(issue)} --comments\` 读取）`,
+    `父任务 issue（spec 在其中）：#${String(parentIssue)}（在本项目目录里用 \`gh issue view ${String(parentIssue)} --comments\` 读取）`,
+    '',
+    '用 /grill-with-docs 推进；你是该任务的主会话。',
+  ].join('\n')
+}
 
 /** Plugin configuration. */
 export interface Config {
@@ -311,6 +332,28 @@ export interface BindMainSessionRequest {
   readonly mainSession: SessionId
   /** Injection point for a new task's creation timestamp. */
   readonly now: Date
+}
+
+/** Input of {@link A2d2Service.openSubtask}. */
+export interface OpenSubtaskRequest {
+  /** The caller session's working directory, which locates the project. */
+  readonly cwd: string
+  /** The session calling the tool; it must be a task issue's main session. */
+  readonly caller: SessionId
+  /** The subtask issue number to open. */
+  readonly issue: number
+  /** Injection point for a new task's creation timestamp. */
+  readonly now: Date
+}
+
+/** Result of opening a subtask main session. */
+export interface OpenedSubtask {
+  /** The new root session that is now the subtask's main session. */
+  readonly session: SessionId
+  /** The model route selected from the grill station. */
+  readonly model: { readonly provider: string; readonly model: string }
+  /** The persisted task document bound to the subtask issue. */
+  readonly task: BoundTask
 }
 
 /** Input of {@link A2d2Service.dispatchSubagent}. */
@@ -564,6 +607,54 @@ export class A2d2Service extends Service {
    */
   async mainSessionOfIssue(cwd: string, issue: number): Promise<SessionId | undefined> {
     return (await this.store.read(cwd, taskIdForIssue(issue)))?.issue?.mainSession
+  }
+
+  /**
+   * Open a subtask as its own root main session.
+   *
+   * Only a task issue's main session may call this: the caller's task becomes
+   * the subtask's parent issue. The new Session is a root Agent, not a subagent,
+   * because ADR 0007 treats design-heavy subtasks as their own main sessions.
+   * @param request - caller, subtask issue, and timestamp.
+   * @returns the new main session, selected grill model, and bound task.
+   */
+  async openSubtask(request: OpenSubtaskRequest): Promise<OpenedSubtask> {
+    if (request.cwd === '') {
+      throw new Error('a2d2: the calling session records no working directory, so no project can hold the subtask')
+    }
+    const parent = await this.taskOfMainSession(request.cwd, request.caller)
+    if (parent === undefined) {
+      throw new Error('a2d2: only a task issue main session can open a subtask')
+    }
+    taskIdForIssue(request.issue)
+    const existing = await this.mainSessionOfIssue(request.cwd, request.issue)
+    if (existing !== undefined) {
+      throw new Error(`a2d2: task issue #${request.issue} already has main session "${existing}"`)
+    }
+
+    const projectRoot = await this.store.projectRoot(request.cwd)
+    const selected = await this.selectStationModel('grill', this.stationModels.stations.grill)
+    const model = splitModelRoute(selected)
+    const session = brandString<SessionId>(`session-${randomUUID()}`)
+    const agents = this.ctx.get('agents') as AgentRegistry | undefined
+    if (agents === undefined) throw new Error('a2d2: agents service is unavailable, so no subtask session can be created')
+    const handle = await agents.create({
+      sessionId: session,
+      meta: { cwd: projectRoot },
+      agentOptions: model,
+    })
+    const task = await this.bindMainSession({
+      cwd: projectRoot,
+      issue: request.issue,
+      parentIssue: parent.issue.number,
+      mainSession: session,
+      now: request.now,
+    })
+    handle.agent.followup(createUserMessage({
+      content: [{ type: 'text', text: openSubtaskPrompt(request.issue, parent.issue.number) }],
+      source: A2D2_OPEN_SUBTASK_MESSAGE_SOURCE,
+    }))
+    return { session, model, task }
   }
 
   /**

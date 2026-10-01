@@ -8,7 +8,7 @@
 
 插件当前给 DSH 带来的能力：
 
-- **任务聚合**——一个任务把属于同一件工作的会话归到一起，并记录它们之间的交接边，使相关会话保留一段可阅读、可评审、可提交的关系。数据存放在项目本地文档中，且不为承载它而修改任何会话的持久格式。绑定了任务 issue 的任务还记着它的主会话——此刻执行它的那一条会话，由会话用 `bind_main_session` 工具绑定。主会话还可以用 `dispatch_subagent` 派出可续跑子代理，按站点模型表选模型，并可带项目本地特殊 Agent persona。
+- **任务聚合**——一个任务把属于同一件工作的会话归到一起，并记录它们之间的交接边，使相关会话保留一段可阅读、可评审、可提交的关系。数据存放在项目本地文档中，且不为承载它而修改任何会话的持久格式。绑定了任务 issue 的任务还记着它的主会话——此刻执行它的那一条会话，由会话用 `bind_main_session` 工具绑定。主会话可以用 `open_subtask` 把设计较重的子任务开成根主会话，也可以用 `dispatch_subagent` 派出可续跑子代理，按站点模型表选模型，并可带项目本地特殊 Agent persona。
 - **会话交接**——`/handoff` 把工作从一条又长又贵的会话搬到一条干净的新会话而不丢失脉络：交接出去的会话写下有界的接续内容，后继会话据此继续。
 - **指示球**——输入框旁一枚可一眼看清上下文长度与花费的小球；会话接近 smart zone 时告警，提醒在下个相位边界决定去向。
 - **A²D² 面板**——better-sidebar 里的侧边栏 Tab，展示当前会话所属项目的任务、成员交接树，以及主会话子代理路由树。
@@ -19,7 +19,7 @@
 
 ## 插件（namespace：`a2d2`）
 
-本包贡献四个挂载行。`ctx.a2d2` 是任务存储，不声明任何服务，因此在任何 profile 中都会加载；命令行声明了 `commands` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `/handoff`；工具行声明了 `tools` 与 `a2d2`，所以只有组合了两者的 profile 才得到模型工具（`bind_main_session` 与 `dispatch_subagent`）；CEO 提示段行声明了 `agents`、`systemPrompt` 与 `a2d2`，所以只有同时组合 live Agents 与系统提示词组装的 profile 才得到主会话作用域指导。`dispatch_subagent` 只在实际运行时查找 `subagents`，因此没有子代理服务的 profile 仍能加载工具行，`bind_main_session` 照常可用。Cordis 对"声明了却缺失的服务"是拒绝加载，这正是把它们拆成多行、而不是从一行里条件式注册的原因。悬浮球不需要自己的一行：它通过自己已经身处的那个会话驱动同一条命令。
+本包贡献五个挂载行。`ctx.a2d2` 是任务存储，不声明任何服务，因此在任何 profile 中都会加载；命令行声明了 `commands` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `/handoff`；基础工具行声明了 `tools` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `bind_main_session` 与 `dispatch_subagent`；开子任务工具行额外声明 `agents` 与 `llm`，因为 `open_subtask` 要创建根会话并选择 grill 站模型；CEO 提示段行声明了 `agents`、`systemPrompt` 与 `a2d2`，所以只有同时组合 live Agents 与系统提示词组装的 profile 才得到主会话作用域指导。`dispatch_subagent` 只在实际运行时查找 `subagents`，因此没有子代理服务的 profile 仍能加载基础工具行，`bind_main_session` 照常可用。Cordis 对"声明了却缺失的服务"是拒绝加载，这正是把它们拆成多行、而不是从一行里条件式注册的原因。悬浮球不需要自己的一行：它通过自己已经身处的那个会话驱动同一条命令。
 
 ```yaml
 - id: a2d2
@@ -28,6 +28,8 @@
   name: '@deepseek-ai/dsh-a2d2/command'
 - id: a2d2-tools
   name: '@deepseek-ai/dsh-a2d2/tools'
+- id: a2d2-open-subtask-tools
+  name: '@deepseek-ai/dsh-a2d2/open-subtask-tools'
 - id: a2d2-ceo-prompt
   name: '@deepseek-ai/dsh-a2d2/ceo-prompt'
 ```
@@ -43,7 +45,7 @@
 | `modelPrices` | `{}` | 悬浮球花费行用的每百万 token 费率，键先看 `provider/model`、再看裸 `model`。负数或非有限值在加载时失败。 |
 | `currency` | `¥` | 费率所标价的货币符号。 |
 
-这些配置键属于 `a2d2` 那一行。每个方法都接收调用方的会话 cwd 并自行推导项目根，因此调用方不携带任何项目簿记。`list` 读取该项目的任务，`resolve` 返回新会话继承的任务，`create` 生成 id 并写入文档，`registerMember` 把一个会话登记为成员并可选地记录交接边，`prepareHandoff` / `takeHandoff` 分别写入与消费交接文档，`bindMainSession` 把一条会话绑定为某任务 issue 的主会话，`taskOfMainSession` / `mainSessionOfIssue` 分别回答"这条会话是哪个任务的主会话"与"这个任务 issue 的主会话是哪条"。
+这些配置键属于 `a2d2` 那一行。每个方法都接收调用方的会话 cwd 并自行推导项目根，因此调用方不携带任何项目簿记。`list` 读取该项目的任务，`resolve` 返回新会话继承的任务，`create` 生成 id 并写入文档，`registerMember` 把一个会话登记为成员并可选地记录交接边，`prepareHandoff` / `takeHandoff` 分别写入与消费交接文档，`bindMainSession` 把一条会话绑定为某任务 issue 的主会话，`openSubtask` 把一个子任务 issue 开成新的根主会话，`taskOfMainSession` / `mainSessionOfIssue` 分别回答"这条会话是哪个任务的主会话"与"这个任务 issue 的主会话是哪条"。
 
 ### 站点模型 settings
 
@@ -111,6 +113,14 @@ sessions:
 - 以相同参数再次绑定，返回已记录的任务、不做改动；父任务 issue 不同则拒绝。
 - 当组合了 CEO 提示段行时，绑定成功还会把作用域内的 `a2d2:ceo` 系统提示段装到这条主会话正在运行的 Agent 上；之后创建或恢复的 Agent，如果其会话已经是该任务 issue 的主会话，也会得到同一段。
 - 已有一份占用 `issue-<编号>` 这个 id 的未绑定任务时拒绝，而不是把它接管；会话没有工作目录时同样拒绝。
+
+## 开子任务
+
+`open_subtask` 让一个任务 issue 的主会话把某个子任务 issue 开成它自己的根主会话（ADR 0007）。唯一参数是 `issue`，也就是已经建好并挂到父任务下的子任务 issue 编号。调用方自己的任务 issue 会成为父 issue。
+
+服务会从 `a2d2-station-models` 的 `grill` 站候选中，选择第一个出现在 DSH 实时模型目录里的 `provider/model`；随后在同一项目 cwd 下创建一条新的根 Agent 会话，给它设置该模型，只投递一条首条 prompt：子任务 issue 编号引用、父任务 issue（spec 在其中）编号引用、在本项目目录运行的逐条 `gh issue view <编号> --comments` 读取命令，以及“用 `/grill-with-docs` 推进、你是该任务的主会话”的指令；最后复用 `bindMainSession` 把新会话记录为子任务主会话。非任务 issue 主会话调用会被拒绝；子任务 issue 已有主会话时也会被拒绝。
+
+## 派子代理
 
 `dispatch_subagent` 从调用它的主会话派出一个可续跑子代理。参数是 `station`、可选 `agent`（省略或填 `default` 表示默认 Agent）、`issue` 与 `prompt`；父 Agent、会话 id、cwd 与取消信号取自工具执行上下文。工具只把这些转交给 `ctx.a2d2.dispatchSubagent`，规则都在服务里：
 
@@ -212,7 +222,7 @@ sessions:
 
 上半部分读取 `/a2d2/api/tasks?session=<id>`，展示当前会话 cwd 所属项目里的任务。浏览器从不发送路径；宿主查出该会话，按插件正常存储规则把它的 cwd 解析成项目根，再返回 `{ root, tasks }`。这条路由只读、只允许 GET，并复用咨询与配置路由的 host / origin / fetch 信任判据；所有失败都是 JSON 响应体（`400` 会话 id 不可用、`403` 不受信、`404` 宿主无此会话、`405` 非 GET、`409` 会话无工作目录、`500` 读失败）。
 
-任务行展示状态、目标、成员会话与传入交接边。绑定了任务 issue 的任务还多一行：issue 编号、类型——没有父任务时是主任务，有父任务时是子任务（附父任务编号）——以及主会话，点开方式与成员相同；`issue.handoff` 存在时，同一行会带一个 **交接中** 标记。未绑定 issue 的任务没有这一行。成员会按 `handoffFrom` 形成树。缺失父节点、指向非成员的父节点、以及会闭合成环的边都会让该成员成为根，而不是把会话隐藏掉。包含当前会话的任务会被标为当前。成员标题与能否点击来自 shell 已有的会话列表：列表里有的成员可通过 `sessions.open` 打开；列表里没有的只显示短 id，不可点击。成功读到空列表时显示这个项目没有任务；路由或读取失败则显示失败行。
+任务卡按任务树排列：绑定了 issue 且 `parent` 指向另一个已返回任务 issue 的任务，会显示在父任务下面；父任务缺失、形成环、或未绑定 issue 的旧任务都作为根显示。每张任务卡展示状态、目标、成员会话与传入交接边。绑定了任务 issue 的任务还多一行：issue 编号、类型——没有父任务时是主任务，有父任务时是子任务（附父任务编号）——以及主会话，点开方式与成员相同；`issue.handoff` 存在时，同一行会带一个 **交接中** 标记。未绑定 issue 的任务没有这一行。成员会按 `handoffFrom` 形成树。缺失父节点、指向非成员的父节点、以及会闭合成环的边都会让该成员成为根，而不是把会话隐藏掉。包含当前会话的任务会被标为当前。成员标题与能否点击来自 shell 已有的会话列表：列表里有的成员可通过 `sessions.open` 打开；列表里没有的只显示短 id，不可点击。成功读到空列表时显示这个项目没有任务；路由或读取失败则显示失败行。
 
 下半部分展示以主会话为根的子代理模型拓扑：从当前打开会话沿 durable 父链回到主会话，再递归展开已知的子代理目录。因此打开一个子代理时，仍能看到它的同级、后代与主会话。存在的原因是子代理的路由本来不可见。会话自己的模型是用户选的；被派出去的子代理用的是创建它时生效的那份组合所声明的模型，而 shell 里没有任何原生位置显示它——于是被钉在另一个模型上的子代理会安静地花掉那个模型的额度。
 
@@ -264,19 +274,33 @@ sessions:
 
 工具列表属于请求前缀，因此组合工具行会让前缀变化一次。定义不含任何按会话或按轮变化的内容，之后的请求照常命中缓存。
 
+### `open_subtask`
+
+#### What the model sees
+
+组合了开子任务工具行的 profile 中，同时拥有 `tools`、`a2d2`、`agents`、`llm` 的 agent 会多一份名为 `open_subtask` 的工具定义。调用成功时，结果返回新根会话 id、任务 issue、父 issue 与实际选择的 `provider/model`。被创建的子任务会话会收到一条普通首条 prompt，只包含子任务 issue 编号引用、父任务 issue 编号引用、在本项目目录运行的逐条 `gh issue view <编号> --comments` 读取命令与 `/grill-with-docs` 主会话指令。
+
+#### Token effect
+
+该工具定义在对应挂载行存在时进入调用方的请求前缀。成功调用会把参数和结果加入调用方历史；新建的子任务会话则以那条很短的首条 prompt 开始。
+
+#### KV Cache effect
+
+组合开子任务工具行会让调用方的工具列表前缀变化一次。新的根会话有自己的对话历史，因此也有自己的缓存路径。
+
 ### `dispatch_subagent`
 
 #### What the model sees
 
-组合了工具行的 profile 中，agent 的每次请求都会再多一份工具定义。一次调用的结果写明子代理会话 id、实际 `provider/model` 与 Agent（`default` 或特殊 Agent 名）。非主会话调用、没有目录内可用站点模型、特殊 Agent 缺失或为空等拒绝，都会作为工具错误返回。特殊 Agent persona 只发给子代理，不注入父会话。
+组合了基础工具行的 profile 中，agent 的每次请求都会再多一份工具定义。一次调用的结果写明子代理会话 id、实际 `provider/model` 与 Agent（`default` 或特殊 Agent 名）。非主会话调用、没有目录内可用站点模型、特殊 Agent 缺失或为空等拒绝，都会作为工具错误返回。特殊 Agent persona 只发给子代理，不注入父会话。
 
 #### Token effect
 
-定义约 950 字符的 JSON，按每 4 字符一个 token 估算约 240 token，出现在组合了工具行的每次请求里。每次调用把参数与紧凑结果加入父会话历史；子代理会把传入的 `prompt` 作为首条用户消息接收。
+定义约 950 字符的 JSON，按每 4 字符一个 token 估算约 240 token，出现在组合了基础工具行的每次请求里。每次调用把参数与紧凑结果加入父会话历史；子代理会把传入的 `prompt` 作为首条用户消息接收。
 
 #### KV Cache effect
 
-新增工具会让组合工具行的 profile 的工具列表前缀变化一次。站点模型 settings 与特殊 Agent 文件内容在工具运行时读取，不嵌进父会话请求前缀，因此它们变化本身不会让父会话缓存失效。
+新增工具会让组合基础工具行的 profile 的工具列表前缀变化一次。站点模型 settings 与特殊 Agent 文件内容在工具运行时读取，不嵌进父会话请求前缀，因此它们变化本身不会让父会话缓存失效。
 
 ### `/handoff`
 

@@ -86,6 +86,8 @@ declare module '*.module.css' {
     readonly label: string
     readonly meta: string
     readonly cardCurrent: string
+    readonly taskNode: string
+    readonly taskChildren: string
     readonly cardHead: string
     readonly name: string
     readonly state: string

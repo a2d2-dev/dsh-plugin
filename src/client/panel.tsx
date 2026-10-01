@@ -14,10 +14,11 @@ import {
   handoffForest,
   nextPanelState,
   panelLoadState,
-  panelSessionTarget,
-  panelSessionTitles,
-  panelTally,
-  panelTaskRows,
+   panelSessionTarget,
+   panelSessionTitles,
+   panelTally,
+   panelTaskForest,
+   panelTaskRows,
   panelTitleReadCandidates,
 } from './panel-model.ts'
 import type {
@@ -26,6 +27,7 @@ import type {
   PanelMemberTreeNode,
   PanelTaskIssueRow,
   PanelTaskRow,
+  PanelTaskTreeNode,
   SessionTitleHistoryApi,
   SessionTitleHistoryRead,
   SessionTitleLoader,
@@ -151,6 +153,21 @@ function TaskCard({ row, ctx }: { readonly row: PanelTaskRow; readonly ctx: A2d2
   )
 }
 
+function TaskNode({ node, ctx }: { readonly node: PanelTaskTreeNode; readonly ctx: A2d2ClientContext }): ReturnType<typeof createElement> {
+  return createElement(
+    'div',
+    { className: css.taskNode },
+    createElement(TaskCard, { row: node.row, ctx }),
+    node.children.length === 0
+      ? null
+      : createElement(
+        'div',
+        { className: css.taskChildren },
+        node.children.map(child => createElement(TaskNode, { key: child.row.id, node: child, ctx })),
+      ),
+  )
+}
+
 export function A2d2Panel({ ctx, sessionId, visible }: A2d2PanelProps): ReturnType<typeof createElement> {
   // `ctx.get` returns a fresh traceable proxy per call; read the services once
   // per context so hook dependencies stay stable — an unstable `remote`
@@ -232,6 +249,7 @@ export function A2d2Panel({ ctx, sessionId, visible }: A2d2PanelProps): ReturnTy
   }, [state.byId, effectiveTitleReads, titleReadCandidates])
   const openable = useCallback((id: string) => state.byId[id] !== undefined, [state])
   const rows = payload === undefined ? [] : panelTaskRows(payload, titles, openable, sessionTarget.currentMemberSessionId)
+  const taskForest = panelTaskForest(rows)
   const tally = panelTally(rows)
   const load = panelLoadState(payload, failure)
   const currentTaskText = tally.current === undefined
@@ -272,7 +290,7 @@ export function A2d2Panel({ ctx, sessionId, visible }: A2d2PanelProps): ReturnTy
         : createElement(
           'div',
           { className: css.list },
-          rows.map(row => createElement(TaskCard, { key: row.id, row, ctx })),
+          taskForest.map(node => createElement(TaskNode, { key: node.row.id, node, ctx })),
         ),
     ),
     createElement('div', { className: css.divider }, '子代理模型'),

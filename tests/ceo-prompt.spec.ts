@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context, Service } from '@deepseek-ai/cordis'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentHandle, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import A2d2Service from '../src/index.ts'
 import * as ceoPromptPlugin from '../src/ceo-prompt.ts'
@@ -78,6 +78,29 @@ class StubAgents extends Service {
     this.agents.push(agent)
     this.ctx.emit('agent/created', { agent, source: 'resume' })
   }
+
+  async create(options: CreateAgentOptions): Promise<AgentHandle> {
+    const created = agent(options.meta?.cwd ?? '', options.sessionId)
+    this.agents.push(created)
+    this.ctx.emit('agent/created', { agent: created, source: 'resume' })
+    return { agent: created, dispose: async () => {} }
+  }
+}
+
+class StubLlm extends Service {
+  constructor(ctx: Context) {
+    super(ctx, 'llm')
+  }
+
+  listProviders(): readonly { readonly id: string }[] {
+    return [{ id: 'claude-bray' }, { id: 'codex' }]
+  }
+
+  async listModels(provider: string): Promise<readonly { readonly id: string }[]> {
+    if (provider === 'claude-bray') return []
+    if (provider === 'codex') return [{ id: 'gpt-6' }]
+    return []
+  }
 }
 
 function agent(root: string, id: string): Agent & { readonly prompt: PromptSections } {
@@ -87,6 +110,7 @@ function agent(root: string, id: string): Agent & { readonly prompt: PromptSecti
     session: { header: { cwd: root, id: SessionId(id) } },
     ctx: { systemPrompt: prompt },
     prompt,
+    followup: vi.fn(),
   } as unknown as Agent & { readonly prompt: PromptSections }
 }
 
@@ -146,6 +170,33 @@ describe('CEO prompt section', () => {
     expect(await readFile(join(root, '.dsh', 'a2d2', 'tasks', 'issue-46.yaml'), 'utf8')).toContain('mainSession: session-main')
   })
 
+  it('installs on a subtask main session opened through openSubtask', async () => {
+    const root = await tempRoot()
+    const { agentFilesDir, globalSoulDir } = await writeAgentFiles(root, {
+      agents: 'CEO duties for opened subtask',
+      wake: 'Wake checklist for opened subtask',
+      globalSoul: 'Global principle for opened subtask',
+      projectSoul: 'Project principle for opened subtask',
+    })
+    const ctx = new Context()
+    await ctx.plugin(StubSystemPrompt)
+    await ctx.plugin(StubAgents)
+    await ctx.plugin(StubLlm)
+    await ctx.plugin(A2d2Service, { root })
+    await ctx.plugin(ceoPromptPlugin, { agentFilesDir, globalSoulDir })
+    const parent = agent(root, 'session-parent')
+    ;(ctx.get('agents') as unknown as StubAgents).add(parent)
+    await ctx.a2d2.bindMainSession({ cwd: root, issue: 41, mainSession: parent.id, now: new Date('2026-10-01T10:00:00.000Z') })
+
+    const opened = await ctx.a2d2.openSubtask({ cwd: root, caller: parent.id, issue: 49, now: new Date('2026-10-01T11:00:00.000Z') })
+
+    const child = (ctx.get('agents') as unknown as StubAgents).list()
+      .find(candidate => candidate.id === opened.session) as (Agent & { readonly prompt: PromptSections }) | undefined
+    expect(child).toBeDefined()
+    expect(child?.prompt.render('a2d2:ceo')).toContain('CEO duties for opened subtask')
+    expect(child?.prompt.render('a2d2:ceo')).toContain('Project principle for opened subtask')
+    expect(await readFile(join(root, '.dsh', 'a2d2', 'tasks', 'issue-49.yaml'), 'utf8')).toContain('mainSession: session-')
+  })
 
   it('moves the CEO prompt section when handoff take changes the main session', async () => {
     const root = await tempRoot()

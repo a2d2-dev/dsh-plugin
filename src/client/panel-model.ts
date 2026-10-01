@@ -128,6 +128,12 @@ export interface PanelTaskRow {
   readonly handoffs: number
 }
 
+/** One node in the task issue hierarchy forest. */
+export interface PanelTaskTreeNode {
+  readonly row: PanelTaskRow
+  readonly children: readonly PanelTaskTreeNode[]
+}
+
 /** Header counts for the panel. */
 export interface PanelTally {
   readonly total: number
@@ -382,6 +388,81 @@ export function panelTaskRows(
   currentSessionId: string,
 ): readonly PanelTaskRow[] {
   return payload.tasks.map(task => taskRow(task, titles, openable, currentSessionId))
+}
+
+/**
+ * Shape bound task issues into a task tree forest.
+ *
+ * A task whose parent issue is missing, unbound, or cycle-closing stays rooted;
+ * unbound legacy tasks are roots as well. Input order remains sibling order.
+ */
+export function panelTaskForest(rows: readonly PanelTaskRow[]): readonly PanelTaskTreeNode[] {
+  const byIssue = new Map<number, PanelTaskRow>()
+  const order = new Map<PanelTaskRow, number>()
+  rows.forEach((row, index) => {
+    order.set(row, index)
+    if (row.issue !== undefined) byIssue.set(row.issue.number, row)
+  })
+
+  const candidateParent = new Map<PanelTaskRow, PanelTaskRow>()
+  for (const row of rows) {
+    const parentIssue = row.issue?.parent
+    const parent = parentIssue === undefined ? undefined : byIssue.get(parentIssue)
+    if (parent !== undefined && parent !== row) candidateParent.set(row, parent)
+  }
+
+  const cycleRoots = new Set<PanelTaskRow>()
+  const finished = new Set<PanelTaskRow>()
+  for (const row of rows) {
+    if (finished.has(row)) continue
+    const path: PanelTaskRow[] = []
+    const pathIndex = new Map<PanelTaskRow, number>()
+    let current: PanelTaskRow | undefined = row
+    while (current !== undefined && !finished.has(current)) {
+      const seenAt = pathIndex.get(current)
+      if (seenAt !== undefined) {
+        const cycle = path.slice(seenAt)
+        let root = cycle[0]
+        if (root === undefined) break
+        for (const item of cycle.slice(1)) {
+          if ((order.get(item) ?? Number.MAX_SAFE_INTEGER) < (order.get(root) ?? Number.MAX_SAFE_INTEGER)) root = item
+        }
+        cycleRoots.add(root)
+        break
+      }
+      pathIndex.set(current, path.length)
+      path.push(current)
+      current = candidateParent.get(current)
+    }
+    for (const item of path) finished.add(item)
+  }
+
+  const childrenByParent = new Map<PanelTaskRow, PanelTaskRow[]>()
+  const roots: PanelTaskRow[] = []
+  for (const row of rows) {
+    const parent = candidateParent.get(row)
+    if (parent === undefined || cycleRoots.has(row)) {
+      roots.push(row)
+      continue
+    }
+    const siblings = childrenByParent.get(parent) ?? []
+    siblings.push(row)
+    childrenByParent.set(parent, siblings)
+  }
+
+  const rootOrder = (left: PanelTaskRow, right: PanelTaskRow): number => {
+    if (left.issue !== undefined && right.issue !== undefined) return left.issue.number - right.issue.number
+    if (left.issue !== undefined) return -1
+    if (right.issue !== undefined) return 1
+    return (order.get(left) ?? Number.MAX_SAFE_INTEGER) - (order.get(right) ?? Number.MAX_SAFE_INTEGER)
+  }
+  roots.sort(rootOrder)
+
+  const visit = (row: PanelTaskRow): PanelTaskTreeNode => ({
+    row,
+    children: (childrenByParent.get(row) ?? []).map(visit),
+  })
+  return roots.map(visit)
 }
 
 /**
