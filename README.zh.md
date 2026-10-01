@@ -146,7 +146,7 @@ sessions:
 
 同时，卡片会针对当前会话发起一次不进入会话历史的咨询。新宿主返回公路图坐标（`zone`、`station`、`phaseDone`，服务区另带 `returnTo`）、推荐下一站与走法，以及 2-4 颗带走法的候选芯片。卡片先显示现状区块，再画一条竖向迷你公路：主干 `grill` -> `to-spec` -> `to-tickets` -> `implement` -> `code-review`，标出已过 / 当前 / 下一站 / 未到站，并显示每站中文职责，以及该站候选中第一个出现在本会话 DSH 模型目录里的模型。服务区与匝道显示旁注，例如「绕道中：prototype，完成后 handoff 回 grill」或「匝道：wayfinder，并入 to-spec」；独立区和不在公路上显示路牌，不高亮主干。公路图下方的下一站行形如 `→ /to-spec · Continue（理由）· fable-5-1`；`phaseDone` 为 false 时显示「本阶段未完成 · 继续」。旧宿主不返回 `location` 时仍退化为旧的 **当前位置** 一句话加芯片。
 
-当宿主装有 `a2d2-orchestrator` skill 时，咨询信封只引用它 front matter 里的 description；若当前上下文显示已有 `ready-for-agent` 工单可实施，会要求模型在逐张 `/implement` 芯片旁再给一颗「编排实施全部工单」芯片。这颗芯片只是普通的 `move: "continue"`、目标站为 `implement` 的候选，因此点击行为、填入输入框和按站点切模型都沿用 continue 芯片规则。旧名 `ceo-team` 的 skill 目录在找不到 `a2d2-orchestrator` 时仍作为回落读取。
+下一步咨询不再读取 `a2d2-orchestrator`，也不再回落读取旧名 `ceo-team`。咨询信封只携带当前会话材料、宿主检查出的项目事实、上下文事实、公路图目录，以及逐字注入的 `ask-matt` 真源；候选意图仍由模型基于这些材料生成，和普通芯片一样处理。因此装着或没装这些编排 skill，都不会改变咨询信封，也不会额外增加「编排实施全部工单」芯片。
 
 宿主在询问模型前，还会检查会话 cwd 所属项目的首次使用前置条件：必须存在 `CONTEXT.md` 或 `CONTEXT-MAP.md`，并且必须存在 `docs/agents/issue-tracker.md`。响应带 `preconditions.missing`，prompt 信封也写入同一份宿主事实，避免让模型猜配置状态。只要有缺失，卡片顶部显示「首次使用前：/setup-matt-pocock-skills」路牌，并列出缺失项。宿主还会在解析模型输出之后把 `/setup-matt-pocock-skills` 强制置为首颗芯片；模型已经给出时就移动到首位，否则补上一颗，芯片总数仍最多四颗。已配置项目、以及没有 `preconditions` 字段的旧宿主，都不显示该路牌。
 

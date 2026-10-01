@@ -43,7 +43,6 @@ import type { HighwayZone, MainStation, Move } from './highway.ts'
 import type { HandoffThresholds } from './indicator-projection.ts'
 import { classifyFailureKind } from './refusal.ts'
 import type { FailureKind } from './refusal.ts'
-import { skillDescription } from './skill-source.ts'
 import type { SkillSource } from './skill-source.ts'
 import { DEFAULT_STATION_MODELS, splitModelRoute } from './station-models.ts'
 import type { StationModelsSettings } from './station-models.ts'
@@ -96,12 +95,6 @@ export interface ConsultCandidate {
   readonly input: string
   readonly move: Move
   readonly station?: string
-}
-
-/** An installed orchestration skill the consultation may recommend. */
-export interface OrchestratorSkill {
-  /** The skill's own front-matter description, quoted verbatim. */
-  readonly description: string
 }
 
 export type ConsultPreconditionId = 'context' | 'issue-tracker'
@@ -209,8 +202,6 @@ export interface ConsultDependencies {
   readonly projectRoot?: (cwd: string) => Promise<string>
   readonly checkPreconditions?: (projectRoot: string) => Promise<ConsultPreconditions>
   readonly readAskMatt: () => Promise<SkillSource>
-  /** Reads `a2d2-orchestrator`; hosts may fall back to the former `ceo-team` name. */
-  readonly readOrchestrator?: () => Promise<SkillSource>
   readonly getStationModels?: () => StationModelsSettings
   readonly contextFacts?: (session: ConsultSession) => ConsultContextFacts | undefined
   readonly stream: (options: GenerateOptions) => AsyncIterable<StreamChunk>
@@ -219,7 +210,7 @@ export interface ConsultDependencies {
     surfaceNodes: readonly SessionSeq[],
     tasks: readonly Task[],
   ) => ConsultMaterial
-  readonly buildPrompt?: (material: ConsultMaterial, skillSource: SkillSource, orchestrator?: OrchestratorSkill) => string
+  readonly buildPrompt?: (material: ConsultMaterial, skillSource: SkillSource) => string
 }
 
 /** A model response that cannot safely become any chips. */
@@ -386,7 +377,6 @@ function renderSkillSource(source: SkillSource): string {
 export function buildConsultPrompt(
   material: ConsultMaterial,
   skillSource: SkillSource,
-  orchestrator?: OrchestratorSkill,
 ): string {
   const contextFacts = material.context ?? {
     status: 'unavailable',
@@ -400,10 +390,6 @@ export function buildConsultPrompt(
     '{"position":"one sentence: where this session\'s work stands now","location":{"zone":"main|service|ramp|standalone|roadbed|off-road","station":"station id except off-road","returnTo":"main station, required only for service","phaseDone":true},"next":{"station":"next station id","move":"continue|clear|handoff|subagent|compact","reason":"why this move fits"},"candidates":[2 to 4 candidates]}',
     'Each candidate has exactly this shape:',
     '{"label":"short visible label","input":"complete editable command or instruction","move":"continue|clear|handoff|subagent|compact","station":"optional target station id"}',
-    ...(orchestrator === undefined ? [] : [
-      `Installed orchestration skill: <a2d2-orchestrator-description>${orchestrator.description}</a2d2-orchestrator-description>`,
-      'When ready-for-agent tickets are ready to implement, include one chip that asks a2d2-orchestrator to implement all ready tickets at once, alongside any per-ticket /implement chip; the a2d2-orchestrator chip uses move "continue" and station "implement".',
-    ]),
     'Write "position" in the language the session uses; it is shown above the chips as the basis for them.',
     'Location values are closed except standalone station names. Use the highway catalog exactly as listed here:',
     JSON.stringify(HIGHWAY_PROMPT_CATALOG),
@@ -416,26 +402,6 @@ export function buildConsultPrompt(
     '</situation-envelope>',
   ].join('\n')
   return `${envelope}\n\n${renderSkillSource(skillSource)}`
-}
-
-/**
- * Read the optional a2d2-orchestrator skill down to what the envelope quotes.
- *
- * The orchestrate chip is an extra, so an absent, unreadable, or description-less
- * skill only removes that guidance; it never fails the consultation.
- */
-export async function loadOrchestratorSkill(
-  read: (() => Promise<SkillSource>) | undefined,
-): Promise<OrchestratorSkill | undefined> {
-  if (read === undefined) return undefined
-  try {
-    const source = await read()
-    if (source.status !== 'loaded') return undefined
-    const description = skillDescription(source.skill)
-    return description === undefined ? undefined : { description }
-  } catch {
-    return undefined
-  }
 }
 
 /**
@@ -922,10 +888,9 @@ export function createConsultHandler(
       }
       const controller = new AbortController()
       request.once('aborted', () => { controller.abort() })
-      const [tasks, skillSource, orchestrator] = await Promise.all([
+      const [tasks, skillSource] = await Promise.all([
         dependencies.listTasks(cwd),
         dependencies.readAskMatt(),
-        loadOrchestratorSkill(dependencies.readOrchestrator),
       ])
       const projectRoot = await (dependencies.projectRoot?.(cwd) ?? Promise.resolve(cwd))
       const preconditions = await (dependencies.checkPreconditions ?? checkProjectPreconditions)(projectRoot)
@@ -938,7 +903,7 @@ export function createConsultHandler(
         ...(context === undefined ? {} : { context }),
         preconditions,
       }
-      const prompt = buildPrompt(materialWithFacts, skillSource, orchestrator)
+      const prompt = buildPrompt(materialWithFacts, skillSource)
       const stationModels = dependencies.getStationModels?.() ?? DEFAULT_STATION_MODELS
       const generated = await generateConsultWithFallback({
         stream: dependencies.stream,
