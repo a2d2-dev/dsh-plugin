@@ -6,6 +6,7 @@ import {
   nextPanelState,
   panelLoadState,
   panelSessionTarget,
+  panelTaskForest,
   panelSessionTitles,
   panelTally,
   panelTaskRows,
@@ -125,6 +126,37 @@ describe('panel task view model', () => {
       mainSession: expect.objectContaining({ sessionId: 'session-bbbb2222', label: 'bbbb2222', openable: false, current: false }),
     })
     expect(rows[2]).not.toHaveProperty('issue')
+  })
+
+  it('arranges task issue rows into a parent-child forest while leaving unbound tasks at the root', () => {
+    const task = payload().tasks[0]!
+    const rows = panelTaskRows(
+      payload({
+        tasks: [
+          { ...task, id: 'issue-49', name: 'Open subtask', issue: { number: 49, parent: 41, mainSession: 'session-child' } },
+          { ...task, id: 'legacy', name: 'Legacy task' },
+          { ...task, id: 'issue-41', name: 'CEO carrier', issue: { number: 41, mainSession: 'session-parent' } },
+          { ...task, id: 'issue-50', name: 'Complete subtask', issue: { number: 50, parent: 49, mainSession: 'session-grandchild' } },
+        ],
+      }),
+      {},
+      () => true,
+      'session-child',
+    )
+
+    expect(panelTaskForest(rows).map(node => ({
+      id: node.row.id,
+      children: node.children.map(child => ({
+        id: child.row.id,
+        children: child.children.map(grandchild => grandchild.row.id),
+      })),
+    }))).toEqual([
+      {
+        id: 'issue-41',
+        children: [{ id: 'issue-49', children: ['issue-50'] }],
+      },
+      { id: 'legacy', children: [] },
+    ])
   })
 
   it('prefers list titles, then cold-read titles, before blank placeholders', () => {
