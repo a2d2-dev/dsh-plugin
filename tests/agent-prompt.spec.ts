@@ -21,9 +21,9 @@ afterEach(async () => {
 })
 
 class PromptSections {
-  private readonly sections = new Map<string, { readonly text: string | (() => string) }>()
+  private readonly sections = new Map<string, { readonly text: string | (() => string); readonly interpolate?: boolean }>()
 
-  section(section: { readonly name: string; readonly text: string | (() => string) }): () => void {
+  section(section: { readonly name: string; readonly text: string | (() => string); readonly interpolate?: boolean }): () => void {
     this.sections.set(section.name, section)
     return () => { this.sections.delete(section.name) }
   }
@@ -37,6 +37,15 @@ class PromptSections {
     const section = this.sections.get(name)
     if (section === undefined) return undefined
     return typeof section.text === 'function' ? section.text() : section.text
+  }
+
+  renderModelPrompt(name: string): string | undefined {
+    const section = this.sections.get(name)
+    if (section === undefined) return undefined
+    const text = typeof section.text === 'function' ? section.text() : section.text
+    if (section.interpolate === false) return text
+    if (text.includes('{{')) throw new Error('prompt interpolation attempted')
+    return text
   }
 }
 
@@ -69,6 +78,11 @@ class StubAgents extends Service {
   add(agent: Agent): void {
     this.agents.push(agent)
     this.ctx.emit('agent/created', { agent, source: 'resume' })
+  }
+
+  async addSerial(agent: Agent): Promise<void> {
+    this.agents.push(agent)
+    await this.ctx.serial('agent/created', { agent, source: 'resume' })
   }
 }
 
@@ -132,6 +146,22 @@ describe('engineer and reviewer Agent prompt sections', () => {
     expect(second).not.toContain('Project engineer instructions v1')
   })
 
+  it('finishes prompt installation before the serial agent-created event resolves', async () => {
+    const root = await tempRoot()
+    const { globalAgentsDir } = await writeAgentConfig(root, 'engineer', { global: 'Ready before first assembly' })
+    const ctx = new Context()
+    await ctx.plugin(StubSystemPrompt)
+    await ctx.plugin(StubAgents)
+    await ctx.plugin(A2d2Service, { root })
+    await ctx.a2d2.recordSessionAgent(root, SessionId('session-engineer'), 'engineer')
+    await ctx.plugin(agentPromptPlugin, { globalAgentsDir })
+    const child = agent(root, 'session-engineer')
+
+    await (ctx.get('agents') as unknown as StubAgents).addSerial(child)
+
+    expect(child.prompt.render('a2d2:agent')).toContain('Ready before first assembly')
+  })
+
   it('installs when a browser route records the Agent after the session was created', async () => {
     const root = await tempRoot()
     const { globalAgentsDir } = await writeAgentConfig(root, 'reviewer', { global: 'Reviewer guidance' })
@@ -149,7 +179,7 @@ describe('engineer and reviewer Agent prompt sections', () => {
     expect(child.prompt.render('a2d2:agent')).toContain('Reviewer guidance')
   })
 
-  it('does not install a section when both Agent configuration levels are absent', async () => {
+  it('installs an empty section when both levels are absent and picks up a later file write', async () => {
     const root = await tempRoot()
     const { globalAgentsDir } = await writeAgentConfig(root, 'engineer', {})
     const ctx = new Context()
@@ -162,6 +192,32 @@ describe('engineer and reviewer Agent prompt sections', () => {
 
     ;(ctx.get('agents') as unknown as StubAgents).add(child)
 
-    expect(child.prompt.render('a2d2:agent')).toBeUndefined()
+    await vi.waitFor(() => {
+      expect(child.prompt.render('a2d2:agent')).toBe('')
+    })
+
+    await writeFile(join(globalAgentsDir, 'engineer.md'), 'Engineer guidance added after session creation', 'utf8')
+
+    expect(child.prompt.render('a2d2:agent')).toContain('Engineer guidance added after session creation')
+  })
+
+  it('preserves prompt variable-looking Agent configuration literally', async () => {
+    const root = await tempRoot()
+    const { globalAgentsDir } = await writeAgentConfig(root, 'engineer', {
+      global: 'Use the literal token template ${{ secrets.TOKEN }} in examples.',
+    })
+    const ctx = new Context()
+    await ctx.plugin(StubSystemPrompt)
+    await ctx.plugin(StubAgents)
+    await ctx.plugin(A2d2Service, { root })
+    await ctx.a2d2.recordSessionAgent(root, SessionId('session-engineer'), 'engineer')
+    await ctx.plugin(agentPromptPlugin, { globalAgentsDir })
+    const child = agent(root, 'session-engineer')
+
+    ;(ctx.get('agents') as unknown as StubAgents).add(child)
+
+    await vi.waitFor(() => {
+      expect(child.prompt.renderModelPrompt('a2d2:agent')).toContain('${{ secrets.TOKEN }}')
+    })
   })
 })

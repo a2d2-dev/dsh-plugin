@@ -41,7 +41,7 @@ declare module '@deepseek-ai/cordis' {
       projectRoot: string
       session: SessionId
       agent: StageAgent
-    }): void
+    }): void | Promise<void>
   }
 }
 
@@ -50,7 +50,7 @@ interface AgentsService {
 }
 
 interface ScopedSystemPrompt {
-  section(section: { readonly name: string; readonly order: number; readonly text: () => string }): () => void
+  section(section: { readonly name: string; readonly order: number; readonly text: () => string; readonly interpolate?: boolean }): () => void
   getSectionOrder(name: 'TEAM_POLICY'): number
 }
 
@@ -71,6 +71,7 @@ function titleOf(agent: ConfiguredAgent): string {
 function renderAgentPrompt(globalAgentsDir: string, projectRoot: string, agent: ConfiguredAgent): string {
   const globalText = readExisting(join(globalAgentsDir, `${agent}.md`))
   const projectText = readExisting(join(projectRoot, '.dsh', 'a2d2', 'agents', `${agent}.md`))
+  if (globalText === undefined && projectText === undefined) return ''
   const sections = [
     `# A2D2 ${titleOf(agent)}`,
     'This scoped section applies only when this session is recorded as this A2D2 Agent.',
@@ -78,11 +79,6 @@ function renderAgentPrompt(globalAgentsDir: string, projectRoot: string, agent: 
   if (globalText !== undefined) sections.push('## Global Agent configuration', globalText)
   if (projectText !== undefined) sections.push('## Project Agent configuration (priority over global Agent configuration)', projectText)
   return sections.join('\n\n')
-}
-
-function hasAgentConfiguration(globalAgentsDir: string, projectRoot: string, agent: ConfiguredAgent): boolean {
-  return readExisting(join(globalAgentsDir, `${agent}.md`)) !== undefined
-    || readExisting(join(projectRoot, '.dsh', 'a2d2', 'agents', `${agent}.md`)) !== undefined
 }
 
 function sessionCwd(agent: Agent): string {
@@ -99,6 +95,7 @@ function install(agent: Agent, projectRoot: string, globalAgentsDir: string, con
     name: AGENT_PROMPT_SECTION,
     order: systemPrompt.getSectionOrder('TEAM_POLICY') + 20,
     text: () => renderAgentPrompt(globalAgentsDir, projectRoot, configuredAgent),
+    interpolate: false,
   })
 }
 
@@ -119,7 +116,6 @@ export function apply(ctx: Context, config: Config = {}): void {
 
   const installOnce = (agent: Agent, projectRoot: string, configuredAgent: ConfiguredAgent): void => {
     if (installed.has(agent)) return
-    if (!hasAgentConfiguration(globalAgentsDir, projectRoot, configuredAgent)) return
     installed.set(agent, install(agent, projectRoot, globalAgentsDir, configuredAgent))
   }
 
@@ -132,18 +128,29 @@ export function apply(ctx: Context, config: Config = {}): void {
     installOnce(agent, await ctx.a2d2.projectRoot(cwd), configuredAgent)
   }
 
-  for (const agent of agents.list()) void maybeInstall(agent)
-  ctx.on('agent/created', ({ agent }) => {
-    void maybeInstall(agent)
+  const logInstallError = (agent: Agent, error: unknown): void => {
+    ctx.logger.error(`a2d2: failed to install Agent prompt section for session "${agent.id}": ${String(error)}`)
+  }
+
+  for (const agent of agents.list()) void maybeInstall(agent).catch(error => { logInstallError(agent, error) })
+  ctx.on('agent/created', async ({ agent }) => {
+    try {
+      await maybeInstall(agent)
+    } catch (error) {
+      logInstallError(agent, error)
+    }
     return undefined
   })
   ctx.on('agent/disposed', ({ agent }) => {
     uninstall(agent)
   })
-  ctx.on('a2d2/session-agent-recorded', ({ session, projectRoot, agent: configuredAgent }) => {
-    if (!isConfiguredAgent(configuredAgent)) return
+  ctx.on('a2d2/session-agent-recorded', ({ session }) => {
     const agent = agents.list().find(candidate => candidate.id === session)
-    if (agent !== undefined) installOnce(agent, projectRoot, configuredAgent)
+    if (agent === undefined) return undefined
+    return maybeInstall(agent).catch(error => {
+      logInstallError(agent, error)
+      return undefined
+    })
   })
   ctx.effect(() => () => {
     for (const dispose of installed.values()) dispose()
