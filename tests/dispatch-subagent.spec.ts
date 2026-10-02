@@ -96,6 +96,7 @@ describe('dispatchSubagent', () => {
     expect(subagents.startContinuable).toHaveBeenCalledWith(expect.objectContaining({
       provider: 'spawn',
       label: 'implement #48',
+      childId: result.session,
       request: expect.objectContaining({
         parent,
         prompt: [{ type: 'text', text: 'Implement issue #48.' }],
@@ -122,6 +123,7 @@ describe('dispatchSubagent', () => {
     })
 
     expect(result).toMatchObject({ model: 'codex/reviewer', agent: 'reviewer' })
+    await expect(service.agentOfSession(root, result.session)).resolves.toBe('reviewer')
     expect(subagents.startContinuable.mock.calls[0]?.[0].request).not.toHaveProperty('persona')
   })
 

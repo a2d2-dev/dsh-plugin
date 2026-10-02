@@ -13,6 +13,7 @@ import {
   SESSION_AGENT_ROUTE_PATH,
   createSessionAgentHandler,
 } from '../src/session-agent-route.ts'
+import { parseSessionAgentsDocument } from '../src/session-agents.ts'
 
 interface HttpResult {
   readonly status: number
@@ -35,6 +36,16 @@ async function send(
   handler: (request: IncomingMessage, response: ServerResponse) => Promise<void>,
   body: unknown,
   headers: Record<string, string> = { host: '10.126.126.12:30710' },
+  method = 'POST',
+): Promise<HttpResult> {
+  return sendRaw(handler, JSON.stringify(body), headers, method)
+}
+
+async function sendRaw(
+  handler: (request: IncomingMessage, response: ServerResponse) => Promise<void>,
+  body: string,
+  headers: Record<string, string> = { host: '10.126.126.12:30710' },
+  method = 'POST',
 ): Promise<HttpResult> {
   const server = createServer((request, response) => {
     void handler(request, response)
@@ -44,16 +55,15 @@ async function send(
   const port = (server.address() as AddressInfo).port
   try {
     return await new Promise<HttpResult>((resolve, reject) => {
-      const encoded = JSON.stringify(body)
       const request = httpRequest({
         hostname: '127.0.0.1',
         port,
-        method: 'POST',
+        method,
         path: SESSION_AGENT_ROUTE_PATH,
         headers: {
           ...headers,
           'content-type': 'application/json',
-          'content-length': Buffer.byteLength(encoded).toString(),
+          'content-length': Buffer.byteLength(body).toString(),
         },
       }, (response) => {
         const chunks: Buffer[] = []
@@ -66,7 +76,7 @@ async function send(
         })
       })
       request.once('error', reject)
-      request.end(encoded)
+      request.end(body)
     })
   } finally {
     server.close()
@@ -88,6 +98,44 @@ describe('session Agent service queries', () => {
 
     await expect(ctx.a2d2.agentOfSession(root, SessionId('session-main'))).resolves.toBe('ceo')
     await expect(ctx.a2d2.agentOfSession(root, SessionId('session-unrecorded'))).resolves.toBeUndefined()
+  })
+
+  it('rejects recording a task main session as a non-CEO Agent', async () => {
+    const root = await tempRoot()
+    const ctx = new Context()
+    await ctx.plugin(A2d2Service, { root })
+    await ctx.a2d2.bindMainSession({
+      cwd: root,
+      issue: 73,
+      mainSession: SessionId('session-main'),
+      now: new Date('2026-10-02T10:00:00.000Z'),
+    })
+
+    await expect(ctx.a2d2.recordSessionAgent(root, SessionId('session-main'), 'engineer')).rejects.toThrow(/main session/)
+    await expect(ctx.a2d2.agentOfSession(root, SessionId('session-main'))).resolves.toBe('ceo')
+  })
+
+  it('treats repeated same-Agent records as idempotent and rejects different-Agent rewrites', async () => {
+    const root = await tempRoot()
+    const ctx = new Context()
+    await ctx.plugin(A2d2Service, { root })
+
+    await ctx.a2d2.recordSessionAgent(root, SessionId('session-worker'), 'engineer')
+    await ctx.a2d2.recordSessionAgent(root, SessionId('session-worker'), 'engineer')
+
+    await expect(ctx.a2d2.agentOfSession(root, SessionId('session-worker'))).resolves.toBe('engineer')
+    await expect(ctx.a2d2.recordSessionAgent(root, SessionId('session-worker'), 'reviewer')).rejects.toThrow(/already recorded/)
+    await expect(ctx.a2d2.agentOfSession(root, SessionId('session-worker'))).resolves.toBe('engineer')
+  })
+})
+
+describe('session Agent ledger document validation', () => {
+  it('rejects malformed documents', () => {
+    expect(() => parseSessionAgentsDocument('[]')).toThrow(/must be a mapping/)
+  })
+
+  it('rejects unknown document versions', () => {
+    expect(() => parseSessionAgentsDocument('version: 2\nsessions: []\n')).toThrow(/reads version 1/)
   })
 })
 
@@ -134,5 +182,66 @@ describe('session Agent registration route', () => {
 
     expect(result).toMatchObject({ status: 400, json: { ok: false, error: { code: 'bad-agent' } } })
     expect(writes).toBe(0)
+  })
+
+  it('rejects non-POST requests', async () => {
+    let writes = 0
+    const handler = createSessionAgentHandler({
+      trustedHosts: () => ['10.126.126.12:30710'],
+      getSession: id => ({ id, header: { cwd: '/tmp/project' } }),
+      recordSessionAgent: async () => { writes += 1 },
+    })
+
+    const result = await send(handler, { session: 'session-chip', agent: 'engineer' }, { host: '10.126.126.12:30710' }, 'GET')
+
+    expect(result).toMatchObject({ status: 405, json: { ok: false, error: { code: 'method-not-allowed' } } })
+    expect(writes).toBe(0)
+  })
+
+  it('rejects malformed JSON before recording', async () => {
+    let writes = 0
+    const handler = createSessionAgentHandler({
+      trustedHosts: () => ['10.126.126.12:30710'],
+      getSession: id => ({ id, header: { cwd: '/tmp/project' } }),
+      recordSessionAgent: async () => { writes += 1 },
+    })
+
+    const result = await sendRaw(handler, '{bad json')
+
+    expect(result).toMatchObject({ status: 400, json: { ok: false, error: { code: 'bad-json' } } })
+    expect(writes).toBe(0)
+  })
+
+  it('maps a main-session record rejection to a 4xx response', async () => {
+    const root = await tempRoot()
+    const ctx = new Context()
+    await ctx.plugin(A2d2Service, { root })
+    await ctx.a2d2.bindMainSession({ cwd: root, issue: 73, mainSession: SessionId('session-main'), now: new Date() })
+    const handler = createSessionAgentHandler({
+      trustedHosts: () => ['10.126.126.12:30710'],
+      getSession: id => ({ id, header: { cwd: root } }),
+      recordSessionAgent: (cwd, sessionId, agent) => ctx.a2d2.recordSessionAgent(cwd, sessionId, agent),
+    })
+
+    const result = await send(handler, { session: 'session-main', agent: 'engineer' })
+
+    expect(result).toMatchObject({ status: 409, json: { ok: false, error: { code: 'record-rejected' } } })
+  })
+
+  it('maps a different-Agent duplicate rejection to a 4xx response', async () => {
+    const root = await tempRoot()
+    const ctx = new Context()
+    await ctx.plugin(A2d2Service, { root })
+    await ctx.a2d2.recordSessionAgent(root, SessionId('session-chip'), 'engineer')
+    const handler = createSessionAgentHandler({
+      trustedHosts: () => ['10.126.126.12:30710'],
+      getSession: id => ({ id, header: { cwd: root } }),
+      recordSessionAgent: (cwd, sessionId, agent) => ctx.a2d2.recordSessionAgent(cwd, sessionId, agent),
+    })
+
+    const result = await send(handler, { session: 'session-chip', agent: 'reviewer' })
+
+    expect(result).toMatchObject({ status: 409, json: { ok: false, error: { code: 'record-rejected' } } })
+    await expect(ctx.a2d2.agentOfSession(root, SessionId('session-chip'))).resolves.toBe('engineer')
   })
 })

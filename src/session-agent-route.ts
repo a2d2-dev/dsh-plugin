@@ -37,6 +37,7 @@ type SessionAgentErrorCode =
   | 'unknown-session'
   | 'no-working-directory'
   | 'bad-agent'
+  | 'record-rejected'
   | 'record-failed'
 
 export interface SessionAgentSession {
@@ -63,6 +64,11 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
 function reasonOf(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error)
   return raw.trim() || 'unknown error'
+}
+
+function isRecordRejected(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  return /main session|already recorded session/u.test(error.message)
 }
 
 async function readJson(request: IncomingMessage): Promise<unknown> {
@@ -151,6 +157,10 @@ export function createSessionAgentHandler(
     try {
       await dependencies.recordSessionAgent(cwd, sessionId, body.agent as StageAgent)
     } catch (error) {
+      if (isRecordRejected(error)) {
+        fail(response, 409, 'record-rejected', reasonOf(error))
+        return
+      }
       fail(response, 500, 'record-failed', reasonOf(error))
       return
     }

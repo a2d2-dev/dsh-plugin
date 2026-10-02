@@ -231,7 +231,7 @@ declare module '@deepseek-ai/cordis' {
       projectRoot: string
       session: SessionId
       agent: StageAgent
-    }): void
+    }): void | Promise<void>
   }
 }
 
@@ -780,9 +780,12 @@ export class A2d2Service extends Service {
    */
   async recordSessionAgent(cwd: string, sessionId: SessionId, agent: StageAgent): Promise<void> {
     if (cwd === '') throw new Error('a2d2: the session records no working directory, so no project holds its Agent')
+    if (await this.taskOfMainSession(cwd, sessionId) !== undefined) {
+      throw new Error(`a2d2: session "${sessionId}" is a task issue main session and already runs as ceo`)
+    }
     const projectRoot = await this.store.projectRoot(cwd)
     await this.sessionAgents.record(projectRoot, sessionId, agent)
-    this.ctx.emit('a2d2/session-agent-recorded', { cwd, projectRoot, session: sessionId, agent })
+    await this.ctx.serial('a2d2/session-agent-recorded', { cwd, projectRoot, session: sessionId, agent })
   }
 
   /**

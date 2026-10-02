@@ -144,8 +144,15 @@ export class SessionAgentStore {
     await mkdir(dirname(path), { recursive: true })
     await withFileLock(path, async () => {
       const document = await this.read(projectRoot)
-      const sessions = document.sessions.filter(entry => entry.sessionId !== sessionId)
-      sessions.push({ sessionId, agent })
+      const existing = document.sessions.find(entry => entry.sessionId === sessionId)
+      if (existing !== undefined) {
+        if (existing.agent === agent) return
+        throw new SessionAgentsDocumentError(
+          'duplicate-session',
+          `session Agent ledger already recorded session "${sessionId}" as ${existing.agent}`,
+        )
+      }
+      const sessions = [...document.sessions, { sessionId, agent }]
       sessions.sort((left, right) => left.sessionId.localeCompare(right.sessionId))
       await writeFileAtomic(path, renderSessionAgentsDocument({ version: SESSION_AGENTS_DOCUMENT_VERSION, sessions }), {
         mode: 0o600,
