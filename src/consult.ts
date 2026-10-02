@@ -76,6 +76,8 @@ const LEGACY_KIND_MOVES = {
   other: 'continue',
 } as const
 
+const STANDALONE_STATION_PATTERN = /^[a-z0-9][a-z0-9-]*$/u
+
 export interface ConsultLocation {
   readonly zone: HighwayZone
   readonly station?: string
@@ -484,15 +486,14 @@ export function parseConsultOutput(text: string, validation?: ConsultValidationC
     if (move === undefined) {
       throw new MalformedCandidatesError(`candidate ${String(index)} has an invalid move`)
     }
-    const station = value.station
-    if (station !== undefined && (typeof station !== 'string' || station.trim() === '')) {
-      throw new MalformedCandidatesError(`candidate ${String(index)} has an invalid station`)
-    }
+    const station = value.station === undefined
+      ? undefined
+      : parseStationId(value.station, `candidate ${String(index)}`)
     return {
       label: value.label,
       input: value.input,
       move,
-      ...(station === undefined ? {} : { station: station.trim() }),
+      ...(station === undefined ? {} : { station }),
     }
   })
   if (location.phaseDone === false) {
@@ -574,6 +575,25 @@ function candidatesWithSetupPrecondition(
   return deepFreeze([setup, ...rest].slice(0, 4))
 }
 
+function parseStationId(value: unknown, label: string): string {
+  if (typeof value !== 'string') {
+    throw new MalformedCandidatesError(`${label} has an invalid station`)
+  }
+  const station = value.trim()
+  if (station === '') {
+    throw new MalformedCandidatesError(`${label} has an invalid station`)
+  }
+  const lowercase = station.toLowerCase()
+  if (lowercase !== station && isClosedHighwayStation(lowercase)) {
+    throw new MalformedCandidatesError(`${label} has a malformed station`)
+  }
+  if (isClosedHighwayStation(station)) return station
+  if (!STANDALONE_STATION_PATTERN.test(station) || Object.prototype.hasOwnProperty.call(Object.prototype, station)) {
+    throw new MalformedCandidatesError(`${label} has an invalid station`)
+  }
+  return station
+}
+
 function parseLocation(value: unknown): ConsultLocation {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     throw new MalformedCandidatesError('model output has no location object')
@@ -587,39 +607,40 @@ function parseLocation(value: unknown): ConsultLocation {
   }
   const station = location.station
   const returnTo = location.returnTo
+  const parsedStation = station === undefined ? undefined : parseStationId(station, `${location.zone} location`)
   switch (location.zone) {
     case 'main':
-      if (typeof station !== 'string' || !isMainStation(station)) {
+      if (parsedStation === undefined || !isMainStation(parsedStation)) {
         throw new MalformedCandidatesError('main location has an invalid station')
       }
       if (returnTo !== undefined) throw new MalformedCandidatesError('main location must not carry returnTo')
-      return { zone: location.zone, station, phaseDone: location.phaseDone }
+      return { zone: location.zone, station: parsedStation, phaseDone: location.phaseDone }
     case 'service':
-      if (typeof station !== 'string' || !isServiceStation(station)) {
+      if (parsedStation === undefined || !isServiceStation(parsedStation)) {
         throw new MalformedCandidatesError('service location has an invalid station')
       }
       if (typeof returnTo !== 'string' || !isMainStation(returnTo)) {
         throw new MalformedCandidatesError('service location requires a valid returnTo')
       }
-      return { zone: location.zone, station, returnTo, phaseDone: location.phaseDone }
+      return { zone: location.zone, station: parsedStation, returnTo, phaseDone: location.phaseDone }
     case 'ramp':
-      if (typeof station !== 'string' || !isRampStation(station)) {
+      if (parsedStation === undefined || !isRampStation(parsedStation)) {
         throw new MalformedCandidatesError('ramp location has an invalid station')
       }
       if (returnTo !== undefined) throw new MalformedCandidatesError('ramp location must not carry returnTo')
-      return { zone: location.zone, station, phaseDone: location.phaseDone }
+      return { zone: location.zone, station: parsedStation, phaseDone: location.phaseDone }
     case 'standalone':
-      if (typeof station !== 'string' || station.trim() === '') {
-        throw new MalformedCandidatesError('standalone location requires a non-empty station')
+      if (parsedStation === undefined || isClosedHighwayStation(parsedStation)) {
+        throw new MalformedCandidatesError('standalone location requires a valid standalone station')
       }
       if (returnTo !== undefined) throw new MalformedCandidatesError('standalone location must not carry returnTo')
-      return { zone: location.zone, station: station.trim(), phaseDone: location.phaseDone }
+      return { zone: location.zone, station: parsedStation, phaseDone: location.phaseDone }
     case 'roadbed':
-      if (typeof station !== 'string' || !isRoadbedStation(station)) {
+      if (parsedStation === undefined || !isRoadbedStation(parsedStation)) {
         throw new MalformedCandidatesError('roadbed location has an invalid station')
       }
       if (returnTo !== undefined) throw new MalformedCandidatesError('roadbed location must not carry returnTo')
-      return { zone: location.zone, station, phaseDone: location.phaseDone }
+      return { zone: location.zone, station: parsedStation, phaseDone: location.phaseDone }
     case 'off-road':
       if (station !== undefined) throw new MalformedCandidatesError('off-road location must not carry station')
       if (returnTo !== undefined) throw new MalformedCandidatesError('off-road location must not carry returnTo')
@@ -640,16 +661,14 @@ function parseNext(value: unknown): ConsultNext {
     throw new MalformedCandidatesError('next is not an object')
   }
   const next = value as Record<string, unknown>
-  if (typeof next.station !== 'string' || next.station.trim() === '') {
-    throw new MalformedCandidatesError('next has an invalid station')
-  }
+  const station = parseStationId(next.station, 'next')
   if (typeof next.move !== 'string' || !isMove(next.move)) {
     throw new MalformedCandidatesError('next has an invalid move')
   }
   if (typeof next.reason !== 'string' || next.reason.trim() === '') {
     throw new MalformedCandidatesError('next has no non-empty reason')
   }
-  return { station: next.station.trim(), move: next.move, reason: next.reason.trim() }
+  return { station, move: next.move, reason: next.reason.trim() }
 }
 
 type ClassifiedError = Error & {

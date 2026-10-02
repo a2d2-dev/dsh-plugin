@@ -94,6 +94,7 @@ const position = 'Implementation is finished; verification has not started.'
 const location = { zone: 'main', station: 'grill', phaseDone: true }
 const next = { station: 'to-spec', move: 'continue', reason: 'the spec needs current context' }
 const candidatesJson = JSON.stringify({ position, location, next, candidates })
+const ceoValidation = { stageAgents: DEFAULT_STAGE_AGENTS, sessionAgent: 'ceo' as const }
 const roots: string[] = []
 
 async function tempRoot(): Promise<string> {
@@ -811,6 +812,37 @@ describe('consult HTTP route', () => {
     expect(await send(createConsultHandler(deps))).toMatchObject({
       status: 200,
       json: { ok: true, value: { sessionAgent: 'ceo' } },
+    })
+  })
+
+  it.each([
+    ['case variant of a closed station', 'Implement'],
+    ['closed station with an invisible suffix', 'implement\u200b'],
+    ['prototype-chain property name', 'constructor'],
+  ])('rejects a continuing next station that is a %s', (_name, station) => {
+    expect(() => parseConsultOutput(JSON.stringify({
+      position,
+      location,
+      next: { station, move: 'continue', reason: 'start implementation' },
+      candidates: [
+        { label: '继续', input: `/${station}`, move: 'continue', station },
+        { label: '派代理', input: 'delegate implementation', move: 'subagent', station },
+      ],
+    }), ceoValidation)).toThrow(/a2d2 consult/)
+  })
+
+  it('continues legal standalone skill targets as CEO stages', () => {
+    expect(parseConsultOutput(JSON.stringify({
+      position,
+      location: { zone: 'standalone', station: 'research', phaseDone: true },
+      next: { station: 'research', move: 'continue', reason: 'standalone skills stay with CEO' },
+      candidates: [
+        { label: '继续 research', input: '/research', move: 'continue', station: 'research' },
+        { label: '开新会话', input: '/research fresh', move: 'clear', station: 'research' },
+      ],
+    }), ceoValidation)).toMatchObject({
+      location: { zone: 'standalone', station: 'research', phaseDone: true },
+      next: { station: 'research', move: 'continue' },
     })
   })
 
