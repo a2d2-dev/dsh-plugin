@@ -446,7 +446,7 @@ export interface ConsultValidationContext {
 }
 
 /** Parse and validate the whole model answer, rejecting every partial shape. */
-export function parseConsultOutput(text: string, validation?: ConsultValidationContext): ConsultOutput {
+export function parseConsultOutput(text: string, validation: ConsultValidationContext): ConsultOutput {
   let parsed: unknown
   try {
     parsed = JSON.parse(unfence(text))
@@ -734,7 +734,7 @@ export async function generateConsultOutput(options: {
   readonly route: ConsultRoute
   readonly sessionId: SessionId
   readonly prompt: string
-  readonly validation?: ConsultValidationContext
+  readonly validation: ConsultValidationContext
   readonly signal: AbortSignal
 }): Promise<ConsultOutput> {
   const messages: Message[] = [createUserMessage({
@@ -786,7 +786,7 @@ export async function generateConsultWithFallback(options: {
   readonly routes: readonly string[]
   readonly sessionId: SessionId
   readonly prompt: string
-  readonly validation?: ConsultValidationContext
+  readonly validation: ConsultValidationContext
   readonly signal: AbortSignal
 }): Promise<ConsultOutput & { readonly answeredBy: string; readonly fallbacks: readonly ConsultFallback[] }> {
   const fallbacks: ConsultFallback[] = []

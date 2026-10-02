@@ -95,6 +95,10 @@ const location = { zone: 'main', station: 'grill', phaseDone: true }
 const next = { station: 'to-spec', move: 'continue', reason: 'the spec needs current context' }
 const candidatesJson = JSON.stringify({ position, location, next, candidates })
 const ceoValidation = { stageAgents: DEFAULT_STAGE_AGENTS, sessionAgent: 'ceo' as const }
+if (false) {
+  // @ts-expect-error parseConsultOutput callers must supply validation context.
+  parseConsultOutput(candidatesJson)
+}
 const roots: string[] = []
 
 async function tempRoot(): Promise<string> {
@@ -414,18 +418,18 @@ describe('next-step consult without orchestration skill coupling', () => {
 
 describe('candidate parsing', () => {
   it('accepts a complete valid answer', () => {
-    expect(parseConsultOutput(candidatesJson)).toEqual({ position, location, next, candidates })
+    expect(parseConsultOutput(candidatesJson, ceoValidation)).toEqual({ position, location, next, candidates })
   })
 
   it('trims the position line', () => {
-    expect(parseConsultOutput(JSON.stringify({ position: `  ${position}\n`, location, next, candidates })).position).toBe(position)
+    expect(parseConsultOutput(JSON.stringify({ position: `  ${position}\n`, location, next, candidates }), ceoValidation).position).toBe(position)
   })
 
   it.each([
     ['a json fence', `\`\`\`json\n${candidatesJson}\n\`\`\``],
     ['a bare fence with surrounding whitespace', `\n\`\`\`\n${candidatesJson}\n\`\`\`\n`],
   ])('unwraps %s around the whole answer', (_name, value) => {
-    expect(parseConsultOutput(value)).toEqual({ position, location, next, candidates })
+    expect(parseConsultOutput(value, ceoValidation)).toEqual({ position, location, next, candidates })
   })
 
   it('maps legacy candidate kind values for one compatibility version', () => {
@@ -437,7 +441,7 @@ describe('candidate parsing', () => {
         { label: 'Stay', input: 'Keep going.', kind: 'stay', station: 'to-spec' },
         { label: 'Other', input: 'Keep going differently.', kind: 'other', station: 'to-spec' },
       ],
-    })).candidates).toEqual([
+    }), ceoValidation).candidates).toEqual([
       { label: 'Stay', input: 'Keep going.', move: 'continue', station: 'to-spec' },
       { label: 'Other', input: 'Keep going differently.', move: 'continue', station: 'to-spec' },
     ])
@@ -462,7 +466,7 @@ describe('candidate parsing', () => {
     ['too few candidates', JSON.stringify({ position, location, next, candidates: candidates.slice(0, 1) })],
     ['missing field', JSON.stringify({ position, location, next, candidates: [{ label: 'x', move: 'continue' }, candidates[1]] })],
   ])('rejects %s without returning a partial result', (_name, value) => {
-    expect(() => parseConsultOutput(value)).toThrow(/a2d2 consult/)
+    expect(() => parseConsultOutput(value, ceoValidation)).toThrow(/a2d2 consult/)
   })
 })
 
@@ -478,6 +482,7 @@ describe('consult generation finishes', () => {
       route: { provider: 'provider-a', model: 'model-a' },
       sessionId,
       prompt: 'consult',
+      validation: ceoValidation,
       signal: new AbortController().signal,
     })).rejects.toThrow(message)
   })
