@@ -212,6 +212,30 @@ describe('wait notices', () => {
     })
   })
 
+  it('sends no "等你回复" for the turn that completed the task issue, and notifies the next turn as usual', async () => {
+    const root = await projectRoot()
+    const { ctx, service, notifier } = await mount(root)
+    await service.bindMainSession({ cwd: root, issue: 86, mainSession, now: new Date() })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+
+    emit(ctx, root, mainSession, 'turn/start', { turn: 1 })
+    await service.completeTask({ cwd: root, caller: mainSession, summary: 'PR #95 已合并，验收通过。' })
+    assistantSays(ctx, root, mainSession, 1, '任务已完成。')
+    emit(ctx, root, mainSession, 'turn/end', { turn: 1, reason: { kind: 'completed' } })
+    await vi.advanceTimersByTimeAsync(60_000)
+    await settle(50)
+
+    expect(notifier?.calls.map(call => call.message.title)).toEqual(['#86 · 已完成'])
+
+    emit(ctx, root, mainSession, 'turn/start', { turn: 2 })
+    assistantSays(ctx, root, mainSession, 2, '还有一个后续问题等你看。')
+    emit(ctx, root, mainSession, 'turn/end', { turn: 2, reason: { kind: 'completed' } })
+    await vi.advanceTimersByTimeAsync(30_000)
+    await vi.waitFor(() => expect(notifier?.calls).toHaveLength(2))
+
+    expect(notifier?.calls[1]?.message.title).toBe('#86 · 等你回复')
+  })
+
   it('starts and runs without a notifier provider, sending nothing and raising nothing', async () => {
     const root = await projectRoot()
     const { ctx, service } = await mount(root, { notifier: false })
