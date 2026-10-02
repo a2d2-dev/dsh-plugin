@@ -247,9 +247,16 @@ sessions:
 
 宿主在询问模型前，还会检查会话 cwd 所属项目的首次使用前置条件：必须存在 `CONTEXT.md` 或 `CONTEXT-MAP.md`，并且必须存在 `docs/agents/issue-tracker.md`。响应带 `preconditions.missing`，prompt 信封也写入同一份宿主事实，避免让模型猜配置状态。只要有缺失，卡片顶部显示「首次使用前：/setup-matt-pocock-skills」路牌，并列出缺失项。宿主还会在解析模型输出之后把 `/setup-matt-pocock-skills` 强制置为首颗芯片；模型已经给出时就移动到首位，否则补上一颗，芯片总数仍最多四颗。模型给出的芯片若 input 精确等于 `/setup-matt-pocock-skills`，是唯一不受跨 Agent continue 规则约束的 `continue` 候选，与宿主插入的 setup 芯片保持一致。已配置项目、以及没有 `preconditions` 字段的旧宿主，都不显示该路牌。
 
-咨询不再沿用当前会话 route，而是按阶段 Agent settings 的 `consult` 候选顺序尝试；提供方错误、限流、拒答或空输出会换下一个候选。非空但畸形的 JSON 不重试，因为这是协议失败，不是 route 可用性问题；这也包括 `phaseDone: true` 时试图 `continue` 到目标 Agent 不等于本会话 Agent 的阶段，或在本会话没有记录 Agent 时试图跨阶段 `continue`，但上面所述精确 setup 芯片例外。响应会带回 `answeredBy`、`fallbacks`、`stageAgents: { stages, agents }`，以及已知时的 `sessionAgent`；卡底显示「由 X 生成」，发生回落时注明原因。浏览器从 `stageAgents` 推导每个公路图标签：阶段 -> Agent -> 该 Agent 在本会话模型目录里的首个候选，显示为「工程师 · gpt-5.5」或「工程师 · 无可用模型」。芯片点击行为与副作用文案仍保持现有语义，留给 #75；当前浏览器只把模型选择来源从已删除的 `stationModels` 改为 `stageAgents`。
+咨询不再沿用当前会话 route，而是按阶段 Agent settings 的 `consult` 候选顺序尝试；提供方错误、限流、拒答或空输出会换下一个候选。非空但畸形的 JSON 不重试，因为这是协议失败，不是 route 可用性问题；这也包括 `phaseDone: true` 时试图 `continue` 到目标 Agent 不等于本会话 Agent 的阶段，或在本会话没有记录 Agent 时试图跨阶段 `continue`，但上面所述精确 setup 芯片例外。响应会带回 `answeredBy`、`fallbacks`、`stageAgents: { stages, agents }`，以及已知时的 `sessionAgent`；卡底显示「由 X 生成」，发生回落时注明原因。浏览器从 `stageAgents` 推导每个公路图标签：阶段 -> Agent -> 该 Agent 在本会话模型目录里的首个候选，显示为「工程师 · gpt-5.5」或「工程师 · 无可用模型」。芯片也按这张表准备（ADR 0007）。芯片永不代发送，也从不切本会话的模型；它只按走法做准备，并把副作用预先写在芯片上：
 
-边界卡底部有一行始终可用的 **其他走法** 折叠入口，列出 continue 之外的通用走法：clear、subagent、compact、handoff。clear 走与 clear 芯片相同的建空会话序列，但没有站点目标时保持新会话默认模型；subagent 准备一段可编辑的输入框文本；compact 与 handoff 打开交接卡。这样想手动交接时仍能从卡片里找到入口，但球上不会再把交接放回 **下一步** 的平级位置。
+- **continue**：填本会话输入框并聚焦。不写副作用，因为它只在下一阶段的 Agent 与本会话的 Agent 相同时出现。
+- **subagent**：本会话不动，填框，指令末尾写明子代理的 Agent；芯片写作「子代理 · 评审」这样的文案。
+- **clear**：在同一工作区新建会话，经 `/a2d2/api/session-agent` 登记为下一阶段的 Agent，按该 Agent 候选取首个在**新会话**模型目录里的模型并选中，打开它，再填它的输入框。芯片写作「新会话 · 工程师（gpt-5.5）」（本会话模型目录尚未读到时写「新会话 · 工程师」）。该 Agent 的候选全不在目录里时，芯片写「工程师无可用模型」，点击只填本会话输入框并提示原因。新建会话失败同样退化为只填本会话；新会话上登记或选模型失败会提示原因，但不阻断填框。
+- **compact / handoff**：打开交接卡；下面的一键交接序列在 take 之前把后继会话登记为下一阶段的 Agent 并选好它的模型。
+
+独立区任意 skill 的 Agent 都是 CEO，芯片与下一阶段行一致。不返回 `stageAgents` 的旧宿主没有 Agent 可言：clear 只新建会话、保持默认模型（「新会话 · 默认模型」），不登记。
+
+边界卡底部有一行始终可用的 **其他走法** 折叠入口，列出 continue 之外的通用走法：clear、subagent、compact、handoff。clear 走与 clear 芯片相同的建空会话序列，但没有阶段目标，因此不登记 Agent、保持新会话默认模型；subagent 准备一段可编辑的输入框文本；compact 与 handoff 打开交接卡。这样想手动交接时仍能从卡片里找到入口，但球上不会再把交接放回 **下一步** 的平级位置。
 
 边界卡会明确显示加载中和路由错误。宿主未读到 `ask-matt` skill 时仍返回降级候选，卡片同时标注 **未读到 ask-matt skill**；生成失败时直接展示路由返回的错误消息并允许重试。每次咨询都会替换上一轮候选状态，不累计芯片或其他副作用。
 
@@ -260,12 +267,12 @@ sessions:
 1. 浏览器在它所在的会话上、通过该会话自己的命令面运行 `/handoff <focus>`，正是这一步让 host 写入骨架、并排入写接续内容的那一轮；
 2. 浏览器等待那一轮，通过会话传输读取会话自身的 `running` 状态——不用定时器，也不用另一个插件渲染出的 DOM，这两者都会在错误的时刻把会话报告为已完成；
 3. 浏览器找到该会话的 workspace，`connectWorkspace` 出一个全新的后继会话；
-4. 当 handoff 或 compact 芯片带入下一阶段目标时，浏览器通过 `stageAgents` 解析该阶段，并在 take 前为后继会话选择该 Agent 的首个可用候选；
+4. 当 handoff 或 compact 芯片带入下一阶段目标时，浏览器通过 `stageAgents` 解析该阶段的 Agent（独立区 skill 为 CEO），经 `/a2d2/api/session-agent` 把后继会话登记为该 Agent，再按该 Agent 候选取首个在后继会话模型目录里的模型并选中——全部在 take 之前；登记或选模型失败会提示原因，交接继续；
 5. 浏览器切焦点到后继会话；
 6. 后继会话继承交接出去的会话的标题，并按 fork 给同级会话编号的同一风格递增（`Ship the store` → `Ship the store (1)`），使一条交接链读起来是同一件有名字的工作，而不是若干个同名会话。源会话没有标题、或重命名被拒绝时，后继保留它的自动标题——一次只丢标题的失败绝不打断一个接续内容已经落地的交接；
 7. 后继会话跑 `/handoff take <session-id>`，这正是让 host 把接续内容注入为它首条 prompt 的动作。
 
-如果等待结束时那一轮还没跑、或仍在运行，序列就停下并指出失败的是哪一步；反正 take 也会拒绝一份未写出的摘要，所以半途而废的交接不可能看起来像已完成。指示球只触及客户端已经组合的服务——会话面与 workspaces 服务——不需要自己的 host 路由，因此这次手势不增加任何 HTTP 表面积。会话不属于任何 workspace 时就没有后继可建；两者中任一服务缺失时，指示球退化为旧行为：把字面 `/handoff ` 追加进草稿并聚焦输入框，发送留给用户。**已有的草稿会被保留**而不是被替换。
+如果等待结束时那一轮还没跑、或仍在运行，序列就停下并指出失败的是哪一步；反正 take 也会拒绝一份未写出的摘要，所以半途而废的交接不可能看起来像已完成。指示球通过客户端已经组合的服务——会话面与 workspaces 服务——自己驱动交接；它唯一用到的 host 路由是上面的 Agent 登记，仅在交接带有下一阶段目标时调用。会话不属于任何 workspace 时就没有后继可建；两者中任一服务缺失时，指示球退化为旧行为：把字面 `/handoff ` 追加进草稿并聚焦输入框，发送留给用户。**已有的草稿会被保留**而不是被替换。
 
 圆球的位置与配色用的是字面量而不是主题变量：本 bundle 的样式先于主题 token 生效，它看不到的变量会解析为空，导致文字在背景上不可读。
 
