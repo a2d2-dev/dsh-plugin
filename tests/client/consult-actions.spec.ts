@@ -234,6 +234,28 @@ describe('requestConsult', () => {
     expect(setPhase).toHaveBeenLastCalledWith({ kind: 'error', message: '下一步咨询返回了无效响应' })
   })
 
+  it.each([
+    ['standalone station with punctuation', { location: { zone: 'standalone', station: 'research!', phaseDone: true } }],
+    ['next station with invisible suffix', { next: { station: 'implement\u200b', move: 'clear', reason: 'bad station' } }],
+    ['candidate station using a prototype property', { candidates: [{ label: '继续', input: '继续', move: 'continue', station: 'constructor' }] }],
+  ])('rejects a response with %s', async (_name, override) => {
+    const setPhase = vi.fn<(phase: ConsultPhase) => void>()
+    await requestConsult({
+      fetch: async () => jsonResponse({
+        ok: true,
+        value: {
+          location: { zone: 'standalone', station: 'research', phaseDone: true },
+          next: { station: 'research', move: 'clear', reason: '继续 research' },
+          candidates: [{ label: '继续', input: '继续', move: 'clear', station: 'research' }],
+          degraded: false,
+          ...override,
+        },
+      }),
+      setPhase,
+    }, 'session-a')
+    expect(setPhase).toHaveBeenLastCalledWith({ kind: 'error', message: '下一步咨询返回了无效响应' })
+  })
+
   it('shows the route error message unchanged', async () => {
     const setPhase = vi.fn<(phase: ConsultPhase) => void>()
     await requestConsult({
