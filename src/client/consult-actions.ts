@@ -143,6 +143,7 @@ export type ConsultPhase =
       readonly answeredBy?: string
       readonly fallbacks?: readonly ConsultFallback[]
       readonly stageAgents?: StageAgentRouteSettings
+      readonly sessionAgent?: StageAgent
       readonly preconditions?: ConsultPreconditions
     }
   | { readonly kind: 'error'; readonly message: string }
@@ -219,6 +220,7 @@ type ConsultResponse =
         readonly answeredBy?: string
         readonly fallbacks?: readonly ConsultFallback[]
         readonly stageAgents?: StageAgentRouteSettings
+        readonly sessionAgent?: StageAgent
         readonly preconditions?: ConsultPreconditions
       }
     }
@@ -237,6 +239,8 @@ const LEGACY_KIND_MOVES = {
   other: 'continue',
 } as const
 
+const STANDALONE_STATION_PATTERN = /^[a-z0-9][a-z0-9-]*$/u
+
 function parseMove(value: unknown, legacyKind?: unknown): Move | undefined {
   if (typeof value === 'string') return isMove(value) ? value : undefined
   if (typeof legacyKind === 'string' && legacyKind in LEGACY_KIND_MOVES) {
@@ -245,18 +249,30 @@ function parseMove(value: unknown, legacyKind?: unknown): Move | undefined {
   return undefined
 }
 
+function parseStationId(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const station = value.trim()
+  if (station === '') return undefined
+  const lowercase = station.toLowerCase()
+  if (lowercase !== station && isClosedHighwayStation(lowercase)) return undefined
+  if (isClosedHighwayStation(station)) return station
+  if (!STANDALONE_STATION_PATTERN.test(station) || Object.prototype.hasOwnProperty.call(Object.prototype, station)) return undefined
+  return station
+}
+
 function parseCandidate(value: unknown): ConsultCandidate | undefined {
   if (!isRecord(value)) return undefined
   if (typeof value.label !== 'string' || value.label.trim() === '') return undefined
   if (typeof value.input !== 'string' || value.input.trim() === '') return undefined
   const move = parseMove(value.move, value.kind)
   if (move === undefined) return undefined
-  if (value.station !== undefined && (typeof value.station !== 'string' || !isClosedHighwayStation(value.station))) return undefined
+  const station = value.station === undefined ? undefined : parseStationId(value.station)
+  if (value.station !== undefined && station === undefined) return undefined
   return {
     label: value.label,
     input: value.input,
     move,
-    ...(value.station === undefined ? {} : { station: value.station.trim() }),
+    ...(station === undefined ? {} : { station }),
   }
 }
 
@@ -267,22 +283,23 @@ function parseLocation(value: unknown): ConsultLocation | undefined {
   if (typeof value.phaseDone !== 'boolean') return undefined
   const station = value.station
   const returnTo = value.returnTo
+  const parsedStation = station === undefined ? undefined : parseStationId(station)
   if (returnTo !== undefined && (typeof returnTo !== 'string' || !isMainStation(returnTo))) return undefined
   switch (value.zone) {
     case 'main':
-      if (typeof station !== 'string' || !isMainStation(station) || returnTo !== undefined) return undefined
+      if (parsedStation === undefined || !isMainStation(parsedStation) || returnTo !== undefined) return undefined
       break
     case 'service':
-      if (typeof station !== 'string' || !isServiceStation(station) || returnTo === undefined) return undefined
+      if (parsedStation === undefined || !isServiceStation(parsedStation) || returnTo === undefined) return undefined
       break
     case 'ramp':
-      if (typeof station !== 'string' || !isRampStation(station) || returnTo !== undefined) return undefined
+      if (parsedStation === undefined || !isRampStation(parsedStation) || returnTo !== undefined) return undefined
       break
     case 'standalone':
-      if (typeof station !== 'string' || station.trim() === '' || returnTo !== undefined) return undefined
+      if (parsedStation === undefined || isClosedHighwayStation(parsedStation) || returnTo !== undefined) return undefined
       break
     case 'roadbed':
-      if (typeof station !== 'string' || !isRoadbedStation(station) || returnTo !== undefined) return undefined
+      if (parsedStation === undefined || !isRoadbedStation(parsedStation) || returnTo !== undefined) return undefined
       break
     case 'off-road':
       if (station !== undefined || returnTo !== undefined) return undefined
@@ -290,7 +307,7 @@ function parseLocation(value: unknown): ConsultLocation | undefined {
   }
   return {
     zone: value.zone,
-    ...(station === undefined ? {} : { station: station.trim() }),
+    ...(parsedStation === undefined ? {} : { station: parsedStation }),
     ...(returnTo === undefined ? {} : { returnTo }),
     phaseDone: value.phaseDone,
   }
@@ -299,10 +316,11 @@ function parseLocation(value: unknown): ConsultLocation | undefined {
 function parseNext(value: unknown): ConsultNext | undefined {
   if (value === undefined) return undefined
   if (!isRecord(value)) return undefined
-  if (typeof value.station !== 'string' || !isClosedHighwayStation(value.station)) return undefined
+  const station = parseStationId(value.station)
+  if (station === undefined) return undefined
   if (typeof value.move !== 'string' || !isMove(value.move)) return undefined
   if (typeof value.reason !== 'string' || value.reason.trim() === '') return undefined
-  return { station: value.station.trim(), move: value.move, reason: value.reason.trim() }
+  return { station, move: value.move, reason: value.reason.trim() }
 }
 
 function parseFallback(value: unknown): ConsultFallback | undefined {
@@ -419,6 +437,10 @@ export function parseConsultResponse(value: unknown): ConsultResponse {
   if (value.value.stageAgents !== undefined && stageAgents === undefined) {
     throw new Error('下一步咨询返回了无效响应')
   }
+  const sessionAgent = value.value.sessionAgent
+  if (sessionAgent !== undefined && !isStageAgent(sessionAgent)) {
+    throw new Error('下一步咨询返回了无效响应')
+  }
   const preconditions = parsePreconditions(value.value.preconditions)
   if (value.value.preconditions !== undefined && preconditions === undefined) {
     throw new Error('下一步咨询返回了无效响应')
@@ -438,6 +460,7 @@ export function parseConsultResponse(value: unknown): ConsultResponse {
       ...(answeredBy === undefined ? {} : { answeredBy: answeredBy.trim() }),
       ...(parsedFallbacks === undefined ? {} : { fallbacks: parsedFallbacks as ConsultFallback[] }),
       ...(stageAgents === undefined ? {} : { stageAgents }),
+      ...(sessionAgent === undefined ? {} : { sessionAgent }),
       ...(preconditions === undefined ? {} : { preconditions }),
     },
   }
@@ -466,6 +489,7 @@ export async function requestConsult(deps: ConsultRequestDeps, sessionId: string
       ...(result.value.answeredBy === undefined ? {} : { answeredBy: result.value.answeredBy }),
       ...(result.value.fallbacks === undefined ? {} : { fallbacks: result.value.fallbacks }),
       ...(result.value.stageAgents === undefined ? {} : { stageAgents: result.value.stageAgents }),
+      ...(result.value.sessionAgent === undefined ? {} : { sessionAgent: result.value.sessionAgent }),
       ...(result.value.preconditions === undefined ? {} : { preconditions: result.value.preconditions }),
     })
   } catch (error) {

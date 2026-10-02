@@ -99,6 +99,7 @@ describe('requestConsult', () => {
           answeredBy: 'codex/gpt-6',
           fallbacks: [{ route: 'claude-bray/claude-fable-5-1', kind: 'refusal', reason: 'policy text without legacy keyword' }],
           stageAgents: { stages: DEFAULT_STAGE_AGENTS.stages, agents: DEFAULT_STAGE_AGENTS.agents },
+          sessionAgent: 'ceo',
         },
       }),
       setPhase,
@@ -113,6 +114,32 @@ describe('requestConsult', () => {
       answeredBy: 'codex/gpt-6',
       fallbacks: [{ route: 'claude-bray/claude-fable-5-1', kind: 'refusal', reason: 'policy text without legacy keyword' }],
       stageAgents: { stages: DEFAULT_STAGE_AGENTS.stages, agents: DEFAULT_STAGE_AGENTS.agents },
+      sessionAgent: 'ceo',
+    })
+  })
+
+  it('accepts standalone skill station names in the ready card', async () => {
+    const setPhase = vi.fn<(phase: ConsultPhase) => void>()
+    await requestConsult({
+      fetch: async () => jsonResponse({
+        ok: true,
+        value: {
+          position: '正在做独立 research。',
+          location: { zone: 'standalone', station: 'research', phaseDone: true },
+          next: { station: 'research', move: 'continue', reason: '继续独立技能' },
+          candidates: [{ label: '继续 research', input: '/research', move: 'continue', station: 'research' }],
+          degraded: false,
+        },
+      }),
+      setPhase,
+    }, 'session-a')
+    expect(setPhase).toHaveBeenLastCalledWith({
+      kind: 'ready',
+      position: '正在做独立 research。',
+      location: { zone: 'standalone', station: 'research', phaseDone: true },
+      next: { station: 'research', move: 'continue', reason: '继续独立技能' },
+      candidates: [{ label: '继续 research', input: '/research', move: 'continue', station: 'research' }],
+      degraded: false,
     })
   })
 
@@ -184,6 +211,44 @@ describe('requestConsult', () => {
             { label: '代理', input: '整理资料', move: 'subagent' },
           ],
           degraded: false,
+        },
+      }),
+      setPhase,
+    }, 'session-a')
+    expect(setPhase).toHaveBeenLastCalledWith({ kind: 'error', message: '下一步咨询返回了无效响应' })
+  })
+
+  it('rejects a response with an illegal session Agent', async () => {
+    const setPhase = vi.fn<(phase: ConsultPhase) => void>()
+    await requestConsult({
+      fetch: async () => jsonResponse({
+        ok: true,
+        value: {
+          candidates: [{ label: '继续', input: '继续', move: 'continue' }],
+          degraded: false,
+          sessionAgent: 'boss',
+        },
+      }),
+      setPhase,
+    }, 'session-a')
+    expect(setPhase).toHaveBeenLastCalledWith({ kind: 'error', message: '下一步咨询返回了无效响应' })
+  })
+
+  it.each([
+    ['standalone station with punctuation', { location: { zone: 'standalone', station: 'research!', phaseDone: true } }],
+    ['next station with invisible suffix', { next: { station: 'implement\u200b', move: 'clear', reason: 'bad station' } }],
+    ['candidate station using a prototype property', { candidates: [{ label: '继续', input: '继续', move: 'continue', station: 'constructor' }] }],
+  ])('rejects a response with %s', async (_name, override) => {
+    const setPhase = vi.fn<(phase: ConsultPhase) => void>()
+    await requestConsult({
+      fetch: async () => jsonResponse({
+        ok: true,
+        value: {
+          location: { zone: 'standalone', station: 'research', phaseDone: true },
+          next: { station: 'research', move: 'clear', reason: '继续 research' },
+          candidates: [{ label: '继续', input: '继续', move: 'clear', station: 'research' }],
+          degraded: false,
+          ...override,
         },
       }),
       setPhase,
