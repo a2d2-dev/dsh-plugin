@@ -15,6 +15,7 @@ import type {
   ConsultPhase,
   ConsultSelectionDeps,
 } from '../../src/client/consult-actions.ts'
+import { DEFAULT_STAGE_AGENTS } from '../../src/stage-agent-data.ts'
 import type { ClientSessionsService, ClientWorkspaceNavigation, ClientWorkspacesService } from '../../src/client/context.ts'
 
 function jsonResponse(value: unknown): { json(): Promise<unknown> } {
@@ -84,7 +85,7 @@ describe('requestConsult', () => {
     })
   })
 
-  it('carries answer attribution, fallbacks, and station models into the ready card', async () => {
+  it('carries answer attribution, fallbacks, and stage Agents into the ready card', async () => {
     const setPhase = vi.fn<(phase: ConsultPhase) => void>()
     await requestConsult({
       fetch: async () => jsonResponse({
@@ -97,7 +98,7 @@ describe('requestConsult', () => {
           degraded: false,
           answeredBy: 'codex/gpt-6',
           fallbacks: [{ route: 'claude-bray/claude-fable-5-1', kind: 'refusal', reason: 'policy text without legacy keyword' }],
-          stationModels: { grill: ['claude-bray/claude-fable-5-1', 'codex/gpt-6'] },
+          stageAgents: { stages: DEFAULT_STAGE_AGENTS.stages, agents: DEFAULT_STAGE_AGENTS.agents },
         },
       }),
       setPhase,
@@ -111,7 +112,7 @@ describe('requestConsult', () => {
       degraded: false,
       answeredBy: 'codex/gpt-6',
       fallbacks: [{ route: 'claude-bray/claude-fable-5-1', kind: 'refusal', reason: 'policy text without legacy keyword' }],
-      stationModels: { grill: ['claude-bray/claude-fable-5-1', 'codex/gpt-6'] },
+      stageAgents: { stages: DEFAULT_STAGE_AGENTS.stages, agents: DEFAULT_STAGE_AGENTS.agents },
     })
   })
 
@@ -338,10 +339,7 @@ const readyWithModels: Extract<ConsultPhase, { kind: 'ready' }> = {
   location: { zone: 'main', station: 'grill', phaseDone: true },
   next: { station: 'to-spec', move: 'continue', reason: '需要本轮原始推理' },
   candidates: [{ label: '写 spec', input: '/to-spec', move: 'continue', station: 'to-spec' }],
-  stationModels: {
-    'to-spec': ['claude-bray/claude-fable-5-1', 'codex/gpt-6'],
-    'code-review': ['claude-bray/claude-fable-5-1'],
-  },
+  stageAgents: { stages: DEFAULT_STAGE_AGENTS.stages, agents: DEFAULT_STAGE_AGENTS.agents },
 }
 
 describe('selectModel', () => {
@@ -363,7 +361,7 @@ describe('station route decision', () => {
   it('chooses the first station candidate present in the session catalog', () => {
     expect(stationRouteDecision({
       station: 'to-spec',
-      stationModels: readyWithModels.stationModels,
+      stageAgents: readyWithModels.stageAgents,
       catalog: ['codex/gpt-6', 'claude-bray/claude-fable-5-1'],
       current: routeSelection('codex/gpt-6'),
     })).toEqual({
@@ -377,7 +375,7 @@ describe('station route decision', () => {
   it('keeps the current model when no station candidate is in the catalog', () => {
     expect(stationRouteDecision({
       station: 'to-spec',
-      stationModels: readyWithModels.stationModels,
+      stageAgents: readyWithModels.stageAgents,
       catalog: ['codex/gpt-5.5'],
       current: routeSelection('codex/gpt-6'),
     })).toEqual({
@@ -406,7 +404,6 @@ describe('candidate model effect', () => {
   it('previews a clear chip as a new session with the target station model', () => {
     expect(candidateModelEffect({ label: '实现', input: '/implement #15', move: 'clear', station: 'implement' }, {
       ...readyWithModels,
-      stationModels: { implement: ['codex/gpt-5.5', 'claude-bray/claude-opus-5-5'] },
     }, {
       current: routeSelection('claude-bray/claude-fable-5-1'),
       catalog: ['codex/gpt-5.5', 'claude-bray/claude-fable-5-1'],
@@ -416,7 +413,6 @@ describe('candidate model effect', () => {
   it('previews a clear chip as default model when no station candidate is available', () => {
     expect(candidateModelEffect({ label: '实现', input: '/implement #15', move: 'clear', station: 'implement' }, {
       ...readyWithModels,
-      stationModels: { implement: ['codex/gpt-5.5'] },
     }, {
       current: routeSelection('claude-bray/claude-fable-5-1'),
       catalog: ['claude-bray/claude-fable-5-1'],
@@ -523,10 +519,7 @@ describe('model-aware candidate selection', () => {
       station: 'implement',
     }, {
       sessionId: 'session-a',
-      phase: {
-        ...readyWithModels,
-        stationModels: { implement: ['codex/gpt-5.5', 'claude-bray/claude-opus-5-5'] },
-      },
+      phase: readyWithModels,
     })).resolves.toBe(true)
 
     expect(events).toEqual([
@@ -561,10 +554,7 @@ describe('model-aware candidate selection', () => {
       station: 'implement',
     }, {
       sessionId: 'session-a',
-      phase: {
-        ...readyWithModels,
-        stationModels: { implement: ['codex/gpt-5.5'] },
-      },
+      phase: readyWithModels,
     })).resolves.toBe(true)
 
     expect(events).toEqual(['connect:workspace-1', 'draft:current:/implement #15'])
