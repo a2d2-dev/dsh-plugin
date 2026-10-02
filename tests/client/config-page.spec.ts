@@ -6,13 +6,19 @@ import type { SlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import { apply, inject } from '../../src/client/index.tsx'
 import {
   A2d2ConfigSection,
+  addConfigCandidate,
+  configCandidateRows,
   configHighwayView,
-  configModelRows,
+  configUpdatePayload,
+  configWarnings,
   loadModelRouteCatalog,
+  moveConfigCandidate,
   normalizeConfigInjected,
   probeResultText,
+  removeConfigCandidate,
+  setConfigStageAgent,
 } from '../../src/client/config-page.tsx'
-import { DEFAULT_STATION_MODELS } from '../../src/station-model-data.ts'
+import { DEFAULT_STAGE_AGENTS } from '../../src/stage-agent-data.ts'
 
 class StubSlots extends Service {
   private readonly declared = new Set<string>()
@@ -147,48 +153,76 @@ describe('A2D2 config client registration', () => {
 })
 
 describe('A2D2 config page view model', () => {
-  it('draws the whole Matt highway and marks unconfigured stations as no model switch', () => {
-    const view = configHighwayView(DEFAULT_STATION_MODELS)
+  it('draws the whole Matt highway with stage Agent labels and a fixed standalone Agent', () => {
+    const view = configHighwayView(DEFAULT_STAGE_AGENTS, ['claude-bray/claude-fable-5-1', 'codex/gpt-5.5'])
 
-    expect(view.stations.map(station => [station.id, station.role, station.models])).toEqual([
-      ['grill', '澄清目标与约束', 'claude-fable-5-1'],
-      ['to-spec', '沉淀规格与验收', 'claude-fable-5-1'],
-      ['to-tickets', '拆成可实施工单', 'claude-fable-5-1'],
-      ['implement', '实现与 TDD', 'gpt-5.5'],
-      ['code-review', '独立评审与收口', 'claude-fable-5-1'],
-      ['prototype', '服务区：原型验证', 'gpt-5.5'],
-      ['handoff', '服务区：交接', '不切模型'],
-      ['triage', '匝道，并入 implement', 'claude-fable-5-1'],
-      ['diagnosing-bugs', '匝道，并入 implement', 'gpt-5.5'],
-      ['wayfinder', '匝道，并入 to-spec', 'claude-fable-5-1'],
-      ['improve-codebase-architecture', '匝道，并入 grill', 'claude-fable-5-1'],
-      ['domain-modeling', '路基：领域建模', '不切模型'],
-      ['codebase-design', '路基：模块设计', '不切模型'],
-      ['standalone', '独立区：其他 skill', '不切模型'],
+    expect(view.stations.map(station => [station.id, station.role, station.agent, station.models])).toEqual([
+      ['grill', '澄清目标与约束', 'CEO', 'claude-fable-5-1'],
+      ['to-spec', '沉淀规格与验收', 'CEO', 'claude-fable-5-1'],
+      ['to-tickets', '拆成可实施工单', 'CEO', 'claude-fable-5-1'],
+      ['implement', '实现与 TDD', '工程师', 'gpt-5.5'],
+      ['code-review', '独立评审与收口', '评审', 'claude-fable-5-1'],
+      ['prototype', '服务区：原型验证', 'CEO', 'claude-fable-5-1'],
+      ['handoff', '服务区：交接', 'CEO', 'claude-fable-5-1'],
+      ['triage', '匝道，并入 implement', 'CEO', 'claude-fable-5-1'],
+      ['diagnosing-bugs', '匝道，并入 implement', 'CEO', 'claude-fable-5-1'],
+      ['wayfinder', '匝道，并入 to-spec', 'CEO', 'claude-fable-5-1'],
+      ['improve-codebase-architecture', '匝道，并入 grill', 'CEO', 'claude-fable-5-1'],
+      ['domain-modeling', '路基：领域建模', 'CEO', 'claude-fable-5-1'],
+      ['codebase-design', '路基：模块设计', 'CEO', 'claude-fable-5-1'],
+      ['standalone', '独立区：其他 skill', 'CEO（任意 skill）', 'claude-fable-5-1'],
     ])
     expect(view.aside).toBe('服务区、匝道、路基、独立区均为 Matt 流程的一部分；匝道并入点由插件固定。')
   })
 
-  it('offers editable route rows for every configured station and readonly rows for no-switch stations', () => {
-    const rows = configModelRows(DEFAULT_STATION_MODELS)
+  it('edits stage Agents without changing the candidate lists', () => {
+    const edited = setConfigStageAgent(DEFAULT_STAGE_AGENTS, 'to-spec', 'reviewer')
 
-    expect(rows.map(row => [row.scope, row.label, row.kind, row.routes])).toEqual([
-      ['consult', '咨询', 'editable', DEFAULT_STATION_MODELS.consult],
-      ['grill', '/grill · 澄清目标与约束', 'editable', DEFAULT_STATION_MODELS.stations.grill],
-      ['to-spec', '/to-spec · 沉淀规格与验收', 'editable', DEFAULT_STATION_MODELS.stations['to-spec']],
-      ['to-tickets', '/to-tickets · 拆成可实施工单', 'editable', DEFAULT_STATION_MODELS.stations['to-tickets']],
-      ['implement', '/implement · 实现与 TDD', 'editable', DEFAULT_STATION_MODELS.stations.implement],
-      ['code-review', '/code-review · 独立评审与收口', 'editable', DEFAULT_STATION_MODELS.stations['code-review']],
-      ['prototype', '/prototype · 服务区：原型验证', 'editable', DEFAULT_STATION_MODELS.stations.prototype],
-      ['handoff', '/handoff · 服务区：交接', 'fixed', []],
-      ['triage', '/triage · 匝道，并入 implement', 'editable', DEFAULT_STATION_MODELS.stations.triage],
-      ['diagnosing-bugs', '/diagnosing-bugs · 匝道，并入 implement', 'editable', DEFAULT_STATION_MODELS.stations['diagnosing-bugs']],
-      ['wayfinder', '/wayfinder · 匝道，并入 to-spec', 'editable', DEFAULT_STATION_MODELS.stations.wayfinder],
-      ['improve-codebase-architecture', '/improve-codebase-architecture · 匝道，并入 grill', 'editable', DEFAULT_STATION_MODELS.stations['improve-codebase-architecture']],
-      ['domain-modeling', '/domain-modeling · 路基：领域建模', 'fixed', []],
-      ['codebase-design', '/codebase-design · 路基：模块设计', 'fixed', []],
-      ['standalone', '独立区 · 其他 skill', 'fixed', []],
+    expect(edited.stages['to-spec']).toBe('reviewer')
+    expect(DEFAULT_STAGE_AGENTS.stages['to-spec']).toBe('ceo')
+    expect(edited.agents).toEqual(DEFAULT_STAGE_AGENTS.agents)
+    expect(edited.consult).toEqual(DEFAULT_STAGE_AGENTS.consult)
+  })
+
+  it('offers four editable candidate rows for CEO, engineer, reviewer, and consult', () => {
+    const rows = configCandidateRows(DEFAULT_STAGE_AGENTS)
+
+    expect(rows.map(row => [row.scope, row.label, row.routes])).toEqual([
+      ['ceo', 'CEO', DEFAULT_STAGE_AGENTS.agents.ceo],
+      ['engineer', '工程师', DEFAULT_STAGE_AGENTS.agents.engineer],
+      ['reviewer', '评审', DEFAULT_STAGE_AGENTS.agents.reviewer],
+      ['consult', '咨询', DEFAULT_STAGE_AGENTS.consult],
     ])
+  })
+
+  it('adds, removes, and sorts candidates only from the model catalog', () => {
+    const added = addConfigCandidate(DEFAULT_STAGE_AGENTS, 'reviewer', 'codex/gpt-5.5', ['codex/gpt-5.5'])
+    expect(added.agents.reviewer).toEqual(['claude-bray/claude-fable-5-1', 'codex/gpt-6', 'codex/gpt-5.5'])
+    expect(() => addConfigCandidate(DEFAULT_STAGE_AGENTS, 'reviewer', 'missing/model', ['codex/gpt-5.5'])).toThrow('模型目录')
+
+    const moved = moveConfigCandidate(added, 'reviewer', 2, -1)
+    expect(moved.agents.reviewer).toEqual(['claude-bray/claude-fable-5-1', 'codex/gpt-5.5', 'codex/gpt-6'])
+
+    const removed = removeConfigCandidate(moved, 'reviewer', 'codex/gpt-5.5')
+    expect(removed.agents.reviewer).toEqual(DEFAULT_STAGE_AGENTS.agents.reviewer)
+  })
+
+  it('warns in Chinese and serializes the complete host settings shape with revision', () => {
+    const warned = {
+      ...DEFAULT_STAGE_AGENTS,
+      agents: {
+        ...DEFAULT_STAGE_AGENTS.agents,
+        reviewer: DEFAULT_STAGE_AGENTS.agents.engineer,
+      },
+    }
+
+    expect(configWarnings(warned)).toEqual([
+      'a2d2: 评审和工程师的首选模型同为 codex/gpt-5.5；通常应为评审配置不同的首选模型',
+    ])
+    expect(configUpdatePayload(warned, 7)).toEqual({
+      settings: warned,
+      expectedRevision: 7,
+    })
   })
 
   it('uses a stable default model-route loader across renders', () => {

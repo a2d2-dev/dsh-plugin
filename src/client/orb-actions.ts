@@ -16,6 +16,7 @@
  * @module @deepseek-ai/dsh-a2d2/client/orb-actions
  */
 
+import { isClosedHighwayStation } from '../highway.ts'
 import type {
   ClientCommandResult,
   ClientSessionFace,
@@ -264,7 +265,7 @@ async function takeOnSuccessor(
 
 async function selectSuccessorModel(deps: OrbHandoffDeps, successor: string): Promise<void> {
   const target = deps.successorModel
-  if (target?.station === undefined || target.stationModels === undefined) return
+  if (target?.station === undefined || target.stageAgents === undefined || !isClosedHighwayStation(target.station)) return
   if (deps.modelDirectories === undefined) {
     deps.notify?.('选择后继会话模型失败：模型目录服务不可用')
     return
@@ -274,7 +275,7 @@ async function selectSuccessorModel(deps: OrbHandoffDeps, successor: string): Pr
     const directory = await face.load()
     const decision = stationRouteDecision({
       station: target.station,
-      stationModels: target.stationModels,
+      stageAgents: target.stageAgents,
       catalog: modelCatalogRoutes(directory),
       current: directory.current,
     })

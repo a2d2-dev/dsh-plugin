@@ -102,7 +102,7 @@
 
 ### A2D2 配置页
 
-浏览器 bundle 会向 DSH 设置导航注册一个独立 section：**A2D2 配置**。当前浏览器 UI 仍是 #72 接手前的站点模型编辑器；宿主路由现在读写的是上面的阶段 Agent settings 形状。
+浏览器 bundle 会向 DSH 设置导航注册一个独立 section：**A2D2 配置**。页面首块画完整 Matt 公路图，并为每个闭集阶段提供 Agent 选择器；独立区显示为 **CEO（任意 skill）**，不可编辑。公路图下方编辑四个有序候选列表：CEO、工程师、评审与咨询。
 
 页面不会从浏览器直接写任意 settings 命名空间。它调用本插件自己的受信任路由 `/a2d2/api/config`，该路由复用下一步咨询的 host / origin / fetch 信任判据。请求体上限是 64 KiB，JSON 解析失败会被拒绝；读取会返回当前 settings revision，保存必须带着该 revision 整体替换 `stageAgents` 值：`stages`、`agents`、`consult` 三节必须齐全，`stages` 必须覆盖全部闭集公路阶段，`agents` 必须包含 `ceo`、`engineer`、`reviewer`，`stageAgents` 内未知顶层键（例如旧形状的 `stations`）会被拒绝。缺 revision 不会写入；若保存时 revision 已过期，路由拒绝写入并返回最新值；空列表、格式错误 route 等 schema 失败会直接回显原因，且不会落盘。
 
@@ -247,7 +247,7 @@ sessions:
 
 宿主在询问模型前，还会检查会话 cwd 所属项目的首次使用前置条件：必须存在 `CONTEXT.md` 或 `CONTEXT-MAP.md`，并且必须存在 `docs/agents/issue-tracker.md`。响应带 `preconditions.missing`，prompt 信封也写入同一份宿主事实，避免让模型猜配置状态。只要有缺失，卡片顶部显示「首次使用前：/setup-matt-pocock-skills」路牌，并列出缺失项。宿主还会在解析模型输出之后把 `/setup-matt-pocock-skills` 强制置为首颗芯片；模型已经给出时就移动到首位，否则补上一颗，芯片总数仍最多四颗。已配置项目、以及没有 `preconditions` 字段的旧宿主，都不显示该路牌。
 
-咨询不再沿用当前会话 route，而是按阶段 Agent settings 的 `consult` 候选顺序尝试；提供方错误、限流、拒答或空输出会换下一个候选。非空但畸形的 JSON 不重试，因为这是协议失败，不是 route 可用性问题。响应会带回 `answeredBy`、`fallbacks` 和 `stageAgents: { stages, agents }`；卡底显示「由 X 生成」，发生回落时注明原因。客户端芯片选模型仍是 #72 接手前的 `stationModels` 行为，作为浏览器后续工作列出。
+咨询不再沿用当前会话 route，而是按阶段 Agent settings 的 `consult` 候选顺序尝试；提供方错误、限流、拒答或空输出会换下一个候选。非空但畸形的 JSON 不重试，因为这是协议失败，不是 route 可用性问题。响应会带回 `answeredBy`、`fallbacks` 和 `stageAgents: { stages, agents }`；卡底显示「由 X 生成」，发生回落时注明原因。浏览器从 `stageAgents` 推导每个公路图标签：阶段 -> Agent -> 该 Agent 在本会话模型目录里的首个候选，显示为「工程师 · gpt-5.5」或「工程师 · 无可用模型」。芯片点击行为与副作用文案仍保持现有语义，留给 #75；当前浏览器只把模型选择来源从已删除的 `stationModels` 改为 `stageAgents`。
 
 边界卡底部有一行始终可用的 **其他走法** 折叠入口，列出 continue 之外的通用走法：clear、subagent、compact、handoff。clear 走与 clear 芯片相同的建空会话序列，但没有站点目标时保持新会话默认模型；subagent 准备一段可编辑的输入框文本；compact 与 handoff 打开交接卡。这样想手动交接时仍能从卡片里找到入口，但球上不会再把交接放回 **下一步** 的平级位置。
 
@@ -260,7 +260,7 @@ sessions:
 1. 浏览器在它所在的会话上、通过该会话自己的命令面运行 `/handoff <focus>`，正是这一步让 host 写入骨架、并排入写接续内容的那一轮；
 2. 浏览器等待那一轮，通过会话传输读取会话自身的 `running` 状态——不用定时器，也不用另一个插件渲染出的 DOM，这两者都会在错误的时刻把会话报告为已完成；
 3. 浏览器找到该会话的 workspace，`connectWorkspace` 出一个全新的后继会话；
-4. 当 handoff 或 compact 芯片带入下一阶段目标时，#72 会把浏览器更新为通过 `stageAgents` 解析该阶段；当前浏览器代码仍使用旧的站点模型目标；
+4. 当 handoff 或 compact 芯片带入下一阶段目标时，浏览器通过 `stageAgents` 解析该阶段，并在 take 前为后继会话选择该 Agent 的首个可用候选；
 5. 浏览器切焦点到后继会话；
 6. 后继会话继承交接出去的会话的标题，并按 fork 给同级会话编号的同一风格递增（`Ship the store` → `Ship the store (1)`），使一条交接链读起来是同一件有名字的工作，而不是若干个同名会话。源会话没有标题、或重命名被拒绝时，后继保留它的自动标题——一次只丢标题的失败绝不打断一个接续内容已经落地的交接；
 7. 后继会话跑 `/handoff take <session-id>`，这正是让 host 把接续内容注入为它首条 prompt 的动作。

@@ -8,12 +8,14 @@
  */
 
 import { createElement } from 'react'
+import type { ReactNode } from 'react'
 import css from './orb.module.css'
-import type { HighwayView } from './highway-view.ts'
+import type { HighwayView, HighwayViewStation } from './highway-view.ts'
 
 export interface HighwayMapProps {
   readonly view: HighwayView
   readonly mode?: 'readonly' | 'editable'
+  readonly renderStationControl?: (station: HighwayViewStation) => ReactNode
 }
 
 export function HighwayMap(props: HighwayMapProps): ReturnType<typeof createElement> {
@@ -38,10 +40,16 @@ export function HighwayMap(props: HighwayMapProps): ReturnType<typeof createElem
           createElement('span', { className: css.highwayName }, `/${station.id}`),
           createElement('span', { className: css.highwayRole }, station.role),
         ),
-        station.models === undefined ? null : createElement('span', { className: css.highwayModel }, station.models),
+        props.renderStationControl === undefined ? null : props.renderStationControl(station),
+        stationModelLabel(station) === undefined ? null : createElement('span', { className: css.highwayModel }, stationModelLabel(station)),
       )),
     ),
   )
+}
+
+function stationModelLabel(station: HighwayViewStation): string | undefined {
+  if (station.agent === undefined) return station.models
+  return `${station.agent} · ${station.models ?? '无可用模型'}`
 }
 
 function stateClass(state: HighwayView['stations'][number]['state']): string {
