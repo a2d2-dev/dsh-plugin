@@ -452,18 +452,12 @@ describe('station route decision', () => {
 })
 
 describe('candidate model effect', () => {
-  it('previews a continue chip model switch', () => {
+  it('writes no side effect on a continue chip, because it never switches this session', () => {
     expect(candidateModelEffect(readyWithModels.candidates[0]!, readyWithModels, {
       current: routeSelection('codex/gpt-6'),
       catalog: ['claude-bray/claude-fable-5-1', 'codex/gpt-6'],
-    })).toBe('切到 claude-fable-5-1')
-  })
-
-  it('previews keeping the current model when no station candidate is available', () => {
-    expect(candidateModelEffect(readyWithModels.candidates[0]!, readyWithModels, {
-      current: routeSelection('codex/gpt-6'),
-      catalog: ['codex/gpt-6'],
-    })).toBe('保持当前模型')
+    })).toBeUndefined()
+    expect(candidateModelEffect(readyWithModels.candidates[0]!, readyWithModels, undefined)).toBeUndefined()
   })
 
   it('previews a clear chip as a new session with the target station model', () => {
@@ -652,37 +646,12 @@ describe('model-aware candidate selection', () => {
     expect(deps.command).not.toHaveBeenCalled()
   })
 
-  it('does not switch before filling when the available station model is already current', async () => {
+  it('fills and focuses this session for a continue chip without loading or switching its model', async () => {
     const events: string[] = []
     const deps = {
       ...selectionDoubles(),
-      appendToDraft: vi.fn((input: string) => {
-        events.push(`draft:${input}`)
-        return true
-      }),
-      modelDirectories: modelDirectory(
-        'claude-bray/claude-fable-5-1',
-        ['claude-bray/claude-fable-5-1', 'codex/gpt-6'],
-        events,
-      ),
-    }
-
-    await expect(selectConsultCandidate(deps, readyWithModels.candidates[0]!, {
-      sessionId: 'session-a',
-      phase: readyWithModels,
-    })).resolves.toBe(true)
-
-    expect(events).toEqual(['load', 'draft:/to-spec'])
-    expect(deps.notify).not.toHaveBeenCalled()
-    expect(deps.command).not.toHaveBeenCalled()
-  })
-
-  it('selects a different available station model before filling and focusing', async () => {
-    const events: string[] = []
-    const deps = {
-      ...selectionDoubles(),
-      appendToDraft: vi.fn((input: string) => {
-        events.push(`draft:${input}`)
+      appendToDraft: vi.fn((input: string, target?: string) => {
+        events.push(`draft:${target ?? 'current'}:${input}`)
         return true
       }),
       focusComposer: vi.fn(() => { events.push('focus') }),
@@ -698,68 +667,12 @@ describe('model-aware candidate selection', () => {
       phase: readyWithModels,
     })).resolves.toBe(true)
 
-    expect(events).toEqual([
-      'load',
-      'select:claude-bray/claude-fable-5-1',
-      'draft:/to-spec',
-      'focus',
-    ])
+    expect(events).toEqual(['draft:current:/to-spec', 'focus'])
     expect(deps.notify).not.toHaveBeenCalled()
     expect(deps.command).not.toHaveBeenCalled()
   })
 
-  it('keeps the current model when station candidates are absent from the session catalog', async () => {
-    const events: string[] = []
-    const deps = {
-      ...selectionDoubles(),
-      appendToDraft: vi.fn((input: string) => {
-        events.push(`draft:${input}`)
-        return true
-      }),
-      modelDirectories: modelDirectory('codex/gpt-6', ['codex/gpt-6'], events),
-    }
-
-    await expect(selectConsultCandidate(deps, readyWithModels.candidates[0]!, {
-      sessionId: 'session-a',
-      phase: readyWithModels,
-    })).resolves.toBe(true)
-
-    expect(events).toEqual(['load', 'draft:/to-spec'])
-    expect(deps.notify).not.toHaveBeenCalled()
-    expect(deps.command).not.toHaveBeenCalled()
-  })
-
-  it('fills the composer and reports the reason when model selection fails', async () => {
-    const events: string[] = []
-    const deps = {
-      ...selectionDoubles(),
-      appendToDraft: vi.fn((input: string) => {
-        events.push(`draft:${input}`)
-        return true
-      }),
-      modelDirectories: failingModelDirectory(
-        'codex/gpt-6',
-        ['claude-bray/claude-fable-5-1', 'codex/gpt-6'],
-        new Error('adapter rejected the model'),
-        events,
-      ),
-    }
-
-    await expect(selectConsultCandidate(deps, readyWithModels.candidates[0]!, {
-      sessionId: 'session-a',
-      phase: readyWithModels,
-    })).resolves.toBe(true)
-
-    expect(events).toEqual([
-      'load',
-      'select:claude-bray/claude-fable-5-1',
-      'draft:/to-spec',
-    ])
-    expect(deps.notify).toHaveBeenCalledWith('切换模型失败：adapter rejected the model')
-    expect(deps.command).not.toHaveBeenCalled()
-  })
-
-  it('fills the composer and reports that the session model directory service is missing', async () => {
+  it('fills a continue chip without complaint when no model directory service is composed', async () => {
     const deps = selectionDoubles()
 
     await expect(selectConsultCandidate(deps, readyWithModels.candidates[0]!, {
@@ -768,7 +681,7 @@ describe('model-aware candidate selection', () => {
     })).resolves.toBe(true)
 
     expect(deps.appendToDraft).toHaveBeenCalledWith('/to-spec')
-    expect(deps.notify).toHaveBeenCalledWith('模型目录服务不可用，已只填入输入框')
+    expect(deps.notify).not.toHaveBeenCalled()
     expect(deps.command).not.toHaveBeenCalled()
   })
 

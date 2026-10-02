@@ -617,16 +617,7 @@ export function candidateModelEffect(
   directory: ClientModelDirectorySnapshot | undefined,
 ): string | undefined {
   if (candidate.move === 'clear') return newSessionEffectLabel(candidate, phase, directory)
-  if (candidate.move !== 'continue') return undefined
-  const station = candidateStation(candidate, phase)
-  if (station === undefined || phase?.kind !== 'ready') return undefined
-  if (directory === undefined) return '保持当前模型'
-  return stationRouteDecision({
-    station,
-    stageAgents: phase.stageAgents,
-    catalog: modelCatalogRoutes(directory),
-    current: directory.current,
-  }).label
+  return undefined
 }
 
 function subagentInput(input: string, route: string | undefined): string {
@@ -721,7 +712,7 @@ async function prepareCandidateInput(
   candidate: ConsultCandidate,
   context: ConsultSelectionContext | undefined,
 ): Promise<string> {
-  if (candidate.move !== 'continue' && candidate.move !== 'subagent') return candidate.input
+  if (candidate.move !== 'subagent') return candidate.input
   const phase = context?.phase
   const station = candidateStation(candidate, phase)
   if (station === undefined || phase?.kind !== 'ready' || phase.stageAgents === undefined) return candidate.input
@@ -748,15 +739,7 @@ async function prepareCandidateInput(
     current: directory.current,
   })
 
-  if (candidate.move === 'subagent') return subagentInput(candidate.input, decision.route)
-  if (decision.kind === 'switch') {
-    try {
-      await selectModel(face, decision.selection)
-    } catch (error) {
-      deps.notify?.(`切换模型失败：${errorMessage(error)}`)
-    }
-  }
-  return candidate.input
+  return subagentInput(candidate.input, decision.route)
 }
 
 /**
