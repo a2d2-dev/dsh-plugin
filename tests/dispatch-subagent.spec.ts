@@ -170,6 +170,23 @@ describe('dispatchSubagent', () => {
     expect(subagents.startContinuable).not.toHaveBeenCalled()
   })
 
+  it.each(['constructor', '__proto__', 'toString'])('rejects %s as an unknown stage before model selection', async (stage) => {
+    const root = await tempRoot()
+    const { service, subagents } = await mount(root, stageAgents('engineer', ['codex/gpt-5.5']), ['codex/gpt-5.5'])
+    const parent = stubAgent(root, mainSession)
+    await service.bindMainSession({ cwd: root, issue: 41, mainSession, now: new Date() })
+
+    await expect(service.dispatchSubagent({
+      cwd: root,
+      stage: stage as never,
+      issue: 48,
+      prompt: 'Implement issue #48.',
+      parent,
+      signal: new AbortController().signal,
+    })).rejects.toThrow(`unknown stage "${stage}"`)
+    expect(subagents.startContinuable).not.toHaveBeenCalled()
+  })
+
   it('uses the changed stage Agent table on the next dispatch', async () => {
     const root = await tempRoot()
     const { service, subagents } = await mount(root, stageAgents('engineer', ['codex/old']), ['codex/old', 'codex/new'])

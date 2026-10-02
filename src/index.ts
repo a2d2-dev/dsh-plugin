@@ -37,6 +37,7 @@ import {
 } from './handoff-document.ts'
 import { handoffInstruction } from './handoff-instruction.ts'
 import { handoffPrompt } from './handoff-prompt.ts'
+import { isClosedHighwayStation } from './highway.ts'
 import { indicatorProjectionDefinition } from './indicator-projection.ts'
 import type { HandoffThresholds, ModelPrice } from './indicator-projection.ts'
 import { PANEL_ROUTE_PATH, createPanelHandler } from './panel.ts'
@@ -764,8 +765,8 @@ export class A2d2Service extends Service {
     if (task === undefined) {
       throw new Error(`a2d2: session "${parent.id}" is not the main session of a task issue and cannot dispatch subagents`)
     }
+    if (!isClosedHighwayStation(request.stage)) throw new Error(`a2d2: unknown stage "${request.stage}"`)
     const configuredAgent = this.stageAgents.stages[request.stage]
-    if (configuredAgent === undefined) throw new Error(`a2d2: unknown stage "${request.stage}"`)
     const model = await this.selectStageModel(request.stage)
     const route = splitModelRoute(model)
     const persona = await this.readSpecialAgentPersona(cwd, request.agentName)
@@ -879,10 +880,10 @@ export class A2d2Service extends Service {
     return (this.ctx.get as unknown as (name: string) => T | undefined).call(this.ctx, name)
   }
 
-  private async selectStageModel(stage: Stage): Promise<string> {
+  private async selectStageModel(stage: string): Promise<string> {
+    if (!isClosedHighwayStation(stage)) throw new Error(`a2d2: unknown stage "${stage}"`)
     const settings = this.stageAgents
     const agent = settings.stages[stage]
-    if (agent === undefined) throw new Error(`a2d2: unknown stage "${stage}"`)
     return await this.selectModelCandidate(`stage "${stage}" Agent "${agent}"`, modelCandidatesForStage(settings, stage))
   }
 
