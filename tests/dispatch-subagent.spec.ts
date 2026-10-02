@@ -1,6 +1,6 @@
 /**
- * Dispatching subagents from a main session: stage Agent model selection, special
- * Agent persona loading, and the continuable start request sent to DSH.
+ * Dispatching subagents from a main session: stage Agent model selection, child
+ * session Agent recording, and the continuable start request sent to DSH.
  *
  * @module dsh-a2d2/tests/dispatch-subagent
  */
@@ -90,6 +90,7 @@ describe('dispatchSubagent', () => {
     })
 
     expect(result).toEqual({ session: 'session-child', model: 'codex/gpt-5.5', agent: 'engineer' })
+    await expect(service.agentOfSession(root, SessionId('session-child'))).resolves.toBe('engineer')
     expect(subagents.startContinuable).toHaveBeenCalledOnce()
     expect(subagents.startContinuable).toHaveBeenCalledWith(expect.objectContaining({
       provider: 'spawn',

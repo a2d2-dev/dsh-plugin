@@ -41,6 +41,8 @@ import { isClosedHighwayStation } from './highway.ts'
 import { indicatorProjectionDefinition } from './indicator-projection.ts'
 import type { HandoffThresholds, ModelPrice } from './indicator-projection.ts'
 import { PANEL_ROUTE_PATH, createPanelHandler } from './panel.ts'
+import { SESSION_AGENT_ROUTE_PATH, createSessionAgentHandler } from './session-agent-route.ts'
+import { SessionAgentStore } from './session-agents.ts'
 import { parseSessionId, redactText } from './handoff.ts'
 import { DEFAULT_SKILLS_ROOT, readSkillSource, resolveSkillsRoot } from './skill-source.ts'
 import {
@@ -177,6 +179,21 @@ export type {
   PanelTask,
   PanelTaskIssue,
 } from './panel.ts'
+export {
+  SESSION_AGENT_ROUTE_PATH,
+  createSessionAgentHandler,
+} from './session-agent-route.ts'
+export type { SessionAgentDependencies, SessionAgentSession } from './session-agent-route.ts'
+export {
+  SESSION_AGENTS_DOCUMENT_VERSION,
+  SESSION_AGENTS_FILE_SEGMENTS,
+  SessionAgentStore,
+  SessionAgentsDocumentError,
+  parseSessionAgentsDocument,
+  renderSessionAgentsDocument,
+  sessionAgentsFile,
+} from './session-agents.ts'
+export type { SessionAgentRecord, SessionAgentsDocument, SessionAgentsDocumentErrorCode } from './session-agents.ts'
 export {
   LEGACY_TASK_DOCUMENT_VERSION,
   TASK_DOCUMENT_VERSION,
@@ -463,6 +480,7 @@ export class A2d2Service extends Service {
   }) as z<Config>
 
   private readonly store: TaskDocumentStore
+  private readonly sessionAgents: SessionAgentStore
   private readonly projectMarkers: readonly string[]
   private readonly skillsRoot: string
   private readonly thresholds: HandoffThresholds
@@ -508,6 +526,7 @@ export class A2d2Service extends Service {
       ...(root === undefined ? {} : { root }),
       projectMarkers: [...projectMarkers],
     })
+    this.sessionAgents = new SessionAgentStore()
     this.projectMarkers = [...projectMarkers]
     this.prices = new Map(Object.entries(config.modelPrices ?? {}))
     for (const [route, price] of this.prices) {
@@ -523,6 +542,7 @@ export class A2d2Service extends Service {
     this.publishIndicator()
     this.publishConsult()
     this.publishConfig()
+    this.publishSessionAgent()
     this.publishPanel()
     // Stated once at load: whether the browser half received these is otherwise
     // only visible by looking at the indicator, which never reports absence.
@@ -749,6 +769,32 @@ export class A2d2Service extends Service {
   }
 
   /**
+   * Record the Agent assigned to a non-main session created as an A2D2 Agent.
+   * @param cwd - absolute session working directory, locating the project ledger.
+   * @param sessionId - the session to record.
+   * @param agent - the Agent the session runs as.
+   */
+  async recordSessionAgent(cwd: string, sessionId: SessionId, agent: StageAgent): Promise<void> {
+    if (cwd === '') throw new Error('a2d2: the session records no working directory, so no project holds its Agent')
+    await this.sessionAgents.record(await this.store.projectRoot(cwd), sessionId, agent)
+  }
+
+  /**
+   * The A2D2 Agent assigned to one session, if any.
+   *
+   * Main sessions are CEO by task binding and are never stored in the session
+   * Agent ledger; non-main sessions are read from the project-local ledger.
+   * @param cwd - absolute session working directory, locating the project.
+   * @param sessionId - the session to query.
+   * @returns the session Agent, or `undefined` when the session has none.
+   */
+  async agentOfSession(cwd: string, sessionId: SessionId): Promise<StageAgent | undefined> {
+    if (cwd === '') throw new Error('a2d2: the session records no working directory, so no project holds its Agent')
+    if (await this.taskOfMainSession(cwd, sessionId) !== undefined) return 'ceo'
+    return await this.sessionAgents.agentOf(await this.store.projectRoot(cwd), sessionId)
+  }
+
+  /**
    * Dispatch a continuable child subagent from a task's main session.
    * @param request - station, target task issue, optional special Agent, and parent Agent.
    * @returns the child session id plus the effective model and Agent identity.
@@ -764,8 +810,12 @@ export class A2d2Service extends Service {
       throw new Error(`a2d2: session "${parent.id}" is not the main session of a task issue and cannot dispatch subagents`)
     }
     if (!isClosedHighwayStation(request.stage)) throw new Error(`a2d2: unknown stage "${request.stage}"`)
-    const configuredAgent = this.stageAgents.stages[request.stage]
-    const model = await this.selectStageModel(request.stage)
+    const settings = this.stageAgents
+    const configuredAgent = settings.stages[request.stage]
+    const model = await this.selectModelCandidate(
+      `stage "${request.stage}" Agent "${configuredAgent}"`,
+      modelCandidatesForStage(settings, request.stage),
+    )
     const route = splitModelRoute(model)
     const persona = await this.readSpecialAgentPersona(cwd, request.agentName)
     const subagents = this.getService<SubagentsRuntime>('subagents')
@@ -781,6 +831,7 @@ export class A2d2Service extends Service {
       },
       signal: request.signal,
     })
+    await this.recordSessionAgent(cwd, started.childId, configuredAgent)
     return { session: started.childId, model, agent: configuredAgent }
   }
 
@@ -1055,6 +1106,34 @@ export class A2d2Service extends Service {
       routeCtx.effect(
         () => server.register({ kind: 'exact', path: CONFIG_ROUTE_PATH, handler }),
         'a2d2 config route',
+      )
+    })
+  }
+
+  /** Publish the trusted browser route that records a session's A2D2 Agent. */
+  private publishSessionAgent(): void {
+    this.ctx.inject(['webServer'], (routeCtx) => {
+      type WebServer = {
+        register(route: {
+          kind: 'exact'
+          path: string
+          handler: ReturnType<typeof createSessionAgentHandler>
+        }): () => void
+      }
+      type WebRuntime = { readonly trustedHosts: readonly string[] }
+      const getService = <T>(name: string): T | undefined => (
+        (routeCtx.get as unknown as (name: string) => T | undefined).call(routeCtx, name)
+      )
+      const server = getService<WebServer>('webServer')
+      if (server === undefined) return
+      const handler = createSessionAgentHandler({
+        trustedHosts: () => getService<WebRuntime>('webRuntime')?.trustedHosts ?? [],
+        getSession: id => routeCtx.get('sessions')?.get(id),
+        recordSessionAgent: (cwd, sessionId, agent) => this.recordSessionAgent(cwd, sessionId, agent),
+      })
+      routeCtx.effect(
+        () => server.register({ kind: 'exact', path: SESSION_AGENT_ROUTE_PATH, handler }),
+        'a2d2 session Agent route',
       )
     })
   }
