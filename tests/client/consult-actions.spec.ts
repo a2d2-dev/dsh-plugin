@@ -2,13 +2,15 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   OTHER_MOVE_OPTIONS,
   CONSULT_ROUTE_PATH,
+  SESSION_AGENT_ROUTE_PATH,
   candidateModelEffect,
+  chipAgentTarget,
   consultAttributionLine,
   requestConsult,
   selectConsultCandidate,
   selectModel,
   selectOtherMove,
-  stationRouteDecision,
+  sessionAgentRegistrar,
 } from '../../src/client/consult-actions.ts'
 import type {
   ConsultCandidate,
@@ -329,48 +331,44 @@ function selectionDoubles() {
   }
 }
 
+/**
+ * Per-session model directories recording `load:<session>` and
+ * `select:<session>:<route>`; `catalogs` overrides one session's catalog.
+ */
 function modelDirectory(
   current: string,
   catalog: readonly string[],
   events: string[] = [],
+  options: {
+    readonly catalogs?: Readonly<Record<string, readonly string[]>>
+    readonly select?: () => Promise<unknown>
+  } = {},
 ): NonNullable<ConsultSelectionDeps['modelDirectories']> {
   return {
-    directoryFor: () => ({
+    directoryFor: (sessionId: string) => ({
       load: vi.fn(async () => {
-        events.push('load')
+        events.push(`load:${sessionId}`)
         return {
           current: routeSelection(current),
-          catalog,
+          catalog: options.catalogs?.[sessionId] ?? catalog,
         }
       }),
       select: vi.fn(async (selection) => {
-        events.push(`select:${selection.provider}/${selection.model}`)
+        events.push(`select:${sessionId}:${selection.provider}/${selection.model}`)
+        return await options.select?.()
       }),
     }),
   }
 }
 
-function failingModelDirectory(
-  current: string,
-  catalog: readonly string[],
-  error: Error,
-  events: string[] = [],
-): NonNullable<ConsultSelectionDeps['modelDirectories']> {
-  return {
-    directoryFor: () => ({
-      load: vi.fn(async () => {
-        events.push('load')
-        return {
-          current: routeSelection(current),
-          catalog,
-        }
-      }),
-      select: vi.fn(async (selection) => {
-        events.push(`select:${selection.provider}/${selection.model}`)
-        throw error
-      }),
-    }),
-  }
+function registrar(
+  events: string[],
+  outcome: () => Promise<void> = async () => {},
+): NonNullable<ConsultSelectionDeps['registerSessionAgent']> {
+  return vi.fn(async (sessionId: string, agent: string) => {
+    events.push(`register:${sessionId}:${agent}`)
+    await outcome()
+  })
 }
 
 function routeSelection(route: string): { provider: string; model: string } {
@@ -407,6 +405,8 @@ const readyWithModels: Extract<ConsultPhase, { kind: 'ready' }> = {
   stageAgents: { stages: DEFAULT_STAGE_AGENTS.stages, agents: DEFAULT_STAGE_AGENTS.agents },
 }
 
+const implementClear: ConsultCandidate = { label: '实现', input: '/implement #15', move: 'clear', station: 'implement' }
+
 describe('selectModel', () => {
   const selection = { provider: 'codex', model: 'gpt-6' }
   const face = (result: unknown) => ({ load: vi.fn(), select: vi.fn(async () => result) })
@@ -422,65 +422,102 @@ describe('selectModel', () => {
   })
 })
 
-describe('station route decision', () => {
-  it('chooses the first station candidate present in the session catalog', () => {
-    expect(stationRouteDecision({
-      station: 'to-spec',
-      stageAgents: readyWithModels.stageAgents,
-      catalog: ['codex/gpt-6', 'claude-bray/claude-fable-5-1'],
-      current: routeSelection('codex/gpt-6'),
-    })).toEqual({
-      kind: 'switch',
-      route: 'claude-bray/claude-fable-5-1',
-      selection: { provider: 'claude-bray', model: 'claude-fable-5-1' },
-      label: '切到 claude-fable-5-1',
+describe('session Agent registrar', () => {
+  it('posts the session and Agent to the host registration route', async () => {
+    const fetch = vi.fn(async (_input: string, _init: { method: 'POST'; headers: Record<string, string>; body: string }) =>
+      jsonResponse({ ok: true, value: { session: 'session-new', agent: 'engineer' } }))
+
+    await expect(sessionAgentRegistrar(fetch)('session-new', 'engineer')).resolves.toBeUndefined()
+
+    expect(SESSION_AGENT_ROUTE_PATH).toBe('/a2d2/api/session-agent')
+    expect(fetch).toHaveBeenCalledWith('/a2d2/api/session-agent', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ session: 'session-new', agent: 'engineer' }),
     })
   })
 
-  it('keeps the current model when no station candidate is in the catalog', () => {
-    expect(stationRouteDecision({
-      station: 'to-spec',
-      stageAgents: readyWithModels.stageAgents,
-      catalog: ['codex/gpt-5.5'],
-      current: routeSelection('codex/gpt-6'),
-    })).toEqual({
-      kind: 'keep',
-      route: 'codex/gpt-6',
-      label: '保持当前模型',
+  it('rejects with the route message when the host refuses the registration', async () => {
+    const fetch = vi.fn(async () => jsonResponse({
+      ok: false,
+      error: { code: 'record-rejected', message: 'session already recorded session as reviewer' },
+    }))
+
+    await expect(sessionAgentRegistrar(fetch)('session-new', 'engineer'))
+      .rejects.toThrow('session already recorded session as reviewer')
+  })
+
+  it('rejects an answer that is not a route envelope', async () => {
+    await expect(sessionAgentRegistrar(async () => jsonResponse('nope'))('session-new', 'engineer'))
+      .rejects.toThrow('登记会话 Agent 返回了无效响应')
+  })
+})
+
+describe('chip Agent target', () => {
+  it('reads closed stations from the stage Agent table and runs standalone skills as CEO', () => {
+    expect(chipAgentTarget('implement', readyWithModels.stageAgents)).toEqual({
+      agent: 'engineer',
+      label: '工程师',
+      routes: ['codex/gpt-5.5', 'claude-bray/claude-opus-5-5'],
     })
+    expect(chipAgentTarget('research', readyWithModels.stageAgents)?.agent).toBe('ceo')
+    expect(chipAgentTarget('implement', undefined)).toBeUndefined()
+    expect(chipAgentTarget(undefined, readyWithModels.stageAgents)).toBeUndefined()
   })
 })
 
 describe('candidate model effect', () => {
-  it('previews a continue chip model switch', () => {
+  it('writes no side effect on a continue chip, because it never switches this session', () => {
     expect(candidateModelEffect(readyWithModels.candidates[0]!, readyWithModels, {
       current: routeSelection('codex/gpt-6'),
       catalog: ['claude-bray/claude-fable-5-1', 'codex/gpt-6'],
-    })).toBe('切到 claude-fable-5-1')
+    })).toBeUndefined()
+    expect(candidateModelEffect(readyWithModels.candidates[0]!, readyWithModels, undefined)).toBeUndefined()
   })
 
-  it('previews keeping the current model when no station candidate is available', () => {
-    expect(candidateModelEffect(readyWithModels.candidates[0]!, readyWithModels, {
-      current: routeSelection('codex/gpt-6'),
-      catalog: ['codex/gpt-6'],
-    })).toBe('保持当前模型')
+  it('writes the subagent Agent on a subagent chip', () => {
+    expect(candidateModelEffect(
+      { label: '派评审', input: '让子代理评审当前分支', move: 'subagent', station: 'code-review' },
+      readyWithModels,
+      undefined,
+    )).toBe('子代理 · 评审')
+    expect(candidateModelEffect(
+      { label: '派研究', input: '派子代理调研', move: 'subagent', station: 'research' },
+      readyWithModels,
+      undefined,
+    )).toBe('子代理 · CEO')
   })
 
-  it('previews a clear chip as a new session with the target station model', () => {
-    expect(candidateModelEffect({ label: '实现', input: '/implement #15', move: 'clear', station: 'implement' }, {
-      ...readyWithModels,
-    }, {
+  it('writes the next stage Agent and its first available model on a clear chip', () => {
+    expect(candidateModelEffect(implementClear, readyWithModels, {
       current: routeSelection('claude-bray/claude-fable-5-1'),
-      catalog: ['codex/gpt-5.5', 'claude-bray/claude-fable-5-1'],
-    })).toBe('新会话 · gpt-5.5')
+      catalog: ['claude-bray/claude-opus-5-5', 'codex/gpt-5.5', 'claude-bray/claude-fable-5-1'],
+    })).toBe('新会话 · 工程师（gpt-5.5）')
   })
 
-  it('previews a clear chip as default model when no station candidate is available', () => {
-    expect(candidateModelEffect({ label: '实现', input: '/implement #15', move: 'clear', station: 'implement' }, {
-      ...readyWithModels,
-    }, {
+  it('writes CEO with its model on a clear chip into a standalone skill', () => {
+    expect(candidateModelEffect({ label: '调研', input: '/research DSH', move: 'clear', station: 'research' }, readyWithModels, {
+      current: routeSelection('codex/gpt-5.5'),
+      catalog: ['codex/gpt-6'],
+    })).toBe('新会话 · CEO（gpt-6）')
+  })
+
+  it('writes that the Agent has no usable model when none of its candidates is in the catalog', () => {
+    expect(candidateModelEffect(implementClear, readyWithModels, {
       current: routeSelection('claude-bray/claude-fable-5-1'),
       catalog: ['claude-bray/claude-fable-5-1'],
+    })).toBe('工程师无可用模型')
+  })
+
+  it('writes the Agent alone while the session model directory is not loaded', () => {
+    expect(candidateModelEffect(implementClear, readyWithModels, undefined)).toBe('新会话 · 工程师')
+  })
+
+  it('writes the default model on a clear chip when the host sent no stage Agent table', () => {
+    const { stageAgents: _omitted, ...oldHost } = readyWithModels
+    expect(candidateModelEffect(implementClear, oldHost, {
+      current: routeSelection('codex/gpt-6'),
+      catalog: ['codex/gpt-5.5'],
     })).toBe('新会话 · 默认模型')
   })
 })
@@ -559,88 +596,195 @@ describe.each([
   })
 })
 
-describe('model-aware candidate selection', () => {
-  it('creates a clear successor, selects its station model, opens it, and fills its draft without sending', async () => {
-    const events: string[] = []
-    const deps = {
+describe('chip selection by Agent', () => {
+  /** Doubles for a clear chip whose every capability records into `events`. */
+  function clearDeps(events: string[], overrides: Partial<ConsultSelectionDeps> & {
+    readonly connect?: () => Promise<string>
+  } = {}) {
+    const { connect, ...rest } = overrides
+    return {
       ...selectionDoubles(),
-      ...clearSessionDeps(events),
+      ...clearSessionDeps(events, connect),
       appendToDraft: vi.fn((input: string, target?: string) => {
         events.push(`draft:${target ?? 'current'}:${input}`)
         return true
       }),
       focusComposer: vi.fn(() => { events.push('focus') }),
+      notify: vi.fn((message: string) => { events.push(`notify:${message}`) }),
       modelDirectories: modelDirectory(
         'claude-bray/claude-fable-5-1',
-        ['codex/gpt-5.5', 'claude-bray/claude-fable-5-1'],
+        ['claude-bray/claude-opus-5-5', 'codex/gpt-5.5', 'claude-bray/claude-fable-5-1'],
         events,
       ),
+      registerSessionAgent: registrar(events),
+      ...rest,
     }
+  }
 
-    await expect(selectConsultCandidate(deps, {
-      label: '实现',
-      input: '/implement #15',
-      move: 'clear',
-      station: 'implement',
-    }, {
-      sessionId: 'session-a',
-      phase: readyWithModels,
-    })).resolves.toBe(true)
+  const clearContext = { sessionId: 'session-a', phase: readyWithModels }
+
+  it('creates a clear successor, records it as the next stage Agent, selects that Agent model, opens it, and fills it', async () => {
+    const events: string[] = []
+    const deps = clearDeps(events)
+
+    await expect(selectConsultCandidate(deps, implementClear, clearContext)).resolves.toBe(true)
 
     expect(events).toEqual([
+      'load:session-a',
       'connect:workspace-1',
-      'load',
-      'select:codex/gpt-5.5',
+      'register:session-new:engineer',
+      'load:session-new',
+      'select:session-new:codex/gpt-5.5',
       'open:session-new',
       'draft:session-new:/implement #15',
       'focus',
     ])
     expect(deps.closeConsult).toHaveBeenCalledOnce()
-    expect(deps.notify).not.toHaveBeenCalled()
+    expect(deps.command).not.toHaveBeenCalled()
+  })
+
+  it('starts a clear successor into a standalone skill as CEO', async () => {
+    const events: string[] = []
+    const deps = clearDeps(events)
+
+    await expect(selectConsultCandidate(deps, {
+      label: '调研', input: '/research DSH', move: 'clear', station: 'research',
+    }, clearContext)).resolves.toBe(true)
+
+    expect(events).toContain('register:session-new:ceo')
+    expect(events).toContain('select:session-new:claude-bray/claude-fable-5-1')
+    expect(events.at(-2)).toBe('draft:session-new:/research DSH')
+  })
+
+  it('only fills this session and says why when no candidate of the Agent is in the catalog', async () => {
+    const events: string[] = []
+    const deps = clearDeps(events, {
+      modelDirectories: modelDirectory('claude-bray/claude-fable-5-1', ['claude-bray/claude-fable-5-1'], events),
+    })
+
+    await expect(selectConsultCandidate(deps, implementClear, clearContext)).resolves.toBe(true)
+
+    expect(events).toEqual([
+      'load:session-a',
+      'notify:工程师无可用模型，已只填入本会话输入框',
+      'draft:current:/implement #15',
+      'focus',
+    ])
     expect(deps.command).not.toHaveBeenCalled()
   })
 
   it('falls back to this session draft when clear cannot create a successor', async () => {
     const events: string[] = []
-    const deps = {
-      ...selectionDoubles(),
-      ...clearSessionDeps(events, async () => { throw new Error('workspace unavailable') }),
-      appendToDraft: vi.fn((input: string, target?: string) => {
-        events.push(`draft:${target ?? 'current'}:${input}`)
-        return true
-      }),
-      modelDirectories: modelDirectory('codex/gpt-6', ['codex/gpt-6'], events),
-    }
+    const deps = clearDeps(events, { connect: async () => { throw new Error('workspace unavailable') } })
 
-    await expect(selectConsultCandidate(deps, {
-      label: '新会话',
-      input: '/implement #15',
-      move: 'clear',
-      station: 'implement',
-    }, {
-      sessionId: 'session-a',
-      phase: readyWithModels,
-    })).resolves.toBe(true)
+    await expect(selectConsultCandidate(deps, implementClear, clearContext)).resolves.toBe(true)
 
-    expect(events).toEqual(['connect:workspace-1', 'draft:current:/implement #15'])
-    expect(deps.notify).toHaveBeenCalledWith('创建新会话失败：workspace unavailable，已只填入本会话输入框')
+    expect(events).toEqual([
+      'load:session-a',
+      'connect:workspace-1',
+      'notify:创建新会话失败：workspace unavailable，已只填入本会话输入框',
+      'draft:current:/implement #15',
+      'focus',
+    ])
     expect(deps.command).not.toHaveBeenCalled()
   })
 
-  it('creates a clear successor without selecting a model when no station is known', async () => {
+  it('still selects the model and fills the successor when the Agent registration fails', async () => {
     const events: string[] = []
-    const deps = {
-      ...selectionDoubles(),
-      ...clearSessionDeps(events),
-      appendToDraft: vi.fn((input: string, target?: string) => {
-        events.push(`draft:${target ?? 'current'}:${input}`)
-        return true
-      }),
-      focusComposer: vi.fn(() => { events.push('focus') }),
-      modelDirectories: modelDirectory('codex/gpt-6', ['codex/gpt-6'], events),
-    }
+    const deps = clearDeps(events, {
+      registerSessionAgent: registrar(events, async () => { throw new Error('session-new is a task issue main session') }),
+    })
 
-    await expect(selectOtherMove(deps, 'clear', { sessionId: 'session-a' })).resolves.toBe(true)
+    await expect(selectConsultCandidate(deps, implementClear, clearContext)).resolves.toBe(true)
+
+    expect(events).toEqual([
+      'load:session-a',
+      'connect:workspace-1',
+      'register:session-new:engineer',
+      'notify:登记新会话 Agent 失败：session-new is a task issue main session',
+      'load:session-new',
+      'select:session-new:codex/gpt-5.5',
+      'open:session-new',
+      'draft:session-new:/implement #15',
+      'focus',
+    ])
+    expect(deps.command).not.toHaveBeenCalled()
+  })
+
+  it('still fills the successor when its model selection is refused', async () => {
+    const events: string[] = []
+    const deps = clearDeps(events, {
+      modelDirectories: modelDirectory(
+        'claude-bray/claude-fable-5-1',
+        ['codex/gpt-5.5'],
+        events,
+        { select: async () => ({ ok: false, error: { message: 'adapter rejected the model' } }) },
+      ),
+    })
+
+    await expect(selectConsultCandidate(deps, implementClear, clearContext)).resolves.toBe(true)
+
+    expect(events).toEqual([
+      'load:session-a',
+      'connect:workspace-1',
+      'register:session-new:engineer',
+      'load:session-new',
+      'select:session-new:codex/gpt-5.5',
+      'notify:选择新会话模型失败：adapter rejected the model',
+      'open:session-new',
+      'draft:session-new:/implement #15',
+      'focus',
+    ])
+  })
+
+  it('still fills the successor when its own catalog holds none of the Agent candidates', async () => {
+    const events: string[] = []
+    const deps = clearDeps(events, {
+      modelDirectories: modelDirectory(
+        'claude-bray/claude-fable-5-1',
+        ['codex/gpt-5.5'],
+        events,
+        { catalogs: { 'session-new': ['claude-bray/claude-fable-5-1'] } },
+      ),
+    })
+
+    await expect(selectConsultCandidate(deps, implementClear, clearContext)).resolves.toBe(true)
+
+    expect(events).toEqual([
+      'load:session-a',
+      'connect:workspace-1',
+      'register:session-new:engineer',
+      'load:session-new',
+      'notify:选择新会话模型失败：工程师无可用模型',
+      'open:session-new',
+      'draft:session-new:/implement #15',
+      'focus',
+    ])
+  })
+
+  it.each([
+    ['model directory', { modelDirectories: undefined }, '模型目录服务不可用，已只填入本会话输入框'],
+    ['Agent registration', { registerSessionAgent: undefined }, '登记会话 Agent 的能力不可用，已只填入本会话输入框'],
+    ['workspace navigation', { navigation: undefined }, '创建新会话能力不可用，已只填入本会话输入框'],
+  ] as const)('degrades to filling this session when the %s capability is missing', async (_name, missing, message) => {
+    const events: string[] = []
+    const deps = clearDeps(events, missing)
+
+    await expect(selectConsultCandidate(deps, implementClear, clearContext)).resolves.toBe(true)
+
+    expect(events.filter(event => !event.startsWith('load:'))).toEqual([
+      `notify:${message}`,
+      'draft:current:/implement #15',
+      'focus',
+    ])
+    expect(deps.command).not.toHaveBeenCalled()
+  })
+
+  it('creates an other-moves clear successor without recording an Agent or selecting a model', async () => {
+    const events: string[] = []
+    const deps = clearDeps(events)
+
+    await expect(selectOtherMove(deps, 'clear', clearContext)).resolves.toBe(true)
 
     expect(events).toEqual([
       'connect:workspace-1',
@@ -648,41 +792,35 @@ describe('model-aware candidate selection', () => {
       'draft:session-new:开空会话继续：',
       'focus',
     ])
-    expect(deps.notify).not.toHaveBeenCalled()
     expect(deps.command).not.toHaveBeenCalled()
   })
 
-  it('does not switch before filling when the available station model is already current', async () => {
+  it('never selects a model on this session, whatever the move', async () => {
     const events: string[] = []
-    const deps = {
-      ...selectionDoubles(),
-      appendToDraft: vi.fn((input: string) => {
-        events.push(`draft:${input}`)
-        return true
-      }),
-      modelDirectories: modelDirectory(
-        'claude-bray/claude-fable-5-1',
-        ['claude-bray/claude-fable-5-1', 'codex/gpt-6'],
-        events,
-      ),
+    const deps = clearDeps(events)
+    for (const candidate of [
+      { label: '写 spec', input: '/to-spec', move: 'continue', station: 'to-spec' },
+      { label: '派评审', input: '评审当前分支', move: 'subagent', station: 'code-review' },
+      implementClear,
+      { label: '压缩', input: '保留实现状态', move: 'compact', station: 'implement' },
+      { label: '交接', input: '交接实现', move: 'handoff', station: 'implement' },
+    ] as const satisfies readonly ConsultCandidate[]) {
+      await selectConsultCandidate(deps, candidate, clearContext)
+    }
+    for (const move of OTHER_MOVE_OPTIONS.map(option => option.move)) {
+      await selectOtherMove(deps, move, clearContext)
     }
 
-    await expect(selectConsultCandidate(deps, readyWithModels.candidates[0]!, {
-      sessionId: 'session-a',
-      phase: readyWithModels,
-    })).resolves.toBe(true)
-
-    expect(events).toEqual(['load', 'draft:/to-spec'])
-    expect(deps.notify).not.toHaveBeenCalled()
+    expect(events.filter(event => event.startsWith('select:session-a'))).toEqual([])
     expect(deps.command).not.toHaveBeenCalled()
   })
 
-  it('selects a different available station model before filling and focusing', async () => {
+  it('fills and focuses this session for a continue chip without loading or switching its model', async () => {
     const events: string[] = []
     const deps = {
       ...selectionDoubles(),
-      appendToDraft: vi.fn((input: string) => {
-        events.push(`draft:${input}`)
+      appendToDraft: vi.fn((input: string, target?: string) => {
+        events.push(`draft:${target ?? 'current'}:${input}`)
         return true
       }),
       focusComposer: vi.fn(() => { events.push('focus') }),
@@ -698,68 +836,12 @@ describe('model-aware candidate selection', () => {
       phase: readyWithModels,
     })).resolves.toBe(true)
 
-    expect(events).toEqual([
-      'load',
-      'select:claude-bray/claude-fable-5-1',
-      'draft:/to-spec',
-      'focus',
-    ])
+    expect(events).toEqual(['draft:current:/to-spec', 'focus'])
     expect(deps.notify).not.toHaveBeenCalled()
     expect(deps.command).not.toHaveBeenCalled()
   })
 
-  it('keeps the current model when station candidates are absent from the session catalog', async () => {
-    const events: string[] = []
-    const deps = {
-      ...selectionDoubles(),
-      appendToDraft: vi.fn((input: string) => {
-        events.push(`draft:${input}`)
-        return true
-      }),
-      modelDirectories: modelDirectory('codex/gpt-6', ['codex/gpt-6'], events),
-    }
-
-    await expect(selectConsultCandidate(deps, readyWithModels.candidates[0]!, {
-      sessionId: 'session-a',
-      phase: readyWithModels,
-    })).resolves.toBe(true)
-
-    expect(events).toEqual(['load', 'draft:/to-spec'])
-    expect(deps.notify).not.toHaveBeenCalled()
-    expect(deps.command).not.toHaveBeenCalled()
-  })
-
-  it('fills the composer and reports the reason when model selection fails', async () => {
-    const events: string[] = []
-    const deps = {
-      ...selectionDoubles(),
-      appendToDraft: vi.fn((input: string) => {
-        events.push(`draft:${input}`)
-        return true
-      }),
-      modelDirectories: failingModelDirectory(
-        'codex/gpt-6',
-        ['claude-bray/claude-fable-5-1', 'codex/gpt-6'],
-        new Error('adapter rejected the model'),
-        events,
-      ),
-    }
-
-    await expect(selectConsultCandidate(deps, readyWithModels.candidates[0]!, {
-      sessionId: 'session-a',
-      phase: readyWithModels,
-    })).resolves.toBe(true)
-
-    expect(events).toEqual([
-      'load',
-      'select:claude-bray/claude-fable-5-1',
-      'draft:/to-spec',
-    ])
-    expect(deps.notify).toHaveBeenCalledWith('切换模型失败：adapter rejected the model')
-    expect(deps.command).not.toHaveBeenCalled()
-  })
-
-  it('fills the composer and reports that the session model directory service is missing', async () => {
+  it('fills a continue chip without complaint when no model directory service is composed', async () => {
     const deps = selectionDoubles()
 
     await expect(selectConsultCandidate(deps, readyWithModels.candidates[0]!, {
@@ -768,18 +850,19 @@ describe('model-aware candidate selection', () => {
     })).resolves.toBe(true)
 
     expect(deps.appendToDraft).toHaveBeenCalledWith('/to-spec')
-    expect(deps.notify).toHaveBeenCalledWith('模型目录服务不可用，已只填入输入框')
+    expect(deps.notify).not.toHaveBeenCalled()
     expect(deps.command).not.toHaveBeenCalled()
   })
 
-  it('keeps this session model untouched for subagent chips and writes the subagent model into the input', async () => {
+  it('keeps this session untouched for subagent chips and names the subagent Agent in the input', async () => {
     const events: string[] = []
     const deps = {
       ...selectionDoubles(),
-      appendToDraft: vi.fn((input: string) => {
-        events.push(`draft:${input}`)
+      appendToDraft: vi.fn((input: string, target?: string) => {
+        events.push(`draft:${target ?? 'current'}:${input}`)
         return true
       }),
+      focusComposer: vi.fn(() => { events.push('focus') }),
       modelDirectories: modelDirectory(
         'codex/gpt-5.5',
         ['claude-bray/claude-fable-5-1', 'codex/gpt-5.5'],
@@ -797,8 +880,40 @@ describe('model-aware candidate selection', () => {
       phase: readyWithModels,
     })).resolves.toBe(true)
 
-    expect(events).toEqual(['load', 'draft:让子代理评审当前分支\n\n子代理使用 claude-bray/claude-fable-5-1'])
+    expect(events).toEqual(['draft:current:让子代理评审当前分支\n\n子代理 · 评审', 'focus'])
     expect(deps.notify).not.toHaveBeenCalled()
     expect(deps.command).not.toHaveBeenCalled()
+  })
+
+  it('names CEO as the subagent Agent for a standalone skill', async () => {
+    const deps = selectionDoubles()
+
+    await expect(selectConsultCandidate(deps, {
+      label: '派研究',
+      input: '派子代理调研 DSH 子代理接口',
+      move: 'subagent',
+      station: 'research',
+    }, {
+      sessionId: 'session-a',
+      phase: readyWithModels,
+    })).resolves.toBe(true)
+
+    expect(deps.appendToDraft).toHaveBeenCalledWith('派子代理调研 DSH 子代理接口\n\n子代理 · CEO')
+    expect(deps.notify).not.toHaveBeenCalled()
+  })
+
+  it('leaves a subagent input unchanged when the host sent no stage Agent table', async () => {
+    const deps = selectionDoubles()
+    const { stageAgents: _omitted, ...oldHost } = readyWithModels
+
+    await expect(selectConsultCandidate(deps, {
+      label: '派评审',
+      input: '让子代理评审当前分支',
+      move: 'subagent',
+      station: 'code-review',
+    }, { sessionId: 'session-a', phase: oldHost })).resolves.toBe(true)
+
+    expect(deps.appendToDraft).toHaveBeenCalledWith('让子代理评审当前分支')
+    expect(deps.notify).not.toHaveBeenCalled()
   })
 })

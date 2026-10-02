@@ -16,7 +16,6 @@
  * @module @deepseek-ai/dsh-a2d2/client/orb-actions
  */
 
-import { isClosedHighwayStation } from '../highway.ts'
 import type {
   ClientCommandResult,
   ClientSessionFace,
@@ -24,14 +23,11 @@ import type {
   ClientWorkspaceNavigation,
   ClientWorkspacesService,
 } from './context.ts'
-import {
-  modelCatalogRoutes,
-  selectModel,
-  stationRouteDecision,
-} from './consult-actions.ts'
+import { chipAgentTarget, startSessionAsAgent } from './consult-actions.ts'
 import type {
   ClientModelDirectoryService,
   ConsultNewSessionModelTarget,
+  RegisterSessionAgent,
 } from './consult-actions.ts'
 
 /** What one confirmed handoff produced, or where it stopped. */
@@ -66,9 +62,11 @@ export interface OrbHandoffDeps {
   readonly startTimeoutMs?: number
   /** Milliseconds to wait for the writing turn to end once it started. */
   readonly turnTimeoutMs?: number
-  /** Optional shared model directory service for selecting the successor's next-station model. */
+  /** Optional shared model directory service for selecting the successor Agent's model. */
   readonly modelDirectories?: ClientModelDirectoryService
-  /** The next-station model target that should be selected on the successor before take. */
+  /** Records the successor as the next stage's Agent before take. */
+  readonly registerSessionAgent?: RegisterSessionAgent
+  /** The next stage whose Agent the successor starts as, before take. */
   readonly successorModel?: ConsultNewSessionModelTarget
   /** Non-fatal user-facing status reporter. */
   readonly notify?: (message: string) => void
@@ -219,14 +217,14 @@ export async function runOrbHandoff(
   }
 }
 
-/** Select the model, focus, carry the title over, and run the take on the opened successor. */
+/** Start the Agent, focus, carry the title over, and run the take on the opened successor. */
 async function takeOnSuccessor(
   deps: OrbHandoffDeps,
   binding: { readonly session: ClientSessionFace },
   sessionId: string,
   successor: string,
 ): Promise<OrbHandoffOutcome> {
-  await selectSuccessorModel(deps, successor)
+  await startSuccessorAgent(deps, successor)
 
   // Focus the successor before it runs the take, so the user watches the
   // handoff land in the session they were switched to.
@@ -263,26 +261,10 @@ async function takeOnSuccessor(
   return { ok: true, successor }
 }
 
-async function selectSuccessorModel(deps: OrbHandoffDeps, successor: string): Promise<void> {
-  const target = deps.successorModel
-  if (target?.station === undefined || target.stageAgents === undefined || !isClosedHighwayStation(target.station)) return
-  if (deps.modelDirectories === undefined) {
-    deps.notify?.('选择后继会话模型失败：模型目录服务不可用')
-    return
-  }
-  try {
-    const face = deps.modelDirectories.directoryFor(successor)
-    const directory = await face.load()
-    const decision = stationRouteDecision({
-      station: target.station,
-      stageAgents: target.stageAgents,
-      catalog: modelCatalogRoutes(directory),
-      current: directory.current,
-    })
-    if (decision.kind === 'switch') await selectModel(face, decision.selection)
-  } catch (error) {
-    deps.notify?.(`选择后继会话模型失败：${messageOf(error)}`)
-  }
+/** Start the successor as the next stage's Agent, when the handoff carries one. */
+async function startSuccessorAgent(deps: OrbHandoffDeps, successor: string): Promise<void> {
+  const agent = chipAgentTarget(deps.successorModel?.station, deps.successorModel?.stageAgents)
+  if (agent !== undefined) await startSessionAsAgent(deps, successor, agent, '后继会话')
 }
 
 /** The message one ended-not-finished wait reports. */

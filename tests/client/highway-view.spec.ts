@@ -99,6 +99,21 @@ describe('highwayView', () => {
     expect(ramp.stations.every(station => station.state === 'ahead')).toBe(true)
   })
 
+  it('names CEO as the Agent of a standalone skill on the next-stage line', () => {
+    const toStandalone = (station: string) => highwayView({
+      kind: 'ready',
+      degraded: false,
+      location: { zone: 'main', station: 'grill', phaseDone: true },
+      next: { station, move: 'clear', reason: '先调研' },
+      candidates: [{ label: '调研', input: `/${station}`, move: 'clear' }],
+      stageAgents,
+    }).nextLine
+
+    expect(toStandalone('research')).toBe('→ /research · Clear（先调研）· CEO')
+    // An Object.prototype key is not a closed station, so it never reads the table's prototype chain.
+    expect(toStandalone('constructor')).toBe('→ /constructor · Clear（先调研）· CEO')
+  })
+
   it('shows standalone, roadbed, and off-road placards with no main-road highlight', () => {
     expect(highwayView({
       kind: 'ready',

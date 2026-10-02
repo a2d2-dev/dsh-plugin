@@ -313,9 +313,24 @@ describe('runOrbHandoff', () => {
     expect(log).toEqual(['connect', `open ${SUCCESSOR}`, `take /handoff take ${CURRENT}`])
   })
 
-  it('selects the successor station model after create and before take', async () => {
-    const log: string[] = []
-    const current = writingSession()
+  const implementTarget = {
+    station: 'implement',
+    stageAgents: { stages: DEFAULT_STAGE_AGENTS.stages, agents: DEFAULT_STAGE_AGENTS.agents },
+  }
+
+  /** A registration double recording `register:<session>:<agent>` into the log. */
+  function registrar(log: string[], outcome: () => Promise<void> = async () => {}): NonNullable<OrbHandoffDeps['registerSessionAgent']> {
+    return async (sessionId, agent) => {
+      log.push(`register:${sessionId}:${agent}`)
+      await outcome()
+    }
+  }
+
+  /** Run one handoff whose successor runs the take, logging every capability call. */
+  async function handoffWithAgent(
+    log: string[],
+    overrides: Partial<OrbHandoffDeps>,
+  ): Promise<Awaited<ReturnType<typeof runOrbHandoff>>> {
     const successor = fakeSession({
       command: async (line) => {
         log.push(`take ${line}`)
@@ -326,24 +341,57 @@ describe('runOrbHandoff', () => {
       log.push('connect')
       return SUCCESSOR
     })
-
-    const outcome = await runOrbHandoff(
+    return await runOrbHandoff(
       {
-        ...handoffDeps(sessions({ [CURRENT]: current, [SUCCESSOR]: successor }, log), workspaces({ connect })),
+        ...handoffDeps(sessions({ [CURRENT]: writingSession(), [SUCCESSOR]: successor }, log), workspaces({ connect })),
         modelDirectories: successorModelDirectory(log),
-        successorModel: {
-          station: 'implement',
-          stageAgents: { stages: DEFAULT_STAGE_AGENTS.stages, agents: DEFAULT_STAGE_AGENTS.agents },
-        },
+        registerSessionAgent: registrar(log),
+        successorModel: implementTarget,
+        notify: message => { log.push(`notify:${message}`) },
         ...QUICK,
+        ...overrides,
       },
       CURRENT,
       'implement #15',
     )
+  }
+
+  it('records the successor as the next stage Agent and selects that Agent model before take', async () => {
+    const log: string[] = []
+
+    expect(await handoffWithAgent(log, {})).toEqual({ ok: true, successor: SUCCESSOR })
+    expect(log).toEqual([
+      'connect',
+      `register:${SUCCESSOR}:engineer`,
+      `directory:${SUCCESSOR}`,
+      'load',
+      'select:codex/gpt-5.5',
+      `open ${SUCCESSOR}`,
+      `take /handoff take ${CURRENT}`,
+    ])
+  })
+
+  it('starts a successor into a standalone skill as CEO', async () => {
+    const log: string[] = []
+
+    expect(await handoffWithAgent(log, { successorModel: { ...implementTarget, station: 'research' } }))
+      .toEqual({ ok: true, successor: SUCCESSOR })
+    expect(log).toContain(`register:${SUCCESSOR}:ceo`)
+    expect(log).toContain('select:claude-bray/claude-fable-5-1')
+  })
+
+  it('reports a refused Agent registration and still selects the model and takes', async () => {
+    const log: string[] = []
+
+    const outcome = await handoffWithAgent(log, {
+      registerSessionAgent: registrar(log, async () => { throw new Error('already recorded session as reviewer') }),
+    })
 
     expect(outcome).toEqual({ ok: true, successor: SUCCESSOR })
     expect(log).toEqual([
       'connect',
+      `register:${SUCCESSOR}:engineer`,
+      'notify:登记后继会话 Agent 失败：already recorded session as reviewer',
       `directory:${SUCCESSOR}`,
       'load',
       'select:codex/gpt-5.5',
@@ -354,40 +402,17 @@ describe('runOrbHandoff', () => {
 
   it('reports successor model selection failure and still takes the handoff', async () => {
     const log: string[] = []
-    const notify = vi.fn((message: string) => { log.push(`notify:${message}`) })
-    const current = writingSession()
-    const successor = fakeSession({
-      command: async (line) => {
-        log.push(`take ${line}`)
-        return accepted
-      },
-    })
-    const connect = vi.fn(async () => {
-      log.push('connect')
-      return SUCCESSOR
-    })
 
-    const outcome = await runOrbHandoff(
-      {
-        ...handoffDeps(sessions({ [CURRENT]: current, [SUCCESSOR]: successor }, log), workspaces({ connect })),
-        modelDirectories: successorModelDirectory(log, {
-          select: async () => { throw new Error('adapter rejected the model') },
-        }),
-        successorModel: {
-          station: 'implement',
-          stageAgents: { stages: DEFAULT_STAGE_AGENTS.stages, agents: DEFAULT_STAGE_AGENTS.agents },
-        },
-        notify,
-        ...QUICK,
-      },
-      CURRENT,
-      'implement #15',
-    )
+    const outcome = await handoffWithAgent(log, {
+      modelDirectories: successorModelDirectory(log, {
+        select: async () => { throw new Error('adapter rejected the model') },
+      }),
+    })
 
     expect(outcome).toEqual({ ok: true, successor: SUCCESSOR })
-    expect(notify).toHaveBeenCalledWith('选择后继会话模型失败：adapter rejected the model')
     expect(log).toEqual([
       'connect',
+      `register:${SUCCESSOR}:engineer`,
       `directory:${SUCCESSOR}`,
       'load',
       'select:codex/gpt-5.5',
@@ -395,6 +420,13 @@ describe('runOrbHandoff', () => {
       `open ${SUCCESSOR}`,
       `take /handoff take ${CURRENT}`,
     ])
+  })
+
+  it('neither records an Agent nor selects a model for a handoff without a next-stage target', async () => {
+    const log: string[] = []
+
+    expect(await handoffWithAgent(log, { successorModel: undefined })).toEqual({ ok: true, successor: SUCCESSOR })
+    expect(log).toEqual(['connect', `open ${SUCCESSOR}`, `take /handoff take ${CURRENT}`])
   })
 
   it('asks for a generic handoff when the focus is blank', async () => {
