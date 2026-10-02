@@ -26,6 +26,7 @@ import { boundContextSummary, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm/message'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import { repoOfCwd } from './github-remote.ts'
 import { DEFAULT_RELAY_URL } from './github-watch/relay.ts'
 import { WatchStore } from './github-watch/store.ts'
 import { Watcher } from './github-watch/watcher.ts'
@@ -67,6 +68,8 @@ interface SessionsService {
   flush(session: Agent['session']): Promise<boolean>
 }
 
+export { parseGitHubRemote, repoOfCwd } from './github-remote.ts'
+
 const run = promisify(execFile)
 
 /** The user's GitHub token, as `gh` holds it; GH_TOKEN / GITHUB_TOKEN as fallbacks. */
@@ -80,23 +83,6 @@ async function githubToken(): Promise<string> {
   const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN
   if (token) return token
   throw new Error('no GitHub token: run `gh auth login` or set GH_TOKEN')
-}
-
-/** `owner/name` of the session's `origin` remote on github.com. */
-export async function repoOfCwd(cwd: string): Promise<string | undefined> {
-  if (cwd === '') return undefined
-  try {
-    const { stdout } = await run('git', ['-C', cwd, 'remote', 'get-url', 'origin'], { timeout: 10_000 })
-    return parseGitHubRemote(stdout.trim())
-  } catch {
-    return undefined
-  }
-}
-
-/** Parse `git@github.com:o/n.git`, `https://github.com/o/n`, `ssh://git@github.com/o/n.git`. */
-export function parseGitHubRemote(url: string): string | undefined {
-  const match = /github\.com[:/]([A-Za-z0-9-]+)\/([A-Za-z0-9._-]+?)(?:\.git)?\/?$/.exec(url)
-  return match ? `${match[1]}/${match[2]}` : undefined
 }
 
 const REPO_PATTERN = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}$/

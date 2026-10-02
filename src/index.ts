@@ -23,11 +23,13 @@ import type { ContextFormed, MessageSource } from '@deepseek-ai/dsh-llm'
 import type { Fiber, Volatile } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
+import type {} from '@deepseek-ai/dsh-session'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { TaskId, taskIdForIssue } from './brand.ts'
 import { CONFIG_ROUTE_PATH, createConfigHandler } from './config-page.ts'
 import { CONSULT_ROUTE_PATH, consultContextFactsFromProjectionValues, createConsultHandler } from './consult.ts'
 import { handedOff, memberOf, successorsOf } from './derive.ts'
+import { repoOfCwd } from './github-remote.ts'
 import type { HandoffDocument, HandoffFacts } from './handoff-document.ts'
 import {
   parseHandoffDocument,
@@ -65,6 +67,8 @@ import {
   writeHandoffDocument,
 } from './store.ts'
 import type { BoundTask, CreateTaskRequest, Task } from './types.ts'
+import { WaitNotices } from './wait-notice.ts'
+import type { Notifier } from './wait-notice.ts'
 
 export { TaskId, taskIdForIssue } from './brand.ts'
 export type { TaskId as TaskIdType } from './brand.ts'
@@ -204,6 +208,8 @@ export {
 } from './document.ts'
 export type { TaskDocumentErrorCode } from './document.ts'
 export type { BoundTask, CreateTaskRequest, Task, TaskIssue, TaskIssueHandoff, TaskMember, TaskState } from './types.ts'
+export { WAIT_NOTICE_GRACE_MS, WAIT_NOTICE_SOURCE, WAIT_NOTICE_SUMMARY_MAX_CHARS } from './wait-notice.ts'
+export type { Notifier, NotifierMessage, NotifierPushOptions, NotifierPushResult } from './wait-notice.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -493,6 +499,8 @@ export class A2d2Service extends Service {
   private readonly currency: string
   private readonly stageAgentsConfig: Volatile<StageAgentsSettings> | undefined
   private readonly entryFiber: Fiber
+  /** Wait notices, present while some plugin provides `notifier`. */
+  private waitNotices: WaitNotices | undefined
 
   /**
    * Create the service over a resolved store configuration.
@@ -549,6 +557,7 @@ export class A2d2Service extends Service {
     this.publishConfig()
     this.publishSessionAgent()
     this.publishPanel()
+    this.publishWaitNotices()
     // Stated once at load: whether the browser half received these is otherwise
     // only visible by looking at the indicator, which never reports absence.
     this.ctx.logger.info(
@@ -739,6 +748,7 @@ export class A2d2Service extends Service {
 
     const completed: BoundTask = task.state === 'done' ? task : { ...task, state: 'done' }
     if (completed !== task) await this.store.write(request.cwd, completed)
+    this.waitNotices?.completed(request.caller, completed.issue.number, summary)
 
     const parentIssue = completed.issue.parent
     if (parentIssue === undefined) {
@@ -1155,6 +1165,38 @@ export class A2d2Service extends Service {
         () => server.register({ kind: 'exact', path: PANEL_ROUTE_PATH, handler }),
         'a2d2 panel route',
       )
+    })
+  }
+
+  /**
+   * Push wait notices through the `notifier` service when some plugin provides
+   * it (ADR 0010). The dependency is optional: injected by callback, so a
+   * profile without a provider starts as before and sends nothing; a static
+   * `inject` would hold the whole plugin until a provider appears.
+   */
+  private publishWaitNotices(): void {
+    this.ctx.inject(['notifier'], (notifierCtx) => {
+      const notifier = (notifierCtx.get as unknown as (name: string) => Notifier | undefined).call(notifierCtx, 'notifier')
+      if (notifier === undefined) return
+      const notices = new WaitNotices({
+        notifier,
+        mainTaskIssue: async (cwd, sessionId) => (await this.taskOfMainSession(cwd, sessionId))?.issue.number,
+        issueUrl: async (cwd, issue) => {
+          const repo = await repoOfCwd(cwd)
+          return repo === undefined ? undefined : `https://github.com/${repo}/issues/${String(issue)}`
+        },
+        log: this.ctx.logger,
+      })
+      // `global`: DSH publishes session events through a scope carrier, which
+      // admits a listener tagged with this plugin's scope only for its own sessions.
+      notifierCtx.on('session/event', (session, event) => notices.observe(session, event), { global: true })
+      notifierCtx.effect(() => {
+        this.waitNotices = notices
+        return () => {
+          notices.dispose()
+          if (this.waitNotices === notices) this.waitNotices = undefined
+        }
+      }, 'a2d2 wait notices')
     })
   }
 
