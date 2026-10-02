@@ -22,7 +22,6 @@ import {
   STAGE_AGENTS,
   STAGE_AGENT_STAGES,
   agentForStage,
-  modelCandidatesForStage,
   stageAgentLabel,
 } from '../stage-agent-data.ts'
 import type { FailureKind } from '../refusal.ts'
@@ -121,19 +120,6 @@ export interface ClientModelDirectoryService {
   directoryFor(sessionId: string): ClientModelDirectory
 }
 
-export type StationRouteDecision =
-  | {
-      readonly kind: 'switch'
-      readonly route: string
-      readonly selection: ClientModelSelection
-      readonly label: string
-    }
-  | {
-      readonly kind: 'keep'
-      readonly route?: string
-      readonly label: string
-    }
-
 /** The complete state of the next-step card. */
 export type ConsultPhase =
   | { readonly kind: 'idle' }
@@ -179,7 +165,38 @@ export interface ConsultSelectionDeps {
   /** `uiWorkspace`: creates the successor session and shows it. */
   readonly navigation?: ClientWorkspaceNavigation
   readonly modelDirectories?: ClientModelDirectoryService
+  /** Records a session a chip created as an Agent; see {@link sessionAgentRegistrar}. */
+  readonly registerSessionAgent?: RegisterSessionAgent
   readonly notify?: (message: string) => void
+}
+
+/** Exact host route that records the Agent of a session a chip created. */
+export const SESSION_AGENT_ROUTE_PATH = '/a2d2/api/session-agent'
+
+/** Record one session as an Agent; rejects with the host's reason. */
+export type RegisterSessionAgent = (sessionId: string, agent: StageAgent) => Promise<void>
+
+/** The fetch face the registrar needs. */
+export type SessionAgentFetch = (
+  input: string,
+  init: { readonly method: 'POST'; readonly headers: Record<string, string>; readonly body: string },
+) => Promise<ConsultFetchResponse>
+
+/** Build the capability that records a chip-created session's Agent through the host route. */
+export function sessionAgentRegistrar(fetch: SessionAgentFetch): RegisterSessionAgent {
+  return async (sessionId, agent) => {
+    const response = await fetch(SESSION_AGENT_ROUTE_PATH, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ session: sessionId, agent }),
+    })
+    const body: unknown = await response.json()
+    if (isRecord(body) && body.ok === true) return
+    if (isRecord(body) && body.ok === false && isRecord(body.error) && typeof body.error.message === 'string') {
+      throw new Error(body.error.message)
+    }
+    throw new Error('登记会话 Agent 返回了无效响应')
+  }
 }
 
 export interface ConsultSelectionContext {
@@ -511,10 +528,6 @@ function shortRoute(route: string): string {
   return slash < 0 ? route : route.slice(slash + 1)
 }
 
-function routeOf(selection: ClientModelSelection | undefined): string | undefined {
-  return selection === undefined ? undefined : `${selection.provider}/${selection.model}`
-}
-
 function splitRoute(route: string): ClientModelSelection {
   const slash = route.indexOf('/')
   return { provider: route.slice(0, slash), model: route.slice(slash + 1) }
@@ -524,39 +537,9 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-/**
- * Pick the station route that is available in the session model directory.
- *
- * The host returns the station model table unchanged. The browser decides
- * against the session directory because catalog membership is per session.
- */
-export function stationRouteDecision(input: {
-  readonly station?: string
-  readonly stageAgents?: StageAgentRouteSettings
-  readonly catalog: readonly string[]
-  readonly current?: ClientModelSelection
-}): StationRouteDecision {
-  const currentRoute = routeOf(input.current)
-  const routes = input.station !== undefined && input.stageAgents !== undefined && isClosedHighwayStation(input.station)
-    ? modelCandidatesForStage(input.stageAgents, input.station)
-    : undefined
-  const available = routes?.find(route => input.catalog.includes(route))
-  if (available === undefined) {
-    return {
-      kind: 'keep',
-      ...(currentRoute === undefined ? {} : { route: currentRoute }),
-      label: '保持当前模型',
-    }
-  }
-  if (available === currentRoute) {
-    return { kind: 'keep', route: available, label: '保持当前模型' }
-  }
-  return {
-    kind: 'switch',
-    route: available,
-    selection: splitRoute(available),
-    label: `切到 ${shortRoute(available)}`,
-  }
+/** An Agent's usable model: its first candidate present in the session catalog. */
+function firstAvailableRoute(routes: readonly string[], catalog: readonly string[]): string | undefined {
+  return routes.find(route => catalog.includes(route))
 }
 
 function displayReason(reason: string, kind?: FailureKind): string {
@@ -626,21 +609,20 @@ function newSessionModelTarget(
   return target.station === undefined && target.stageAgents === undefined ? undefined : target
 }
 
+function noModelLabel(agent: ChipAgentTarget): string {
+  return `${agent.label}无可用模型`
+}
+
 function newSessionEffectLabel(
   candidate: ConsultCandidate,
   phase: ConsultPhase | undefined,
   directory: ClientModelDirectorySnapshot | undefined,
 ): string {
-  if (directory === undefined) return '新会话 · 默认模型'
-  const station = candidateStation(candidate, phase)
-  if (station === undefined || phase?.kind !== 'ready') return '新会话 · 默认模型'
-  const decision = stationRouteDecision({
-    station,
-    stageAgents: phase.stageAgents,
-    catalog: modelCatalogRoutes(directory),
-    current: undefined,
-  })
-  return decision.route === undefined ? '新会话 · 默认模型' : `新会话 · ${shortRoute(decision.route)}`
+  const agent = chipAgentTarget(candidateStation(candidate, phase), stageAgentsOf(phase))
+  if (agent === undefined) return '新会话 · 默认模型'
+  if (directory === undefined) return `新会话 · ${agent.label}`
+  const route = firstAvailableRoute(agent.routes, modelCatalogRoutes(directory))
+  return route === undefined ? noModelLabel(agent) : `新会话 · ${agent.label}（${shortRoute(route)}）`
 }
 
 export function candidateModelEffect(
@@ -667,33 +649,35 @@ function workspaceOf(workspaces: ClientWorkspacesService, sessionId: string): st
   return workspaces.list.getSnapshot().items.find(item => item.sessionIds.includes(sessionId))?.workspaceId
 }
 
-function targetNeedsModelSelection(target: ConsultNewSessionModelTarget | undefined): boolean {
-  return target?.station !== undefined && target.stageAgents !== undefined && isClosedHighwayStation(target.station)
-}
+/** Capabilities that start a freshly created session as an Agent. */
+export type SessionAgentStartDeps = Pick<ConsultSelectionDeps, 'registerSessionAgent' | 'modelDirectories' | 'notify'>
 
-async function selectNewSessionModel(
-  deps: Pick<ConsultSelectionDeps, 'modelDirectories' | 'notify'>,
+/**
+ * Start a freshly created session as an Agent: record the Agent through the
+ * host route, then select the Agent's first candidate in that session's own
+ * model directory. Neither failure stops the caller; each is reported.
+ * @param subject - how messages name the session, e.g. 新会话 or 后继会话.
+ */
+export async function startSessionAsAgent(
+  deps: SessionAgentStartDeps,
   sessionId: string,
-  target: ConsultNewSessionModelTarget | undefined,
-  messagePrefix: string,
+  agent: ChipAgentTarget,
+  subject: string,
 ): Promise<void> {
-  if (target?.station === undefined || target.stageAgents === undefined || !isClosedHighwayStation(target.station)) return
-  if (deps.modelDirectories === undefined) {
-    deps.notify?.(`${messagePrefix}模型目录服务不可用`)
-    return
+  try {
+    if (deps.registerSessionAgent === undefined) throw new Error('登记能力不可用')
+    await deps.registerSessionAgent(sessionId, agent.agent)
+  } catch (error) {
+    deps.notify?.(`登记${subject} Agent 失败：${errorMessage(error)}`)
   }
   try {
+    if (deps.modelDirectories === undefined) throw new Error('模型目录服务不可用')
     const face = deps.modelDirectories.directoryFor(sessionId)
-    const directory = await face.load()
-    const decision = stationRouteDecision({
-      station: target.station,
-      stageAgents: target.stageAgents,
-      catalog: modelCatalogRoutes(directory),
-      current: directory.current,
-    })
-    if (decision.kind === 'switch') await selectModel(face, decision.selection)
+    const route = firstAvailableRoute(agent.routes, modelCatalogRoutes(await face.load()))
+    if (route === undefined) throw new Error(noModelLabel(agent))
+    await selectModel(face, splitRoute(route))
   } catch (error) {
-    deps.notify?.(`${messagePrefix}${errorMessage(error)}`)
+    deps.notify?.(`选择${subject}模型失败：${errorMessage(error)}`)
   }
 }
 
@@ -707,20 +691,44 @@ function fillCurrentSession(
   return true
 }
 
+/**
+ * Why a clear chip with a known Agent cannot start a new session, read before
+ * anything is created; `undefined` when it can.
+ */
+async function newSessionBlocker(
+  deps: ConsultSelectionDeps,
+  sessionId: string,
+  agent: ChipAgentTarget,
+): Promise<string | undefined> {
+  if (deps.modelDirectories === undefined) return '模型目录服务不可用'
+  if (deps.registerSessionAgent === undefined) return '登记会话 Agent 的能力不可用'
+  try {
+    const directory = await deps.modelDirectories.directoryFor(sessionId).load()
+    return firstAvailableRoute(agent.routes, modelCatalogRoutes(directory)) === undefined
+      ? noModelLabel(agent)
+      : undefined
+  } catch (error) {
+    return `读取模型目录失败：${errorMessage(error)}`
+  }
+}
+
 async function selectClearCandidate(
   deps: ConsultSelectionDeps,
   input: string,
   context: ConsultSelectionContext | undefined,
-  target: ConsultNewSessionModelTarget | undefined,
+  agent: ChipAgentTarget | undefined,
 ): Promise<boolean> {
   const sessionId = context?.sessionId
   if (sessionId === undefined || deps.navigation === undefined || deps.workspaces === undefined) {
     deps.notify?.('创建新会话能力不可用，已只填入本会话输入框')
     return fillCurrentSession(deps, input)
   }
-  if (targetNeedsModelSelection(target) && deps.modelDirectories === undefined) {
-    deps.notify?.('模型目录服务不可用，已只填入本会话输入框')
-    return fillCurrentSession(deps, input)
+  if (agent !== undefined) {
+    const blocker = await newSessionBlocker(deps, sessionId, agent)
+    if (blocker !== undefined) {
+      deps.notify?.(`${blocker}，已只填入本会话输入框`)
+      return fillCurrentSession(deps, input)
+    }
   }
 
   const workspaceId = workspaceOf(deps.workspaces, sessionId)
@@ -737,7 +745,7 @@ async function selectClearCandidate(
     return fillCurrentSession(deps, input)
   }
 
-  await selectNewSessionModel(deps, successor, target, '选择新会话模型失败：')
+  if (agent !== undefined) await startSessionAsAgent(deps, successor, agent, '新会话')
   deps.navigation.openSession(successor)
   if (!deps.appendToDraft(input, successor)) return false
   deps.closeConsult()
@@ -755,8 +763,10 @@ function prepareCandidateInput(candidate: ConsultCandidate, phase: ConsultPhase 
 /**
  * Apply one candidate without ever sending it.
  *
- * Non-handoff candidates only write and focus the composer. Handoff candidates
- * only open the existing confirmation card with their input as its focus.
+ * Continue and subagent candidates only write and focus this session's
+ * composer; a clear candidate starts a new session as the next stage's Agent
+ * and fills that session's composer; handoff and compact candidates only open
+ * the confirmation card. No path selects a model on this session.
  * @returns whether the requested UI transition was completed.
  */
 export function selectConsultCandidate(
@@ -777,7 +787,8 @@ export function selectConsultCandidate(
     return Promise.resolve(true)
   }
   if (candidate.move === 'clear') {
-    return selectClearCandidate(deps, candidate.input, context, newSessionModelTarget(candidate, context?.phase))
+    const agent = chipAgentTarget(candidateStation(candidate, context?.phase), stageAgentsOf(context?.phase))
+    return selectClearCandidate(deps, candidate.input, context, agent)
   }
   return Promise.resolve(fillCurrentSession(deps, prepareCandidateInput(candidate, context?.phase)))
 }

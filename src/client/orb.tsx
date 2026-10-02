@@ -34,6 +34,7 @@ import {
   requestConsult,
   selectConsultCandidate,
   selectOtherMove,
+  sessionAgentRegistrar,
 } from './consult-actions.ts'
 import type {
   ClientModelDirectoryService,
@@ -88,6 +89,9 @@ import type { OrbLevel, OrbOccupancy } from './orb-model.ts'
 
 /** What the user is told when the draft could not be written. */
 const INSERT_FAILED = '无法写入输入框（会话未就绪）'
+
+/** Records the Agent of a session a chip or handoff created, through the host route. */
+const registerSessionAgent = sessionAgentRegistrar((input, init) => fetch(input, init))
 
 /**
  * One session's occupancy, following both projections that feed it.
@@ -487,6 +491,7 @@ export function HandoffOrb(props: {
         navigation,
         ...(handoffModelTarget === undefined ? {} : { successorModel: handoffModelTarget }),
         ...(modelDirectories === undefined ? {} : { modelDirectories }),
+        registerSessionAgent,
         notify: message => { setFailure(message) },
       },
       sessionId,
@@ -539,6 +544,7 @@ export function HandoffOrb(props: {
       workspaces: ctx.get('workspaces') as ClientWorkspacesService | undefined,
       navigation: ctx.get('uiWorkspace') as ClientWorkspaceNavigation | undefined,
       ...(modelDirectories === undefined ? {} : { modelDirectories }),
+      registerSessionAgent,
       notify: message => { setFailure(message) },
     }, candidate, {
       sessionId,
@@ -558,6 +564,7 @@ export function HandoffOrb(props: {
       workspaces: ctx.get('workspaces') as ClientWorkspacesService | undefined,
       navigation: ctx.get('uiWorkspace') as ClientWorkspaceNavigation | undefined,
       modelDirectories: ctx.get('modelDirectories') as ClientModelDirectoryService | undefined,
+      registerSessionAgent,
       notify: message => { setFailure(message) },
     }, move, { sessionId, phase: consult }).then((ok) => {
       if (!ok) setFailure(INSERT_FAILED)
