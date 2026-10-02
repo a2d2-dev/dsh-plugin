@@ -30,7 +30,7 @@ function session(cwd = '/tmp/project'): PanelSession {
 
 function deps(overrides: Partial<PanelDependencies> = {}): PanelDependencies {
   return {
-    trustedHosts: () => ['trusted.example:3710'],
+    requestRejection: () => undefined,
     getSession: id => id === sessionA ? session('/tmp/project') : undefined,
     listTasks: async () => [task()],
     projectRoot: async cwd => cwd,
@@ -130,10 +130,10 @@ describe('panel route handler', () => {
     expect(JSON.parse(captured.body ?? 'null')).toMatchObject({ ok: false, error: { code: 'method-not-allowed' } })
   })
 
-  it('reuses the consult trust fence', async () => {
+  it('rejects a request DSH refuses without reading a session', async () => {
     const getSession = vi.fn()
     const captured = await send(
-      createPanelHandler(deps({ getSession })),
+      createPanelHandler(deps({ getSession, requestRejection: () => 403 })),
       get(`${PANEL_ROUTE_PATH}?session=${sessionA}`, 'trusted.example:9999'),
     )
 

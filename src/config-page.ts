@@ -2,8 +2,8 @@
  * Host-side route for the A2D2 configuration page.
  *
  * The browser cannot call arbitrary settings namespaces: this route exposes
- * only the plugin-owned stage Agent settings, guarded by the same trusted-host
- * fence as the next-step consult route.
+ * only the plugin-owned stage Agent settings, and only to a browser DSH has
+ * authenticated (see `route-auth.ts`), like every other A2D2 route.
  *
  * @module @deepseek-ai/dsh-a2d2/src/config-page
  */
@@ -16,7 +16,8 @@ import {
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { SettingsConflictError } from '@deepseek-ai/dsh-settings'
 import { deepFreeze } from '@deepseek-ai/dsh-util-values'
-import { isTrustedConsultRequest } from './consult.ts'
+import { rejectionError } from './route-auth.ts'
+import type { RequestRejection } from './route-auth.ts'
 import { A2D2_MESSAGE_SOURCE } from './message-source.ts'
 import { classifyFailureKind } from './refusal.ts'
 import {
@@ -54,7 +55,8 @@ export interface ModelProbeResult {
 }
 
 export interface ConfigDependencies {
-  readonly trustedHosts: () => readonly string[]
+  /** DSH's browser authentication, asked before anything else (see `route-auth.ts`). */
+  readonly requestRejection: RequestRejection
   readonly getSettings: () => ConfigSettingsView | { readonly value: StageAgentsSettings; readonly revision: number | undefined }
   readonly updateSettings: (
     value: StageAgentsSettings,
@@ -192,17 +194,19 @@ function fail(response: ServerResponse, status: number, code: string, message: s
   respond(response, status, { ok: false, error: { code, message, ...extras } })
 }
 
-/** Create the trusted configuration route handler. */
+/** Create the authenticated configuration route handler. */
 export function createConfigHandler(
   dependencies: ConfigDependencies,
 ): (request: IncomingMessage, response: ServerResponse) => Promise<void> {
   return async (request, response) => {
-    if (request.method !== 'POST') {
-      fail(response, 405, 'method-not-allowed', 'Only POST is allowed for this route.')
+    const rejection = dependencies.requestRejection(request)
+    if (rejection !== undefined) {
+      const { code, message } = rejectionError(rejection)
+      fail(response, rejection, code, message)
       return
     }
-    if (!isTrustedConsultRequest(request.headers, dependencies.trustedHosts())) {
-      fail(response, 403, 'untrusted', 'The request authority or origin is not trusted.')
+    if (request.method !== 'POST') {
+      fail(response, 405, 'method-not-allowed', 'Only POST is allowed for this route.')
       return
     }
     let body: unknown

@@ -145,7 +145,7 @@ describe('session Agent registration route', () => {
     const ctx = new Context()
     await ctx.plugin(A2d2Service, { root })
     const handler = createSessionAgentHandler({
-      trustedHosts: () => ['10.126.126.12:30710'],
+      requestRejection: () => undefined,
       getSession: id => ({ id, header: { cwd: root } }),
       recordSessionAgent: (cwd, sessionId, agent) => ctx.a2d2.recordSessionAgent(cwd, sessionId, agent),
     })
@@ -156,10 +156,10 @@ describe('session Agent registration route', () => {
     await expect(ctx.a2d2.agentOfSession(root, SessionId('session-chip'))).resolves.toBe('reviewer')
   })
 
-  it('rejects untrusted browser requests before recording', async () => {
+  it('rejects a request DSH refuses before recording', async () => {
     let writes = 0
     const handler = createSessionAgentHandler({
-      trustedHosts: () => ['10.126.126.12:30710'],
+      requestRejection: () => 403,
       getSession: id => ({ id, header: { cwd: '/tmp/project' } }),
       recordSessionAgent: async () => { writes += 1 },
     })
@@ -173,7 +173,7 @@ describe('session Agent registration route', () => {
   it('rejects illegal Agent values before recording', async () => {
     let writes = 0
     const handler = createSessionAgentHandler({
-      trustedHosts: () => ['10.126.126.12:30710'],
+      requestRejection: () => undefined,
       getSession: id => ({ id, header: { cwd: '/tmp/project' } }),
       recordSessionAgent: async () => { writes += 1 },
     })
@@ -187,7 +187,7 @@ describe('session Agent registration route', () => {
   it('rejects non-POST requests', async () => {
     let writes = 0
     const handler = createSessionAgentHandler({
-      trustedHosts: () => ['10.126.126.12:30710'],
+      requestRejection: () => undefined,
       getSession: id => ({ id, header: { cwd: '/tmp/project' } }),
       recordSessionAgent: async () => { writes += 1 },
     })
@@ -201,7 +201,7 @@ describe('session Agent registration route', () => {
   it('rejects malformed JSON before recording', async () => {
     let writes = 0
     const handler = createSessionAgentHandler({
-      trustedHosts: () => ['10.126.126.12:30710'],
+      requestRejection: () => undefined,
       getSession: id => ({ id, header: { cwd: '/tmp/project' } }),
       recordSessionAgent: async () => { writes += 1 },
     })
@@ -218,7 +218,7 @@ describe('session Agent registration route', () => {
     await ctx.plugin(A2d2Service, { root })
     await ctx.a2d2.bindMainSession({ cwd: root, issue: 73, mainSession: SessionId('session-main'), now: new Date() })
     const handler = createSessionAgentHandler({
-      trustedHosts: () => ['10.126.126.12:30710'],
+      requestRejection: () => undefined,
       getSession: id => ({ id, header: { cwd: root } }),
       recordSessionAgent: (cwd, sessionId, agent) => ctx.a2d2.recordSessionAgent(cwd, sessionId, agent),
     })
@@ -234,7 +234,7 @@ describe('session Agent registration route', () => {
     await ctx.plugin(A2d2Service, { root })
     await ctx.a2d2.recordSessionAgent(root, SessionId('session-chip'), 'engineer')
     const handler = createSessionAgentHandler({
-      trustedHosts: () => ['10.126.126.12:30710'],
+      requestRejection: () => undefined,
       getSession: id => ({ id, header: { cwd: root } }),
       recordSessionAgent: (cwd, sessionId, agent) => ctx.a2d2.recordSessionAgent(cwd, sessionId, agent),
     })

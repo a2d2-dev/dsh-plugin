@@ -1,5 +1,5 @@
 /**
- * Trusted browser route for recording the Agent assigned to a session.
+ * Authenticated browser route for recording the Agent assigned to a session.
  *
  * Browser chips create sessions outside the model tool path, so they call this
  * route immediately after creation to persist the session's A2D2 Agent.
@@ -9,15 +9,16 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
-import { isTrustedConsultRequest } from './consult.ts'
 import { parseSessionId } from './handoff.ts'
+import { rejectionError } from './route-auth.ts'
+import type { RequestRejection } from './route-auth.ts'
 import { STAGE_AGENTS } from './stage-agents.ts'
 import type { StageAgent } from './stage-agents.ts'
 
 /** Exact HTTP pathname owned by the session Agent registration route. */
 export const SESSION_AGENT_ROUTE_PATH = '/a2d2/api/session-agent'
 
-/** Same request body limit used by the trusted A2D2 configuration route. */
+/** Same request body limit used by the A2D2 configuration route. */
 export const SESSION_AGENT_BODY_LIMIT_BYTES = 64 * 1024
 
 const JSON_HEADERS = {
@@ -29,6 +30,7 @@ const AGENT_SET = new Set<string>(STAGE_AGENTS)
 
 type SessionAgentErrorCode =
   | 'method-not-allowed'
+  | 'unauthenticated'
   | 'untrusted'
   | 'payload-too-large'
   | 'bad-json'
@@ -46,7 +48,8 @@ export interface SessionAgentSession {
 }
 
 export interface SessionAgentDependencies {
-  readonly trustedHosts: () => readonly string[]
+  /** DSH's browser authentication, asked before anything else (see `route-auth.ts`). */
+  readonly requestRejection: RequestRejection
   readonly getSession: (id: SessionId) => SessionAgentSession | undefined
   readonly recordSessionAgent: (cwd: string, sessionId: SessionId, agent: StageAgent) => Promise<void>
 }
@@ -103,17 +106,19 @@ function fail(response: ServerResponse, status: number, code: SessionAgentErrorC
   respond(response, status, { ok: false, error: { code, message } })
 }
 
-/** Create the trusted browser route handler that records session Agents. */
+/** Create the authenticated browser route handler that records session Agents. */
 export function createSessionAgentHandler(
   dependencies: SessionAgentDependencies,
 ): (request: IncomingMessage, response: ServerResponse) => Promise<void> {
   return async (request, response) => {
-    if (request.method !== 'POST') {
-      fail(response, 405, 'method-not-allowed', 'Only POST is allowed for this route.')
+    const rejection = dependencies.requestRejection(request)
+    if (rejection !== undefined) {
+      const { code, message } = rejectionError(rejection)
+      fail(response, rejection, code, message)
       return
     }
-    if (!isTrustedConsultRequest(request.headers, dependencies.trustedHosts())) {
-      fail(response, 403, 'untrusted', 'The request authority or origin is not trusted.')
+    if (request.method !== 'POST') {
+      fail(response, 405, 'method-not-allowed', 'Only POST is allowed for this route.')
       return
     }
     let body: unknown

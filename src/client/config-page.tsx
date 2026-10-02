@@ -1,7 +1,7 @@
 /**
  * A2D2 settings section: edit the stage Agent table and run explicit probes.
  *
- * The component talks only to the plugin-owned trusted host route. It never
+ * The component talks only to the plugin-owned authenticated host route. It never
  * calls DSH settings for arbitrary namespaces from the browser.
  *
  * @module @deepseek-ai/dsh-a2d2/client/config-page

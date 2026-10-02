@@ -24,13 +24,13 @@ import {
   createConsultHandler,
   currentConsultRoute,
   generateConsultOutput,
-  isTrustedConsultRequest,
   parseConsultOutput,
 } from '../src/consult.ts'
 import type { ConsultDependencies, ConsultSession } from '../src/consult.ts'
 import { DEFAULT_STAGE_AGENTS } from '../src/stage-agents.ts'
 import type { SkillSource } from '../src/skill-source.ts'
 import type { Task } from '../src/types.ts'
+import { StubConnection } from './stubs.ts'
 
 const anthropicUsagePolicyRefusal = "This request triggered restrictions on violative cyber content and was blocked under Anthropic's Usage Policy. To learn more, see https://platform.claude.com/docs/en/build-with-claude/refusals-and-fallback."
 
@@ -203,7 +203,7 @@ function dependencies(
   return {
     session: live,
     calls,
-    trustedHosts: () => ['10.126.126.12', 'trusted.example:3710'],
+    requestRejection: () => undefined,
     getSession: id => id === sessionId ? live : undefined,
     listTasks: async () => [task],
     projectRoot: async cwd => cwd,
@@ -488,53 +488,12 @@ describe('consult generation finishes', () => {
   })
 })
 
-describe('consult request trust', () => {
-  it('accepts only strict loopback authorities without a trusted-host entry', () => {
-    expect(isTrustedConsultRequest({ host: '127.0.0.1' }, [])).toBe(true)
-    expect(isTrustedConsultRequest({ host: '127.1.2.3:3710' }, [])).toBe(true)
-    expect(isTrustedConsultRequest({ host: 'localhost:3710' }, [])).toBe(true)
-    expect(isTrustedConsultRequest({ host: '::1' }, [])).toBe(true)
-    expect(isTrustedConsultRequest({ host: '[::1]' }, [])).toBe(true)
-    expect(isTrustedConsultRequest({ host: '[::1]:3710' }, [])).toBe(true)
-  })
-
-  it.each([
-    '127.evil.example',
-    '127x.example',
-    '0127.0.0.1',
-    '127.1',
-    '127.0.0.256',
-  ])('rejects the loopback lookalike %s', (host) => {
-    expect(isTrustedConsultRequest({ host }, [])).toBe(false)
-  })
-
-  it('honors explicit trusted ports and lets portless entries match any port', () => {
-    expect(isTrustedConsultRequest({ host: 'trusted.example:3710' }, ['trusted.example:3710'])).toBe(true)
-    expect(isTrustedConsultRequest({ host: 'trusted.example:9999' }, ['trusted.example:3710'])).toBe(false)
-    expect(isTrustedConsultRequest({ host: 'trusted.example' }, ['trusted.example:3710'])).toBe(false)
-    expect(isTrustedConsultRequest({ host: 'trusted.example:80' }, ['trusted.example:80'])).toBe(true)
-    expect(isTrustedConsultRequest({ host: 'trusted.example' }, ['trusted.example:80'])).toBe(false)
-    expect(isTrustedConsultRequest({ host: 'trusted.example:9999' }, ['trusted.example'])).toBe(true)
-    expect(isTrustedConsultRequest({ host: 'trusted.example' }, ['trusted.example'])).toBe(true)
-  })
-
-  it('rejects cross-site fetches and cross-host origins even for trusted authorities', () => {
-    expect(isTrustedConsultRequest({
-      host: 'trusted.example:3710',
-      'sec-fetch-site': 'cross-site',
-    }, ['trusted.example'])).toBe(false)
-    expect(isTrustedConsultRequest({
-      host: 'trusted.example:3710',
-      origin: 'https://other.example',
-    }, ['trusted.example'])).toBe(false)
-  })
-})
-
 describe('consult HTTP route', () => {
   it('registers an exact route when webServer is present', async () => {
     const ctx = new Context()
     try {
       await ctx.plugin(StubWebServer)
+      await ctx.plugin(StubConnection)
       await ctx.plugin(A2d2Service, { root: '/project' })
 
       expect(ctx.webServer.routes).toEqual(expect.arrayContaining([
@@ -565,6 +524,7 @@ describe('consult HTTP route', () => {
     const ctx = new Context()
     try {
       await ctx.plugin(StubWebServer)
+      await ctx.plugin(StubConnection)
       await ctx.plugin(StubSessions)
       await ctx.plugin(StubLlm)
       ;(ctx.get('sessions') as unknown as StubSessions).live = session({ header: header({ cwd }) })
@@ -602,6 +562,7 @@ describe('consult HTTP route', () => {
     const ctx = new Context()
     try {
       await ctx.plugin(StubWebServer)
+      await ctx.plugin(StubConnection)
       await ctx.plugin(StubSessions)
       await ctx.plugin(StubLlm)
       ;(ctx.get('sessions') as unknown as StubSessions).live = session({ header: header({ cwd: fixedRoot }) })
@@ -630,7 +591,6 @@ describe('consult HTTP route', () => {
 
   it.each([
     ['method-not-allowed', { method: 'GET' }, 405, 'method-not-allowed'],
-    ['untrusted', { headers: { host: 'evil.example' } }, 403, 'untrusted'],
     ['missing session', { path: '/a2d2/api/consult' }, 400, 'missing-session'],
     ['invalid session', { path: '/a2d2/api/consult?session=../bad' }, 400, 'missing-session'],
   ])('returns the %s response body', async (_name, options, status, code) => {

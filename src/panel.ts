@@ -10,7 +10,8 @@
 
 import type { IncomingHttpHeaders } from 'node:http'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
-import { isTrustedConsultRequest } from './consult.ts'
+import { rejectionError } from './route-auth.ts'
+import type { RequestRejection } from './route-auth.ts'
 import { PANEL_ROUTE_PATH } from './panel-types.ts'
 import type { PanelErrorCode, PanelPayload, PanelResponse, PanelTask } from './panel-types.ts'
 import type { Task } from './types.ts'
@@ -32,7 +33,8 @@ export interface PanelSession {
 
 /** Host capabilities injected into the route handler. */
 export interface PanelDependencies {
-  readonly trustedHosts: () => readonly string[]
+  /** DSH's browser authentication, asked before anything else (see `route-auth.ts`). */
+  readonly requestRejection: RequestRejection
   readonly getSession: (id: SessionId) => PanelSession | undefined
   readonly listTasks: (cwd: string) => Promise<readonly Task[]>
   readonly projectRoot: (cwd: string) => Promise<string>
@@ -89,6 +91,7 @@ export function panelPayload(root: string, tasks: readonly Task[]): PanelPayload
 function statusOf(code: PanelErrorCode): number {
   switch (code) {
     case 'method-not-allowed': return 405
+    case 'unauthenticated': return 401
     case 'untrusted': return 403
     case 'missing-session': return 400
     case 'unknown-session': return 404
@@ -125,7 +128,7 @@ function sessionIdOf(url: string | undefined): SessionId | undefined {
 }
 
 /**
- * Create the trusted, read-only panel task route.
+ * Create the authenticated, read-only panel task route.
  * @param dependencies - host services used by the route.
  * @returns a Node-compatible request handler.
  */
@@ -133,12 +136,14 @@ export function createPanelHandler(
   dependencies: PanelDependencies,
 ): (request: PanelRequest, response: PanelResponseWriter) => Promise<void> {
   return async (request, response) => {
-    if (request.method !== 'GET') {
-      fail(response, 'method-not-allowed', 'Only GET is allowed for this route.')
+    const rejection = dependencies.requestRejection(request)
+    if (rejection !== undefined) {
+      const { code, message } = rejectionError(rejection)
+      fail(response, code, message)
       return
     }
-    if (!isTrustedConsultRequest(request.headers, dependencies.trustedHosts())) {
-      fail(response, 'untrusted', 'The request authority or origin is not trusted.')
+    if (request.method !== 'GET') {
+      fail(response, 'method-not-allowed', 'Only GET is allowed for this route.')
       return
     }
     const sessionId = sessionIdOf(request.url)

@@ -121,11 +121,12 @@ function handler(options: {
   update?: (value: StageAgentsSettings, expectedRevision: number | undefined) => Promise<{ value: StageAgentsSettings; revision: number }>
   modelRoutes?: readonly string[]
   stream?: (options: GenerateOptions) => AsyncIterable<StreamChunk>
+  requestRejection?: () => 401 | 403 | undefined
 } = {}) {
   let value = options.value ?? DEFAULT_STAGE_AGENTS
   let revision = options.revision ?? 7
   return createConfigHandler({
-    trustedHosts: () => ['10.126.126.12:30710'],
+    requestRejection: options.requestRejection ?? (() => undefined),
     getSettings: () => ({ value, revision }),
     updateSettings: options.update ?? (async (next, expectedRevision) => {
       if (expectedRevision !== undefined && expectedRevision !== revision) {
@@ -141,8 +142,8 @@ function handler(options: {
 }
 
 describe('A2D2 config settings route', () => {
-  it('rejects untrusted browser requests before reading settings', async () => {
-    const result = await send(handler(), { method: 'settings.get', payload: {} }, { host: 'evil.example' })
+  it('rejects a request DSH refuses before reading settings', async () => {
+    const result = await send(handler({ requestRejection: () => 403 }), { method: 'settings.get', payload: {} }, { host: 'evil.example' })
     expect(result).toMatchObject({
       status: 403,
       json: { ok: false, error: { code: 'untrusted' } },
@@ -349,7 +350,7 @@ describe('model probe', () => {
 
   it('does not require a catalog read for routes already present in settings', async () => {
     const route = createConfigHandler({
-      trustedHosts: () => ['10.126.126.12:30710'],
+      requestRejection: () => undefined,
       getSettings: () => ({ value: DEFAULT_STAGE_AGENTS, revision: 1 }),
       updateSettings: async value => ({ value, revision: 2 }),
       modelRoutes: async () => { throw new Error('catalog unavailable') },

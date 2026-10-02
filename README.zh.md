@@ -96,7 +96,7 @@
 
 ### 会话 Agent 装配
 
-主会话由任务绑定推出为 CEO，不另写 Agent 账本。`dispatch_subagent` 会把子代理会话记录为请求阶段指定的 Agent；受信任浏览器路由 `/a2d2/api/session-agent` 供芯片创建的会话登记为 `ceo`、`engineer` 或 `reviewer`。该路由只接受 POST，使用与 `/a2d2/api/consult`、`/a2d2/api/config` 相同的 host / origin / fetch 信任栅栏和 64 KiB JSON 请求体上限，会拒绝未知会话 id、非法 Agent 值、任务 issue 主会话，以及把已记录会话改写成另一个 Agent 的请求，并写入项目本地 `.dsh/a2d2/session-agents.yaml` 账本。把同一会话重复登记成同一 Agent 是幂等操作。`ctx.a2d2.agentOfSession(cwd, session)` 对任务 issue 主会话返回 `ceo`，对已记录的非主会话返回账本值，对普通未记录会话返回 `undefined`。
+主会话由任务绑定推出为 CEO，不另写 Agent 账本。`dispatch_subagent` 会把子代理会话记录为请求阶段指定的 Agent；需登录的浏览器路由 `/a2d2/api/session-agent` 供芯片创建的会话登记为 `ceo`、`engineer` 或 `reviewer`。该路由只接受 POST，使用与 `/a2d2/api/consult`、`/a2d2/api/config` 相同的 DSH 浏览器认证和 64 KiB JSON 请求体上限，会拒绝未知会话 id、非法 Agent 值、任务 issue 主会话，以及把已记录会话改写成另一个 Agent 的请求，并写入项目本地 `.dsh/a2d2/session-agents.yaml` 账本。把同一会话重复登记成同一 Agent 是幂等操作。`ctx.a2d2.agentOfSession(cwd, session)` 对任务 issue 主会话返回 `ceo`，对已记录的非主会话返回账本值，对普通未记录会话返回 `undefined`。
 
 组合了 `agent-prompt` 行时，工程师和评审会话会得到一个作用域 `a2d2:agent` 系统提示段。该段先读 `~/.dsh/a2d2/agents/<engineer|reviewer>.md`，再读 `<项目根>/.dsh/a2d2/agents/<engineer|reviewer>.md`，并标明项目配置优先于全局配置。文件在每次系统提示词组装时现读；缺失或为空就跳过；两级都缺时该段渲染为空，因此之后新增配置文件会影响下一次请求。这些用户编写的 Agent 配置按字面提示词处理，`{{...}}` 示例会原样保留而不会被插值。这些文件不写入会话历史。CEO 继续使用既有的 `a2d2:ceo` 段与 SOUL 行为，SOUL 文本同样按字面处理。
 
@@ -104,7 +104,7 @@
 
 浏览器 bundle 会向 DSH 设置导航注册一个独立 section：**A2D2 配置**。页面首块画完整 Matt 公路图，并为每个闭集阶段提供 Agent 选择器；独立区显示为 **CEO（任意 skill）**，不可编辑。公路图下方编辑四个有序候选列表：CEO、工程师、评审与咨询。
 
-页面不会从浏览器直接写任意 settings 命名空间。它调用本插件自己的受信任路由 `/a2d2/api/config`，该路由复用下一步咨询的 host / origin / fetch 信任判据。请求体上限是 64 KiB，JSON 解析失败会被拒绝；读取会返回当前 settings revision，保存必须带着该 revision 整体替换 `stageAgents` 值：`stages`、`agents`、`consult` 三节必须齐全，`stages` 必须覆盖全部闭集公路阶段，`agents` 必须包含 `ceo`、`engineer`、`reviewer`，`stageAgents` 内未知顶层键（例如旧形状的 `stations`）会被拒绝。缺 revision 不会写入；若保存时 revision 已过期，路由拒绝写入并返回最新值；空列表、格式错误 route 等 schema 失败会直接回显原因，且不会落盘。
+页面不会从浏览器直接写任意 settings 命名空间。它调用本插件自己的路由 `/a2d2/api/config`。与所有 A²D² 浏览器路由（`/a2d2/api/config`、`/a2d2/api/consult`、`/a2d2/api/session-agent`、`/a2d2/api/tasks`）一样，它先询问 DSH 的 `connection` 服务（`requestRejection`），该检查与 DSH 内置通道相同：Host/Origin 栅栏加浏览器登录校验。未带 DSH 登录 cookie 的请求得到 `401`（`unauthenticated`），来自不受信 authority 或 origin 的请求得到 `403`（`untrusted`），均在读取请求体之前拒绝。仅凭 Host 或 Origin 请求头永远不够，因为任何非浏览器客户端都能伪造它们。没有 `connection` 服务的 profile 不注册这些路由。浏览器端同源 `fetch` 会自动带上登录 cookie，已登录的 DSH 页面无需额外处理。请求体上限是 64 KiB，JSON 解析失败会被拒绝；读取会返回当前 settings revision，保存必须带着该 revision 整体替换 `stageAgents` 值：`stages`、`agents`、`consult` 三节必须齐全，`stages` 必须覆盖全部闭集公路阶段，`agents` 必须包含 `ceo`、`engineer`、`reviewer`，`stageAgents` 内未知顶层键（例如旧形状的 `stations`）会被拒绝。缺 revision 不会写入；若保存时 revision 已过期，路由拒绝写入并返回最新值；空列表、格式错误 route 等 schema 失败会直接回显原因，且不会落盘。
 
 新增候选只能从 DSH 宿主模型目录（`llm.models`）选择，因此页面不会制造拼写错误的 route。每个已有候选旁都有 **测试** 动作：点击时宿主只发一次极小调用（`reply OK`，小输出预算），并把结果分类为正常、拒答、限流或报错，同时显示原因；空输出按报错处理。没有后台轮询探测。
 
@@ -282,7 +282,7 @@ sessions:
 
 同一份浏览器 bundle 还向 better-sidebar 注册一个侧边栏 Tab，id 为 `a2d2-panel`，标题为 **A²D²**。better-sidebar 是可选 peer，通过 `ctx.get('betterSidebar')` 软读、不进入 `inject`：部署里没有它时，本 bundle 只注册指示球，这个 Tab 被跳过而不是让整个 bundle 失败。
 
-上半部分读取 `/a2d2/api/tasks?session=<id>`，展示当前会话 cwd 所属项目里的任务。浏览器从不发送路径；宿主查出该会话，按插件正常存储规则把它的 cwd 解析成项目根，再返回 `{ root, tasks }`。这条路由只读、只允许 GET，并复用咨询与配置路由的 host / origin / fetch 信任判据；所有失败都是 JSON 响应体（`400` 会话 id 不可用、`403` 不受信、`404` 宿主无此会话、`405` 非 GET、`409` 会话无工作目录、`500` 读失败）。
+上半部分读取 `/a2d2/api/tasks?session=<id>`，展示当前会话 cwd 所属项目里的任务。浏览器从不发送路径；宿主查出该会话，按插件正常存储规则把它的 cwd 解析成项目根，再返回 `{ root, tasks }`。这条路由只读、只允许 GET，并使用与咨询、配置路由相同的 DSH 浏览器认证；所有失败都是 JSON 响应体（`400` 会话 id 不可用、`401` 未登录、`403` 不受信、`404` 宿主无此会话、`405` 非 GET、`409` 会话无工作目录、`500` 读失败）。
 
 任务卡按任务树排列：绑定了 issue 且 `parent` 指向另一个已返回任务 issue 的任务，会显示在父任务下面；父任务缺失、形成环、或未绑定 issue 的旧任务都作为根显示。每张任务卡展示状态、目标、成员会话与传入交接边。绑定了任务 issue 的任务还多一行：issue 编号、类型——没有父任务时是主任务，有父任务时是子任务（附父任务编号）——以及主会话，点开方式与成员相同；`issue.handoff` 存在时，同一行会带一个 **交接中** 标记。未绑定 issue 的任务没有这一行。成员会按 `handoffFrom` 形成树。缺失父节点、指向非成员的父节点、以及会闭合成环的边都会让该成员成为根，而不是把会话隐藏掉。包含当前会话的任务会被标为当前。成员标题与能否点击来自 shell 已有的会话列表：列表里有的成员可通过 `sessions.open` 打开；列表里没有的只显示短 id，不可点击。成功读到空列表时显示这个项目没有任务；路由或读取失败则显示失败行。
 
