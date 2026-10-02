@@ -949,6 +949,39 @@ describe('consult HTTP route', () => {
     expect(prompt).toContain('"preconditions":{"missing":[{"id":"issue-tracker","label":"docs/agents/issue-tracker.md","paths":["docs/agents/issue-tracker.md"]}]}')
   })
 
+  it('exempts a model-provided setup continue chip from cross-Agent validation', async () => {
+    const deps = dependencies({
+      checkPreconditions: async () => ({
+        missing: [{
+          id: 'context',
+          label: 'CONTEXT.md or CONTEXT-MAP.md',
+          paths: ['CONTEXT.md', 'CONTEXT-MAP.md'],
+        }],
+      }),
+      stream: () => output(JSON.stringify({
+        position: 'This project still needs setup.',
+        location: { zone: 'off-road', phaseDone: true },
+        candidates: [
+          { label: '开 spec 会话', input: '/to-spec', move: 'clear', station: 'to-spec' },
+          { label: '设置 skills', input: '/setup-matt-pocock-skills', move: 'continue', station: 'implement' },
+        ],
+      })),
+    })
+
+    expect(await send(createConsultHandler(deps))).toMatchObject({
+      status: 200,
+      json: {
+        ok: true,
+        value: {
+          candidates: [
+            { label: '设置 skills', input: '/setup-matt-pocock-skills', move: 'continue', station: 'implement' },
+            { label: '开 spec 会话', input: '/to-spec', move: 'clear', station: 'to-spec' },
+          ],
+        },
+      },
+    })
+  })
+
   it('moves an existing setup chip to the top and keeps the candidate cap', async () => {
     const deps = dependencies({
       checkPreconditions: async () => ({

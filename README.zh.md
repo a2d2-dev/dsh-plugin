@@ -245,9 +245,9 @@ sessions:
 
 下一步咨询不再读取 `a2d2-orchestrator`，也不再回落读取旧名 `ceo-team`。咨询信封只携带当前会话材料、宿主检查出的项目事实、上下文事实、公路图目录、阶段 Agent 表、本会话的 Agent（如已知），以及逐字注入的 `ask-matt` 真源；候选意图仍由模型基于这些材料生成，和普通芯片一样处理。因此装着或没装这些编排 skill，都不会改变咨询信封，也不会额外增加「编排实施全部工单」芯片。
 
-宿主在询问模型前，还会检查会话 cwd 所属项目的首次使用前置条件：必须存在 `CONTEXT.md` 或 `CONTEXT-MAP.md`，并且必须存在 `docs/agents/issue-tracker.md`。响应带 `preconditions.missing`，prompt 信封也写入同一份宿主事实，避免让模型猜配置状态。只要有缺失，卡片顶部显示「首次使用前：/setup-matt-pocock-skills」路牌，并列出缺失项。宿主还会在解析模型输出之后把 `/setup-matt-pocock-skills` 强制置为首颗芯片；模型已经给出时就移动到首位，否则补上一颗，芯片总数仍最多四颗。已配置项目、以及没有 `preconditions` 字段的旧宿主，都不显示该路牌。
+宿主在询问模型前，还会检查会话 cwd 所属项目的首次使用前置条件：必须存在 `CONTEXT.md` 或 `CONTEXT-MAP.md`，并且必须存在 `docs/agents/issue-tracker.md`。响应带 `preconditions.missing`，prompt 信封也写入同一份宿主事实，避免让模型猜配置状态。只要有缺失，卡片顶部显示「首次使用前：/setup-matt-pocock-skills」路牌，并列出缺失项。宿主还会在解析模型输出之后把 `/setup-matt-pocock-skills` 强制置为首颗芯片；模型已经给出时就移动到首位，否则补上一颗，芯片总数仍最多四颗。模型给出的芯片若 input 精确等于 `/setup-matt-pocock-skills`，是唯一不受跨 Agent continue 规则约束的 `continue` 候选，与宿主插入的 setup 芯片保持一致。已配置项目、以及没有 `preconditions` 字段的旧宿主，都不显示该路牌。
 
-咨询不再沿用当前会话 route，而是按阶段 Agent settings 的 `consult` 候选顺序尝试；提供方错误、限流、拒答或空输出会换下一个候选。非空但畸形的 JSON 不重试，因为这是协议失败，不是 route 可用性问题；这也包括 `phaseDone: true` 时试图 `continue` 到目标 Agent 不等于本会话 Agent 的阶段，或在本会话没有记录 Agent 时试图跨阶段 `continue`。响应会带回 `answeredBy`、`fallbacks`、`stageAgents: { stages, agents }`，以及已知时的 `sessionAgent`；卡底显示「由 X 生成」，发生回落时注明原因。浏览器从 `stageAgents` 推导每个公路图标签：阶段 -> Agent -> 该 Agent 在本会话模型目录里的首个候选，显示为「工程师 · gpt-5.5」或「工程师 · 无可用模型」。芯片点击行为与副作用文案仍保持现有语义，留给 #75；当前浏览器只把模型选择来源从已删除的 `stationModels` 改为 `stageAgents`。
+咨询不再沿用当前会话 route，而是按阶段 Agent settings 的 `consult` 候选顺序尝试；提供方错误、限流、拒答或空输出会换下一个候选。非空但畸形的 JSON 不重试，因为这是协议失败，不是 route 可用性问题；这也包括 `phaseDone: true` 时试图 `continue` 到目标 Agent 不等于本会话 Agent 的阶段，或在本会话没有记录 Agent 时试图跨阶段 `continue`，但上面所述精确 setup 芯片例外。响应会带回 `answeredBy`、`fallbacks`、`stageAgents: { stages, agents }`，以及已知时的 `sessionAgent`；卡底显示「由 X 生成」，发生回落时注明原因。浏览器从 `stageAgents` 推导每个公路图标签：阶段 -> Agent -> 该 Agent 在本会话模型目录里的首个候选，显示为「工程师 · gpt-5.5」或「工程师 · 无可用模型」。芯片点击行为与副作用文案仍保持现有语义，留给 #75；当前浏览器只把模型选择来源从已删除的 `stationModels` 改为 `stageAgents`。
 
 边界卡底部有一行始终可用的 **其他走法** 折叠入口，列出 continue 之外的通用走法：clear、subagent、compact、handoff。clear 走与 clear 芯片相同的建空会话序列，但没有站点目标时保持新会话默认模型；subagent 准备一段可编辑的输入框文本；compact 与 handoff 打开交接卡。这样想手动交接时仍能从卡片里找到入口，但球上不会再把交接放回 **下一步** 的平级位置。
 

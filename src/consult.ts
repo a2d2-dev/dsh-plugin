@@ -555,6 +555,7 @@ function rejectForbiddenContinueMoves(input: {
     rejectForbiddenContinue('next.move', input.next.move, input.next.station, input.validation)
   }
   for (const [index, candidate] of input.candidates.entries()) {
+    if (candidate.input.trim() === SETUP_MATT_POCOCK_SKILLS_COMMAND) continue
     rejectForbiddenContinue(`candidate ${String(index)} move`, candidate.move, candidate.station ?? input.next?.station, input.validation)
   }
 }
