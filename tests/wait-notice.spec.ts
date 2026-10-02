@@ -12,6 +12,7 @@
 import { execFile } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+import { setTimeout as settle } from 'node:timers/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -99,6 +100,7 @@ describe('wait notices', () => {
     emit(ctx, root, mainSession, 'turn/end', { turn: 1, reason: { kind: 'completed' } })
 
     await vi.advanceTimersByTimeAsync(29_000)
+    await settle(50)
     expect(notifier?.calls).toEqual([])
     await vi.advanceTimersByTimeAsync(1_000)
     await vi.waitFor(() => expect(notifier?.calls).toHaveLength(1))
@@ -111,5 +113,145 @@ describe('wait notices', () => {
       },
       options: { sourceName: 'dsh-a2d2', sessionId: mainSession },
     })
+  })
+
+  it('cuts the reply excerpt to 300 characters', async () => {
+    const root = await projectRoot()
+    const { ctx, service, notifier } = await mount(root)
+    await service.bindMainSession({ cwd: root, issue: 86, mainSession, now: new Date() })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+
+    emit(ctx, root, mainSession, 'turn/start', { turn: 1 })
+    assistantSays(ctx, root, mainSession, 1, '长'.repeat(400))
+    emit(ctx, root, mainSession, 'turn/end', { turn: 1, reason: { kind: 'completed' } })
+    await vi.advanceTimersByTimeAsync(30_000)
+    await vi.waitFor(() => expect(notifier?.calls).toHaveLength(1))
+
+    const [excerpt] = (notifier?.calls[0]?.message.content ?? '').split('\n\n')
+    expect(excerpt).toBe(`${'长'.repeat(299)}…`)
+  })
+
+  it.each([
+    ['LF sends a message', 'user/message', { role: 'user', content: [{ type: 'text', text: '合并吧' }], source: { kind: 'user' } }],
+    ['the session runs again', 'turn/start', { turn: 2 }],
+  ])('retracts a turn notice when %s within the grace window', async (_label, type, data) => {
+    const root = await projectRoot()
+    const { ctx, service, notifier } = await mount(root)
+    await service.bindMainSession({ cwd: root, issue: 86, mainSession, now: new Date() })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+
+    emit(ctx, root, mainSession, 'turn/start', { turn: 1 })
+    assistantSays(ctx, root, mainSession, 1, '等你确认。')
+    emit(ctx, root, mainSession, 'turn/end', { turn: 1, reason: { kind: 'completed' } })
+    await vi.advanceTimersByTimeAsync(10_000)
+    emit(ctx, root, mainSession, type, data)
+    await vi.advanceTimersByTimeAsync(60_000)
+    await settle(50)
+
+    expect(notifier?.calls).toEqual([])
+  })
+
+  it('pushes nothing for a subagent or an unbound session', async () => {
+    const root = await projectRoot()
+    const { ctx, service, notifier } = await mount(root)
+    await service.bindMainSession({ cwd: root, issue: 86, mainSession, now: new Date() })
+    await service.recordSessionAgent(root, childSession, 'engineer')
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+
+    for (const session of [childSession, SessionId('session-unbound')]) {
+      emit(ctx, root, session, 'turn/start', { turn: 1 })
+      assistantSays(ctx, root, session, 1, '实现完成。')
+      emit(ctx, root, session, 'tool/call', {
+        turn: 1, step: 1, callId: 'call-ask', name: 'ask_user_question',
+        arguments: JSON.stringify({ questions: [{ id: 'q', question: '要合并吗？' }] }),
+      })
+      emit(ctx, root, session, 'turn/end', { turn: 1, reason: { kind: 'completed' } })
+    }
+    await vi.advanceTimersByTimeAsync(60_000)
+    await settle(50)
+
+    expect(notifier?.calls).toEqual([])
+  })
+
+  it('pushes "需要你决定" with the question text at once when the main session asks LF', async () => {
+    const root = await projectRoot()
+    const { ctx, service, notifier } = await mount(root)
+    await service.bindMainSession({ cwd: root, issue: 86, mainSession, now: new Date() })
+
+    emit(ctx, root, mainSession, 'turn/start', { turn: 1 })
+    emit(ctx, root, mainSession, 'tool/call', {
+      turn: 1, step: 1, callId: 'call-ask', name: 'ask_user_question',
+      arguments: JSON.stringify({ questions: [
+        { id: 'deploy', question: '要发布到生产吗？', options: [{ label: '发布' }, { label: '不发' }] },
+        { id: 'scope', question: '范围要包含飞书桥吗？' },
+      ] }),
+    })
+    await vi.waitFor(() => expect(notifier?.calls).toHaveLength(1))
+
+    expect(notifier?.calls[0]).toEqual({
+      message: {
+        title: '#86 · 需要你决定',
+        content: '要发布到生产吗？\n范围要包含飞书桥吗？\n\nhttps://github.com/a2d2-dev/dsh-plugin/issues/86',
+        level: 'timeSensitive',
+      },
+      options: { sourceName: 'dsh-a2d2', sessionId: mainSession },
+    })
+  })
+
+  it('pushes "已完成" with the completion summary when the main session completes its task issue', async () => {
+    const root = await projectRoot()
+    const { service, notifier } = await mount(root)
+    await service.bindMainSession({ cwd: root, issue: 86, mainSession, now: new Date() })
+
+    await service.completeTask({ cwd: root, caller: mainSession, summary: 'PR #95 已合并，验收通过。' })
+    await vi.waitFor(() => expect(notifier?.calls).toHaveLength(1))
+
+    expect(notifier?.calls[0]).toEqual({
+      message: { title: '#86 · 已完成', content: 'PR #95 已合并，验收通过。', level: 'active' },
+      options: { sourceName: 'dsh-a2d2', sessionId: mainSession },
+    })
+  })
+
+  it('starts and runs without a notifier provider, sending nothing and raising nothing', async () => {
+    const root = await projectRoot()
+    const { ctx, service } = await mount(root, { notifier: false })
+    await service.bindMainSession({ cwd: root, issue: 86, mainSession, now: new Date() })
+
+    emit(ctx, root, mainSession, 'turn/start', { turn: 1 })
+    emit(ctx, root, mainSession, 'tool/call', {
+      turn: 1, step: 1, callId: 'call-ask', name: 'ask_user_question',
+      arguments: JSON.stringify({ questions: [{ id: 'q', question: '要合并吗？' }] }),
+    })
+    emit(ctx, root, mainSession, 'turn/end', { turn: 1, reason: { kind: 'completed' } })
+    const completed = await service.completeTask({ cwd: root, caller: mainSession, summary: '完成。' })
+
+    expect(completed.task.state).toBe('done')
+  })
+
+  it.each([
+    ['rejects', () => Promise.reject(new Error('channel down'))],
+    ['throws', () => { throw new Error('provider bug') }],
+  ])('keeps the session unaffected when push %s', async (_label, failure) => {
+    const root = await projectRoot()
+    const { ctx, service, notifier } = await mount(root)
+    await service.bindMainSession({ cwd: root, issue: 86, mainSession, now: new Date() })
+    notifier?.push.mockImplementation(failure as never)
+    const unhandled = vi.fn()
+    process.on('unhandledRejection', unhandled)
+    try {
+      emit(ctx, root, mainSession, 'turn/start', { turn: 1 })
+      emit(ctx, root, mainSession, 'tool/call', {
+        turn: 1, step: 1, callId: 'call-ask', name: 'ask_user_question',
+        arguments: JSON.stringify({ questions: [{ id: 'q', question: '要合并吗？' }] }),
+      })
+      const completed = await service.completeTask({ cwd: root, caller: mainSession, summary: '完成。' })
+      await vi.waitFor(() => expect(notifier?.push).toHaveBeenCalledTimes(2))
+      await settle(50)
+
+      expect(completed.task.state).toBe('done')
+      expect(unhandled).not.toHaveBeenCalled()
+    } finally {
+      process.off('unhandledRejection', unhandled)
+    }
   })
 })
