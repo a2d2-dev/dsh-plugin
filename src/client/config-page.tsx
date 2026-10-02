@@ -1,5 +1,5 @@
 /**
- * A2D2 settings section: edit the station model table and run explicit probes.
+ * A2D2 settings section: edit the stage Agent table and run explicit probes.
  *
  * The component talks only to the plugin-owned trusted host route. It never
  * calls DSH settings for arbitrary namespaces from the browser.
@@ -11,6 +11,7 @@ import { createElement, useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent, ReactNode } from 'react'
 import type { InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
 import {
+  CLOSED_HIGHWAY_STATIONS,
   MAIN_STATION_ROLES,
   MAIN_STATIONS,
   RAMP_MERGES,
@@ -20,12 +21,15 @@ import {
 } from '../highway.ts'
 import type { ClosedHighwayStation } from '../highway.ts'
 import {
-  DEFAULT_STATION_MODELS,
-  STATION_MODEL_STATIONS,
+  DEFAULT_STAGE_AGENTS,
+  STAGE_AGENTS,
+  agentForStage,
+  modelCandidatesForStage,
   shortModelRoute,
-  stationModelWarnings,
-} from '../station-model-data.ts'
-import type { Station, StationModelsSettings } from '../station-model-data.ts'
+  stageAgentLabel,
+  stageAgentWarnings,
+} from '../stage-agent-data.ts'
+import type { Stage, StageAgent, StageAgentsSettings } from '../stage-agent-data.ts'
 import { HighwayMap } from './highway-map.tsx'
 import type { HighwayView, HighwayViewStation } from './highway-view.ts'
 import css from './orb.module.css'
@@ -37,7 +41,7 @@ type ConfigResponse<T> =
   | { readonly ok: false; readonly error: { readonly code: string; readonly message: string; readonly latest?: ConfigSnapshot } }
 
 interface ConfigSnapshot {
-  readonly settings: StationModelsSettings
+  readonly settings: StageAgentsSettings
   readonly revision?: number
   readonly warnings: readonly string[]
 }
@@ -62,34 +66,24 @@ export interface A2d2ConfigInjected {
 export type A2d2ConfigSectionProps = Partial<InjectFace<A2d2ConfigInjected>>
 
 const MAIN_STATION_SET = new Set<string>(MAIN_STATIONS)
-const CONFIG_MODEL_ROW_ORDER = [
+const CONFIG_STAGE_ROW_ORDER = [
   ...MAIN_STATIONS,
   ...SERVICE_STATIONS,
   ...RAMP_STATIONS,
   ...ROADBED_STATIONS,
   'standalone',
 ] as const
-const NO_SWITCH_MODEL = '不切模型'
 const DEFAULT_LOAD_MODEL_ROUTES = async (): Promise<readonly string[]> => []
 
 type ConfigStationId = ClosedHighwayStation | 'standalone'
-type ConfigEditableScope = 'consult' | Station
+type ConfigCandidateScope = StageAgent | 'consult'
 
-export type ConfigModelRow =
-  | {
-    readonly kind: 'editable'
-    readonly scope: ConfigEditableScope
-    readonly label: string
-    readonly group: string
-    readonly routes: readonly string[]
-  }
-  | {
-    readonly kind: 'fixed'
-    readonly scope: Exclude<ConfigStationId, Station>
-    readonly label: string
-    readonly group: string
-    readonly routes: readonly []
-  }
+export interface ConfigCandidateRow {
+  readonly scope: ConfigCandidateScope
+  readonly label: string
+  readonly group: string
+  readonly routes: readonly string[]
+}
 
 const STATION_LABELS: Readonly<Record<ConfigStationId, string>> = {
   grill: '/grill · 澄清目标与约束',
@@ -136,25 +130,32 @@ export async function loadModelRouteCatalog(api: ModelCatalogApi | undefined): P
   return response.value.groups.flatMap(group => group.models.map(model => `${group.id}/${model.id}`))
 }
 
-function cloneSettings(settings: StationModelsSettings): StationModelsSettings {
+function cloneSettings(settings: StageAgentsSettings): StageAgentsSettings {
   return {
-    stations: Object.fromEntries(
-      STATION_MODEL_STATIONS.map(station => [station, [...settings.stations[station]]]),
-    ) as Record<Station, string[]>,
+    stages: Object.fromEntries(
+      CLOSED_HIGHWAY_STATIONS.map(stage => [stage, settings.stages[stage]]),
+    ) as Record<Stage, StageAgent>,
+    agents: Object.fromEntries(
+      STAGE_AGENTS.map(agent => [agent, [...settings.agents[agent]]]),
+    ) as Record<StageAgent, string[]>,
     consult: [...settings.consult],
   }
 }
 
-function routeKey(scope: 'consult' | Station, route: string): string {
+function routeKey(scope: ConfigCandidateScope, route: string): string {
   return `${scope}\u0000${route}`
 }
 
-function replaceList(settings: StationModelsSettings, scope: 'consult' | Station, routes: readonly string[]): StationModelsSettings {
+function replaceCandidateList(
+  settings: StageAgentsSettings,
+  scope: ConfigCandidateScope,
+  routes: readonly string[],
+): StageAgentsSettings {
   if (scope === 'consult') return { ...settings, consult: [...routes] }
   return {
     ...settings,
-    stations: {
-      ...settings.stations,
+    agents: {
+      ...settings.agents,
       [scope]: [...routes],
     },
   }
@@ -167,46 +168,113 @@ export function normalizeConfigInjected(props: A2d2ConfigSectionProps): A2d2Conf
   }
 }
 
-export function configHighwayView(settings: StationModelsSettings): HighwayView {
+export function setConfigStageAgent(settings: StageAgentsSettings, stage: Stage, agent: StageAgent): StageAgentsSettings {
   return {
-    aside: '服务区、匝道、路基、独立区均为 Matt 流程的一部分；匝道并入点由插件固定。',
-    stations: CONFIG_MODEL_ROW_ORDER.map((station): HighwayViewStation => ({
-      id: station,
-      role: stationRole(station),
-      models: stationModelSummary(settings, station),
-      state: 'ahead' as const,
-    })),
+    ...settings,
+    stages: {
+      ...settings.stages,
+      [stage]: agent,
+    },
   }
 }
 
-export function configModelRows(settings: StationModelsSettings): readonly ConfigModelRow[] {
+export function configCandidateRows(settings: StageAgentsSettings): readonly ConfigCandidateRow[] {
   return [
+    ...STAGE_AGENTS.map((agent): ConfigCandidateRow => ({
+      scope: agent,
+      label: stageAgentLabel(agent),
+      group: 'Agent 模型候选',
+      routes: settings.agents[agent],
+    })),
     {
-      kind: 'editable',
       scope: 'consult',
       label: '咨询',
       group: '下一步咨询',
       routes: settings.consult,
     },
-    ...CONFIG_MODEL_ROW_ORDER.map((station): ConfigModelRow => {
-      if (isEditableStation(station)) {
-        return {
-          kind: 'editable',
-          scope: station,
-          label: STATION_LABELS[station],
-          group: groupLabel(station),
-          routes: settings.stations[station],
-        }
-      }
-      return {
-        kind: 'fixed',
-        scope: station,
-        label: STATION_LABELS[station],
-        group: groupLabel(station),
-        routes: [],
-      }
-    }),
   ]
+}
+
+export function addConfigCandidate(
+  settings: StageAgentsSettings,
+  scope: ConfigCandidateScope,
+  route: string,
+  catalog: readonly string[],
+): StageAgentsSettings {
+  if (!catalog.includes(route)) throw new Error('只能从模型目录添加候选')
+  const routes = scope === 'consult' ? settings.consult : settings.agents[scope]
+  if (routes.includes(route)) return settings
+  return replaceCandidateList(settings, scope, [...routes, route])
+}
+
+export function removeConfigCandidate(
+  settings: StageAgentsSettings,
+  scope: ConfigCandidateScope,
+  route: string,
+): StageAgentsSettings {
+  const routes = scope === 'consult' ? settings.consult : settings.agents[scope]
+  if (routes.length <= 1) throw new Error('至少保留一个模型候选')
+  return replaceCandidateList(settings, scope, routes.filter(item => item !== route))
+}
+
+export function moveConfigCandidate(
+  settings: StageAgentsSettings,
+  scope: ConfigCandidateScope,
+  index: number,
+  delta: -1 | 1,
+): StageAgentsSettings {
+  const routes = [...(scope === 'consult' ? settings.consult : settings.agents[scope])]
+  const target = index + delta
+  if (index < 0 || index >= routes.length || target < 0 || target >= routes.length) return settings
+  const route = routes[index]!
+  routes[index] = routes[target]!
+  routes[target] = route
+  return replaceCandidateList(settings, scope, routes)
+}
+
+export function configWarnings(settings: StageAgentsSettings): readonly string[] {
+  return stageAgentWarnings(settings)
+}
+
+export function configUpdatePayload(settings: StageAgentsSettings, revision: number): { readonly settings: StageAgentsSettings; readonly expectedRevision: number } {
+  return { settings, expectedRevision: revision }
+}
+
+export function configHighwayView(settings: StageAgentsSettings, catalog?: readonly string[]): HighwayView {
+  return {
+    aside: '服务区、匝道、路基、独立区均为 Matt 流程的一部分；匝道并入点由插件固定。',
+    stations: CONFIG_STAGE_ROW_ORDER.map((station): HighwayViewStation => ({
+      id: station,
+      role: stationRole(station),
+      ...configStationAgentField(settings, station, catalog),
+      state: 'ahead' as const,
+    })),
+  }
+}
+
+function configStationAgentField(
+  settings: StageAgentsSettings,
+  station: ConfigStationId,
+  catalog: readonly string[] | undefined,
+): Pick<HighwayViewStation, 'agent' | 'agentKey' | 'models'> {
+  if (station === 'standalone') {
+    return {
+      agent: 'CEO（任意 skill）',
+      models: candidateModelLabel(settings.agents.ceo, catalog),
+    }
+  }
+  const agent = agentForStage(settings, station)
+  return {
+    agent: stageAgentLabel(agent),
+    agentKey: agent,
+    models: candidateModelLabel(modelCandidatesForStage(settings, station), catalog),
+  }
+}
+
+function candidateModelLabel(routes: readonly string[], catalog: readonly string[] | undefined): string {
+  if (catalog === undefined) return shortModelRoute(routes[0] ?? '') || '无可用模型'
+  const selected = routes.find(route => catalog.includes(route))
+  return selected === undefined ? '无可用模型' : shortModelRoute(selected)
 }
 
 function stationRole(station: ConfigStationId): string {
@@ -217,15 +285,6 @@ function stationRole(station: ConfigStationId): string {
   if (station === 'codebase-design') return '路基：模块设计'
   if (station === 'standalone') return '独立区：其他 skill'
   return `匝道，并入 ${RAMP_MERGES[station as keyof typeof RAMP_MERGES]}`
-}
-
-function stationModelSummary(settings: StationModelsSettings, station: ConfigStationId): string {
-  if (!isEditableStation(station)) return NO_SWITCH_MODEL
-  return shortModelRoute(settings.stations[station][0] ?? '') || NO_SWITCH_MODEL
-}
-
-function isEditableStation(station: ConfigStationId): station is Station {
-  return station in DEFAULT_STATION_MODELS.stations
 }
 
 function probeLabel(status: ProbeResult['status']): string {
@@ -243,27 +302,19 @@ export function probeResultText(result: ProbeResult): string {
   return `${probeLabel(result.status)} · ${result.reason}`
 }
 
-function groupLabel(station: ConfigStationId): string {
-  if (MAIN_STATION_SET.has(station)) return '主干'
-  if ((SERVICE_STATIONS as readonly string[]).includes(station)) return '服务区'
-  if ((ROADBED_STATIONS as readonly string[]).includes(station)) return '路基'
-  if (station === 'standalone') return '独立区'
-  return '匝道'
-}
-
 export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
   const injected = useMemo(() => normalizeConfigInjected(props), [props.fetch, props.loadModelRoutes])
   const fetchImpl = injected.fetch
   const loadRoutes = injected.loadModelRoutes
   const [snapshot, setSnapshot] = useState<ConfigSnapshot | null>(null)
-  const [draft, setDraft] = useState<StationModelsSettings>(() => cloneSettings(DEFAULT_STATION_MODELS))
+  const [draft, setDraft] = useState<StageAgentsSettings>(() => cloneSettings(DEFAULT_STAGE_AGENTS))
   const [catalog, setCatalog] = useState<readonly string[]>([])
   const [status, setStatus] = useState<string>('加载中')
   const [saving, setSaving] = useState(false)
   const [probes, setProbes] = useState<Readonly<Record<string, ProbeResult | undefined>>>(EMPTY_PROBES)
   const [selected, setSelected] = useState<Record<string, string>>({})
-  const warnings = useMemo(() => stationModelWarnings(draft), [draft])
-  const rows = useMemo(() => configModelRows(draft), [draft])
+  const warnings = useMemo(() => configWarnings(draft), [draft])
+  const rows = useMemo(() => configCandidateRows(draft), [draft])
 
   useEffect(() => {
     let alive = true
@@ -288,18 +339,15 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
     return () => { alive = false }
   }, [fetchImpl, loadRoutes])
 
-  const setRoutes = (scope: 'consult' | Station, routes: readonly string[]): void => {
-    setDraft(current => replaceList(current, scope, routes))
+  const setRoutes = (scope: ConfigCandidateScope, routes: readonly string[]): void => {
+    setDraft(current => replaceCandidateList(current, scope, routes))
   }
   const save = async (): Promise<void> => {
     if (snapshot?.revision === undefined) return
     setSaving(true)
     setStatus('保存中')
     try {
-      const saved = await callConfig<ConfigSnapshot>(fetchImpl, 'settings.update', {
-        settings: draft,
-        expectedRevision: snapshot.revision,
-      })
+      const saved = await callConfig<ConfigSnapshot>(fetchImpl, 'settings.update', configUpdatePayload(draft, snapshot.revision))
       setSnapshot(saved)
       setDraft(cloneSettings(saved.settings))
       setStatus('已保存')
@@ -316,7 +364,7 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
       setSaving(false)
     }
   }
-  const probe = async (scope: 'consult' | Station, route: string): Promise<void> => {
+  const probe = async (scope: ConfigCandidateScope, route: string): Promise<void> => {
     const key = routeKey(scope, route)
     setProbes(current => ({ ...current, [key]: { status: 'pending', reason: '测试中' } }))
     try {
@@ -330,8 +378,20 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
     }
   }
 
-  const renderRoutes = (row: ConfigModelRow): ReactNode => {
-    if (row.kind === 'fixed') return createElement('div', { className: css.configNoSwitch }, NO_SWITCH_MODEL)
+  const renderStationControl = (station: HighwayViewStation): ReactNode => {
+    if (station.id === 'standalone') return createElement('span', { className: css.configNoSwitch }, 'CEO（任意 skill）')
+    return createElement('select', {
+      className: css.configSelect,
+      value: station.agentKey ?? draft.stages[station.id],
+      onChange: (event: ChangeEvent<HTMLSelectElement>) => {
+        setDraft(current => setConfigStageAgent(current, station.id as Stage, event.currentTarget.value as StageAgent))
+      },
+    },
+      ...STAGE_AGENTS.map(agent => createElement('option', { key: agent, value: agent }, stageAgentLabel(agent))),
+    )
+  }
+
+  const renderRoutes = (row: ConfigCandidateRow): ReactNode => {
     const scope = row.scope
     const routes = row.routes
     const available = catalog.filter(route => !routes.includes(route))
@@ -346,14 +406,14 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
             type: 'button',
             title: '上移',
             disabled: index === 0,
-            onClick: () => setRoutes(scope, [...routes.slice(0, index - 1), route, routes[index - 1]!, ...routes.slice(index + 1)]),
+            onClick: () => setDraft(current => moveConfigCandidate(current, scope, index, -1)),
           }, '↑'),
           createElement('button', {
             className: css.configIconButton,
             type: 'button',
             title: '下移',
             disabled: index === routes.length - 1,
-            onClick: () => setRoutes(scope, [...routes.slice(0, index), routes[index + 1]!, route, ...routes.slice(index + 2)]),
+            onClick: () => setDraft(current => moveConfigCandidate(current, scope, index, 1)),
           }, '↓'),
           createElement('button', {
             className: css.configButton,
@@ -386,7 +446,7 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
           disabled: selectedRoute === '',
           onClick: () => {
             if (selectedRoute === '') return
-            setRoutes(scope, [...routes, selectedRoute])
+            setDraft(current => addConfigCandidate(current, scope, selectedRoute, catalog))
             setSelected(current => ({ ...current, [scope]: '' }))
           },
         }, '添加'),
@@ -403,8 +463,8 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
       createElement('button', { className: css.configSave, type: 'button', disabled: saving || snapshot?.revision === undefined, onClick: () => { void save() } }, '保存'),
     ),
     createElement('section', { className: css.configSection },
-      createElement('h3', { className: css.configSectionTitle }, 'Matt 流程'),
-      createElement(HighwayMap, { view: configHighwayView(draft), mode: 'editable' }),
+      createElement('h3', { className: css.configSectionTitle }, 'Matt 工作流'),
+      createElement(HighwayMap, { view: configHighwayView(draft, catalog), mode: 'editable', renderStationControl }),
       warnings.length === 0 ? null : createElement('div', { className: css.configWarning }, warnings.join('\n')),
       createElement('div', { className: css.configRows },
         ...rows.map(row => createElement('article', { className: css.configRow, key: row.scope },

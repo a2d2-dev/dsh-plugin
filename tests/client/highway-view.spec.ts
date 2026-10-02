@@ -1,13 +1,28 @@
 import { describe, expect, it } from 'vitest'
 import { highwayView } from '../../src/client/highway-view.ts'
 
-const stationModels = {
-  grill: ['claude-bray/claude-fable-5-1', 'codex/gpt-6'],
-  'to-spec': ['claude-bray/claude-fable-5-1'],
-  'to-tickets': ['claude-bray/claude-fable-5-1'],
-  implement: ['codex/gpt-5.5'],
-  'code-review': ['claude-bray/claude-fable-5-1'],
-}
+const stageAgents = {
+  stages: {
+    grill: 'ceo',
+    'to-spec': 'ceo',
+    'to-tickets': 'ceo',
+    implement: 'engineer',
+    'code-review': 'reviewer',
+    prototype: 'ceo',
+    handoff: 'ceo',
+    triage: 'ceo',
+    'diagnosing-bugs': 'engineer',
+    wayfinder: 'ceo',
+    'improve-codebase-architecture': 'ceo',
+    'domain-modeling': 'ceo',
+    'codebase-design': 'ceo',
+  },
+  agents: {
+    ceo: ['claude-bray/claude-fable-5-1', 'codex/gpt-6'],
+    engineer: ['codex/gpt-5.5', 'claude-bray/claude-opus-5-5'],
+    reviewer: ['claude-bray/claude-fable-5-1'],
+  },
+} as const
 
 describe('highwayView', () => {
   it('derives passed, current, next, and ahead stations on the main highway', () => {
@@ -21,17 +36,17 @@ describe('highwayView', () => {
         { label: '写 spec', input: '/to-spec', move: 'continue', station: 'to-spec' },
         { label: '派代理', input: '让子代理整理材料', move: 'subagent', station: 'to-spec' },
       ],
-      stationModels,
+      stageAgents,
     }, ['claude-bray/claude-fable-5-1'])
 
-    expect(view.stations.map(station => [station.id, station.state, station.role, station.models])).toEqual([
-      ['grill', 'current', '澄清目标与约束', 'claude-fable-5-1'],
-      ['to-spec', 'next', '沉淀规格与验收', 'claude-fable-5-1'],
-      ['to-tickets', 'ahead', '拆成可实施工单', 'claude-fable-5-1'],
-      ['implement', 'ahead', '实现与 TDD', '保持当前模型'],
-      ['code-review', 'ahead', '独立评审与收口', 'claude-fable-5-1'],
+    expect(view.stations.map(station => [station.id, station.state, station.role, station.agent, station.models])).toEqual([
+      ['grill', 'current', '澄清目标与约束', 'CEO', 'claude-fable-5-1'],
+      ['to-spec', 'next', '沉淀规格与验收', 'CEO', 'claude-fable-5-1'],
+      ['to-tickets', 'ahead', '拆成可实施工单', 'CEO', 'claude-fable-5-1'],
+      ['implement', 'ahead', '实现与 TDD', '工程师', '无可用模型'],
+      ['code-review', 'ahead', '独立评审与收口', '评审', 'claude-fable-5-1'],
     ])
-    expect(view.nextLine).toBe('→ /to-spec · Continue（需要本轮原始推理）· claude-fable-5-1')
+    expect(view.nextLine).toBe('→ /to-spec · Continue（需要本轮原始推理）· CEO')
     expect(view.aside).toBeUndefined()
     expect(view.placard).toBeUndefined()
   })
@@ -163,5 +178,18 @@ describe('highwayView', () => {
         { label: '代理', input: '整理', move: 'subagent' },
       ],
     }).preconditionPlacard).toBeUndefined()
+
+    const legacy = highwayView({
+      kind: 'ready',
+      degraded: false,
+      location: { zone: 'main', station: 'grill', phaseDone: true },
+      next: { station: 'to-spec', move: 'continue', reason: '旧宿主' },
+      candidates: [
+        { label: '继续', input: '/to-spec', move: 'continue' },
+        { label: '代理', input: '整理', move: 'subagent' },
+      ],
+    })
+    expect(legacy.stations.map(station => station.agent)).toEqual([undefined, undefined, undefined, undefined, undefined])
+    expect(legacy.nextLine).toBe('→ /to-spec · Continue（旧宿主）')
   })
 })

@@ -22,6 +22,7 @@ import {
   runOrbHandoff,
   workspaceOf,
 } from '../../src/client/orb-actions.ts'
+import { DEFAULT_STAGE_AGENTS } from '../../src/stage-agent-data.ts'
 import type { OrbHandoffDeps } from '../../src/client/orb-actions.ts'
 import type { ClientModelDirectoryService } from '../../src/client/consult-actions.ts'
 import type {
@@ -332,7 +333,7 @@ describe('runOrbHandoff', () => {
         modelDirectories: successorModelDirectory(log),
         successorModel: {
           station: 'implement',
-          stationModels: { implement: ['codex/gpt-5.5'] },
+          stageAgents: { stages: DEFAULT_STAGE_AGENTS.stages, agents: DEFAULT_STAGE_AGENTS.agents },
         },
         ...QUICK,
       },
@@ -374,7 +375,7 @@ describe('runOrbHandoff', () => {
         }),
         successorModel: {
           station: 'implement',
-          stationModels: { implement: ['codex/gpt-5.5'] },
+          stageAgents: { stages: DEFAULT_STAGE_AGENTS.stages, agents: DEFAULT_STAGE_AGENTS.agents },
         },
         notify,
         ...QUICK,
