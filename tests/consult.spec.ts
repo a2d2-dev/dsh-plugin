@@ -656,6 +656,18 @@ describe('consult HTTP route', () => {
     })
   })
 
+  it('puts the current session Agent in the prompt envelope and material facts', async () => {
+    const deps = dependencies({ agentOfSession: async () => 'ceo' })
+
+    await send(createConsultHandler(deps))
+
+    const prompt = deps.calls[0]?.messages[0]?.content[0]?.type === 'text'
+      ? deps.calls[0].messages[0].content[0].text
+      : ''
+    expect(prompt).toContain('This session Agent (null means no Agent is recorded for this session):\n"ceo"')
+    expect(prompt).toContain('"sessionAgent":"ceo"')
+  })
+
   it('contains read/generation failures and rejects malformed model output without trying the next candidate', async () => {
     const readFailure = dependencies({ listTasks: async () => { throw new Error('broken ledger') } })
     expect(await send(createConsultHandler(readFailure))).toMatchObject({
@@ -693,6 +705,21 @@ describe('consult HTTP route', () => {
         error: {
           code: 'consult-failed',
           message: 'The consultation could not be generated: every consult route failed (primary/model: Concurrency limit exceeded for user, please retry later)',
+        },
+      },
+    })
+  })
+
+  it('reports agent lookup failures as consult-failed instead of treating the session as agentless', async () => {
+    const deps = dependencies({ agentOfSession: async () => { throw new Error('agent ledger unreadable') } })
+
+    expect(await send(createConsultHandler(deps))).toMatchObject({
+      status: 500,
+      json: {
+        ok: false,
+        error: {
+          code: 'consult-failed',
+          message: 'The consultation could not be generated: agent ledger unreadable',
         },
       },
     })

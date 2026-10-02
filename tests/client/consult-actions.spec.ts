@@ -218,6 +218,22 @@ describe('requestConsult', () => {
     expect(setPhase).toHaveBeenLastCalledWith({ kind: 'error', message: '下一步咨询返回了无效响应' })
   })
 
+  it('rejects a response with an illegal session Agent', async () => {
+    const setPhase = vi.fn<(phase: ConsultPhase) => void>()
+    await requestConsult({
+      fetch: async () => jsonResponse({
+        ok: true,
+        value: {
+          candidates: [{ label: '继续', input: '继续', move: 'continue' }],
+          degraded: false,
+          sessionAgent: 'boss',
+        },
+      }),
+      setPhase,
+    }, 'session-a')
+    expect(setPhase).toHaveBeenLastCalledWith({ kind: 'error', message: '下一步咨询返回了无效响应' })
+  })
+
   it('shows the route error message unchanged', async () => {
     const setPhase = vi.fn<(phase: ConsultPhase) => void>()
     await requestConsult({
