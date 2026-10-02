@@ -89,8 +89,9 @@ describe('dispatchSubagent', () => {
       signal: new AbortController().signal,
     })
 
-    expect(result).toEqual({ session: 'session-child', model: 'codex/gpt-5.5', agent: 'engineer' })
-    await expect(service.agentOfSession(root, SessionId('session-child'))).resolves.toBe('engineer')
+    expect(result).toMatchObject({ model: 'codex/gpt-5.5', agent: 'engineer' })
+    expect(result.session).toMatch(/^session-/u)
+    await expect(service.agentOfSession(root, result.session)).resolves.toBe('engineer')
     expect(subagents.startContinuable).toHaveBeenCalledOnce()
     expect(subagents.startContinuable).toHaveBeenCalledWith(expect.objectContaining({
       provider: 'spawn',
@@ -121,7 +122,7 @@ describe('dispatchSubagent', () => {
       signal: new AbortController().signal,
     })
 
-    expect(result).toEqual({ session: 'session-child', model: 'codex/reviewer', agent: 'reviewer' })
+    expect(result).toMatchObject({ model: 'codex/reviewer', agent: 'reviewer' })
     expect(subagents.startContinuable.mock.calls[0]?.[0].request).toMatchObject({
       persona: 'Review with the project-specific checklist.\n',
     })
@@ -232,8 +233,9 @@ describe('dispatch_subagent tool', () => {
     if (tool === undefined) throw new Error('the tool did not register')
     const args = { stage: 'implement', agent: 'default', issue: 48, prompt: 'Implement issue #48.' }
 
-    const value = await tool.execute(args, toolRunContext(parent, tool.name, args))
+    const value = await tool.execute(args, toolRunContext(parent, tool.name, args)) as { session: string; model: string; agent: string }
 
-    expect(value).toEqual({ session: 'session-child', model: 'codex/gpt-5.5', agent: 'engineer' })
+    expect(value).toMatchObject({ model: 'codex/gpt-5.5', agent: 'engineer' })
+    expect(value.session).toMatch(/^session-/u)
   })
 })

@@ -226,6 +226,13 @@ declare module '@deepseek-ai/cordis' {
       previousMainSession?: SessionId
       mainSession: SessionId
     }): void
+    /** Emitted after a non-main session is recorded as an A2D2 Agent. */
+    'a2d2/session-agent-recorded'(payload: {
+      cwd: string
+      projectRoot: string
+      session: SessionId
+      agent: StageAgent
+    }): void
   }
 }
 
@@ -445,6 +452,7 @@ type SubagentsRuntime = {
   startContinuable(spec: {
     readonly provider: string
     readonly label: string
+    readonly childId?: SessionId
     readonly request: {
       readonly prompt: readonly { readonly type: 'text'; readonly text: string }[]
       readonly parent: Agent
@@ -776,7 +784,9 @@ export class A2d2Service extends Service {
    */
   async recordSessionAgent(cwd: string, sessionId: SessionId, agent: StageAgent): Promise<void> {
     if (cwd === '') throw new Error('a2d2: the session records no working directory, so no project holds its Agent')
-    await this.sessionAgents.record(await this.store.projectRoot(cwd), sessionId, agent)
+    const projectRoot = await this.store.projectRoot(cwd)
+    await this.sessionAgents.record(projectRoot, sessionId, agent)
+    this.ctx.emit('a2d2/session-agent-recorded', { cwd, projectRoot, session: sessionId, agent })
   }
 
   /**
@@ -818,11 +828,14 @@ export class A2d2Service extends Service {
     )
     const route = splitModelRoute(model)
     const persona = await this.readSpecialAgentPersona(cwd, request.agentName)
+    const childId = brandString<SessionId>(`session-${randomUUID()}`)
+    await this.recordSessionAgent(cwd, childId, configuredAgent)
     const subagents = this.getService<SubagentsRuntime>('subagents')
     if (subagents === undefined) throw new Error('a2d2: subagents service is unavailable')
     const started = await subagents.startContinuable({
       provider: 'spawn',
       label: `${request.stage} #${issue}`,
+      childId,
       request: {
         prompt: [{ type: 'text', text: request.prompt }],
         parent,
@@ -831,7 +844,6 @@ export class A2d2Service extends Service {
       },
       signal: request.signal,
     })
-    await this.recordSessionAgent(cwd, started.childId, configuredAgent)
     return { session: started.childId, model, agent: configuredAgent }
   }
 
