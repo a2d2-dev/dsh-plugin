@@ -196,7 +196,7 @@ describe('A2D2 config settings route', () => {
       payload: { settings: { ...DEFAULT_STAGE_AGENTS, consult: [] }, expectedRevision: 7 },
     })).toMatchObject({
       status: 400,
-      json: { ok: false, error: { code: 'schema-rejected', message: expect.stringContaining('array length >= 1') } },
+      json: { ok: false, error: { code: 'schema-rejected', message: expect.stringContaining('consult must name at least one model route') } },
     })
 
     expect(await send(handler({ revision: 3 }), {
@@ -230,6 +230,46 @@ describe('A2D2 config settings route', () => {
       status: 400,
       json: { ok: false, error: { code: 'missing-revision' } },
     })
+    expect(writes).toBe(0)
+  })
+
+  it('rejects incomplete or legacy settings update payloads without writing', async () => {
+    let writes = 0
+    const route = handler({
+      update: async value => {
+        writes += 1
+        return { value, revision: 8 }
+      },
+    })
+
+    expect(await send(route, {
+      method: 'settings.update',
+      payload: {
+        settings: {
+          stages: DEFAULT_STAGE_AGENTS.stages,
+          agents: DEFAULT_STAGE_AGENTS.agents,
+        },
+        expectedRevision: 7,
+      },
+    })).toMatchObject({
+      status: 400,
+      json: { ok: false, error: { code: 'schema-rejected' } },
+    })
+
+    expect(await send(route, {
+      method: 'settings.update',
+      payload: {
+        settings: {
+          ...DEFAULT_STAGE_AGENTS,
+          stations: { implement: ['codex/gpt-5.5'] },
+        },
+        expectedRevision: 7,
+      },
+    })).toMatchObject({
+      status: 400,
+      json: { ok: false, error: { code: 'schema-rejected' } },
+    })
+
     expect(writes).toBe(0)
   })
 

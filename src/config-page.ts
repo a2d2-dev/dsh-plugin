@@ -22,7 +22,7 @@ import { classifyFailureKind } from './refusal.ts'
 import {
   splitModelRoute,
   stageAgentWarnings,
-  validateStageAgentsSettings,
+  validateCompleteStageAgentsSettings,
 } from './stage-agents.ts'
 import type { StageAgentsSettings } from './stage-agents.ts'
 
@@ -235,7 +235,7 @@ export function createConfigHandler(
           const expectedRevision = payload.expectedRevision
           let next: StageAgentsSettings
           try {
-            next = validateStageAgentsSettings(payload.settings)
+            next = validateCompleteStageAgentsSettings(payload.settings)
           } catch (error) {
             fail(response, 400, 'schema-rejected', reasonOf(error))
             return

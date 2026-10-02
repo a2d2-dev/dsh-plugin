@@ -49,6 +49,7 @@ import {
   modelCandidatesForStage,
   splitModelRoute,
   stageAgentWarnings,
+  validateCompleteStageAgentsSettings,
   validateStageAgentsSettings,
 } from './stage-agents.ts'
 import type { Stage, StageAgent, StageAgentsSettings } from './stage-agents.ts'
@@ -1031,7 +1032,7 @@ export class A2d2Service extends Service {
           const settings = getService<SettingsRuntime>('settings')
           if (settings === undefined) throw new Error('a2d2: settings service is unavailable')
           if (ns === undefined) throw new Error('a2d2: no profile entry to store settings in')
-          await settings.replace(ns, { stageAgents: validateStageAgentsSettings(value) }, expectedRevision)
+          await settings.replace(ns, { stageAgents: validateCompleteStageAgentsSettings(value) }, expectedRevision)
           return readSettings()
         },
         modelRoutes: async () => {
