@@ -14,13 +14,13 @@ import {
   RAMP_MERGES,
 } from '../highway.ts'
 import {
-  agentForStage,
   modelCandidatesForStage,
   shortModelRoute,
   stageAgentLabel,
 } from '../stage-agent-data.ts'
 import type { Stage, StageAgentRouteSettings } from '../stage-agent-data.ts'
 import type { MainStation, Move } from '../highway.ts'
+import { chipAgentTarget } from './consult-actions.ts'
 import type { ConsultLocation, ConsultNext, ConsultPhase } from './consult-actions.ts'
 
 export type HighwayStationState = 'passed' | 'current' | 'next' | 'ahead'
@@ -124,7 +124,7 @@ function nextLineField(
   if (response.location?.phaseDone === false) return { nextLine: '本阶段未完成 · 继续' }
   const next = response.next
   if (next === undefined) return {}
-  const agent = agentLabelForStage(response.stageAgents, next.station)
+  const agent = chipAgentTarget(next.station, response.stageAgents)?.label
   return {
     nextLine: `→ /${next.station} · ${MOVE_LABELS[next.move]}（${next.reason}）${agent === undefined ? '' : `· ${agent}`}`,
   }
@@ -142,11 +142,6 @@ function agentField(
     agentKey: agent,
     models: modelLabel(modelCandidatesForStage(settings, stage), catalog),
   }
-}
-
-function agentLabelForStage(settings: StageAgentRouteSettings | undefined, stage: string): string | undefined {
-  if (settings === undefined || !(stage in settings.stages)) return undefined
-  return stageAgentLabel(agentForStage(settings, stage as Stage))
 }
 
 function modelLabel(
