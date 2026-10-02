@@ -2,7 +2,7 @@
  * Host-side route for the A2D2 configuration page.
  *
  * The browser cannot call arbitrary settings namespaces: this route exposes
- * only the plugin-owned station model table, guarded by the same trusted-host
+ * only the plugin-owned stage Agent settings, guarded by the same trusted-host
  * fence as the next-step consult route.
  *
  * @module @deepseek-ai/dsh-a2d2/src/config-page
@@ -20,12 +20,11 @@ import { isTrustedConsultRequest } from './consult.ts'
 import { A2D2_MESSAGE_SOURCE } from './message-source.ts'
 import { classifyFailureKind } from './refusal.ts'
 import {
-  DEFAULT_STATION_MODELS,
   splitModelRoute,
-  stationModelWarnings,
-  validateStationModelsSettings,
-} from './station-models.ts'
-import type { StationModelsSettings } from './station-models.ts'
+  stageAgentWarnings,
+  validateStageAgentsSettings,
+} from './stage-agents.ts'
+import type { StageAgentsSettings } from './stage-agents.ts'
 
 /** Exact HTTP pathname owned by the configuration page. */
 export const CONFIG_ROUTE_PATH = '/a2d2/api/config'
@@ -42,7 +41,7 @@ const ROUTE_PATTERN = /^[^/\s]+\/[^/\s]+$/u
 export type ConfigMethod = 'settings.get' | 'settings.update' | 'probe'
 
 export interface ConfigSettingsView {
-  readonly settings: StationModelsSettings
+  readonly settings: StageAgentsSettings
   readonly revision: number | undefined
   readonly warnings: readonly string[]
 }
@@ -56,11 +55,11 @@ export interface ModelProbeResult {
 
 export interface ConfigDependencies {
   readonly trustedHosts: () => readonly string[]
-  readonly getSettings: () => ConfigSettingsView | { readonly value: StationModelsSettings; readonly revision: number | undefined }
+  readonly getSettings: () => ConfigSettingsView | { readonly value: StageAgentsSettings; readonly revision: number | undefined }
   readonly updateSettings: (
-    value: StationModelsSettings,
+    value: StageAgentsSettings,
     expectedRevision: number | undefined,
-  ) => Promise<{ readonly value: StationModelsSettings; readonly revision: number | undefined }>
+  ) => Promise<{ readonly value: StageAgentsSettings; readonly revision: number | undefined }>
   readonly modelRoutes: () => Promise<readonly string[]>
   readonly stream: (options: GenerateOptions) => AsyncIterable<StreamChunk>
 }
@@ -70,20 +69,20 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
 }
 
 function settingsView(
-  entry: ConfigSettingsView | { readonly value: StationModelsSettings; readonly revision: number | undefined },
+  entry: ConfigSettingsView | { readonly value: StageAgentsSettings; readonly revision: number | undefined },
 ): ConfigSettingsView {
   const settings = 'settings' in entry ? entry.settings : entry.value
   return {
     settings,
     revision: entry.revision,
-    warnings: stationModelWarnings(settings),
+    warnings: stageAgentWarnings(settings),
   }
 }
 
-function flattenConfiguredRoutes(settings: StationModelsSettings): Set<string> {
+function flattenConfiguredRoutes(settings: StageAgentsSettings): Set<string> {
   return new Set([
     ...settings.consult,
-    ...Object.values(settings.stations).flat(),
+    ...Object.values(settings.agents).flat(),
   ])
 }
 
@@ -234,9 +233,9 @@ export function createConfigHandler(
             return
           }
           const expectedRevision = payload.expectedRevision
-          let next: StationModelsSettings
+          let next: StageAgentsSettings
           try {
-            next = validateStationModelsSettings(payload.settings)
+            next = validateStageAgentsSettings(payload.settings)
           } catch (error) {
             fail(response, 400, 'schema-rejected', reasonOf(error))
             return

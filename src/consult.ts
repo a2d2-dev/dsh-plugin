@@ -44,8 +44,8 @@ import type { HandoffThresholds } from './indicator-projection.ts'
 import { classifyFailureKind } from './refusal.ts'
 import type { FailureKind } from './refusal.ts'
 import type { SkillSource } from './skill-source.ts'
-import { DEFAULT_STATION_MODELS, splitModelRoute } from './station-models.ts'
-import type { StationModelsSettings } from './station-models.ts'
+import { DEFAULT_STAGE_AGENTS, splitModelRoute } from './stage-agents.ts'
+import type { StageAgentsSettings } from './stage-agents.ts'
 import type { Task } from './types.ts'
 
 /** Number of newest current-surface messages supplied to one consultation. */
@@ -130,8 +130,11 @@ export interface ConsultValue {
   readonly answeredBy: string
   /** Consult candidates skipped before the answer, with displayable reasons. */
   readonly fallbacks: readonly ConsultFallback[]
-  /** Current station model table, by station, with candidates in configured order. */
-  readonly stationModels: StationModelsSettings['stations']
+  /** Current stage Agent table, without consult-only routes. */
+  readonly stageAgents: {
+    readonly stages: StageAgentsSettings['stages']
+    readonly agents: StageAgentsSettings['agents']
+  }
   /** Host-checked setup facts for the project that owns the session cwd. */
   readonly preconditions: ConsultPreconditions
 }
@@ -202,7 +205,7 @@ export interface ConsultDependencies {
   readonly projectRoot?: (cwd: string) => Promise<string>
   readonly checkPreconditions?: (projectRoot: string) => Promise<ConsultPreconditions>
   readonly readAskMatt: () => Promise<SkillSource>
-  readonly getStationModels?: () => StationModelsSettings
+  readonly getStageAgents?: () => StageAgentsSettings
   readonly contextFacts?: (session: ConsultSession) => ConsultContextFacts | undefined
   readonly stream: (options: GenerateOptions) => AsyncIterable<StreamChunk>
   readonly collectMaterial?: (
@@ -904,10 +907,10 @@ export function createConsultHandler(
         preconditions,
       }
       const prompt = buildPrompt(materialWithFacts, skillSource)
-      const stationModels = dependencies.getStationModels?.() ?? DEFAULT_STATION_MODELS
+      const stageAgents = dependencies.getStageAgents?.() ?? DEFAULT_STAGE_AGENTS
       const generated = await generateConsultWithFallback({
         stream: dependencies.stream,
-        routes: stationModels.consult,
+        routes: stageAgents.consult,
         sessionId,
         prompt,
         signal: controller.signal,
@@ -924,7 +927,10 @@ export function createConsultHandler(
           degraded: skillSource.status === 'missing',
           answeredBy,
           fallbacks,
-          stationModels: stationModels.stations,
+          stageAgents: {
+            stages: stageAgents.stages,
+            agents: stageAgents.agents,
+          },
           preconditions,
         },
       })
