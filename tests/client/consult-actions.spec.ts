@@ -99,6 +99,7 @@ describe('requestConsult', () => {
           answeredBy: 'codex/gpt-6',
           fallbacks: [{ route: 'claude-bray/claude-fable-5-1', kind: 'refusal', reason: 'policy text without legacy keyword' }],
           stageAgents: { stages: DEFAULT_STAGE_AGENTS.stages, agents: DEFAULT_STAGE_AGENTS.agents },
+          sessionAgent: 'ceo',
         },
       }),
       setPhase,
@@ -113,6 +114,32 @@ describe('requestConsult', () => {
       answeredBy: 'codex/gpt-6',
       fallbacks: [{ route: 'claude-bray/claude-fable-5-1', kind: 'refusal', reason: 'policy text without legacy keyword' }],
       stageAgents: { stages: DEFAULT_STAGE_AGENTS.stages, agents: DEFAULT_STAGE_AGENTS.agents },
+      sessionAgent: 'ceo',
+    })
+  })
+
+  it('accepts standalone skill station names in the ready card', async () => {
+    const setPhase = vi.fn<(phase: ConsultPhase) => void>()
+    await requestConsult({
+      fetch: async () => jsonResponse({
+        ok: true,
+        value: {
+          position: '正在做独立 research。',
+          location: { zone: 'standalone', station: 'research', phaseDone: true },
+          next: { station: 'research', move: 'continue', reason: '继续独立技能' },
+          candidates: [{ label: '继续 research', input: '/research', move: 'continue', station: 'research' }],
+          degraded: false,
+        },
+      }),
+      setPhase,
+    }, 'session-a')
+    expect(setPhase).toHaveBeenLastCalledWith({
+      kind: 'ready',
+      position: '正在做独立 research。',
+      location: { zone: 'standalone', station: 'research', phaseDone: true },
+      next: { station: 'research', move: 'continue', reason: '继续独立技能' },
+      candidates: [{ label: '继续 research', input: '/research', move: 'continue', station: 'research' }],
+      degraded: false,
     })
   })
 

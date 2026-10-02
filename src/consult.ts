@@ -45,7 +45,7 @@ import { classifyFailureKind } from './refusal.ts'
 import type { FailureKind } from './refusal.ts'
 import type { SkillSource } from './skill-source.ts'
 import { DEFAULT_STAGE_AGENTS, splitModelRoute } from './stage-agents.ts'
-import type { StageAgentsSettings } from './stage-agents.ts'
+import type { StageAgent, StageAgentsSettings } from './stage-agents.ts'
 import type { Task } from './types.ts'
 
 /** Number of newest current-surface messages supplied to one consultation. */
@@ -135,6 +135,8 @@ export interface ConsultValue {
     readonly stages: StageAgentsSettings['stages']
     readonly agents: StageAgentsSettings['agents']
   }
+  /** Agent assigned to this session, absent when the host has no record. */
+  readonly sessionAgent?: StageAgent
   /** Host-checked setup facts for the project that owns the session cwd. */
   readonly preconditions: ConsultPreconditions
 }
@@ -182,6 +184,11 @@ export interface ConsultMaterial {
   readonly tasks: readonly Task[]
   readonly context?: ConsultContextFacts
   readonly preconditions?: ConsultPreconditions
+  readonly stageAgents?: {
+    readonly stages: StageAgentsSettings['stages']
+    readonly agents: StageAgentsSettings['agents']
+  }
+  readonly sessionAgent?: StageAgent
 }
 
 /** Minimal live-session surface needed by the route. */
@@ -206,6 +213,7 @@ export interface ConsultDependencies {
   readonly checkPreconditions?: (projectRoot: string) => Promise<ConsultPreconditions>
   readonly readAskMatt: () => Promise<SkillSource>
   readonly getStageAgents?: () => StageAgentsSettings
+  readonly agentOfSession?: (cwd: string, sessionId: SessionId) => Promise<StageAgent | undefined>
   readonly contextFacts?: (session: ConsultSession) => ConsultContextFacts | undefined
   readonly stream: (options: GenerateOptions) => AsyncIterable<StreamChunk>
   readonly collectMaterial?: (
@@ -385,6 +393,11 @@ export function buildConsultPrompt(
     status: 'unavailable',
   }
   const preconditions = material.preconditions ?? { missing: [] }
+  const stageAgents = material.stageAgents ?? {
+    stages: DEFAULT_STAGE_AGENTS.stages,
+    agents: DEFAULT_STAGE_AGENTS.agents,
+  }
+  const sessionAgent = material.sessionAgent ?? null
   const envelope = [
     '<situation-envelope>',
     'This is a next-step consultation at a phase boundary.',
@@ -393,9 +406,15 @@ export function buildConsultPrompt(
     '{"position":"one sentence: where this session\'s work stands now","location":{"zone":"main|service|ramp|standalone|roadbed|off-road","station":"station id except off-road","returnTo":"main station, required only for service","phaseDone":true},"next":{"station":"next station id","move":"continue|clear|handoff|subagent|compact","reason":"why this move fits"},"candidates":[2 to 4 candidates]}',
     'Each candidate has exactly this shape:',
     '{"label":"short visible label","input":"complete editable command or instruction","move":"continue|clear|handoff|subagent|compact","station":"optional target station id"}',
+    'If location.phaseDone is false, next.move and every candidate.move must be continue or subagent.',
+    'If location.phaseDone is true, a continue move is allowed only when the target station Agent equals this session Agent; when this session has no Agent, do not use continue across a phase boundary.',
     'Write "position" in the language the session uses; it is shown above the chips as the basis for them.',
     'Location values are closed except standalone station names. Use the highway catalog exactly as listed here:',
     JSON.stringify(HIGHWAY_PROMPT_CATALOG),
+    'Stage Agent table:',
+    JSON.stringify(stageAgents),
+    'This session Agent (null means no Agent is recorded for this session):',
+    JSON.stringify(sessionAgent),
     'Current context and smart zone facts:',
     JSON.stringify(contextFacts),
     'Project preconditions checked by the host:',
@@ -419,8 +438,13 @@ function unfence(text: string): string {
   return match === null ? text : match[1] ?? ''
 }
 
+export interface ConsultValidationContext {
+  readonly stageAgents: Pick<StageAgentsSettings, 'stages'>
+  readonly sessionAgent?: StageAgent
+}
+
 /** Parse and validate the whole model answer, rejecting every partial shape. */
-export function parseConsultOutput(text: string): ConsultOutput {
+export function parseConsultOutput(text: string, validation?: ConsultValidationContext): ConsultOutput {
   let parsed: unknown
   try {
     parsed = JSON.parse(unfence(text))
@@ -461,7 +485,7 @@ export function parseConsultOutput(text: string): ConsultOutput {
       throw new MalformedCandidatesError(`candidate ${String(index)} has an invalid move`)
     }
     const station = value.station
-    if (station !== undefined && (typeof station !== 'string' || station.trim() === '' || !isClosedHighwayStation(station))) {
+    if (station !== undefined && (typeof station !== 'string' || station.trim() === '')) {
       throw new MalformedCandidatesError(`candidate ${String(index)} has an invalid station`)
     }
     return {
@@ -481,6 +505,8 @@ export function parseConsultOutput(text: string): ConsultOutput {
         throw new MalformedCandidatesError(`phaseDone false only allows continue or subagent candidate moves; candidate ${String(index)} was ${candidate.move}`)
       }
     }
+  } else if (validation !== undefined && next !== undefined) {
+    rejectForbiddenContinueMoves({ next, candidates, validation })
   }
   if (next !== undefined && candidates[0]?.move !== next.move) {
     throw new MalformedCandidatesError('first candidate move must match next.move')
@@ -491,6 +517,40 @@ export function parseConsultOutput(text: string): ConsultOutput {
     ...(next === undefined ? {} : { next }),
     candidates,
   })
+}
+
+function targetAgentForStation(
+  stageAgents: Pick<StageAgentsSettings, 'stages'>,
+  station: string,
+): StageAgent {
+  return isClosedHighwayStation(station) ? stageAgents.stages[station] : 'ceo'
+}
+
+function rejectForbiddenContinue(
+  label: string,
+  move: Move,
+  station: string | undefined,
+  validation: ConsultValidationContext,
+): void {
+  if (move !== 'continue' || station === undefined) return
+  const targetAgent = targetAgentForStation(validation.stageAgents, station)
+  if (validation.sessionAgent === undefined) {
+    throw new MalformedCandidatesError(`${label} cannot continue to ${station} because this session has no Agent`)
+  }
+  if (validation.sessionAgent !== targetAgent) {
+    throw new MalformedCandidatesError(`${label} cannot continue to ${station} because target Agent ${targetAgent} differs from this session Agent ${validation.sessionAgent}`)
+  }
+}
+
+function rejectForbiddenContinueMoves(input: {
+  readonly next: ConsultNext
+  readonly candidates: readonly ConsultCandidate[]
+  readonly validation: ConsultValidationContext
+}): void {
+  rejectForbiddenContinue('next.move', input.next.move, input.next.station, input.validation)
+  for (const [index, candidate] of input.candidates.entries()) {
+    rejectForbiddenContinue(`candidate ${String(index)} move`, candidate.move, candidate.station ?? input.next.station, input.validation)
+  }
 }
 
 function setupPreconditionCandidate(candidate?: ConsultCandidate): ConsultCandidate {
@@ -580,7 +640,7 @@ function parseNext(value: unknown): ConsultNext {
     throw new MalformedCandidatesError('next is not an object')
   }
   const next = value as Record<string, unknown>
-  if (typeof next.station !== 'string' || !isClosedHighwayStation(next.station)) {
+  if (typeof next.station !== 'string' || next.station.trim() === '') {
     throw new MalformedCandidatesError('next has an invalid station')
   }
   if (typeof next.move !== 'string' || !isMove(next.move)) {
@@ -589,7 +649,7 @@ function parseNext(value: unknown): ConsultNext {
   if (typeof next.reason !== 'string' || next.reason.trim() === '') {
     throw new MalformedCandidatesError('next has no non-empty reason')
   }
-  return { station: next.station, move: next.move, reason: next.reason.trim() }
+  return { station: next.station.trim(), move: next.move, reason: next.reason.trim() }
 }
 
 type ClassifiedError = Error & {
@@ -650,6 +710,7 @@ export async function generateConsultOutput(options: {
   readonly route: ConsultRoute
   readonly sessionId: SessionId
   readonly prompt: string
+  readonly validation?: ConsultValidationContext
   readonly signal: AbortSignal
 }): Promise<ConsultOutput> {
   const messages: Message[] = [createUserMessage({
@@ -678,7 +739,7 @@ export async function generateConsultOutput(options: {
     .map(block => block.text)
     .join('')
   if (text.trim().length === 0) throw classifiedError('a2d2 consult: model returned no text', 'empty')
-  return parseConsultOutput(text)
+  return parseConsultOutput(text, options.validation)
 }
 
 function fallbackKindOf(error: unknown): FailureKind {
@@ -701,6 +762,7 @@ export async function generateConsultWithFallback(options: {
   readonly routes: readonly string[]
   readonly sessionId: SessionId
   readonly prompt: string
+  readonly validation?: ConsultValidationContext
   readonly signal: AbortSignal
 }): Promise<ConsultOutput & { readonly answeredBy: string; readonly fallbacks: readonly ConsultFallback[] }> {
   const fallbacks: ConsultFallback[] = []
@@ -711,6 +773,7 @@ export async function generateConsultWithFallback(options: {
         route: splitModelRoute(route),
         sessionId: options.sessionId,
         prompt: options.prompt,
+        validation: options.validation,
         signal: options.signal,
       })
       return { ...output, answeredBy: route, fallbacks }
@@ -897,6 +960,8 @@ export function createConsultHandler(
       ])
       const projectRoot = await (dependencies.projectRoot?.(cwd) ?? Promise.resolve(cwd))
       const preconditions = await (dependencies.checkPreconditions ?? checkProjectPreconditions)(projectRoot)
+      const stageAgents = dependencies.getStageAgents?.() ?? DEFAULT_STAGE_AGENTS
+      const sessionAgent = await dependencies.agentOfSession?.(cwd, sessionId)
       const collectMaterial = dependencies.collectMaterial ?? collectConsultMaterial
       const buildPrompt = dependencies.buildPrompt ?? buildConsultPrompt
       const material = collectMaterial(seq => session.eventAt(seq), session.surface.nodes, tasks)
@@ -905,14 +970,19 @@ export function createConsultHandler(
         ...material,
         ...(context === undefined ? {} : { context }),
         preconditions,
+        stageAgents: {
+          stages: stageAgents.stages,
+          agents: stageAgents.agents,
+        },
+        ...(sessionAgent === undefined ? {} : { sessionAgent }),
       }
       const prompt = buildPrompt(materialWithFacts, skillSource)
-      const stageAgents = dependencies.getStageAgents?.() ?? DEFAULT_STAGE_AGENTS
       const generated = await generateConsultWithFallback({
         stream: dependencies.stream,
         routes: stageAgents.consult,
         sessionId,
         prompt,
+        validation: { stageAgents, ...(sessionAgent === undefined ? {} : { sessionAgent }) },
         signal: controller.signal,
       })
       const { position, location, next, answeredBy, fallbacks } = generated
@@ -931,6 +1001,7 @@ export function createConsultHandler(
             stages: stageAgents.stages,
             agents: stageAgents.agents,
           },
+          ...(sessionAgent === undefined ? {} : { sessionAgent }),
           preconditions,
         },
       })

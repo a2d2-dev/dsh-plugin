@@ -205,6 +205,7 @@ function dependencies(
     checkPreconditions: async () => ({ missing: [] }),
     readAskMatt: async () => ({ status: 'missing' }),
     getStageAgents: () => DEFAULT_STAGE_AGENTS,
+    agentOfSession: async () => 'ceo',
     stream: (options) => {
       calls.push(options)
       return output(candidatesJson)
@@ -360,9 +361,15 @@ describe('consult material and route', () => {
       {"position":"one sentence: where this session's work stands now","location":{"zone":"main|service|ramp|standalone|roadbed|off-road","station":"station id except off-road","returnTo":"main station, required only for service","phaseDone":true},"next":{"station":"next station id","move":"continue|clear|handoff|subagent|compact","reason":"why this move fits"},"candidates":[2 to 4 candidates]}
       Each candidate has exactly this shape:
       {"label":"short visible label","input":"complete editable command or instruction","move":"continue|clear|handoff|subagent|compact","station":"optional target station id"}
+      If location.phaseDone is false, next.move and every candidate.move must be continue or subagent.
+      If location.phaseDone is true, a continue move is allowed only when the target station Agent equals this session Agent; when this session has no Agent, do not use continue across a phase boundary.
       Write "position" in the language the session uses; it is shown above the chips as the basis for them.
       Location values are closed except standalone station names. Use the highway catalog exactly as listed here:
       {"zones":["main","service","ramp","standalone","roadbed","off-road"],"main":["grill","to-spec","to-tickets","implement","code-review"],"service":["prototype","handoff"],"ramp":{"triage":"implement","diagnosing-bugs":"implement","wayfinder":"to-spec","improve-codebase-architecture":"grill"},"roadbed":["domain-modeling","codebase-design"]}
+      Stage Agent table:
+      {"stages":{"grill":"ceo","to-spec":"ceo","to-tickets":"ceo","prototype":"ceo","handoff":"ceo","triage":"ceo","diagnosing-bugs":"ceo","wayfinder":"ceo","improve-codebase-architecture":"ceo","domain-modeling":"ceo","codebase-design":"ceo","implement":"engineer","code-review":"reviewer"},"agents":{"ceo":["claude-bray/claude-fable-5-1","codex/gpt-6"],"engineer":["codex/gpt-5.5","claude-bray/claude-opus-5-5"],"reviewer":["claude-bray/claude-fable-5-1","codex/gpt-6"]}}
+      This session Agent (null means no Agent is recorded for this session):
+      null
       Current context and smart zone facts:
       {"status":"unavailable"}
       Project preconditions checked by the host:
@@ -556,6 +563,7 @@ describe('consult HTTP route', () => {
       await ctx.plugin(StubLlm)
       ;(ctx.get('sessions') as unknown as StubSessions).live = session({ header: header({ cwd }) })
       await ctx.plugin(A2d2Service, { root: fixedRoot })
+      await ctx.a2d2.bindMainSession({ cwd, issue: 74, mainSession: sessionId, now: new Date('2026-10-02T00:00:00.000Z') })
 
       const handler = ctx.webServer.routes[0]?.handler
       expect(handler).toBeDefined()
@@ -592,6 +600,7 @@ describe('consult HTTP route', () => {
       await ctx.plugin(StubLlm)
       ;(ctx.get('sessions') as unknown as StubSessions).live = session({ header: header({ cwd: fixedRoot }) })
       await ctx.plugin(A2d2Service, { root: fixedRoot, skillsRoot })
+      await ctx.a2d2.bindMainSession({ cwd: fixedRoot, issue: 75, mainSession: sessionId, now: new Date('2026-10-02T00:00:00.000Z') })
 
       const handler = ctx.webServer.routes[0]?.handler
       expect(handler).toBeDefined()
@@ -698,6 +707,7 @@ describe('consult HTTP route', () => {
           degraded: true,
           answeredBy: 'claude-bray/claude-fable-5-1',
           fallbacks: [],
+          sessionAgent: 'ceo',
           stageAgents: {
             stages: DEFAULT_STAGE_AGENTS.stages,
             agents: DEFAULT_STAGE_AGENTS.agents,
@@ -718,6 +728,112 @@ describe('consult HTTP route', () => {
       text: expect.stringContaining('<ask-matt-source status="missing" />'),
     })
     expect(deps.session.append).not.toHaveBeenCalled()
+  })
+
+  it('rejects a cross-phase continue when the session has no Agent', async () => {
+    const deps = dependencies({ agentOfSession: async () => undefined })
+
+    expect(await send(createConsultHandler(deps))).toMatchObject({
+      status: 502,
+      json: {
+        ok: false,
+        error: {
+          code: 'malformed-candidates',
+          message: expect.stringContaining('session has no Agent'),
+        },
+      },
+    })
+  })
+
+  it('rejects a CEO session continuing into an engineer stage', async () => {
+    const deps = dependencies({
+      stream: () => output(JSON.stringify({
+        position,
+        location,
+        next: { station: 'implement', move: 'continue', reason: 'start implementation' },
+        candidates: [
+          { label: '实现', input: '/implement #15', move: 'continue', station: 'implement' },
+          { label: '派代理', input: '让工程师实现 #15', move: 'subagent', station: 'implement' },
+        ],
+      })),
+    })
+
+    expect(await send(createConsultHandler(deps))).toMatchObject({
+      status: 502,
+      json: {
+        ok: false,
+        error: {
+          code: 'malformed-candidates',
+          message: expect.stringContaining('target Agent engineer differs from this session Agent ceo'),
+        },
+      },
+    })
+  })
+
+  it('checks a continuing candidate against its own station when present', async () => {
+    const deps = dependencies({
+      stream: () => output(JSON.stringify({
+        position,
+        location,
+        next: { station: 'to-spec', move: 'clear', reason: 'open a clean spec session' },
+        candidates: [
+          { label: '开规格会话', input: '/to-spec', move: 'clear', station: 'to-spec' },
+          { label: '直接实现', input: '/implement #15', move: 'continue', station: 'implement' },
+        ],
+      })),
+    })
+
+    expect(await send(createConsultHandler(deps))).toMatchObject({
+      status: 502,
+      json: {
+        ok: false,
+        error: {
+          code: 'malformed-candidates',
+          message: expect.stringContaining('candidate 1 move cannot continue to implement'),
+        },
+      },
+    })
+  })
+
+  it('treats standalone skill targets as CEO stages for continue validation', async () => {
+    const deps = dependencies({
+      stream: () => output(JSON.stringify({
+        position,
+        location: { zone: 'standalone', station: 'research', phaseDone: true },
+        next: { station: 'research', move: 'continue', reason: 'standalone skills stay with CEO' },
+        candidates: [
+          { label: '继续 research', input: '/research', move: 'continue', station: 'research' },
+          { label: '开新会话', input: '/research fresh', move: 'clear', station: 'research' },
+        ],
+      })),
+    })
+
+    expect(await send(createConsultHandler(deps))).toMatchObject({
+      status: 200,
+      json: { ok: true, value: { sessionAgent: 'ceo' } },
+    })
+  })
+
+  it('allows continue while phaseDone is false even when the session has no Agent', async () => {
+    const deps = dependencies({
+      agentOfSession: async () => undefined,
+      stream: () => output(JSON.stringify({
+        position,
+        location: { ...location, phaseDone: false },
+        next: { station: 'implement', move: 'continue', reason: 'finish the current phase first' },
+        candidates: [
+          { label: '继续', input: 'finish the current phase', move: 'continue', station: 'implement' },
+          { label: '派代理', input: 'delegate a side task', move: 'subagent', station: 'implement' },
+        ],
+      })),
+    })
+
+    const result = await send(createConsultHandler(deps))
+    expect(result).toMatchObject({
+      status: 200,
+      json: { ok: true },
+    })
+    expect((result.json as { value?: unknown }).value).not.toHaveProperty('sessionAgent')
   })
 
   it('adds preconditions to the response and prompt, and forces the setup chip to the top when anything is missing', async () => {

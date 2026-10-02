@@ -143,6 +143,7 @@ export type ConsultPhase =
       readonly answeredBy?: string
       readonly fallbacks?: readonly ConsultFallback[]
       readonly stageAgents?: StageAgentRouteSettings
+      readonly sessionAgent?: StageAgent
       readonly preconditions?: ConsultPreconditions
     }
   | { readonly kind: 'error'; readonly message: string }
@@ -219,6 +220,7 @@ type ConsultResponse =
         readonly answeredBy?: string
         readonly fallbacks?: readonly ConsultFallback[]
         readonly stageAgents?: StageAgentRouteSettings
+        readonly sessionAgent?: StageAgent
         readonly preconditions?: ConsultPreconditions
       }
     }
@@ -251,7 +253,7 @@ function parseCandidate(value: unknown): ConsultCandidate | undefined {
   if (typeof value.input !== 'string' || value.input.trim() === '') return undefined
   const move = parseMove(value.move, value.kind)
   if (move === undefined) return undefined
-  if (value.station !== undefined && (typeof value.station !== 'string' || !isClosedHighwayStation(value.station))) return undefined
+  if (value.station !== undefined && (typeof value.station !== 'string' || value.station.trim() === '')) return undefined
   return {
     label: value.label,
     input: value.input,
@@ -299,7 +301,7 @@ function parseLocation(value: unknown): ConsultLocation | undefined {
 function parseNext(value: unknown): ConsultNext | undefined {
   if (value === undefined) return undefined
   if (!isRecord(value)) return undefined
-  if (typeof value.station !== 'string' || !isClosedHighwayStation(value.station)) return undefined
+  if (typeof value.station !== 'string' || value.station.trim() === '') return undefined
   if (typeof value.move !== 'string' || !isMove(value.move)) return undefined
   if (typeof value.reason !== 'string' || value.reason.trim() === '') return undefined
   return { station: value.station.trim(), move: value.move, reason: value.reason.trim() }
@@ -419,6 +421,10 @@ export function parseConsultResponse(value: unknown): ConsultResponse {
   if (value.value.stageAgents !== undefined && stageAgents === undefined) {
     throw new Error('下一步咨询返回了无效响应')
   }
+  const sessionAgent = value.value.sessionAgent
+  if (sessionAgent !== undefined && !isStageAgent(sessionAgent)) {
+    throw new Error('下一步咨询返回了无效响应')
+  }
   const preconditions = parsePreconditions(value.value.preconditions)
   if (value.value.preconditions !== undefined && preconditions === undefined) {
     throw new Error('下一步咨询返回了无效响应')
@@ -438,6 +444,7 @@ export function parseConsultResponse(value: unknown): ConsultResponse {
       ...(answeredBy === undefined ? {} : { answeredBy: answeredBy.trim() }),
       ...(parsedFallbacks === undefined ? {} : { fallbacks: parsedFallbacks as ConsultFallback[] }),
       ...(stageAgents === undefined ? {} : { stageAgents }),
+      ...(sessionAgent === undefined ? {} : { sessionAgent }),
       ...(preconditions === undefined ? {} : { preconditions }),
     },
   }
@@ -466,6 +473,7 @@ export async function requestConsult(deps: ConsultRequestDeps, sessionId: string
       ...(result.value.answeredBy === undefined ? {} : { answeredBy: result.value.answeredBy }),
       ...(result.value.fallbacks === undefined ? {} : { fallbacks: result.value.fallbacks }),
       ...(result.value.stageAgents === undefined ? {} : { stageAgents: result.value.stageAgents }),
+      ...(result.value.sessionAgent === undefined ? {} : { sessionAgent: result.value.sessionAgent }),
       ...(result.value.preconditions === undefined ? {} : { preconditions: result.value.preconditions }),
     })
   } catch (error) {

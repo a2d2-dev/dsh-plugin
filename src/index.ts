@@ -105,6 +105,7 @@ export type {
   ConsultPreconditions,
   ConsultRoute,
   ConsultSession,
+  ConsultValidationContext,
   ConsultValue,
 } from './consult.ts'
 export {
@@ -1007,6 +1008,7 @@ export class A2d2Service extends Service {
         projectRoot: cwd => resolveProjectRoot(cwd, this.projectMarkers),
         readAskMatt: () => readSkillSource('ask-matt', this.skillsRoot),
         getStageAgents: () => this.stageAgents,
+        agentOfSession: (cwd, sessionId) => this.agentOfSession(cwd, sessionId),
         contextFacts: (session) => {
           const projections = getService<ProjectionReader>('sessionProjections')
           return consultContextFactsFromProjectionValues(projections?.snapshot(session).values, this.thresholds)
