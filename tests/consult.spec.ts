@@ -705,6 +705,7 @@ describe('consult HTTP route', () => {
         },
       },
     })
+    expect((result.json as { value?: unknown }).value).not.toHaveProperty('stationModels')
     expect(deps.calls).toHaveLength(1)
     expect(deps.calls[0]).toMatchObject({
       provider: 'claude-bray',

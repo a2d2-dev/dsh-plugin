@@ -107,13 +107,13 @@ describe('dispatchSubagent', () => {
     const root = await tempRoot()
     const { service, subagents } = await mount(root, stageAgents('reviewer', ['codex/reviewer']), ['codex/reviewer'])
     const parent = stubAgent(root, mainSession)
-    await writeSpecialAgent(root, 'reviewer', 'Review with the project-specific checklist.\n')
+    await writeSpecialAgent(root, 'checklist', 'Review with the project-specific checklist.\n')
     await service.bindMainSession({ cwd: root, issue: 41, mainSession, now: new Date() })
 
     const result = await service.dispatchSubagent({
       cwd: root,
       stage: 'code-review',
-      agentName: 'reviewer',
+      agentName: 'checklist',
       issue: 48,
       prompt: 'Review issue #48.',
       parent,
