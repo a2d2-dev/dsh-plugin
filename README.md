@@ -112,7 +112,7 @@ Writes are atomic and serialized through the document's own file lock. `create` 
 
 ## Main session
 
-`bind_main_session` binds the calling session as the main session of a task issue (ADR 0007). Its parameters are `issue`, `parent_issue` (set only for a subtask), and `title`, which names the task when it is first recorded (default `Task issue #<number>`); the session id and its cwd come from the calling agent. The tool only hands these to `ctx.a2d2.bindMainSession`, which owns the rules:
+`bind_main_session` binds the calling session as the main session of a task issue (ADR 0003). Its parameters are `issue`, `parent_issue` (set only for a subtask), and `title`, which names the task when it is first recorded (default `Task issue #<number>`); the session id and its cwd come from the calling agent. The tool only hands these to `ctx.a2d2.bindMainSession`, which owns the rules:
 
 - The first binding writes `issue-<number>.yaml` with the session as `mainSession` and as the first member.
 - A task issue has one main session at a time: another session's binding is refused, naming the current main session; a successor takes over only through a handoff.
@@ -123,7 +123,7 @@ Writes are atomic and serialized through the document's own file lock. `create` 
 
 ## Open subtask
 
-`open_subtask` lets a task issue's main session open a subtask issue as its own root main session (ADR 0007). Its only parameter is `issue`, the already-created subtask issue number. The caller's own task issue becomes the parent issue.
+`open_subtask` lets a task issue's main session open a subtask issue as its own root main session (ADR 0005). Its only parameter is `issue`, the already-created subtask issue number. The caller's own task issue becomes the parent issue.
 
 The service selects the first `grill` station candidate from `a2d2-station-models` that appears in the live DSH model directory, creates a new root Agent in the same project cwd with that provider/model, sends exactly one first prompt containing the subtask issue reference, the parent task issue reference, per-reference `gh issue view <number> --comments` read commands to run in the project directory, and the instruction to use `/grill-with-docs` as that task's main session, then reuses `bindMainSession` to record the new session as the subtask's main session. It refuses calls from sessions that are not task issue main sessions, and refuses a subtask issue that already has a main session.
 

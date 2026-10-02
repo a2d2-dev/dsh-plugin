@@ -2,7 +2,7 @@
  * The task document vocabulary. A task aggregates related sessions in one
  * project; membership and handoff edges live here rather than on the session, so
  * a session's durable format stays untouched. A task bound to a task issue also
- * records its main session (ADR 0007).
+ * records its main session (ADR 0003).
  * @module @deepseek-ai/dsh-a2d2/src/types
  */
 

@@ -39,7 +39,7 @@ Every A²D² task issue carries exactly one label that tells how it is executed 
 | `a2d2:sub` | 子任务 that still needs grill → to-spec → to-tickets; also a GitHub sub-issue of its parent | its own root main session (CEO) |
 | `ready-for-agent` | 子任务 that is ready to implement (what `/to-tickets` produces); also a sub-issue of its parent | a subagent dispatched by the parent's main session |
 
-The current station and main session live in the issue body's 现状 block, not in labels.
+The current stage and main session live in the issue body's 现状 block, not in labels.
 
 ## When a skill says "fetch the relevant ticket"
 

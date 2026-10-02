@@ -1,10 +1,10 @@
 # Spec: 指示球演进为边界卡（boundary card）
 
-状态: 已 grilling 收敛（2026-09，与 LF 十三问定案）。决策真源见 docs/adr/0001–0003 与 CONTEXT.md。
+状态: 已 grilling 收敛（2026-09，与 LF 十三问定案）。决策真源见 docs/adr/（0006 知识归属、0007 决策归人、0008 下一步咨询）与 CONTEXT.md。
 
 ## Problem Statement
 
-用户在相位边界（一个阶段做完、或上下文逼近 smart zone）需要决定下一步，但悬浮球只提供一种出口：写摘要式交接。真实工作里交接只是五选一之一；且当状态已沉淀在文档/工单里时，被迫写 4000 字符叙述摘要既慢（约 10 分钟一轮）又错——后继需要的是几行指针。用户被迫手打"我该如何给新会话写提示词"并等待长答案。
+用户在阶段边界（一个阶段做完、或上下文逼近 smart zone）需要决定下一步，但悬浮球只提供一种出口：写摘要式交接。真实工作里交接只是五选一之一；且当状态已沉淀在文档/工单里时，被迫写 4000 字符叙述摘要既慢（约 10 分钟一轮）又错——后继需要的是几行指针。用户被迫手打"我该如何给新会话写提示词"并等待长答案。
 
 ## Solution
 
@@ -30,7 +30,7 @@
 
 ## Implementation Decisions
 
-- **交接指令重写**（宿主，handoff-instruction 模块）：删除叙述式摘要辅导词与 suggestedSkills 渲染；新形态 = handoff SKILL.md 原文注入 + 参数信封（文档路径、标记对、focus、约 4000 字符预算）。信封不含任何 skill 已有规则（ADR 0001）。skill 文件缺失时回落为最小指令并在文档 front matter 标注降级。
+- **交接指令重写**（宿主，handoff-instruction 模块）：删除叙述式摘要辅导词与 suggestedSkills 渲染；新形态 = handoff SKILL.md 原文注入 + 参数信封（文档路径、标记对、focus、约 4000 字符预算）。信封不含任何 skill 已有规则（ADR 0006）。skill 文件缺失时回落为最小指令并在文档 front matter 标注降级。
 - **skill 读取**：探测既有 skill 根目录（可配置覆盖），读 SKILL.md 及其正文相对引用的本地 markdown；注入原文不改写。
 - **下一步咨询**（宿主）：新增插件 HTTP 路由面 `POST /a2d2/api/consult?session=<id>`，同现有 tasks 路由的信任判据与 `{ok,value}/{ok,error:{code}}` 响应纪律。宿主取素材（最近 N 条 surface 消息节选 + 本项目任务/交接账本，N 与 token 上限为常量）→ `ctx.llm.stream` 手构 messages 一次生成（先例：session-title-llm），路由跟随本会话当前路由（已为价格解析 request/header，复用）。产出解析为候选数组 `{label, input, kind: stay|handoff|other}`，解析失败整体报错不出半成品芯片。
 - **客户端**：hover 动作区从一个按钮改两个（「交接」「下一步」）；「下一步」点击 → 调 consult 路由 → 卡上渲染芯片（loading/error 态显式）；stay/other 芯片点击复用既有 appendToDraft + focusComposer（替换而非追加需保留既有草稿保护语义），handoff 芯片点击打开交接卡并预填 focus。交接卡与一键交接序列（command → 等写摘要轮 → connectWorkspace → rename → take）不动。
@@ -54,5 +54,5 @@
 
 ## Further Notes
 
-- handoff skill 原文已于本轮修改（"调用方给位置就用调用方的"），upstream 真源与插件同日演进——这是 ADR 0001 的第一次实践。
+- handoff skill 原文已于本轮修改（"调用方给位置就用调用方的"），upstream 真源与插件同日演进——这是 ADR 0006 的第一次实践。
 - README 的 Known Limitation"写摘要的指令复述 skill 规则须手工同步"在本 spec 落地后删除。
