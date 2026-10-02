@@ -112,7 +112,7 @@ sessions:
 
 ## 主会话
 
-`bind_main_session` 把调用它的会话绑定为某个任务 issue 的主会话（ADR 0007）。参数是 `issue`、`parent_issue`（只在子任务时给）与 `title`（首次记录任务时作为任务名，缺省为 `Task issue #<编号>`）；会话 id 与 cwd 取自调用方 agent。工具只把这些转交给 `ctx.a2d2.bindMainSession`，规则都在服务里：
+`bind_main_session` 把调用它的会话绑定为某个任务 issue 的主会话（ADR 0003）。参数是 `issue`、`parent_issue`（只在子任务时给）与 `title`（首次记录任务时作为任务名，缺省为 `Task issue #<编号>`）；会话 id 与 cwd 取自调用方 agent。工具只把这些转交给 `ctx.a2d2.bindMainSession`，规则都在服务里：
 
 - 首次绑定写出 `issue-<编号>.yaml`，该会话既是 `mainSession`，也是第一个成员。
 - 一个任务 issue 同一时刻只有一条主会话：另一条会话来绑定会被拒绝，并说明当前主会话是哪条；后继只能经交接接任。
@@ -123,7 +123,7 @@ sessions:
 
 ## 开子任务
 
-`open_subtask` 让一个任务 issue 的主会话把某个子任务 issue 开成它自己的根主会话（ADR 0007）。唯一参数是 `issue`，也就是已经建好并挂到父任务下的子任务 issue 编号。调用方自己的任务 issue 会成为父 issue。
+`open_subtask` 让一个任务 issue 的主会话把某个子任务 issue 开成它自己的根主会话（ADR 0005）。唯一参数是 `issue`，也就是已经建好并挂到父任务下的子任务 issue 编号。调用方自己的任务 issue 会成为父 issue。
 
 服务会从 `a2d2-station-models` 的 `grill` 站候选中，选择第一个出现在 DSH 实时模型目录里的 `provider/model`；随后在同一项目 cwd 下创建一条新的根 Agent 会话，给它设置该模型，只投递一条首条 prompt：子任务 issue 编号引用、父任务 issue（spec 在其中）编号引用、在本项目目录运行的逐条 `gh issue view <编号> --comments` 读取命令，以及“用 `/grill-with-docs` 推进、你是该任务的主会话”的指令；最后复用 `bindMainSession` 把新会话记录为子任务主会话。非任务 issue 主会话调用会被拒绝；子任务 issue 已有主会话时也会被拒绝。
 

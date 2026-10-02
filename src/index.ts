@@ -644,7 +644,7 @@ export class A2d2Service extends Service {
    *
    * Only a task issue's main session may call this: the caller's task becomes
    * the subtask's parent issue. The new Session is a root Agent, not a subagent,
-   * because ADR 0007 treats design-heavy subtasks as their own main sessions.
+   * because ADR 0005 treats design-heavy subtasks as their own main sessions.
    * @param request - caller, subtask issue, and timestamp.
    * @returns the new main session, selected grill model, and bound task.
    */
@@ -690,7 +690,7 @@ export class A2d2Service extends Service {
   /**
    * Mark the caller's task issue done and wake the parent task's main session.
    *
-   * ADR 0007 keeps tracker changes in the CEO's hands: this method writes only
+   * ADR 0003 keeps tracker changes in the CEO's hands: this method writes only
    * the project-local task document and sends the parent notification, never the
    * GitHub issue.
    * @param request - caller main session and completion summary.
