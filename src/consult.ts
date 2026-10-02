@@ -506,7 +506,7 @@ export function parseConsultOutput(text: string, validation?: ConsultValidationC
         throw new MalformedCandidatesError(`phaseDone false only allows continue or subagent candidate moves; candidate ${String(index)} was ${candidate.move}`)
       }
     }
-  } else if (validation !== undefined && next !== undefined) {
+  } else if (validation !== undefined) {
     rejectForbiddenContinueMoves({ next, candidates, validation })
   }
   if (next !== undefined && candidates[0]?.move !== next.move) {
@@ -533,24 +533,29 @@ function rejectForbiddenContinue(
   station: string | undefined,
   validation: ConsultValidationContext,
 ): void {
-  if (move !== 'continue' || station === undefined) return
-  const targetAgent = targetAgentForStation(validation.stageAgents, station)
+  if (move !== 'continue') return
   if (validation.sessionAgent === undefined) {
-    throw new MalformedCandidatesError(`${label} cannot continue to ${station} because this session has no Agent`)
+    throw new MalformedCandidatesError(station === undefined
+      ? `${label} cannot continue because this session has no Agent`
+      : `${label} cannot continue to ${station} because this session has no Agent`)
   }
+  if (station === undefined) return
+  const targetAgent = targetAgentForStation(validation.stageAgents, station)
   if (validation.sessionAgent !== targetAgent) {
     throw new MalformedCandidatesError(`${label} cannot continue to ${station} because target Agent ${targetAgent} differs from this session Agent ${validation.sessionAgent}`)
   }
 }
 
 function rejectForbiddenContinueMoves(input: {
-  readonly next: ConsultNext
+  readonly next?: ConsultNext
   readonly candidates: readonly ConsultCandidate[]
   readonly validation: ConsultValidationContext
 }): void {
-  rejectForbiddenContinue('next.move', input.next.move, input.next.station, input.validation)
+  if (input.next !== undefined) {
+    rejectForbiddenContinue('next.move', input.next.move, input.next.station, input.validation)
+  }
   for (const [index, candidate] of input.candidates.entries()) {
-    rejectForbiddenContinue(`candidate ${String(index)} move`, candidate.move, candidate.station ?? input.next.station, input.validation)
+    rejectForbiddenContinue(`candidate ${String(index)} move`, candidate.move, candidate.station ?? input.next?.station, input.validation)
   }
 }
 

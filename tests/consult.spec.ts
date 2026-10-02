@@ -846,6 +846,31 @@ describe('consult HTTP route', () => {
     })
   })
 
+  it('rejects off-road continue candidates without next when the session has no Agent', async () => {
+    const deps = dependencies({
+      agentOfSession: async () => undefined,
+      stream: () => output(JSON.stringify({
+        position: 'This session is not on the Matt highway yet.',
+        location: { zone: 'off-road', phaseDone: true },
+        candidates: [
+          { label: '继续当前会话', input: 'continue here', move: 'continue' },
+          { label: '派代理整理', input: 'summarize context', move: 'subagent' },
+        ],
+      })),
+    })
+
+    expect(await send(createConsultHandler(deps))).toMatchObject({
+      status: 502,
+      json: {
+        ok: false,
+        error: {
+          code: 'malformed-candidates',
+          message: expect.stringContaining('session has no Agent'),
+        },
+      },
+    })
+  })
+
   it('allows continue while phaseDone is false even when the session has no Agent', async () => {
     const deps = dependencies({
       agentOfSession: async () => undefined,
