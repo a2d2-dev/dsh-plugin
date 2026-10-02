@@ -14,7 +14,6 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
 import { basename, isAbsolute, join } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -41,6 +40,8 @@ import { isClosedHighwayStation } from './highway.ts'
 import { indicatorProjectionDefinition } from './indicator-projection.ts'
 import type { HandoffThresholds, ModelPrice } from './indicator-projection.ts'
 import { PANEL_ROUTE_PATH, createPanelHandler } from './panel.ts'
+import { SESSION_AGENT_ROUTE_PATH, createSessionAgentHandler } from './session-agent-route.ts'
+import { SessionAgentStore } from './session-agents.ts'
 import { parseSessionId, redactText } from './handoff.ts'
 import { DEFAULT_SKILLS_ROOT, readSkillSource, resolveSkillsRoot } from './skill-source.ts'
 import {
@@ -178,6 +179,21 @@ export type {
   PanelTaskIssue,
 } from './panel.ts'
 export {
+  SESSION_AGENT_ROUTE_PATH,
+  createSessionAgentHandler,
+} from './session-agent-route.ts'
+export type { SessionAgentDependencies, SessionAgentSession } from './session-agent-route.ts'
+export {
+  SESSION_AGENTS_DOCUMENT_VERSION,
+  SESSION_AGENTS_FILE_SEGMENTS,
+  SessionAgentStore,
+  SessionAgentsDocumentError,
+  parseSessionAgentsDocument,
+  renderSessionAgentsDocument,
+  sessionAgentsFile,
+} from './session-agents.ts'
+export type { SessionAgentRecord, SessionAgentsDocument, SessionAgentsDocumentErrorCode } from './session-agents.ts'
+export {
   LEGACY_TASK_DOCUMENT_VERSION,
   TASK_DOCUMENT_VERSION,
   TaskDocumentError,
@@ -209,6 +225,13 @@ declare module '@deepseek-ai/cordis' {
       previousMainSession?: SessionId
       mainSession: SessionId
     }): void
+    /** Emitted after a non-main session is recorded as an A2D2 Agent. */
+    'a2d2/session-agent-recorded'(payload: {
+      cwd: string
+      projectRoot: string
+      session: SessionId
+      agent: StageAgent
+    }): void | Promise<void>
   }
 }
 
@@ -361,7 +384,7 @@ export interface OpenSubtaskRequest {
 export interface OpenedSubtask {
   /** The new root session that is now the subtask's main session. */
   readonly session: SessionId
-  /** The model route selected from the grill station. */
+  /** The model route selected from the grill stage. */
   readonly model: { readonly provider: string; readonly model: string }
   /** The persisted task document bound to the subtask issue. */
   readonly task: BoundTask
@@ -397,8 +420,6 @@ export interface DispatchSubagentRequest {
   readonly cwd: string
   /** Matt highway stage whose stage Agent table chooses the child Agent and model. */
   readonly stage: Stage
-  /** Special Agent name from `<project>/.dsh/a2d2/agents/<name>.md`; absent means the default Agent. */
-  readonly agentName?: string
   /** Task issue number the child is dispatched to implement or review. */
   readonly issue: number
   /** Prompt delivered as the child subagent's initial user message. */
@@ -428,11 +449,11 @@ type SubagentsRuntime = {
   startContinuable(spec: {
     readonly provider: string
     readonly label: string
+    readonly childId?: SessionId
     readonly request: {
       readonly prompt: readonly { readonly type: 'text'; readonly text: string }[]
       readonly parent: Agent
       readonly agentOptions: { readonly provider: string; readonly model: string }
-      readonly persona?: string
     }
     readonly signal: AbortSignal
   }): Promise<{ readonly childId: SessionId }>
@@ -463,6 +484,7 @@ export class A2d2Service extends Service {
   }) as z<Config>
 
   private readonly store: TaskDocumentStore
+  private readonly sessionAgents: SessionAgentStore
   private readonly projectMarkers: readonly string[]
   private readonly skillsRoot: string
   private readonly thresholds: HandoffThresholds
@@ -508,6 +530,7 @@ export class A2d2Service extends Service {
       ...(root === undefined ? {} : { root }),
       projectMarkers: [...projectMarkers],
     })
+    this.sessionAgents = new SessionAgentStore()
     this.projectMarkers = [...projectMarkers]
     this.prices = new Map(Object.entries(config.modelPrices ?? {}))
     for (const [route, price] of this.prices) {
@@ -523,6 +546,7 @@ export class A2d2Service extends Service {
     this.publishIndicator()
     this.publishConsult()
     this.publishConfig()
+    this.publishSessionAgent()
     this.publishPanel()
     // Stated once at load: whether the browser half received these is otherwise
     // only visible by looking at the indicator, which never reports absence.
@@ -749,8 +773,39 @@ export class A2d2Service extends Service {
   }
 
   /**
+   * Record the Agent assigned to a non-main session created as an A2D2 Agent.
+   * @param cwd - absolute session working directory, locating the project ledger.
+   * @param sessionId - the session to record.
+   * @param agent - the Agent the session runs as.
+   */
+  async recordSessionAgent(cwd: string, sessionId: SessionId, agent: StageAgent): Promise<void> {
+    if (cwd === '') throw new Error('a2d2: the session records no working directory, so no project holds its Agent')
+    if (await this.taskOfMainSession(cwd, sessionId) !== undefined) {
+      throw new Error(`a2d2: session "${sessionId}" is a task issue main session and already runs as ceo`)
+    }
+    const projectRoot = await this.store.projectRoot(cwd)
+    await this.sessionAgents.record(projectRoot, sessionId, agent)
+    await this.ctx.serial('a2d2/session-agent-recorded', { cwd, projectRoot, session: sessionId, agent })
+  }
+
+  /**
+   * The A2D2 Agent assigned to one session, if any.
+   *
+   * Main sessions are CEO by task binding and are never stored in the session
+   * Agent ledger; non-main sessions are read from the project-local ledger.
+   * @param cwd - absolute session working directory, locating the project.
+   * @param sessionId - the session to query.
+   * @returns the session Agent, or `undefined` when the session has none.
+   */
+  async agentOfSession(cwd: string, sessionId: SessionId): Promise<StageAgent | undefined> {
+    if (cwd === '') throw new Error('a2d2: the session records no working directory, so no project holds its Agent')
+    if (await this.taskOfMainSession(cwd, sessionId) !== undefined) return 'ceo'
+    return await this.sessionAgents.agentOf(await this.store.projectRoot(cwd), sessionId)
+  }
+
+  /**
    * Dispatch a continuable child subagent from a task's main session.
-   * @param request - station, target task issue, optional special Agent, and parent Agent.
+   * @param request - stage, target task issue, prompt, and parent Agent.
    * @returns the child session id plus the effective model and Agent identity.
    */
   async dispatchSubagent(request: DispatchSubagentRequest): Promise<DispatchedSubagent> {
@@ -764,20 +819,25 @@ export class A2d2Service extends Service {
       throw new Error(`a2d2: session "${parent.id}" is not the main session of a task issue and cannot dispatch subagents`)
     }
     if (!isClosedHighwayStation(request.stage)) throw new Error(`a2d2: unknown stage "${request.stage}"`)
-    const configuredAgent = this.stageAgents.stages[request.stage]
-    const model = await this.selectStageModel(request.stage)
+    const settings = this.stageAgents
+    const configuredAgent = settings.stages[request.stage]
+    const model = await this.selectModelCandidate(
+      `stage "${request.stage}" Agent "${configuredAgent}"`,
+      modelCandidatesForStage(settings, request.stage),
+    )
     const route = splitModelRoute(model)
-    const persona = await this.readSpecialAgentPersona(cwd, request.agentName)
+    const childId = brandString<SessionId>(`session-${randomUUID()}`)
+    await this.recordSessionAgent(cwd, childId, configuredAgent)
     const subagents = this.getService<SubagentsRuntime>('subagents')
     if (subagents === undefined) throw new Error('a2d2: subagents service is unavailable')
     const started = await subagents.startContinuable({
       provider: 'spawn',
       label: `${request.stage} #${issue}`,
+      childId,
       request: {
         prompt: [{ type: 'text', text: request.prompt }],
         parent,
         agentOptions: { provider: route.provider, model: route.model },
-        ...(persona === undefined ? {} : { persona }),
       },
       signal: request.signal,
     })
@@ -905,26 +965,6 @@ export class A2d2Service extends Service {
       if (models.some(model => model.id === route.model)) return candidate
     }
     throw new Error(`a2d2: ${subject} has no model candidate present in the model catalog`)
-  }
-
-  private async readSpecialAgentPersona(cwd: string, agentName: string | undefined): Promise<string | undefined> {
-    if (agentName === undefined) return undefined
-    if (agentName.trim() === '' || agentName !== basename(agentName) || agentName.includes('/') || agentName.includes('\\')) {
-      throw new Error(`a2d2: special Agent "${agentName}" is not a usable Agent file name`)
-    }
-    const projectRoot = await this.store.projectRoot(cwd)
-    const path = join(projectRoot, '.dsh', 'a2d2', 'agents', `${agentName}.md`)
-    let persona: string
-    try {
-      persona = await readFile(path, 'utf8')
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        throw new Error(`a2d2: special Agent "${agentName}" does not exist at ${path}`)
-      }
-      throw error
-    }
-    if (persona.trim() === '') throw new Error(`a2d2: special Agent "${agentName}" is empty at ${path}`)
-    return persona
   }
 
   /**
@@ -1055,6 +1095,34 @@ export class A2d2Service extends Service {
       routeCtx.effect(
         () => server.register({ kind: 'exact', path: CONFIG_ROUTE_PATH, handler }),
         'a2d2 config route',
+      )
+    })
+  }
+
+  /** Publish the trusted browser route that records a session's A2D2 Agent. */
+  private publishSessionAgent(): void {
+    this.ctx.inject(['webServer'], (routeCtx) => {
+      type WebServer = {
+        register(route: {
+          kind: 'exact'
+          path: string
+          handler: ReturnType<typeof createSessionAgentHandler>
+        }): () => void
+      }
+      type WebRuntime = { readonly trustedHosts: readonly string[] }
+      const getService = <T>(name: string): T | undefined => (
+        (routeCtx.get as unknown as (name: string) => T | undefined).call(routeCtx, name)
+      )
+      const server = getService<WebServer>('webServer')
+      if (server === undefined) return
+      const handler = createSessionAgentHandler({
+        trustedHosts: () => getService<WebRuntime>('webRuntime')?.trustedHosts ?? [],
+        getSession: id => routeCtx.get('sessions')?.get(id),
+        recordSessionAgent: (cwd, sessionId, agent) => this.recordSessionAgent(cwd, sessionId, agent),
+      })
+      routeCtx.effect(
+        () => server.register({ kind: 'exact', path: SESSION_AGENT_ROUTE_PATH, handler }),
+        'a2d2 session Agent route',
       )
     })
   }

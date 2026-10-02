@@ -29,9 +29,9 @@ afterEach(async () => {
 })
 
 class PromptSections {
-  private readonly sections = new Map<string, { readonly text: string | (() => string) }>()
+  private readonly sections = new Map<string, { readonly text: string | (() => string); readonly interpolate?: boolean }>()
 
-  section(section: { readonly name: string; readonly text: string | (() => string) }): () => void {
+  section(section: { readonly name: string; readonly text: string | (() => string); readonly interpolate?: boolean }): () => void {
     this.sections.set(section.name, section)
     return () => { this.sections.delete(section.name) }
   }
@@ -45,6 +45,15 @@ class PromptSections {
     const section = this.sections.get(name)
     if (section === undefined) return undefined
     return typeof section.text === 'function' ? section.text() : section.text
+  }
+
+  renderModelPrompt(name: string): string | undefined {
+    const section = this.sections.get(name)
+    if (section === undefined) return undefined
+    const text = typeof section.text === 'function' ? section.text() : section.text
+    if (section.interpolate === false) return text
+    if (text.includes('{{')) throw new Error('prompt interpolation attempted')
+    return text
   }
 }
 
@@ -168,6 +177,26 @@ describe('CEO prompt section', () => {
     expect(second).not.toContain('Global principle v1')
     expect(second).not.toContain('Project principle v1')
     expect(await readFile(join(root, '.dsh', 'a2d2', 'tasks', 'issue-46.yaml'), 'utf8')).toContain('mainSession: session-main')
+  })
+
+  it('preserves prompt variable-looking SOUL text literally', async () => {
+    const root = await tempRoot()
+    const { agentFilesDir, globalSoulDir } = await writeAgentFiles(root, {
+      agents: 'CEO duties',
+      wake: 'Wake checklist',
+      globalSoul: 'Keep literal examples such as ${{ secrets.TOKEN }} unchanged.',
+    })
+    const ctx = new Context()
+    await ctx.plugin(StubSystemPrompt)
+    await ctx.plugin(StubAgents)
+    await ctx.plugin(A2d2Service, { root })
+    await ctx.plugin(ceoPromptPlugin, { agentFilesDir, globalSoulDir })
+    const main = agent(root, 'session-main')
+    ;(ctx.get('agents') as unknown as StubAgents).add(main)
+
+    await ctx.a2d2.bindMainSession({ cwd: root, issue: 46, mainSession: main.id, now: new Date() })
+
+    expect(main.prompt.renderModelPrompt('a2d2:ceo')).toContain('${{ secrets.TOKEN }}')
   })
 
   it('exposes the absolute CEO method directory that contains dispatch templates', async () => {

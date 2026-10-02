@@ -53,7 +53,7 @@ interface AgentsService {
 }
 
 interface ScopedSystemPrompt {
-  section(section: { readonly name: string; readonly order: number; readonly text: () => string }): () => void
+  section(section: { readonly name: string; readonly order: number; readonly text: () => string; readonly interpolate?: boolean }): () => void
   getSectionOrder(name: 'TEAM_POLICY'): number
 }
 
@@ -101,6 +101,7 @@ function install(agent: Agent, projectRoot: string, agentFilesDir: string, globa
     name: CEO_PROMPT_SECTION,
     order: systemPrompt.getSectionOrder('TEAM_POLICY') + 10,
     text: () => renderCeoPrompt(agentFilesDir, globalSoulDir, projectRoot),
+    interpolate: false,
   })
 }
 

@@ -30,6 +30,7 @@ interface StubLlmModel {
 interface StubContinuableStartSpec {
   readonly provider: string
   readonly label: string
+  readonly childId?: SessionId
   readonly request: {
     readonly prompt: readonly unknown[]
     readonly parent: Agent
@@ -149,8 +150,8 @@ export class StubLlm extends Service {
 
 /** A `subagents` service that records continuable starts without creating DSH children. */
 export class StubSubagents extends Service {
-  readonly startContinuable = vi.fn(async (_spec: StubContinuableStartSpec) => ({
-    childId: 'session-child' as SessionId,
+  readonly startContinuable = vi.fn(async (spec: StubContinuableStartSpec) => ({
+    childId: spec.childId ?? 'session-child' as SessionId,
     messageId: 'message-child',
   }))
 

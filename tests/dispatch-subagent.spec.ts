@@ -1,6 +1,6 @@
 /**
- * Dispatching subagents from a main session: stage Agent model selection, special
- * Agent persona loading, and the continuable start request sent to DSH.
+ * Dispatching subagents from a main session: stage Agent model selection, child
+ * session Agent recording, and the continuable start request sent to DSH.
  *
  * @module dsh-a2d2/tests/dispatch-subagent
  */
@@ -89,11 +89,14 @@ describe('dispatchSubagent', () => {
       signal: new AbortController().signal,
     })
 
-    expect(result).toEqual({ session: 'session-child', model: 'codex/gpt-5.5', agent: 'engineer' })
+    expect(result).toMatchObject({ model: 'codex/gpt-5.5', agent: 'engineer' })
+    expect(result.session).toMatch(/^session-/u)
+    await expect(service.agentOfSession(root, result.session)).resolves.toBe('engineer')
     expect(subagents.startContinuable).toHaveBeenCalledOnce()
     expect(subagents.startContinuable).toHaveBeenCalledWith(expect.objectContaining({
       provider: 'spawn',
       label: 'implement #48',
+      childId: result.session,
       request: expect.objectContaining({
         parent,
         prompt: [{ type: 'text', text: 'Implement issue #48.' }],
@@ -103,30 +106,28 @@ describe('dispatchSubagent', () => {
     expect(subagents.startContinuable.mock.calls[0]?.[0].request).not.toHaveProperty('persona')
   })
 
-  it('starts a special Agent child with persona loaded from the project agents directory', async () => {
+  it('does not pass project Agent configuration through the DSH persona field', async () => {
     const root = await tempRoot()
     const { service, subagents } = await mount(root, stageAgents('reviewer', ['codex/reviewer']), ['codex/reviewer'])
     const parent = stubAgent(root, mainSession)
-    await writeSpecialAgent(root, 'checklist', 'Review with the project-specific checklist.\n')
+    await writeSpecialAgent(root, 'reviewer', 'Review with the project-specific checklist.\n')
     await service.bindMainSession({ cwd: root, issue: 41, mainSession, now: new Date() })
 
     const result = await service.dispatchSubagent({
       cwd: root,
       stage: 'code-review',
-      agentName: 'checklist',
       issue: 48,
       prompt: 'Review issue #48.',
       parent,
       signal: new AbortController().signal,
     })
 
-    expect(result).toEqual({ session: 'session-child', model: 'codex/reviewer', agent: 'reviewer' })
-    expect(subagents.startContinuable.mock.calls[0]?.[0].request).toMatchObject({
-      persona: 'Review with the project-specific checklist.\n',
-    })
+    expect(result).toMatchObject({ model: 'codex/reviewer', agent: 'reviewer' })
+    await expect(service.agentOfSession(root, result.session)).resolves.toBe('reviewer')
+    expect(subagents.startContinuable.mock.calls[0]?.[0].request).not.toHaveProperty('persona')
   })
 
-  it('rejects a missing or empty special Agent instead of falling back to the default Agent', async () => {
+  it('does not treat missing project Agent configuration as a dispatch failure', async () => {
     const root = await tempRoot()
     const { service, subagents } = await mount(root, stageAgents('engineer', ['codex/gpt-5.5']), ['codex/gpt-5.5'])
     const parent = stubAgent(root, mainSession)
@@ -135,24 +136,12 @@ describe('dispatchSubagent', () => {
     await expect(service.dispatchSubagent({
       cwd: root,
       stage: 'implement',
-      agentName: 'missing',
       issue: 48,
       prompt: 'Implement issue #48.',
       parent,
       signal: new AbortController().signal,
-    })).rejects.toThrow(/special Agent "missing".*does not exist/)
-
-    await writeSpecialAgent(root, 'empty', '  \n\t')
-    await expect(service.dispatchSubagent({
-      cwd: root,
-      stage: 'implement',
-      agentName: 'empty',
-      issue: 48,
-      prompt: 'Implement issue #48.',
-      parent,
-      signal: new AbortController().signal,
-    })).rejects.toThrow(/special Agent "empty".*empty/)
-    expect(subagents.startContinuable).not.toHaveBeenCalled()
+    })).resolves.toMatchObject({ model: 'codex/gpt-5.5', agent: 'engineer' })
+    expect(subagents.startContinuable).toHaveBeenCalledOnce()
   })
 
   it('rejects a caller that is not the project task issue main session', async () => {
@@ -217,7 +206,7 @@ describe('dispatchSubagent', () => {
 })
 
 describe('dispatch_subagent tool', () => {
-  it('hands stage, special Agent, issue, and prompt to the service with the calling session as parent', async () => {
+  it('hands stage, issue, and prompt to the service with the calling session as parent', async () => {
     const root = await tempRoot()
     const ctx = new Context()
     await ctx.plugin(StubTools)
@@ -229,10 +218,12 @@ describe('dispatch_subagent tool', () => {
     await ctx.a2d2.bindMainSession({ cwd: root, issue: 41, mainSession, now: new Date() })
     const tool = (ctx.get('tools') as unknown as StubTools).find('dispatch_subagent')
     if (tool === undefined) throw new Error('the tool did not register')
-    const args = { stage: 'implement', agent: 'default', issue: 48, prompt: 'Implement issue #48.' }
+    const args = { stage: 'implement', issue: 48, prompt: 'Implement issue #48.' }
+    expect(tool.parameters).not.toHaveProperty('agent')
 
-    const value = await tool.execute(args, toolRunContext(parent, tool.name, args))
+    const value = await tool.execute(args, toolRunContext(parent, tool.name, args)) as { session: string; model: string; agent: string }
 
-    expect(value).toEqual({ session: 'session-child', model: 'codex/gpt-5.5', agent: 'engineer' })
+    expect(value).toMatchObject({ model: 'codex/gpt-5.5', agent: 'engineer' })
+    expect(value.session).toMatch(/^session-/u)
   })
 })

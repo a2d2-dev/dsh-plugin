@@ -1,6 +1,6 @@
 # Dispatch Templates
 
-Use these templates when drafting `dispatch_subagent` prompts. Fill every placeholder with durable facts; child sessions do not share the main-session context.
+Use these templates when drafting `dispatch_subagent` prompts. Fill every placeholder with durable facts; child sessions do not share the main-session context and run as the Agent configured for the requested stage.
 
 ## Dev: implementation or fix
 
