@@ -14,7 +14,6 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
 import { basename, isAbsolute, join } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -385,7 +384,7 @@ export interface OpenSubtaskRequest {
 export interface OpenedSubtask {
   /** The new root session that is now the subtask's main session. */
   readonly session: SessionId
-  /** The model route selected from the grill station. */
+  /** The model route selected from the grill stage. */
   readonly model: { readonly provider: string; readonly model: string }
   /** The persisted task document bound to the subtask issue. */
   readonly task: BoundTask
@@ -421,8 +420,6 @@ export interface DispatchSubagentRequest {
   readonly cwd: string
   /** Matt highway stage whose stage Agent table chooses the child Agent and model. */
   readonly stage: Stage
-  /** Special Agent name from `<project>/.dsh/a2d2/agents/<name>.md`; absent means the default Agent. */
-  readonly agentName?: string
   /** Task issue number the child is dispatched to implement or review. */
   readonly issue: number
   /** Prompt delivered as the child subagent's initial user message. */
@@ -457,7 +454,6 @@ type SubagentsRuntime = {
       readonly prompt: readonly { readonly type: 'text'; readonly text: string }[]
       readonly parent: Agent
       readonly agentOptions: { readonly provider: string; readonly model: string }
-      readonly persona?: string
     }
     readonly signal: AbortSignal
   }): Promise<{ readonly childId: SessionId }>
@@ -806,7 +802,7 @@ export class A2d2Service extends Service {
 
   /**
    * Dispatch a continuable child subagent from a task's main session.
-   * @param request - station, target task issue, optional special Agent, and parent Agent.
+   * @param request - stage, target task issue, prompt, and parent Agent.
    * @returns the child session id plus the effective model and Agent identity.
    */
   async dispatchSubagent(request: DispatchSubagentRequest): Promise<DispatchedSubagent> {
@@ -827,7 +823,6 @@ export class A2d2Service extends Service {
       modelCandidatesForStage(settings, request.stage),
     )
     const route = splitModelRoute(model)
-    const persona = await this.readSpecialAgentPersona(cwd, request.agentName)
     const childId = brandString<SessionId>(`session-${randomUUID()}`)
     await this.recordSessionAgent(cwd, childId, configuredAgent)
     const subagents = this.getService<SubagentsRuntime>('subagents')
@@ -840,7 +835,6 @@ export class A2d2Service extends Service {
         prompt: [{ type: 'text', text: request.prompt }],
         parent,
         agentOptions: { provider: route.provider, model: route.model },
-        ...(persona === undefined ? {} : { persona }),
       },
       signal: request.signal,
     })
@@ -968,26 +962,6 @@ export class A2d2Service extends Service {
       if (models.some(model => model.id === route.model)) return candidate
     }
     throw new Error(`a2d2: ${subject} has no model candidate present in the model catalog`)
-  }
-
-  private async readSpecialAgentPersona(cwd: string, agentName: string | undefined): Promise<string | undefined> {
-    if (agentName === undefined) return undefined
-    if (agentName.trim() === '' || agentName !== basename(agentName) || agentName.includes('/') || agentName.includes('\\')) {
-      throw new Error(`a2d2: special Agent "${agentName}" is not a usable Agent file name`)
-    }
-    const projectRoot = await this.store.projectRoot(cwd)
-    const path = join(projectRoot, '.dsh', 'a2d2', 'agents', `${agentName}.md`)
-    let persona: string
-    try {
-      persona = await readFile(path, 'utf8')
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        throw new Error(`a2d2: special Agent "${agentName}" does not exist at ${path}`)
-      }
-      throw error
-    }
-    if (persona.trim() === '') throw new Error(`a2d2: special Agent "${agentName}" is empty at ${path}`)
-    return persona
   }
 
   /**

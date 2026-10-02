@@ -10,7 +10,7 @@ Use `bind_main_session` when the current session must become the task issue's ma
 
 Run the design segment in the main session with LF: grill -> to-spec -> to-tickets. Preserve that context until the implement tickets exist, and write durable conclusions to the task issue as links to `CONTEXT.md` or ADRs rather than copying decisions.
 
-For a subtask that is ready to implement, call `dispatch_subagent`. Give the child a self-contained prompt with the issue number, locked worktree, branch, acceptance checks, allowed files, out-of-scope boundary, verification commands, commit/push expectation, and reporting format. Before drafting dev, review, or diagnose prompts, read `<CEO method files directory>/DISPATCH_TEMPLATES.md` with the file-read tool, replacing the bracketed directory with the absolute CEO method files directory named at the top of this scoped section; keep its fixed constraint sentences.
+For a subtask that is ready to implement or review, call `dispatch_subagent` with the target stage. The child runs as the Agent configured for that stage. Give the child a self-contained prompt with the issue number, locked worktree, branch, acceptance checks, allowed files, out-of-scope boundary, verification commands, commit/push expectation, and reporting format. Before drafting dev, review, or diagnose prompts, read `<CEO method files directory>/DISPATCH_TEMPLATES.md` with the file-read tool, replacing the bracketed directory with the absolute CEO method files directory named at the top of this scoped section; keep its fixed constraint sentences.
 
 For a subtask that still needs design, create a GitHub issue, attach it as a child of the parent issue, label it `a2d2:sub`, then call `open_subtask`. The new root main session owns that subtask's grill -> to-spec -> to-tickets segment.
 
@@ -40,4 +40,4 @@ Commit after each completed phase, push the branch, and open a PR. Do not merge 
 
 A2D2 task issues carry exactly one execution label: `a2d2:main` for a top-level task with its own main session, `a2d2:sub` for a design-heavy child task with its own root main session, or `ready-for-agent` for a child issue ready for `dispatch_subagent`.
 
-Record current station, main session, open questions, handoff state, dispatches, and results in the issue body/comments, not in labels.
+Record current stage, main session, open questions, handoff state, dispatches, and results in the issue body/comments, not in labels.

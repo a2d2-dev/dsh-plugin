@@ -8,7 +8,7 @@
 
 插件当前给 DSH 带来的能力：
 
-- **任务聚合**——一个任务把属于同一件工作的会话归到一起，并记录它们之间的交接边，使相关会话保留一段可阅读、可评审、可提交的关系。数据存放在项目本地文档中，且不为承载它而修改任何会话的持久格式。绑定了任务 issue 的任务还记着它的主会话——此刻执行它的那一条会话，由会话用 `bind_main_session` 工具绑定。主会话可以用 `open_subtask` 把设计较重的子任务开成根主会话，也可以用 `dispatch_subagent` 派出可续跑子代理，或用 `complete_task` 宣告自己的任务完成；涉及模型与特殊 Agent 的动作按阶段 Agent 表选模型，并可带项目本地特殊 Agent persona。
+- **任务聚合**——一个任务把属于同一件工作的会话归到一起，并记录它们之间的交接边，使相关会话保留一段可阅读、可评审、可提交的关系。数据存放在项目本地文档中，且不为承载它而修改任何会话的持久格式。绑定了任务 issue 的任务还记着它的主会话——此刻执行它的那一条会话，由会话用 `bind_main_session` 工具绑定。主会话可以用 `open_subtask` 把设计较重的子任务开成根主会话，也可以用 `dispatch_subagent` 派出可续跑子代理，或用 `complete_task` 宣告自己的任务完成；Agent 身份与模型选择都来自阶段 Agent 表。
 - **会话交接**——`/handoff` 把工作从一条又长又贵的会话搬到一条干净的新会话而不丢失脉络：交接出去的会话写下有界的接续内容，后继会话据此继续。
 - **指示球**——输入框旁一枚可一眼看清上下文长度与花费的小球；会话接近 smart zone 时告警，提醒在下个相位边界决定去向。
 - **A²D² 面板**——better-sidebar 里的侧边栏 Tab，展示当前会话所属项目的任务、成员交接树，以及主会话子代理路由树。
@@ -20,7 +20,7 @@
 
 ## 插件（namespace：`a2d2`）
 
-本包贡献七个挂载行。`ctx.a2d2` 是任务存储，不声明任何服务，因此在任何 profile 中都会加载；命令行声明了 `commands` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `/handoff`；基础工具行声明了 `tools` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `bind_main_session` 与 `dispatch_subagent`；开子任务工具行额外声明 `agents` 与 `llm`，因为 `open_subtask` 要创建根会话，并从 `grill` 阶段指定的 Agent 选择模型；完成任务工具行声明 `agents`，因为 `complete_task` 可能需要先恢复父任务主会话再发送通知；CEO 提示段行声明了 `agents`、`systemPrompt` 与 `a2d2`，所以只有同时组合 live Agents 与系统提示词组装的 profile 才得到主会话作用域指导；GitHub 关注行声明了 `tools`、`agents`、`sessions` 与 `sessionController`，所以只有能唤醒会话的 profile 才得到 `github_watch`。`dispatch_subagent` 只在实际运行时查找 `subagents`，因此没有子代理服务的 profile 仍能加载基础工具行，`bind_main_session` 照常可用。Cordis 对"声明了却缺失的服务"是拒绝加载，这正是把它们拆成多行、而不是从一行里条件式注册的原因。悬浮球不需要自己的一行：它通过自己已经身处的那个会话驱动同一条命令。
+本包贡献八个挂载行。`ctx.a2d2` 是任务存储，不声明任何服务，因此在任何 profile 中都会加载；命令行声明了 `commands` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `/handoff`；基础工具行声明了 `tools` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `bind_main_session` 与 `dispatch_subagent`；开子任务工具行额外声明 `agents` 与 `llm`，因为 `open_subtask` 要创建根会话，并从 `grill` 阶段指定的 Agent 选择模型；完成任务工具行声明 `agents`，因为 `complete_task` 可能需要先恢复父任务主会话再发送通知；CEO 提示段行声明了 `agents`、`systemPrompt` 与 `a2d2`，所以只有同时组合 live Agents 与系统提示词组装的 profile 才得到主会话作用域指导；Agent 提示段行使用同一组服务，为已记录 Agent 的工程师/评审会话装配配置；GitHub 关注行声明了 `tools`、`agents`、`sessions` 与 `sessionController`，所以只有能唤醒会话的 profile 才得到 `github_watch`。`dispatch_subagent` 只在实际运行时查找 `subagents`，因此没有子代理服务的 profile 仍能加载基础工具行，`bind_main_session` 照常可用。Cordis 对"声明了却缺失的服务"是拒绝加载，这正是把它们拆成多行、而不是从一行里条件式注册的原因。悬浮球不需要自己的一行：它通过自己已经身处的那个会话驱动同一条命令。
 
 发布前运行 `pnpm verify:pack-exports`。它会构建包、打出 tarball、把 tarball 安装到一个空的临时项目里，并逐个导入 `package.json` exports 声明的每个 Node 入口。这个检查会在发版前发现遗漏的 hash 构建分块，例如共享的交接分块。
 
@@ -37,6 +37,8 @@
   name: '@deepseek-ai/dsh-a2d2/complete-task-tools'
 - id: a2d2-ceo-prompt
   name: '@deepseek-ai/dsh-a2d2/ceo-prompt'
+- id: a2d2-agent-prompt
+  name: '@deepseek-ai/dsh-a2d2/agent-prompt'
 - id: a2d2-github-watch
   name: '@deepseek-ai/dsh-a2d2/github-watch'
 ```
@@ -91,6 +93,12 @@
 ```
 
 `stages` 覆盖 Matt 公路图闭集阶段，每个阶段映射到 `ceo`、`engineer` 或 `reviewer`；独立区任意 skill 按规则使用 CEO，不进表。`agents` 与 `consult` 都是有序的 `provider/model` 候选列表。空列表、格式错误 route、未知阶段和未知 Agent 名都会被 settings schema 拒绝。默认值把 `implement` 交给 engineer，`code-review` 交给 reviewer，其余闭集阶段交给 CEO。CEO、reviewer 和 consult 默认是 `claude-bray/claude-fable-5-1` 再到 `codex/gpt-6`；engineer 默认是 `codex/gpt-5.5` 再到 `claude-bray/claude-opus-5-5`。若 reviewer 与 engineer 的首选候选相同，宿主会记录中文告警，但不会拒绝该设置。
+
+### 会话 Agent 装配
+
+主会话由任务绑定推出为 CEO，不另写 Agent 账本。`dispatch_subagent` 会把子代理会话记录为请求阶段指定的 Agent；受信任浏览器路由 `/a2d2/api/session-agent` 供芯片创建的会话登记为 `ceo`、`engineer` 或 `reviewer`。该路由只接受 POST，使用与 `/a2d2/api/consult`、`/a2d2/api/config` 相同的 host / origin / fetch 信任栅栏和 64 KiB JSON 请求体上限，会拒绝未知会话 id 与非法 Agent 值，并写入项目本地 `.dsh/a2d2/session-agents.yaml` 账本。`ctx.a2d2.agentOfSession(cwd, session)` 对任务 issue 主会话返回 `ceo`，对已记录的非主会话返回账本值，对普通未记录会话返回 `undefined`。
+
+组合了 `agent-prompt` 行时，工程师和评审会话会得到一个作用域 `a2d2:agent` 系统提示段。该段先读 `~/.dsh/a2d2/agents/<engineer|reviewer>.md`，再读 `<项目根>/.dsh/a2d2/agents/<engineer|reviewer>.md`，并标明项目配置优先于全局配置。文件在每次系统提示词组装时现读；缺失或为空就跳过；两级都缺时不装该段。这些文件不写入会话历史。CEO 继续使用既有的 `a2d2:ceo` 段与 SOUL 行为。
 
 ### A2D2 配置页
 
@@ -153,12 +161,12 @@ sessions:
 
 ## 派子代理
 
-`dispatch_subagent` 从调用它的主会话派出一个可续跑子代理。参数是 `stage`、可选 `agent`（省略或填 `default` 表示不使用特殊 Agent persona）、`issue` 与 `prompt`；父 Agent、会话 id、cwd 与取消信号取自工具执行上下文。工具只把这些转交给 `ctx.a2d2.dispatchSubagent`，规则都在服务里：
+`dispatch_subagent` 从调用它的主会话派出一个可续跑子代理。参数是 `stage`、`issue` 与 `prompt`；父 Agent、会话 id、cwd 与取消信号取自工具执行上下文。工具只把这些转交给 `ctx.a2d2.dispatchSubagent`，规则都在服务里：
 
 - 只有任务 issue 当前的主会话能派子代理；普通会话会被拒绝。
 - 子代理使用 DSH 的 fresh `spawn` 可续跑 provider。
-- 阶段先映射到 `ceo`、`engineer` 或 `reviewer`；模型取该 Agent 候选中第一个存在于 DSH 宿主模型目录的 `provider/model`，派发时现读，因此 settings 改动影响下一次调用。
-- 特殊 Agent `agent` 从 `<项目根>/.dsh/a2d2/agents/<agent>.md` 读取，并作为子代理 persona 传入。特殊 Agent 缺失或为空都会报错，绝不回退默认 Agent。
+- 阶段先映射到 `ceo`、`engineer` 或 `reviewer`；模型取该 Agent 候选中第一个存在于 DSH 宿主模型目录的 `provider/model`，派发时只读一次，因此 settings 改动影响下一次调用，也不会出现返回 Agent 与选模型所用 Agent 不一致。
+- 子会话 id 会预先生成，并在 DSH 创建子代理前记录为该阶段 Agent，使 `agent-prompt` 行能把工程师/评审配置装配进子会话首轮系统提示词。`dispatch_subagent` 不再通过 DSH `persona` 字段传入项目 Agent 配置。
 - 返回值给出子代理会话 id、实际 `provider/model` 与所用阶段 Agent（`ceo`、`engineer` 或 `reviewer`）。
 
 ## GitHub 关注
@@ -353,15 +361,15 @@ sessions:
 
 #### What the model sees
 
-组合了基础工具行的 profile 中，agent 的每次请求都会再多一份工具定义。一次调用的结果写明子代理会话 id、实际 `provider/model` 与阶段 Agent（`ceo`、`engineer` 或 `reviewer`）。非主会话调用、该阶段 Agent 没有目录内可用模型、特殊 Agent 缺失或为空等拒绝，都会作为工具错误返回。特殊 Agent persona 只发给子代理，不注入父会话。
+组合了基础工具行的 profile 中，agent 的每次请求都会再多一份工具定义。一次调用的结果写明子代理会话 id、实际 `provider/model` 与阶段 Agent（`ceo`、`engineer` 或 `reviewer`）。非主会话调用、该阶段 Agent 没有目录内可用模型等拒绝，都会作为工具错误返回。子会话会在 DSH 创建前被记录为该阶段 Agent；工程师/评审配置通过作用域系统提示词装配进入子会话，而不是通过 `persona` 请求字段。
 
 #### Token effect
 
-定义约 950 字符的 JSON，按每 4 字符一个 token 估算约 240 token，出现在组合了基础工具行的每次请求里。每次调用把参数与紧凑结果加入父会话历史；子代理会把传入的 `prompt` 作为首条用户消息接收。
+定义约 820 字符的 JSON，按每 4 字符一个 token 估算约 205 token，出现在组合了基础工具行的每次请求里。每次调用把参数与紧凑结果加入父会话历史；子代理会把传入的 `prompt` 作为首条用户消息接收。
 
 #### KV Cache effect
 
-新增工具会让组合基础工具行的 profile 的工具列表前缀变化一次。阶段 Agent settings 与特殊 Agent 文件内容在工具运行时读取，不嵌进父会话请求前缀，因此它们变化本身不会让父会话缓存失效。
+新增工具会让组合基础工具行的 profile 的工具列表前缀变化一次。阶段 Agent settings 在工具运行时读取，不嵌进父会话请求前缀，因此它们变化本身不会让父会话缓存失效。工程师/评审 Agent 配置由子会话的作用域系统提示词段在每次组装时读取，因此文件变化影响的是该 Agent 下一次请求前缀，而不是父会话。
 
 ### `github_watch`
 

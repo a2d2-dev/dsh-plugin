@@ -8,7 +8,7 @@ This repository holds the **A²D² DeepSeek Harness plugin**: the components tha
 
 What the plugin gives DSH today:
 
-- **Task aggregation** — a task groups the sessions belonging to one piece of work and records the handoff edges between them, so related sessions keep a relationship a person can read, review, and commit. The data lives in project-local documents, and no session's durable format changes to carry it. A task bound to a task issue also records its main session — the one session executing it — which a session sets with the `bind_main_session` tool. A main session can open design-heavy subtasks as root main sessions with `open_subtask`, dispatch continuable subagents with `dispatch_subagent`, or declare its own task done with `complete_task`, using the stage Agent table and optional project-local special Agent personas where those apply.
+- **Task aggregation** — a task groups the sessions belonging to one piece of work and records the handoff edges between them, so related sessions keep a relationship a person can read, review, and commit. The data lives in project-local documents, and no session's durable format changes to carry it. A task bound to a task issue also records its main session — the one session executing it — which a session sets with the `bind_main_session` tool. A main session can open design-heavy subtasks as root main sessions with `open_subtask`, dispatch continuable subagents with `dispatch_subagent`, or declare its own task done with `complete_task`, using the stage Agent table for Agent identity and model selection.
 - **Session handoff** — `/handoff` moves work from a long, expensive session to a fresh one without losing the thread: the handing-off session writes bounded continuation content, and the successor continues from it.
 - **A floating indicator** — an at-a-glance orb by the composer that tracks context length and cost, and warns when a session approaches the smart zone so the next phase boundary can choose its outcome.
 - **A²D² panel** — a better-sidebar tab for the open session's project tasks, member handoff tree, and main-session subagent route tree.
@@ -20,7 +20,7 @@ The rest of this document is the plugin's behavior contract and known limits, ke
 
 ## Plugin (namespace: `a2d2`)
 
-The package contributes seven mount rows. `ctx.a2d2` is the task store and declares no service, so it loads in any profile; the command row declares `commands` and `a2d2`, so only a profile that composes both gets `/handoff`; the base tools row declares `tools` and `a2d2`, so only a profile that composes both gets `bind_main_session` and `dispatch_subagent`; the open-subtask tools row additionally declares `agents` and `llm`, because `open_subtask` creates a root session and selects the model from the Agent assigned to the `grill` stage; the complete-task tools row declares `agents`, because `complete_task` may resume a parent task's main session before sending the notification; the CEO prompt row declares `agents`, `systemPrompt`, and `a2d2`, so only a profile that composes live Agents and system prompt assembly gets scoped main-session guidance; the GitHub watch row declares `tools`, `agents`, `sessions`, and `sessionController`, so only a profile that can wake sessions gets `github_watch`. The dispatch tool looks up `subagents` only when it runs, so profiles without the subagent service still load the base tools row and keep `bind_main_session` available. Cordis refuses to load a plugin whose declared services are absent, which is why the rows are split rather than registered conditionally from one row. The floating orb needs no row of its own: it drives that same command through the session it already sits on.
+The package contributes eight mount rows. `ctx.a2d2` is the task store and declares no service, so it loads in any profile; the command row declares `commands` and `a2d2`, so only a profile that composes both gets `/handoff`; the base tools row declares `tools` and `a2d2`, so only a profile that composes both gets `bind_main_session` and `dispatch_subagent`; the open-subtask tools row additionally declares `agents` and `llm`, because `open_subtask` creates a root session and selects the model from the Agent assigned to the `grill` stage; the complete-task tools row declares `agents`, because `complete_task` may resume a parent task's main session before sending the notification; the CEO prompt row declares `agents`, `systemPrompt`, and `a2d2`, so only a profile that composes live Agents and system prompt assembly gets scoped main-session guidance; the Agent prompt row uses the same services to assemble engineer/reviewer configuration for recorded Agent sessions; the GitHub watch row declares `tools`, `agents`, `sessions`, and `sessionController`, so only a profile that can wake sessions gets `github_watch`. The dispatch tool looks up `subagents` only when it runs, so profiles without the subagent service still load the base tools row and keep `bind_main_session` available. Cordis refuses to load a plugin whose declared services are absent, which is why the rows are split rather than registered conditionally from one row. The floating orb needs no row of its own: it drives that same command through the session it already sits on.
 
 Before publishing, run `pnpm verify:pack-exports`. It builds the package, packs the tarball, installs that tarball into an empty temporary project, and imports every Node entry declared in `package.json` exports. The check catches missing hashed build chunks such as the shared handoff chunk before a release is cut.
 
@@ -37,6 +37,8 @@ Before publishing, run `pnpm verify:pack-exports`. It builds the package, packs 
   name: '@deepseek-ai/dsh-a2d2/complete-task-tools'
 - id: a2d2-ceo-prompt
   name: '@deepseek-ai/dsh-a2d2/ceo-prompt'
+- id: a2d2-agent-prompt
+  name: '@deepseek-ai/dsh-a2d2/agent-prompt'
 - id: a2d2-github-watch
   name: '@deepseek-ai/dsh-a2d2/github-watch'
 ```
@@ -91,6 +93,12 @@ The plugin also exposes live stage Agent settings in DSH's `settings.yaml`. The 
 ```
 
 `stages` covers the closed Matt highway stages and maps each one to `ceo`, `engineer`, or `reviewer`; standalone skills use CEO by policy and are not stored in the table. `agents` and `consult` are ordered `provider/model` candidate lists. Empty lists, malformed routes, unknown stages, and unknown Agent names are rejected by the settings schema. Defaults assign `implement` to engineer, `code-review` to reviewer, and every other closed stage to CEO. CEO, reviewer, and consult default to `claude-bray/claude-fable-5-1` then `codex/gpt-6`; engineer defaults to `codex/gpt-5.5` then `claude-bray/claude-opus-5-5`. If reviewer and engineer share the same first candidate the host logs a Chinese warning, but keeps the setting.
+
+### Session Agent assembly
+
+Main sessions are CEO by task binding and are not written to a separate Agent ledger. `dispatch_subagent` records its child session as the Agent assigned to the requested stage, and the trusted browser route `/a2d2/api/session-agent` records sessions created by chips as `ceo`, `engineer`, or `reviewer`. That route is POST-only, uses the same host/origin/fetch trust fence and 64 KiB JSON body limit as `/a2d2/api/consult` and `/a2d2/api/config`, rejects unknown session ids and illegal Agent values, and writes the project-local `.dsh/a2d2/session-agents.yaml` ledger. `ctx.a2d2.agentOfSession(cwd, session)` returns `ceo` for task issue main sessions, the ledger value for recorded non-main sessions, and `undefined` for ordinary unrecorded sessions.
+
+Engineer and reviewer sessions get a scoped `a2d2:agent` system prompt section when the `agent-prompt` row is composed. The section reads `~/.dsh/a2d2/agents/<engineer|reviewer>.md` first and `<projectRoot>/.dsh/a2d2/agents/<engineer|reviewer>.md` second, marking the project configuration as priority over global configuration. The files are reread on every system prompt assembly, skipped when missing or empty, and the section is omitted when both levels are absent. These files are not written into session history. CEO keeps the existing `a2d2:ceo` section and SOUL behavior.
 
 ### A2D2 configuration page
 
@@ -153,12 +161,12 @@ Only the task issue's current main session can complete it. If the task has no p
 
 ## Dispatch subagent
 
-`dispatch_subagent` dispatches a continuable child subagent from the calling main session. Its parameters are `stage`, optional `agent` (`default` or omitted means no special Agent persona), `issue`, and `prompt`; the parent Agent, session id, cwd, and cancellation signal come from the tool execution context. The tool only hands these to `ctx.a2d2.dispatchSubagent`, which owns the rules:
+`dispatch_subagent` dispatches a continuable child subagent from the calling main session. Its parameters are `stage`, `issue`, and `prompt`; the parent Agent, session id, cwd, and cancellation signal come from the tool execution context. The tool only hands these to `ctx.a2d2.dispatchSubagent`, which owns the rules:
 
 - Only a task issue's current main session can dispatch; ordinary sessions are refused.
 - The child uses DSH's fresh `spawn` continuable provider.
-- The stage maps to `ceo`, `engineer`, or `reviewer`; the child model is that Agent's first `provider/model` candidate that is present in DSH's host model catalog, read at dispatch time so a settings change affects the next call.
-- A special Agent named `agent` is read from `<projectRoot>/.dsh/a2d2/agents/<agent>.md` and passed as the child's persona. A missing or empty special Agent is an error and never falls back to the default Agent.
+- The stage maps to `ceo`, `engineer`, or `reviewer`; the child model is that Agent's first `provider/model` candidate that is present in DSH's host model catalog, read once at dispatch time so a settings change affects the next call without making the returned Agent disagree with the selected model.
+- The child session id is preallocated and recorded as that stage Agent before DSH creates the child, so the `agent-prompt` row can assemble engineer/reviewer configuration into the child's first system prompt. `dispatch_subagent` never passes project Agent configuration through DSH's `persona` field.
 - The result returns the child session id, the actual `provider/model`, and the stage Agent used (`ceo`, `engineer`, or `reviewer`).
 
 ## GitHub watch
@@ -353,15 +361,15 @@ Composing the complete-task tools row changes the caller's tool-list prefix once
 
 #### What the model sees
 
-One additional tool definition in every request of an agent whose profile composes the base tools row. A call result names the child session id, actual `provider/model`, and stage Agent (`ceo`, `engineer`, or `reviewer`). Refusals, such as a non-main session caller, no catalog-present model for the stage Agent, or a missing/empty special Agent, return as tool errors. The special Agent persona is sent only to the child subagent; it is not injected into the parent session.
+One additional tool definition in every request of an agent whose profile composes the base tools row. A call result names the child session id, actual `provider/model`, and stage Agent (`ceo`, `engineer`, or `reviewer`). Refusals, such as a non-main session caller or no catalog-present model for the stage Agent, return as tool errors. The child session is recorded as that stage Agent before DSH creates it; engineer/reviewer configuration reaches the child through scoped system prompt assembly, not through a `persona` request field.
 
 #### Token effect
 
-The definition is about 950 characters of JSON, roughly 240 tokens by the four-characters-per-token estimate, on every request in a base-tools-row profile. Each call adds its arguments and compact result to the parent session history; the child receives the supplied `prompt` as its first user message.
+The definition is about 820 characters of JSON, roughly 205 tokens by the four-characters-per-token estimate, on every request in a base-tools-row profile. Each call adds its arguments and compact result to the parent session history; the child receives the supplied `prompt` as its first user message.
 
 #### KV Cache effect
 
-Adding the tool changes the tool-list prefix once for profiles that compose the base tools row. Stage Agent settings and special Agent file contents are read when the tool runs, not embedded in the parent request prefix, so changing them does not invalidate the parent's cache by itself.
+Adding the tool changes the tool-list prefix once for profiles that compose the base tools row. Stage Agent settings are read when the tool runs, not embedded in the parent request prefix, so changing them does not invalidate the parent's cache by itself. Engineer/reviewer Agent configuration is read by the child session's scoped system prompt section on each assembly, so changing those files affects that Agent's next request prefix rather than the parent's.
 
 ### `github_watch`
 

@@ -30,6 +30,10 @@
       "types": "./lib/types/ceo-prompt.d.ts",
       "default": "./lib/ceo-prompt.js"
     },
+    "./agent-prompt": {
+      "types": "./lib/types/agent-prompt.d.ts",
+      "default": "./lib/agent-prompt.js"
+    },
     "./github-watch": {
       "types": "./lib/types/github-watch.d.ts",
       "default": "./lib/github-watch.js"
