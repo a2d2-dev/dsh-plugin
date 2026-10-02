@@ -460,6 +460,19 @@ describe('candidate model effect', () => {
     expect(candidateModelEffect(readyWithModels.candidates[0]!, readyWithModels, undefined)).toBeUndefined()
   })
 
+  it('writes the subagent Agent on a subagent chip', () => {
+    expect(candidateModelEffect(
+      { label: '派评审', input: '让子代理评审当前分支', move: 'subagent', station: 'code-review' },
+      readyWithModels,
+      undefined,
+    )).toBe('子代理 · 评审')
+    expect(candidateModelEffect(
+      { label: '派研究', input: '派子代理调研', move: 'subagent', station: 'research' },
+      readyWithModels,
+      undefined,
+    )).toBe('子代理 · CEO')
+  })
+
   it('previews a clear chip as a new session with the target station model', () => {
     expect(candidateModelEffect({ label: '实现', input: '/implement #15', move: 'clear', station: 'implement' }, {
       ...readyWithModels,
@@ -685,14 +698,15 @@ describe('model-aware candidate selection', () => {
     expect(deps.command).not.toHaveBeenCalled()
   })
 
-  it('keeps this session model untouched for subagent chips and writes the subagent model into the input', async () => {
+  it('keeps this session untouched for subagent chips and names the subagent Agent in the input', async () => {
     const events: string[] = []
     const deps = {
       ...selectionDoubles(),
-      appendToDraft: vi.fn((input: string) => {
-        events.push(`draft:${input}`)
+      appendToDraft: vi.fn((input: string, target?: string) => {
+        events.push(`draft:${target ?? 'current'}:${input}`)
         return true
       }),
+      focusComposer: vi.fn(() => { events.push('focus') }),
       modelDirectories: modelDirectory(
         'codex/gpt-5.5',
         ['claude-bray/claude-fable-5-1', 'codex/gpt-5.5'],
@@ -710,8 +724,40 @@ describe('model-aware candidate selection', () => {
       phase: readyWithModels,
     })).resolves.toBe(true)
 
-    expect(events).toEqual(['load', 'draft:让子代理评审当前分支\n\n子代理使用 claude-bray/claude-fable-5-1'])
+    expect(events).toEqual(['draft:current:让子代理评审当前分支\n\n子代理 · 评审', 'focus'])
     expect(deps.notify).not.toHaveBeenCalled()
     expect(deps.command).not.toHaveBeenCalled()
+  })
+
+  it('names CEO as the subagent Agent for a standalone skill', async () => {
+    const deps = selectionDoubles()
+
+    await expect(selectConsultCandidate(deps, {
+      label: '派研究',
+      input: '派子代理调研 DSH 子代理接口',
+      move: 'subagent',
+      station: 'research',
+    }, {
+      sessionId: 'session-a',
+      phase: readyWithModels,
+    })).resolves.toBe(true)
+
+    expect(deps.appendToDraft).toHaveBeenCalledWith('派子代理调研 DSH 子代理接口\n\n子代理 · CEO')
+    expect(deps.notify).not.toHaveBeenCalled()
+  })
+
+  it('leaves a subagent input unchanged when the host sent no stage Agent table', async () => {
+    const deps = selectionDoubles()
+    const { stageAgents: _omitted, ...oldHost } = readyWithModels
+
+    await expect(selectConsultCandidate(deps, {
+      label: '派评审',
+      input: '让子代理评审当前分支',
+      move: 'subagent',
+      station: 'code-review',
+    }, { sessionId: 'session-a', phase: oldHost })).resolves.toBe(true)
+
+    expect(deps.appendToDraft).toHaveBeenCalledWith('让子代理评审当前分支')
+    expect(deps.notify).not.toHaveBeenCalled()
   })
 })

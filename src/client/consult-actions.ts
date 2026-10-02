@@ -18,7 +18,13 @@ import {
 } from '../highway.ts'
 import type { HighwayZone, MainStation, Move } from '../highway.ts'
 import type { StageAgent, StageAgentRouteSettings } from '../stage-agent-data.ts'
-import { STAGE_AGENTS, STAGE_AGENT_STAGES, modelCandidatesForStage } from '../stage-agent-data.ts'
+import {
+  STAGE_AGENTS,
+  STAGE_AGENT_STAGES,
+  agentForStage,
+  modelCandidatesForStage,
+  stageAgentLabel,
+} from '../stage-agent-data.ts'
 import type { FailureKind } from '../refusal.ts'
 import type { ClientSessionsService, ClientWorkspaceNavigation, ClientWorkspacesService } from './context.ts'
 
@@ -581,6 +587,32 @@ export function candidateStation(candidate: ConsultCandidate, phase: ConsultPhas
   return phase?.kind === 'ready' ? phase.next?.station : undefined
 }
 
+/** The Agent a chip prepares for, with that Agent's ordered model candidates. */
+export interface ChipAgentTarget {
+  readonly agent: StageAgent
+  /** The Agent's display name, e.g. 工程师. */
+  readonly label: string
+  readonly routes: readonly string[]
+}
+
+/**
+ * The Agent of a chip's target station: the stage Agent table decides every
+ * closed station, and any standalone skill runs as CEO.
+ * @returns `undefined` when no station is known or the host sent no table.
+ */
+export function chipAgentTarget(
+  station: string | undefined,
+  stageAgents: StageAgentRouteSettings | undefined,
+): ChipAgentTarget | undefined {
+  if (station === undefined || stageAgents === undefined) return undefined
+  const agent: StageAgent = isClosedHighwayStation(station) ? agentForStage(stageAgents, station) : 'ceo'
+  return { agent, label: stageAgentLabel(agent), routes: stageAgents.agents[agent] }
+}
+
+function stageAgentsOf(phase: ConsultPhase | undefined): StageAgentRouteSettings | undefined {
+  return phase?.kind === 'ready' ? phase.stageAgents : undefined
+}
+
 function newSessionModelTarget(
   candidate: ConsultCandidate,
   phase: ConsultPhase | undefined,
@@ -617,12 +649,18 @@ export function candidateModelEffect(
   directory: ClientModelDirectorySnapshot | undefined,
 ): string | undefined {
   if (candidate.move === 'clear') return newSessionEffectLabel(candidate, phase, directory)
-  return undefined
+  if (candidate.move !== 'subagent') return undefined
+  const target = chipAgentTarget(candidateStation(candidate, phase), stageAgentsOf(phase))
+  return target === undefined ? undefined : subagentLine(target.label)
 }
 
-function subagentInput(input: string, route: string | undefined): string {
-  if (route === undefined || /子代理使用\s+\S+/u.test(input)) return input
-  return `${input}\n\n子代理使用 ${route}`
+function subagentLine(label: string): string {
+  return `子代理 · ${label}`
+}
+
+function subagentInput(input: string, label: string): string {
+  const line = subagentLine(label)
+  return input.includes(line) ? input : `${input}\n\n${line}`
 }
 
 function workspaceOf(workspaces: ClientWorkspacesService, sessionId: string): string | undefined {
@@ -707,39 +745,11 @@ async function selectClearCandidate(
   return true
 }
 
-async function prepareCandidateInput(
-  deps: ConsultSelectionDeps,
-  candidate: ConsultCandidate,
-  context: ConsultSelectionContext | undefined,
-): Promise<string> {
+/** The text a continue or subagent chip writes into this session's composer. */
+function prepareCandidateInput(candidate: ConsultCandidate, phase: ConsultPhase | undefined): string {
   if (candidate.move !== 'subagent') return candidate.input
-  const phase = context?.phase
-  const station = candidateStation(candidate, phase)
-  if (station === undefined || phase?.kind !== 'ready' || phase.stageAgents === undefined) return candidate.input
-  const sessionId = context?.sessionId
-  if (sessionId === undefined || deps.modelDirectories === undefined) {
-    deps.notify?.('模型目录服务不可用，已只填入输入框')
-    return candidate.input
-  }
-
-  let directory: ClientModelDirectorySnapshot
-  let face: ClientModelDirectory
-  try {
-    face = deps.modelDirectories.directoryFor(sessionId)
-    directory = await face.load()
-  } catch (error) {
-    deps.notify?.(`读取模型目录失败：${errorMessage(error)}`)
-    return candidate.input
-  }
-
-  const decision = stationRouteDecision({
-    station,
-    stageAgents: phase.stageAgents,
-    catalog: modelCatalogRoutes(directory),
-    current: directory.current,
-  })
-
-  return subagentInput(candidate.input, decision.route)
+  const target = chipAgentTarget(candidateStation(candidate, phase), stageAgentsOf(phase))
+  return target === undefined ? candidate.input : subagentInput(candidate.input, target.label)
 }
 
 /**
@@ -769,9 +779,7 @@ export function selectConsultCandidate(
   if (candidate.move === 'clear') {
     return selectClearCandidate(deps, candidate.input, context, newSessionModelTarget(candidate, context?.phase))
   }
-  return prepareCandidateInput(deps, candidate, context).then((input) => {
-    return fillCurrentSession(deps, input)
-  })
+  return Promise.resolve(fillCurrentSession(deps, prepareCandidateInput(candidate, context?.phase)))
 }
 
 export function selectOtherMove(
