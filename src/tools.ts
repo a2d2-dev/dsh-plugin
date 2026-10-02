@@ -15,7 +15,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
-import type { Station } from './index.ts'
+import type { Stage } from './index.ts'
 import type {} from './index.ts'
 
 /** Cordis plugin name of the tools half. */
@@ -93,9 +93,9 @@ export function apply(ctx: Context): void {
   ctx.effect(() => ctx.tools.register(defineTool({
     name: DISPATCH_SUBAGENT_TOOL,
     description: 'Dispatch a continuable child subagent from this task issue main session. '
-      + 'The model is selected from the station model table and the optional special Agent loads its persona from the project agents directory.',
+      + 'The model is selected from the stage Agent table and the optional special Agent loads its persona from the project agents directory.',
     parameters: {
-      station: { type: 'string', required: true, description: 'Matt highway station whose station model table chooses the child model.' },
+      stage: { type: 'string', required: true, description: 'Matt highway stage whose stage Agent table chooses the child Agent and model.' },
       agent: { type: 'string', description: 'Special Agent name; omit or set "default" to use the default Agent with no persona.' },
       issue: { type: 'integer', required: true, description: 'Task issue number assigned to the child subagent.' },
       prompt: { type: 'string', required: true, description: 'Prompt delivered to the child subagent as its initial user message.' },
@@ -119,7 +119,7 @@ export function apply(ctx: Context): void {
       const agent = callingAgent(exec)
       return await ctx.a2d2.dispatchSubagent({
         cwd: agent.session.header.cwd ?? '',
-        station: args.station as Station,
+        stage: args.stage as Stage,
         ...(args.agent === undefined || args.agent === 'default' ? {} : { agentName: args.agent }),
         issue: args.issue,
         prompt: args.prompt,
@@ -127,6 +127,6 @@ export function apply(ctx: Context): void {
         signal: exec.signal,
       })
     },
-    presentCall: args => ({ card: 'generic', title: `Dispatch ${args.station} subagent for #${args.issue}`, kind: 'other', rawInput: args }),
+    presentCall: args => ({ card: 'generic', title: `Dispatch ${args.stage} subagent for #${args.issue}`, kind: 'other', rawInput: args }),
   })), 'a2d2 dispatch_subagent tool registration')
 }
