@@ -74,13 +74,23 @@ export const StageAgentsSettingsSchema: z<StageAgentsSettings> = z.object({
   consult: [...THINKING_MODEL_ROUTES],
 }) as z<StageAgentsSettings>
 
+function assertRouteList(path: string, routes: readonly unknown[]): void {
+  for (const [index, route] of routes.entries()) {
+    if (typeof route !== 'string' || !ROUTE_PATTERN.test(route)) {
+      throw new Error(`a2d2: ${path}[${index}] must be provider/model`)
+    }
+  }
+}
+
 export function validateStageAgentsSettings(value: unknown): StageAgentsSettings {
   const settings = StageAgentsSettingsSchema(structuredClone(value) as never)
   if (settings.consult.length === 0) {
     throw new Error('a2d2: consult must name at least one model route')
   }
+  assertRouteList('consult', settings.consult)
   for (const [agent, routes] of Object.entries(settings.agents)) {
     if (routes.length === 0) throw new Error(`a2d2: agents.${agent} must name at least one model route`)
+    assertRouteList(`agents.${agent}`, routes)
   }
   for (const [stage, agent] of Object.entries(settings.stages)) {
     if (!STAGE_SET.has(stage)) throw new Error(`a2d2: unknown stage "${stage}"`)

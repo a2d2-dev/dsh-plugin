@@ -60,6 +60,20 @@ describe('stage agent settings', () => {
     })).toThrow(/array length >= 1/u)
   })
 
+  it('rejects nullish route entries in consult and Agent candidate lists', () => {
+    expect(() => validateStageAgentsSettings({
+      ...DEFAULT_STAGE_AGENTS,
+      consult: [null],
+    } as never)).toThrow(/consult/i)
+    expect(() => validateStageAgentsSettings({
+      ...DEFAULT_STAGE_AGENTS,
+      agents: {
+        ...DEFAULT_STAGE_AGENTS.agents,
+        ceo: [null, 'a/b'],
+      },
+    } as never)).toThrow(/agents\.ceo/i)
+  })
+
   it('warns in Chinese when reviewer and engineer share the same first candidate', () => {
     expect(stageAgentWarnings({
       ...DEFAULT_STAGE_AGENTS,
