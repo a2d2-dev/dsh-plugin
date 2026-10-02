@@ -11,7 +11,8 @@
  * - a turn ended: pushed after {@link WAIT_NOTICE_GRACE_MS} unless the session
  *   receives user input or starts another turn first;
  * - `ask_user_question` was called: pushed at once;
- * - `complete_task` succeeded: pushed at once.
+ * - `complete_task` succeeded: pushed at once, and the turn it ran in sends no
+ *   turn notice — one wait, one notice.
  *
  * A push never affects the session: results are logged, and a rejected or
  * throwing provider is contained here.
@@ -134,6 +135,8 @@ function body(...parts: readonly (string | undefined)[]): string {
 export class WaitNotices {
   private readonly lastReply = new Map<SessionId, string>()
   private readonly pending = new Map<SessionId, PendingTurnNotice>()
+  /** Sessions that sent "已完成" in their current turn; that turn's end sends no turn notice. */
+  private readonly completedThisTurn = new Set<SessionId>()
 
   /**
    * @param deps - the provider, the main-session lookup, link resolution, and logging.
@@ -148,6 +151,7 @@ export class WaitNotices {
   observe(session: WaitNoticeSession, event: SessionEvent): void {
     const id = session.id
     if (event.type === 'turn/start' || event.type.startsWith('user/')) this.cancel(id)
+    if (event.type.startsWith('user/')) this.completedThisTurn.delete(id)
     switch (event.type) {
       case 'turn/start':
         this.lastReply.delete(id)
@@ -160,6 +164,7 @@ export class WaitNotices {
       case 'turn/end': {
         const reply = this.lastReply.get(id)
         this.lastReply.delete(id)
+        if (this.completedThisTurn.delete(id)) return
         if (!WAITING_TURN_ENDS.has(event.data.reason.kind)) return
         const cwd = session.header.cwd ?? ''
         const timer = setTimeout(() => {
@@ -192,12 +197,16 @@ export class WaitNotices {
   }
 
   /**
-   * Notify that a main session completed its task issue.
+   * Notify that a main session completed its task issue. The end of the
+   * current turn then sends no "等你回复": "已完成" already is this wait's
+   * notice. `ask_user_question` gets no such pass — LF's answer resumes the
+   * turn, so its end is a new wait.
    * @param sessionId - the main session that called `complete_task`.
    * @param issue - its task issue number.
    * @param summary - the completion summary.
    */
   completed(sessionId: SessionId, issue: number, summary: string): void {
+    this.completedThisTurn.add(sessionId)
     void this.push(sessionId, { title: `#${String(issue)} · 已完成`, content: summary, level: 'active' })
   }
 
@@ -206,6 +215,7 @@ export class WaitNotices {
     for (const { timer } of this.pending.values()) clearTimeout(timer)
     this.pending.clear()
     this.lastReply.clear()
+    this.completedThisTurn.clear()
   }
 
   private cancel(id: SessionId): void {

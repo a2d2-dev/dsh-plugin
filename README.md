@@ -168,9 +168,9 @@ Only a task issue's main session notifies; subagents and unbound sessions never 
 
 | Wait | Title | Content | Level | When |
 |---|---|---|---|---|
-| A turn ends (`completed`, `error`, `blocked`, `max-tokens`) | `#<issue> · 等你回复` | The turn's last assistant reply, cut to 300 characters, then the task issue link | `active` | 30 s after the turn ends; retracted when the session receives a `user/*` event or starts another turn first |
+| A turn ends (`completed`, `error`, `blocked`, `max-tokens`) | `#<issue> · 等你回复` | The turn's last assistant reply, cut to 300 characters, then the task issue link | `active` | 30 s after the turn ends; retracted when the session receives a `user/*` event or starts another turn first; not sent for a turn that called `complete_task` |
 | `ask_user_question` is called | `#<issue> · 需要你决定` | The question texts, then the task issue link | `timeSensitive` | At once |
-| `complete_task` succeeds | `#<issue> · 已完成` | The completion summary | `active` | At once |
+| `complete_task` succeeds | `#<issue> · 已完成` | The completion summary | `active` | At once; the turn it ran in then ends without `等你回复` |
 
 A turn cancelled by `aborted`, and the after-the-fact `interrupted`/`forked` closers, send nothing. The link is `https://github.com/<owner>/<name>/issues/<issue>`, taken from the session cwd's `github.com` `origin`; without one the message has no link. The title carries no stage: the current stage lives only in the task issue's status, which the plugin does not read.
 

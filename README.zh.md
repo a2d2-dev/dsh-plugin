@@ -168,9 +168,9 @@ sessions:
 
 | 等待 | 标题 | 正文 | 级别 | 时机 |
 |---|---|---|---|---|
-| 一轮结束（`completed`、`error`、`blocked`、`max-tokens`） | `#<issue> · 等你回复` | 这一轮最后一段助手回复（截到 300 字），再加任务 issue 链接 | `active` | 一轮结束 30 秒后；期间该会话有 `user/*` 事件或重新开始一轮就撤销 |
+| 一轮结束（`completed`、`error`、`blocked`、`max-tokens`） | `#<issue> · 等你回复` | 这一轮最后一段助手回复（截到 300 字），再加任务 issue 链接 | `active` | 一轮结束 30 秒后；期间该会话有 `user/*` 事件或重新开始一轮就撤销；调用过 `complete_task` 的那一轮不发 |
 | 调用 `ask_user_question` | `#<issue> · 需要你决定` | 问题文本，再加任务 issue 链接 | `timeSensitive` | 立即 |
-| `complete_task` 成功 | `#<issue> · 已完成` | 完成说明 | `active` | 立即 |
+| `complete_task` 成功 | `#<issue> · 已完成` | 完成说明 | `active` | 立即；所在那一轮结束时不再发 `等你回复` |
 
 以 `aborted` 结束的一轮，以及事后补写的 `interrupted`/`forked` 收尾，不发消息。链接是 `https://github.com/<owner>/<name>/issues/<issue>`，取自会话 cwd 的 `github.com` `origin`；没有就不带链接。标题不带阶段：当前阶段只写在任务 issue 的「现状」里，插件不读它。
 
