@@ -8,7 +8,7 @@ This repository holds the **A²D² DeepSeek Harness plugin**: the components tha
 
 What the plugin gives DSH today:
 
-- **Task aggregation** — a task groups the sessions belonging to one piece of work and records the handoff edges between them, so related sessions keep a relationship a person can read, review, and commit. The data lives in project-local documents, and no session's durable format changes to carry it. A task bound to a task issue also records its main session — the one session executing it — which a session sets with the `bind_main_session` tool. A main session can open design-heavy subtasks as root main sessions with `open_subtask`, dispatch continuable subagents with `dispatch_subagent`, or declare its own task done with `complete_task`, using the station model table and optional project-local special Agent personas where those apply.
+- **Task aggregation** — a task groups the sessions belonging to one piece of work and records the handoff edges between them, so related sessions keep a relationship a person can read, review, and commit. The data lives in project-local documents, and no session's durable format changes to carry it. A task bound to a task issue also records its main session — the one session executing it — which a session sets with the `bind_main_session` tool. A main session can open design-heavy subtasks as root main sessions with `open_subtask`, dispatch continuable subagents with `dispatch_subagent`, or declare its own task done with `complete_task`, using the stage Agent table and optional project-local special Agent personas where those apply.
 - **Session handoff** — `/handoff` moves work from a long, expensive session to a fresh one without losing the thread: the handing-off session writes bounded continuation content, and the successor continues from it.
 - **A floating indicator** — an at-a-glance orb by the composer that tracks context length and cost, and warns when a session approaches the smart zone so the next phase boundary can choose its outcome.
 - **A²D² panel** — a better-sidebar tab for the open session's project tasks, member handoff tree, and main-session subagent route tree.
@@ -20,7 +20,7 @@ The rest of this document is the plugin's behavior contract and known limits, ke
 
 ## Plugin (namespace: `a2d2`)
 
-The package contributes seven mount rows. `ctx.a2d2` is the task store and declares no service, so it loads in any profile; the command row declares `commands` and `a2d2`, so only a profile that composes both gets `/handoff`; the base tools row declares `tools` and `a2d2`, so only a profile that composes both gets `bind_main_session` and `dispatch_subagent`; the open-subtask tools row additionally declares `agents` and `llm`, because `open_subtask` creates a root session and selects the grill station model; the complete-task tools row declares `agents`, because `complete_task` may resume a parent task's main session before sending the notification; the CEO prompt row declares `agents`, `systemPrompt`, and `a2d2`, so only a profile that composes live Agents and system prompt assembly gets scoped main-session guidance; the GitHub watch row declares `tools`, `agents`, `sessions`, and `sessionController`, so only a profile that can wake sessions gets `github_watch`. The dispatch tool looks up `subagents` only when it runs, so profiles without the subagent service still load the base tools row and keep `bind_main_session` available. Cordis refuses to load a plugin whose declared services are absent, which is why the rows are split rather than registered conditionally from one row. The floating orb needs no row of its own: it drives that same command through the session it already sits on.
+The package contributes seven mount rows. `ctx.a2d2` is the task store and declares no service, so it loads in any profile; the command row declares `commands` and `a2d2`, so only a profile that composes both gets `/handoff`; the base tools row declares `tools` and `a2d2`, so only a profile that composes both gets `bind_main_session` and `dispatch_subagent`; the open-subtask tools row additionally declares `agents` and `llm`, because `open_subtask` creates a root session and selects the model from the Agent assigned to the `grill` stage; the complete-task tools row declares `agents`, because `complete_task` may resume a parent task's main session before sending the notification; the CEO prompt row declares `agents`, `systemPrompt`, and `a2d2`, so only a profile that composes live Agents and system prompt assembly gets scoped main-session guidance; the GitHub watch row declares `tools`, `agents`, `sessions`, and `sessionController`, so only a profile that can wake sessions gets `github_watch`. The dispatch tool looks up `subagents` only when it runs, so profiles without the subagent service still load the base tools row and keep `bind_main_session` available. Cordis refuses to load a plugin whose declared services are absent, which is why the rows are split rather than registered conditionally from one row. The floating orb needs no row of its own: it drives that same command through the session it already sits on.
 
 Before publishing, run `pnpm verify:pack-exports`. It builds the package, packs the tarball, installs that tarball into an empty temporary project, and imports every Node entry declared in `package.json` exports. The check catches missing hashed build chunks such as the shared handoff chunk before a release is cut.
 
@@ -54,31 +54,49 @@ Before publishing, run `pnpm verify:pack-exports`. It builds the package, packs 
 
 The configuration keys belong to the `a2d2` row. Every method takes the caller's session cwd and resolves the project root itself, so callers carry no project bookkeeping. `list` reads the project's tasks, `resolve` returns the task a new session inherits, `create` mints an id and writes a document, `registerMember` records a session as a member with an optional handoff edge, `prepareHandoff` / `takeHandoff` write and consume a handoff document, `bindMainSession` binds a session as the main session of a task issue, `openSubtask` opens a subtask issue as a new root main session, `completeTask` marks a task issue done and notifies its parent main session when one exists, and `taskOfMainSession` / `mainSessionOfIssue` answer which task a session is the main session of and which session is a task issue's main session.
 
-### Station model settings
+### Stage Agent settings
 
-The plugin also registers a live settings namespace, `a2d2-station-models`, stored in DSH's `settings.yaml`. It is separate from the plugin row above because users should be able to reorder station model candidates without restarting the host.
+The plugin also exposes live stage Agent settings in DSH's `settings.yaml`. The persisted section is keyed by the plugin profile entry id, and this plugin owns the `stageAgents` value inside that section. Users can change stage assignments, Agent model candidates, and consult candidates without restarting the host.
 
 ```yaml
-a2d2-station-models:
-  consult:
-    - claude-bray/claude-fable-5-1
-    - codex/gpt-6
-  stations:
-    grill:
+<profile entry id>:
+  stageAgents:
+    stages:
+      grill: ceo
+      to-spec: ceo
+      to-tickets: ceo
+      implement: engineer
+      code-review: reviewer
+      prototype: ceo
+      handoff: ceo
+      diagnosing-bugs: ceo
+      triage: ceo
+      wayfinder: ceo
+      improve-codebase-architecture: ceo
+      domain-modeling: ceo
+      codebase-design: ceo
+    agents:
+      ceo:
+        - claude-bray/claude-fable-5-1
+        - codex/gpt-6
+      engineer:
+        - codex/gpt-5.5
+        - claude-bray/claude-opus-5-5
+      reviewer:
+        - claude-bray/claude-fable-5-1
+        - codex/gpt-6
+    consult:
       - claude-bray/claude-fable-5-1
       - codex/gpt-6
-    implement:
-      - codex/gpt-5.5
-      - claude-bray/claude-opus-5-5
 ```
 
-`consult` and every station entry are ordered `provider/model` candidate lists. Empty lists and malformed routes are rejected by the settings schema. Thinking stations (`grill`, `to-spec`, `to-tickets`, `code-review`, `triage`, `wayfinder`, `improve-codebase-architecture`) default to `claude-bray/claude-fable-5-1` then `codex/gpt-6`; coding stations (`implement`, `prototype`, `diagnosing-bugs`) default to `codex/gpt-5.5` then `claude-bray/claude-opus-5-5`. `handoff`, roadbed, and standalone skills are intentionally not listed because this ticket does not switch models for them. If `code-review` and `implement` share the same first candidate the host logs a warning, but keeps the setting.
+`stages` covers the closed Matt highway stages and maps each one to `ceo`, `engineer`, or `reviewer`; standalone skills use CEO by policy and are not stored in the table. `agents` and `consult` are ordered `provider/model` candidate lists. Empty lists, malformed routes, unknown stages, and unknown Agent names are rejected by the settings schema. Defaults assign `implement` to engineer, `code-review` to reviewer, and every other closed stage to CEO. CEO, reviewer, and consult default to `claude-bray/claude-fable-5-1` then `codex/gpt-6`; engineer defaults to `codex/gpt-5.5` then `claude-bray/claude-opus-5-5`. If reviewer and engineer share the same first candidate the host logs a Chinese warning, but keeps the setting.
 
 ### A2D2 configuration page
 
-The browser bundle registers an independent DSH settings section, **A2D2 配置**. Its first block, **Matt 流程**, reuses the highway map drawing and shows the main road, ramps, service areas, roadbed, and standalone area. The model table then lets the user edit ordered candidates for configurable stations plus the separate `consult` row; `handoff`, roadbed stations, and standalone skills are shown as `不切模型`.
+The browser bundle registers an independent DSH settings section, **A2D2 配置**. The current browser UI still has the pre-#72 station-model editor; the host route now reads and writes the stage Agent settings shape above.
 
-The page never writes arbitrary settings namespaces from the browser. It calls this plugin's own trusted route, `/a2d2/api/config`, which uses the same host/origin/fetch trust fence as the next-step consult route and exposes only `a2d2-station-models`. Requests are capped at 64 KiB, invalid JSON is rejected, and writes must include the revision returned by a completed read. Saves replace the whole station model table with that revision; a missing revision is rejected without writing, a stale save is rejected as a conflict, the page reloads the latest value, and schema failures such as an empty list or malformed route are reported without persisting anything.
+The page never writes arbitrary settings namespaces from the browser. It calls this plugin's own trusted route, `/a2d2/api/config`, which uses the same host/origin/fetch trust fence as the next-step consult route. Requests are capped at 64 KiB, invalid JSON is rejected, and writes must include the revision returned by a completed read. Saves replace the whole `stageAgents` value with that revision: `stages`, `agents`, and `consult` are all required, `stages` must cover every closed highway stage, `agents` must include `ceo`, `engineer`, and `reviewer`, and unknown top-level keys inside `stageAgents` such as the old `stations` shape are rejected. A missing revision is rejected without writing, a stale save is rejected as a conflict, the route returns the latest value, and schema failures such as an empty list or malformed route are reported without persisting anything.
 
 Model candidates are added from DSH's host model catalog (`llm.models`) so the page cannot create a typo-only route. Each existing candidate has a **Test** action that performs exactly one tiny host-side call (`reply OK`, small output budget) and classifies the result as normal, refusal, rate-limited, or error with the reason; an empty response is reported as error. There is no background probing.
 
@@ -125,7 +143,7 @@ Writes are atomic and serialized through the document's own file lock. `create` 
 
 `open_subtask` lets a task issue's main session open a subtask issue as its own root main session (ADR 0005). Its only parameter is `issue`, the already-created subtask issue number. The caller's own task issue becomes the parent issue.
 
-The service selects the first `grill` station candidate from `a2d2-station-models` that appears in the live DSH model directory, creates a new root Agent in the same project cwd with that provider/model, sends exactly one first prompt containing the subtask issue reference, the parent task issue reference, per-reference `gh issue view <number> --comments` read commands to run in the project directory, and the instruction to use `/grill-with-docs` as that task's main session, then reuses `bindMainSession` to record the new session as the subtask's main session. It refuses calls from sessions that are not task issue main sessions, and refuses a subtask issue that already has a main session.
+The service reads the Agent assigned to the `grill` stage, selects that Agent's first `provider/model` candidate that appears in the live DSH model directory, creates a new root Agent in the same project cwd with that provider/model, sends exactly one first prompt containing the subtask issue reference, the parent task issue reference, per-reference `gh issue view <number> --comments` read commands to run in the project directory, and the instruction to use `/grill-with-docs` as that task's main session, then reuses `bindMainSession` to record the new session as the subtask's main session. It refuses calls from sessions that are not task issue main sessions, and refuses a subtask issue that already has a main session.
 
 ## Complete task
 
@@ -135,13 +153,13 @@ Only the task issue's current main session can complete it. If the task has no p
 
 ## Dispatch subagent
 
-`dispatch_subagent` dispatches a continuable child subagent from the calling main session. Its parameters are `station`, optional `agent` (`default` or omitted means the default Agent), `issue`, and `prompt`; the parent Agent, session id, cwd, and cancellation signal come from the tool execution context. The tool only hands these to `ctx.a2d2.dispatchSubagent`, which owns the rules:
+`dispatch_subagent` dispatches a continuable child subagent from the calling main session. Its parameters are `stage`, optional `agent` (`default` or omitted means no special Agent persona), `issue`, and `prompt`; the parent Agent, session id, cwd, and cancellation signal come from the tool execution context. The tool only hands these to `ctx.a2d2.dispatchSubagent`, which owns the rules:
 
 - Only a task issue's current main session can dispatch; ordinary sessions are refused.
 - The child uses DSH's fresh `spawn` continuable provider.
-- The model is the station model table's first `provider/model` candidate that is present in DSH's host model catalog, read at dispatch time so a settings change affects the next call.
+- The stage maps to `ceo`, `engineer`, or `reviewer`; the child model is that Agent's first `provider/model` candidate that is present in DSH's host model catalog, read at dispatch time so a settings change affects the next call.
 - A special Agent named `agent` is read from `<projectRoot>/.dsh/a2d2/agents/<agent>.md` and passed as the child's persona. A missing or empty special Agent is an error and never falls back to the default Agent.
-- The result returns the child session id, the actual `provider/model`, and the Agent used.
+- The result returns the child session id, the actual `provider/model`, and the stage Agent used (`ceo`, `engineer`, or `reviewer`).
 
 ## GitHub watch
 
@@ -215,13 +233,13 @@ It renders one fixed circle beside the composer showing the session's context le
 
 The **下一步** card opens with an instant status block answering "what is this session doing right now": running (with the in-flight tool and how long it has run), waiting on you (a pending approval — naming the tool and reason — or question), possibly stuck (running, not streaming, and no new turn or tool call for 10 minutes), errored, idle (with when the last turn ended), or not started — plus queued messages and context occupancy. It reads only the conversation snapshot the client already holds, never calls a model, and stays live while the card is open — so the card is useful while the consultation below is still generating.
 
-Opening the card also requests a one-off consultation for the current session, without adding a consultation turn to session history. New hosts return a highway location (`zone`, `station`, `phaseDone`, and optional `returnTo`), a recommended next station and move, and 2-4 move-labeled candidates. The card renders the status block first, then a vertical mini highway for the main Matt road (`grill` -> `to-spec` -> `to-tickets` -> `implement` -> `code-review`), with passed/current/next/ahead state, Chinese station roles, and the first station model candidate that is present in this session's DSH model directory. Service areas and ramps show notes such as "绕道中：prototype，完成后 handoff 回 grill" or "匝道：wayfinder，并入 to-spec"; standalone and off-road locations show a placard instead of highlighting the main road. Under the map, the next line reads like `→ /to-spec · Continue（reason）· fable-5-1`, or `本阶段未完成 · 继续` while `phaseDone` is false. Older hosts that do not return `location` still degrade to the old one-sentence **当前位置** plus chips.
+Opening the card also requests a one-off consultation for the current session, without adding a consultation turn to session history. New hosts return a highway location (`zone`, `station`, `phaseDone`, and optional `returnTo`), a recommended next station and move, 2-4 move-labeled candidates, and `stageAgents: { stages, agents }`. The card renders the status block first, then a vertical mini highway for the main Matt road (`grill` -> `to-spec` -> `to-tickets` -> `implement` -> `code-review`), with passed/current/next/ahead state, Chinese station roles, and the configured Agent for each stage. Service areas and ramps show notes such as "绕道中：prototype，完成后 handoff 回 grill" or "匝道：wayfinder，并入 to-spec"; standalone and off-road locations show a placard instead of highlighting the main road. Under the map, the next line reads like `→ /to-spec · Continue（reason）· CEO`, or `本阶段未完成 · 继续` while `phaseDone` is false. Older hosts that do not return `location` still degrade to the old one-sentence **当前位置** plus chips.
 
 The next-step consultation does not read `a2d2-orchestrator` or the former `ceo-team` skill. Its envelope carries the current session material, host-checked project facts, context facts, the highway catalog, and the verbatim `ask-matt` source; candidate intents are generated from that material like ordinary chips. Installing or removing those orchestration skills therefore does not change the consultation envelope or add an extra all-tickets implementation chip.
 
 The host also checks the project that owns the session cwd before asking the model: either `CONTEXT.md` or `CONTEXT-MAP.md` must exist, and `docs/agents/issue-tracker.md` must exist. The response carries `preconditions.missing`, and the prompt envelope records the same host fact so the model does not have to infer setup state. When anything is missing, the card shows a top placard, **首次使用前：/setup-matt-pocock-skills**, listing the missing items. The host also forces `/setup-matt-pocock-skills` to the first chip after parsing the model output; if the model already proposed it, that chip is moved to the front, otherwise it is inserted, and the list is capped at four chips. Configured projects and older hosts with no `preconditions` field show no setup placard.
 
-The consultation does not reuse the current session route: it tries the `a2d2-station-models.consult` candidates in order, falling back on provider errors, rate limits, refusals, or empty output. Malformed non-empty JSON is not retried because that is a protocol failure, not route availability. The response includes `answeredBy`, `fallbacks`, and the current station model table; the card footer shows "由 X 生成" and names the fallback reason when one occurred. A continue chip shows its side effect up front: `切到 X` when the first directory-present station candidate differs from the current session model, otherwise `保持当前模型`. Clicking it selects that model through the shared DSH `modelDirectories` service before filling and focusing the composer; if the service is missing or selection fails, the chip still fills the composer and reports the reason. A subagent chip never changes this session's model, but appends `子代理使用 X` to the filled input when the directory can resolve the target station model. A clear chip shows `新会话 · X` (or `新会话 · 默认模型` when no target station candidate is present), creates a blank session in the same workspace, selects the target station model against that new session's own directory, opens it, and fills that session's composer; if session creation or a required model-directory capability is missing, it falls back to filling this session and reports why. Compact and handoff chips open the existing handoff card, with compact using a "保留什么" focus prompt and both carrying the next-station model target into the confirmed handoff. Chips never call the session command face or send on the user's behalf.
+The consultation does not reuse the current session route: it tries the stage Agent settings `consult` candidates in order, falling back on provider errors, rate limits, refusals, or empty output. Malformed non-empty JSON is not retried because that is a protocol failure, not route availability. The response includes `answeredBy`, `fallbacks`, and `stageAgents: { stages, agents }`; the card footer shows "由 X 生成" and names the fallback reason when one occurred. Client-side chip model selection still has the pre-#72 `stationModels` behavior and is listed as a follow-up for the browser work.
 
 The bottom of the boundary card has an always-available **其他走法** foldout. It lists the non-continue moves — clear, subagent, compact, and handoff — as general entrances. Clear follows the same blank-session sequence as a clear chip, but without a station target it keeps the new session's default model; subagent prepares editable composer text; compact and handoff open the handoff card. This keeps handoff reachable without putting it back on the orb as a peer to **下一步**.
 
@@ -234,7 +252,7 @@ The handoff card is opened from a handoff or compact chip, or from **其他走�
 1. the browser runs `/handoff <focus>` on the session it sits on, through that session's own command face, which is what makes the host write the skeleton and queue the turn that writes the continuation content;
 2. the browser waits for that turn, reading the session's own `running` state over the session transport — not a timer, and not another plugin's rendered DOM, either of which would report the session as finished at the wrong moment;
 3. the browser finds the session's workspace and `connectWorkspace`s a fresh successor session;
-4. when a handoff or compact chip carried a next-station target, the browser reads `modelDirectories.directoryFor(successor)`, selects the first configured station model present in that successor's catalog, and reports any selection failure without stopping the handoff;
+4. when a handoff or compact chip carries a next-stage target, #72 will update the browser to resolve that stage through `stageAgents`; the current browser code still uses its legacy station-model target;
 5. the browser focuses the successor session;
 6. the successor inherits the handing-off session's title, incremented in the same style a fork numbers a peer (`Ship the store` → `Ship the store (1)`), so a handoff chain reads as one named piece of work rather than several sessions with an identical name. A source with no title, or a rejected rename, leaves the successor on its automatic title — a title-only loss never stops a handoff whose continuation content already landed;
 7. the successor runs `/handoff take <session-id>`, which is what makes the host inject the continuation content as its first prompt.
@@ -335,7 +353,7 @@ Composing the complete-task tools row changes the caller's tool-list prefix once
 
 #### What the model sees
 
-One additional tool definition in every request of an agent whose profile composes the base tools row. A call result names the child session id, actual `provider/model`, and Agent (`default` or the special Agent name). Refusals, such as a non-main session caller, no catalog-present station model, or a missing/empty special Agent, return as tool errors. The special Agent persona is sent only to the child subagent; it is not injected into the parent session.
+One additional tool definition in every request of an agent whose profile composes the base tools row. A call result names the child session id, actual `provider/model`, and stage Agent (`ceo`, `engineer`, or `reviewer`). Refusals, such as a non-main session caller, no catalog-present model for the stage Agent, or a missing/empty special Agent, return as tool errors. The special Agent persona is sent only to the child subagent; it is not injected into the parent session.
 
 #### Token effect
 
@@ -343,7 +361,7 @@ The definition is about 950 characters of JSON, roughly 240 tokens by the four-c
 
 #### KV Cache effect
 
-Adding the tool changes the tool-list prefix once for profiles that compose the base tools row. Station model settings and special Agent file contents are read when the tool runs, not embedded in the parent request prefix, so changing them does not invalidate the parent's cache by itself.
+Adding the tool changes the tool-list prefix once for profiles that compose the base tools row. Stage Agent settings and special Agent file contents are read when the tool runs, not embedded in the parent request prefix, so changing them does not invalidate the parent's cache by itself.
 
 ### `github_watch`
 

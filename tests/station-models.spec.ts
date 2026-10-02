@@ -1,66 +1,87 @@
 import { describe, expect, it } from 'vitest'
 import {
-  DEFAULT_STATION_MODELS,
-  STATION_MODEL_SETTINGS_NAMESPACE,
-  StationModelsSettingsSchema,
-  stationModelWarnings,
-  validateStationModelsSettings,
-} from '../src/station-models.ts'
+  DEFAULT_STAGE_AGENTS,
+  STAGE_AGENT_STAGES,
+  StageAgentsSettingsSchema,
+  stageAgentWarnings,
+  validateStageAgentsSettings,
+} from '../src/stage-agents.ts'
 
-describe('station model settings', () => {
+describe('stage agent settings', () => {
   it('provides the documented settings namespace and factory defaults', () => {
-    expect(STATION_MODEL_SETTINGS_NAMESPACE).toBe('a2d2-station-models')
-    expect(StationModelsSettingsSchema()).toEqual(DEFAULT_STATION_MODELS)
-    expect(DEFAULT_STATION_MODELS.consult).toEqual([
+    expect(StageAgentsSettingsSchema()).toEqual(DEFAULT_STAGE_AGENTS)
+    expect(Object.keys(DEFAULT_STAGE_AGENTS.stages).sort()).toEqual([...STAGE_AGENT_STAGES].sort())
+    expect(DEFAULT_STAGE_AGENTS.consult).toEqual([
       'claude-bray/claude-fable-5-1',
       'codex/gpt-6',
     ])
-    expect(DEFAULT_STATION_MODELS.stations['grill']).toEqual([
+    expect(DEFAULT_STAGE_AGENTS.stages.grill).toBe('ceo')
+    expect(DEFAULT_STAGE_AGENTS.stages.implement).toBe('engineer')
+    expect(DEFAULT_STAGE_AGENTS.stages['code-review']).toBe('reviewer')
+    expect(DEFAULT_STAGE_AGENTS.agents.ceo).toEqual([
       'claude-bray/claude-fable-5-1',
       'codex/gpt-6',
     ])
-    expect(DEFAULT_STATION_MODELS.stations['implement']).toEqual([
+    expect(DEFAULT_STAGE_AGENTS.agents.reviewer).toEqual(DEFAULT_STAGE_AGENTS.agents.ceo)
+    expect(DEFAULT_STAGE_AGENTS.agents.engineer).toEqual([
       'codex/gpt-5.5',
       'claude-bray/claude-opus-5-5',
     ])
-    expect(DEFAULT_STATION_MODELS.stations).not.toHaveProperty('handoff')
-    expect(DEFAULT_STATION_MODELS.stations).not.toHaveProperty('domain-modeling')
+    expect(DEFAULT_STAGE_AGENTS.stages).toHaveProperty('handoff', 'ceo')
+    expect(DEFAULT_STAGE_AGENTS.stages).toHaveProperty('domain-modeling', 'ceo')
   })
 
-  it('rejects empty candidate lists and non provider/model routes', () => {
-    expect(() => StationModelsSettingsSchema({
-      stations: { grill: [] },
+  it('rejects empty candidate lists, non provider/model routes, unknown stages, and unknown agents', () => {
+    expect(() => StageAgentsSettingsSchema({
+      agents: { ceo: [] },
     } as never)).toThrow(/array length >= 1/u)
-    expect(() => StationModelsSettingsSchema({
+    expect(() => StageAgentsSettingsSchema({
       consult: ['gpt-6'],
     } as never)).toThrow(/regexp/u)
-    expect(() => StationModelsSettingsSchema({
-      stations: { 'not-a-station': ['codex/gpt-6'] },
-    } as never)).toThrow(/not-a-station/u)
+    expect(() => StageAgentsSettingsSchema({
+      stages: { 'not-a-stage': 'ceo' },
+    } as never)).toThrow(/not-a-stage/u)
+    expect(() => StageAgentsSettingsSchema({
+      stages: { implement: 'qa' },
+    } as never)).toThrow(/qa/u)
   })
 
   it('keeps ordered candidate lists and lets schema reject empty consult lists', () => {
-    const settings = validateStationModelsSettings({
-      ...DEFAULT_STATION_MODELS,
+    const settings = validateStageAgentsSettings({
+      ...DEFAULT_STAGE_AGENTS,
       consult: ['codex/gpt-6', 'claude-bray/claude-fable-5-1'],
     })
     expect(settings.consult).toEqual(['codex/gpt-6', 'claude-bray/claude-fable-5-1'])
-    expect(() => validateStationModelsSettings({
-      ...DEFAULT_STATION_MODELS,
+    expect(() => validateStageAgentsSettings({
+      ...DEFAULT_STAGE_AGENTS,
       consult: [],
     })).toThrow(/array length >= 1/u)
   })
 
-  it('warns when code-review and implement share the same first candidate', () => {
-    expect(stationModelWarnings({
-      ...DEFAULT_STATION_MODELS,
-      stations: {
-        ...DEFAULT_STATION_MODELS.stations,
-        implement: ['codex/gpt-6'],
-        'code-review': ['codex/gpt-6', 'claude-bray/claude-fable-5-1'],
+  it('rejects nullish route entries in consult and Agent candidate lists', () => {
+    expect(() => validateStageAgentsSettings({
+      ...DEFAULT_STAGE_AGENTS,
+      consult: [null],
+    } as never)).toThrow(/consult/i)
+    expect(() => validateStageAgentsSettings({
+      ...DEFAULT_STAGE_AGENTS,
+      agents: {
+        ...DEFAULT_STAGE_AGENTS.agents,
+        ceo: [null, 'a/b'],
+      },
+    } as never)).toThrow(/agents\.ceo/i)
+  })
+
+  it('warns in Chinese when reviewer and engineer share the same first candidate', () => {
+    expect(stageAgentWarnings({
+      ...DEFAULT_STAGE_AGENTS,
+      agents: {
+        ...DEFAULT_STAGE_AGENTS.agents,
+        engineer: ['codex/gpt-6'],
+        reviewer: ['codex/gpt-6', 'claude-bray/claude-fable-5-1'],
       },
     })).toEqual([
-      'a2d2: code-review and implement both prefer codex/gpt-6; review should normally use a different first model',
+      'a2d2: 评审和工程师的首选模型同为 codex/gpt-6；通常应为评审配置不同的首选模型',
     ])
   })
 })

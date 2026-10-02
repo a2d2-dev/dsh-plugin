@@ -8,7 +8,7 @@
 
 插件当前给 DSH 带来的能力：
 
-- **任务聚合**——一个任务把属于同一件工作的会话归到一起，并记录它们之间的交接边，使相关会话保留一段可阅读、可评审、可提交的关系。数据存放在项目本地文档中，且不为承载它而修改任何会话的持久格式。绑定了任务 issue 的任务还记着它的主会话——此刻执行它的那一条会话，由会话用 `bind_main_session` 工具绑定。主会话可以用 `open_subtask` 把设计较重的子任务开成根主会话，也可以用 `dispatch_subagent` 派出可续跑子代理，或用 `complete_task` 宣告自己的任务完成；涉及模型与特殊 Agent 的动作按站点模型表选模型，并可带项目本地特殊 Agent persona。
+- **任务聚合**——一个任务把属于同一件工作的会话归到一起，并记录它们之间的交接边，使相关会话保留一段可阅读、可评审、可提交的关系。数据存放在项目本地文档中，且不为承载它而修改任何会话的持久格式。绑定了任务 issue 的任务还记着它的主会话——此刻执行它的那一条会话，由会话用 `bind_main_session` 工具绑定。主会话可以用 `open_subtask` 把设计较重的子任务开成根主会话，也可以用 `dispatch_subagent` 派出可续跑子代理，或用 `complete_task` 宣告自己的任务完成；涉及模型与特殊 Agent 的动作按阶段 Agent 表选模型，并可带项目本地特殊 Agent persona。
 - **会话交接**——`/handoff` 把工作从一条又长又贵的会话搬到一条干净的新会话而不丢失脉络：交接出去的会话写下有界的接续内容，后继会话据此继续。
 - **指示球**——输入框旁一枚可一眼看清上下文长度与花费的小球；会话接近 smart zone 时告警，提醒在下个相位边界决定去向。
 - **A²D² 面板**——better-sidebar 里的侧边栏 Tab，展示当前会话所属项目的任务、成员交接树，以及主会话子代理路由树。
@@ -20,7 +20,7 @@
 
 ## 插件（namespace：`a2d2`）
 
-本包贡献七个挂载行。`ctx.a2d2` 是任务存储，不声明任何服务，因此在任何 profile 中都会加载；命令行声明了 `commands` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `/handoff`；基础工具行声明了 `tools` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `bind_main_session` 与 `dispatch_subagent`；开子任务工具行额外声明 `agents` 与 `llm`，因为 `open_subtask` 要创建根会话并选择 grill 站模型；完成任务工具行声明 `agents`，因为 `complete_task` 可能需要先恢复父任务主会话再发送通知；CEO 提示段行声明了 `agents`、`systemPrompt` 与 `a2d2`，所以只有同时组合 live Agents 与系统提示词组装的 profile 才得到主会话作用域指导；GitHub 关注行声明了 `tools`、`agents`、`sessions` 与 `sessionController`，所以只有能唤醒会话的 profile 才得到 `github_watch`。`dispatch_subagent` 只在实际运行时查找 `subagents`，因此没有子代理服务的 profile 仍能加载基础工具行，`bind_main_session` 照常可用。Cordis 对"声明了却缺失的服务"是拒绝加载，这正是把它们拆成多行、而不是从一行里条件式注册的原因。悬浮球不需要自己的一行：它通过自己已经身处的那个会话驱动同一条命令。
+本包贡献七个挂载行。`ctx.a2d2` 是任务存储，不声明任何服务，因此在任何 profile 中都会加载；命令行声明了 `commands` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `/handoff`；基础工具行声明了 `tools` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `bind_main_session` 与 `dispatch_subagent`；开子任务工具行额外声明 `agents` 与 `llm`，因为 `open_subtask` 要创建根会话，并从 `grill` 阶段指定的 Agent 选择模型；完成任务工具行声明 `agents`，因为 `complete_task` 可能需要先恢复父任务主会话再发送通知；CEO 提示段行声明了 `agents`、`systemPrompt` 与 `a2d2`，所以只有同时组合 live Agents 与系统提示词组装的 profile 才得到主会话作用域指导；GitHub 关注行声明了 `tools`、`agents`、`sessions` 与 `sessionController`，所以只有能唤醒会话的 profile 才得到 `github_watch`。`dispatch_subagent` 只在实际运行时查找 `subagents`，因此没有子代理服务的 profile 仍能加载基础工具行，`bind_main_session` 照常可用。Cordis 对"声明了却缺失的服务"是拒绝加载，这正是把它们拆成多行、而不是从一行里条件式注册的原因。悬浮球不需要自己的一行：它通过自己已经身处的那个会话驱动同一条命令。
 
 发布前运行 `pnpm verify:pack-exports`。它会构建包、打出 tarball、把 tarball 安装到一个空的临时项目里，并逐个导入 `package.json` exports 声明的每个 Node 入口。这个检查会在发版前发现遗漏的 hash 构建分块，例如共享的交接分块。
 
@@ -54,31 +54,49 @@
 
 这些配置键属于 `a2d2` 那一行。每个方法都接收调用方的会话 cwd 并自行推导项目根，因此调用方不携带任何项目簿记。`list` 读取该项目的任务，`resolve` 返回新会话继承的任务，`create` 生成 id 并写入文档，`registerMember` 把一个会话登记为成员并可选地记录交接边，`prepareHandoff` / `takeHandoff` 分别写入与消费交接文档，`bindMainSession` 把一条会话绑定为某任务 issue 的主会话，`openSubtask` 把一个子任务 issue 开成新的根主会话，`completeTask` 把任务 issue 标成完成并在有父主会话时通知它，`taskOfMainSession` / `mainSessionOfIssue` 分别回答"这条会话是哪个任务的主会话"与"这个任务 issue 的主会话是哪条"。
 
-### 站点模型 settings
+### 阶段 Agent settings
 
-插件还注册一个实时 settings 命名空间 `a2d2-station-models`，存放在 DSH 的 `settings.yaml`。它不属于上面的插件挂载行配置，因为用户应该能在不重启宿主的情况下调整每站模型候选顺序。
+插件还在 DSH 的 `settings.yaml` 暴露实时阶段 Agent settings。落盘 section 以插件 profile entry id 为键，本插件拥有该 section 内的 `stageAgents` 值。用户可以在不重启宿主的情况下调整阶段分配、Agent 模型候选和咨询候选。
 
 ```yaml
-a2d2-station-models:
-  consult:
-    - claude-bray/claude-fable-5-1
-    - codex/gpt-6
-  stations:
-    grill:
+<profile entry id>:
+  stageAgents:
+    stages:
+      grill: ceo
+      to-spec: ceo
+      to-tickets: ceo
+      implement: engineer
+      code-review: reviewer
+      prototype: ceo
+      handoff: ceo
+      diagnosing-bugs: ceo
+      triage: ceo
+      wayfinder: ceo
+      improve-codebase-architecture: ceo
+      domain-modeling: ceo
+      codebase-design: ceo
+    agents:
+      ceo:
+        - claude-bray/claude-fable-5-1
+        - codex/gpt-6
+      engineer:
+        - codex/gpt-5.5
+        - claude-bray/claude-opus-5-5
+      reviewer:
+        - claude-bray/claude-fable-5-1
+        - codex/gpt-6
+    consult:
       - claude-bray/claude-fable-5-1
       - codex/gpt-6
-    implement:
-      - codex/gpt-5.5
-      - claude-bray/claude-opus-5-5
 ```
 
-`consult` 与每个站点条目都是有序的 `provider/model` 候选列表。空列表和格式错误的 route 会被 settings schema 拒绝。思考类站点（`grill`、`to-spec`、`to-tickets`、`code-review`、`triage`、`wayfinder`、`improve-codebase-architecture`）默认是 `claude-bray/claude-fable-5-1` 再到 `codex/gpt-6`；写代码类站点（`implement`、`prototype`、`diagnosing-bugs`）默认是 `codex/gpt-5.5` 再到 `claude-bray/claude-opus-5-5`。`handoff`、路基和独立技能刻意不列入，因为本票不负责为它们切模型。若 `code-review` 与 `implement` 的首个候选相同，宿主会记录告警，但不会拒绝该设置。
+`stages` 覆盖 Matt 公路图闭集阶段，每个阶段映射到 `ceo`、`engineer` 或 `reviewer`；独立区任意 skill 按规则使用 CEO，不进表。`agents` 与 `consult` 都是有序的 `provider/model` 候选列表。空列表、格式错误 route、未知阶段和未知 Agent 名都会被 settings schema 拒绝。默认值把 `implement` 交给 engineer，`code-review` 交给 reviewer，其余闭集阶段交给 CEO。CEO、reviewer 和 consult 默认是 `claude-bray/claude-fable-5-1` 再到 `codex/gpt-6`；engineer 默认是 `codex/gpt-5.5` 再到 `claude-bray/claude-opus-5-5`。若 reviewer 与 engineer 的首选候选相同，宿主会记录中文告警，但不会拒绝该设置。
 
 ### A2D2 配置页
 
-浏览器 bundle 会向 DSH 设置导航注册一个独立 section：**A2D2 配置**。首块 **Matt 流程** 复用公路图绘制，展示主干、匝道、服务区、路基与独立区；随后可以编辑可配置站点的有序模型候选列表，并单独编辑 `consult` 这一行。`handoff`、路基站点和独立技能显示为「不切模型」。
+浏览器 bundle 会向 DSH 设置导航注册一个独立 section：**A2D2 配置**。当前浏览器 UI 仍是 #72 接手前的站点模型编辑器；宿主路由现在读写的是上面的阶段 Agent settings 形状。
 
-页面不会从浏览器直接写任意 settings 命名空间。它调用本插件自己的受信任路由 `/a2d2/api/config`，该路由复用下一步咨询的 host / origin / fetch 信任判据，并且只暴露 `a2d2-station-models`。请求体上限是 64 KiB，JSON 解析失败会被拒绝；读取会返回当前 settings revision，保存必须带着该 revision 整体替换站点模型表。缺 revision 不会写入；若保存时 revision 已过期，路由拒绝写入并返回最新值，页面重新读取；空列表、格式错误 route 等 schema 失败会直接回显原因，且不会落盘。
+页面不会从浏览器直接写任意 settings 命名空间。它调用本插件自己的受信任路由 `/a2d2/api/config`，该路由复用下一步咨询的 host / origin / fetch 信任判据。请求体上限是 64 KiB，JSON 解析失败会被拒绝；读取会返回当前 settings revision，保存必须带着该 revision 整体替换 `stageAgents` 值：`stages`、`agents`、`consult` 三节必须齐全，`stages` 必须覆盖全部闭集公路阶段，`agents` 必须包含 `ceo`、`engineer`、`reviewer`，`stageAgents` 内未知顶层键（例如旧形状的 `stations`）会被拒绝。缺 revision 不会写入；若保存时 revision 已过期，路由拒绝写入并返回最新值；空列表、格式错误 route 等 schema 失败会直接回显原因，且不会落盘。
 
 新增候选只能从 DSH 宿主模型目录（`llm.models`）选择，因此页面不会制造拼写错误的 route。每个已有候选旁都有 **测试** 动作：点击时宿主只发一次极小调用（`reply OK`，小输出预算），并把结果分类为正常、拒答、限流或报错，同时显示原因；空输出按报错处理。没有后台轮询探测。
 
@@ -125,7 +143,7 @@ sessions:
 
 `open_subtask` 让一个任务 issue 的主会话把某个子任务 issue 开成它自己的根主会话（ADR 0005）。唯一参数是 `issue`，也就是已经建好并挂到父任务下的子任务 issue 编号。调用方自己的任务 issue 会成为父 issue。
 
-服务会从 `a2d2-station-models` 的 `grill` 站候选中，选择第一个出现在 DSH 实时模型目录里的 `provider/model`；随后在同一项目 cwd 下创建一条新的根 Agent 会话，给它设置该模型，只投递一条首条 prompt：子任务 issue 编号引用、父任务 issue（spec 在其中）编号引用、在本项目目录运行的逐条 `gh issue view <编号> --comments` 读取命令，以及“用 `/grill-with-docs` 推进、你是该任务的主会话”的指令；最后复用 `bindMainSession` 把新会话记录为子任务主会话。非任务 issue 主会话调用会被拒绝；子任务 issue 已有主会话时也会被拒绝。
+服务会读取 `grill` 阶段指定的 Agent，从该 Agent 候选中选择第一个出现在 DSH 实时模型目录里的 `provider/model`；随后在同一项目 cwd 下创建一条新的根 Agent 会话，给它设置该模型，只投递一条首条 prompt：子任务 issue 编号引用、父任务 issue（spec 在其中）编号引用、在本项目目录运行的逐条 `gh issue view <编号> --comments` 读取命令，以及“用 `/grill-with-docs` 推进、你是该任务的主会话”的指令；最后复用 `bindMainSession` 把新会话记录为子任务主会话。非任务 issue 主会话调用会被拒绝；子任务 issue 已有主会话时也会被拒绝。
 
 ## 宣告完成
 
@@ -135,13 +153,13 @@ sessions:
 
 ## 派子代理
 
-`dispatch_subagent` 从调用它的主会话派出一个可续跑子代理。参数是 `station`、可选 `agent`（省略或填 `default` 表示默认 Agent）、`issue` 与 `prompt`；父 Agent、会话 id、cwd 与取消信号取自工具执行上下文。工具只把这些转交给 `ctx.a2d2.dispatchSubagent`，规则都在服务里：
+`dispatch_subagent` 从调用它的主会话派出一个可续跑子代理。参数是 `stage`、可选 `agent`（省略或填 `default` 表示不使用特殊 Agent persona）、`issue` 与 `prompt`；父 Agent、会话 id、cwd 与取消信号取自工具执行上下文。工具只把这些转交给 `ctx.a2d2.dispatchSubagent`，规则都在服务里：
 
 - 只有任务 issue 当前的主会话能派子代理；普通会话会被拒绝。
 - 子代理使用 DSH 的 fresh `spawn` 可续跑 provider。
-- 模型取站点模型表里该站第一个存在于 DSH 宿主模型目录的 `provider/model` 候选；派发时现读，因此 settings 改动影响下一次调用。
+- 阶段先映射到 `ceo`、`engineer` 或 `reviewer`；模型取该 Agent 候选中第一个存在于 DSH 宿主模型目录的 `provider/model`，派发时现读，因此 settings 改动影响下一次调用。
 - 特殊 Agent `agent` 从 `<项目根>/.dsh/a2d2/agents/<agent>.md` 读取，并作为子代理 persona 传入。特殊 Agent 缺失或为空都会报错，绝不回退默认 Agent。
-- 返回值给出子代理会话 id、实际 `provider/model` 与所用 Agent。
+- 返回值给出子代理会话 id、实际 `provider/model` 与所用阶段 Agent（`ceo`、`engineer` 或 `reviewer`）。
 
 ## GitHub 关注
 
@@ -215,13 +233,13 @@ sessions:
 
 点击 **下一步** 打开的卡片，顶部立刻显示现状区块，回答「它现在在干嘛」：运行中（在跑的工具及已运行时长）、在等你（待审批——含工具名与理由——或待回答的问题）、疑似卡住（运行中、无流式输出、且 10 分钟没有新的轮次或工具调用）、出错了、空闲（上一轮何时结束）或尚未开始，外加排队消息与上下文占用。它只读客户端已有的会话快照，不调模型，卡片打开期间实时刷新，因此咨询还在生成时卡片也不是空的。
 
-同时，卡片会针对当前会话发起一次不进入会话历史的咨询。新宿主返回公路图坐标（`zone`、`station`、`phaseDone`，服务区另带 `returnTo`）、推荐下一站与走法，以及 2-4 颗带走法的候选芯片。卡片先显示现状区块，再画一条竖向迷你公路：主干 `grill` -> `to-spec` -> `to-tickets` -> `implement` -> `code-review`，标出已过 / 当前 / 下一站 / 未到站，并显示每站中文职责，以及该站候选中第一个出现在本会话 DSH 模型目录里的模型。服务区与匝道显示旁注，例如「绕道中：prototype，完成后 handoff 回 grill」或「匝道：wayfinder，并入 to-spec」；独立区和不在公路上显示路牌，不高亮主干。公路图下方的下一站行形如 `→ /to-spec · Continue（理由）· fable-5-1`；`phaseDone` 为 false 时显示「本阶段未完成 · 继续」。旧宿主不返回 `location` 时仍退化为旧的 **当前位置** 一句话加芯片。
+同时，卡片会针对当前会话发起一次不进入会话历史的咨询。新宿主返回公路图坐标（`zone`、`station`、`phaseDone`，服务区另带 `returnTo`）、推荐下一站与走法、2-4 颗带走法的候选芯片，以及 `stageAgents: { stages, agents }`。卡片先显示现状区块，再画一条竖向迷你公路：主干 `grill` -> `to-spec` -> `to-tickets` -> `implement` -> `code-review`，标出已过 / 当前 / 下一站 / 未到站，并显示每站中文职责和该阶段配置的 Agent。服务区与匝道显示旁注，例如「绕道中：prototype，完成后 handoff 回 grill」或「匝道：wayfinder，并入 to-spec」；独立区和不在公路上显示路牌，不高亮主干。公路图下方的下一站行形如 `→ /to-spec · Continue（理由）· CEO`；`phaseDone` 为 false 时显示「本阶段未完成 · 继续」。旧宿主不返回 `location` 时仍退化为旧的 **当前位置** 一句话加芯片。
 
 下一步咨询不再读取 `a2d2-orchestrator`，也不再回落读取旧名 `ceo-team`。咨询信封只携带当前会话材料、宿主检查出的项目事实、上下文事实、公路图目录，以及逐字注入的 `ask-matt` 真源；候选意图仍由模型基于这些材料生成，和普通芯片一样处理。因此装着或没装这些编排 skill，都不会改变咨询信封，也不会额外增加「编排实施全部工单」芯片。
 
 宿主在询问模型前，还会检查会话 cwd 所属项目的首次使用前置条件：必须存在 `CONTEXT.md` 或 `CONTEXT-MAP.md`，并且必须存在 `docs/agents/issue-tracker.md`。响应带 `preconditions.missing`，prompt 信封也写入同一份宿主事实，避免让模型猜配置状态。只要有缺失，卡片顶部显示「首次使用前：/setup-matt-pocock-skills」路牌，并列出缺失项。宿主还会在解析模型输出之后把 `/setup-matt-pocock-skills` 强制置为首颗芯片；模型已经给出时就移动到首位，否则补上一颗，芯片总数仍最多四颗。已配置项目、以及没有 `preconditions` 字段的旧宿主，都不显示该路牌。
 
-咨询不再沿用当前会话 route，而是按 `a2d2-station-models.consult` 候选顺序尝试；提供方错误、限流、拒答或空输出会换下一个候选。非空但畸形的 JSON 不重试，因为这是协议失败，不是 route 可用性问题。响应会带回 `answeredBy`、`fallbacks` 和当前站点模型表；卡底显示「由 X 生成」，发生回落时注明原因。continue 芯片会预先显示副作用：当目标站首个目录内候选不同于本会话当前模型时显示「切到 X」，否则显示「保持当前模型」。点击后通过共享的 DSH `modelDirectories` 服务先切本会话模型，再填草稿并聚焦；若服务缺失或切换失败，仍填草稿并提示原因。subagent 芯片不切本会话模型，但目录能解析目标站模型时，会在填入的指令末尾追加「子代理使用 X」。clear 芯片预显示「新会话 · X」（没有目标站候选时显示「新会话 · 默认模型」），在同一 workspace 建空会话，按这个新会话自己的模型目录选择目标站模型，打开它并填入该会话输入框；若建会话能力或必需的模型目录能力缺失，则退化为只填本会话输入框并提示原因。compact 与 handoff 芯片打开既有交接卡，其中 compact 使用「保留什么」提示预填 focus，二者都会把下一站模型目标带入确认后的交接序列。芯片绝不调用会话命令面，也不代用户发送。
+咨询不再沿用当前会话 route，而是按阶段 Agent settings 的 `consult` 候选顺序尝试；提供方错误、限流、拒答或空输出会换下一个候选。非空但畸形的 JSON 不重试，因为这是协议失败，不是 route 可用性问题。响应会带回 `answeredBy`、`fallbacks` 和 `stageAgents: { stages, agents }`；卡底显示「由 X 生成」，发生回落时注明原因。客户端芯片选模型仍是 #72 接手前的 `stationModels` 行为，作为浏览器后续工作列出。
 
 边界卡底部有一行始终可用的 **其他走法** 折叠入口，列出 continue 之外的通用走法：clear、subagent、compact、handoff。clear 走与 clear 芯片相同的建空会话序列，但没有站点目标时保持新会话默认模型；subagent 准备一段可编辑的输入框文本；compact 与 handoff 打开交接卡。这样想手动交接时仍能从卡片里找到入口，但球上不会再把交接放回 **下一步** 的平级位置。
 
@@ -234,7 +252,7 @@ sessions:
 1. 浏览器在它所在的会话上、通过该会话自己的命令面运行 `/handoff <focus>`，正是这一步让 host 写入骨架、并排入写接续内容的那一轮；
 2. 浏览器等待那一轮，通过会话传输读取会话自身的 `running` 状态——不用定时器，也不用另一个插件渲染出的 DOM，这两者都会在错误的时刻把会话报告为已完成；
 3. 浏览器找到该会话的 workspace，`connectWorkspace` 出一个全新的后继会话；
-4. 当 handoff 或 compact 芯片带入了下一站目标时，浏览器读取 `modelDirectories.directoryFor(successor)`，从后继会话自己的目录里选择该站配置的第一个可用模型；选择失败只提示原因，不打断交接；
+4. 当 handoff 或 compact 芯片带入下一阶段目标时，#72 会把浏览器更新为通过 `stageAgents` 解析该阶段；当前浏览器代码仍使用旧的站点模型目标；
 5. 浏览器切焦点到后继会话；
 6. 后继会话继承交接出去的会话的标题，并按 fork 给同级会话编号的同一风格递增（`Ship the store` → `Ship the store (1)`），使一条交接链读起来是同一件有名字的工作，而不是若干个同名会话。源会话没有标题、或重命名被拒绝时，后继保留它的自动标题——一次只丢标题的失败绝不打断一个接续内容已经落地的交接；
 7. 后继会话跑 `/handoff take <session-id>`，这正是让 host 把接续内容注入为它首条 prompt 的动作。
@@ -335,7 +353,7 @@ sessions:
 
 #### What the model sees
 
-组合了基础工具行的 profile 中，agent 的每次请求都会再多一份工具定义。一次调用的结果写明子代理会话 id、实际 `provider/model` 与 Agent（`default` 或特殊 Agent 名）。非主会话调用、没有目录内可用站点模型、特殊 Agent 缺失或为空等拒绝，都会作为工具错误返回。特殊 Agent persona 只发给子代理，不注入父会话。
+组合了基础工具行的 profile 中，agent 的每次请求都会再多一份工具定义。一次调用的结果写明子代理会话 id、实际 `provider/model` 与阶段 Agent（`ceo`、`engineer` 或 `reviewer`）。非主会话调用、该阶段 Agent 没有目录内可用模型、特殊 Agent 缺失或为空等拒绝，都会作为工具错误返回。特殊 Agent persona 只发给子代理，不注入父会话。
 
 #### Token effect
 
@@ -343,7 +361,7 @@ sessions:
 
 #### KV Cache effect
 
-新增工具会让组合基础工具行的 profile 的工具列表前缀变化一次。站点模型 settings 与特殊 Agent 文件内容在工具运行时读取，不嵌进父会话请求前缀，因此它们变化本身不会让父会话缓存失效。
+新增工具会让组合基础工具行的 profile 的工具列表前缀变化一次。阶段 Agent settings 与特殊 Agent 文件内容在工具运行时读取，不嵌进父会话请求前缀，因此它们变化本身不会让父会话缓存失效。
 
 ### `github_watch`
 

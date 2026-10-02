@@ -14,6 +14,8 @@ import type { Agent, AgentHandle, CreateAgentOptions } from '@deepseek-ai/dsh-ag
 import type { LlmModelInfo, LlmProviderInfo } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import A2d2Service from '../src/index.ts'
+import type { StageAgentsSettings } from '../src/stage-agents.ts'
+import { DEFAULT_STAGE_AGENTS } from '../src/stage-agents.ts'
 import * as openSubtaskToolsPlugin from '../src/open-subtask-tools.ts'
 import { tasksDirectory } from '../src/store.ts'
 import { StubTools, stubAgent, toolRunContext } from './stubs.ts'
@@ -70,11 +72,14 @@ class StubLlm extends Service {
   }
 }
 
-async function mount(root: string): Promise<{ readonly ctx: Context; readonly service: A2d2Service; readonly agents: StubAgents }> {
+async function mount(
+  root: string,
+  stageAgents?: StageAgentsSettings,
+): Promise<{ readonly ctx: Context; readonly service: A2d2Service; readonly agents: StubAgents }> {
   const ctx = new Context()
   await ctx.plugin(StubAgents)
   await ctx.plugin(StubLlm)
-  await ctx.plugin(A2d2Service, { root })
+  await ctx.plugin(A2d2Service, { root, ...(stageAgents === undefined ? {} : { stageAgents: stageAgents as never }) })
   return { ctx, service: ctx.a2d2, agents: ctx.get('agents') as unknown as StubAgents }
 }
 
@@ -115,6 +120,29 @@ describe('openSubtask', () => {
       members: [{ sessionId: opened.session }],
     })
     expect(await readFile(join(tasksDirectory(root), 'issue-49.yaml'), 'utf8')).toContain('parent: 41')
+  })
+
+  it('selects the model from the Agent assigned to the grill stage', async () => {
+    const root = await tempRoot()
+    const stageAgents: StageAgentsSettings = {
+      ...DEFAULT_STAGE_AGENTS,
+      stages: { ...DEFAULT_STAGE_AGENTS.stages, grill: 'engineer' },
+      agents: {
+        ceo: ['claude-bray/claude-fable-5-1'],
+        engineer: ['missing/slow', 'codex/gpt-6'],
+        reviewer: [...DEFAULT_STAGE_AGENTS.agents.reviewer],
+      },
+    }
+    const { service, agents } = await mount(root, stageAgents)
+    await service.bindMainSession({ cwd: root, issue: 41, mainSession: parentSession, now: new Date('2026-10-01T10:00:00.000Z') })
+
+    const opened = await service.openSubtask({ cwd: root, caller: parentSession, issue: 49, now: new Date('2026-10-01T11:00:00.000Z') })
+
+    expect(opened.model).toEqual({ provider: 'codex', model: 'gpt-6' })
+    expect(agents.created[0]).toMatchObject({
+      sessionId: opened.session,
+      agentOptions: { provider: 'codex', model: 'gpt-6' },
+    })
   })
 
   it('refuses a caller that is not the main session of a task issue', async () => {

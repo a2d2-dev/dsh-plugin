@@ -13,7 +13,7 @@ import {
   renderTaskDocument,
   taskIdFromFilename,
 } from '../src/document.ts'
-import { DEFAULT_STATION_MODELS, validateStationModelsSettings } from '../src/station-models.ts'
+import { DEFAULT_STAGE_AGENTS, validateStageAgentsSettings } from '../src/stage-agents.ts'
 import { TaskDocumentStore, newTask, resolveProjectRoot, tasksDirectory, withMember } from '../src/store.ts'
 import type { Task } from '../src/types.ts'
 
@@ -320,17 +320,17 @@ describe('a2d2 service', () => {
     await expect(ctx.plugin(A2d2Service, { projectMarkers: [] })).rejects.toThrow(/at least one/)
   })
 
-  it('declares the station model table as a volatile Config field with the package defaults', () => {
-    const field = A2d2Service.Config.dict?.stationModels
+  it('declares the stage Agent table as a volatile Config field with the package defaults', () => {
+    const field = A2d2Service.Config.dict?.stageAgents
     expect(field?.meta.volatile).toBe(true)
-    expect(A2d2Service.Config({}).stationModels?.get()).toEqual(DEFAULT_STATION_MODELS)
-    expect(() => validateStationModelsSettings({
-      ...DEFAULT_STATION_MODELS,
+    expect(A2d2Service.Config({}).stageAgents?.get()).toEqual(DEFAULT_STAGE_AGENTS)
+    expect(() => validateStageAgentsSettings({
+      ...DEFAULT_STAGE_AGENTS,
       consult: [],
     })).toThrow(/array length >= 1/u)
   })
 
-  it('turns off the generated settings page in favour of its own station model page', async () => {
+  it('turns off the generated settings page in favour of its own A2D2 config page', async () => {
     const root = await tempRoot()
     const ctx = new Context()
     await ctx.plugin(StubSettings)

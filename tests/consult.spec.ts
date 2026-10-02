@@ -28,7 +28,7 @@ import {
   parseConsultOutput,
 } from '../src/consult.ts'
 import type { ConsultDependencies, ConsultSession } from '../src/consult.ts'
-import { DEFAULT_STATION_MODELS } from '../src/station-models.ts'
+import { DEFAULT_STAGE_AGENTS } from '../src/stage-agents.ts'
 import type { SkillSource } from '../src/skill-source.ts'
 import type { Task } from '../src/types.ts'
 
@@ -204,7 +204,7 @@ function dependencies(
     projectRoot: async cwd => cwd,
     checkPreconditions: async () => ({ missing: [] }),
     readAskMatt: async () => ({ status: 'missing' }),
-    getStationModels: () => DEFAULT_STATION_MODELS,
+    getStageAgents: () => DEFAULT_STAGE_AGENTS,
     stream: (options) => {
       calls.push(options)
       return output(candidatesJson)
@@ -649,8 +649,8 @@ describe('consult HTTP route', () => {
     })
 
     const malformed = dependencies({
-      getStationModels: () => ({
-        ...DEFAULT_STATION_MODELS,
+      getStageAgents: () => ({
+        ...DEFAULT_STAGE_AGENTS,
         consult: ['primary/model', 'backup/model'],
       }),
       stream: (options) => {
@@ -665,8 +665,8 @@ describe('consult HTTP route', () => {
     expect(malformed.calls.map(call => `${call.provider}/${call.model}`)).toEqual(['primary/model'])
 
     const rateLimited = dependencies({
-      getStationModels: () => ({
-        ...DEFAULT_STATION_MODELS,
+      getStageAgents: () => ({
+        ...DEFAULT_STAGE_AGENTS,
         consult: ['primary/model'],
       }),
       stream: () => output('', { kind: 'error', failure: { message: 'Concurrency limit exceeded for user, please retry later', code: 'RATE_LIMIT' } } as FinishReason),
@@ -698,10 +698,14 @@ describe('consult HTTP route', () => {
           degraded: true,
           answeredBy: 'claude-bray/claude-fable-5-1',
           fallbacks: [],
-          stationModels: DEFAULT_STATION_MODELS.stations,
+          stageAgents: {
+            stages: DEFAULT_STAGE_AGENTS.stages,
+            agents: DEFAULT_STAGE_AGENTS.agents,
+          },
         },
       },
     })
+    expect((result.json as { value?: unknown }).value).not.toHaveProperty('stationModels')
     expect(deps.calls).toHaveLength(1)
     expect(deps.calls[0]).toMatchObject({
       provider: 'claude-bray',
@@ -835,8 +839,8 @@ describe('consult HTTP route', () => {
 
   it('falls back on call failure, refusal, and empty output, carrying every reason kind', async () => {
     const deps = dependencies({
-      getStationModels: () => ({
-        ...DEFAULT_STATION_MODELS,
+      getStageAgents: () => ({
+        ...DEFAULT_STAGE_AGENTS,
         consult: ['primary/model-a', 'primary/model-b', 'primary/model-c', 'primary/model-d', 'backup/model-ok'],
       }),
       stream: (options) => {
@@ -879,8 +883,8 @@ describe('consult HTTP route', () => {
 
   it('lists each failed candidate when no consult route can answer', async () => {
     const deps = dependencies({
-      getStationModels: () => ({
-        ...DEFAULT_STATION_MODELS,
+      getStageAgents: () => ({
+        ...DEFAULT_STAGE_AGENTS,
         consult: ['primary/model-a', 'backup/model-b'],
       }),
       stream: (options) => {

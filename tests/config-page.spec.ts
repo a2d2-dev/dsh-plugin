@@ -11,8 +11,8 @@ import {
   classifyModelProbe,
   createConfigHandler,
 } from '../src/config-page.ts'
-import { DEFAULT_STATION_MODELS } from '../src/station-models.ts'
-import type { StationModelsSettings } from '../src/station-models.ts'
+import { DEFAULT_STAGE_AGENTS } from '../src/stage-agents.ts'
+import type { StageAgentsSettings } from '../src/stage-agents.ts'
 
 const anthropicUsagePolicyRefusal = "This request triggered restrictions on violative cyber content and was blocked under Anthropic's Usage Policy. To learn more, see https://platform.claude.com/docs/en/build-with-claude/refusals-and-fallback."
 
@@ -116,13 +116,13 @@ async function sendRaw(
 }
 
 function handler(options: {
-  value?: StationModelsSettings
+  value?: StageAgentsSettings
   revision?: number
-  update?: (value: StationModelsSettings, expectedRevision: number | undefined) => Promise<{ value: StationModelsSettings; revision: number }>
+  update?: (value: StageAgentsSettings, expectedRevision: number | undefined) => Promise<{ value: StageAgentsSettings; revision: number }>
   modelRoutes?: readonly string[]
   stream?: (options: GenerateOptions) => AsyncIterable<StreamChunk>
 } = {}) {
-  let value = options.value ?? DEFAULT_STATION_MODELS
+  let value = options.value ?? DEFAULT_STAGE_AGENTS
   let revision = options.revision ?? 7
   return createConfigHandler({
     trustedHosts: () => ['10.126.126.12:30710'],
@@ -149,14 +149,14 @@ describe('A2D2 config settings route', () => {
     })
   })
 
-  it('reads the whitelisted station-model namespace with warnings', async () => {
+  it('reads the whitelisted stage-agent settings with warnings', async () => {
     const result = await send(handler({
       value: {
-        ...DEFAULT_STATION_MODELS,
-        stations: {
-          ...DEFAULT_STATION_MODELS.stations,
-          implement: ['codex/gpt-6'],
-          'code-review': ['codex/gpt-6'],
+        ...DEFAULT_STAGE_AGENTS,
+        agents: {
+          ...DEFAULT_STAGE_AGENTS.agents,
+          engineer: ['codex/gpt-6'],
+          reviewer: ['codex/gpt-6'],
         },
       },
     }), { method: 'settings.get', payload: {} })
@@ -168,10 +168,11 @@ describe('A2D2 config settings route', () => {
         value: {
           revision: 7,
           settings: {
-            stations: expect.objectContaining({ implement: ['codex/gpt-6'] }),
-            consult: DEFAULT_STATION_MODELS.consult,
+            stages: expect.objectContaining({ implement: 'engineer', 'code-review': 'reviewer' }),
+            agents: expect.objectContaining({ engineer: ['codex/gpt-6'], reviewer: ['codex/gpt-6'] }),
+            consult: DEFAULT_STAGE_AGENTS.consult,
           },
-          warnings: ['a2d2: code-review and implement both prefer codex/gpt-6; review should normally use a different first model'],
+          warnings: ['a2d2: 评审和工程师的首选模型同为 codex/gpt-6；通常应为评审配置不同的首选模型'],
         },
       },
     })
@@ -179,7 +180,7 @@ describe('A2D2 config settings route', () => {
 
   it('revision-guards writes, schema-validates values, and returns the reread value', async () => {
     const next = {
-      ...DEFAULT_STATION_MODELS,
+      ...DEFAULT_STAGE_AGENTS,
       consult: ['codex/gpt-6'],
     }
     expect(await send(handler(), {
@@ -192,10 +193,10 @@ describe('A2D2 config settings route', () => {
 
     expect(await send(handler(), {
       method: 'settings.update',
-      payload: { settings: { ...DEFAULT_STATION_MODELS, consult: [] }, expectedRevision: 7 },
+      payload: { settings: { ...DEFAULT_STAGE_AGENTS, consult: [] }, expectedRevision: 7 },
     })).toMatchObject({
       status: 400,
-      json: { ok: false, error: { code: 'schema-rejected', message: expect.stringContaining('array length >= 1') } },
+      json: { ok: false, error: { code: 'schema-rejected', message: expect.stringContaining('consult must name at least one model route') } },
     })
 
     expect(await send(handler({ revision: 3 }), {
@@ -207,7 +208,7 @@ describe('A2D2 config settings route', () => {
         ok: false,
         error: {
           code: 'settings-conflict',
-          latest: { revision: 3, settings: DEFAULT_STATION_MODELS },
+          latest: { revision: 3, settings: DEFAULT_STAGE_AGENTS },
         },
       },
     })
@@ -222,13 +223,53 @@ describe('A2D2 config settings route', () => {
       },
     }), {
       method: 'settings.update',
-      payload: { settings: DEFAULT_STATION_MODELS },
+      payload: { settings: DEFAULT_STAGE_AGENTS },
     })
 
     expect(result).toMatchObject({
       status: 400,
       json: { ok: false, error: { code: 'missing-revision' } },
     })
+    expect(writes).toBe(0)
+  })
+
+  it('rejects incomplete or legacy settings update payloads without writing', async () => {
+    let writes = 0
+    const route = handler({
+      update: async value => {
+        writes += 1
+        return { value, revision: 8 }
+      },
+    })
+
+    expect(await send(route, {
+      method: 'settings.update',
+      payload: {
+        settings: {
+          stages: DEFAULT_STAGE_AGENTS.stages,
+          agents: DEFAULT_STAGE_AGENTS.agents,
+        },
+        expectedRevision: 7,
+      },
+    })).toMatchObject({
+      status: 400,
+      json: { ok: false, error: { code: 'schema-rejected' } },
+    })
+
+    expect(await send(route, {
+      method: 'settings.update',
+      payload: {
+        settings: {
+          ...DEFAULT_STAGE_AGENTS,
+          stations: { implement: ['codex/gpt-5.5'] },
+        },
+        expectedRevision: 7,
+      },
+    })).toMatchObject({
+      status: 400,
+      json: { ok: false, error: { code: 'schema-rejected' } },
+    })
+
     expect(writes).toBe(0)
   })
 
@@ -309,7 +350,7 @@ describe('model probe', () => {
   it('does not require a catalog read for routes already present in settings', async () => {
     const route = createConfigHandler({
       trustedHosts: () => ['10.126.126.12:30710'],
-      getSettings: () => ({ value: DEFAULT_STATION_MODELS, revision: 1 }),
+      getSettings: () => ({ value: DEFAULT_STAGE_AGENTS, revision: 1 }),
       updateSettings: async value => ({ value, revision: 2 }),
       modelRoutes: async () => { throw new Error('catalog unavailable') },
       stream: () => output('OK'),

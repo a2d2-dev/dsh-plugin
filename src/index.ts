@@ -37,20 +37,22 @@ import {
 } from './handoff-document.ts'
 import { handoffInstruction } from './handoff-instruction.ts'
 import { handoffPrompt } from './handoff-prompt.ts'
+import { isClosedHighwayStation } from './highway.ts'
 import { indicatorProjectionDefinition } from './indicator-projection.ts'
 import type { HandoffThresholds, ModelPrice } from './indicator-projection.ts'
 import { PANEL_ROUTE_PATH, createPanelHandler } from './panel.ts'
 import { parseSessionId, redactText } from './handoff.ts'
 import { DEFAULT_SKILLS_ROOT, readSkillSource, resolveSkillsRoot } from './skill-source.ts'
 import {
-  DEFAULT_STATION_MODELS,
-  STATION_MODEL_SETTINGS_NAMESPACE,
-  StationModelsSettingsSchema,
+  DEFAULT_STAGE_AGENTS,
+  StageAgentsSettingsSchema,
+  modelCandidatesForStage,
   splitModelRoute,
-  stationModelWarnings,
-  validateStationModelsSettings,
-} from './station-models.ts'
-import type { Station, StationModelsSettings } from './station-models.ts'
+  stageAgentWarnings,
+  validateCompleteStageAgentsSettings,
+  validateStageAgentsSettings,
+} from './stage-agents.ts'
+import type { Stage, StageAgent, StageAgentsSettings } from './stage-agents.ts'
 import {
   DEFAULT_PROJECT_MARKERS,
   TaskDocumentStore,
@@ -106,17 +108,19 @@ export type {
 } from './consult.ts'
 export {
   CODING_MODEL_ROUTES,
-  DEFAULT_STATION_MODELS,
-  STATION_MODEL_SETTINGS_NAMESPACE,
-  STATION_MODEL_STATIONS,
-  StationModelsSettingsSchema,
+  DEFAULT_STAGE_AGENTS,
+  STAGE_AGENTS,
+  STAGE_AGENT_STAGES,
+  StageAgentsSettingsSchema,
   THINKING_MODEL_ROUTES,
+  agentForStage,
+  modelCandidatesForStage,
   shortModelRoute,
   splitModelRoute,
-  stationModelWarnings,
-  validateStationModelsSettings,
-} from './station-models.ts'
-export type { Station, StationModelsSettings } from './station-models.ts'
+  stageAgentWarnings,
+  validateStageAgentsSettings,
+} from './stage-agents.ts'
+export type { Stage, StageAgent, StageAgentsSettings } from './stage-agents.ts'
 export { handedOff, memberOf, successorsOf } from './derive.ts'
 export {
   DEFAULT_PROJECT_MARKERS,
@@ -271,11 +275,12 @@ export interface Config {
   /** Currency the rates are quoted in, shown beside the computed cost. */
   currency?: string
   /**
-   * Model routes per highway station and for the next-step consult. A volatile
-   * field: edits through the settings service apply without a reload. Absent
-   * only where no loader composes the plugin (tests), which reads the defaults.
+   * Stage-to-Agent assignments, each Agent's model candidates, and consult
+   * model candidates. A volatile field: edits through the settings service apply
+   * without a reload. Absent only where no loader composes the plugin (tests),
+   * which reads the defaults.
    */
-  stationModels?: Volatile<StationModelsSettings>
+  stageAgents?: Volatile<StageAgentsSettings>
 }
 
 /** Everything one prepared handoff produced. */
@@ -390,8 +395,8 @@ export interface CompletedTask {
 export interface DispatchSubagentRequest {
   /** The calling session's working directory, which locates the project. */
   readonly cwd: string
-  /** Matt highway station whose station model table chooses the child model. */
-  readonly station: Station
+  /** Matt highway stage whose stage Agent table chooses the child Agent and model. */
+  readonly stage: Stage
   /** Special Agent name from `<project>/.dsh/a2d2/agents/<name>.md`; absent means the default Agent. */
   readonly agentName?: string
   /** Task issue number the child is dispatched to implement or review. */
@@ -408,10 +413,10 @@ export interface DispatchSubagentRequest {
 export interface DispatchedSubagent {
   /** Durable child session id returned by DSH. */
   readonly session: SessionId
-  /** Effective `provider/model` route selected from the station model table. */
+  /** Effective `provider/model` route selected from the stage Agent table. */
   readonly model: string
-  /** The special Agent used, or `default` when no special Agent was requested. */
-  readonly agent: string
+  /** Stage Agent used for the dispatch. */
+  readonly agent: StageAgent
 }
 
 type LlmRuntime = {
@@ -454,7 +459,7 @@ export class A2d2Service extends Service {
       outputPerMillion: z.number(),
     })).default({}),
     currency: z.string().default(DEFAULT_CURRENCY),
-    stationModels: StationModelsSettingsSchema.volatile(),
+    stageAgents: StageAgentsSettingsSchema.volatile(),
   }) as z<Config>
 
   private readonly store: TaskDocumentStore
@@ -463,7 +468,7 @@ export class A2d2Service extends Service {
   private readonly thresholds: HandoffThresholds
   private readonly prices: ReadonlyMap<string, ModelPrice>
   private readonly currency: string
-  private readonly stationModelsConfig: Volatile<StationModelsSettings> | undefined
+  private readonly stageAgentsConfig: Volatile<StageAgentsSettings> | undefined
   private readonly entryFiber: Fiber
 
   /**
@@ -512,9 +517,9 @@ export class A2d2Service extends Service {
       }
     }
     this.currency = config.currency ?? DEFAULT_CURRENCY
-    this.stationModelsConfig = config.stationModels
+    this.stageAgentsConfig = config.stageAgents
     this.entryFiber = ctx.fiber
-    this.publishStationModels()
+    this.publishStageAgents()
     this.publishIndicator()
     this.publishConsult()
     this.publishConfig()
@@ -663,7 +668,7 @@ export class A2d2Service extends Service {
     }
 
     const projectRoot = await this.store.projectRoot(request.cwd)
-    const selected = await this.selectStationModel('grill', this.stationModels.stations.grill)
+    const selected = await this.selectStageModel('grill')
     const model = splitModelRoute(selected)
     const session = brandString<SessionId>(`session-${randomUUID()}`)
     const agents = this.ctx.get('agents') as AgentRegistry | undefined
@@ -758,16 +763,16 @@ export class A2d2Service extends Service {
     if (task === undefined) {
       throw new Error(`a2d2: session "${parent.id}" is not the main session of a task issue and cannot dispatch subagents`)
     }
-    const candidates = this.stationModels.stations[request.station]
-    if (candidates === undefined) throw new Error(`a2d2: unknown station "${request.station}"`)
-    const model = await this.selectStationModel(request.station, candidates)
+    if (!isClosedHighwayStation(request.stage)) throw new Error(`a2d2: unknown stage "${request.stage}"`)
+    const configuredAgent = this.stageAgents.stages[request.stage]
+    const model = await this.selectStageModel(request.stage)
     const route = splitModelRoute(model)
     const persona = await this.readSpecialAgentPersona(cwd, request.agentName)
     const subagents = this.getService<SubagentsRuntime>('subagents')
     if (subagents === undefined) throw new Error('a2d2: subagents service is unavailable')
     const started = await subagents.startContinuable({
       provider: 'spawn',
-      label: `${request.station} #${issue}`,
+      label: `${request.stage} #${issue}`,
       request: {
         prompt: [{ type: 'text', text: request.prompt }],
         parent,
@@ -776,7 +781,7 @@ export class A2d2Service extends Service {
       },
       signal: request.signal,
     })
-    return { session: started.childId, model, agent: request.agentName ?? 'default' }
+    return { session: started.childId, model, agent: configuredAgent }
   }
 
   /**
@@ -861,19 +866,26 @@ export class A2d2Service extends Service {
   }
 
   /**
-   * The live station model table, validated on every read: the volatile field
+   * The live stage Agent table, validated on every read: the volatile field
    * changes in place when the settings service writes it.
    */
-  private get stationModels(): StationModelsSettings {
-    if (this.stationModelsConfig === undefined) return DEFAULT_STATION_MODELS
-    return validateStationModelsSettings(this.stationModelsConfig.get())
+  private get stageAgents(): StageAgentsSettings {
+    if (this.stageAgentsConfig === undefined) return DEFAULT_STAGE_AGENTS
+    return validateStageAgentsSettings(this.stageAgentsConfig.get())
   }
 
   private getService<T>(name: string): T | undefined {
     return (this.ctx.get as unknown as (name: string) => T | undefined).call(this.ctx, name)
   }
 
-  private async selectStationModel(station: Station, candidates: readonly string[]): Promise<string> {
+  private async selectStageModel(stage: string): Promise<string> {
+    if (!isClosedHighwayStation(stage)) throw new Error(`a2d2: unknown stage "${stage}"`)
+    const settings = this.stageAgents
+    const agent = settings.stages[stage]
+    return await this.selectModelCandidate(`stage "${stage}" Agent "${agent}"`, modelCandidatesForStage(settings, stage))
+  }
+
+  private async selectModelCandidate(subject: string, candidates: readonly string[]): Promise<string> {
     const llm = this.getService<LlmRuntime>('llm')
     if (llm === undefined) throw new Error('a2d2: llm service is unavailable')
     const providers = new Set(llm.listProviders().map(provider => provider.id))
@@ -892,7 +904,7 @@ export class A2d2Service extends Service {
       }
       if (models.some(model => model.id === route.model)) return candidate
     }
-    throw new Error(`a2d2: station "${station}" has no model candidate present in the model catalog`)
+    throw new Error(`a2d2: ${subject} has no model candidate present in the model catalog`)
   }
 
   private async readSpecialAgentPersona(cwd: string, agentName: string | undefined): Promise<string | undefined> {
@@ -917,10 +929,10 @@ export class A2d2Service extends Service {
 
   /**
    * State the table's warnings once at load, and turn off the generated
-   * settings page: the plugin contributes its own station model page.
+   * settings page: the plugin contributes its own A2D2 configuration page.
    */
-  private publishStationModels(): void {
-    for (const warning of stationModelWarnings(this.stationModels)) this.ctx.logger.warn(warning)
+  private publishStageAgents(): void {
+    for (const warning of stageAgentWarnings(this.stageAgents)) this.ctx.logger.warn(warning)
     this.ctx.inject(['settings'], (settingsCtx) => {
       settingsCtx.effect(
         () => settingsCtx.settings.configure({ auto: false }, this.entryFiber),
@@ -954,7 +966,7 @@ export class A2d2Service extends Service {
         listTasks: cwd => this.store.list(cwd),
         projectRoot: cwd => resolveProjectRoot(cwd, this.projectMarkers),
         readAskMatt: () => readSkillSource('ask-matt', this.skillsRoot),
-        getStationModels: () => this.stationModels,
+        getStageAgents: () => this.stageAgents,
         contextFacts: (session) => {
           const projections = getService<ProjectionReader>('sessionProjections')
           return consultContextFactsFromProjectionValues(projections?.snapshot(session).values, this.thresholds)
@@ -1006,9 +1018,9 @@ export class A2d2Service extends Service {
       const readSettings = () => {
         const settings = getService<SettingsRuntime>('settings')
         const descriptor = ns === undefined ? undefined : settings?.describe().find(entry => entry.ns === ns)
-        if (descriptor === undefined) return { value: this.stationModels, revision: undefined }
+        if (descriptor === undefined) return { value: this.stageAgents, revision: undefined }
         return {
-          value: validateStationModelsSettings((descriptor.value as { stationModels?: unknown }).stationModels),
+          value: validateStageAgentsSettings((descriptor.value as { stageAgents?: unknown }).stageAgents),
           revision: descriptor.revision,
         }
       }
@@ -1019,7 +1031,7 @@ export class A2d2Service extends Service {
           const settings = getService<SettingsRuntime>('settings')
           if (settings === undefined) throw new Error('a2d2: settings service is unavailable')
           if (ns === undefined) throw new Error('a2d2: no profile entry to store settings in')
-          await settings.replace(ns, { stationModels: validateStationModelsSettings(value) }, expectedRevision)
+          await settings.replace(ns, { stageAgents: validateCompleteStageAgentsSettings(value) }, expectedRevision)
           return readSettings()
         },
         modelRoutes: async () => {
