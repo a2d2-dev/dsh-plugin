@@ -13,6 +13,7 @@
 - **指示球**——输入框旁一枚可一眼看清上下文长度与花费的小球；会话接近 smart zone 时告警，提醒在下个相位边界决定去向。
 - **A²D² 面板**——better-sidebar 里的侧边栏 Tab，展示当前会话所属项目的任务、成员交接树，以及主会话子代理路由树。
 - **GitHub 关注**——`github_watch` 让会话不用轮询就能等一个 PR：PR 合并、关闭、CI 出结果或有了 review 结论时，会话会收到一条消息，空闲中的会话也会被唤醒。
+- **通知**——任务 issue 的主会话停下来等 LF 时，经已装的 `notifier` 提供者往 LF 手机推一条带 A²D² 语义的消息。
 
 > `A²D²` 是品牌与展示写法；`a2d2` 是技术标识——包名、目录、服务名都用它，因为 `²` 不能进 npm 包名。包名为 `@deepseek-ai/dsh-a2d2`。
 
@@ -158,6 +159,22 @@ sessions:
 `complete_task` 让任务 issue 的主会话在验收完成后宣告自己的任务已完成。参数是 `summary`，即要交给父任务 CEO 的完成说明。插件只写项目本地任务文档（`state: done`）；它不调用 GitHub，关闭任务 issue 仍由 CEO 自己完成。
 
 只有任务 issue 当前主会话能完成该任务。任务没有父 issue 时，写完文档即结束。任务有父 issue 且父任务有主会话时，插件用 `a2d2-complete-task` 来源向父主会话发送一条通知。通知只写子任务 issue（`#<编号>`）与完成说明，不拼 URL。父主会话已加载时，插件直接对 live Agent 调用 `followup`；未加载时，插件先调用 DSH `agents.resume({ resumeSessionId })`，再对恢复出的 Agent 调用 `followup`。
+
+## 通知
+
+任务 issue 的主会话停下来等 LF 时，插件经可选的 `notifier` 服务往 LF 手机推一条消息（ADR 0010）。「这算不算在等 LF、消息说什么」由 A²D² 判断；送达交给提供 `notifier` 服务的插件。**提供者只装一个**：a2d2-dev/dsh-feishu-connect（飞书应用机器人）或 dsh-notifier（多渠道），二选一——两者提供同一个服务名，同时装会抢。没装提供者时插件照常启动、照常运行，不发通知；插件用回调式 `ctx.inject(['notifier'], …)` 接入，不用静态 `inject`，所以缺提供者不会卡住启动。
+
+只有任务 issue 的主会话会发；子代理和未绑定的会话不发。三种等待会触发消息：
+
+| 等待 | 标题 | 正文 | 级别 | 时机 |
+|---|---|---|---|---|
+| 一轮结束（`completed`、`error`、`blocked`、`max-tokens`） | `#<issue> · 等你回复` | 这一轮最后一段助手回复（截到 300 字），再加任务 issue 链接 | `active` | 一轮结束 30 秒后；期间该会话有 `user/*` 事件或重新开始一轮就撤销 |
+| 调用 `ask_user_question` | `#<issue> · 需要你决定` | 问题文本，再加任务 issue 链接 | `timeSensitive` | 立即 |
+| `complete_task` 成功 | `#<issue> · 已完成` | 完成说明 | `active` | 立即 |
+
+以 `aborted` 结束的一轮，以及事后补写的 `interrupted`/`forked` 收尾，不发消息。链接是 `https://github.com/<owner>/<name>/issues/<issue>`，取自会话 cwd 的 `github.com` `origin`；没有就不带链接。标题不带阶段：当前阶段只写在任务 issue 的「现状」里，插件不读它。
+
+每次推送都是 `ctx.notifier.push({ title, content, level }, { sourceName: 'dsh-a2d2', sessionId })`。`sessionId` 让提供者撤销它自己为同一次等待准备的通用通知，一次等待只收到一条。结果只记日志；推送失败、reject 或抛错都不影响会话。
 
 ## 派子代理
 
@@ -415,6 +432,20 @@ sessions:
 #### Token effect
 
 无。面板读取任务文档宿主路由、已在传输中的投影值与目录响应，不给任何提供方请求增加 token。
+
+#### KV Cache effect
+
+无。没有任何会话的请求内容发生变化。
+
+### 通知
+
+#### What the model sees
+
+什么都没有。通知在宿主侧观察会话事件与 `complete_task`；它不注册工具、不写提示词段落、不注入上下文。
+
+#### Token effect
+
+无。推送只发给 `notifier` 提供者，不发给任何模型提供方。
 
 #### KV Cache effect
 

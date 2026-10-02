@@ -13,6 +13,7 @@ What the plugin gives DSH today:
 - **A floating indicator** — an at-a-glance orb by the composer that tracks context length and cost, and warns when a session approaches the smart zone so the next phase boundary can choose its outcome.
 - **A²D² panel** — a better-sidebar tab for the open session's project tasks, member handoff tree, and main-session subagent route tree.
 - **GitHub watch** — `github_watch` lets a session wait on a pull request without polling: when the PR merges, closes, finishes CI, or gets a review decision, the session receives a message, even if it was idle.
+- **Notifications** — when a task issue's main session stops for LF, one A²D²-worded message reaches LF's phone through an installed `notifier` provider.
 
 > `A²D²` is the brand and display form; `a2d2` is the technical identifier — package name, directories, and service names all use it, because `²` cannot appear in an npm package name. The package is `@deepseek-ai/dsh-a2d2`.
 
@@ -158,6 +159,22 @@ The service reads the Agent assigned to the `grill` stage, selects that Agent's 
 `complete_task` lets a task issue's main session declare its own task done after acceptance. Its parameter is `summary`, the completion summary that a parent CEO should receive. The plugin writes only the project-local task document (`state: done`); it never calls GitHub, and closing the task issue remains the CEO's job.
 
 Only the task issue's current main session can complete it. If the task has no parent issue, completion stops after the document write. If the task has a parent issue and that parent task has a main session, the plugin sends that parent main session one notification from the `a2d2-complete-task` source. The notification names only the child task issue (`#<number>`) and the completion summary, with no URL. When the parent main session is already loaded, the plugin calls `followup` on that live Agent; when it is not loaded, the plugin first calls DSH `agents.resume({ resumeSessionId })`, then calls `followup` on the resumed Agent.
+
+## Notifications
+
+When a task issue's main session stops and waits for LF, the plugin pushes one message to LF's phone through the optional `notifier` service (ADR 0010). A²D² decides whether a stop is a wait for LF and what the message says; delivery belongs to whichever plugin provides `notifier`. **Install exactly one provider**: a2d2-dev/dsh-feishu-connect (Feishu app bot) or dsh-notifier (many channels). Both provide the same service name and would compete, so never install both. Without a provider the plugin starts and runs as before and sends nothing; it reaches the service through a callback `ctx.inject(['notifier'], …)`, never a static `inject`, so a missing provider cannot hold startup.
+
+Only a task issue's main session notifies; subagents and unbound sessions never do. Three waits trigger a message:
+
+| Wait | Title | Content | Level | When |
+|---|---|---|---|---|
+| A turn ends (`completed`, `error`, `blocked`, `max-tokens`) | `#<issue> · 等你回复` | The turn's last assistant reply, cut to 300 characters, then the task issue link | `active` | 30 s after the turn ends; retracted when the session receives a `user/*` event or starts another turn first |
+| `ask_user_question` is called | `#<issue> · 需要你决定` | The question texts, then the task issue link | `timeSensitive` | At once |
+| `complete_task` succeeds | `#<issue> · 已完成` | The completion summary | `active` | At once |
+
+A turn cancelled by `aborted`, and the after-the-fact `interrupted`/`forked` closers, send nothing. The link is `https://github.com/<owner>/<name>/issues/<issue>`, taken from the session cwd's `github.com` `origin`; without one the message has no link. The title carries no stage: the current stage lives only in the task issue's status, which the plugin does not read.
+
+Every push is `ctx.notifier.push({ title, content, level }, { sourceName: 'dsh-a2d2', sessionId })`. `sessionId` lets the provider retract its own generic notice for the same wait, so the wait produces one message. The result is only logged; a failed, rejected, or throwing push never affects the session.
 
 ## Dispatch subagent
 
@@ -415,6 +432,20 @@ Nothing. The panel is a read-only browser view: it registers no tool, writes no 
 #### Token effect
 
 None. The panel reads task documents through a host route, projection values already in flight, and a catalog response; it adds no tokens to any provider request.
+
+#### KV Cache effect
+
+None. No session's request content changes.
+
+### Notifications
+
+#### What the model sees
+
+Nothing. Notifications observe session events and `complete_task` from the host; they register no tool, write no prompt section, and inject no context.
+
+#### Token effect
+
+None. A push goes to the `notifier` provider, never to a model provider.
 
 #### KV Cache effect
 
