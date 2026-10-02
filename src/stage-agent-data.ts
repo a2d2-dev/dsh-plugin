@@ -10,8 +10,6 @@
 import { CLOSED_HIGHWAY_STATIONS } from './highway.ts'
 import type { ClosedHighwayStation } from './highway.ts'
 
-export const STAGE_AGENT_SETTINGS_NAMESPACE = 'a2d2-stage-agents'
-
 export const THINKING_MODEL_ROUTES = [
   'claude-bray/claude-fable-5-1',
   'codex/gpt-6',

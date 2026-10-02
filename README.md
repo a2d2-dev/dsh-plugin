@@ -56,35 +56,36 @@ The configuration keys belong to the `a2d2` row. Every method takes the caller's
 
 ### Stage Agent settings
 
-The plugin also registers live stage Agent settings, stored in DSH's `settings.yaml`. They are separate from the plugin row above because users should be able to change stage assignments, Agent model candidates, and consult candidates without restarting the host.
+The plugin also exposes live stage Agent settings in DSH's `settings.yaml`. The persisted section is keyed by the plugin profile entry id, and this plugin owns the `stageAgents` value inside that section. Users can change stage assignments, Agent model candidates, and consult candidates without restarting the host.
 
 ```yaml
-a2d2-stage-agents:
-  consult:
-    - claude-bray/claude-fable-5-1
-    - codex/gpt-6
-  stages:
-    grill: ceo
-    to-spec: ceo
-    to-tickets: ceo
-    implement: engineer
-    code-review: reviewer
-    prototype: ceo
-    handoff: ceo
-    diagnosing-bugs: ceo
-    triage: ceo
-    wayfinder: ceo
-    improve-codebase-architecture: ceo
-    domain-modeling: ceo
-    codebase-design: ceo
-  agents:
-    ceo:
-      - claude-bray/claude-fable-5-1
-      - codex/gpt-6
-    engineer:
-      - codex/gpt-5.5
-      - claude-bray/claude-opus-5-5
-    reviewer:
+<profile entry id>:
+  stageAgents:
+    stages:
+      grill: ceo
+      to-spec: ceo
+      to-tickets: ceo
+      implement: engineer
+      code-review: reviewer
+      prototype: ceo
+      handoff: ceo
+      diagnosing-bugs: ceo
+      triage: ceo
+      wayfinder: ceo
+      improve-codebase-architecture: ceo
+      domain-modeling: ceo
+      codebase-design: ceo
+    agents:
+      ceo:
+        - claude-bray/claude-fable-5-1
+        - codex/gpt-6
+      engineer:
+        - codex/gpt-5.5
+        - claude-bray/claude-opus-5-5
+      reviewer:
+        - claude-bray/claude-fable-5-1
+        - codex/gpt-6
+    consult:
       - claude-bray/claude-fable-5-1
       - codex/gpt-6
 ```
@@ -95,7 +96,7 @@ a2d2-stage-agents:
 
 The browser bundle registers an independent DSH settings section, **A2D2 配置**. The current browser UI still has the pre-#72 station-model editor; the host route now reads and writes the stage Agent settings shape above.
 
-The page never writes arbitrary settings namespaces from the browser. It calls this plugin's own trusted route, `/a2d2/api/config`, which uses the same host/origin/fetch trust fence as the next-step consult route. Requests are capped at 64 KiB, invalid JSON is rejected, and writes must include the revision returned by a completed read. Saves replace the whole stage Agent settings value with that revision; a missing revision is rejected without writing, a stale save is rejected as a conflict, the route returns the latest value, and schema failures such as an empty list or malformed route are reported without persisting anything.
+The page never writes arbitrary settings namespaces from the browser. It calls this plugin's own trusted route, `/a2d2/api/config`, which uses the same host/origin/fetch trust fence as the next-step consult route. Requests are capped at 64 KiB, invalid JSON is rejected, and writes must include the revision returned by a completed read. Saves replace the whole `stageAgents` value with that revision: `stages`, `agents`, and `consult` are all required, `stages` must cover every closed highway stage, `agents` must include `ceo`, `engineer`, and `reviewer`, and unknown top-level keys inside `stageAgents` such as the old `stations` shape are rejected. A missing revision is rejected without writing, a stale save is rejected as a conflict, the route returns the latest value, and schema failures such as an empty list or malformed route are reported without persisting anything.
 
 Model candidates are added from DSH's host model catalog (`llm.models`) so the page cannot create a typo-only route. Each existing candidate has a **Test** action that performs exactly one tiny host-side call (`reply OK`, small output budget) and classifies the result as normal, refusal, rate-limited, or error with the reason; an empty response is reported as error. There is no background probing.
 

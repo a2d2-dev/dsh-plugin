@@ -56,35 +56,36 @@
 
 ### 阶段 Agent settings
 
-插件还注册实时阶段 Agent settings，存放在 DSH 的 `settings.yaml`。它不属于上面的插件挂载行配置，因为用户应该能在不重启宿主的情况下调整阶段分配、Agent 模型候选和咨询候选。
+插件还在 DSH 的 `settings.yaml` 暴露实时阶段 Agent settings。落盘 section 以插件 profile entry id 为键，本插件拥有该 section 内的 `stageAgents` 值。用户可以在不重启宿主的情况下调整阶段分配、Agent 模型候选和咨询候选。
 
 ```yaml
-a2d2-stage-agents:
-  consult:
-    - claude-bray/claude-fable-5-1
-    - codex/gpt-6
-  stages:
-    grill: ceo
-    to-spec: ceo
-    to-tickets: ceo
-    implement: engineer
-    code-review: reviewer
-    prototype: ceo
-    handoff: ceo
-    diagnosing-bugs: ceo
-    triage: ceo
-    wayfinder: ceo
-    improve-codebase-architecture: ceo
-    domain-modeling: ceo
-    codebase-design: ceo
-  agents:
-    ceo:
-      - claude-bray/claude-fable-5-1
-      - codex/gpt-6
-    engineer:
-      - codex/gpt-5.5
-      - claude-bray/claude-opus-5-5
-    reviewer:
+<profile entry id>:
+  stageAgents:
+    stages:
+      grill: ceo
+      to-spec: ceo
+      to-tickets: ceo
+      implement: engineer
+      code-review: reviewer
+      prototype: ceo
+      handoff: ceo
+      diagnosing-bugs: ceo
+      triage: ceo
+      wayfinder: ceo
+      improve-codebase-architecture: ceo
+      domain-modeling: ceo
+      codebase-design: ceo
+    agents:
+      ceo:
+        - claude-bray/claude-fable-5-1
+        - codex/gpt-6
+      engineer:
+        - codex/gpt-5.5
+        - claude-bray/claude-opus-5-5
+      reviewer:
+        - claude-bray/claude-fable-5-1
+        - codex/gpt-6
+    consult:
       - claude-bray/claude-fable-5-1
       - codex/gpt-6
 ```
@@ -95,7 +96,7 @@ a2d2-stage-agents:
 
 浏览器 bundle 会向 DSH 设置导航注册一个独立 section：**A2D2 配置**。当前浏览器 UI 仍是 #72 接手前的站点模型编辑器；宿主路由现在读写的是上面的阶段 Agent settings 形状。
 
-页面不会从浏览器直接写任意 settings 命名空间。它调用本插件自己的受信任路由 `/a2d2/api/config`，该路由复用下一步咨询的 host / origin / fetch 信任判据。请求体上限是 64 KiB，JSON 解析失败会被拒绝；读取会返回当前 settings revision，保存必须带着该 revision 整体替换阶段 Agent settings。缺 revision 不会写入；若保存时 revision 已过期，路由拒绝写入并返回最新值；空列表、格式错误 route 等 schema 失败会直接回显原因，且不会落盘。
+页面不会从浏览器直接写任意 settings 命名空间。它调用本插件自己的受信任路由 `/a2d2/api/config`，该路由复用下一步咨询的 host / origin / fetch 信任判据。请求体上限是 64 KiB，JSON 解析失败会被拒绝；读取会返回当前 settings revision，保存必须带着该 revision 整体替换 `stageAgents` 值：`stages`、`agents`、`consult` 三节必须齐全，`stages` 必须覆盖全部闭集公路阶段，`agents` 必须包含 `ceo`、`engineer`、`reviewer`，`stageAgents` 内未知顶层键（例如旧形状的 `stations`）会被拒绝。缺 revision 不会写入；若保存时 revision 已过期，路由拒绝写入并返回最新值；空列表、格式错误 route 等 schema 失败会直接回显原因，且不会落盘。
 
 新增候选只能从 DSH 宿主模型目录（`llm.models`）选择，因此页面不会制造拼写错误的 route。每个已有候选旁都有 **测试** 动作：点击时宿主只发一次极小调用（`reply OK`，小输出预算），并把结果分类为正常、拒答、限流或报错，同时显示原因；空输出按报错处理。没有后台轮询探测。
 

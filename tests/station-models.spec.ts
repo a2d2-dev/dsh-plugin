@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_STAGE_AGENTS,
-  STAGE_AGENT_SETTINGS_NAMESPACE,
   STAGE_AGENT_STAGES,
   StageAgentsSettingsSchema,
   stageAgentWarnings,
@@ -10,7 +9,6 @@ import {
 
 describe('stage agent settings', () => {
   it('provides the documented settings namespace and factory defaults', () => {
-    expect(STAGE_AGENT_SETTINGS_NAMESPACE).toBe('a2d2-stage-agents')
     expect(StageAgentsSettingsSchema()).toEqual(DEFAULT_STAGE_AGENTS)
     expect(Object.keys(DEFAULT_STAGE_AGENTS.stages).sort()).toEqual([...STAGE_AGENT_STAGES].sort())
     expect(DEFAULT_STAGE_AGENTS.consult).toEqual([

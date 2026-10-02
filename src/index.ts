@@ -45,7 +45,6 @@ import { parseSessionId, redactText } from './handoff.ts'
 import { DEFAULT_SKILLS_ROOT, readSkillSource, resolveSkillsRoot } from './skill-source.ts'
 import {
   DEFAULT_STAGE_AGENTS,
-  STAGE_AGENT_SETTINGS_NAMESPACE,
   StageAgentsSettingsSchema,
   modelCandidatesForStage,
   splitModelRoute,
@@ -111,7 +110,6 @@ export {
   CODING_MODEL_ROUTES,
   DEFAULT_STAGE_AGENTS,
   STAGE_AGENTS,
-  STAGE_AGENT_SETTINGS_NAMESPACE,
   STAGE_AGENT_STAGES,
   StageAgentsSettingsSchema,
   THINKING_MODEL_ROUTES,
