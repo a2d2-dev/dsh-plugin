@@ -13,6 +13,13 @@ import {
   MAIN_STATIONS,
   RAMP_MERGES,
 } from '../highway.ts'
+import {
+  agentForStage,
+  modelCandidatesForStage,
+  shortModelRoute,
+  stageAgentLabel,
+} from '../stage-agent-data.ts'
+import type { Stage, StageAgentRouteSettings } from '../stage-agent-data.ts'
 import type { MainStation, Move } from '../highway.ts'
 import type { ConsultLocation, ConsultNext, ConsultPhase } from './consult-actions.ts'
 
@@ -21,6 +28,8 @@ export type HighwayStationState = 'passed' | 'current' | 'next' | 'ahead'
 export interface HighwayViewStation {
   readonly id: ClosedHighwayStation | 'standalone'
   readonly role: string
+  readonly agent?: string
+  readonly agentKey?: string
   readonly models?: string
   readonly state: HighwayStationState
 }
@@ -55,14 +64,14 @@ export function highwayView(
   const stations = MAIN_STATIONS.map((station): HighwayViewStation => ({
     id: station,
     role: MAIN_STATION_ROLES[station],
-    ...modelField(response.stationModels?.[station], catalog),
+    ...agentField(response.stageAgents, station, catalog),
     state: stationState(station, location, next),
   }))
   return {
     ...preconditionPlacardField(response),
     stations,
     ...noteField(location),
-    ...nextLineField(response, catalog),
+    ...nextLineField(response),
   }
 }
 
@@ -111,36 +120,40 @@ function noteField(location: ConsultLocation | undefined): Pick<HighwayView, 'as
 
 function nextLineField(
   response: ReadyConsult,
-  catalog: readonly string[] | undefined,
 ): Pick<HighwayView, 'nextLine'> {
   if (response.location?.phaseDone === false) return { nextLine: '本阶段未完成 · 继续' }
   const next = response.next
   if (next === undefined) return {}
-  const model = selectModel(response.stationModels?.[next.station], catalog)
+  const agent = agentLabelForStage(response.stageAgents, next.station)
   return {
-    nextLine: `→ /${next.station} · ${MOVE_LABELS[next.move]}（${next.reason}）${model === undefined ? '' : `· ${model}`}`,
+    nextLine: `→ /${next.station} · ${MOVE_LABELS[next.move]}（${next.reason}）${agent === undefined ? '' : `· ${agent}`}`,
   }
 }
 
-function modelField(
-  routes: readonly string[] | undefined,
+function agentField(
+  settings: StageAgentRouteSettings | undefined,
+  stage: Stage,
   catalog: readonly string[] | undefined,
-): Pick<HighwayViewStation, 'models'> {
-  const model = selectModel(routes, catalog)
-  return model === undefined ? {} : { models: model }
+): Pick<HighwayViewStation, 'agent' | 'agentKey' | 'models'> {
+  const agent = settings?.stages[stage]
+  if (agent === undefined) return {}
+  return {
+    agent: stageAgentLabel(agent),
+    agentKey: agent,
+    models: modelLabel(modelCandidatesForStage(settings, stage), catalog),
+  }
 }
 
-function selectModel(
-  routes: readonly string[] | undefined,
+function agentLabelForStage(settings: StageAgentRouteSettings | undefined, stage: string): string | undefined {
+  if (settings === undefined || !(stage in settings.stages)) return undefined
+  return stageAgentLabel(agentForStage(settings, stage as Stage))
+}
+
+function modelLabel(
+  routes: readonly string[],
   catalog: readonly string[] | undefined,
-): string | undefined {
-  if (routes === undefined || routes.length === 0) return undefined
-  if (catalog === undefined) return shortRoute(routes[0] ?? '')
+): string {
+  if (catalog === undefined) return shortModelRoute(routes[0] ?? '') || '无可用模型'
   const selected = routes.find(route => catalog.includes(route))
-  return selected === undefined ? '保持当前模型' : shortRoute(selected)
-}
-
-function shortRoute(route: string): string {
-  const slash = route.indexOf('/')
-  return slash < 0 ? route : route.slice(slash + 1)
+  return selected === undefined ? '无可用模型' : shortModelRoute(selected)
 }

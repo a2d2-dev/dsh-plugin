@@ -24,13 +24,22 @@ export const STAGE_AGENTS = ['ceo', 'engineer', 'reviewer'] as const
 
 export type StageAgent = typeof STAGE_AGENTS[number]
 
+export const STAGE_AGENT_LABELS: Readonly<Record<StageAgent, string>> = {
+  ceo: 'CEO',
+  engineer: '工程师',
+  reviewer: '评审',
+}
+
 export const STAGE_AGENT_STAGES = CLOSED_HIGHWAY_STATIONS
 
 export type Stage = ClosedHighwayStation
 
-export interface StageAgentsSettings {
+export interface StageAgentRouteSettings {
   readonly stages: Readonly<Record<Stage, StageAgent>>
   readonly agents: Readonly<Record<StageAgent, readonly string[]>>
+}
+
+export interface StageAgentsSettings extends StageAgentRouteSettings {
   readonly consult: readonly string[]
 }
 
@@ -81,11 +90,15 @@ export function stageAgentWarnings(settings: StageAgentsSettings): readonly stri
   return []
 }
 
-export function agentForStage(settings: StageAgentsSettings, stage: Stage): StageAgent {
+export function stageAgentLabel(agent: StageAgent): string {
+  return STAGE_AGENT_LABELS[agent]
+}
+
+export function agentForStage(settings: StageAgentRouteSettings, stage: Stage): StageAgent {
   return settings.stages[stage]
 }
 
-export function modelCandidatesForStage(settings: StageAgentsSettings, stage: Stage): readonly string[] {
+export function modelCandidatesForStage(settings: StageAgentRouteSettings, stage: Stage): readonly string[] {
   return settings.agents[agentForStage(settings, stage)]
 }
 

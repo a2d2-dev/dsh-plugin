@@ -17,6 +17,8 @@ import {
   isServiceStation,
 } from '../highway.ts'
 import type { HighwayZone, MainStation, Move } from '../highway.ts'
+import type { StageAgent, StageAgentRouteSettings } from '../stage-agent-data.ts'
+import { STAGE_AGENTS, STAGE_AGENT_STAGES, modelCandidatesForStage } from '../stage-agent-data.ts'
 import type { FailureKind } from '../refusal.ts'
 import type { ClientSessionsService, ClientWorkspaceNavigation, ClientWorkspacesService } from './context.ts'
 
@@ -140,7 +142,7 @@ export type ConsultPhase =
       readonly degraded: boolean
       readonly answeredBy?: string
       readonly fallbacks?: readonly ConsultFallback[]
-      readonly stationModels?: Readonly<Record<string, readonly string[]>>
+      readonly stageAgents?: StageAgentRouteSettings
       readonly preconditions?: ConsultPreconditions
     }
   | { readonly kind: 'error'; readonly message: string }
@@ -180,7 +182,7 @@ export interface ConsultSelectionContext {
 
 export interface ConsultNewSessionModelTarget {
   readonly station?: string
-  readonly stationModels?: Readonly<Record<string, readonly string[]>>
+  readonly stageAgents?: StageAgentRouteSettings
 }
 
 export type OtherMove = Exclude<Move, 'continue'>
@@ -216,7 +218,7 @@ type ConsultResponse =
         readonly degraded: boolean
         readonly answeredBy?: string
         readonly fallbacks?: readonly ConsultFallback[]
-        readonly stationModels?: Readonly<Record<string, readonly string[]>>
+        readonly stageAgents?: StageAgentRouteSettings
         readonly preconditions?: ConsultPreconditions
       }
     }
@@ -319,17 +321,39 @@ function parseFallback(value: unknown): ConsultFallback | undefined {
   }
 }
 
-function parseStationModels(value: unknown): Readonly<Record<string, readonly string[]>> | undefined {
+const STAGE_AGENT_SET = new Set<string>(STAGE_AGENTS)
+const STAGE_AGENT_STAGE_SET = new Set<string>(STAGE_AGENT_STAGES)
+
+function isStageAgent(value: unknown): value is StageAgent {
+  return typeof value === 'string' && STAGE_AGENT_SET.has(value)
+}
+
+function parseRouteList(value: unknown): readonly string[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  if (value.some(route => typeof route !== 'string' || route.trim() === '')) return undefined
+  return value.map(route => route.trim())
+}
+
+function parseStageAgents(value: unknown): StageAgentRouteSettings | undefined {
   if (value === undefined) return undefined
-  if (!isRecord(value)) return undefined
-  const result: Record<string, readonly string[]> = {}
-  for (const [station, routes] of Object.entries(value)) {
-    if (!Array.isArray(routes) || routes.some(route => typeof route !== 'string' || route.trim() === '')) {
-      return undefined
-    }
-    result[station] = routes
+  if (!isRecord(value) || !isRecord(value.stages) || !isRecord(value.agents)) return undefined
+  if (Object.keys(value.stages).some(stage => !STAGE_AGENT_STAGE_SET.has(stage))) return undefined
+  if (Object.keys(value.agents).some(agent => !STAGE_AGENT_SET.has(agent))) return undefined
+
+  const stages: Partial<Record<(typeof STAGE_AGENT_STAGES)[number], StageAgent>> = {}
+  for (const stage of STAGE_AGENT_STAGES) {
+    const agent = value.stages[stage]
+    if (!isStageAgent(agent)) return undefined
+    stages[stage] = agent
   }
-  return result
+
+  const agents: Partial<Record<StageAgent, readonly string[]>> = {}
+  for (const agent of STAGE_AGENTS) {
+    const routes = parseRouteList(value.agents[agent])
+    if (routes === undefined) return undefined
+    agents[agent] = routes
+  }
+  return { stages: stages as Record<(typeof STAGE_AGENT_STAGES)[number], StageAgent>, agents: agents as Record<StageAgent, readonly string[]> }
 }
 
 function parsePreconditionMissing(value: unknown): ConsultPreconditionMissing | undefined {
@@ -391,8 +415,8 @@ export function parseConsultResponse(value: unknown): ConsultResponse {
   if (parsedFallbacks?.some(fallback => fallback === undefined)) {
     throw new Error('下一步咨询返回了无效响应')
   }
-  const stationModels = parseStationModels(value.value.stationModels)
-  if (value.value.stationModels !== undefined && stationModels === undefined) {
+  const stageAgents = parseStageAgents(value.value.stageAgents)
+  if (value.value.stageAgents !== undefined && stageAgents === undefined) {
     throw new Error('下一步咨询返回了无效响应')
   }
   const preconditions = parsePreconditions(value.value.preconditions)
@@ -413,7 +437,7 @@ export function parseConsultResponse(value: unknown): ConsultResponse {
       degraded: value.value.degraded,
       ...(answeredBy === undefined ? {} : { answeredBy: answeredBy.trim() }),
       ...(parsedFallbacks === undefined ? {} : { fallbacks: parsedFallbacks as ConsultFallback[] }),
-      ...(stationModels === undefined ? {} : { stationModels }),
+      ...(stageAgents === undefined ? {} : { stageAgents }),
       ...(preconditions === undefined ? {} : { preconditions }),
     },
   }
@@ -441,7 +465,7 @@ export async function requestConsult(deps: ConsultRequestDeps, sessionId: string
       degraded: result.value.degraded,
       ...(result.value.answeredBy === undefined ? {} : { answeredBy: result.value.answeredBy }),
       ...(result.value.fallbacks === undefined ? {} : { fallbacks: result.value.fallbacks }),
-      ...(result.value.stationModels === undefined ? {} : { stationModels: result.value.stationModels }),
+      ...(result.value.stageAgents === undefined ? {} : { stageAgents: result.value.stageAgents }),
       ...(result.value.preconditions === undefined ? {} : { preconditions: result.value.preconditions }),
     })
   } catch (error) {
@@ -478,12 +502,14 @@ function errorMessage(error: unknown): string {
  */
 export function stationRouteDecision(input: {
   readonly station?: string
-  readonly stationModels?: Readonly<Record<string, readonly string[]>>
+  readonly stageAgents?: StageAgentRouteSettings
   readonly catalog: readonly string[]
   readonly current?: ClientModelSelection
 }): StationRouteDecision {
   const currentRoute = routeOf(input.current)
-  const routes = input.station === undefined ? undefined : input.stationModels?.[input.station]
+  const routes = input.station !== undefined && input.stageAgents !== undefined && isClosedHighwayStation(input.station)
+    ? modelCandidatesForStage(input.stageAgents, input.station)
+    : undefined
   const available = routes?.find(route => input.catalog.includes(route))
   if (available === undefined) {
     return {
@@ -539,9 +565,9 @@ function newSessionModelTarget(
   if (phase?.kind !== 'ready') return station === undefined ? undefined : { station }
   const target = {
     ...(station === undefined ? {} : { station }),
-    ...(phase.stationModels === undefined ? {} : { stationModels: phase.stationModels }),
+    ...(phase.stageAgents === undefined ? {} : { stageAgents: phase.stageAgents }),
   }
-  return target.station === undefined && target.stationModels === undefined ? undefined : target
+  return target.station === undefined && target.stageAgents === undefined ? undefined : target
 }
 
 function newSessionEffectLabel(
@@ -554,7 +580,7 @@ function newSessionEffectLabel(
   if (station === undefined || phase?.kind !== 'ready') return '新会话 · 默认模型'
   const decision = stationRouteDecision({
     station,
-    stationModels: phase.stationModels,
+    stageAgents: phase.stageAgents,
     catalog: modelCatalogRoutes(directory),
     current: undefined,
   })
@@ -573,7 +599,7 @@ export function candidateModelEffect(
   if (directory === undefined) return '保持当前模型'
   return stationRouteDecision({
     station,
-    stationModels: phase.stationModels,
+    stageAgents: phase.stageAgents,
     catalog: modelCatalogRoutes(directory),
     current: directory.current,
   }).label
@@ -589,7 +615,7 @@ function workspaceOf(workspaces: ClientWorkspacesService, sessionId: string): st
 }
 
 function targetNeedsModelSelection(target: ConsultNewSessionModelTarget | undefined): boolean {
-  return target?.station !== undefined && target.stationModels?.[target.station] !== undefined
+  return target?.station !== undefined && target.stageAgents !== undefined && isClosedHighwayStation(target.station)
 }
 
 async function selectNewSessionModel(
@@ -598,8 +624,7 @@ async function selectNewSessionModel(
   target: ConsultNewSessionModelTarget | undefined,
   messagePrefix: string,
 ): Promise<void> {
-  if (target?.station === undefined || target.stationModels === undefined) return
-  if (target.stationModels[target.station] === undefined) return
+  if (target?.station === undefined || target.stageAgents === undefined || !isClosedHighwayStation(target.station)) return
   if (deps.modelDirectories === undefined) {
     deps.notify?.(`${messagePrefix}模型目录服务不可用`)
     return
@@ -609,7 +634,7 @@ async function selectNewSessionModel(
     const directory = await face.load()
     const decision = stationRouteDecision({
       station: target.station,
-      stationModels: target.stationModels,
+      stageAgents: target.stageAgents,
       catalog: modelCatalogRoutes(directory),
       current: directory.current,
     })
@@ -675,7 +700,7 @@ async function prepareCandidateInput(
   if (candidate.move !== 'continue' && candidate.move !== 'subagent') return candidate.input
   const phase = context?.phase
   const station = candidateStation(candidate, phase)
-  if (station === undefined || phase?.kind !== 'ready' || phase.stationModels === undefined) return candidate.input
+  if (station === undefined || phase?.kind !== 'ready' || phase.stageAgents === undefined) return candidate.input
   const sessionId = context?.sessionId
   if (sessionId === undefined || deps.modelDirectories === undefined) {
     deps.notify?.('模型目录服务不可用，已只填入输入框')
@@ -694,7 +719,7 @@ async function prepareCandidateInput(
 
   const decision = stationRouteDecision({
     station,
-    stationModels: phase.stationModels,
+    stageAgents: phase.stageAgents,
     catalog: modelCatalogRoutes(directory),
     current: directory.current,
   })
