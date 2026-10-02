@@ -135,8 +135,8 @@ function agentField(
   stage: Stage,
   catalog: readonly string[] | undefined,
 ): Pick<HighwayViewStation, 'agent' | 'agentKey' | 'models'> {
-  const agent = settings?.stages[stage]
-  if (agent === undefined) return {}
+  if (settings === undefined) return {}
+  const agent = settings.stages[stage]
   return {
     agent: stageAgentLabel(agent),
     agentKey: agent,
