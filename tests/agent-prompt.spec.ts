@@ -7,6 +7,9 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import A2d2Service from '../src/index.ts'
 import * as agentPromptPlugin from '../src/agent-prompt.ts'
+import { accessCount, resetAccesses } from './fs-access.ts'
+
+vi.mock('node:fs', async importOriginal => (await import('./fs-access.ts')).spyFs(await importOriginal()))
 
 const roots: string[] = []
 
@@ -219,5 +222,28 @@ describe('engineer and reviewer Agent prompt sections', () => {
     await vi.waitFor(() => {
       expect(child.prompt.renderModelPrompt('a2d2:agent')).toContain('${{ secrets.TOKEN }}')
     })
+  })
+
+  it('touches each Agent configuration file exactly once per assembly', async () => {
+    const root = await tempRoot()
+    const { globalAgentsDir } = await writeAgentConfig(root, 'engineer', {
+      global: 'Global engineer instructions',
+      project: 'Project engineer instructions',
+    })
+    const ctx = new Context()
+    await ctx.plugin(StubSystemPrompt)
+    await ctx.plugin(StubAgents)
+    await ctx.plugin(A2d2Service, { root })
+    await ctx.a2d2.recordSessionAgent(root, SessionId('session-engineer'), 'engineer')
+    await ctx.plugin(agentPromptPlugin, { globalAgentsDir })
+    const child = agent(root, 'session-engineer')
+    await (ctx.get('agents') as unknown as StubAgents).addSerial(child)
+
+    resetAccesses()
+    expect(child.prompt.render('a2d2:agent')).toContain('Project engineer instructions')
+
+    for (const path of [join(globalAgentsDir, 'engineer.md'), join(root, '.dsh', 'a2d2', 'agents', 'engineer.md')]) {
+      expect(accessCount(path), path).toBe(1)
+    }
   })
 })

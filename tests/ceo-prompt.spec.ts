@@ -15,6 +15,9 @@ import { SessionId } from '@deepseek-ai/dsh-session/types'
 import A2d2Service from '../src/index.ts'
 import * as ceoPromptPlugin from '../src/ceo-prompt.ts'
 import { HANDOFF_SUMMARY_PLACEHOLDER } from '../src/handoff-document.ts'
+import { accessCount, resetAccesses } from './fs-access.ts'
+
+vi.mock('node:fs', async importOriginal => (await import('./fs-access.ts')).spyFs(await importOriginal()))
 
 const roots: string[] = []
 
@@ -353,5 +356,35 @@ describe('CEO prompt section', () => {
     const section = main.prompt.render('a2d2:ceo')
     expect(section).toContain(`Missing Global SOUL: ${join(globalSoulDir, 'SOUL.md')}`)
     expect(section).toContain(`Missing Project SOUL (priority over global SOUL): ${join(root, '.dsh', 'a2d2', 'SOUL.md')}`)
+  })
+
+  it('touches each CEO method and SOUL file exactly once per assembly', async () => {
+    const root = await tempRoot()
+    const { agentFilesDir, globalSoulDir } = await writeAgentFiles(root, {
+      agents: 'CEO duties',
+      wake: 'Wake checklist',
+      globalSoul: 'Global principle',
+      projectSoul: 'Project principle',
+    })
+    const ctx = new Context()
+    await ctx.plugin(StubSystemPrompt)
+    await ctx.plugin(StubAgents)
+    await ctx.plugin(A2d2Service, { root })
+    await ctx.plugin(ceoPromptPlugin, { agentFilesDir, globalSoulDir })
+    const main = agent(root, 'session-main')
+    ;(ctx.get('agents') as unknown as StubAgents).add(main)
+    await ctx.a2d2.bindMainSession({ cwd: root, issue: 46, mainSession: main.id, now: new Date() })
+
+    resetAccesses()
+    expect(main.prompt.render('a2d2:ceo')).toContain('Project principle')
+
+    for (const path of [
+      join(agentFilesDir, 'AGENTS.md'),
+      join(agentFilesDir, 'WAKE.md'),
+      join(globalSoulDir, 'SOUL.md'),
+      join(root, '.dsh', 'a2d2', 'SOUL.md'),
+    ]) {
+      expect(accessCount(path), path).toBe(1)
+    }
   })
 })
