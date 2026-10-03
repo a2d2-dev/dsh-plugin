@@ -22,6 +22,18 @@ import { Watcher } from '../src/github-watch/watcher.ts'
 import type { Inject } from '../src/github-watch/watcher.ts'
 import { StubTools, stubAgent, toolRunContext } from './stubs.ts'
 
+// The mounted plugin asks `gh auth token` before it opens a connection. A real
+// `gh` would make every socket wait on a process spawn, which takes longer than
+// `vi.waitFor` allows on a loaded machine (#96). Here `gh` is absent, so the
+// token comes from the GH_TOKEN the plugin tests stub.
+vi.mock('node:child_process', async importOriginal => ({
+  ...await importOriginal<typeof import('node:child_process')>(),
+  execFile: (...args: unknown[]) => {
+    const callback = args.at(-1) as (error: Error) => void
+    queueMicrotask(() => callback(Object.assign(new Error('spawn gh ENOENT'), { code: 'ENOENT' })))
+  },
+}))
+
 const pr = (patch: Partial<PrState> = {}): PrState => ({
   number: 7, state: 'open', draft: false, headSha: 'aaaaaaa1', mergedAt: null, checks: null, review: null, ...patch,
 })
