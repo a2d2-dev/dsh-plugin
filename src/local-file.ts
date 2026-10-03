@@ -11,8 +11,8 @@
  * @module @deepseek-ai/dsh-a2d2/src/local-file
  */
 
-import { closeSync, fstatSync, openSync, readSync } from 'node:fs'
-import { open } from 'node:fs/promises'
+import { closeSync, constants, fstatSync, lstatSync, openSync, readSync } from 'node:fs'
+import { lstat, open } from 'node:fs/promises'
 
 /**
  * Largest file the plugin reads, in bytes (1 MiB).
@@ -25,7 +25,7 @@ import { open } from 'node:fs/promises'
 export const LOCAL_FILE_MAX_BYTES = 1024 * 1024
 
 /** Why an existing path could not be read as a plugin file. */
-export type LocalFileProblem = 'too-large' | 'error'
+export type LocalFileProblem = 'too-large' | 'symlink' | 'error'
 
 /** Outcome of one guarded read. */
 export type LocalFileRead =
@@ -52,6 +52,16 @@ export interface LocalFileReadOptions {
   readonly maxBytes?: number
 }
 
+/**
+ * Open flags: read-only, never through a symbolic link as the last path
+ * component, and never blocking on a FIFO planted where a file is expected.
+ * Platforms without `O_NOFOLLOW` (Windows) fall back to an `lstat` check.
+ */
+const OPEN_FLAGS = constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0)
+const CHECK_LINK_BEFORE_OPEN = constants.O_NOFOLLOW === undefined
+
+const SYMLINK: LocalFileRead = { kind: 'unreadable', problem: 'symlink', message: 'path is a symbolic link; the plugin only reads regular files' }
+
 function tooLarge(maxBytes: number): LocalFileRead {
   return { kind: 'unreadable', problem: 'too-large', message: `file is too large (over ${maxBytes} bytes)` }
 }
@@ -59,6 +69,8 @@ function tooLarge(maxBytes: number): LocalFileRead {
 function fromOpenError(error: unknown): LocalFileRead {
   const code = (error as NodeJS.ErrnoException).code
   if (code === 'ENOENT' || code === 'ENOTDIR') return { kind: 'missing' }
+  // O_NOFOLLOW on a symbolic link fails with ELOOP (Linux, macOS) or EMLINK (FreeBSD).
+  if (code === 'ELOOP' || code === 'EMLINK') return SYMLINK
   return { kind: 'unreadable', problem: 'error', message: (error as Error).message }
 }
 
@@ -73,7 +85,8 @@ export function readLocalFileSync(path: string, options: LocalFileReadOptions = 
   const maxBytes = options.maxBytes ?? LOCAL_FILE_MAX_BYTES
   let fd: number
   try {
-    fd = openSync(path, 'r')
+    if (CHECK_LINK_BEFORE_OPEN && lstatSync(path).isSymbolicLink()) return SYMLINK
+    fd = openSync(path, OPEN_FLAGS)
   } catch (error) {
     return fromOpenError(error)
   }
@@ -105,7 +118,8 @@ export async function readLocalFile(path: string, options: LocalFileReadOptions 
   const maxBytes = options.maxBytes ?? LOCAL_FILE_MAX_BYTES
   let handle: Awaited<ReturnType<typeof open>>
   try {
-    handle = await open(path, 'r')
+    if (CHECK_LINK_BEFORE_OPEN && (await lstat(path)).isSymbolicLink()) return SYMLINK
+    handle = await open(path, OPEN_FLAGS)
   } catch (error) {
     return fromOpenError(error)
   }
