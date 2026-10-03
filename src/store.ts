@@ -9,13 +9,14 @@
  * @module @deepseek-ai/dsh-a2d2/src/store
  */
 
-import { mkdir, readFile, readdir, stat } from 'node:fs/promises'
+import { mkdir, readdir, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { TaskId } from './brand.ts'
 import { parseTaskDocument, renderTaskDocument, taskIdFromFilename } from './document.ts'
 import { HandoffDocumentError, handoffDocumentName } from './handoff-document.ts'
+import { LocalFileError, readLocalFile, requireLocalFile } from './local-file.ts'
 import type { CreateTaskRequest, Task } from './types.ts'
 
 /** Path segments appended to a project root to reach the task documents. */
@@ -141,6 +142,7 @@ export class TaskDocumentStore {
    * person can see in their own working tree.
    * @param cwd - absolute session working directory.
    * @returns the tasks in filename order.
+ * @throws LocalFileError when a task document exists but is unreadable.
    */
   async list(cwd: string): Promise<readonly Task[]> {
     const directory = tasksDirectory(await this.projectRoot(cwd))
@@ -154,7 +156,9 @@ export class TaskDocumentStore {
     const documents = entries.filter(entry => entry.endsWith(TASK_DOCUMENT_EXTENSION)).sort()
     const tasks: Task[] = []
     for (const entry of documents) {
-      const text = await readFile(join(directory, entry), 'utf8')
+      const path = join(directory, entry)
+      const text = requireLocalFile(path, await readLocalFile(path))
+      if (text === undefined) throw new LocalFileError(path, 'error', 'task document disappeared while listing')
       tasks.push(parseTaskDocument(text, taskIdFromFilename(entry)))
     }
     return tasks
@@ -165,17 +169,10 @@ export class TaskDocumentStore {
    * @param cwd - absolute session working directory.
    * @param id - the task to read.
    * @returns the task, or `undefined` when no document carries that id.
+ * @throws LocalFileError when the document exists but is unreadable.
    */
   async read(cwd: string, id: TaskId): Promise<Task | undefined> {
-    const filename = this.filename(await this.projectRoot(cwd), id)
-    let text: string
-    try {
-      text = await readFile(filename, 'utf8')
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
-      throw error
-    }
-    return parseTaskDocument(text, id)
+    return await this.readFilename(this.filename(await this.projectRoot(cwd), id), id)
   }
 
   /**
@@ -236,14 +233,8 @@ export class TaskDocumentStore {
   }
 
   private async readFilename(filename: string, id: TaskId): Promise<Task | undefined> {
-    let text: string
-    try {
-      text = await readFile(filename, 'utf8')
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
-      throw error
-    }
-    return parseTaskDocument(text, id)
+    const text = requireLocalFile(filename, await readLocalFile(filename))
+    return text === undefined ? undefined : parseTaskDocument(text, id)
   }
 
   private async writeFilename(filename: string, task: Task): Promise<void> {
@@ -297,17 +288,14 @@ export async function writeHandoffDocument(
  */
 export async function readHandoffDocument(directory: string, source: SessionId): Promise<string> {
   const filename = join(directory, handoffDocumentName(source))
-  try {
-    return await readFile(filename, 'utf8')
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      throw new HandoffDocumentError(
-        'malformed',
-        `no handoff document at "${filename}"; the source session must run /handoff in the same project first`,
-      )
-    }
-    throw error
+  const text = requireLocalFile(filename, await readLocalFile(filename))
+  if (text === undefined) {
+    throw new HandoffDocumentError(
+      'malformed',
+      `no handoff document at "${filename}"; the source session must run /handoff in the same project first`,
+    )
   }
+  return text
 }
 
 /**

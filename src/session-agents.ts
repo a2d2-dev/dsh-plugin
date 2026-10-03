@@ -8,11 +8,12 @@
  * @module @deepseek-ai/dsh-a2d2/src/session-agents
  */
 
-import { mkdir, readFile } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
+import { readLocalFile, requireLocalFile } from './local-file.ts'
 import { STAGE_AGENTS } from './stage-agents.ts'
 import type { StageAgent } from './stage-agents.ts'
 
@@ -123,15 +124,8 @@ export function sessionAgentsFile(projectRoot: string): string {
 export class SessionAgentStore {
   async read(projectRoot: string): Promise<SessionAgentsDocument> {
     const path = sessionAgentsFile(projectRoot)
-    let text: string
-    try {
-      text = await readFile(path, 'utf8')
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return { version: SESSION_AGENTS_DOCUMENT_VERSION, sessions: [] }
-      }
-      throw error
-    }
+    const text = requireLocalFile(path, await readLocalFile(path))
+    if (text === undefined) return { version: SESSION_AGENTS_DOCUMENT_VERSION, sessions: [] }
     return parseSessionAgentsDocument(text)
   }
 
