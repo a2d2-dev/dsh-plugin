@@ -162,6 +162,7 @@ function response() {
 
 const forgedBrowserHeaders = { host: TRUSTED_HOST, origin: TRUSTED_ORIGIN, 'sec-fetch-site': 'same-origin' }
 const loggedInHeaders = { ...forgedBrowserHeaders, cookie: LOGIN_COOKIE }
+const loggedInJsonHeaders = { ...loggedInHeaders, 'content-type': 'application/json' }
 
 const routeCalls = [
   { path: CONFIG_ROUTE_PATH, method: 'POST', url: CONFIG_ROUTE_PATH, body: { method: 'settings.get', payload: {} } },
@@ -227,7 +228,7 @@ describe('A2D2 route authentication', () => {
     const root = await tempRoot()
     const { server, sessions, service } = await mount({ connection: true })
     sessions.add(sessionA, root)
-    const sent = request('POST', SESSION_AGENT_ROUTE_PATH, loggedInHeaders, { session: sessionA, agent: 'engineer' })
+    const sent = request('POST', SESSION_AGENT_ROUTE_PATH, loggedInJsonHeaders, { session: sessionA, agent: 'engineer' })
     const answer = response()
 
     await server.routes.get(SESSION_AGENT_ROUTE_PATH)?.(sent.request, answer.response)
@@ -238,12 +239,52 @@ describe('A2D2 route authentication', () => {
 
   it('answers settings.get for a logged-in browser', async () => {
     const { server } = await mount({ connection: true })
-    const sent = request('POST', CONFIG_ROUTE_PATH, loggedInHeaders, { method: 'settings.get', payload: {} })
+    const sent = request('POST', CONFIG_ROUTE_PATH, loggedInJsonHeaders, { method: 'settings.get', payload: {} })
     const answer = response()
 
     await server.routes.get(CONFIG_ROUTE_PATH)?.(sent.request, answer.response)
 
     expect(answer.captured.status).toBe(200)
     expect(JSON.parse(answer.captured.body ?? 'null')).toMatchObject({ ok: true, value: { settings: { stages: {} } } })
+  })
+})
+
+/**
+ * DSH's login cookie is same-site, so a page on another port of the same host
+ * can still make the browser send it with a simple POST that skips the CORS
+ * preflight (`text/plain`, or no body at all). Requiring `application/json`
+ * forces a preflight that such a page cannot pass; every write route refuses
+ * anything else with 415 before any side effect.
+ */
+const writeRouteCalls = [
+  { path: CONFIG_ROUTE_PATH, url: CONFIG_ROUTE_PATH, body: { method: 'settings.get', payload: {} } },
+] as const
+
+describe('A2D2 write route content type', () => {
+  it.each(writeRouteCalls)('refuses a logged-in text/plain $path POST with 415 before any side effect', async (call) => {
+    const root = await tempRoot()
+    const { server, sessions, llm, service } = await mount({ connection: true })
+    sessions.add(sessionA, root)
+    const sent = request('POST', call.url, { ...loggedInHeaders, 'content-type': 'text/plain' }, 'body' in call ? call.body : undefined)
+    const answer = response()
+
+    await server.routes.get(call.path)?.(sent.request, answer.response)
+
+    expect(answer.captured.status).toBe(415)
+    expect(JSON.parse(answer.captured.body ?? 'null')).toMatchObject({ ok: false, error: { code: 'unsupported-media-type' } })
+    expect(sent.bodyRead()).toBe(false)
+    expect(sessions.lookups).not.toHaveBeenCalled()
+    expect(llm.stream).not.toHaveBeenCalled()
+    expect(await service.agentOfSession(root, sessionA)).toBeUndefined()
+  })
+
+  it('accepts application/json with a charset parameter', async () => {
+    const { server } = await mount({ connection: true })
+    const sent = request('POST', CONFIG_ROUTE_PATH, { ...loggedInHeaders, 'content-type': 'application/json; charset=utf-8' }, { method: 'settings.get', payload: {} })
+    const answer = response()
+
+    await server.routes.get(CONFIG_ROUTE_PATH)?.(sent.request, answer.response)
+
+    expect(answer.captured.status).toBe(200)
   })
 })
