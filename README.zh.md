@@ -99,6 +99,8 @@
 
 主会话由任务绑定推出为 CEO，不另写 Agent 账本。`dispatch_subagent` 会把子代理会话记录为请求阶段指定的 Agent；需登录的浏览器路由 `/a2d2/api/session-agent` 供芯片创建的会话登记为 `ceo`、`engineer` 或 `reviewer`。该路由只接受 POST，使用与 `/a2d2/api/consult`、`/a2d2/api/config` 相同的 DSH 浏览器认证和 64 KiB JSON 请求体上限，会拒绝未知会话 id、非法 Agent 值、任务 issue 主会话，以及把已记录会话改写成另一个 Agent 的请求，并写入项目本地 `.dsh/a2d2/session-agents.yaml` 账本。把同一会话重复登记成同一 Agent 是幂等操作。`ctx.a2d2.agentOfSession(cwd, session)` 对任务 issue 主会话返回 `ceo`，对已记录的非主会话返回账本值，对普通未记录会话返回 `undefined`。
 
+账本记录与会话同寿命，不做清理。记录表达的是「这条会话以哪个 Agent 运行」，而会话的生命周期归 DSH，DSH 不物理删除会话：`SessionPersistence` 只有 create/open/flush/stat/list（`packages/session/session-persistence/src/index.ts`）；`session/disposed` 只表示会话从内存卸载，之后仍可重开或冷恢复（`packages/core/session/src/index.ts`）；归档可由 `unarchiveSession` 撤销（`packages/workspace/workspace/src/index.ts`）。因此会话仍存在时，它的记录不是孤儿；若在卸载或归档时删除记录，会话回来时会装配不出它的 Agent。唯一的孤儿来源是 DSH 启动子代理失败：`dispatch_subagent` 会撤销该记录，并抛出启动失败；如果撤销也失败，两个错误一起抛出。DSH 将来若提供会话删除事件，再随该事件移除记录。
+
 组合了 `agent-prompt` 行时，工程师和评审会话会得到一个作用域 `a2d2:agent` 系统提示段。该段先读 `~/.dsh/a2d2/agents/<engineer|reviewer>.md`，再读 `<项目根>/.dsh/a2d2/agents/<engineer|reviewer>.md`，并标明项目配置优先于全局配置。文件在每次系统提示词组装时现读；缺失或为空就跳过；两级都缺时该段渲染为空，因此之后新增配置文件会影响下一次请求。这些用户编写的 Agent 配置按字面提示词处理，`{{...}}` 示例会原样保留而不会被插值。这些文件不写入会话历史。CEO 继续使用既有的 `a2d2:ceo` 段与 SOUL 行为，SOUL 文本同样按字面处理。
 
 ### A2D2 配置页

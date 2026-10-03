@@ -5,6 +5,19 @@
  * this ledger records sessions created directly as a named A2D2 Agent, such as
  * dispatched subagents and browser-created sessions.
  *
+ * Lifetime (#93): a record lives as long as its session. The ledger states
+ * which Agent a session runs as, and session lifetime belongs to DSH, which
+ * never deletes a session: `SessionPersistence` offers only
+ * create/open/flush/stat/list (packages/session/session-persistence/src/index.ts);
+ * `session/disposed` only means the session left the in-memory store and it
+ * can be reopened or cold-resumed (packages/core/session/src/index.ts);
+ * archiving is undone by `unarchiveSession` and emits no event of its own
+ * (packages/workspace/workspace/src/index.ts). A record whose session still
+ * exists is therefore not an orphan, and dropping it on dispose or archive
+ * would break the session's Agent assembly when it returns. The one orphan
+ * source, a child DSH failed to start, is withdrawn by `withdraw`. Should DSH
+ * gain a session deletion event, records are removed on it.
+ *
  * @module @deepseek-ai/dsh-a2d2/src/session-agents
  */
 
