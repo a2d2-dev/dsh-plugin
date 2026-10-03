@@ -364,7 +364,7 @@ describe('boundary failures', () => {
     const root = await tempRoot()
     await mkdir(join(tasksDirectory(root), 'demo.yaml'), { recursive: true })
     const store = new TaskDocumentStore({ root, projectMarkers: ['.git'] })
-    await expect(store.read(root, TaskId('demo'))).rejects.toThrow(/EISDIR/)
+    await expect(store.read(root, TaskId('demo'))).rejects.toMatchObject({ name: 'LocalFileError', problem: 'directory' })
   })
 
   it('rejects a blank task name', () => {
