@@ -12,6 +12,7 @@
  */
 
 import { closeSync, constants, fstatSync, lstatSync, openSync, readSync } from 'node:fs'
+import type { Stats } from 'node:fs'
 import { lstat, open } from 'node:fs/promises'
 
 /**
@@ -25,7 +26,7 @@ import { lstat, open } from 'node:fs/promises'
 export const LOCAL_FILE_MAX_BYTES = 1024 * 1024
 
 /** Why an existing path could not be read as a plugin file. */
-export type LocalFileProblem = 'too-large' | 'symlink' | 'error'
+export type LocalFileProblem = 'too-large' | 'symlink' | 'directory' | 'not-regular-file' | 'error'
 
 /** Outcome of one guarded read. */
 export type LocalFileRead =
@@ -66,6 +67,14 @@ function tooLarge(maxBytes: number): LocalFileRead {
   return { kind: 'unreadable', problem: 'too-large', message: `file is too large (over ${maxBytes} bytes)` }
 }
 
+/** Refuse what the opened descriptor turned out to be, before reading from it. */
+function refuseByStat(stats: Stats, maxBytes: number): LocalFileRead | undefined {
+  if (stats.isDirectory()) return { kind: 'unreadable', problem: 'directory', message: 'path is a directory, not a file' }
+  if (!stats.isFile()) return { kind: 'unreadable', problem: 'not-regular-file', message: 'path is not a regular file' }
+  if (stats.size > maxBytes) return tooLarge(maxBytes)
+  return undefined
+}
+
 function fromOpenError(error: unknown): LocalFileRead {
   const code = (error as NodeJS.ErrnoException).code
   if (code === 'ENOENT' || code === 'ENOTDIR') return { kind: 'missing' }
@@ -91,7 +100,8 @@ export function readLocalFileSync(path: string, options: LocalFileReadOptions = 
     return fromOpenError(error)
   }
   try {
-    if (fstatSync(fd).size > maxBytes) return tooLarge(maxBytes)
+    const refused = refuseByStat(fstatSync(fd), maxBytes)
+    if (refused !== undefined) return refused
     const buffer = Buffer.allocUnsafe(maxBytes + 1)
     let length = 0
     for (;;) {
@@ -124,7 +134,8 @@ export async function readLocalFile(path: string, options: LocalFileReadOptions 
     return fromOpenError(error)
   }
   try {
-    if ((await handle.stat()).size > maxBytes) return tooLarge(maxBytes)
+    const refused = refuseByStat(await handle.stat(), maxBytes)
+    if (refused !== undefined) return refused
     const buffer = Buffer.allocUnsafe(maxBytes + 1)
     let length = 0
     for (;;) {
