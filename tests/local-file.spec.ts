@@ -6,7 +6,7 @@
  * @module dsh-a2d2/tests/local-file
  */
 
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -78,5 +78,41 @@ describe('oversized local files', () => {
     await writeOversized(join(directory, handoffDocumentName(SessionId('session-big'))))
 
     await expect(readHandoffDocument(directory, SessionId('session-big'))).rejects.toThrow(LocalFileError)
+  })
+})
+
+describe('symbolic links', () => {
+  it('reports a symbolic link as a symlink rather than following it, sync and async', async () => {
+    const root = await tempRoot()
+    const target = join(root, 'target.md')
+    await writeFile(target, 'secret elsewhere', 'utf8')
+    const link = join(root, 'link.md')
+    await symlink(target, link)
+
+    for (const result of [readLocalFileSync(link), await readLocalFile(link)]) {
+      expect(result).toMatchObject({ kind: 'unreadable', problem: 'symlink' })
+    }
+  })
+
+  it('reports a dangling symbolic link as a symlink, not as a missing file', async () => {
+    const root = await tempRoot()
+    const link = join(root, 'dangling.md')
+    await symlink(join(root, 'nowhere.md'), link)
+
+    for (const result of [readLocalFileSync(link), await readLocalFile(link)]) {
+      expect(result).toMatchObject({ kind: 'unreadable', problem: 'symlink' })
+    }
+  })
+
+  it('refuses a symlinked task document and session Agent ledger', async () => {
+    const root = await tempRoot()
+    const outside = join(root, 'outside.yaml')
+    await writeFile(outside, 'version: 1\nsessions: []\n', 'utf8')
+    await mkdir(tasksDirectory(root), { recursive: true })
+    await symlink(outside, join(tasksDirectory(root), 'linked.yaml'))
+    await symlink(outside, sessionAgentsFile(root))
+
+    await expect(store(root).read(root, TaskId('linked'))).rejects.toThrow(/symbolic link/)
+    await expect(new SessionAgentStore().read(root)).rejects.toThrow(/symbolic link/)
   })
 })
