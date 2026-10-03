@@ -147,3 +147,44 @@ describe('directories', () => {
     }
   })
 })
+
+describe('regular files', () => {
+  it('returns the exact UTF-8 text of a regular file, including one exactly at the limit, sync and async', async () => {
+    const root = await tempRoot()
+    const small = join(root, 'SOUL.md')
+    await writeFile(small, '原则：先问为什么。\n', 'utf8')
+    const atLimit = join(root, 'at-limit.md')
+    await writeFile(atLimit, 'y'.repeat(LOCAL_FILE_MAX_BYTES), 'utf8')
+    const empty = join(root, 'empty.md')
+    await writeFile(empty, '', 'utf8')
+
+    for (const read of [readLocalFileSync, readLocalFile]) {
+      expect(await read(small)).toEqual({ kind: 'file', text: '原则：先问为什么。\n' })
+      const whole = await read(atLimit)
+      expect(whole.kind).toBe('file')
+      if (whole.kind === 'file') expect(whole.text.length).toBe(LOCAL_FILE_MAX_BYTES)
+      expect(await read(empty)).toEqual({ kind: 'file', text: '' })
+    }
+  })
+
+  it('reports an absent file, or one under an absent directory, as missing', async () => {
+    const root = await tempRoot()
+
+    for (const read of [readLocalFileSync, readLocalFile]) {
+      expect(await read(join(root, 'absent.md'))).toEqual({ kind: 'missing' })
+      expect(await read(join(root, 'no-such-dir', 'absent.md'))).toEqual({ kind: 'missing' })
+    }
+  })
+
+  it('reads a regular session Agent ledger and handoff document through the shared reader', async () => {
+    const root = await tempRoot()
+    await mkdir(join(sessionAgentsFile(root), '..'), { recursive: true })
+    await writeFile(sessionAgentsFile(root), 'version: 1\nsessions:\n  - id: session-a\n    agent: engineer\n', 'utf8')
+    const directory = join(root, 'handoffs')
+    await mkdir(directory)
+    await writeFile(join(directory, handoffDocumentName(SessionId('session-a'))), 'handoff text', 'utf8')
+
+    await expect(new SessionAgentStore().agentOf(root, SessionId('session-a'))).resolves.toBe('engineer')
+    await expect(readHandoffDocument(directory, SessionId('session-a'))).resolves.toBe('handoff text')
+  })
+})
