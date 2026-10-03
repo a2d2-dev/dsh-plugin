@@ -258,6 +258,7 @@ describe('A2D2 route authentication', () => {
  */
 const writeRouteCalls = [
   { path: CONFIG_ROUTE_PATH, url: CONFIG_ROUTE_PATH, body: { method: 'settings.get', payload: {} } },
+  { path: SESSION_AGENT_ROUTE_PATH, url: SESSION_AGENT_ROUTE_PATH, body: { session: sessionA, agent: 'engineer' } },
 ] as const
 
 describe('A2D2 write route content type', () => {
