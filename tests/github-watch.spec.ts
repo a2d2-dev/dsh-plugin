@@ -386,13 +386,26 @@ describe('github_watch plugin', () => {
       }
     })
   })
-  afterEach(() => vi.unstubAllEnvs())
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+  })
 
   it('watches from a tool call and wakes the session with a notice when the PR merges', async () => {
     const home = await tempDir()
     const session = SessionId('session-main')
     const agent = stubAgent(home, session)
     const flush = vi.fn(async () => true)
+    // Ending the watch writes the store after the session is woken; on a loaded
+    // machine that write is still running when the wake is seen (#96). Hold it
+    // until then so the test sees the same order every run.
+    let wakeSeen!: () => void
+    const woken = new Promise<void>(resolve => { wakeSeen = resolve })
+    const remove = WatchStore.prototype.remove
+    vi.spyOn(WatchStore.prototype, 'remove').mockImplementation(async function (this: WatchStore, watch) {
+      await woken
+      return remove.call(this, watch)
+    })
     const ctx = new Context()
     await ctx.plugin(StubTools)
     await ctx.plugin(NamedStub, { name: 'agents', impl: { list: () => [agent] } })
@@ -418,8 +431,9 @@ describe('github_watch plugin', () => {
     })
     expect(message.content[0].text).toContain('The watch on this PR has ended')
     await vi.waitFor(() => expect(flush).toHaveBeenCalledWith(agent.session))
-    // The merge ended the only watch, so the connection is already closed.
-    expect(sockets[0]!.readyState).toBe(3)
+    wakeSeen()
+    // The merge ended the only watch, so the watcher closes the connection.
+    await vi.waitFor(() => expect(sockets[0]!.readyState).toBe(3))
     await ctx.fiber.dispose()
   })
 
