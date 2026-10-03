@@ -848,22 +848,52 @@ export class A2d2Service extends Service {
       modelCandidatesForStage(settings, request.stage),
     )
     const route = splitModelRoute(model)
-    const childId = brandString<SessionId>(`session-${randomUUID()}`)
-    await this.recordSessionAgent(cwd, childId, configuredAgent)
     const subagents = this.getService<SubagentsRuntime>('subagents')
     if (subagents === undefined) throw new Error('a2d2: subagents service is unavailable')
-    const started = await subagents.startContinuable({
-      provider: 'spawn',
-      label: `${request.stage} #${issue}`,
-      childId,
-      request: {
-        prompt: [{ type: 'text', text: request.prompt }],
-        parent,
-        agentOptions: { provider: route.provider, model: route.model },
-      },
-      signal: request.signal,
-    })
+    const childId = brandString<SessionId>(`session-${randomUUID()}`)
+    // Recorded before the start so the child's first request already assembles
+    // as its Agent; withdrawn when DSH reports the child was never established.
+    await this.recordSessionAgent(cwd, childId, configuredAgent)
+    let started: { readonly childId: SessionId }
+    try {
+      started = await subagents.startContinuable({
+        provider: 'spawn',
+        label: `${request.stage} #${issue}`,
+        childId,
+        request: {
+          prompt: [{ type: 'text', text: request.prompt }],
+          parent,
+          agentOptions: { provider: route.provider, model: route.model },
+        },
+        signal: request.signal,
+      })
+    } catch (startError) {
+      await this.withdrawSessionAgent(cwd, childId, configuredAgent, startError)
+      throw startError
+    }
     return { session: started.childId, model, agent: configuredAgent }
+  }
+
+  /**
+   * Withdraw the ledger record of a child DSH failed to start. DSH's
+   * `startContinuable` rejects only after disposing any handle it created and
+   * without returning the child id, so the recorded id names no session.
+   * A failed withdrawal is raised together with the start failure.
+   */
+  private async withdrawSessionAgent(
+    cwd: string,
+    childId: SessionId,
+    agent: StageAgent,
+    startError: unknown,
+  ): Promise<void> {
+    try {
+      await this.sessionAgents.withdraw(await this.store.projectRoot(cwd), childId, agent)
+    } catch (withdrawError) {
+      throw new AggregateError(
+        [startError, withdrawError],
+        `a2d2: subagent start failed and the session Agent ledger could not withdraw session "${childId}"`,
+      )
+    }
   }
 
   /**

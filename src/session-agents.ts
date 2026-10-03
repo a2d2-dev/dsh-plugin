@@ -148,10 +148,37 @@ export class SessionAgentStore {
       }
       const sessions = [...document.sessions, { sessionId, agent }]
       sessions.sort((left, right) => left.sessionId.localeCompare(right.sessionId))
-      await writeFileAtomic(path, renderSessionAgentsDocument({ version: SESSION_AGENTS_DOCUMENT_VERSION, sessions }), {
-        mode: 0o600,
-        dirMode: 0o700,
-      })
+      await writeSessions(path, sessions)
     })
   }
+
+  /**
+   * Remove the record `record` wrote for a session that never came to exist.
+   *
+   * Only the exact `(sessionId, agent)` pair is removed: a record naming another
+   * Agent belongs to someone else and is refused rather than silently dropped.
+   * A missing record resolves without writing.
+   */
+  async withdraw(projectRoot: string, sessionId: SessionId, agent: StageAgent): Promise<void> {
+    const path = sessionAgentsFile(projectRoot)
+    await withFileLock(path, async () => {
+      const document = await this.read(projectRoot)
+      const existing = document.sessions.find(entry => entry.sessionId === sessionId)
+      if (existing === undefined) return
+      if (existing.agent !== agent) {
+        throw new SessionAgentsDocumentError(
+          'duplicate-session',
+          `session Agent ledger records session "${sessionId}" as ${existing.agent}, not ${agent}; refusing to withdraw it`,
+        )
+      }
+      await writeSessions(path, document.sessions.filter(entry => entry !== existing))
+    })
+  }
+}
+
+async function writeSessions(path: string, sessions: readonly SessionAgentRecord[]): Promise<void> {
+  await writeFileAtomic(path, renderSessionAgentsDocument({ version: SESSION_AGENTS_DOCUMENT_VERSION, sessions }), {
+    mode: 0o600,
+    dirMode: 0o700,
+  })
 }
