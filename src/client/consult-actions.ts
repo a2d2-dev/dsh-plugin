@@ -149,7 +149,7 @@ export interface ConsultFetchResponse {
 export interface ConsultRequestDeps {
   readonly fetch: (
     input: string,
-    init: { readonly method: 'POST' },
+    init: { readonly method: 'POST'; readonly headers: Record<string, string> },
   ) => Promise<ConsultFetchResponse>
   readonly setPhase: (phase: ConsultPhase) => void
 }
@@ -495,7 +495,9 @@ export async function requestConsult(deps: ConsultRequestDeps, sessionId: string
   try {
     const response = await deps.fetch(
       `${CONSULT_ROUTE_PATH}?session=${encodeURIComponent(sessionId)}`,
-      { method: 'POST' },
+      // The host route accepts only JSON writes (route-auth.ts); declaring it
+      // is what makes a cross-site page's copy of this request need a preflight.
+      { method: 'POST', headers: { 'content-type': 'application/json' } },
     )
     const result = parseConsultResponse(await response.json())
     if (!result.ok) {

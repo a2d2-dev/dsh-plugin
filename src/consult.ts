@@ -41,7 +41,7 @@ import {
 } from './highway.ts'
 import type { HighwayZone, MainStation, Move } from './highway.ts'
 import type { HandoffThresholds } from './indicator-projection.ts'
-import { rejectionError } from './route-auth.ts'
+import { contentTypeRejection, rejectionError } from './route-auth.ts'
 import type { RequestRejection } from './route-auth.ts'
 import { classifyFailureKind } from './refusal.ts'
 import type { FailureKind } from './refusal.ts'
@@ -150,6 +150,7 @@ export type ConsultErrorCode =
   | 'method-not-allowed'
   | 'unauthenticated'
   | 'untrusted'
+  | 'unsupported-media-type'
   | 'missing-session'
   | 'unknown-session'
   | 'no-working-directory'
@@ -821,6 +822,7 @@ export function statusOf(code: ConsultErrorCode): number {
     case 'method-not-allowed': return 405
     case 'unauthenticated': return 401
     case 'untrusted': return 403
+    case 'unsupported-media-type': return 415
     case 'missing-session': return 400
     case 'unknown-session': return 404
     case 'no-working-directory': return 409
@@ -872,6 +874,11 @@ export function createConsultHandler(
     }
     if (request.method !== 'POST') {
       fail(response, 'method-not-allowed', 'Only POST is allowed for this route.')
+      return
+    }
+    const unsupported = contentTypeRejection(request)
+    if (unsupported !== undefined) {
+      fail(response, unsupported.code, unsupported.message)
       return
     }
     try {

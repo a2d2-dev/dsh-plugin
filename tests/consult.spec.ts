@@ -246,7 +246,7 @@ async function send(
         port,
         method: options.method ?? 'POST',
         path: options.path ?? `/a2d2/api/consult?session=${sessionId}`,
-        headers: options.headers,
+        headers: { 'content-type': 'application/json', ...options.headers },
       }, (response) => {
         const chunks: Buffer[] = []
         response.on('data', chunk => { chunks.push(Buffer.from(chunk)) })
