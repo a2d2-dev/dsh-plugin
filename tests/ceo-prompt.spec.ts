@@ -388,7 +388,7 @@ describe('CEO prompt section', () => {
     }
   })
 
-  it('names a SOUL path that is a directory or a symbolic link in the section instead of failing assembly', async () => {
+  it('names a project SOUL path that is a directory in the section instead of failing assembly', async () => {
     const root = await tempRoot()
     const { agentFilesDir, globalSoulDir } = await writeAgentFiles(root, {
       agents: 'CEO duties',
@@ -396,8 +396,6 @@ describe('CEO prompt section', () => {
     })
     const projectSoul = join(root, '.dsh', 'a2d2', 'SOUL.md')
     await mkdir(projectSoul, { recursive: true })
-    await writeFile(join(root, 'elsewhere.md'), 'Principle from elsewhere', 'utf8')
-    await symlink(join(root, 'elsewhere.md'), join(globalSoulDir, 'SOUL.md'))
     const ctx = new Context()
     await ctx.plugin(StubSystemPrompt)
     await ctx.plugin(StubAgents)
@@ -410,7 +408,38 @@ describe('CEO prompt section', () => {
     const section = main.prompt.render('a2d2:ceo')
     expect(section).toContain('CEO duties')
     expect(section).toContain(`Unreadable Project SOUL (priority over global SOUL): ${projectSoul} (path is a directory`)
-    expect(section).toContain(`Unreadable Global SOUL: ${join(globalSoulDir, 'SOUL.md')} (path is a symbolic link`)
-    expect(section).not.toContain('Principle from elsewhere')
+  })
+
+  it('follows symbolic links for the global SOUL and packaged method files but refuses a symlinked project SOUL', async () => {
+    const root = await tempRoot()
+    const dotfiles = join(root, 'dotfiles')
+    await mkdir(dotfiles, { recursive: true })
+    await writeFile(join(dotfiles, 'SOUL.md'), 'Global principle from dotfiles', 'utf8')
+    await writeFile(join(dotfiles, 'AGENTS.md'), 'CEO duties from linked package file', 'utf8')
+    await writeFile(join(dotfiles, 'project-soul.md'), 'Project principle from outside the tree', 'utf8')
+    const agentFilesDir = join(root, 'method')
+    const globalSoulDir = join(root, 'global-soul')
+    const projectSoulDir = join(root, '.dsh', 'a2d2')
+    await mkdir(agentFilesDir, { recursive: true })
+    await mkdir(globalSoulDir, { recursive: true })
+    await mkdir(projectSoulDir, { recursive: true })
+    await symlink(join(dotfiles, 'AGENTS.md'), join(agentFilesDir, 'AGENTS.md'))
+    await writeFile(join(agentFilesDir, 'WAKE.md'), 'Wake checklist', 'utf8')
+    await symlink(join(dotfiles, 'SOUL.md'), join(globalSoulDir, 'SOUL.md'))
+    await symlink(join(dotfiles, 'project-soul.md'), join(projectSoulDir, 'SOUL.md'))
+    const ctx = new Context()
+    await ctx.plugin(StubSystemPrompt)
+    await ctx.plugin(StubAgents)
+    await ctx.plugin(A2d2Service, { root })
+    await ctx.plugin(ceoPromptPlugin, { agentFilesDir, globalSoulDir })
+    const main = agent(root, 'session-main')
+    ;(ctx.get('agents') as unknown as StubAgents).add(main)
+    await ctx.a2d2.bindMainSession({ cwd: root, issue: 46, mainSession: main.id, now: new Date() })
+
+    const section = main.prompt.render('a2d2:ceo')
+    expect(section).toContain('CEO duties from linked package file')
+    expect(section).toContain('Global principle from dotfiles')
+    expect(section).toContain(`Unreadable Project SOUL (priority over global SOUL): ${join(projectSoulDir, 'SOUL.md')} (path is a symbolic link`)
+    expect(section).not.toContain('Project principle from outside the tree')
   })
 })

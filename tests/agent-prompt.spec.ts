@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -264,5 +264,31 @@ describe('engineer and reviewer Agent prompt sections', () => {
     const section = child.prompt.render('a2d2:agent')
     expect(section).toContain('Global engineer instructions')
     expect(section).toContain(`Unreadable project Agent configuration: ${projectConfig} (path is a directory`)
+  })
+
+  it('follows a symlinked global Agent configuration but refuses a symlinked project one', async () => {
+    const root = await tempRoot()
+    const dotfiles = join(root, 'dotfiles')
+    await mkdir(dotfiles, { recursive: true })
+    await writeFile(join(dotfiles, 'engineer.md'), 'Global engineer instructions from dotfiles', 'utf8')
+    await writeFile(join(dotfiles, 'project-engineer.md'), 'Project engineer instructions from outside the tree', 'utf8')
+    const { globalAgentsDir } = await writeAgentConfig(root, 'engineer', {})
+    await symlink(join(dotfiles, 'engineer.md'), join(globalAgentsDir, 'engineer.md'))
+    const projectConfig = join(root, '.dsh', 'a2d2', 'agents', 'engineer.md')
+    await mkdir(join(projectConfig, '..'), { recursive: true })
+    await symlink(join(dotfiles, 'project-engineer.md'), projectConfig)
+    const ctx = new Context()
+    await ctx.plugin(StubSystemPrompt)
+    await ctx.plugin(StubAgents)
+    await ctx.plugin(A2d2Service, { root })
+    await ctx.a2d2.recordSessionAgent(root, SessionId('session-engineer'), 'engineer')
+    await ctx.plugin(agentPromptPlugin, { globalAgentsDir })
+    const child = agent(root, 'session-engineer')
+    await (ctx.get('agents') as unknown as StubAgents).addSerial(child)
+
+    const section = child.prompt.render('a2d2:agent')
+    expect(section).toContain('Global engineer instructions from dotfiles')
+    expect(section).toContain(`Unreadable project Agent configuration: ${projectConfig} (path is a symbolic link`)
+    expect(section).not.toContain('Project engineer instructions from outside the tree')
   })
 })

@@ -188,3 +188,25 @@ describe('regular files', () => {
     await expect(readHandoffDocument(directory, SessionId('session-a'))).resolves.toBe('handoff text')
   })
 })
+
+describe('following symbolic links on request', () => {
+  it('reads through a symbolic link only when followSymlinks is set, still checking the target', async () => {
+    const root = await tempRoot()
+    const target = join(root, 'target.md')
+    await writeFile(target, 'linked text', 'utf8')
+    await symlink(target, join(root, 'file-link.md'))
+    await mkdir(join(root, 'folder'))
+    await symlink(join(root, 'folder'), join(root, 'dir-link.md'))
+    await writeOversized(join(root, 'big.md'))
+    await symlink(join(root, 'big.md'), join(root, 'big-link.md'))
+    await symlink(join(root, 'nowhere.md'), join(root, 'dangling.md'))
+
+    for (const read of [readLocalFileSync, readLocalFile]) {
+      expect(await read(join(root, 'file-link.md'), { followSymlinks: true })).toEqual({ kind: 'file', text: 'linked text' })
+      expect(await read(join(root, 'dir-link.md'), { followSymlinks: true })).toMatchObject({ kind: 'unreadable', problem: 'directory' })
+      expect(await read(join(root, 'big-link.md'), { followSymlinks: true })).toMatchObject({ kind: 'unreadable', problem: 'too-large' })
+      expect(await read(join(root, 'dangling.md'), { followSymlinks: true })).toEqual({ kind: 'missing' })
+      expect(await read(join(root, 'file-link.md'))).toMatchObject({ kind: 'unreadable', problem: 'symlink' })
+    }
+  })
+})
