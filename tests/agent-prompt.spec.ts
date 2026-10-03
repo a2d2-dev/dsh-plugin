@@ -246,4 +246,23 @@ describe('engineer and reviewer Agent prompt sections', () => {
       expect(accessCount(path), path).toBe(1)
     }
   })
+
+  it('names a project Agent configuration path that is a directory instead of failing assembly', async () => {
+    const root = await tempRoot()
+    const { globalAgentsDir } = await writeAgentConfig(root, 'engineer', { global: 'Global engineer instructions' })
+    const projectConfig = join(root, '.dsh', 'a2d2', 'agents', 'engineer.md')
+    await mkdir(projectConfig, { recursive: true })
+    const ctx = new Context()
+    await ctx.plugin(StubSystemPrompt)
+    await ctx.plugin(StubAgents)
+    await ctx.plugin(A2d2Service, { root })
+    await ctx.a2d2.recordSessionAgent(root, SessionId('session-engineer'), 'engineer')
+    await ctx.plugin(agentPromptPlugin, { globalAgentsDir })
+    const child = agent(root, 'session-engineer')
+    await (ctx.get('agents') as unknown as StubAgents).addSerial(child)
+
+    const section = child.prompt.render('a2d2:agent')
+    expect(section).toContain('Global engineer instructions')
+    expect(section).toContain(`Unreadable project Agent configuration: ${projectConfig} (path is a directory`)
+  })
 })

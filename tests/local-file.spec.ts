@@ -6,6 +6,7 @@
  * @module dsh-a2d2/tests/local-file
  */
 
+import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -114,5 +115,35 @@ describe('symbolic links', () => {
 
     await expect(store(root).read(root, TaskId('linked'))).rejects.toThrow(/symbolic link/)
     await expect(new SessionAgentStore().read(root)).rejects.toThrow(/symbolic link/)
+  })
+})
+
+describe('directories', () => {
+  it('reports a directory as unreadable rather than throwing, sync and async', async () => {
+    const root = await tempRoot()
+    const path = join(root, 'SOUL.md')
+    await mkdir(path)
+
+    for (const result of [readLocalFileSync(path), await readLocalFile(path)]) {
+      expect(result).toMatchObject({ kind: 'unreadable', problem: 'directory' })
+      if (result.kind === 'unreadable') expect(result.message).toContain('path is a directory')
+    }
+  })
+
+  it('refuses a task document path that is a directory with a named problem', async () => {
+    const root = await tempRoot()
+    await mkdir(join(tasksDirectory(root), 'folder.yaml'), { recursive: true })
+
+    await expect(store(root).read(root, TaskId('folder'))).rejects.toMatchObject({ name: 'LocalFileError', problem: 'directory' })
+  })
+
+  it('reports a FIFO as not a regular file without blocking on it', async () => {
+    const root = await tempRoot()
+    const path = join(root, 'pipe.yaml')
+    execFileSync('mkfifo', [path])
+
+    for (const result of [readLocalFileSync(path), await readLocalFile(path)]) {
+      expect(result).toMatchObject({ kind: 'unreadable', problem: 'not-regular-file' })
+    }
   })
 })

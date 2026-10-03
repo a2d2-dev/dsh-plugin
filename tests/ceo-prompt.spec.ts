@@ -5,7 +5,7 @@
  * @module dsh-a2d2/tests/ceo-prompt
  */
 
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -386,5 +386,31 @@ describe('CEO prompt section', () => {
     ]) {
       expect(accessCount(path), path).toBe(1)
     }
+  })
+
+  it('names a SOUL path that is a directory or a symbolic link in the section instead of failing assembly', async () => {
+    const root = await tempRoot()
+    const { agentFilesDir, globalSoulDir } = await writeAgentFiles(root, {
+      agents: 'CEO duties',
+      wake: 'Wake checklist',
+    })
+    const projectSoul = join(root, '.dsh', 'a2d2', 'SOUL.md')
+    await mkdir(projectSoul, { recursive: true })
+    await writeFile(join(root, 'elsewhere.md'), 'Principle from elsewhere', 'utf8')
+    await symlink(join(root, 'elsewhere.md'), join(globalSoulDir, 'SOUL.md'))
+    const ctx = new Context()
+    await ctx.plugin(StubSystemPrompt)
+    await ctx.plugin(StubAgents)
+    await ctx.plugin(A2d2Service, { root })
+    await ctx.plugin(ceoPromptPlugin, { agentFilesDir, globalSoulDir })
+    const main = agent(root, 'session-main')
+    ;(ctx.get('agents') as unknown as StubAgents).add(main)
+    await ctx.a2d2.bindMainSession({ cwd: root, issue: 46, mainSession: main.id, now: new Date() })
+
+    const section = main.prompt.render('a2d2:ceo')
+    expect(section).toContain('CEO duties')
+    expect(section).toContain(`Unreadable Project SOUL (priority over global SOUL): ${projectSoul} (path is a directory`)
+    expect(section).toContain(`Unreadable Global SOUL: ${join(globalSoulDir, 'SOUL.md')} (path is a symbolic link`)
+    expect(section).not.toContain('Principle from elsewhere')
   })
 })
