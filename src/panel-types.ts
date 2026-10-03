@@ -55,6 +55,7 @@ export interface PanelPayload {
 /** Stable failure vocabulary for the route. */
 export type PanelErrorCode =
   | 'method-not-allowed'
+  | 'unauthenticated'
   | 'untrusted'
   | 'missing-session'
   | 'unknown-session'

@@ -9,7 +9,7 @@
  * @module @deepseek-ai/dsh-a2d2/src/consult
  */
 
-import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from 'node:http'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
@@ -41,6 +41,8 @@ import {
 } from './highway.ts'
 import type { HighwayZone, MainStation, Move } from './highway.ts'
 import type { HandoffThresholds } from './indicator-projection.ts'
+import { rejectionError } from './route-auth.ts'
+import type { RequestRejection } from './route-auth.ts'
 import { classifyFailureKind } from './refusal.ts'
 import type { FailureKind } from './refusal.ts'
 import type { SkillSource } from './skill-source.ts'
@@ -146,6 +148,7 @@ export interface ConsultValue {
 /** Stable public failure vocabulary for the route. */
 export type ConsultErrorCode =
   | 'method-not-allowed'
+  | 'unauthenticated'
   | 'untrusted'
   | 'missing-session'
   | 'unknown-session'
@@ -208,7 +211,8 @@ export interface ConsultSession {
 
 /** Injectable host capabilities used by the HTTP route. */
 export interface ConsultDependencies {
-  readonly trustedHosts: () => readonly string[]
+  /** DSH's browser authentication, asked before anything else (see `route-auth.ts`). */
+  readonly requestRejection: RequestRejection
   readonly getSession: (id: SessionId) => ConsultSession | undefined
   readonly listTasks: (cwd: string) => Promise<readonly Task[]>
   readonly projectRoot?: (cwd: string) => Promise<string>
@@ -811,102 +815,11 @@ export async function generateConsultWithFallback(options: {
   throw new Error(`a2d2 consult: every consult route failed${reasons === '' ? '' : ` (${reasons})`}`)
 }
 
-function header(headers: IncomingHttpHeaders, name: string): string | undefined {
-  const value = headers[name]
-  return typeof value === 'string' ? value : undefined
-}
-
-interface ParsedAuthority {
-  readonly hostname: string
-  readonly literalHostname: string
-  readonly port?: string
-}
-
-function parseAuthority(authority: string): ParsedAuthority | undefined {
-  let literalHostname: string
-  let literalPort: string | undefined
-  if (authority === '::1') {
-    literalHostname = authority
-  } else if (authority.startsWith('[')) {
-    const closingBracket = authority.indexOf(']')
-    if (closingBracket < 0) return undefined
-    literalHostname = authority.slice(1, closingBracket)
-    const remainder = authority.slice(closingBracket + 1)
-    if (remainder !== '') {
-      if (!/^:\d+$/u.test(remainder)) return undefined
-      literalPort = remainder.slice(1)
-    }
-  } else {
-    const firstColon = authority.indexOf(':')
-    if (firstColon < 0) {
-      literalHostname = authority
-    } else {
-      if (firstColon !== authority.lastIndexOf(':')) return undefined
-      literalHostname = authority.slice(0, firstColon)
-      literalPort = authority.slice(firstColon + 1)
-      if (!/^\d+$/u.test(literalPort)) return undefined
-    }
-  }
-  if (literalHostname === '') return undefined
-
-  try {
-    const url = new URL(`http://${authority === '::1' ? '[::1]' : authority}`)
-    if (url.username !== '' || url.password !== '' || url.pathname !== '/' || url.search !== '' || url.hash !== '') {
-      return undefined
-    }
-    const urlHostname = url.hostname.toLowerCase()
-    const hostname = urlHostname.startsWith('[') && urlHostname.endsWith(']')
-      ? urlHostname.slice(1, -1)
-      : urlHostname
-    return {
-      hostname,
-      literalHostname: literalHostname.toLowerCase(),
-      ...(literalPort === undefined ? {} : { port: String(Number(literalPort)) }),
-    }
-  } catch {
-    return undefined
-  }
-}
-
-function isLoopback(authority: ParsedAuthority): boolean {
-  if (authority.hostname === 'localhost' || authority.hostname === '::1') return true
-  const match = /^127\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/u.exec(authority.literalHostname)
-  return match !== null && match.slice(1).every(octet => Number(octet) <= 255)
-}
-
-/** Evaluate the route's host/fetch/origin trust fence for one request. */
-export function isTrustedConsultRequest(
-  headers: IncomingHttpHeaders,
-  trustedHosts: readonly string[],
-): boolean {
-  const authority = header(headers, 'host')
-  if (authority === undefined) return false
-  const parsedAuthority = parseAuthority(authority)
-  if (parsedAuthority === undefined) return false
-  if (header(headers, 'sec-fetch-site')?.toLowerCase() === 'cross-site') return false
-  const origin = header(headers, 'origin')
-  if (origin !== undefined) {
-    try {
-      const originUrl = new URL(origin)
-      const originHostname = originUrl.hostname.toLowerCase().replace(/^\[|\]$/gu, '')
-      if (originHostname !== parsedAuthority.hostname) return false
-    } catch {
-      return false
-    }
-  }
-  if (isLoopback(parsedAuthority)) return true
-  return trustedHosts.some((candidate) => {
-    const trusted = parseAuthority(candidate)
-    return trusted !== undefined
-      && trusted.hostname === parsedAuthority.hostname
-      && (trusted.port === undefined || trusted.port === parsedAuthority.port)
-  })
-}
-
 /** Map one public error code to its required HTTP status. */
 export function statusOf(code: ConsultErrorCode): number {
   switch (code) {
     case 'method-not-allowed': return 405
+    case 'unauthenticated': return 401
     case 'untrusted': return 403
     case 'missing-session': return 400
     case 'unknown-session': return 404
@@ -932,7 +845,7 @@ const REASON_LIMIT = 300
 /**
  * The human-readable cause of a failure, for the card.
  *
- * The route is loopback- or trust-fenced and the reason comes from this module
+ * The route answers only DSH-authenticated browsers and the reason comes from this module
  * or the provider adapter (rate limits, token limits, shape errors), so showing
  * it is what lets a user tell "retry in a moment" from "this route cannot work".
  */
@@ -951,15 +864,17 @@ export function createConsultHandler(
   dependencies: ConsultDependencies,
 ): (request: IncomingMessage, response: ServerResponse) => Promise<void> {
   return async (request, response) => {
+    const rejection = dependencies.requestRejection(request)
+    if (rejection !== undefined) {
+      const { code, message } = rejectionError(rejection)
+      fail(response, code, message)
+      return
+    }
     if (request.method !== 'POST') {
       fail(response, 'method-not-allowed', 'Only POST is allowed for this route.')
       return
     }
     try {
-      if (!isTrustedConsultRequest(request.headers, dependencies.trustedHosts())) {
-        fail(response, 'untrusted', 'The request authority or origin is not trusted.')
-        return
-      }
       const rawSession = new URL(request.url ?? CONSULT_ROUTE_PATH, 'http://a2d2.invalid')
         .searchParams.get('session')
       const sessionId = rawSession === null ? undefined : parseSessionId(rawSession)

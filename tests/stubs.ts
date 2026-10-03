@@ -148,6 +148,21 @@ export class StubLlm extends Service {
   }
 }
 
+/**
+ * A `connection` service that admits every request, as DSH's does for a
+ * logged-in browser on a trusted authority. Without it the A2D2 browser routes
+ * are not registered at all.
+ */
+export class StubConnection extends Service {
+  constructor(ctx: Context) {
+    super(ctx, 'connection')
+  }
+
+  requestRejection(): 401 | 403 | undefined {
+    return undefined
+  }
+}
+
 /** A `subagents` service that records continuable starts without creating DSH children. */
 export class StubSubagents extends Service {
   readonly startContinuable = vi.fn(async (spec: StubContinuableStartSpec) => ({

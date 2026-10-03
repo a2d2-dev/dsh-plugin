@@ -42,6 +42,7 @@ import { isClosedHighwayStation } from './highway.ts'
 import { indicatorProjectionDefinition } from './indicator-projection.ts'
 import type { HandoffThresholds, ModelPrice } from './indicator-projection.ts'
 import { PANEL_ROUTE_PATH, createPanelHandler } from './panel.ts'
+import type { RequestRejection } from './route-auth.ts'
 import { SESSION_AGENT_ROUTE_PATH, createSessionAgentHandler } from './session-agent-route.ts'
 import { SessionAgentStore } from './session-agents.ts'
 import { parseSessionId, redactText } from './handoff.ts'
@@ -91,7 +92,6 @@ export {
   currentConsultRoute,
   generateConsultWithFallback,
   generateConsultOutput,
-  isTrustedConsultRequest,
   parseConsultOutput,
   statusOf,
 } from './consult.ts'
@@ -183,6 +183,8 @@ export type {
   PanelTask,
   PanelTaskIssue,
 } from './panel.ts'
+export { rejectionError } from './route-auth.ts'
+export type { RequestRejection, RouteRejection } from './route-auth.ts'
 export {
   SESSION_AGENT_ROUTE_PATH,
   createSessionAgentHandler,
@@ -446,6 +448,15 @@ export interface DispatchedSubagent {
   /** Stage Agent used for the dispatch. */
   readonly agent: StageAgent
 }
+
+/**
+ * The slice of DSH's `connection` service the browser routes ask before doing
+ * anything: its Host/Origin fence plus browser (login-cookie) authentication.
+ * Typed here because its package is browser-side. The routes are injected
+ * with `webServer` *and* `connection`, so a composition without the service
+ * registers none of them rather than serving them unauthenticated.
+ */
+type RouteConnection = { readonly requestRejection: RequestRejection }
 
 type LlmRuntime = {
   listProviders(): readonly { readonly id: string }[]
@@ -992,9 +1003,9 @@ export class A2d2Service extends Service {
     })
   }
 
-  /** Publish the optional Web host's one-shot next-step consultation route. */
+  /** Publish the optional Web host's one-shot next-step consultation route, behind DSH browser authentication. */
   private publishConsult(): void {
-    this.ctx.inject(['webServer'], (routeCtx) => {
+    this.ctx.inject(['webServer', 'connection'], (routeCtx) => {
       type WebServer = {
         register(route: {
           kind: 'exact'
@@ -1002,17 +1013,17 @@ export class A2d2Service extends Service {
           handler: ReturnType<typeof createConsultHandler>
         }): () => void
       }
-      type WebRuntime = { readonly trustedHosts: readonly string[] }
       const getService = <T>(name: string): T | undefined => (
         (routeCtx.get as unknown as (name: string) => T | undefined).call(routeCtx, name)
       )
       const server = getService<WebServer>('webServer')
-      if (server === undefined) return
+      const connection = getService<RouteConnection>('connection')
+      if (server === undefined || connection === undefined) return
       type ProjectionReader = {
         snapshot(session: unknown): { readonly values: Readonly<Record<string, unknown>> }
       }
       const handler = createConsultHandler({
-        trustedHosts: () => getService<WebRuntime>('webRuntime')?.trustedHosts ?? [],
+        requestRejection: request => connection.requestRejection(request),
         getSession: id => routeCtx.get('sessions')?.get(id),
         listTasks: cwd => this.store.list(cwd),
         projectRoot: cwd => resolveProjectRoot(cwd, this.projectMarkers),
@@ -1036,9 +1047,9 @@ export class A2d2Service extends Service {
     })
   }
 
-  /** Publish the trusted browser route backing the A2D2 settings page. */
+  /** Publish the authenticated browser route backing the A2D2 settings page. */
   private publishConfig(): void {
-    this.ctx.inject(['webServer'], (routeCtx) => {
+    this.ctx.inject(['webServer', 'connection'], (routeCtx) => {
       type WebServer = {
         register(route: {
           kind: 'exact'
@@ -1046,7 +1057,6 @@ export class A2d2Service extends Service {
           handler: ReturnType<typeof createConfigHandler>
         }): () => void
       }
-      type WebRuntime = { readonly trustedHosts: readonly string[] }
       type LlmModel = { readonly id: string }
       type LlmProvider = { readonly id: string }
       type LlmRuntime = {
@@ -1064,7 +1074,8 @@ export class A2d2Service extends Service {
         (routeCtx.get as unknown as (name: string) => T | undefined).call(routeCtx, name)
       )
       const server = getService<WebServer>('webServer')
-      if (server === undefined) return
+      const connection = getService<RouteConnection>('connection')
+      if (server === undefined || connection === undefined) return
       // The loader stamps its entry on the fiber (a type merge this plugin does not import).
       const ns = (this.entryFiber as { readonly entry?: { readonly id: string } }).entry?.id
       const readSettings = () => {
@@ -1077,7 +1088,7 @@ export class A2d2Service extends Service {
         }
       }
       const handler = createConfigHandler({
-        trustedHosts: () => getService<WebRuntime>('webRuntime')?.trustedHosts ?? [],
+        requestRejection: request => connection.requestRejection(request),
         getSettings: readSettings,
         updateSettings: async (value, expectedRevision) => {
           const settings = getService<SettingsRuntime>('settings')
@@ -1111,9 +1122,9 @@ export class A2d2Service extends Service {
     })
   }
 
-  /** Publish the trusted browser route that records a session's A2D2 Agent. */
+  /** Publish the authenticated browser route that records a session's A2D2 Agent. */
   private publishSessionAgent(): void {
-    this.ctx.inject(['webServer'], (routeCtx) => {
+    this.ctx.inject(['webServer', 'connection'], (routeCtx) => {
       type WebServer = {
         register(route: {
           kind: 'exact'
@@ -1121,14 +1132,14 @@ export class A2d2Service extends Service {
           handler: ReturnType<typeof createSessionAgentHandler>
         }): () => void
       }
-      type WebRuntime = { readonly trustedHosts: readonly string[] }
       const getService = <T>(name: string): T | undefined => (
         (routeCtx.get as unknown as (name: string) => T | undefined).call(routeCtx, name)
       )
       const server = getService<WebServer>('webServer')
-      if (server === undefined) return
+      const connection = getService<RouteConnection>('connection')
+      if (server === undefined || connection === undefined) return
       const handler = createSessionAgentHandler({
-        trustedHosts: () => getService<WebRuntime>('webRuntime')?.trustedHosts ?? [],
+        requestRejection: request => connection.requestRejection(request),
         getSession: id => routeCtx.get('sessions')?.get(id),
         recordSessionAgent: (cwd, sessionId, agent) => this.recordSessionAgent(cwd, sessionId, agent),
       })
@@ -1139,9 +1150,9 @@ export class A2d2Service extends Service {
     })
   }
 
-  /** Publish the optional Web host's trusted read route for the A²D² panel. */
+  /** Publish the optional Web host's authenticated read route for the A²D² panel. */
   private publishPanel(): void {
-    this.ctx.inject(['webServer'], (routeCtx) => {
+    this.ctx.inject(['webServer', 'connection'], (routeCtx) => {
       type WebServer = {
         register(route: {
           kind: 'exact'
@@ -1149,14 +1160,14 @@ export class A2d2Service extends Service {
           handler: ReturnType<typeof createPanelHandler>
         }): () => void
       }
-      type WebRuntime = { readonly trustedHosts: readonly string[] }
       const getService = <T>(name: string): T | undefined => (
         (routeCtx.get as unknown as (name: string) => T | undefined).call(routeCtx, name)
       )
       const server = getService<WebServer>('webServer')
-      if (server === undefined) return
+      const connection = getService<RouteConnection>('connection')
+      if (server === undefined || connection === undefined) return
       const handler = createPanelHandler({
-        trustedHosts: () => getService<WebRuntime>('webRuntime')?.trustedHosts ?? [],
+        requestRejection: request => connection.requestRejection(request),
         getSession: id => routeCtx.get('sessions')?.get(id),
         listTasks: cwd => this.store.list(cwd),
         projectRoot: cwd => this.store.projectRoot(cwd),

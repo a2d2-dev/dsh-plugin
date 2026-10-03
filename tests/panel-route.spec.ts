@@ -6,6 +6,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import A2d2Service from '../src/index.ts'
 import { PANEL_ROUTE_PATH } from '../src/panel.ts'
+import { StubConnection } from './stubs.ts'
 
 const roots: string[] = []
 const sessionA = SessionId('session-a')
@@ -70,15 +71,6 @@ class StubSessions extends Service {
   }
 }
 
-class StubWebRuntime extends Service {
-  readonly trustedHosts: readonly string[]
-
-  constructor(ctx: Context, trustedHosts: readonly string[] = []) {
-    super(ctx, 'webRuntime')
-    this.trustedHosts = trustedHosts
-  }
-}
-
 function record() {
   const captured: { status?: number; body?: string; response: { writeHead(status: number): void; end(body?: string): void } } = {
     response: undefined as never,
@@ -98,7 +90,7 @@ async function mount(): Promise<{ ctx: Context; server: StubWebServer; sessions:
   const ctx = new Context()
   await ctx.plugin(StubSessions)
   await ctx.plugin(StubWebServer)
-  await ctx.plugin(StubWebRuntime, ['10.126.126.12:3710'])
+  await ctx.plugin(StubConnection)
   await ctx.plugin(A2d2Service, {})
   await settle()
   return {
