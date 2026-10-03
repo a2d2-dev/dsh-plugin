@@ -10,7 +10,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import { parseSessionId } from './handoff.ts'
-import { rejectionError } from './route-auth.ts'
+import { contentTypeRejection, rejectionError } from './route-auth.ts'
 import type { RequestRejection } from './route-auth.ts'
 import { STAGE_AGENTS } from './stage-agents.ts'
 import type { StageAgent } from './stage-agents.ts'
@@ -32,6 +32,7 @@ type SessionAgentErrorCode =
   | 'method-not-allowed'
   | 'unauthenticated'
   | 'untrusted'
+  | 'unsupported-media-type'
   | 'payload-too-large'
   | 'bad-json'
   | 'bad-request'
@@ -119,6 +120,11 @@ export function createSessionAgentHandler(
     }
     if (request.method !== 'POST') {
       fail(response, 405, 'method-not-allowed', 'Only POST is allowed for this route.')
+      return
+    }
+    const unsupported = contentTypeRejection(request)
+    if (unsupported !== undefined) {
+      fail(response, unsupported.status, unsupported.code, unsupported.message)
       return
     }
     let body: unknown
