@@ -16,7 +16,7 @@ import {
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { SettingsConflictError } from '@deepseek-ai/dsh-settings'
 import { deepFreeze } from '@deepseek-ai/dsh-util-values'
-import { rejectionError } from './route-auth.ts'
+import { contentTypeRejection, rejectionError } from './route-auth.ts'
 import type { RequestRejection } from './route-auth.ts'
 import { A2D2_MESSAGE_SOURCE } from './message-source.ts'
 import { classifyFailureKind } from './refusal.ts'
@@ -207,6 +207,11 @@ export function createConfigHandler(
     }
     if (request.method !== 'POST') {
       fail(response, 405, 'method-not-allowed', 'Only POST is allowed for this route.')
+      return
+    }
+    const unsupported = contentTypeRejection(request)
+    if (unsupported !== undefined) {
+      fail(response, unsupported.status, unsupported.code, unsupported.message)
       return
     }
     let body: unknown

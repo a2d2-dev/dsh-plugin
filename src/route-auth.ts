@@ -28,3 +28,32 @@ export function rejectionError(status: RouteRejection): { readonly code: 'unauth
     ? { code: 'unauthenticated', message: 'Sign in to DSH in this browser to use this route.' }
     : { code: 'untrusted', message: 'The request authority or origin is not trusted.' }
 }
+
+/** The JSON error a write route answers a request without a JSON body with. */
+export interface UnsupportedMediaType {
+  readonly status: 415
+  readonly code: 'unsupported-media-type'
+  readonly message: string
+}
+
+/**
+ * The write routes' content-type check, asked right after authentication and
+ * before reading the body or touching any state.
+ *
+ * DSH's login cookie is same-site, so a page on another port of the same host
+ * can make a logged-in browser send a "simple" POST — `text/plain`, a form
+ * encoding, or no body at all — that skips the CORS preflight. Only
+ * `application/json` (parameters such as `charset` allowed) forces a preflight
+ * such a page cannot pass, so write routes accept nothing else.
+ * @param request - the incoming request's headers.
+ * @returns the 415 refusal, or `undefined` when the request declares JSON.
+ */
+export function contentTypeRejection(request: { readonly headers: IncomingHttpHeaders }): UnsupportedMediaType | undefined {
+  const mediaType = request.headers['content-type']?.split(';', 1)[0]?.trim().toLowerCase()
+  if (mediaType === 'application/json') return undefined
+  return {
+    status: 415,
+    code: 'unsupported-media-type',
+    message: 'Write requests must send content-type: application/json.',
+  }
+}
