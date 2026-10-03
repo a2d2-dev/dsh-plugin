@@ -8,6 +8,17 @@
  * is bounded in size and each problem comes back as a named result rather than
  * an exception from deep inside prompt assembly or a silent empty string.
  *
+ * Symbolic links are refused by default. That default is for files inside a
+ * project tree (task and handoff documents, the session Agent ledger, project
+ * SOUL and project Agent configuration): repository content can plant a link
+ * pointing anywhere on the machine, which is the threat these guards exist for.
+ * Files the user maintains under `~/.dsh` (global SOUL, global Agent
+ * configuration) and the CEO method files shipped inside this package are read
+ * with `followSymlinks: true`, because linking them from a dotfiles repository
+ * is ordinary use, and refusing would leave that configuration silently
+ * unapplied. Size, directory, and regular-file checks still apply to the link
+ * target.
+ *
  * @module @deepseek-ai/dsh-a2d2/src/local-file
  */
 
@@ -51,6 +62,12 @@ export class LocalFileError extends Error {
 export interface LocalFileReadOptions {
   /** Size limit in bytes; defaults to {@link LOCAL_FILE_MAX_BYTES}. */
   readonly maxBytes?: number
+  /**
+   * Follow a symbolic link at the last path component and check its target.
+   * Defaults to `false`, the safe choice for project-tree files; set it only
+   * for user-maintained global files and files shipped with the plugin.
+   */
+  readonly followSymlinks?: boolean
 }
 
 /**
@@ -58,8 +75,17 @@ export interface LocalFileReadOptions {
  * component, and never blocking on a FIFO planted where a file is expected.
  * Platforms without `O_NOFOLLOW` (Windows) fall back to an `lstat` check.
  */
-const OPEN_FLAGS = constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0)
+const FOLLOW_FLAGS = constants.O_RDONLY | (constants.O_NONBLOCK ?? 0)
+const NOFOLLOW_FLAGS = FOLLOW_FLAGS | (constants.O_NOFOLLOW ?? 0)
 const CHECK_LINK_BEFORE_OPEN = constants.O_NOFOLLOW === undefined
+
+function openFlags(followSymlinks: boolean): number {
+  return followSymlinks ? FOLLOW_FLAGS : NOFOLLOW_FLAGS
+}
+
+function checksLinkBeforeOpen(followSymlinks: boolean): boolean {
+  return !followSymlinks && CHECK_LINK_BEFORE_OPEN
+}
 
 const SYMLINK: LocalFileRead = { kind: 'unreadable', problem: 'symlink', message: 'path is a symbolic link; the plugin only reads regular files' }
 
@@ -75,11 +101,12 @@ function refuseByStat(stats: Stats, maxBytes: number): LocalFileRead | undefined
   return undefined
 }
 
-function fromOpenError(error: unknown): LocalFileRead {
+function fromOpenError(error: unknown, followSymlinks: boolean): LocalFileRead {
   const code = (error as NodeJS.ErrnoException).code
   if (code === 'ENOENT' || code === 'ENOTDIR') return { kind: 'missing' }
-  // O_NOFOLLOW on a symbolic link fails with ELOOP (Linux, macOS) or EMLINK (FreeBSD).
-  if (code === 'ELOOP' || code === 'EMLINK') return SYMLINK
+  // O_NOFOLLOW on a symbolic link fails with ELOOP (Linux, macOS) or EMLINK
+  // (FreeBSD); when following, ELOOP is a genuine link loop and stays an error.
+  if (!followSymlinks && (code === 'ELOOP' || code === 'EMLINK')) return SYMLINK
   return { kind: 'unreadable', problem: 'error', message: (error as Error).message }
 }
 
@@ -87,17 +114,18 @@ function fromOpenError(error: unknown): LocalFileRead {
  * Read one plugin file synchronously, for callers such as system prompt text
  * providers that cannot await.
  * @param path - absolute file path.
- * @param options - optional size limit.
+ * @param options - optional size limit and symbolic-link policy.
  * @returns the text, `missing`, or the named reason it is unreadable.
  */
 export function readLocalFileSync(path: string, options: LocalFileReadOptions = {}): LocalFileRead {
   const maxBytes = options.maxBytes ?? LOCAL_FILE_MAX_BYTES
+  const followSymlinks = options.followSymlinks ?? false
   let fd: number
   try {
-    if (CHECK_LINK_BEFORE_OPEN && lstatSync(path).isSymbolicLink()) return SYMLINK
-    fd = openSync(path, OPEN_FLAGS)
+    if (checksLinkBeforeOpen(followSymlinks) && lstatSync(path).isSymbolicLink()) return SYMLINK
+    fd = openSync(path, openFlags(followSymlinks))
   } catch (error) {
-    return fromOpenError(error)
+    return fromOpenError(error, followSymlinks)
   }
   try {
     const refused = refuseByStat(fstatSync(fd), maxBytes)
@@ -121,17 +149,18 @@ export function readLocalFileSync(path: string, options: LocalFileReadOptions = 
 /**
  * Read one plugin file.
  * @param path - absolute file path.
- * @param options - optional size limit.
+ * @param options - optional size limit and symbolic-link policy.
  * @returns the text, `missing`, or the named reason it is unreadable.
  */
 export async function readLocalFile(path: string, options: LocalFileReadOptions = {}): Promise<LocalFileRead> {
   const maxBytes = options.maxBytes ?? LOCAL_FILE_MAX_BYTES
+  const followSymlinks = options.followSymlinks ?? false
   let handle: Awaited<ReturnType<typeof open>>
   try {
-    if (CHECK_LINK_BEFORE_OPEN && (await lstat(path)).isSymbolicLink()) return SYMLINK
-    handle = await open(path, OPEN_FLAGS)
+    if (checksLinkBeforeOpen(followSymlinks) && (await lstat(path)).isSymbolicLink()) return SYMLINK
+    handle = await open(path, openFlags(followSymlinks))
   } catch (error) {
-    return fromOpenError(error)
+    return fromOpenError(error, followSymlinks)
   }
   try {
     const refused = refuseByStat(await handle.stat(), maxBytes)

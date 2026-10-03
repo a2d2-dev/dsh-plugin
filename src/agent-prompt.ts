@@ -63,8 +63,10 @@ type ConfiguredAgent = Extract<StageAgent, 'engineer' | 'reviewer'>
  * contribute nothing (both levels are optional); an unreadable file is named in
  * the section so the Agent sees that its configuration was not applied.
  */
-function configurationText(title: string, path: string): string | undefined {
-  const result = readLocalFileSync(path)
+function configurationText(title: string, path: string, origin: 'user' | 'project'): string | undefined {
+  // The user's global configuration may be symlinked from dotfiles; project
+  // configuration is repository content and may not.
+  const result = readLocalFileSync(path, { followSymlinks: origin === 'user' })
   if (result.kind === 'missing') return undefined
   if (result.kind === 'unreadable') return `Unreadable ${title}: ${path} (${result.message})`
   return result.text.trim() === '' ? undefined : result.text
@@ -75,8 +77,8 @@ function titleOf(agent: ConfiguredAgent): string {
 }
 
 function renderAgentPrompt(globalAgentsDir: string, projectRoot: string, agent: ConfiguredAgent): string {
-  const globalText = configurationText('global Agent configuration', join(globalAgentsDir, `${agent}.md`))
-  const projectText = configurationText('project Agent configuration', join(projectRoot, '.dsh', 'a2d2', 'agents', `${agent}.md`))
+  const globalText = configurationText('global Agent configuration', join(globalAgentsDir, `${agent}.md`), 'user')
+  const projectText = configurationText('project Agent configuration', join(projectRoot, '.dsh', 'a2d2', 'agents', `${agent}.md`), 'project')
   if (globalText === undefined && projectText === undefined) return ''
   const sections = [
     `# A2D2 ${titleOf(agent)}`,

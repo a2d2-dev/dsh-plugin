@@ -66,8 +66,10 @@ const DEFAULT_GLOBAL_SOUL_DIR = join(homedir(), '.dsh', 'a2d2')
  * in the section in place of its content, so the CEO sees the gap instead of
  * silently running without its duties or principles.
  */
-function promptFile(title: string, path: string): string {
-  const result = readLocalFileSync(path)
+function promptFile(title: string, path: string, origin: 'user-or-package' | 'project'): string {
+  // Packaged method files and the user's global SOUL may be symlinked (dotfiles,
+  // package managers); the project SOUL is repository content and may not.
+  const result = readLocalFileSync(path, { followSymlinks: origin === 'user-or-package' })
   const body = result.kind === 'file'
     ? result.text
     : result.kind === 'missing'
@@ -82,10 +84,10 @@ function renderCeoPrompt(agentFilesDir: string, globalSoulDir: string, projectRo
     'This scoped section applies only when this session is the main session of a task issue.',
     `CEO method files directory: ${agentFilesDir}`,
     'When AGENTS.md or WAKE.md names another CEO method file, read it with the file-read tool from that absolute directory.',
-    promptFile('AGENTS.md', join(agentFilesDir, 'AGENTS.md')),
-    promptFile('WAKE.md', join(agentFilesDir, 'WAKE.md')),
-    promptFile('Global SOUL', join(globalSoulDir, 'SOUL.md')),
-    promptFile('Project SOUL (priority over global SOUL)', join(projectRoot, '.dsh', 'a2d2', 'SOUL.md')),
+    promptFile('AGENTS.md', join(agentFilesDir, 'AGENTS.md'), 'user-or-package'),
+    promptFile('WAKE.md', join(agentFilesDir, 'WAKE.md'), 'user-or-package'),
+    promptFile('Global SOUL', join(globalSoulDir, 'SOUL.md'), 'user-or-package'),
+    promptFile('Project SOUL (priority over global SOUL)', join(projectRoot, '.dsh', 'a2d2', 'SOUL.md'), 'project'),
   ].join('\n\n')
 }
 
