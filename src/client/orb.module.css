@@ -346,7 +346,24 @@
   line-height: 1.35;
 }
 
+/*
+ * The highway map is drawn on two surfaces: the dark boundary card and the
+ * light A2D2 config page. Its colors are custom properties so each surface
+ * supplies its own palette; the defaults below are the card's, which only read
+ * on a dark background.
+ */
 .highwayMap {
+  --a2d2-highway-ink: rgba(242, 245, 248, 0.72);
+  --a2d2-highway-ink-strong: #ffffff;
+  --a2d2-highway-ground: #1b2430;
+  --a2d2-highway-road: rgba(255, 255, 255, 0.16);
+  --a2d2-highway-ring: rgba(255, 255, 255, 0.24);
+  --a2d2-highway-hollow: #101823;
+  --a2d2-highway-chip-ink: rgba(242, 245, 248, 0.9);
+  --a2d2-highway-chip-ground: #101823;
+  --a2d2-highway-chip-edge: rgba(255, 255, 255, 0.16);
+  --a2d2-highway-aside-ink: #ffd99a;
+  --a2d2-highway-aside-ground: #2a2216;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -356,8 +373,8 @@
 .highwayAside {
   padding: 7px 9px;
   border-left: 3px solid #d69a3a;
-  background: #2a2216;
-  color: #ffd99a;
+  background: var(--a2d2-highway-aside-ground);
+  color: var(--a2d2-highway-aside-ink);
   font-size: 11px;
   line-height: 1.4;
 }
@@ -383,7 +400,7 @@
   bottom: 14px;
   left: 9px;
   width: 2px;
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--a2d2-highway-road);
 }
 
 .highwayStation {
@@ -393,7 +410,7 @@
   align-items: center;
   gap: 8px;
   min-height: 34px;
-  color: rgba(242, 245, 248, 0.72);
+  color: var(--a2d2-highway-ink);
 }
 
 .highwayMarker {
@@ -403,9 +420,9 @@
   width: 20px;
   height: 20px;
   box-sizing: border-box;
-  border: 2px solid rgba(255, 255, 255, 0.24);
+  border: 2px solid var(--a2d2-highway-ring);
   border-radius: 50%;
-  background: #1b2430;
+  background: var(--a2d2-highway-ground);
   color: #ffffff;
   font-size: 12px;
   font-weight: 800;
@@ -429,21 +446,52 @@
 .highwayRole {
   font-size: 10px;
   line-height: 1.25;
-  opacity: 0.72;
+  opacity: var(--a2d2-highway-role-opacity, 0.72);
   overflow-wrap: anywhere;
 }
 
 .highwayModel {
   max-width: 96px;
   padding: 3px 6px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid var(--a2d2-highway-chip-edge);
   border-radius: 7px;
-  background: #101823;
-  color: rgba(242, 245, 248, 0.9);
+  background: var(--a2d2-highway-chip-ground);
+  color: var(--a2d2-highway-chip-ink);
   font-size: 10px;
   line-height: 1.2;
   overflow-wrap: anywhere;
   text-align: right;
+}
+
+/*
+ * Editable rows (the config page) carry a control besides the text and model
+ * chip. The card's grid has no cell for a fourth piece, so the three share the
+ * second cell and wrap as whole pieces. Each starts at its content width
+ * (flex-basis auto): a row too narrow for all three moves the control or chip
+ * to the next line instead of squeezing a piece into a one-character column.
+ */
+.highwayBody {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 5px 0;
+}
+
+.highwayBody .highwayText {
+  flex: 1 1 auto;
+}
+
+.highwayControl {
+  flex: none;
+  display: flex;
+}
+
+.highwayBody .highwayModel {
+  max-width: 100%;
+  overflow-wrap: break-word;
+  text-align: left;
 }
 
 .highwayPassed .highwayMarker {
@@ -452,7 +500,7 @@
 }
 
 .highwayCurrent {
-  color: #ffffff;
+  color: var(--a2d2-highway-ink-strong);
 }
 
 .highwayCurrent .highwayMarker {
@@ -461,7 +509,7 @@
 }
 
 .highwayNext {
-  color: #ffffff;
+  color: var(--a2d2-highway-ink-strong);
 }
 
 .highwayNext .highwayMarker {
@@ -470,7 +518,7 @@
 }
 
 .highwayAhead .highwayMarker {
-  background: #101823;
+  background: var(--a2d2-highway-hollow);
 }
 
 .nextLine {
@@ -772,6 +820,22 @@
 .configIconButton:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+/* The config page is a light surface: hand the highway map a light palette. */
+.configPage .highwayMap {
+  --a2d2-highway-ink: #1b2430;
+  --a2d2-highway-ink-strong: #0b1220;
+  --a2d2-highway-role-opacity: 0.78;
+  --a2d2-highway-ground: #ffffff;
+  --a2d2-highway-road: #d7dee8;
+  --a2d2-highway-ring: #9aa6b5;
+  --a2d2-highway-hollow: #ffffff;
+  --a2d2-highway-chip-ink: #46515f;
+  --a2d2-highway-chip-ground: #f6f8fb;
+  --a2d2-highway-chip-edge: #d7dee8;
+  --a2d2-highway-aside-ink: #6a4b00;
+  --a2d2-highway-aside-ground: #fff8e6;
 }
 
 .configSection {

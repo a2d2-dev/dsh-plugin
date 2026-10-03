@@ -36,15 +36,36 @@ export function HighwayMap(props: HighwayMapProps): ReturnType<typeof createElem
         'data-a2d2-station-state': station.state,
       },
         createElement('span', { className: css.highwayMarker, 'aria-hidden': true }, station.state === 'next' ? '→' : ''),
-        createElement('span', { className: css.highwayText },
-          createElement('span', { className: css.highwayName }, `/${station.id}`),
-          createElement('span', { className: css.highwayRole }, station.role),
-        ),
-        props.renderStationControl === undefined ? null : props.renderStationControl(station),
-        stationModelLabel(station) === undefined ? null : createElement('span', { className: css.highwayModel }, stationModelLabel(station)),
+        ...stationBody(station, props.renderStationControl),
       )),
     ),
   )
+}
+
+/**
+ * The station's text, optional control, and model chip.
+ *
+ * Read-only (the boundary card) keeps them as direct grid cells beside the
+ * marker. The editable variant (the A2D2 config page) adds a control, which the
+ * card's three-column grid has no cell for; there the three pieces share one
+ * wrapping cell so a narrow row moves whole pieces onto the next line instead
+ * of squeezing any of them into a one-character column.
+ */
+function stationBody(
+  station: HighwayViewStation,
+  renderControl: HighwayMapProps['renderStationControl'],
+): ReactNode[] {
+  const model = stationModelLabel(station)
+  const pieces = [
+    createElement('span', { className: css.highwayText, key: 'text' },
+      createElement('span', { className: css.highwayName }, `/${station.id}`),
+      createElement('span', { className: css.highwayRole }, station.role),
+    ),
+    renderControl === undefined ? null : createElement('span', { className: css.highwayControl, key: 'control' }, renderControl(station)),
+    model === undefined ? null : createElement('span', { className: css.highwayModel, key: 'model' }, model),
+  ]
+  if (renderControl === undefined) return pieces
+  return [createElement('span', { className: css.highwayBody, key: 'body' }, ...pieces)]
 }
 
 function stationModelLabel(station: HighwayViewStation): string | undefined {

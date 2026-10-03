@@ -51,6 +51,8 @@ declare module '*.module.css' {
     readonly highwayName: string
     readonly highwayRole: string
     readonly highwayModel: string
+    readonly highwayBody: string
+    readonly highwayControl: string
     readonly highwayPassed: string
     readonly highwayCurrent: string
     readonly highwayNext: string
