@@ -259,6 +259,7 @@ describe('A2D2 route authentication', () => {
 const writeRouteCalls = [
   { path: CONFIG_ROUTE_PATH, url: CONFIG_ROUTE_PATH, body: { method: 'settings.get', payload: {} } },
   { path: SESSION_AGENT_ROUTE_PATH, url: SESSION_AGENT_ROUTE_PATH, body: { session: sessionA, agent: 'engineer' } },
+  { path: CONSULT_ROUTE_PATH, url: `${CONSULT_ROUTE_PATH}?session=${sessionA}` },
 ] as const
 
 describe('A2D2 write route content type', () => {
@@ -277,6 +278,20 @@ describe('A2D2 write route content type', () => {
     expect(sessions.lookups).not.toHaveBeenCalled()
     expect(llm.stream).not.toHaveBeenCalled()
     expect(await service.agentOfSession(root, sessionA)).toBeUndefined()
+  })
+
+  it('refuses a logged-in consult POST that declares no content type before reaching the model', async () => {
+    const root = await tempRoot()
+    const { server, sessions, llm } = await mount({ connection: true })
+    sessions.add(sessionA, root)
+    const sent = request('POST', `${CONSULT_ROUTE_PATH}?session=${sessionA}`, loggedInHeaders)
+    const answer = response()
+
+    await server.routes.get(CONSULT_ROUTE_PATH)?.(sent.request, answer.response)
+
+    expect(answer.captured.status).toBe(415)
+    expect(sessions.lookups).not.toHaveBeenCalled()
+    expect(llm.stream).not.toHaveBeenCalled()
   })
 
   it('accepts application/json with a charset parameter', async () => {

@@ -40,7 +40,7 @@ describe('requestConsult', () => {
     expect(phases.at(-1)).toEqual({ kind: 'loading' })
     expect(fetch).toHaveBeenCalledWith(
       `${CONSULT_ROUTE_PATH}?session=session%2Fa`,
-      { method: 'POST' },
+      { method: 'POST', headers: { 'content-type': 'application/json' } },
     )
 
     resolveResponse?.(jsonResponse({
