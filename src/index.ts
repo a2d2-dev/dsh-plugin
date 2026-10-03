@@ -1064,8 +1064,8 @@ export class A2d2Service extends Service {
         listModels(provider: string): Promise<readonly LlmModel[]>
         stream(options: Parameters<Parameters<typeof createConfigHandler>[0]['stream']>[0]): ReturnType<Parameters<typeof createConfigHandler>[0]['stream']>
       }
-      // Settings are keyed by the plugin's profile entry id; the form value
-      // holds only the volatile Config fields.
+      // Settings are keyed by the plugin's profile entry `options.id`; the form
+      // value holds only the volatile Config fields.
       type SettingsRuntime = {
         describe(): readonly { readonly ns: string; readonly value: unknown; readonly revision: number }[]
         replace(ns: string, section: object, expectedRevision?: number): Promise<void>
@@ -1077,7 +1077,9 @@ export class A2d2Service extends Service {
       const connection = getService<RouteConnection>('connection')
       if (server === undefined || connection === undefined) return
       // The loader stamps its entry on the fiber (a type merge this plugin does not import).
-      const ns = (this.entryFiber as { readonly entry?: { readonly id: string } }).entry?.id
+      // DSH settings describe and write a form under `entry.options.id`; the entry's
+      // own `id` differs under a bundle include (`include:a2d2` vs `a2d2`).
+      const ns = (this.entryFiber as { readonly entry?: { readonly options: { readonly id: string } } }).entry?.options.id
       const readSettings = () => {
         const settings = getService<SettingsRuntime>('settings')
         const descriptor = ns === undefined ? undefined : settings?.describe().find(entry => entry.ns === ns)
