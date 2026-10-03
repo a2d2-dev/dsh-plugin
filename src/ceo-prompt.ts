@@ -9,13 +9,13 @@
  * @module @deepseek-ai/dsh-a2d2/src/ceo-prompt
  */
 
-import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { readLocalFileSync } from './local-file.ts'
 import type {} from './index.ts'
 
 /** Cordis plugin name of the CEO prompt half. */
@@ -61,17 +61,19 @@ const PACKAGE_ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const DEFAULT_AGENT_FILES_DIR = join(PACKAGE_ROOT, 'ceo')
 const DEFAULT_GLOBAL_SOUL_DIR = join(homedir(), '.dsh', 'a2d2')
 
-function readExisting(path: string): string | undefined {
-  if (!existsSync(path)) return undefined
-  return readFileSync(path, 'utf8')
-}
-
-function requiredFile(title: string, path: string): string {
-  return [`## ${title}`, readExisting(path) ?? `Missing ${title}: ${path}`].join('\n\n')
-}
-
-function soulFile(title: string, path: string): string {
-  return [`## ${title}`, readExisting(path) ?? `Missing ${title}: ${path}`].join('\n\n')
+/**
+ * Render one CEO file under its heading. A missing or unreadable file is named
+ * in the section in place of its content, so the CEO sees the gap instead of
+ * silently running without its duties or principles.
+ */
+function promptFile(title: string, path: string): string {
+  const result = readLocalFileSync(path)
+  const body = result.kind === 'file'
+    ? result.text
+    : result.kind === 'missing'
+      ? `Missing ${title}: ${path}`
+      : `Unreadable ${title}: ${path} (${result.message})`
+  return [`## ${title}`, body].join('\n\n')
 }
 
 function renderCeoPrompt(agentFilesDir: string, globalSoulDir: string, projectRoot: string): string {
@@ -80,10 +82,10 @@ function renderCeoPrompt(agentFilesDir: string, globalSoulDir: string, projectRo
     'This scoped section applies only when this session is the main session of a task issue.',
     `CEO method files directory: ${agentFilesDir}`,
     'When AGENTS.md or WAKE.md names another CEO method file, read it with the file-read tool from that absolute directory.',
-    requiredFile('AGENTS.md', join(agentFilesDir, 'AGENTS.md')),
-    requiredFile('WAKE.md', join(agentFilesDir, 'WAKE.md')),
-    soulFile('Global SOUL', join(globalSoulDir, 'SOUL.md')),
-    soulFile('Project SOUL (priority over global SOUL)', join(projectRoot, '.dsh', 'a2d2', 'SOUL.md')),
+    promptFile('AGENTS.md', join(agentFilesDir, 'AGENTS.md')),
+    promptFile('WAKE.md', join(agentFilesDir, 'WAKE.md')),
+    promptFile('Global SOUL', join(globalSoulDir, 'SOUL.md')),
+    promptFile('Project SOUL (priority over global SOUL)', join(projectRoot, '.dsh', 'a2d2', 'SOUL.md')),
   ].join('\n\n')
 }
 

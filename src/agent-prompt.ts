@@ -9,12 +9,12 @@
  * @module @deepseek-ai/dsh-a2d2/src/agent-prompt
  */
 
-import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { readLocalFileSync } from './local-file.ts'
 import type { StageAgent } from './stage-agents.ts'
 import type {} from './index.ts'
 
@@ -58,10 +58,16 @@ const DEFAULT_GLOBAL_AGENTS_DIR = join(homedir(), '.dsh', 'a2d2', 'agents')
 
 type ConfiguredAgent = Extract<StageAgent, 'engineer' | 'reviewer'>
 
-function readExisting(path: string): string | undefined {
-  if (!existsSync(path)) return undefined
-  const text = readFileSync(path, 'utf8')
-  return text.trim() === '' ? undefined : text
+/**
+ * Read one Agent configuration file for the prompt. Absent and blank files
+ * contribute nothing (both levels are optional); an unreadable file is named in
+ * the section so the Agent sees that its configuration was not applied.
+ */
+function configurationText(title: string, path: string): string | undefined {
+  const result = readLocalFileSync(path)
+  if (result.kind === 'missing') return undefined
+  if (result.kind === 'unreadable') return `Unreadable ${title}: ${path} (${result.message})`
+  return result.text.trim() === '' ? undefined : result.text
 }
 
 function titleOf(agent: ConfiguredAgent): string {
@@ -69,8 +75,8 @@ function titleOf(agent: ConfiguredAgent): string {
 }
 
 function renderAgentPrompt(globalAgentsDir: string, projectRoot: string, agent: ConfiguredAgent): string {
-  const globalText = readExisting(join(globalAgentsDir, `${agent}.md`))
-  const projectText = readExisting(join(projectRoot, '.dsh', 'a2d2', 'agents', `${agent}.md`))
+  const globalText = configurationText('global Agent configuration', join(globalAgentsDir, `${agent}.md`))
+  const projectText = configurationText('project Agent configuration', join(projectRoot, '.dsh', 'a2d2', 'agents', `${agent}.md`))
   if (globalText === undefined && projectText === undefined) return ''
   const sections = [
     `# A2D2 ${titleOf(agent)}`,
