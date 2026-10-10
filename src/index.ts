@@ -514,6 +514,7 @@ export class A2d2Service extends Service {
 
   private readonly store: TaskDocumentStore
   private readonly sessionAgents: SessionAgentStore
+  private readonly sessionInitializations = new Map<SessionId, Promise<void>>()
   private readonly projectMarkers: readonly string[]
   private readonly skillsRoot: string
   private readonly thresholds: HandoffThresholds
@@ -824,6 +825,18 @@ export class A2d2Service extends Service {
 
   /** Install an Agent candidate on a newly created session without saving host defaults. */
   async initializeSessionAgent(cwd: string, sessionId: SessionId, agent: StageAgent): Promise<void> {
+    const pending = (this.sessionInitializations.get(sessionId) ?? Promise.resolve())
+      .catch(() => {})
+      .then(() => this.initializeSessionAgentLocked(cwd, sessionId, agent))
+    this.sessionInitializations.set(sessionId, pending)
+    try {
+      await pending
+    } finally {
+      if (this.sessionInitializations.get(sessionId) === pending) this.sessionInitializations.delete(sessionId)
+    }
+  }
+
+  private async initializeSessionAgentLocked(cwd: string, sessionId: SessionId, agent: StageAgent): Promise<void> {
     const existing = await this.agentOfSession(cwd, sessionId)
     if (existing !== undefined) {
       await this.recordSessionAgent(cwd, sessionId, agent)
@@ -839,12 +852,12 @@ export class A2d2Service extends Service {
     if (typeof controller?.selectLocalModel !== 'function') {
       throw new Error('a2d2: sessionController.selectLocalModel is required for session-local model selection in this DSH host')
     }
-    await this.recordSessionAgent(cwd, sessionId, agent)
     await controller.selectLocalModel({
       sessionId,
       ...route,
       ...(reasoningEffort === undefined ? {} : { reasoningEffort: ReasoningEffortId(reasoningEffort) }),
     })
+    await this.recordSessionAgent(cwd, sessionId, agent)
   }
 
   /**

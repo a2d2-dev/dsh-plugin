@@ -114,6 +114,8 @@ reviewer:
 
 芯片新建和交接会话初始化的最低宿主能力是公开的 `ctx.sessionController.selectLocalModel({ sessionId, provider, model, reasoningEffort? }): Promise<{ selected: ModelSelection }>` API，只应用到指定会话，绝不保存宿主默认值。缺少该方法的宿主会被明确拒绝；不会回退到会保存默认值的 `selectModel`，也不会修改私有 Agent 或 registry。
 
+初始化按会话串行执行，不阻塞其他会话。只有会话本地模型安装成功后才登记 Agent；安装失败不留下身份记录，可重新尝试，已经排队的请求也可继续。成功后重复初始化同一 Agent 不重装模型，保留用户手动选择；不同 Agent 会在安装前被拒绝。
+
 ### 会话 Agent 装配
 
 主会话由任务绑定推出为 CEO，不另写 Agent 账本。`dispatch_subagent` 会把子代理会话记录为请求阶段指定的 Agent；需登录的浏览器路由 `/a2d2/api/session-agent` 供芯片创建的会话登记为 `ceo`、`engineer` 或 `reviewer`。该路由只接受 POST，使用与 `/a2d2/api/consult`、`/a2d2/api/config` 相同的 DSH 浏览器认证和 64 KiB JSON 请求体上限，会拒绝未知会话 id、非法 Agent 值、任务 issue 主会话，以及把已记录会话改写成另一个 Agent 的请求，并写入项目本地 `.dsh/a2d2/session-agents.yaml` 账本。把同一会话重复登记成同一 Agent 是幂等操作。`ctx.a2d2.agentOfSession(cwd, session)` 对任务 issue 主会话返回 `ceo`，对已记录的非主会话返回账本值，对普通未记录会话返回 `undefined`。
