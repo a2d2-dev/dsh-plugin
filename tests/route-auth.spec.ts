@@ -119,9 +119,8 @@ async function mount(options: { readonly connection: boolean }) {
   const ctx = new Context()
   await ctx.plugin(StubSessions)
   await ctx.plugin(StubLlm)
-  ctx.provide('agents', {
-    get: () => ({ id: sessionA }),
-    selectForNextRequest: vi.fn(),
+  ctx.provide('sessionController', {
+    selectLocalModel: vi.fn(async () => ({ selected: { provider: 'codex', model: 'gpt-5.5' } })),
   } as never)
   await ctx.plugin(StubWebServer)
   await ctx.plugin(StubWebRuntime)
