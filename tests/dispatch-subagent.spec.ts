@@ -249,6 +249,9 @@ describe('dispatch_subagent tool', () => {
 
     expect(value).toMatchObject({ model: route, agent: 'engineer', reasoningEffort })
     expect(validateJsonSchemaValue(tool.output.schema, value, 'value')).toEqual([])
+    expect(validateJsonSchemaValue(tool.output.schema, { ...value, unexpected: 'extra' }, 'value')).toEqual([
+      '"value.unexpected" is not a declared property (additionalProperties: false)',
+    ])
     expect(tool.output.render(args, value)).toEqual([{
       type: 'text',
       text: `Dispatched subagent ${value.session} with ${route} as engineer; reasoning effort: ${reasoningEffort}`,
@@ -274,5 +277,11 @@ describe('dispatch_subagent tool', () => {
 
     expect(value).toMatchObject({ model: 'codex/gpt-5.5', agent: 'engineer' })
     expect(value.session).toMatch(/^session-/u)
+    expect(value).not.toHaveProperty('reasoningEffort')
+    expect(validateJsonSchemaValue(tool.output.schema, value, 'value')).toEqual([])
+    expect(tool.output.render(args, value)).toEqual([{
+      type: 'text',
+      text: `Dispatched subagent ${value.session} with codex/gpt-5.5 as engineer`,
+    }])
   })
 })
