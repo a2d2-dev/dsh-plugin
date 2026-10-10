@@ -34,13 +34,53 @@ export const STAGE_AGENT_STAGES = CLOSED_HIGHWAY_STATIONS
 
 export type Stage = ClosedHighwayStation
 
+export type ModelCandidate = string | {
+  readonly route: string
+  readonly reasoningEffort?: string
+}
+
+export interface ModelEffortOption {
+  readonly id: string
+  readonly name: string
+}
+
+export type ModelEffortCatalog = Readonly<Record<string, readonly ModelEffortOption[]>>
+
+export function candidateRoute(candidate: ModelCandidate): string {
+  return typeof candidate === 'string' ? candidate : candidate.route
+}
+
+export function candidateEffort(candidate: ModelCandidate): string | undefined {
+  return typeof candidate === 'string' ? undefined : candidate.reasoningEffort
+}
+
+export function candidateSelection(candidate: ModelCandidate): {
+  readonly provider: string; readonly model: string; readonly reasoningEffort?: string
+} {
+  const route = splitModelRoute(candidateRoute(candidate))
+  const reasoningEffort = candidateEffort(candidate)
+  return { ...route, ...(reasoningEffort === undefined ? {} : { reasoningEffort }) }
+}
+
+/** Shared by host validation and the untrusted consult response parser. */
+export function isModelCandidate(value: unknown): value is ModelCandidate {
+  const routePattern = /^[^/\s]+\/[^/\s]+$/u
+  if (typeof value === 'string') return routePattern.test(value)
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false
+  const entry = value as Record<string, unknown>
+  return Object.keys(entry).every(key => key === 'route' || key === 'reasoningEffort')
+    && typeof entry.route === 'string' && routePattern.test(entry.route)
+    && (entry.reasoningEffort === undefined
+      || (typeof entry.reasoningEffort === 'string' && /^[^\s]+$/u.test(entry.reasoningEffort)))
+}
+
 export interface StageAgentRouteSettings {
   readonly stages: Readonly<Record<Stage, StageAgent>>
-  readonly agents: Readonly<Record<StageAgent, readonly string[]>>
+  readonly agents: Readonly<Record<StageAgent, readonly ModelCandidate[]>>
 }
 
 export interface StageAgentsSettings extends StageAgentRouteSettings {
-  readonly consult: readonly string[]
+  readonly consult: readonly ModelCandidate[]
 }
 
 const DEFAULT_STAGE_BY_AGENT: Record<StageAgent, readonly Stage[]> = {
@@ -84,8 +124,8 @@ export function stageAgentDefaultAgents(): Record<StageAgent, string[]> {
 export function stageAgentWarnings(settings: StageAgentsSettings): readonly string[] {
   const reviewer = settings.agents.reviewer[0]
   const engineer = settings.agents.engineer[0]
-  if (reviewer !== undefined && reviewer === engineer) {
-    return [`a2d2: 评审和工程师的首选模型同为 ${reviewer}；通常应为评审配置不同的首选模型`]
+  if (reviewer !== undefined && engineer !== undefined && candidateRoute(reviewer) === candidateRoute(engineer)) {
+    return [`a2d2: 评审和工程师的首选模型同为 ${candidateRoute(reviewer)}；通常应为评审配置不同的首选模型`]
   }
   return []
 }
@@ -98,7 +138,7 @@ export function agentForStage(settings: StageAgentRouteSettings, stage: Stage): 
   return settings.stages[stage]
 }
 
-export function modelCandidatesForStage(settings: StageAgentRouteSettings, stage: Stage): readonly string[] {
+export function modelCandidatesForStage(settings: StageAgentRouteSettings, stage: Stage): readonly ModelCandidate[] {
   return settings.agents[agentForStage(settings, stage)]
 }
 

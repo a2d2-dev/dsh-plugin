@@ -18,7 +18,7 @@ import { basename, isAbsolute, join } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Agent, AgentRegistry } from '@deepseek-ai/dsh-agent'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed, MessageSource } from '@deepseek-ai/dsh-llm'
 import type { Fiber, Volatile } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-settings'
@@ -51,12 +51,15 @@ import {
   DEFAULT_STAGE_AGENTS,
   StageAgentsSettingsSchema,
   modelCandidatesForStage,
+  candidateRoute,
+  candidateEffort,
+  candidateSelection,
   splitModelRoute,
   stageAgentWarnings,
   validateCompleteStageAgentsSettings,
   validateStageAgentsSettings,
 } from './stage-agents.ts'
-import type { Stage, StageAgent, StageAgentsSettings } from './stage-agents.ts'
+import type { ModelCandidate, Stage, StageAgent, StageAgentsSettings } from './stage-agents.ts'
 import {
   DEFAULT_PROJECT_MARKERS,
   TaskDocumentStore,
@@ -447,6 +450,8 @@ export interface DispatchedSubagent {
   readonly model: string
   /** Stage Agent used for the dispatch. */
   readonly agent: StageAgent
+  /** Explicit effort chosen for this candidate; omission preserves legacy defaults. */
+  readonly reasoningEffort?: string
 }
 
 /**
@@ -458,9 +463,15 @@ export interface DispatchedSubagent {
  */
 type RouteConnection = { readonly requestRejection: RequestRejection }
 
+type CandidateModelInfo = {
+  readonly id: string
+  readonly reasoning?: { readonly efforts: readonly { readonly id: string; readonly name: string }[] }
+}
+
 type LlmRuntime = {
   listProviders(): readonly { readonly id: string }[]
-  listModels(provider: string): Promise<readonly { readonly id: string }[]>
+  listModels(provider: string): Promise<readonly CandidateModelInfo[]>
+  resolveModelInfo(provider: string, model: string): Promise<CandidateModelInfo>
 }
 
 type SubagentsRuntime = {
@@ -471,7 +482,7 @@ type SubagentsRuntime = {
     readonly request: {
       readonly prompt: readonly { readonly type: 'text'; readonly text: string }[]
       readonly parent: Agent
-      readonly agentOptions: { readonly provider: string; readonly model: string }
+      readonly agentOptions: { readonly provider: string; readonly model: string; readonly reasoningEffort?: string }
     }
     readonly signal: AbortSignal
   }): Promise<{ readonly childId: SessionId }>
@@ -714,7 +725,8 @@ export class A2d2Service extends Service {
 
     const projectRoot = await this.store.projectRoot(request.cwd)
     const selected = await this.selectStageModel('grill')
-    const model = splitModelRoute(selected)
+    const { reasoningEffort, ...selection } = candidateSelection(selected)
+    const model = { ...selection, ...(reasoningEffort === undefined ? {} : { reasoningEffort: ReasoningEffortId(reasoningEffort) }) }
     const session = brandString<SessionId>(`session-${randomUUID()}`)
     const agents = this.ctx.get('agents') as AgentRegistry | undefined
     if (agents === undefined) throw new Error('a2d2: agents service is unavailable, so no subtask session can be created')
@@ -810,6 +822,32 @@ export class A2d2Service extends Service {
     await this.ctx.serial('a2d2/session-agent-recorded', { cwd, projectRoot, session: sessionId, agent })
   }
 
+  /** Install an Agent candidate on a newly created session without saving host defaults. */
+  async initializeSessionAgent(cwd: string, sessionId: SessionId, agent: StageAgent): Promise<void> {
+    const existing = await this.agentOfSession(cwd, sessionId)
+    if (existing !== undefined) {
+      await this.recordSessionAgent(cwd, sessionId, agent)
+      return
+    }
+    const candidate = await this.selectModelCandidate(`Agent "${agent}"`, this.stageAgents.agents[agent])
+    const { reasoningEffort, ...route } = candidateSelection(candidate)
+    const agents = this.getService<{
+      get(id: SessionId): Agent | undefined
+      selectForNextRequest?: (agent: Agent, selection: {
+        provider: string; model: string; reasoningEffort?: ReturnType<typeof ReasoningEffortId>
+      }) => void
+    }>('agents')
+    const live = agents?.get(sessionId)
+    if (agents?.selectForNextRequest === undefined || live === undefined) {
+      throw new Error('a2d2: session-local model selection is unavailable in this DSH host')
+    }
+    await this.recordSessionAgent(cwd, sessionId, agent)
+    agents.selectForNextRequest(live, {
+      ...route,
+      ...(reasoningEffort === undefined ? {} : { reasoningEffort: ReasoningEffortId(reasoningEffort) }),
+    })
+  }
+
   /**
    * The A2D2 Agent assigned to one session, if any.
    *
@@ -847,7 +885,7 @@ export class A2d2Service extends Service {
       `stage "${request.stage}" Agent "${configuredAgent}"`,
       modelCandidatesForStage(settings, request.stage),
     )
-    const route = splitModelRoute(model)
+    const route = candidateSelection(model)
     const childId = brandString<SessionId>(`session-${randomUUID()}`)
     await this.recordSessionAgent(cwd, childId, configuredAgent)
     const subagents = this.getService<SubagentsRuntime>('subagents')
@@ -859,11 +897,12 @@ export class A2d2Service extends Service {
       request: {
         prompt: [{ type: 'text', text: request.prompt }],
         parent,
-        agentOptions: { provider: route.provider, model: route.model },
+        agentOptions: route,
       },
       signal: request.signal,
     })
-    return { session: started.childId, model, agent: configuredAgent }
+    return { session: started.childId, model: candidateRoute(model), agent: configuredAgent,
+      ...(route.reasoningEffort === undefined ? {} : { reasoningEffort: route.reasoningEffort }) }
   }
 
   /**
@@ -960,20 +999,20 @@ export class A2d2Service extends Service {
     return (this.ctx.get as unknown as (name: string) => T | undefined).call(this.ctx, name)
   }
 
-  private async selectStageModel(stage: string): Promise<string> {
+  private async selectStageModel(stage: string): Promise<ModelCandidate> {
     if (!isClosedHighwayStation(stage)) throw new Error(`a2d2: unknown stage "${stage}"`)
     const settings = this.stageAgents
     const agent = settings.stages[stage]
     return await this.selectModelCandidate(`stage "${stage}" Agent "${agent}"`, modelCandidatesForStage(settings, stage))
   }
 
-  private async selectModelCandidate(subject: string, candidates: readonly string[]): Promise<string> {
+  private async selectModelCandidate(subject: string, candidates: readonly ModelCandidate[]): Promise<ModelCandidate> {
     const llm = this.getService<LlmRuntime>('llm')
     if (llm === undefined) throw new Error('a2d2: llm service is unavailable')
     const providers = new Set(llm.listProviders().map(provider => provider.id))
-    const modelCache = new Map<string, readonly { readonly id: string }[]>()
+    const modelCache = new Map<string, readonly CandidateModelInfo[]>()
     for (const candidate of candidates) {
-      const route = splitModelRoute(candidate)
+      const route = splitModelRoute(candidateRoute(candidate))
       if (!providers.has(route.provider)) continue
       let models = modelCache.get(route.provider)
       if (models === undefined) {
@@ -984,7 +1023,16 @@ export class A2d2Service extends Service {
         }
         modelCache.set(route.provider, models)
       }
-      if (models.some(model => model.id === route.model)) return candidate
+      const model = models.find(model => model.id === route.model)
+      if (model === undefined) continue
+      const effort = candidateEffort(candidate)
+      if (effort !== undefined) {
+        const info = await llm.resolveModelInfo(route.provider, route.model)
+        if (!info.reasoning?.efforts.some(option => option.id === effort)) {
+          throw new Error(`a2d2: ${candidateRoute(candidate)} does not support reasoning effort "${effort}"`)
+        }
+      }
+      return candidate
     }
     throw new Error(`a2d2: ${subject} has no model candidate present in the model catalog`)
   }
@@ -1057,11 +1105,12 @@ export class A2d2Service extends Service {
           handler: ReturnType<typeof createConfigHandler>
         }): () => void
       }
-      type LlmModel = { readonly id: string }
+      type LlmModel = CandidateModelInfo
       type LlmProvider = { readonly id: string }
       type LlmRuntime = {
         listProviders(): readonly LlmProvider[]
         listModels(provider: string): Promise<readonly LlmModel[]>
+        resolveModelInfo(provider: string, model: string): Promise<CandidateModelInfo>
         stream(options: Parameters<Parameters<typeof createConfigHandler>[0]['stream']>[0]): ReturnType<Parameters<typeof createConfigHandler>[0]['stream']>
       }
       // Settings are keyed by the plugin's profile entry id; the form value
@@ -1077,7 +1126,7 @@ export class A2d2Service extends Service {
       const connection = getService<RouteConnection>('connection')
       if (server === undefined || connection === undefined) return
       // The loader stamps its entry on the fiber (a type merge this plugin does not import).
-      const ns = (this.entryFiber as { readonly entry?: { readonly id: string } }).entry?.id
+      const ns = (this.entryFiber as { readonly entry?: { readonly options?: { readonly id?: string } } }).entry?.options?.id
       const readSettings = () => {
         const settings = getService<SettingsRuntime>('settings')
         const descriptor = ns === undefined ? undefined : settings?.describe().find(entry => entry.ns === ns)
@@ -1096,6 +1145,26 @@ export class A2d2Service extends Service {
           if (ns === undefined) throw new Error('a2d2: no profile entry to store settings in')
           await settings.replace(ns, { stageAgents: validateCompleteStageAgentsSettings(value) }, expectedRevision)
           return readSettings()
+        },
+        modelEfforts: async () => {
+          const llm = getService<LlmRuntime>('llm')
+          if (llm === undefined) return {}
+          const entries = await Promise.all(llm.listProviders().map(async provider => {
+            try {
+              const resolved = await Promise.all((await llm.listModels(provider.id)).map(async model => {
+                try {
+                  const info = await llm.resolveModelInfo(provider.id, model.id)
+                  return [`${provider.id}/${model.id}`, info.reasoning?.efforts ?? []] as const
+                } catch {
+                  return undefined
+                }
+              }))
+              return resolved.filter((entry): entry is NonNullable<typeof entry> => entry !== undefined)
+            } catch {
+              return []
+            }
+          }))
+          return Object.fromEntries(entries.flat())
         },
         modelRoutes: async () => {
           const llm = getService<LlmRuntime>('llm')
@@ -1141,7 +1210,7 @@ export class A2d2Service extends Service {
       const handler = createSessionAgentHandler({
         requestRejection: request => connection.requestRejection(request),
         getSession: id => routeCtx.get('sessions')?.get(id),
-        recordSessionAgent: (cwd, sessionId, agent) => this.recordSessionAgent(cwd, sessionId, agent),
+        recordSessionAgent: (cwd, sessionId, agent) => this.initializeSessionAgent(cwd, sessionId, agent),
       })
       routeCtx.effect(
         () => server.register({ kind: 'exact', path: SESSION_AGENT_ROUTE_PATH, handler }),

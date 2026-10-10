@@ -95,6 +95,23 @@
 
 `stages` 覆盖 Matt 公路图闭集阶段，每个阶段映射到 `ceo`、`engineer` 或 `reviewer`；独立区任意 skill 按规则使用 CEO，不进表。`agents` 与 `consult` 都是有序的 `provider/model` 候选列表。空列表、格式错误 route、未知阶段和未知 Agent 名都会被 settings schema 拒绝。默认值把 `implement` 交给 engineer，`code-review` 交给 reviewer，其余闭集阶段交给 CEO。CEO、reviewer 和 consult 默认是 `claude-bray/claude-fable-5-1` 再到 `codex/gpt-6`；engineer 默认是 `codex/gpt-5.5` 再到 `claude-bray/claude-opus-5-5`。若 reviewer 与 engineer 的首选候选相同，宿主会记录中文告警，但不会拒绝该设置。
 
+### 子会话推理强度
+
+在 **设置 → A2D2 配置 → Agent 模型候选** 中，每个模型旁的「推理强度」下拉框只列出该精确模型声明的档位。工程师、评审、CEO 和咨询分别配置；保存后下一次创建或派发使用新值，已有会话不变。没有声明档位的模型不可选择强度。选择了不再受支持的档位时会显示错误，保存和创建不会静默降级。
+
+旧 `provider/model` 字符串仍有效，未指定强度时保留 DSH 的原有默认与继承规则。需要独立强度的候选使用对象：
+
+```yaml
+engineer:
+  - route: claude-bray/claude-opus-5-5
+    reasoningEffort: medium
+reviewer:
+  - route: claude-bray/claude-opus-5-5
+    reasoningEffort: high
+```
+
+这些列表位于 `stageAgents.agents` 下。咨询同样可在 `stageAgents.consult` 中使用对象。不要给路由字符串添加 `@medium` 后缀。芯片新建和交接创建由宿主设置会话本地模型，不调用会保存全局默认的 DSH 模型选择器。重复登记同一 Agent 不会重新设置已有会话的模型或强度。「测试」会使用当前候选所选强度，修改强度后不会复用旧档位的测试结果。
+
 ### 会话 Agent 装配
 
 主会话由任务绑定推出为 CEO，不另写 Agent 账本。`dispatch_subagent` 会把子代理会话记录为请求阶段指定的 Agent；需登录的浏览器路由 `/a2d2/api/session-agent` 供芯片创建的会话登记为 `ceo`、`engineer` 或 `reviewer`。该路由只接受 POST，使用与 `/a2d2/api/consult`、`/a2d2/api/config` 相同的 DSH 浏览器认证和 64 KiB JSON 请求体上限，会拒绝未知会话 id、非法 Agent 值、任务 issue 主会话，以及把已记录会话改写成另一个 Agent 的请求，并写入项目本地 `.dsh/a2d2/session-agents.yaml` 账本。把同一会话重复登记成同一 Agent 是幂等操作。`ctx.a2d2.agentOfSession(cwd, session)` 对任务 issue 主会话返回 `ceo`，对已记录的非主会话返回账本值，对普通未记录会话返回 `undefined`。
@@ -268,7 +285,7 @@ sessions:
 
 - **continue**：填本会话输入框并聚焦。不写副作用，因为它只在下一阶段的 Agent 与本会话的 Agent 相同时出现。
 - **subagent**：本会话不动，填框，指令末尾写明子代理的 Agent；芯片写作「子代理 · 评审」这样的文案。
-- **clear**：在同一工作区新建会话，经 `/a2d2/api/session-agent` 登记为下一阶段的 Agent，按该 Agent 候选取首个在**新会话**模型目录里的模型并选中，打开它，再填它的输入框。芯片写作「新会话 · 工程师（gpt-5.5）」（本会话模型目录尚未读到时写「新会话 · 工程师」）。该 Agent 的候选全不在目录里时，芯片写「工程师无可用模型」，点击只填本会话输入框并提示原因。新建会话失败同样退化为只填本会话；新会话上登记或选模型失败会提示原因，但不阻断填框。
+- **clear**：在同一工作区新建会话，经 `/a2d2/api/session-agent` 登记为下一阶段的 Agent，由宿主选中该 Agent 第一个在目录中的候选及其强度，只设置这条会话而不写全局默认，打开它，再填它的输入框。芯片写作「新会话 · 工程师（gpt-5.5）」（本会话模型目录尚未读到时写「新会话 · 工程师」）。该 Agent 的候选全不在目录里时，芯片写「工程师无可用模型」，点击只填本会话输入框并提示原因。新建会话失败同样退化为只填本会话；新会话上登记或选模型失败会提示原因，但不阻断填框。
 - **compact / handoff**：打开交接卡；下面的一键交接序列在 take 之前把后继会话登记为下一阶段的 Agent 并选好它的模型。
 
 独立区任意 skill 的 Agent 都是 CEO，芯片与下一阶段行一致。不返回 `stageAgents` 的旧宿主没有 Agent 可言：clear 只新建会话、保持默认模型（「新会话 · 默认模型」），不登记。
@@ -284,7 +301,7 @@ sessions:
 1. 浏览器在它所在的会话上、通过该会话自己的命令面运行 `/handoff <focus>`，正是这一步让 host 写入骨架、并排入写接续内容的那一轮；
 2. 浏览器等待那一轮，通过会话传输读取会话自身的 `running` 状态——不用定时器，也不用另一个插件渲染出的 DOM，这两者都会在错误的时刻把会话报告为已完成；
 3. 浏览器找到该会话的 workspace，`connectWorkspace` 出一个全新的后继会话；
-4. 当 handoff 或 compact 芯片带入下一阶段目标时，浏览器通过 `stageAgents` 解析该阶段的 Agent（独立区 skill 为 CEO），经 `/a2d2/api/session-agent` 把后继会话登记为该 Agent，再按该 Agent 候选取首个在后继会话模型目录里的模型并选中——全部在 take 之前；登记或选模型失败会提示原因，交接继续；
+4. 当 handoff 或 compact 芯片带入下一阶段目标时，浏览器通过 `stageAgents` 解析该阶段的 Agent（独立区 skill 为 CEO），经 `/a2d2/api/session-agent` 登记后继会话并由宿主设置候选模型与强度，不写全局默认——全部在 take 之前；登记或选模型失败会提示原因，交接继续；
 5. 浏览器切焦点到后继会话；
 6. 后继会话继承交接出去的会话的标题，并按 fork 给同级会话编号的同一风格递增（`Ship the store` → `Ship the store (1)`），使一条交接链读起来是同一件有名字的工作，而不是若干个同名会话。源会话没有标题、或重命名被拒绝时，后继保留它的自动标题——一次只丢标题的失败绝不打断一个接续内容已经落地的交接；
 7. 后继会话跑 `/handoff take <session-id>`，这正是让 host 把接续内容注入为它首条 prompt 的动作。

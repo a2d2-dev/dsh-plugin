@@ -95,6 +95,23 @@ The plugin also exposes live stage Agent settings in DSH's `settings.yaml`. The 
 
 `stages` covers the closed Matt highway stages and maps each one to `ceo`, `engineer`, or `reviewer`; standalone skills use CEO by policy and are not stored in the table. `agents` and `consult` are ordered `provider/model` candidate lists. Empty lists, malformed routes, unknown stages, and unknown Agent names are rejected by the settings schema. Defaults assign `implement` to engineer, `code-review` to reviewer, and every other closed stage to CEO. CEO, reviewer, and consult default to `claude-bray/claude-fable-5-1` then `codex/gpt-6`; engineer defaults to `codex/gpt-5.5` then `claude-bray/claude-opus-5-5`. If reviewer and engineer share the same first candidate the host logs a Chinese warning, but keeps the setting.
 
+### Subagent reasoning effort
+
+Open **Settings → A2D2 配置 → Agent model candidates** to select reasoning effort beside each model. Options come from the exact provider/model's declared efforts, not a shared hard-coded enum. CEO, engineer, reviewer, and consult are independent. Saving affects subsequent creation or dispatch, never existing sessions. Models without declared efforts have a disabled selector. Unsupported explicit efforts are shown and rejected, not silently ignored.
+
+Legacy `provider/model` strings keep DSH's existing omission/default/inheritance behavior. For independent effort, use a structured candidate under `stageAgents.agents`:
+
+```yaml
+engineer:
+  - route: claude-bray/claude-opus-5-5
+    reasoningEffort: medium
+reviewer:
+  - route: claude-bray/claude-opus-5-5
+    reasoningEffort: high
+```
+
+`stageAgents.consult` accepts the same candidate objects. Do not append `@medium` to a route string. Browser-created and handoff sessions install their model through the trusted host route, using session-local selection rather than DSH's default-saving picker. Repeating the same Agent registration does not change an existing session's model or effort. Probes send the currently selected effort; their result identity includes effort so a changed setting cannot reuse a different effort's result.
+
 ### Session Agent assembly
 
 Main sessions are CEO by task binding and are not written to a separate Agent ledger. `dispatch_subagent` records its child session as the Agent assigned to the requested stage, and the authenticated browser route `/a2d2/api/session-agent` records sessions created by chips as `ceo`, `engineer`, or `reviewer`. That route is POST-only, uses the same DSH browser authentication and 64 KiB JSON body limit as `/a2d2/api/consult` and `/a2d2/api/config`, rejects unknown session ids, illegal Agent values, task issue main sessions, and attempts to rewrite an already recorded session to a different Agent, and writes the project-local `.dsh/a2d2/session-agents.yaml` ledger. Recording the same session as the same Agent is idempotent. `ctx.a2d2.agentOfSession(cwd, session)` returns `ceo` for task issue main sessions, the ledger value for recorded non-main sessions, and `undefined` for ordinary unrecorded sessions.
@@ -268,7 +285,7 @@ The consultation does not reuse the current session route: it tries the stage Ag
 
 - **continue** fills this session's composer and focuses it. It carries no side-effect label, because it only appears when the next stage's Agent is this session's Agent.
 - **subagent** fills this session's composer with the instruction plus a line naming the subagent's Agent, and the chip reads e.g. `子代理 · 评审`.
-- **clear** creates a session in the same workspace, records it as the next stage's Agent through `/a2d2/api/session-agent`, selects that Agent's first candidate present in the new session's model directory, opens it, and fills its composer. The chip reads e.g. `新会话 · 工程师（gpt-5.5）` (`新会话 · 工程师` until this session's directory has loaded). When none of the Agent's candidates is in the directory the chip reads `工程师无可用模型`, and clicking only fills this session's composer and says why. A failed creation also falls back to filling this session; a failed registration or model selection on the new session is reported and does not stop the fill.
+- **clear** creates a session in the same workspace, records it as the next stage's Agent through `/a2d2/api/session-agent`, where the host selects that Agent's first catalog-present candidate and its effort locally without saving a global default, opens it, and fills its composer. The chip reads e.g. `新会话 · 工程师（gpt-5.5）` (`新会话 · 工程师` until this session's directory has loaded). When none of the Agent's candidates is in the directory the chip reads `工程师无可用模型`, and clicking only fills this session's composer and says why. A failed creation also falls back to filling this session; a failed registration or model selection on the new session is reported and does not stop the fill.
 - **compact** and **handoff** open the handoff card; the one-click handoff below records and starts the successor as the next stage's Agent before take.
 
 A standalone skill's Agent is CEO, on the chips and on the next-stage line alike. Older hosts that send no `stageAgents` get no Agent: clear creates a session with its default model (`新会话 · 默认模型`) and records nothing.
@@ -284,7 +301,7 @@ The handoff card is opened from a handoff or compact chip, or from **其他走�
 1. the browser runs `/handoff <focus>` on the session it sits on, through that session's own command face, which is what makes the host write the skeleton and queue the turn that writes the continuation content;
 2. the browser waits for that turn, reading the session's own `running` state over the session transport — not a timer, and not another plugin's rendered DOM, either of which would report the session as finished at the wrong moment;
 3. the browser finds the session's workspace and `connectWorkspace`s a fresh successor session;
-4. when a handoff or compact chip carries a next-stage target, the browser resolves that stage's Agent through `stageAgents` (CEO for a standalone skill), records the successor as that Agent through `/a2d2/api/session-agent`, and selects the Agent's first candidate in the successor's model directory — all before take; a failed registration or selection is reported and the handoff continues;
+4. when a handoff or compact chip carries a next-stage target, the browser resolves that stage's Agent through `stageAgents` (CEO for a standalone skill), records the successor and installs its candidate and effort locally through `/a2d2/api/session-agent`, without changing the host default — all before take; a failed registration or selection is reported and the handoff continues;
 5. the browser focuses the successor session;
 6. the successor inherits the handing-off session's title, incremented in the same style a fork numbers a peer (`Ship the store` → `Ship the store (1)`), so a handoff chain reads as one named piece of work rather than several sessions with an identical name. A source with no title, or a rejected rename, leaves the successor on its automatic title — a title-only loss never stops a handoff whose continuation content already landed;
 7. the successor runs `/handoff take <session-id>`, which is what makes the host inject the continuation content as its first prompt.

@@ -28,8 +28,10 @@ import {
   shortModelRoute,
   stageAgentLabel,
   stageAgentWarnings,
+  candidateRoute,
+  candidateEffort,
 } from '../stage-agent-data.ts'
-import type { Stage, StageAgent, StageAgentsSettings } from '../stage-agent-data.ts'
+import type { ModelCandidate, ModelEffortCatalog, Stage, StageAgent, StageAgentsSettings } from '../stage-agent-data.ts'
 import { HighwayMap } from './highway-map.tsx'
 import type { HighwayView, HighwayViewStation } from './highway-view.ts'
 import css from './orb.module.css'
@@ -44,6 +46,7 @@ interface ConfigSnapshot {
   readonly settings: StageAgentsSettings
   readonly revision?: number
   readonly warnings: readonly string[]
+  readonly efforts?: ModelEffortCatalog
 }
 
 export type ProbeResult = { readonly status: 'pending' | 'normal' | 'refusal' | 'rate-limited' | 'error'; readonly reason: string }
@@ -82,7 +85,7 @@ export interface ConfigCandidateRow {
   readonly scope: ConfigCandidateScope
   readonly label: string
   readonly group: string
-  readonly routes: readonly string[]
+  readonly routes: readonly ModelCandidate[]
 }
 
 const STATION_LABELS: Readonly<Record<ConfigStationId, string>> = {
@@ -137,19 +140,19 @@ function cloneSettings(settings: StageAgentsSettings): StageAgentsSettings {
     ) as Record<Stage, StageAgent>,
     agents: Object.fromEntries(
       STAGE_AGENTS.map(agent => [agent, [...settings.agents[agent]]]),
-    ) as Record<StageAgent, string[]>,
+    ) as Record<StageAgent, ModelCandidate[]>,
     consult: [...settings.consult],
   }
 }
 
-function routeKey(scope: ConfigCandidateScope, route: string): string {
-  return `${scope}\u0000${route}`
+function routeKey(scope: ConfigCandidateScope, candidate: ModelCandidate): string {
+  return `${scope}\u0000${candidateRoute(candidate)}\u0000${candidateEffort(candidate) ?? ''}`
 }
 
 function replaceCandidateList(
   settings: StageAgentsSettings,
   scope: ConfigCandidateScope,
-  routes: readonly string[],
+  routes: readonly ModelCandidate[],
 ): StageAgentsSettings {
   if (scope === 'consult') return { ...settings, consult: [...routes] }
   return {
@@ -203,7 +206,7 @@ export function addConfigCandidate(
 ): StageAgentsSettings {
   if (!catalog.includes(route)) throw new Error('只能从模型目录添加候选')
   const routes = scope === 'consult' ? settings.consult : settings.agents[scope]
-  if (routes.includes(route)) return settings
+  if (routes.some(candidate => candidateRoute(candidate) === route)) return settings
   return replaceCandidateList(settings, scope, [...routes, route])
 }
 
@@ -214,7 +217,7 @@ export function removeConfigCandidate(
 ): StageAgentsSettings {
   const routes = scope === 'consult' ? settings.consult : settings.agents[scope]
   if (routes.length <= 1) throw new Error('至少保留一个模型候选')
-  return replaceCandidateList(settings, scope, routes.filter(item => item !== route))
+  return replaceCandidateList(settings, scope, routes.filter(item => candidateRoute(item) !== route))
 }
 
 export function moveConfigCandidate(
@@ -230,6 +233,21 @@ export function moveConfigCandidate(
   routes[index] = routes[target]!
   routes[target] = route
   return replaceCandidateList(settings, scope, routes)
+}
+
+export function setConfigCandidateEffort(
+  settings: StageAgentsSettings,
+  scope: ConfigCandidateScope,
+  route: string,
+  effort: string,
+  catalog: ModelEffortCatalog,
+): StageAgentsSettings {
+  if (effort !== '' && !catalog[route]?.some(option => option.id === effort)) {
+    throw new Error(`${route} 不支持推理强度 ${effort}`)
+  }
+  const routes = scope === 'consult' ? settings.consult : settings.agents[scope]
+  return replaceCandidateList(settings, scope, routes.map(candidate => candidateRoute(candidate) !== route
+    ? candidate : effort === '' ? route : { route, reasoningEffort: effort }))
 }
 
 export function configWarnings(settings: StageAgentsSettings): readonly string[] {
@@ -271,10 +289,10 @@ function configStationAgentField(
   }
 }
 
-function candidateModelLabel(routes: readonly string[], catalog: readonly string[] | undefined): string {
-  if (catalog === undefined) return shortModelRoute(routes[0] ?? '') || '无可用模型'
-  const selected = routes.find(route => catalog.includes(route))
-  return selected === undefined ? '无可用模型' : shortModelRoute(selected)
+function candidateModelLabel(routes: readonly ModelCandidate[], catalog: readonly string[] | undefined): string {
+  if (catalog === undefined) return shortModelRoute(candidateRoute(routes[0] ?? '')) || '无可用模型'
+  const selected = routes.find(route => catalog.includes(candidateRoute(route)))
+  return selected === undefined ? '无可用模型' : shortModelRoute(candidateRoute(selected))
 }
 
 function stationRole(station: ConfigStationId): string {
@@ -339,7 +357,7 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
     return () => { alive = false }
   }, [fetchImpl, loadRoutes])
 
-  const setRoutes = (scope: ConfigCandidateScope, routes: readonly string[]): void => {
+  const setRoutes = (scope: ConfigCandidateScope, routes: readonly ModelCandidate[]): void => {
     setDraft(current => replaceCandidateList(current, scope, routes))
   }
   const save = async (): Promise<void> => {
@@ -348,13 +366,13 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
     setStatus('保存中')
     try {
       const saved = await callConfig<ConfigSnapshot>(fetchImpl, 'settings.update', configUpdatePayload(draft, snapshot.revision))
-      setSnapshot(saved)
+      setSnapshot({ ...saved, efforts: snapshot.efforts })
       setDraft(cloneSettings(saved.settings))
       setStatus('已保存')
     } catch (error) {
       const latest = (error as { latest?: ConfigSnapshot }).latest
       if (latest !== undefined) {
-        setSnapshot(latest)
+        setSnapshot({ ...latest, efforts: snapshot.efforts })
         setDraft(cloneSettings(latest.settings))
         setStatus('配置已被其他页面更新，已重新读取')
       } else {
@@ -364,11 +382,14 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
       setSaving(false)
     }
   }
-  const probe = async (scope: ConfigCandidateScope, route: string): Promise<void> => {
-    const key = routeKey(scope, route)
+  const probe = async (scope: ConfigCandidateScope, candidate: ModelCandidate): Promise<void> => {
+    const key = routeKey(scope, candidate)
     setProbes(current => ({ ...current, [key]: { status: 'pending', reason: '测试中' } }))
     try {
-      const result = await callConfig<ProbeResult>(fetchImpl, 'probe', { route })
+      const result = await callConfig<ProbeResult>(fetchImpl, 'probe', {
+        route: candidateRoute(candidate),
+        ...(candidateEffort(candidate) === undefined ? {} : { reasoningEffort: candidateEffort(candidate) }),
+      })
       setProbes(current => ({ ...current, [key]: result }))
     } catch (error) {
       setProbes(current => ({
@@ -382,6 +403,7 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
     if (station.id === 'standalone') return createElement('span', { className: css.configNoSwitch }, 'CEO（任意 skill）')
     return createElement('select', {
       className: css.configSelect,
+      disabled: saving,
       value: station.agentKey ?? draft.stages[station.id],
       onChange: (event: ChangeEvent<HTMLSelectElement>) => {
         setDraft(current => setConfigStageAgent(current, station.id as Stage, event.currentTarget.value as StageAgent))
@@ -394,38 +416,56 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
   const renderRoutes = (row: ConfigCandidateRow): ReactNode => {
     const scope = row.scope
     const routes = row.routes
-    const available = catalog.filter(route => !routes.includes(route))
+    const available = catalog.filter(route => !routes.some(candidate => candidateRoute(candidate) === route))
     const selectedRoute = selected[scope] ?? available[0] ?? ''
     return createElement('div', { className: css.configRoutes },
-      ...routes.map((route, index) => {
-        const result = probes[routeKey(scope, route)]
+      ...routes.map((candidate, index) => {
+        const route = candidateRoute(candidate)
+        const effort = candidateEffort(candidate) ?? ''
+        const options = snapshot?.efforts?.[route] ?? []
+        const unsupported = effort !== '' && !options.some(option => option.id === effort)
+        const result = probes[routeKey(scope, candidate)]
         return createElement('div', { className: css.configRoute, key: route },
           createElement('span', { className: css.configRouteName }, route),
+          createElement('select', {
+            className: css.configSelect,
+            'aria-label': `${row.label} ${route} 推理强度`,
+            value: effort,
+            disabled: saving || (options.length === 0 && effort === ''),
+            onChange: (event: ChangeEvent<HTMLSelectElement>) => {
+              const value = event.currentTarget.value
+              setDraft(current => setConfigCandidateEffort(current, scope, route, value, snapshot?.efforts ?? {}))
+            },
+          },
+            createElement('option', { value: '' }, options.length === 0 ? '未声明推理强度' : '默认（未指定）'),
+            unsupported ? createElement('option', { value: effort }, `${effort}（不受支持）`) : null,
+            ...options.map(option => createElement('option', { key: option.id, value: option.id }, option.name)),
+          ),
           createElement('button', {
             className: css.configIconButton,
             type: 'button',
             title: '上移',
-            disabled: index === 0,
+            disabled: saving || index === 0,
             onClick: () => setDraft(current => moveConfigCandidate(current, scope, index, -1)),
           }, '↑'),
           createElement('button', {
             className: css.configIconButton,
             type: 'button',
             title: '下移',
-            disabled: index === routes.length - 1,
+            disabled: saving || index === routes.length - 1,
             onClick: () => setDraft(current => moveConfigCandidate(current, scope, index, 1)),
           }, '↓'),
           createElement('button', {
             className: css.configButton,
             type: 'button',
-            onClick: () => { void probe(scope, route) },
+            onClick: () => { void probe(scope, candidate) },
           }, '测试'),
           createElement('button', {
             className: css.configIconButton,
             type: 'button',
             title: '删除',
-            disabled: routes.length <= 1,
-            onClick: () => setRoutes(scope, routes.filter(item => item !== route)),
+            disabled: saving || routes.length <= 1,
+            onClick: () => setRoutes(scope, routes.filter(item => candidateRoute(item) !== route)),
           }, '×'),
           result === undefined ? null : createElement('span', { className: css.configProbe }, probeResultText(result)),
         )
@@ -443,7 +483,7 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
         createElement('button', {
           className: css.configButton,
           type: 'button',
-          disabled: selectedRoute === '',
+          disabled: saving || selectedRoute === '',
           onClick: () => {
             if (selectedRoute === '') return
             setDraft(current => addConfigCandidate(current, scope, selectedRoute, catalog))

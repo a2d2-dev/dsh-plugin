@@ -120,6 +120,7 @@ function handler(options: {
   revision?: number
   update?: (value: StageAgentsSettings, expectedRevision: number | undefined) => Promise<{ value: StageAgentsSettings; revision: number }>
   modelRoutes?: readonly string[]
+  modelEfforts?: Readonly<Record<string, readonly { id: string; name: string }[]>>
   stream?: (options: GenerateOptions) => AsyncIterable<StreamChunk>
   requestRejection?: () => 401 | 403 | undefined
 } = {}) {
@@ -137,11 +138,30 @@ function handler(options: {
       return { value, revision }
     }),
     modelRoutes: async () => options.modelRoutes ?? ['claude-bray/claude-fable-5-1', 'codex/gpt-6', 'codex/gpt-5.5'],
+    ...(options.modelEfforts === undefined ? {} : { modelEfforts: async () => options.modelEfforts! }),
     stream: options.stream ?? (() => output('OK')),
   })
 }
 
 describe('A2D2 config settings route', () => {
+  it('returns model-specific efforts, saves explicit effort, and rejects unsupported efforts', async () => {
+    const route = 'codex/gpt-5.5'
+    const api = handler({ modelEfforts: { [route]: [{ id: 'medium', name: 'Medium' }] } })
+    const get = await send(api, { method: 'settings.get' })
+    expect(get.json).toMatchObject({ value: { efforts: { [route]: [{ id: 'medium', name: 'Medium' }] } } })
+    const settings = { ...DEFAULT_STAGE_AGENTS, agents: {
+      ...DEFAULT_STAGE_AGENTS.agents, engineer: [{ route, reasoningEffort: 'medium' }],
+    } }
+    const saved = await send(api, { method: 'settings.update', payload: { settings, expectedRevision: 7 } })
+    expect(saved).toMatchObject({ status: 200, json: { value: { settings, revision: 8 } } })
+    const rejected = await send(api, { method: 'settings.update', payload: {
+      settings: { ...settings, agents: { ...settings.agents, engineer: [{ route, reasoningEffort: 'max' }] } }, expectedRevision: 8,
+    } })
+    expect(rejected).toMatchObject({ status: 400, json: { error: { code: 'schema-rejected' } } })
+    const probe = await send(api, { method: 'probe', payload: { route, reasoningEffort: 'max' } })
+    expect(probe).toMatchObject({ status: 400, json: { error: { code: 'unsupported-effort' } } })
+  })
+
   it('rejects a request DSH refuses before reading settings', async () => {
     const result = await send(handler({ requestRejection: () => 403 }), { method: 'settings.get', payload: {} }, { host: 'evil.example' })
     expect(result).toMatchObject({

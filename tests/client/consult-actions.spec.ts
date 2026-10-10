@@ -633,8 +633,6 @@ describe('chip selection by Agent', () => {
       'load:session-a',
       'connect:workspace-1',
       'register:session-new:engineer',
-      'load:session-new',
-      'select:session-new:codex/gpt-5.5',
       'open:session-new',
       'draft:session-new:/implement #15',
       'focus',
@@ -652,7 +650,7 @@ describe('chip selection by Agent', () => {
     }, clearContext)).resolves.toBe(true)
 
     expect(events).toContain('register:session-new:ceo')
-    expect(events).toContain('select:session-new:claude-bray/claude-fable-5-1')
+    expect(events.filter(event => event.startsWith('select:'))).toEqual([])
     expect(events.at(-2)).toBe('draft:session-new:/research DSH')
   })
 
@@ -702,8 +700,6 @@ describe('chip selection by Agent', () => {
       'connect:workspace-1',
       'register:session-new:engineer',
       'notify:登记新会话 Agent 失败：session-new is a task issue main session',
-      'load:session-new',
-      'select:session-new:codex/gpt-5.5',
       'open:session-new',
       'draft:session-new:/implement #15',
       'focus',
@@ -714,12 +710,7 @@ describe('chip selection by Agent', () => {
   it('still fills the successor when its model selection is refused', async () => {
     const events: string[] = []
     const deps = clearDeps(events, {
-      modelDirectories: modelDirectory(
-        'claude-bray/claude-fable-5-1',
-        ['codex/gpt-5.5'],
-        events,
-        { select: async () => ({ ok: false, error: { message: 'adapter rejected the model' } }) },
-      ),
+      registerSessionAgent: registrar(events, async () => { throw new Error('adapter rejected the model') }),
     })
 
     await expect(selectConsultCandidate(deps, implementClear, clearContext)).resolves.toBe(true)
@@ -728,9 +719,7 @@ describe('chip selection by Agent', () => {
       'load:session-a',
       'connect:workspace-1',
       'register:session-new:engineer',
-      'load:session-new',
-      'select:session-new:codex/gpt-5.5',
-      'notify:选择新会话模型失败：adapter rejected the model',
+      'notify:登记新会话 Agent 失败：adapter rejected the model',
       'open:session-new',
       'draft:session-new:/implement #15',
       'focus',
@@ -740,6 +729,7 @@ describe('chip selection by Agent', () => {
   it('still fills the successor when its own catalog holds none of the Agent candidates', async () => {
     const events: string[] = []
     const deps = clearDeps(events, {
+      registerSessionAgent: registrar(events, async () => { throw new Error('工程师无可用模型') }),
       modelDirectories: modelDirectory(
         'claude-bray/claude-fable-5-1',
         ['codex/gpt-5.5'],
@@ -754,8 +744,7 @@ describe('chip selection by Agent', () => {
       'load:session-a',
       'connect:workspace-1',
       'register:session-new:engineer',
-      'load:session-new',
-      'notify:选择新会话模型失败：工程师无可用模型',
+      'notify:登记新会话 Agent 失败：工程师无可用模型',
       'open:session-new',
       'draft:session-new:/implement #15',
       'focus',

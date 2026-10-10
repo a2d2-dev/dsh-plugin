@@ -363,9 +363,6 @@ describe('runOrbHandoff', () => {
     expect(log).toEqual([
       'connect',
       `register:${SUCCESSOR}:engineer`,
-      `directory:${SUCCESSOR}`,
-      'load',
-      'select:codex/gpt-5.5',
       `open ${SUCCESSOR}`,
       `take /handoff take ${CURRENT}`,
     ])
@@ -377,7 +374,7 @@ describe('runOrbHandoff', () => {
     expect(await handoffWithAgent(log, { successorModel: { ...implementTarget, station: 'research' } }))
       .toEqual({ ok: true, successor: SUCCESSOR })
     expect(log).toContain(`register:${SUCCESSOR}:ceo`)
-    expect(log).toContain('select:claude-bray/claude-fable-5-1')
+    expect(log.filter(event => event.startsWith('select:'))).toEqual([])
   })
 
   it('reports a refused Agent registration and still selects the model and takes', async () => {
@@ -392,9 +389,6 @@ describe('runOrbHandoff', () => {
       'connect',
       `register:${SUCCESSOR}:engineer`,
       'notify:登记后继会话 Agent 失败：already recorded session as reviewer',
-      `directory:${SUCCESSOR}`,
-      'load',
-      'select:codex/gpt-5.5',
       `open ${SUCCESSOR}`,
       `take /handoff take ${CURRENT}`,
     ])
@@ -404,19 +398,14 @@ describe('runOrbHandoff', () => {
     const log: string[] = []
 
     const outcome = await handoffWithAgent(log, {
-      modelDirectories: successorModelDirectory(log, {
-        select: async () => { throw new Error('adapter rejected the model') },
-      }),
+      registerSessionAgent: registrar(log, async () => { throw new Error('adapter rejected the model') }),
     })
 
     expect(outcome).toEqual({ ok: true, successor: SUCCESSOR })
     expect(log).toEqual([
       'connect',
       `register:${SUCCESSOR}:engineer`,
-      `directory:${SUCCESSOR}`,
-      'load',
-      'select:codex/gpt-5.5',
-      'notify:选择后继会话模型失败：adapter rejected the model',
+      'notify:登记后继会话 Agent 失败：adapter rejected the model',
       `open ${SUCCESSOR}`,
       `take /handoff take ${CURRENT}`,
     ])

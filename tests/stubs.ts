@@ -138,6 +138,13 @@ export class StubLlm extends Service {
       .map(id => ({ id }))
   }
 
+  async resolveModelInfo(provider: string, model: string) {
+    return {
+      provider, id: model, name: model,
+      reasoning: { efforts: ['low', 'medium', 'high'].map(id => ({ id, name: id })) },
+    }
+  }
+
   async listModels(provider: string): Promise<readonly StubLlmModel[]> {
     return this.routes
       .filter(route => route.startsWith(`${provider}/`))

@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import A2d2Service from '../src/index.ts'
-import type { StageAgent, StageAgentsSettings } from '../src/stage-agents.ts'
+import type { ModelCandidate, StageAgent, StageAgentsSettings } from '../src/stage-agents.ts'
 import { DEFAULT_STAGE_AGENTS } from '../src/stage-agents.ts'
 import * as toolsPlugin from '../src/tools.ts'
 import { StubLlm, StubSubagents, StubTools, stubAgent, toolRunContext } from './stubs.ts'
@@ -30,7 +30,7 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })))
 })
 
-function stageAgents(agent: StageAgent, routes: readonly string[]): StageAgentsSettings {
+function stageAgents(agent: StageAgent, routes: readonly ModelCandidate[]): StageAgentsSettings {
   return {
     stages: { ...DEFAULT_STAGE_AGENTS.stages },
     consult: [...DEFAULT_STAGE_AGENTS.consult],
@@ -70,6 +70,29 @@ async function mount(root: string, settings: StageAgentsSettings, catalog: reado
 }
 
 describe('dispatchSubagent', () => {
+  it('dispatches explicit effort independently and reads changed effort on the next call', async () => {
+    const root = await tempRoot()
+    const route = 'claude-bray/claude-opus-5-5'
+    const { service, subagents } = await mount(root,
+      stageAgents('engineer', [{ route, reasoningEffort: 'medium' }]), [route])
+    const parent = stubAgent(root, mainSession)
+    await service.bindMainSession({ cwd: root, issue: 41, mainSession, now: new Date() })
+    const request = { cwd: root, stage: 'implement' as const, issue: 48,
+      prompt: 'Implement.', parent, signal: new AbortController().signal }
+    await expect(service.dispatchSubagent(request)).resolves.toMatchObject({
+      model: route, reasoningEffort: 'medium', agent: 'engineer',
+    })
+    expect(subagents.startContinuable.mock.calls[0]?.[0].request.agentOptions).toEqual({
+      provider: 'claude-bray', model: 'claude-opus-5-5', reasoningEffort: 'medium',
+    })
+    replaceStageAgents(service, stageAgents('engineer', [{ route, reasoningEffort: 'low' }]))
+    await service.dispatchSubagent(request)
+    expect(subagents.startContinuable.mock.calls[1]?.[0].request.agentOptions).toHaveProperty('reasoningEffort', 'low')
+    replaceStageAgents(service, stageAgents('engineer', [{ route, reasoningEffort: 'invalid' }]))
+    await expect(service.dispatchSubagent(request)).rejects.toThrow(/does not support reasoning effort/)
+    expect(subagents.startContinuable).toHaveBeenCalledTimes(2)
+  })
+
   it('starts a child with the stage Agent first model candidate present in the model catalog', async () => {
     const root = await tempRoot()
     const { service, subagents } = await mount(
