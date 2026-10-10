@@ -97,7 +97,7 @@ The plugin also exposes live stage Agent settings in DSH's `settings.yaml`. The 
 
 ### Subagent reasoning effort
 
-Open **Settings → A2D2 配置 → Agent model candidates** to select reasoning effort beside each model. Options come from the exact provider/model's declared efforts, not a shared hard-coded enum. CEO, engineer, reviewer, and consult are independent. Saving affects subsequent creation or dispatch, never existing sessions. Models without declared efforts have a disabled selector. Unsupported explicit efforts are shown and rejected, not silently ignored.
+Open **Settings → A2D2 配置 → Agent model candidates** to select reasoning effort beside each model. Options come from the exact provider/model's declared efforts, not a shared hard-coded enum. CEO, engineer, reviewer, and consult are independent. Saving affects subsequent creation or dispatch, never existing sessions. Models without declared efforts have a disabled selector. Missing model metadata is shown separately as unavailable, not as a declaration of no efforts. Any explicit effort requires verifiable metadata for that exact route: missing metadata, unknown routes, and empty effort declarations are rejected before saving or probing, without reporting success or silently ignoring the effort. Legacy route strings can still be saved without effort metadata.
 
 Legacy `provider/model` strings keep DSH's existing omission/default/inheritance behavior. For independent effort, use a structured candidate under `stageAgents.agents`:
 

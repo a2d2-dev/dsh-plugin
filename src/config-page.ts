@@ -93,6 +93,18 @@ function flattenConfiguredRoutes(settings: StageAgentsSettings): Set<string> {
   ].map(candidateRoute))
 }
 
+function validateCandidateEffort(candidate: ModelCandidate, efforts: ModelEffortCatalog | undefined): void {
+  const selection = candidateSelection(candidate)
+  if (selection.reasoningEffort === undefined) return
+  const route = candidateRoute(candidate)
+  if (efforts === undefined || !Object.hasOwn(efforts, route)) {
+    throw new Error(`${route} reasoning effort metadata is unavailable; cannot validate explicit effort "${selection.reasoningEffort}"`)
+  }
+  if (!efforts[route]?.some(option => option.id === selection.reasoningEffort)) {
+    throw new Error(`${route} does not support reasoning effort "${selection.reasoningEffort}"`)
+  }
+}
+
 function reasonOf(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error)
   return raw.trim() || 'unknown error'
@@ -249,15 +261,11 @@ export function createConfigHandler(
           let next: StageAgentsSettings
           try {
             next = validateCompleteStageAgentsSettings(payload.settings)
-            const efforts = await dependencies.modelEfforts?.()
-            if (efforts !== undefined) {
-              for (const candidate of [...Object.values(next.agents).flat(), ...next.consult]) {
-                const selection = candidateSelection(candidate)
-                if (selection.reasoningEffort !== undefined && candidateRoute(candidate) in efforts
-                  && !efforts[candidateRoute(candidate)]?.some(option => option.id === selection.reasoningEffort)) {
-                  throw new Error(`${candidateRoute(candidate)} does not support reasoning effort "${selection.reasoningEffort}"`)
-                }
-              }
+            const candidates = [...Object.values(next.agents).flat(), ...next.consult]
+            const efforts = candidates.some(candidate => candidateSelection(candidate).reasoningEffort !== undefined)
+              ? await dependencies.modelEfforts?.() : undefined
+            for (const candidate of candidates) {
+              validateCandidateEffort(candidate, efforts)
             }
           } catch (error) {
             fail(response, 400, 'schema-rejected', reasonOf(error))
@@ -296,11 +304,12 @@ export function createConfigHandler(
             fail(response, 400, 'bad-effort', 'reasoningEffort must be a non-empty effort id')
             return
           }
-          const efforts = await dependencies.modelEfforts?.()
-          const selection = candidateSelection(candidate)
-          if (selection.reasoningEffort !== undefined && efforts !== undefined
-            && !efforts[payload.route]?.some(option => option.id === selection.reasoningEffort)) {
-            fail(response, 400, 'unsupported-effort', `${payload.route} does not support reasoning effort "${selection.reasoningEffort}"`)
+          const efforts = candidateSelection(candidate).reasoningEffort === undefined
+            ? undefined : await dependencies.modelEfforts?.()
+          try {
+            validateCandidateEffort(candidate, efforts)
+          } catch (error) {
+            fail(response, 400, 'unsupported-effort', reasonOf(error))
             return
           }
           const controller = new AbortController()
