@@ -113,6 +113,114 @@ describe('Agent candidate reasoning effort', () => {
     }
   })
 
+  it('retries failed installation without retaining an Agent record or poisoning the queue', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'a2d2-effort-retry-'))
+    const ctx = new Context()
+    const id = SessionId('session-retry')
+    const selectLocalModel = vi.fn()
+      .mockRejectedValueOnce(new Error('installation failed'))
+      .mockResolvedValue({ selected: candidateSelection(candidate) })
+    ctx.provide('sessionController', { selectLocalModel } as never)
+    try {
+      await ctx.plugin(StubLlm, { routes: [route] })
+      await ctx.plugin(A2d2Service, { root, stageAgents: settings as never })
+      await expect(ctx.a2d2.initializeSessionAgent(root, id, 'engineer')).rejects.toThrow('installation failed')
+      expect(await ctx.a2d2.agentOfSession(root, id)).toBeUndefined()
+      await ctx.a2d2.initializeSessionAgent(root, id, 'engineer')
+      expect(selectLocalModel).toHaveBeenCalledTimes(2)
+      expect(await ctx.a2d2.agentOfSession(root, id)).toBe('engineer')
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it.each(['engineer', 'reviewer'] as const)('serializes concurrent initialization as %s without blocking another session', async secondAgent => {
+    const root = await mkdtemp(join(tmpdir(), 'a2d2-effort-concurrent-'))
+    const ctx = new Context()
+    const id = SessionId('session-concurrent')
+    const other = SessionId('session-independent')
+    let release!: () => void
+    let entered!: () => void
+    const blocked = new Promise<void>(resolve => { release = resolve })
+    const firstEntered = new Promise<void>(resolve => { entered = resolve })
+    const selectLocalModel = vi.fn(async (request: { sessionId: SessionId }) => {
+      if (request.sessionId === id) {
+        entered()
+        await blocked
+      }
+      return { selected: candidateSelection(candidate) }
+    })
+    ctx.provide('sessionController', { selectLocalModel } as never)
+    try {
+      await ctx.plugin(StubLlm, { routes: [route] })
+      await ctx.plugin(A2d2Service, { root, stageAgents: settings as never })
+      const first = ctx.a2d2.initializeSessionAgent(root, id, 'engineer')
+      await firstEntered
+      const results = Promise.allSettled([first, ctx.a2d2.initializeSessionAgent(root, id, secondAgent)])
+      await ctx.a2d2.initializeSessionAgent(root, other, 'engineer')
+      expect(await ctx.a2d2.agentOfSession(root, id)).toBeUndefined()
+      release()
+      const settled = await results
+      expect(settled[0]?.status).toBe('fulfilled')
+      if (secondAgent === 'engineer') expect(settled[1]?.status).toBe('fulfilled')
+      else expect(settled[1]).toMatchObject({ status: 'rejected', reason: expect.objectContaining({ message: expect.stringContaining('already recorded') }) })
+      expect(selectLocalModel.mock.calls.filter(([request]) => request.sessionId === id)).toHaveLength(1)
+      expect(await ctx.a2d2.agentOfSession(root, id)).toBe('engineer')
+      await ctx.a2d2.initializeSessionAgent(root, id, 'engineer')
+      expect(selectLocalModel.mock.calls.filter(([request]) => request.sessionId === id)).toHaveLength(1)
+    } finally {
+      release()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('allows an already queued retry after installation fails', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'a2d2-effort-queued-retry-'))
+    const ctx = new Context()
+    const id = SessionId('session-queued-retry')
+    const selectLocalModel = vi.fn()
+      .mockRejectedValueOnce(new Error('installation failed'))
+      .mockResolvedValue({ selected: candidateSelection(candidate) })
+    ctx.provide('sessionController', { selectLocalModel } as never)
+    try {
+      await ctx.plugin(StubLlm, { routes: [route] })
+      await ctx.plugin(A2d2Service, { root, stageAgents: settings as never })
+      const results = await Promise.allSettled([
+        ctx.a2d2.initializeSessionAgent(root, id, 'engineer'),
+        ctx.a2d2.initializeSessionAgent(root, id, 'engineer'),
+      ])
+      expect(results.map(result => result.status)).toEqual(['rejected', 'fulfilled'])
+      expect(selectLocalModel).toHaveBeenCalledTimes(2)
+      expect(await ctx.a2d2.agentOfSession(root, id)).toBe('engineer')
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('preserves a manual local model selection after successful initialization', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'a2d2-effort-manual-'))
+    const ctx = new Context()
+    const id = SessionId('session-manual')
+    let selected = candidateSelection(candidate)
+    const selectLocalModel = vi.fn(async (request: typeof selected & { sessionId: SessionId }) => {
+      selected = { provider: request.provider, model: request.model, reasoningEffort: request.reasoningEffort }
+      return { selected }
+    })
+    ctx.provide('sessionController', { selectLocalModel } as never)
+    try {
+      await ctx.plugin(StubLlm, { routes: [route] })
+      await ctx.plugin(A2d2Service, { root, stageAgents: settings as never })
+      await ctx.a2d2.initializeSessionAgent(root, id, 'engineer')
+      await selectLocalModel({ sessionId: id, provider: 'manual', model: 'user-choice', reasoningEffort: 'high' })
+      await ctx.a2d2.initializeSessionAgent(root, id, 'engineer')
+      expect(selected).toEqual({ provider: 'manual', model: 'user-choice', reasoningEffort: 'high' })
+      expect(selectLocalModel).toHaveBeenCalledTimes(2)
+      expect(await ctx.a2d2.agentOfSession(root, id)).toBe('engineer')
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   it('creates a subtask root with the configured CEO effort', async () => {
     const root = await mkdtemp(join(tmpdir(), 'a2d2-effort-root-'))
     const ctx = new Context()
