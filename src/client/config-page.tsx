@@ -422,6 +422,7 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
       ...routes.map((candidate, index) => {
         const route = candidateRoute(candidate)
         const effort = candidateEffort(candidate) ?? ''
+        const metadataUnavailable = snapshot?.efforts === undefined || !Object.hasOwn(snapshot.efforts, route)
         const options = snapshot?.efforts?.[route] ?? []
         const unsupported = effort !== '' && !options.some(option => option.id === effort)
         const result = probes[routeKey(scope, candidate)]
@@ -437,8 +438,8 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
               setDraft(current => setConfigCandidateEffort(current, scope, route, value, snapshot?.efforts ?? {}))
             },
           },
-            createElement('option', { value: '' }, options.length === 0 ? '未声明推理强度' : '默认（未指定）'),
-            unsupported ? createElement('option', { value: effort }, `${effort}（不受支持）`) : null,
+            createElement('option', { value: '' }, metadataUnavailable ? '推理强度元数据不可用' : options.length === 0 ? '未声明推理强度' : '默认（未指定）'),
+            unsupported ? createElement('option', { value: effort }, `${effort}（${metadataUnavailable ? '元数据不可用' : '不受支持'}）`) : null,
             ...options.map(option => createElement('option', { key: option.id, value: option.id }, option.name)),
           ),
           createElement('button', {
