@@ -73,21 +73,41 @@ describe('Agent candidate reasoning effort', () => {
     const ctx = new Context()
     const id = SessionId('session-effort')
     const live = stubAgent(root, id)
-    const selectForNextRequest = vi.fn()
+    const selectLocalModel = vi.fn(async () => ({ selected: candidateSelection(candidate) }))
+    const selectModel = vi.fn()
     const saveSelection = vi.fn()
     const create = vi.fn(async () => ({ agent: live }))
-    ctx.provide('agents', { get: () => live, selectForNextRequest, create } as never)
+    ctx.provide('agents', { get: () => live, create } as never)
+    ctx.provide('sessionController', { selectLocalModel, selectModel } as never)
     ctx.provide('agentDefaultModel', { saveSelection } as never)
     try {
       await ctx.plugin(StubLlm, { routes: [route] })
       await ctx.plugin(A2d2Service, { root, stageAgents: settings as never })
       await ctx.a2d2.initializeSessionAgent(root, id, 'engineer')
-      expect(selectForNextRequest).toHaveBeenCalledWith(live, candidateSelection(candidate))
+      expect(selectLocalModel).toHaveBeenCalledWith({ sessionId: id, ...candidateSelection(candidate) })
+      expect(selectModel).not.toHaveBeenCalled()
       expect(saveSelection).not.toHaveBeenCalled()
       expect(live.options).toEqual({})
       await ctx.a2d2.initializeSessionAgent(root, id, 'engineer')
-      expect(selectForNextRequest).toHaveBeenCalledTimes(1)
+      expect(selectLocalModel).toHaveBeenCalledTimes(1)
       await expect(ctx.a2d2.initializeSessionAgent(root, id, 'reviewer')).rejects.toThrow(/already recorded/)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects hosts without the public local selector without calling the default-saving selector', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'a2d2-effort-api-'))
+    const ctx = new Context()
+    const id = SessionId('session-no-local-api')
+    const selectModel = vi.fn()
+    ctx.provide('sessionController', { selectModel } as never)
+    try {
+      await ctx.plugin(StubLlm, { routes: [route] })
+      await ctx.plugin(A2d2Service, { root, stageAgents: settings as never })
+      await expect(ctx.a2d2.initializeSessionAgent(root, id, 'engineer')).rejects.toThrow(/sessionController.selectLocalModel is required/)
+      expect(selectModel).not.toHaveBeenCalled()
+      expect(await ctx.a2d2.agentOfSession(root, id)).toBeUndefined()
     } finally {
       await rm(root, { recursive: true, force: true })
     }

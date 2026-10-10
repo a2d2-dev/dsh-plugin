@@ -831,18 +831,17 @@ export class A2d2Service extends Service {
     }
     const candidate = await this.selectModelCandidate(`Agent "${agent}"`, this.stageAgents.agents[agent])
     const { reasoningEffort, ...route } = candidateSelection(candidate)
-    const agents = this.getService<{
-      get(id: SessionId): Agent | undefined
-      selectForNextRequest?: (agent: Agent, selection: {
-        provider: string; model: string; reasoningEffort?: ReturnType<typeof ReasoningEffortId>
-      }) => void
-    }>('agents')
-    const live = agents?.get(sessionId)
-    if (agents?.selectForNextRequest === undefined || live === undefined) {
-      throw new Error('a2d2: session-local model selection is unavailable in this DSH host')
+    const controller = this.getService<{
+      selectLocalModel?: (request: {
+        sessionId: SessionId; provider: string; model: string; reasoningEffort?: ReturnType<typeof ReasoningEffortId>
+      }) => Promise<{ selected: { provider: string; model: string; reasoningEffort?: string } }>
+    }>('sessionController')
+    if (typeof controller?.selectLocalModel !== 'function') {
+      throw new Error('a2d2: sessionController.selectLocalModel is required for session-local model selection in this DSH host')
     }
     await this.recordSessionAgent(cwd, sessionId, agent)
-    agents.selectForNextRequest(live, {
+    await controller.selectLocalModel({
+      sessionId,
       ...route,
       ...(reasoningEffort === undefined ? {} : { reasoningEffort: ReasoningEffortId(reasoningEffort) }),
     })
