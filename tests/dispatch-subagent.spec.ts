@@ -11,6 +11,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
+import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 import A2d2Service from '../src/index.ts'
 import type { ModelCandidate, StageAgent, StageAgentsSettings } from '../src/stage-agents.ts'
 import { DEFAULT_STAGE_AGENTS } from '../src/stage-agents.ts'
@@ -229,6 +230,31 @@ describe('dispatchSubagent', () => {
 })
 
 describe('dispatch_subagent tool', () => {
+  it.each(['medium', 'high'])('validates and renders explicit %s reasoning effort in the tool output', async (reasoningEffort) => {
+    const root = await tempRoot()
+    const route = 'codex/gpt-5.5'
+    const { ctx, service } = await mount(root,
+      stageAgents('engineer', [{ route, reasoningEffort }]), [route])
+    await ctx.plugin(StubTools)
+    await ctx.plugin(toolsPlugin)
+    const parent = stubAgent(root, mainSession)
+    await service.bindMainSession({ cwd: root, issue: 41, mainSession, now: new Date() })
+    const tool = (ctx.get('tools') as unknown as StubTools).find('dispatch_subagent')
+    if (tool === undefined) throw new Error('the tool did not register')
+    const args = { stage: 'implement', issue: 48, prompt: 'Implement issue #48.' }
+
+    const value = await tool.execute(args, toolRunContext(parent, tool.name, args)) as {
+      session: string; model: string; agent: string; reasoningEffort: string
+    }
+
+    expect(value).toMatchObject({ model: route, agent: 'engineer', reasoningEffort })
+    expect(validateJsonSchemaValue(tool.output.schema, value, 'value')).toEqual([])
+    expect(tool.output.render(args, value)).toEqual([{
+      type: 'text',
+      text: `Dispatched subagent ${value.session} with ${route} as engineer; reasoning effort: ${reasoningEffort}`,
+    }])
+  })
+
   it('hands stage, issue, and prompt to the service with the calling session as parent', async () => {
     const root = await tempRoot()
     const ctx = new Context()
