@@ -78,8 +78,8 @@ supervisorctl restart dsh-dev-web-server
 
 记录：2026-10-15 的基线验证通过。初始 `workspaceIds=[]`，session JSONL 数量为 0；页面添加后只有 `runtime-verification` 工作空间，模型控件显示 `gpt-6.1-sol / Xhigh`，浏览器 errors 为空。基线阶段生产 `dsh-web-server` 的 PID 为 `1339798`。完整的中文报告、截图与脱敏 JSON 存放于本机 `docs/artifacts/task-runtime-dev-2026-10-15/`，由主会话统一发布到 LogSeq；截图和编译产物不提交。
 
-固定功能提交 `72db64d` 已完成开发插件构建、链接与启用；补齐 native JavaScript 入口后，最终公开 CLI 服务 PID 为 `2490797`，浏览器确认登录、开发工作空间和模型控件正常。启动阶段曾受同机磁盘 I/O 延迟影响，源码 CLI 停在 tsx 缓存读取，改用公开 built CLI 后约 2 分 50 秒达到监听就绪。新增监听检查通过，避免把 supervisor RUNNING 当成网页可访问。
+初次功能切换使用固定提交 `72db64d` 完成开发插件构建、链接与启用；补齐 native JavaScript 入口后，公开 CLI 服务 PID 为 `2490797`，浏览器确认登录、开发工作空间和模型控件正常。后续更新会改变 PID 与插件提交，当前验收版本以 #112 的报告为准。启动阶段曾受同机磁盘 I/O 延迟影响，源码 CLI 停在 tsx 缓存读取，改用公开 built CLI 后约 2 分 50 秒达到监听就绪。新增监听检查通过，避免把 supervisor RUNNING 当成网页可访问。
 
-收尾时另观测到生产 server PID 已变为 `2482857`：supervisor 日志记录本机 10:10:58 对 `dsh-web-server` 的 SIGTERM 停止与重新启动，调用来源待主会话核查。部署任务只对 `dsh-dev-*` 执行管理命令，没有对生产执行 restart；不能据此声称全时段生产 PID 未变。生产 watch 仍为 PID `6439`。
+收尾时另观测到生产 server PID 已变为 `2482857`：supervisor 日志记录本机 10:10:58 对 `dsh-web-server` 的 SIGTERM 停止与重新启动。后续只读核查确认，另一条 Codex 会话 `01a14056-d8a7-7c32-bd95-0e076af98549` 于 `2026-10-15T17:10:57.950Z` 执行 `supervisorctl update dsh-web-server`，与停启记录吻合。开发部署任务只对 `dsh-dev-*` 执行管理命令；不能声称全时段生产 PID 未变。生产 watch 当时仍为 PID `6439`。
 
 该次部署验证未发送模型请求。任务运行器完整验收以主会话后续独立报告为准。检查时系统根分区可用空间为 0，成因尚未由本部署任务确认；开发目录所在 `/data` 有余量。
