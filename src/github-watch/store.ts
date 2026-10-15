@@ -15,6 +15,7 @@ import { dirname, join } from 'node:path'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { isPrState } from './state.ts'
 import type { PrState } from './state.ts'
+import type { TaskAddress } from '../task-runtime/types.ts'
 
 /** File name of the watch list inside the A²D² home directory. */
 export const WATCHES_FILE = 'github-watches.json'
@@ -28,6 +29,8 @@ export interface Watch {
   /** The state this session was last told about; `null` before the first one. */
   readonly last: PrState | null
   readonly since: string
+  readonly task?: TaskAddress
+  readonly revision?: number
 }
 
 const sameWatch = (a: Pick<Watch, 'repo' | 'pr' | 'session'>, b: Pick<Watch, 'repo' | 'pr' | 'session'>) =>
@@ -53,7 +56,7 @@ export class WatchStore {
 
   /** Every watch, in insertion order. */
   async list(): Promise<readonly Watch[]> {
-    return this.serial(async () => [...(await this.load())])
+    return this.serial(async () => { this.cache = undefined; return [...(await this.load())] })
   }
 
   /** Add a watch, or keep the existing one for the same repo, PR, and session. */
@@ -63,7 +66,7 @@ export class WatchStore {
 
   /** Record what the session has now been told. */
   async told(watch: Pick<Watch, 'repo' | 'pr' | 'session'>, state: PrState): Promise<void> {
-    await this.mutate(watches => watches.map(w => (sameWatch(w, watch) ? { ...w, last: state } : w)))
+    await this.mutate(watches => watches.map(w => (sameWatch(w, watch) ? { ...w, last: state, revision: (w.revision ?? 0) + 1 } : w)))
   }
 
   async remove(watch: Pick<Watch, 'repo' | 'pr' | 'session'>): Promise<void> {

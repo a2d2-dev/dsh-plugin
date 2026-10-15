@@ -114,7 +114,14 @@ export function apply(ctx: Context, config: Config = {}): void {
   const controller = ctx.get('sessionController') as unknown as SessionController
   const log = (message: string) => (ctx as unknown as { logger?: { warn(m: string): void } }).logger?.warn(message)
 
-  const injectMessage: Inject = async (sessionId, message) => {
+  const injectMessage: Inject = async (sessionId, message, watch) => {
+    if (watch?.task) {
+      const runtime = ctx.get('a2d2TaskRuntime')?.runner
+      const id = `github:${watch.repo.toLowerCase()}:${watch.pr}:${watch.session}:${watch.since}:${(watch.revision ?? 0) + 1}`
+      if (await runtime?.enqueue(watch.task, id, message.text)) return 'delivered'
+      const task = await ctx.get('a2d2')?.readTask(watch.task.projectRoot, watch.task.task)
+      if (task?.issue) sessionId = task.issue.mainSession
+    }
     let agent = agents.list().find(candidate => candidate.id === sessionId)
     if (agent === undefined) {
       const resolved = await controller.resolveAgent(sessionId as SessionId)
@@ -178,7 +185,11 @@ export function apply(ctx: Context, config: Config = {}): void {
         throw new Error('repo must be "owner/name"; the working directory has no github.com origin to default to')
       }
       if (!Number.isSafeInteger(args.pr) || args.pr <= 0) throw new Error('pr must be a positive integer')
-      const result = await watcher.watch(repo, args.pr, agent.id)
+      const cwd = agent.session.header.cwd ?? ''
+      const a2d2 = ctx.get('a2d2')
+      const task = a2d2 ? await a2d2.taskOfMainSession(cwd, agent.id) : undefined
+      const address = task && a2d2 ? { projectRoot: await a2d2.projectRoot(cwd), task: task.id } : undefined
+      const result = await watcher.watch(repo, args.pr, agent.id, address)
       const state = 'state' in result ? result.state : undefined
       return {
         repo,

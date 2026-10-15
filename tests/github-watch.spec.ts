@@ -79,7 +79,7 @@ describe('WatchStore', () => {
     await store.add({ repo: 'A/B', pr: 7, session: 's1', last: null, since: 't2' })
     await store.told({ repo: 'a/b', pr: 7, session: 's1' }, pr({ checks: 'pending' }))
     const reread = await new WatchStore(dir).list()
-    expect(reread).toEqual([{ repo: 'a/b', pr: 7, session: 's1', last: pr({ checks: 'pending' }), since: 't' }])
+    expect(reread).toEqual([{ repo: 'a/b', pr: 7, session: 's1', last: pr({ checks: 'pending' }), since: 't', revision: 1 }])
     await store.remove({ repo: 'a/b', pr: 7, session: 's1' })
     expect(JSON.parse(await readFile(join(dir, WATCHES_FILE), 'utf8'))).toEqual({ version: 1, watches: [] })
   })

@@ -486,3 +486,25 @@ sessions:
 - **子代理后代是懒加载的** —— 目录按父会话发布，因此新发现的分支会在面板可见且该父目录刷新后出现。
 - **路由取自子会话自己的最新 `request/header`** —— 子代理发起首次请求前该行显示未知；列表也永远无法报告一个子代理"此刻"在跑什么，只能报告它最近一次请求用了什么路由。
 - **目录是请求/响应，不是流** —— 新派出的子代理最多 5 秒后才出现在表内，而 Tab 不可见时不刷新。
+
+## 宿主后台任务运行器（一期）
+
+新增 `dsh-a2d2/task-runtime` mount（id `a2d2-task-runtime`），默认 `enabled: false`。仅在独立开发 profile 启用 `enabled: true`；`homeDir` 默认是 `$DSH_HOME/a2d2/task-runtime`（未设置 DSH_HOME 时使用 `~/.dsh`）。开发与生产的 DSH home、会话、存储和项目 `.dsh/a2d2` 必须隔离。
+
+已绑定 issue 且属于 workspace 的主会话可运行：
+
+```text
+/task-runtime start [issue-number] [title]
+/task-runtime status
+/task-runtime rotate [交接重点]
+/task-runtime stop
+/task-runtime resume
+```
+
+`run` 是 `start` 的别名；重复 start 不重复启动。普通 bind 不启动运行器。managed `/handoff` 请求运行器交接，手动 take 不能绕开执行权。后台与浏览器连接无关，在重启时只恢复 homeDir 中已显式登记的任务。
+
+`running` 默认继续 active 任务；`waiting-human` 等 LF（外部事件保留到 resume），`waiting-event` 等任务事件，`paused` 暂停，`blocked` 表示有限重试或无进展检查失败，`done` 完成。`task_runtime` 模型工具可以报告 continue、wait-human、wait-event、rotate；实际提问、未结算原生子代理、活动子任务和 GitHub watch 也会阻止空推。`complete_task` 仅更新插件任务状态，不关闭 GitHub issue。
+
+配置：`pollMs`（默认 2000）、`rotateTokens`（150000）、`maxAutoTurns`（8，每代健康自动轮数，达到后交接）、`maxFailures`（3，操作失败及连续无进展阈值）。状态输出包含当前主会话、代数、workspace、操作步骤、待处理事件和最后错误。排查失败后使用 resume；未完成的交接沿原 operation 和后继 ID 恢复。
+
+每次交接先保存后继 ID，通过公开宿主 API 创建/恢复、继承 workspace、设置 CEO 会话本地模型、接任和投递接续内容。旧会话在 `agent/pre-step` 被拒绝执行。交接期间 GitHub 和子任务事件保存在任务收件箱，接任后投递。消息 ID 先落盘，重试回读会话日志与 inbox 去重；这不是跨存储的绝对一次事务。进展指纹是工具结果/回答的启发式比较，不能代替验收。文件锁限同机器同 PID 命名空间；断电持久性和跨主机共享不在本期承诺内。详见 ADR 0011。

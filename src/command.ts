@@ -83,6 +83,11 @@ async function prepare(
 
   let prepared: Awaited<ReturnType<Context['a2d2']['prepareHandoff']>>
   try {
+    const runtime = ctx.get('a2d2TaskRuntime')?.runner
+    if (runtime && await runtime.status(cwd, agent.id)) {
+      const run = await runtime.control(cwd, agent.id, 'rotate', focus)
+      return { kind: 'success', text: `Task runtime queued handoff ${run.operation?.id}; use /task-runtime status to inspect progress.` }
+    }
     prepared = await ctx.a2d2.prepareHandoff({
       source: agent.id,
       cwd,

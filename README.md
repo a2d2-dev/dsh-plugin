@@ -486,3 +486,11 @@ None. No session's request content changes.
 - **Subagent descendants are lazy** — the catalog is published per parent, so a newly discovered branch appears after that parent catalog refreshes while the panel is visible.
 - **A route comes from the child's own newest `request/header`** — a child shows as unknown until it issues its first request, and the list can never say what a child is running *right now*, only which route its last request used.
 - **The catalog is a request, not a stream** — a newly delegated child appears up to five seconds late, and the tab does not refresh while it is not visible.
+
+## Host task runtime (phase one)
+
+The separate `dsh-a2d2/task-runtime` mount (`a2d2-task-runtime`) defaults to `enabled: false`. Enable it only in the intended isolated profile; ordinary task binding never opts a task in. Use `/task-runtime start [issue-number] [title]`, `status`, `stop`, `resume`, and `rotate [focus]` from the bound main session. `run` aliases `start`. The session must belong to a workspace.
+
+The host continues active tasks without a browser. Completion, human questions, unsettled children, external dependencies, and explicit `task_runtime` waits stop automatic turns. Healthy turns rotate at the context threshold or per-generation turn limit. Repeated progress fingerprints and operation failures become observable blocked state. Restart recovery discovers only explicitly started records under `homeDir` (default `$DSH_HOME/a2d2/task-runtime`, with `~/.dsh` as the home fallback).
+
+Configuration: `pollMs: 2000`, `rotateTokens: 150000`, `maxAutoTurns: 8`, `maxFailures: 3`. Rotation reserves the successor identity before creation, inherits the workspace, selects a session-local CEO model, and fences retired sessions at the public agent pre-step boundary. GitHub and child-completion events are durable task messages retained across handoffs. Stable message IDs and public log reads deduplicate delivery retries; separate session/runtime storage does not provide an exactly-once transaction. Progress detection is heuristic. File ownership locks support one machine/PID namespace; power-loss durability and shared multi-host data are outside this contract. Development and production homes, sessions, storage, and project `.dsh/a2d2` data must remain separate. See ADR 0011.

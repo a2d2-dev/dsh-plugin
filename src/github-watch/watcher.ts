@@ -16,7 +16,7 @@ import type { PrState } from './state.ts'
 import type { Watch, WatchStore } from './store.ts'
 
 /** Delivers one message to a session; `gone` means the session no longer exists. */
-export type Inject = (session: string, message: { text: string; summary: string; repo: string; pr: number }) => Promise<'delivered' | 'gone'>
+export type Inject = (session: string, message: { text: string; summary: string; repo: string; pr: number }, watch?: Watch) => Promise<'delivered' | 'gone'>
 
 /** How a `github_watch` call ended. */
 export type WatchResult =
@@ -73,9 +73,9 @@ export class Watcher {
   }
 
   /** Start watching `repo#pr` for `session`; resolves with the PR's current state. */
-  async watch(repo: string, pr: number, session: string): Promise<WatchResult> {
+  async watch(repo: string, pr: number, session: string, task?: Watch['task']): Promise<WatchResult> {
     const key = keyOf(repo, pr, session)
-    await this.options.store.add({ repo, pr, session, last: null, since: new Date().toISOString() })
+    await this.options.store.add({ repo, pr, session, last: null, since: new Date().toISOString(), ...(task ? { task } : {}) })
     let waiter: Waiter | undefined
     const answered = new Promise<WatchResult>(resolve => {
       this.waiters.get(key)?.resolve({ status: 'pending', message: 'superseded by a newer watch call' })
@@ -143,7 +143,7 @@ export class Watcher {
       summary: noticeSummary(watch.repo, watch.last ?? undefined, state),
       repo: watch.repo,
       pr: watch.pr,
-    })
+    }, watch)
     if (delivered === 'gone') {
       await this.options.store.remove(watch)
       return
@@ -176,7 +176,7 @@ export class Watcher {
           summary: `${watch.repo}#${watch.pr}: watch stopped`,
           repo: watch.repo,
           pr: watch.pr,
-        }).catch(() => 'gone')
+        }, watch)
       }
       await this.options.store.remove(watch)
     }

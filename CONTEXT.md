@@ -66,6 +66,13 @@ _Avoid_: 可逆/不可逆的长篇判据、请示
 
 ### 执行层
 
+**任务运行器（Task runtime）**:
+宿主后台管理显式 start 的任务执行权、接续与恢复。运行记录保存当前主会话、workspace、交接步骤、固定后继 ID 和任务事件收件箱；任务本身仍以 tracker 为准。默认关闭，不因 bind 接管已有任务。运行态有 running、waiting-human、waiting-event、paused、blocked、done；健康运行按轮数或上下文阈值换代，旧会话被宿主拒绝继续执行。见 ADR 0011。
+_Avoid_: 第二个 tracker、浏览器监督循环、依赖模型每轮续命
+
+**任务事件收件箱（Task event inbox）**:
+以任务为接收者的持久消息。GitHub watch 与子任务结果先写入这里，交接中保留，接任后投递当前主会话；稳定事件 ID 和会话日志中的消息 ID 支持重试去重。
+
 **会话（Session）**:
 某个 Agent 为某个任务执行的一次运行的持久记录，从头到尾只以一个 Agent 的身份运行；要换 Agent 就换会话。主会话的 Agent 是 CEO，子代理和芯片新建的会话在创建时定好 Agent，LF 自己开的会话没有 Agent。
 _Avoid_: 用会话指代任务或 Agent
