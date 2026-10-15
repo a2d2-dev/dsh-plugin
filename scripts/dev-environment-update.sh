@@ -31,6 +31,10 @@ installed = home / 'profiles/web/node_modules/dsh-a2d2'
 assert installed.resolve() == plugin, 'Profile must resolve the development plugin'
 PY
 
+export DSH_HOME="$dev_home"
+export XDG_CACHE_HOME="$dev_home/cache"
+export TMPDIR="$dev_home/tmp"
+
 # A failed build leaves dev stopped, so the process cannot consume half-written
 # artifacts. Correct the build and rerun this command to restore the service.
 python3 - "$service" <<'PY'
@@ -44,12 +48,38 @@ if len(parts) < 2 or parts[0] != service:
     raise SystemExit('Development service is not registered with supervisor')
 if parts[1] in {'RUNNING', 'STARTING'}:
     subprocess.run(['supervisorctl', 'stop', service], check=True)
-elif parts[1] not in {'STOPPED', 'EXITED', 'FATAL', 'BACKOFF'}:
+elif parts[1] not in {'STOPPED', 'FATAL'}:
     raise SystemExit(f'Unexpected development service state: {parts[1]}')
 PY
 if [[ ${1:-} == '--runtime' ]]; then
-  (cd "$dev_runtime" && pnpm build)
+  (cd "$dev_runtime" && corepack pnpm@11.7.0 build)
 fi
-(cd "$dev_plugin" && pnpm build)
+(cd "$dev_plugin" && corepack pnpm@10.26.2 build)
 supervisorctl start "$service"
 supervisorctl status "$service"
+python3 - "$service" <<'PY'
+import socket
+import subprocess
+import sys
+import time
+
+service = sys.argv[1]
+deadline = time.monotonic() + 300
+while time.monotonic() < deadline:
+    status = subprocess.run(['supervisorctl', 'status', service], text=True, capture_output=True)
+    if status.returncode != 0 or 'RUNNING' not in status.stdout:
+        raise SystemExit('Development process exited before its listener became ready')
+    try:
+        # Transport readiness only; actual acceptance still uses agent-browser.
+        with socket.create_connection(('127.0.0.1', 18781), timeout=1):
+            pass
+        with socket.create_connection(('10.126.126.12', 18780), timeout=1):
+            pass
+    except OSError:
+        time.sleep(1)
+    else:
+        print('Development listeners ready: http://10.126.126.12:18780/')
+        break
+else:
+    raise SystemExit('Development listener not ready after 300s; inspect /data/_dsh-dev/logs')
+PY
