@@ -37,7 +37,7 @@ export class TaskRuntimeService extends Service {
     }
     const root = config.homeDir ?? join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'a2d2', 'task-runtime')
     this.runner = new TaskRunner(ctx, new RuntimeStore(root), new RuntimeHost(ctx), options)
-    ctx.on('agent/pre-step', async ({ agent }, next) => await this.runner.allowed(agent) ? next() : { kind: 'reject' })
+    ctx.a2d2.installRuntimeExecutionGuard((agent, messages) => this.runner.allowed(agent, messages))
     ctx.effect(() => {
       let recovering = false
       const tick = async () => {

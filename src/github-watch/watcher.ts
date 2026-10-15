@@ -9,6 +9,7 @@
  * @module @deepseek-ai/dsh-a2d2/src/github-watch/watcher
  */
 
+import { createHash } from 'node:crypto'
 import { RepoConnection } from './relay.ts'
 import type { RelayEvent, RelayOptions } from './relay.ts'
 import { isTerminal, noticeSummary, noticeText, sameState } from './state.ts'
@@ -16,7 +17,13 @@ import type { PrState } from './state.ts'
 import type { Watch, WatchStore } from './store.ts'
 
 /** Delivers one message to a session; `gone` means the session no longer exists. */
-export type Inject = (session: string, message: { text: string; summary: string; repo: string; pr: number }, watch?: Watch) => Promise<'delivered' | 'gone'>
+export type Inject = (session: string, message: { text: string; summary: string; repo: string; pr: number; eventId?: string }, watch?: Watch) => Promise<'delivered' | 'gone'>
+
+/** State identity survives a crash between task enqueue and watch acknowledgement. */
+export function watchEventId(watch: Watch, state: PrState | RelayEvent): string {
+  const digest = createHash('sha256').update(JSON.stringify(Object.entries(state).sort(([a], [b]) => a.localeCompare(b)))).digest('hex')
+  return `github:${watch.repo.toLowerCase()}:${watch.pr}:${watch.session}:${watch.since}:${(watch.revision ?? 0) + 1}:${digest}`
+}
 
 /** How a `github_watch` call ended. */
 export type WatchResult =
@@ -143,6 +150,7 @@ export class Watcher {
       summary: noticeSummary(watch.repo, watch.last ?? undefined, state),
       repo: watch.repo,
       pr: watch.pr,
+      eventId: watchEventId(watch, state),
     }, watch)
     if (delivered === 'gone') {
       await this.options.store.remove(watch)
@@ -176,6 +184,7 @@ export class Watcher {
           summary: `${watch.repo}#${watch.pr}: watch stopped`,
           repo: watch.repo,
           pr: watch.pr,
+          eventId: watchEventId(watch, event),
         }, watch)
       }
       await this.options.store.remove(watch)

@@ -19,7 +19,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Agent, AgentRegistry } from '@deepseek-ai/dsh-agent'
 import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
-import type { ContextFormed, MessageSource } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed, MessageSource, UserMessage } from '@deepseek-ai/dsh-llm'
 import type { Fiber, Volatile } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
@@ -530,6 +530,7 @@ export class A2d2Service extends Service {
   private readonly entryFiber: Fiber
   /** Wait notices, present while some plugin provides `notifier`. */
   private waitNotices: WaitNotices | undefined
+  private runtimeExecutionGuard?: (agent: Agent, messages: readonly UserMessage[]) => Promise<boolean>
 
   /**
    * Create the service over a resolved store configuration.
@@ -587,6 +588,12 @@ export class A2d2Service extends Service {
     this.publishSessionAgent()
     this.publishPanel()
     this.publishWaitNotices()
+    // The fence belongs to the base task service so unloading the optional
+    // scheduler cannot temporarily re-enable retired main sessions.
+    ctx.on('agent/pre-step', async ({ agent, messages }, next) => {
+      if (this.runtimeExecutionGuard && !await this.runtimeExecutionGuard(agent, messages)) return { kind: 'reject' }
+      return next()
+    })
     // Stated once at load: whether the browser half received these is otherwise
     // only visible by looking at the indicator, which never reports absence.
     this.ctx.logger.info(
@@ -602,6 +609,11 @@ export class A2d2Service extends Service {
    */
   async list(cwd: string): Promise<readonly Task[]> {
     return await this.store.list(cwd)
+  }
+
+  /** Keep the last guard on scheduler unload; a closed runner fails managed sessions closed. */
+  installRuntimeExecutionGuard(guard: (agent: Agent, messages: readonly UserMessage[]) => Promise<boolean>): void {
+    this.runtimeExecutionGuard = guard
   }
 
   /**

@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import type { ContextFormed } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed, UserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { parseHandoffDocument } from '../handoff-document.ts'
+import { HandoffDocumentError, parseHandoffDocument } from '../handoff-document.ts'
 import { handoffPrompt } from '../handoff-prompt.ts'
 import { redactText } from '../handoff.ts'
 import { handoffsDirectory, readHandoffDocument } from '../store.ts'
@@ -161,13 +161,25 @@ export class TaskRunner {
     return task ? { projectRoot: root, task: task.id } : undefined
   }
   /** Admission reads the atomic record without acquiring its writer lock. */
-  async allowed(agent: Agent): Promise<boolean> {
-    const record = await this.status(agent.session.header.cwd ?? '', agent.id)
+  async allowed(agent: Agent, messages: readonly UserMessage[] = []): Promise<boolean> {
+    const record = (await this.store.list()).find(item => item.sessions.includes(agent.id))
     if (!record) return true
     if (this.closed || record.owner !== this.instance || !this.ownership.has(this.store.key(record))) return false
     if (record.current !== agent.id || ['paused', 'blocked', 'done'].includes(record.state)) return false
     const task = await this.ctx.a2d2.readTask(record.projectRoot, record.task)
-    return task?.issue?.mainSession === agent.id && task.state !== 'done'
+    if (task?.issue?.mainSession !== agent.id || task.state === 'done') return false
+    const answered = record.state === 'waiting-human' && !await this.host.askedHuman(agent.id)
+    if ((messages.length > 0 || answered) && ['waiting-event', 'waiting-human'].includes(record.state)) {
+      await this.store.locked(record, async current => {
+        if (!current || current.current !== agent.id) return
+        this.assertOwned(current)
+        if (['waiting-event', 'waiting-human'].includes(current.state)) {
+          current.state = 'running'
+          await this.store.save(current)
+        }
+      })
+    }
+    return true
   }
   async guardHandoff(cwd: string, source: SessionId, successor: SessionId | undefined, operation?: string): Promise<void> {
     const record = await this.status(cwd, source)
@@ -227,6 +239,11 @@ export class TaskRunner {
       await this.store.save(record)
     }
     const agent = await this.host.agent(record.current)
+    if (await this.host.askedHuman(record.current)) {
+      record.state = 'waiting-human'
+      await this.store.save(record)
+      return
+    }
     if (agent.status !== 'idle') return
     if (record.operation) { await this.rotate(record, agent); return }
     const event = record.inbox.find(item => !item.delivered)
@@ -254,7 +271,20 @@ export class TaskRunner {
     }
     if (record.state !== 'running') { await this.store.save(record); return }
     const failed = await this.host.lastTurnFailure(record.current)
-    if (failed) throw new Error(failed)
+    if (failed) {
+      record.error = failed.message
+      if (failed.userCancelled) record.state = 'paused'
+      else if (record.recoveredFailure !== failed.id) {
+        record.recoveredFailure = failed.id
+        record.failures++
+        if (record.failures >= this.options.maxFailures) record.state = 'blocked'
+        else record.drive = delivery(`recover:${failed.id}`, `The preceding turn was interrupted or failed. Inspect its durable results before repeating side effects.\n${CONTINUE}`)
+      } else record.state = 'blocked'
+      await this.store.save(record)
+      return
+    }
+    record.failures = 0
+    record.error = undefined
     const decision = record.decision
     record.decision = undefined
     if (await this.host.askedHuman(record.current)) record.state = 'waiting-human'
@@ -320,7 +350,22 @@ export class TaskRunner {
           await this.store.save(record)
           return
         }
-        parseHandoffDocument(await readHandoffDocument(handoffsDirectory(record.projectRoot), operation.source), operation.source)
+        try {
+          parseHandoffDocument(await readHandoffDocument(handoffsDirectory(record.projectRoot), operation.source), operation.source)
+        } catch (error) {
+          const failed = await this.host.lastTurnFailure(operation.source)
+          if (!(error instanceof HandoffDocumentError) || error.code !== 'unwritten' || !failed
+            || record.recoveredFailure === failed.id) throw error
+          record.recoveredFailure = failed.id
+          record.failures++
+          record.error = failed.message
+          if (failed.userCancelled) record.state = 'paused'
+          else if (record.failures >= this.options.maxFailures) record.state = 'blocked'
+          else operation.instruction = delivery(`prepare-recover:${failed.id}`, operation.instruction.message.content
+            .map(block => block.type === 'text' ? block.text : '').join('\n'))
+          await this.store.save(record)
+          return
+        }
         operation.step = 'create'
         await this.store.save(record)
       }

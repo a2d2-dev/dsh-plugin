@@ -503,7 +503,7 @@ sessions:
 
 `run` 是 `start` 的别名；重复 start 不重复启动。普通 bind 不启动运行器。managed `/handoff` 请求运行器交接，手动 take 不能绕开执行权。后台与浏览器连接无关，在重启时只恢复 homeDir 中已显式登记的任务。
 
-`running` 默认继续 active 任务；`waiting-human` 等 LF（外部事件保留到 resume），`waiting-event` 等任务事件，`paused` 暂停，`blocked` 表示有限重试或无进展检查失败，`done` 完成。`task_runtime` 模型工具可以报告 continue、wait-human、wait-event、rotate；实际提问、未结算原生子代理、活动子任务和 GitHub watch 也会阻止空推。`complete_task` 仅更新插件任务状态，不关闭 GitHub issue。
+`running` 默认继续 active 任务；`waiting-human` 等 LF 回复或 resume（期间外部事件保留），`waiting-event` 等任务事件，`paused` 暂停，`blocked` 表示有限重试或无进展检查失败，`done` 完成。`task_runtime` 模型工具可以报告 continue、wait-human、wait-event、rotate；实际提问、未结算原生子代理、活动子任务和 GitHub watch 也会阻止空推。`complete_task` 仅更新插件任务状态，不关闭 GitHub issue。
 
 配置：`pollMs`（默认 2000）、`rotateTokens`（150000）、`maxAutoTurns`（8，每代健康自动轮数，达到后交接）、`maxFailures`（3，操作失败及连续无进展阈值）。状态输出包含当前主会话、代数、workspace、操作步骤、待处理事件和最后错误。排查失败后使用 resume；未完成的交接沿原 operation 和后继 ID 恢复。
 

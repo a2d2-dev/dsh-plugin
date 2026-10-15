@@ -8,14 +8,14 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import LlmRuntime, { LlmAdapter, createUserMessage } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { LlmAdapter, createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SessionQuery from '@deepseek-ai/dsh-session-query'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
 import Storage from '@deepseek-ai/dsh-storage'
 import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
@@ -34,10 +34,28 @@ class Query extends SessionQuery {
 class Adapter extends LlmAdapter {
   calls = 0
   text = 'New work'
+  nextTool?: string
+  hang = false
   async listModels(provider: string) { return [{ provider, id: 'model', name: 'Model' }] }
   async resolveModel(provider: string, model: string) { return { provider, id: model, name: model } }
   async *stream(_request: GenerateOptions): AsyncIterable<StreamChunk> {
     this.calls++
+    if (this.hang) {
+      await new Promise<void>((_resolve, reject) => {
+        _request.signal?.addEventListener('abort', () => reject(new Error('fixture request interrupted')), { once: true })
+      })
+      return
+    }
+    if (this.nextTool) {
+      const name = this.nextTool
+      this.nextTool = undefined
+      const id = ToolCallId('fixture-call')
+      yield { type: 'block-start', index: 0, blockType: 'tool-call' }
+      yield { type: 'tool-call-delta', index: 0, id, name, argumentsDelta: '{}' }
+      yield { type: 'block-end', index: 0, block: { type: 'tool-call', id, name, arguments: '{}' } }
+      yield { type: 'finish', reason: { kind: 'tool-calls' } }
+      return
+    }
     yield { type: 'block-start', index: 0, blockType: 'text' }
     yield { type: 'text-delta', index: 0, text: this.text }
     yield { type: 'block-end', index: 0, block: { type: 'text', text: this.text } }
@@ -76,6 +94,9 @@ async function mount(path: string, enabled = true) {
   await ctx.plugin(StubCommands)
   const selections: string[] = []
   ctx.provide('sessionController', {
+    async resolveAgent(sessionId: SessionId) {
+      return { agent: ctx.agents.get(sessionId) ?? (await ctx.agents.resume({ resumeSessionId: sessionId, agentOptions: { provider: 'fixture', model: 'model' } })).agent }
+    },
     async selectLocalModel(request: { sessionId: SessionId; provider: string; model: string }) {
       const agent = ctx.agents.get(request.sessionId)!
       selections.push(request.sessionId)
@@ -113,6 +134,94 @@ async function rotate(h: Harness, agent: Agent) {
 }
 
 describe('task runtime over real DSH loop, JSONL persistence, query and workspace services', () => {
+  it('retries an interrupted active turn once with a durable recovery message after host restart', async () => {
+    const path = await root()
+    let h = await mount(path)
+    const agent = await initial(h)
+    h.adapter.hang = true
+    const record = await h.runner.start(path, agent.id)
+    await vi.waitFor(() => expect(h.adapter.calls).toBe(1))
+    await h.ctx.fiber.dispose()
+    contexts.splice(contexts.indexOf(h.ctx), 1)
+    h = await mount(path)
+    await h.runner.recover()
+    await h.runner.tick(record)
+    const resumed = await h.runner.host.agent(agent.id)
+    await resumed.whenIdle()
+    const events = await h.runner.host.events(agent.id)
+    expect(events.filter(event => event.type === 'user/message' && event.data.source?.eventId?.startsWith('recover:')), JSON.stringify({ record: await h.runner.store.read(record), events: events.map(event => ({ type: event.type, reason: event.data.reason })) })).toHaveLength(1)
+    expect(h.adapter.calls).toBe(1)
+    expect((await h.runner.store.read(record))?.state).toBe('running')
+  })
+
+  it('keeps the execution fence after scheduler shutdown and rotates healthy generations automatically', async () => {
+    const h = await mount(await root())
+    const agent = await initial(h)
+    h.runner.options.maxAutoTurns = 1
+    const record = await h.runner.start(h.path, agent.id)
+    await agent.whenIdle()
+    await h.runner.tick(record)
+    expect((await h.runner.store.read(record))?.operation?.step).toBe('prepare')
+    await h.runner.close()
+    const calls = h.adapter.calls
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'must stay fenced after unload' }], source: { kind: 'user' } }))
+    await agent.whenIdle()
+    expect(h.adapter.calls).toBe(calls)
+  })
+
+  it('accepts the disabled default configuration without requiring a runtime directory', () => {
+    expect(runtimePlugin.Config({})).toMatchObject({ enabled: false, pollMs: 2000 })
+    expect(runtimePlugin.Config({ enabled: false })).not.toHaveProperty('homeDir')
+  })
+
+  it('observes a real in-flight question and resumes the same turn after its answer', async () => {
+    const h = await mount(await root())
+    const agent = await initial(h)
+    let answer!: () => void
+    const answered = new Promise<void>(resolve => { answer = resolve })
+    h.ctx.tools.register(defineTool({
+      name: 'ask_user_question', description: 'Fixture question with an actual pending tool lifetime', parameters: {},
+      output: { schema: { type: 'object', additionalProperties: false, properties: { answer: { type: 'string', required: true } } }, render: (_args, value) => [{ type: 'text', text: value.answer }] },
+      async execute() { await answered; return { answer: 'Continue' } },
+      presentCall: () => ({ card: 'generic', title: 'Question', kind: 'other' }),
+    }))
+    h.adapter.nextTool = 'ask_user_question'
+    const record = await h.runner.start(h.path, agent.id)
+    try {
+      await vi.waitFor(async () => expect(await h.runner.host.askedHuman(agent.id)).toBe(true))
+      await h.runner.tick(record)
+      expect((await h.runner.store.read(record))?.state).toBe('waiting-human')
+      expect(h.adapter.calls).toBe(1)
+    } finally { answer() }
+    await agent.whenIdle()
+    expect(await h.runner.host.askedHuman(agent.id)).toBe(false)
+    expect(h.adapter.calls).toBe(2)
+    expect((await h.runner.store.read(record))?.state).toBe('running')
+  })
+
+  it('holds rotation until the native child settles and its notification reaches the parent', async () => {
+    const h = await mount(await root())
+    const parent = await initial(h)
+    const record = await h.runner.start(h.path, parent.id)
+    await parent.whenIdle()
+    const { agent: child } = await h.ctx.agents.create({ sessionId: SessionId('session-native-child'), parentAgent: parent,
+      meta: { cwd: h.path, parentSession: parent.id, origin: 'subagent' }, agentOptions: { provider: 'fixture', model: 'model' } })
+    Reflect.apply(parent.session.append, parent.session, ['subagent/catalog', { version: 0, childId: child.id, childCreatedAt: child.session.header.createdAt, mode: 'continuable', label: 'fixture' }])
+    await h.runner.control(h.path, parent.id, 'rotate')
+    expect((await h.runner.store.read(record))?.operation?.step).toBe('prepare')
+    expect((await h.runner.store.read(record))?.error).toContain('native subagents')
+    child.followup(createUserMessage({ content: [{ type: 'text', text: 'Finish fixture' }], source: { kind: 'user' } }))
+    await child.whenIdle()
+    await h.runner.tick(record)
+    expect((await h.runner.store.read(record))?.operation?.step).toBe('prepare')
+    parent.followup(createUserMessage({ content: [{ type: 'text', text: 'Child finished' }],
+      source: { kind: 'subagent-settled', senderSessionId: child.id, form: 'notice', summary: 'Child finished' } as never }))
+    await parent.whenIdle()
+    await h.runner.tick(record)
+    await parent.whenIdle()
+    expect((await h.runner.store.read(record))?.operation?.step).toBe('write')
+  })
+
   it('lets the human command bind and start an issue without a model bookkeeping prompt', async () => {
     const h = await mount(await root())
     const { agent } = await h.ctx.agents.create({ sessionId: SessionId('session-command'), meta: { cwd: h.path }, agentOptions: { provider: 'fixture', model: 'model' } })

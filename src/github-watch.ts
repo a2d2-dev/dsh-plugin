@@ -115,11 +115,27 @@ export function apply(ctx: Context, config: Config = {}): void {
   const log = (message: string) => (ctx as unknown as { logger?: { warn(m: string): void } }).logger?.warn(message)
 
   const injectMessage: Inject = async (sessionId, message, watch) => {
-    if (watch?.task) {
+    let address = watch?.task
+    const a2d2 = ctx.get('a2d2')
+    if (!address && watch && a2d2) {
+      // Old watch documents predate task addresses. Read the source header
+      // without resuming a retired main session, then resolve its task trail.
+      const live = agents.list().find(candidate => candidate.id === sessionId)
+      const persistence = ctx.get('sessionPersistence') as unknown as {
+        stat(id: SessionId): Promise<{ header: { cwd?: string } } | undefined>
+      } | undefined
+      const cwd = live?.session.header.cwd ?? (await persistence?.stat(sessionId as SessionId))?.header.cwd
+      if (cwd) {
+        const task = (await a2d2.list(cwd)).find(item => item.issue && item.members.some(member => member.sessionId === sessionId))
+        if (task) address = { projectRoot: await a2d2.projectRoot(cwd), task: task.id }
+      }
+    }
+    if (address && watch) {
       const runtime = ctx.get('a2d2TaskRuntime')?.runner
-      const id = `github:${watch.repo.toLowerCase()}:${watch.pr}:${watch.session}:${watch.since}:${(watch.revision ?? 0) + 1}`
-      if (await runtime?.enqueue(watch.task, id, message.text)) return 'delivered'
-      const task = await ctx.get('a2d2')?.readTask(watch.task.projectRoot, watch.task.task)
+      const id = message.eventId
+      if (!id) throw new Error('Task watch delivery requires a stable state event ID')
+      if (await runtime?.enqueue(address, id, message.text)) return 'delivered'
+      const task = await a2d2?.readTask(address.projectRoot, address.task)
       if (task?.issue) sessionId = task.issue.mainSession
     }
     let agent = agents.list().find(candidate => candidate.id === sessionId)

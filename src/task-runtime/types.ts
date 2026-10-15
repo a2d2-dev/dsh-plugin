@@ -32,6 +32,7 @@ export interface RunRecord extends TaskAddress {
   noProgress: number
   failures: number
   error?: string
+  recoveredFailure?: string
   inbox: Delivery[]
   updatedAt: string
 }
