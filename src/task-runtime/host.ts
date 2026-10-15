@@ -1,5 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { createHash } from 'node:crypto'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { Agent, AgentRegistry } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { Delivery, RunRecord } from './types.ts'
@@ -68,17 +69,33 @@ export class RuntimeHost {
     const pressure = observation.projections?.values.contextPressure as { projectedTokens?: number; pressureTokens?: number } | undefined
     return pressure?.projectedTokens ?? pressure?.pressureTokens
   }
+  /** A queue acknowledgement is distinct from admission into a model request. */
+  async deliveryState(id: SessionId, delivery: Delivery): Promise<'consumed' | 'queued' | 'missing'> {
+    const agent = await this.agent(id)
+    if ((await this.events(id)).some(event => event.type === 'user/message' && event.data.id === delivery.message.id)) return 'consumed'
+    const queued = [...agent.inbox.nextTurn, ...agent.inbox.nextStep].some(message => message.id === delivery.message.id)
+    return queued ? 'queued' : 'missing'
+  }
+  /** Public wake latch: a transient inbox item wakes existing work, then is removed before maintenance releases it. */
+  async wakePending(agent: Agent, inMaintenance = false): Promise<boolean> {
+    if (agent.status !== 'idle' || agent.inbox.nextTurn.length + agent.inbox.nextStep.length === 0) return false
+    const wake = async () => {
+      const signal = createUserMessage({ content: [], source: { kind: 'a2d2-task-runtime', eventId: 'wake-inbox', form: 'notice', summary: 'Resume pending task input' } })
+      agent.followup(signal)
+      if (!agent.inbox.remove(signal.id)) throw new Error('Runtime wake signal escaped its maintenance boundary')
+      await this.flush(agent)
+    }
+    if (inMaintenance) await wake()
+    else await agent.runMaintenance(wake)
+    return true
+  }
   /** Read-back by stable message identity closes retry-after-flush windows. */
-  async deliver(id: SessionId, delivery: Delivery): Promise<void> {
+  async deliver(id: SessionId, delivery: Delivery, inMaintenance = false): Promise<void> {
     const agent = await this.agent(id)
     await this.flush(agent)
-    const events = await this.events(id)
-    let observed = false
-    for (const event of events) {
-      if (event.type === 'user/message' && event.data.id === delivery.message.id) observed = true
-    }
-    const queued = [...agent.inbox.nextTurn, ...agent.inbox.nextStep].some(message => message.id === delivery.message.id)
-    if (!observed && !queued) agent.followup(delivery.message)
+    const state = await this.deliveryState(id, delivery)
+    if (state === 'missing') agent.followup(delivery.message)
+    else if (state === 'queued') await this.wakePending(agent, inMaintenance)
     await this.flush(agent)
   }
   /** A continuable child is safe only after its settled notice reached the parent log. */
@@ -139,8 +156,12 @@ export class RuntimeHost {
   async waitingOnWatch(id: SessionId): Promise<boolean> {
     const events = await this.events(id)
     const start = events.findLastIndex(event => event.type === 'turn/start')
-    // Registration declares an external dependency. A delivered task event or
-    // explicit continue supplies a later turn that can choose further work.
-    return events.slice(start).some(event => event.type === 'tool/call' && event.data.name === 'github_watch')
+    const calls = new Set(events.slice(start).filter(event => event.type === 'tool/call'
+      && event.data.name === 'github_watch').map(event => event.data.callId))
+    return events.slice(start).some(event => {
+      if (event.type !== 'tool/result' || event.data.message?.isError || !calls.has(event.data.message?.toolCallId)) return false
+      const result = event.data.meta?.a2d2GitHubWatch
+      return result && (result.status === 'pending' || (result.status === 'watching' && result.state === 'open'))
+    })
   }
 }

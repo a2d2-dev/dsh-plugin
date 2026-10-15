@@ -36,10 +36,12 @@ class Adapter extends LlmAdapter {
   text = 'New work'
   nextTool?: string
   hang = false
+  beforeResponse?: (request: GenerateOptions) => Promise<void>
   async listModels(provider: string) { return [{ provider, id: 'model', name: 'Model' }] }
   async resolveModel(provider: string, model: string) { return { provider, id: model, name: model } }
   async *stream(_request: GenerateOptions): AsyncIterable<StreamChunk> {
     this.calls++
+    await this.beforeResponse?.(_request)
     if (this.hang) {
       await new Promise<void>((_resolve, reject) => {
         _request.signal?.addEventListener('abort', () => reject(new Error('fixture request interrupted')), { once: true })
@@ -73,10 +75,9 @@ async function root() {
   roots.push(path)
   return path
 }
-async function mount(path: string, enabled = true) {
+async function mount(path: string, enabled = true, adapter = new Adapter()) {
   const ctx = new Context()
   contexts.push(ctx)
-  const adapter = new Adapter()
   await ctx.plugin(LlmRuntime)
   ctx.llm.registerAdapter(['fixture'], adapter)
   await ctx.plugin(SessionStore)
@@ -134,6 +135,109 @@ async function rotate(h: Harness, agent: Agent) {
 }
 
 describe('task runtime over real DSH loop, JSONL persistence, query and workspace services', () => {
+  it('wakes a persisted unconsumed handoff after reconstruction without adding a second model message', async () => {
+    const path = await root()
+    let h = await mount(path)
+    const source = await initial(h)
+    await h.runner.start(path, source.id)
+    await source.whenIdle()
+    const deliver = h.runner.host.deliver.bind(h.runner.host)
+    vi.spyOn(h.runner.host, 'deliver').mockImplementationOnce(async (id, item, inMaintenance) => {
+      await deliver(id, item, inMaintenance)
+      // Process-exit checkpoint: the real send and flush happened inside
+      // maintenance, but disposal prevents its wake latch from being released.
+      source.cancel({ kind: 'disposed' }, { keepInbox: true })
+    })
+    const record = await h.runner.control(path, source.id, 'rotate')
+    const instruction = record.operation!.instruction!
+    expect(instruction.delivered).toBe(true)
+    expect(await h.runner.host.deliveryState(source.id, instruction)).toBe('queued')
+    expect(source.status).toBe('idle')
+    await h.ctx.fiber.dispose()
+    contexts.splice(contexts.indexOf(h.ctx), 1)
+    const adapter = new Adapter()
+    adapter.beforeResponse = async () => { await fill(h, source.id) }
+    h = await mount(path, true, adapter)
+    await h.runner.recover()
+    const resumed = await h.runner.host.agent(source.id)
+    await resumed.whenIdle()
+    expect(await h.runner.host.deliveryState(source.id, instruction)).toBe('consumed')
+    const messages = (await h.runner.host.events(source.id)).filter(event => event.type === 'user/message')
+    expect(messages.filter(event => event.data.id === instruction.message.id)).toHaveLength(1)
+    expect(messages.some(event => event.data.source?.eventId === 'wake-inbox')).toBe(false)
+    expect(adapter.calls).toBe(1)
+    await h.runner.tick(record)
+    await h.runner.tick(record)
+    const settled = (await h.runner.store.read(record))!
+    await (await h.runner.host.agent(settled.current)).whenIdle()
+    expect(settled.generation).toBe(1)
+    expect(settled.state).toBe('running')
+  })
+
+  it.each([
+    ['watching', 'open', true], ['pending', undefined, true], ['ended', 'merged', false],
+    ['denied', undefined, false], ['not_installed', undefined, false], ['failed', undefined, false],
+  ] as const)('waits only for an active registration: %s', async (status, state, waiting) => {
+    const h = await mount(await root())
+    const agent = await initial(h)
+    h.ctx.tools.register(defineTool({
+      name: 'github_watch', description: 'Scripted registration result', parameters: {},
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: { status: { type: 'string', required: true }, state: { type: 'string' } } },
+        render: (_args, value) => [{ type: 'text', text: value.status }],
+        presentationMeta: (_args, value) => ({ a2d2GitHubWatch: value }),
+      },
+      async execute() { if (status === 'failed') throw new Error('registration failed'); return { status, ...(state ? { state } : {}) } },
+      presentCall: () => ({ card: 'generic', title: 'Watch', kind: 'other' }),
+    }))
+    h.adapter.nextTool = 'github_watch'
+    const record = await h.runner.start(h.path, agent.id)
+    await agent.whenIdle()
+    expect(await h.runner.host.waitingOnWatch(agent.id)).toBe(waiting)
+    await h.runner.tick(record)
+    expect((await h.runner.store.read(record))?.state).toBe(waiting ? 'waiting-event' : 'running')
+  })
+
+  it('durably accepts an event while successor creation holds the transition lock longer than its timeout', async () => {
+    const h = await mount(await root())
+    const source = await initial(h)
+    await h.runner.start(h.path, source.id)
+    await source.whenIdle()
+    const record = await h.runner.control(h.path, source.id, 'rotate')
+    await source.whenIdle()
+    await fill(h, source.id)
+    let entered!: () => void
+    let release!: () => void
+    const inside = new Promise<void>(resolve => { entered = resolve })
+    const held = new Promise<void>(resolve => { release = resolve })
+    const create = h.runner.host.ensureSuccessor.bind(h.runner.host)
+    vi.spyOn(h.runner.host, 'ensureSuccessor').mockImplementationOnce(async next => { entered(); await held; return create(next) })
+    const transition = h.runner.tick(record)
+    await inside
+    const releaseTimer = setTimeout(release, 2300)
+    let deadline: ReturnType<typeof setTimeout> | undefined
+    try {
+      const accepted = await Promise.race([
+        h.runner.enqueue(record, 'slow-creation-event', 'Arrived during slow successor creation'),
+        new Promise<never>((_resolve, reject) => { deadline = setTimeout(() => reject(new Error('event enqueue waited for the transition lock')), 1500) }),
+      ])
+      expect(accepted).toBe(true)
+      await h.runner.enqueue(record, 'slow-creation-event', 'duplicate')
+      expect(await new RuntimeStore(h.runner.store.directory).pending(record)).toHaveLength(1)
+      expect((await h.runner.status(h.path, source.id))?.inbox).toHaveLength(1)
+      await transition
+    } finally { clearTimeout(releaseTimer); if (deadline) clearTimeout(deadline); release(); await transition }
+    await h.runner.tick(record)
+    const current = (await h.runner.store.read(record))!.current
+    const successor = await h.runner.host.agent(current)
+    await successor.whenIdle()
+    await h.runner.tick(record)
+    await successor.whenIdle()
+    await h.runner.tick(record)
+    expect((await h.runner.host.events(current)).filter(event => event.type === 'user/message' && event.data.source?.eventId === 'slow-creation-event')).toHaveLength(1)
+    expect(await h.runner.store.pending(record)).toEqual([])
+  })
+
   it('retries an interrupted active turn once with a durable recovery message after host restart', async () => {
     const path = await root()
     let h = await mount(path)

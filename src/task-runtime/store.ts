@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { mkdir, readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
-import type { RunRecord, TaskAddress } from './types.ts'
+import type { Delivery, RunRecord, TaskAddress } from './types.ts'
 
 /** One registry per DSH home; no project scan and no implicit adoption. */
 export class RuntimeStore {
@@ -11,6 +11,41 @@ export class RuntimeStore {
     return createHash('sha256').update(JSON.stringify([address.projectRoot, address.task])).digest('hex')
   }
   private file(address: TaskAddress): string { return join(this.directory, `${this.key(address)}.json`) }
+  private inboxFile(address: TaskAddress): string { return join(this.directory, 'inbox', `${this.key(address)}.json`) }
+  async pending(address: TaskAddress): Promise<Delivery[]> {
+    try {
+      const value = JSON.parse(await readFile(this.inboxFile(address), 'utf8')) as { version: number; events: Delivery[] }
+      if (value.version !== 1 || !Array.isArray(value.events) || value.events.some(event => !event.id || !event.message?.id)) {
+        throw new Error('Invalid task event inbox; refusing to discard events')
+      }
+      return value.events
+    } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error }
+  }
+  /** This short inbox transaction never waits on an operation or model-selection lock. */
+  private async changeInbox(address: TaskAddress, change: (events: Delivery[]) => Delivery[]): Promise<void> {
+    await mkdir(join(this.directory, 'inbox'), { recursive: true, mode: 0o700 })
+    const file = this.inboxFile(address)
+    await withFileLock(file, async () => {
+      const events = change(await this.pending(address))
+      await writeFileAtomic(file, `${JSON.stringify({ version: 1, events })}\n`, { mode: 0o600, dirMode: 0o700 })
+    })
+  }
+  async enqueue(address: TaskAddress, event: Delivery): Promise<boolean> {
+    const record = await this.read(address)
+    if (!record) return false
+    if (record.inbox.some(item => item.id === event.id)) return true
+    await this.changeInbox(address, events => events.some(item => item.id === event.id) ? events : [...events, event])
+    return true
+  }
+  /** Called under the record writer lock; commit the ledger before removing staged events. */
+  async importInbox(record: RunRecord): Promise<void> {
+    const pending = await this.pending(record)
+    if (pending.length === 0) return
+    for (const event of pending) if (!record.inbox.some(item => item.id === event.id)) record.inbox.push(event)
+    await this.save(record)
+    const imported = new Set(pending.map(event => event.id))
+    await this.changeInbox(record, events => events.filter(event => !imported.has(event.id)))
+  }
   async read(address: TaskAddress): Promise<RunRecord | undefined> {
     try { return this.parse(await readFile(this.file(address), 'utf8')) }
     catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return; throw error }

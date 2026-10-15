@@ -44,7 +44,11 @@ export class TaskRunner {
 
   async status(cwd: string, session: SessionId): Promise<RunRecord | undefined> {
     const projectRoot = await this.ctx.a2d2.projectRoot(cwd)
-    return (await this.store.list()).find(record => record.projectRoot === projectRoot && record.sessions.includes(session))
+    const record = (await this.store.list()).find(record => record.projectRoot === projectRoot && record.sessions.includes(session))
+    if (record) {
+      for (const event of await this.store.pending(record)) if (!record.inbox.some(item => item.id === event.id)) record.inbox.push(event)
+    }
+    return record
   }
   private async own(address: TaskAddress): Promise<void> {
     const key = this.store.key(address)
@@ -146,14 +150,7 @@ export class TaskRunner {
     })
   }
   async enqueue(address: TaskAddress, id: string, text: string): Promise<boolean> {
-    return this.store.locked(address, async record => {
-      if (!record) return false
-      if (!record.inbox.some(item => item.id === id)) {
-        record.inbox.push(delivery(id, text))
-        await this.store.save(record)
-      }
-      return true
-    })
+    return this.store.enqueue(address, delivery(id, text))
   }
   async addressOfSession(cwd: string, session: SessionId): Promise<TaskAddress | undefined> {
     const root = await this.ctx.a2d2.projectRoot(cwd)
@@ -212,6 +209,7 @@ export class TaskRunner {
     const pending = this.store.locked(address, async record => {
       if (!record) return
       this.assertOwned(record)
+      await this.store.importInbox(record)
       if (['paused', 'blocked', 'done'].includes(record.state)) return
       try {
         await this.advance(record)
@@ -245,6 +243,7 @@ export class TaskRunner {
       return
     }
     if (agent.status !== 'idle') return
+    if (await this.host.wakePending(agent)) return
     if (record.operation) { await this.rotate(record, agent); return }
     const event = record.inbox.find(item => !item.delivered)
     if (event) {
@@ -344,8 +343,8 @@ export class TaskRunner {
       }
       if (operation.step === 'write') {
         if (!operation.instruction) throw new Error('Missing handoff instruction checkpoint')
-        if (!operation.instruction.delivered) {
-          await this.host.deliver(operation.source, operation.instruction)
+        if (!operation.instruction.delivered || await this.host.deliveryState(operation.source, operation.instruction) !== 'consumed') {
+          await this.host.deliver(operation.source, operation.instruction, true)
           operation.instruction.delivered = true
           await this.store.save(record)
           return

@@ -192,6 +192,7 @@ export function apply(ctx: Context, config: Config = {}): void {
         },
       },
       render: (_args, value) => [{ type: 'text', text: value.message }],
+      presentationMeta: (_args, value) => ({ a2d2GitHubWatch: { status: value.status, ...(value.state ? { state: value.state } : {}) } }),
     },
     async execute(args, exec) {
       const agent = exec.agent
