@@ -85,8 +85,7 @@ async function prepare(
   try {
     const runtime = ctx.get('a2d2TaskRuntime')?.runner
     if (runtime && await runtime.status(cwd, agent.id)) {
-      const run = await runtime.control(cwd, agent.id, 'rotate', focus)
-      return { kind: 'success', text: `Task runtime queued handoff ${run.operation?.id}; use /task-runtime status to inspect progress.` }
+      return { kind: 'error', text: 'Task runtime owns this task. Use /task-runtime rotate; the manual handoff flow cannot create its successor.' }
     }
     prepared = await ctx.a2d2.prepareHandoff({
       source: agent.id,

@@ -75,6 +75,7 @@ import { WaitNotices } from './wait-notice.ts'
 import type { Notifier } from './wait-notice.ts'
 import type { TaskRuntimeService } from './task-runtime.ts'
 import { inheritWorkspace } from './workspace.ts'
+import { createRootSession } from './root-session.ts'
 
 export { TaskId, taskIdForIssue } from './brand.ts'
 export type { TaskId as TaskIdType } from './brand.ts'
@@ -747,14 +748,10 @@ export class A2d2Service extends Service {
     const { reasoningEffort, ...selection } = candidateSelection(selected)
     const model = { ...selection, ...(reasoningEffort === undefined ? {} : { reasoningEffort: ReasoningEffortId(reasoningEffort) }) }
     const session = brandString<SessionId>(`session-${randomUUID()}`)
-    const agents = this.ctx.get('agents') as AgentRegistry | undefined
-    if (agents === undefined) throw new Error('a2d2: agents service is unavailable, so no subtask session can be created')
-    const handle = await agents.create({
-      sessionId: session,
-      meta: { cwd: projectRoot },
-      agentOptions: model,
-    })
-    await inheritWorkspace(this.ctx, request.caller, session)
+    const agent = await createRootSession(this.ctx, { source: request.caller, sessionId: session, cwd: projectRoot })
+    const controller = this.getService<{ selectLocalModel(request: { sessionId: SessionId } & typeof model): Promise<unknown> }>('sessionController')
+    if (!controller?.selectLocalModel) throw new Error('a2d2: sessionController.selectLocalModel is required for subtask local model selection')
+    await controller.selectLocalModel({ sessionId: session, ...model })
     const task = await this.bindMainSession({
       cwd: projectRoot,
       issue: request.issue,
@@ -762,7 +759,7 @@ export class A2d2Service extends Service {
       mainSession: session,
       now: request.now,
     })
-    handle.agent.followup(createUserMessage({
+    agent.followup(createUserMessage({
       content: [{ type: 'text', text: openSubtaskPrompt(request.issue, parent.issue.number) }],
       source: A2D2_OPEN_SUBTASK_MESSAGE_SOURCE,
     }))

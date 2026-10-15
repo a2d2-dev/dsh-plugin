@@ -4,6 +4,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { Agent, AgentRegistry } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { Delivery, RunRecord } from './types.ts'
+import { createRootSession, rootSessionProfile } from '../root-session.ts'
 
 interface Event { type: string; seq: number; time: number; data: Record<string, any> }
 interface Observation extends Disposable {
@@ -18,7 +19,6 @@ interface Workspace {
 }
 interface WorkspaceRegistry { list(): Workspace[]; get(id: string): Workspace | undefined }
 interface SessionQuery { observeSession(id: SessionId): Promise<Observation> }
-interface Persistence { stat(id: SessionId): Promise<unknown | undefined> }
 
 /** Only published DSH services: no registry mutation or direct session-file access. */
 export class RuntimeHost {
@@ -43,20 +43,15 @@ export class RuntimeHost {
   }
   async ensureSuccessor(record: RunRecord): Promise<Agent> {
     const id = record.operation!.successor
-    let agent = this.agents.get(id)
-    if (!agent) {
-      const persisted = await (this.ctx.get('sessionPersistence') as unknown as Persistence).stat(id)
-      agent = persisted === undefined
-        ? (await this.agents.create({ sessionId: id, meta: { cwd: record.cwd } })).agent
-        : await this.agent(id)
-    }
-    const workspace = this.workspaces.get(record.workspace)
-    if (!workspace) throw new Error(`Recorded workspace ${record.workspace} is unavailable`)
-    await workspace.attachSession(id)
+    const agent = await createRootSession(this.ctx, {
+      source: record.operation!.source, sessionId: id, cwd: record.cwd,
+      workspaceId: record.workspace, profile: record.operation!.profile,
+    })
     await this.ctx.a2d2.initializeSessionAgent(record.cwd, id, 'ceo')
     await this.flush(agent)
     return agent
   }
+  async profile(source: SessionId) { return rootSessionProfile(this.ctx, source) }
   async flush(agent: Agent): Promise<void> {
     if (!await this.ctx.sessions.flush(agent.session)) throw new Error(`Session ${agent.id} is no longer live`)
   }

@@ -369,6 +369,10 @@ export class TaskRunner {
         await this.store.save(record)
       }
       if (operation.step === 'create') {
+        if (!operation.profile) {
+          operation.profile = await this.host.profile(operation.source)
+          await this.store.save(record)
+        }
         await this.host.ensureSuccessor(record)
         operation.step = 'take'
         await this.store.save(record)

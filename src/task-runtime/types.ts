@@ -1,6 +1,7 @@
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { TaskId } from '../brand.ts'
+import type { RootSessionProfile } from '../root-session.ts'
 
 export interface TaskAddress { projectRoot: string; task: TaskId }
 export type RunState = 'running' | 'waiting-human' | 'waiting-event' | 'paused' | 'blocked' | 'done'
@@ -14,6 +15,7 @@ export interface Rotation {
   instruction?: Delivery
   continuation?: Delivery
   createdAt: string
+  profile?: RootSessionProfile
 }
 export interface RunRecord extends TaskAddress {
   version: 1
