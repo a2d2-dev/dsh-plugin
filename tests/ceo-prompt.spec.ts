@@ -82,6 +82,7 @@ class StubAgents extends Service {
   list(): readonly Agent[] {
     return this.agents
   }
+  get(id: SessionId): Agent | undefined { return this.agents.find(agent => agent.id === id) }
 
   add(agent: Agent): void {
     this.agents.push(agent)
@@ -237,6 +238,15 @@ describe('CEO prompt section', () => {
     await ctx.plugin(ceoPromptPlugin, { agentFilesDir, globalSoulDir })
     const parent = agent(root, 'session-parent')
     ;(ctx.get('agents') as unknown as StubAgents).add(parent)
+    const agents = ctx.get('agents') as unknown as StubAgents
+    ctx.provide('sessionController', {
+      async create(request: { sessionId: SessionId; cwd: string }) {
+        const { agent } = await agents.create({ sessionId: request.sessionId, meta: { cwd: request.cwd } })
+        return { sessionId: agent.id }
+      },
+      async resolveAgent(id: SessionId) { return { agent: agents.get(id) } },
+      async selectLocalModel(request: unknown) { return { selected: request } },
+    } as never)
     await ctx.a2d2.bindMainSession({ cwd: root, issue: 41, mainSession: parent.id, now: new Date('2026-10-01T10:00:00.000Z') })
 
     const opened = await ctx.a2d2.openSubtask({ cwd: root, caller: parent.id, issue: 49, now: new Date('2026-10-01T11:00:00.000Z') })
