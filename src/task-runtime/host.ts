@@ -45,9 +45,11 @@ export class RuntimeHost {
     const id = record.operation!.successor
     const agent = await createRootSession(this.ctx, {
       source: record.operation!.source, sessionId: id, cwd: record.cwd,
-      workspaceId: record.workspace, profile: record.operation!.profile,
+      workspaceId: record.workspace, profile: record.operation!.profile, repairLegacy: true,
     })
-    await this.ctx.a2d2.initializeSessionAgent(record.cwd, id, 'ceo')
+    // A replay after take validates the composition without trying to record
+    // an Agent role again: the bound main session already owns the CEO role.
+    if (!await this.ctx.a2d2.taskOfMainSession(record.cwd, id)) await this.ctx.a2d2.initializeSessionAgent(record.cwd, id, 'ceo')
     await this.flush(agent)
     return agent
   }

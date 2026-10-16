@@ -499,6 +499,7 @@ sessions:
 /task-runtime rotate [交接重点]
 /task-runtime stop
 /task-runtime resume
+/task-runtime recover
 ```
 
 `run` 是 `start` 的别名；重复 start 不重复启动。普通 bind 不启动运行器。managed `/handoff` 明确拒绝且不调度交接，提示改用 `/task-runtime rotate`；既有 orb 会在 prepare 失败处停止，不创建额外后继。未启用运行器的手动交接保持原行为，手动 take 不能绕开执行权。后台与浏览器连接无关，在重启时只恢复 homeDir 中已显式登记的任务。
@@ -512,3 +513,5 @@ sessions:
 每次交接先保存后继 ID，通过公开宿主 API 创建/恢复、继承 workspace、设置 CEO 会话本地模型、接任和投递接续内容。旧会话在 `agent/pre-step` 被拒绝执行。交接期间 GitHub 和子任务事件保存在任务收件箱，接任后投递。消息 ID 先落盘，重试回读会话日志与 inbox 去重；这不是跨存储的绝对一次事务。进展指纹是工具结果/回答的启发式比较，不能代替验收。文件锁限同机器同 PID 命名空间；断电持久性和跨主机共享不在本期承诺内。详见 ADR 0011。
 
 运行器后继与 `open_subtask` 使用公开 `sessionController.create` 创建/接续根会话，继承源会话当前 Agent preset 和 workspace，由宿主在发布会话前装配文件、shell 等工具及提示词。交接在创建前持久化选定 preset 与权限配置，重试保持相同身份；CEO 模型仍使用会话本地选择。继承命名权限 preset 及实际 sandbox/approval 配置（包括 custom），不继承单次审批结果，不写宿主全局默认。
+
+升级恢复旧后继时，create、take、deliver 都验证 preset。尚未开始运行的旧会话通过公开 preset 选择 API 补齐，保留原 ID；已有内容且 preset 不兼容时不覆盖，会在 status 中给出 `recoveryRequired` 和 `/task-runtime recover` 指令。在当前主会话空闲时执行该命令，会保留旧会话，先登记新的替代后继 ID，再携带原模型交接内容及旧会话历史指针接续；模型须检查旧会话的新进展后再执行。普通 resume 不会强改非空会话的 preset。

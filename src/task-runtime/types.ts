@@ -16,6 +16,9 @@ export interface Rotation {
   continuation?: Delivery
   createdAt: string
   profile?: RootSessionProfile
+  /** Explicit repair reuses the last model-written handoff plus a history pointer. */
+  recoveryBody?: string
+  replaces?: SessionId
 }
 export interface RunRecord extends TaskAddress {
   version: 1
@@ -35,6 +38,7 @@ export interface RunRecord extends TaskAddress {
   failures: number
   error?: string
   recoveredFailure?: string
+  recoveryRequired?: { session: SessionId; agentPreset: string }
   inbox: Delivery[]
   updatedAt: string
 }

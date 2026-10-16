@@ -197,6 +197,95 @@ async function rotate(h: Harness, agent: Agent) {
 }
 
 describe('task runtime over real DSH loop, JSONL persistence, query and workspace services', () => {
+  it.each([
+    ['create', false], ['take', false], ['deliver', false],
+    ['create', true], ['take', true], ['deliver', true],
+  ] as const)('recovers a legacy blank successor at %s (cold=%s) through public preset selection', async (step, cold) => {
+    const path = await root()
+    let h = await mount(path, true, new Adapter(), true)
+    const source = await initial(h)
+    await h.runner.start(path, source.id)
+    await source.whenIdle()
+    let record = await h.runner.control(path, source.id, 'rotate')
+    await source.whenIdle()
+    await fill(h, source.id)
+    const id = record.operation!.successor
+    const { agent: legacy } = await h.ctx.agents.create({ sessionId: id, meta: { cwd: path }, agentOptions: { provider: 'fixture', model: 'model' } })
+    expect(legacy.session.header.agentPreset).toBeUndefined()
+    expect(h.ctx.agentPresets.composedPreset(legacy.ctx)).toBeUndefined()
+    await h.runner.host.flush(legacy)
+    await h.runner.store.locked(record, async current => {
+      current!.operation!.step = step
+      if (step === 'deliver') {
+        const taken = await h.ctx.a2d2.takeHandoff({ cwd: path, source: source.id, successor: id, runtimeOperation: current!.operation!.id })
+        current!.operation!.continuation = { id: `take:${current!.operation!.id}`, message: createUserMessage({
+          content: [{ type: 'text', text: taken.prompt }], source: { kind: 'a2d2-task-runtime', eventId: 'legacy-take', form: 'notice', summary: 'Legacy handoff' },
+        }) }
+      }
+      await h.runner.store.save(current!)
+    })
+    if (cold) {
+      await h.ctx.fiber.dispose()
+      contexts.splice(contexts.indexOf(h.ctx), 1)
+      h = await mount(path, true, new Adapter(), true)
+      await h.runner.recover()
+    }
+    for (let i = 0; i < 3; i++) {
+      await h.runner.tick(record)
+      record = (await h.runner.store.read(record))!
+      await (await h.runner.host.agent(record.current)).whenIdle()
+      if (record.generation === 1) break
+    }
+    expect(record.generation, record.error).toBe(1)
+    expect(record.current).toBe(id)
+    expect(record.state).toBe('running')
+    const successor = await h.runner.host.agent(id)
+    expect(h.ctx.agentPresets.composedPreset(successor.ctx)).toBe('workspace-agent')
+    expect((await h.runner.host.events(id)).findLast(event => event.type === 'agent-preset/selected')?.data.agentPreset).toBe('workspace-agent')
+    expect((await h.ctx.a2d2.readTask(path, record.task))?.members).toHaveLength(2)
+  })
+
+  it('preserves a started conflicting successor and provides an explicit fresh-session recovery', async () => {
+    const path = await root()
+    const h = await mount(path, true, new Adapter(), true)
+    const source = await initial(h)
+    await h.runner.start(path, source.id)
+    await source.whenIdle()
+    const record = await h.runner.control(path, source.id, 'rotate')
+    await source.whenIdle()
+    await fill(h, source.id)
+    const previous = record.operation!.successor
+    await h.ctx.sessionController.create({ sessionId: previous, workspaceId: record.workspace as never, agentPreset: 'minimal' })
+    const old = await h.runner.host.agent(previous)
+    await h.runner.store.locked(record, async current => {
+      const taken = await h.ctx.a2d2.takeHandoff({ cwd: path, source: source.id, successor: previous, runtimeOperation: current!.operation!.id })
+      current!.current = previous
+      current!.operation!.step = 'deliver'
+      current!.operation!.continuation = { id: 'old-take', message: createUserMessage({ content: [{ type: 'text', text: taken.prompt }], source: { kind: 'user' } }) }
+      await h.runner.store.save(current!)
+    })
+    old.followup(createUserMessage({ content: [{ type: 'text', text: 'Preserve this prior work in the legacy session.' }], source: { kind: 'user' } }))
+    await old.whenIdle()
+    const history = await h.runner.host.events(previous)
+    await h.runner.tick(record)
+    expect((await h.runner.store.read(record))?.recoveryRequired).toEqual({ session: previous, agentPreset: 'workspace-agent' })
+    expect((await h.runner.store.read(record))?.error).toContain('/task-runtime recover')
+    expect(h.ctx.agentPresets.composedPreset(old.ctx)).toBe('minimal')
+    await expect(h.runner.control(path, previous, 'resume')).rejects.toThrow('/task-runtime recover')
+    let repaired = await h.runner.recoverLegacy(path, previous)
+    expect(repaired.current).not.toBe(previous)
+    const fresh = repaired.current
+    await h.runner.tick(repaired)
+    await (await h.runner.host.agent(fresh)).whenIdle()
+    repaired = (await h.runner.store.read(repaired))!
+    expect(repaired.generation).toBe(1)
+    expect(repaired.recoveryRequired).toBeUndefined()
+    expect(h.ctx.agentPresets.composedPreset(old.ctx)).toBe('minimal')
+    expect(await h.runner.host.events(previous)).toEqual(history)
+    expect(JSON.stringify(await h.runner.host.events(fresh))).toContain(`recorded history of session ${previous}`)
+    expect(await h.runner.allowed(old)).toBe(false)
+  })
+
   it.each(['workspace-write', 'custom'] as const)('creates successors and subtasks through real preset setup with %s permissions', async permission => {
     const path = await root()
     await writeFile(join(path, 'AGENTS.md'), 'PRESET_RULE_112: read the acceptance file before acting.\n')

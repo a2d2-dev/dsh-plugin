@@ -4,10 +4,11 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed, UserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { HandoffDocumentError, parseHandoffDocument } from '../handoff-document.ts'
+import { HandoffDocumentError, parseHandoffDocument, renderHandoffDocument } from '../handoff-document.ts'
+import { LegacyRootSessionError } from '../root-session.ts'
 import { handoffPrompt } from '../handoff-prompt.ts'
 import { redactText } from '../handoff.ts'
-import { handoffsDirectory, readHandoffDocument } from '../store.ts'
+import { handoffsDirectory, readHandoffDocument, writeHandoffDocument } from '../store.ts'
 import { RuntimeStore } from './store.ts'
 import { RuntimeHost } from './host.ts'
 import type { Delivery, RunRecord, TaskAddress } from './types.ts'
@@ -112,6 +113,7 @@ export class TaskRunner {
       if (!current || current.current !== session) throw new Error('Main session changed during command')
       current.owner = this.instance
       if (current.state === 'done') throw new Error('Completed tasks cannot resume')
+      if (action !== 'stop' && current.recoveryRequired) throw new Error('This legacy successor requires /task-runtime recover; resume cannot overwrite its preset')
       if (action === 'stop') current.state = 'paused'
       else {
         current.state = 'running'
@@ -127,6 +129,39 @@ export class TaskRunner {
       await this.store.save(current)
     })
     if (action !== 'stop') await this.tick(record)
+    return (await this.store.read(record))!
+  }
+  async recoverLegacy(cwd: string, session: SessionId): Promise<RunRecord> {
+    const record = await this.status(cwd, session)
+    if (!record || !this.options.enabled) throw new Error('No enabled task runtime to recover')
+    await this.own(record)
+    await this.store.locked(record, async current => {
+      if (!current?.operation || !current.recoveryRequired) throw new Error('No legacy preset recovery is required')
+      const task = await this.ctx.a2d2.readTask(current.projectRoot, current.task)
+      if (!task?.issue || task.issue.mainSession !== session || task.state === 'done') throw new Error('Run recovery from the current active main session')
+      const agent = await this.host.agent(session)
+      if (agent.status !== 'idle') throw new Error('Wait for the current main session to become idle before recovery')
+      const previous = current.operation
+      const document = parseHandoffDocument(await readHandoffDocument(handoffsDirectory(current.projectRoot), previous.source), previous.source)
+      const id = randomUUID()
+      current.owner = this.instance
+      current.current = session
+      current.operation = {
+        id, source: session, successor: SessionId(`session-${id}`), step: 'prepare',
+        createdAt: new Date().toISOString(), profile: previous.profile,
+        replaces: previous.successor,
+        recoveryBody: `${redactText(document.body).text}\n\nControlled recovery: inspect the recorded history of session ${previous.successor} for newer work before repeating any side effect. This session was preserved because its preset could not safely be replaced.`,
+      }
+      current.sessions.push(current.operation.successor)
+      current.state = 'running'
+      current.error = undefined
+      current.recoveryRequired = undefined
+      current.failures = 0
+      current.drive = undefined
+      current.decision = undefined
+      await this.store.save(current)
+    })
+    await this.tick(record)
     return (await this.store.read(record))!
   }
   private planRotation(record: RunRecord, focus?: string): void {
@@ -217,6 +252,10 @@ export class TaskRunner {
         record.failures++
         record.error = error instanceof Error ? error.message : String(error)
         if (record.failures >= this.options.maxFailures) record.state = 'blocked'
+        if (error instanceof LegacyRootSessionError) {
+          record.state = 'blocked'
+          record.recoveryRequired = { session: error.sessionId, agentPreset: error.agentPreset }
+        }
         await this.store.save(record)
       }
     })
@@ -243,7 +282,8 @@ export class TaskRunner {
       return
     }
     if (agent.status !== 'idle') return
-    if (await this.host.wakePending(agent)) return
+    if (record.operation?.step === 'deliver') { await this.rotate(record, agent); return }
+    if (!record.operation?.recoveryBody && await this.host.wakePending(agent)) return
     if (record.operation) { await this.rotate(record, agent); return }
     const event = record.inbox.find(item => !item.delivered)
     if (event) {
@@ -312,6 +352,7 @@ export class TaskRunner {
   private async rotate(record: RunRecord, agent: Agent): Promise<void> {
     const operation = record.operation!
     if (operation.step === 'deliver') {
+      await this.ensureSuccessor(record)
       if (!operation.continuation) throw new Error('Recovery cannot find the persisted continuation message')
       await this.host.deliver(record.current, operation.continuation)
       operation.continuation.delivered = true
@@ -322,6 +363,7 @@ export class TaskRunner {
       record.decision = undefined
       record.failures = 0
       record.error = undefined
+      record.recoveryRequired = undefined
       await this.store.save(record)
       return
     }
@@ -337,8 +379,15 @@ export class TaskRunner {
           cwd: record.projectRoot, source: operation.source, taskId: record.task,
           now: new Date(operation.createdAt), focus: operation.focus, runtimeOperation: operation.id,
         })
-        operation.instruction = delivery(`prepare:${operation.id}`, prepared.instruction)
-        operation.step = 'write'
+        if (operation.recoveryBody !== undefined) {
+          await writeHandoffDocument(handoffsDirectory(record.projectRoot), operation.source, renderHandoffDocument({
+            source: operation.source, task: record.task, createdAt: operation.createdAt, focus: operation.focus, body: operation.recoveryBody,
+          }))
+          operation.step = 'create'
+        } else {
+          operation.instruction = delivery(`prepare:${operation.id}`, prepared.instruction)
+          operation.step = 'write'
+        }
         await this.store.save(record)
       }
       if (operation.step === 'write') {
@@ -368,12 +417,8 @@ export class TaskRunner {
         operation.step = 'create'
         await this.store.save(record)
       }
+      if (operation.step === 'create' || operation.step === 'take') await this.ensureSuccessor(record)
       if (operation.step === 'create') {
-        if (!operation.profile) {
-          operation.profile = await this.host.profile(operation.source)
-          await this.store.save(record)
-        }
-        await this.host.ensureSuccessor(record)
         operation.step = 'take'
         await this.store.save(record)
       }
@@ -392,6 +437,13 @@ export class TaskRunner {
         await this.store.save(record)
       }
     })
+  }
+  private async ensureSuccessor(record: RunRecord): Promise<void> {
+    if (!record.operation!.profile) {
+      record.operation!.profile = await this.host.profile(record.operation!.source)
+      await this.store.save(record)
+    }
+    await this.host.ensureSuccessor(record)
   }
   async close(): Promise<void> {
     this.closed = true

@@ -58,7 +58,7 @@ function render(record: RunRecord | undefined): string {
   if (!record) return 'Task runtime is not started for this session. Bind an issue, then /task-runtime start.'
   return JSON.stringify({ task: record.task, state: record.state, current: record.current, workspace: record.workspace,
     generation: record.generation, operation: record.operation, pendingEvents: record.inbox.filter(item => !item.delivered).length,
-    failures: record.failures, error: record.error }, null, 2)
+    failures: record.failures, error: record.error, recoveryRequired: record.recoveryRequired }, null, 2)
 }
 
 /** Human commands provide execution control; the model tool reports continuation intent. */
@@ -66,7 +66,7 @@ export function apply(ctx: Context, config: Config = {}): void {
   const service = new TaskRuntimeService(ctx, config)
   ctx.effect(() => ctx.commands.register({
     name: 'task-runtime', description: 'Control the bound task background runtime',
-    input: { hint: 'start [issue-number] [title] | stop | resume | status | rotate [focus]' },
+    input: { hint: 'start [issue-number] [title] | stop | resume | status | rotate [focus] | recover' },
     handler: async invocation => {
       const [action = 'status', ...rest] = invocation.rawInput.trim().split(/\s+/)
       const { agent } = invocation
@@ -76,10 +76,11 @@ export function apply(ctx: Context, config: Config = {}): void {
           ? { issue: Number(rest[0]?.replace(/^#/, '')), title: rest.slice(1).join(' ') || undefined } : undefined
         const record = action === 'start' || action === 'run'
           ? await service.runner.start(cwd, agent.id, binding)
+          : action === 'recover' ? await service.runner.recoverLegacy(cwd, agent.id)
           : action === 'stop' || action === 'resume' || action === 'rotate'
             ? await service.runner.control(cwd, agent.id, action, rest.join(' ') || undefined)
             : action === 'status' || action === '' ? await service.runner.status(cwd, agent.id) : undefined
-        if (!['', 'run', 'start', 'stop', 'resume', 'rotate', 'status'].includes(action)) throw new Error('Use start, stop, resume, status, or rotate')
+        if (!['', 'run', 'start', 'stop', 'resume', 'rotate', 'status', 'recover'].includes(action)) throw new Error('Use start, stop, resume, status, rotate, or recover')
         return { kind: 'success', text: render(record) }
       } catch (error) { return { kind: 'error', text: String(error) } }
     },

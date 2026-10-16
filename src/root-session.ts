@@ -21,6 +21,11 @@ interface Permissions {
   current(session: Session): string
   set(session: Session, name: string): void
 }
+export class LegacyRootSessionError extends Error {
+  constructor(readonly sessionId: SessionId, readonly agentPreset: string) {
+    super(`Legacy successor ${sessionId} cannot safely change its missing or different preset. Its history was preserved. Run /task-runtime recover from the current main session to reserve a fresh successor with preset ${agentPreset}.`)
+  }
+}
 function sourceService(ctx: Context, agent: Agent, name: string): unknown {
   const presets = ctx.get('agentPresets') as unknown as { serviceFor(agent: Agent, name: string): unknown } | undefined
   return presets?.serviceFor(agent, name) ?? (ctx.get as (name: string) => unknown).call(ctx, name)
@@ -65,6 +70,7 @@ export async function createRootSession(ctx: Context, request: {
   cwd: string
   workspaceId?: string
   profile?: RootSessionProfile
+  repairLegacy?: boolean
 }): Promise<Agent> {
   const profile = request.profile ?? await rootSessionProfile(ctx, request.source)
   const workspaces = ctx.get('workspaceRegistry') as unknown as {
@@ -72,21 +78,48 @@ export async function createRootSession(ctx: Context, request: {
   } | undefined
   const workspaceId = request.workspaceId ?? workspaces?.list().find(item => item.sessionIds.includes(request.source))?.id
   if (workspaces && !workspaceId) throw new Error(`Source session ${request.source} has no workspace`)
+  const location = workspaceId ? { workspaceId } : { cwd: request.cwd }
+  const agents = ctx.get('agents') as AgentRegistry
+  const persistence = ctx.get('sessionPersistence') as unknown as { stat(id: SessionId): Promise<unknown | undefined> } | undefined
+  const existing = request.repairLegacy && (agents.get(request.sessionId) || await persistence?.stat(request.sessionId))
   await controller(ctx).create({
     sessionId: request.sessionId,
-    ...(workspaceId ? { workspaceId } : { cwd: request.cwd }),
-    ...(profile.agentPreset ? { agentPreset: profile.agentPreset } : {}),
+    ...location,
+    ...(!existing && profile.agentPreset ? { agentPreset: profile.agentPreset } : {}),
   })
   const agent = await agentOf(ctx, request.sessionId)
+  const projections = ctx.get('sessionProjections') as unknown as { stateOf(session: Session, key: string): unknown } | undefined
+  const boundary = projections?.stateOf(agent.session, 'turnBoundary') as { lastTurn: number; openTurnStartSeq: number | null } | undefined
+  const started = boundary !== undefined && (boundary.lastTurn > 0 || boundary.openTurnStartSeq !== null)
+  if (existing && profile.agentPreset) {
+    const presets = ctx.get('agentPresets') as unknown as {
+      composedPreset(ctx: Context): string | undefined
+      select(agent: Agent, preset: string): Promise<string>
+    } | undefined
+    if (!presets) throw new Error('a2d2: agentPresets service is required to recover this legacy successor')
+    const selected = projections?.stateOf(agent.session, 'agentPreset')
+    const composed = presets.composedPreset(agent.ctx)
+    if (selected !== profile.agentPreset || composed !== profile.agentPreset) {
+      if (started) {
+        // A cold legacy session may already have the requested default mounted.
+        // Accept its actual composition without rewriting a nonblank history.
+        if (selected != null || composed !== profile.agentPreset) throw new LegacyRootSessionError(agent.id, profile.agentPreset)
+      } else {
+        if (!boundary || agent.status !== 'idle') throw new LegacyRootSessionError(agent.id, profile.agentPreset)
+        await agent.runMaintenance(async () => { await presets.select(agent, profile.agentPreset!) })
+      }
+    }
+  }
+  // A started successor can contain deliberate later permission changes.
+  if (existing && started) return agent
   if (profile.permission) {
     const permissions = sourceService(ctx, agent, 'permissionPresets') as Permissions | undefined
     if (!permissions) throw new Error('a2d2: successor preset did not compose the source permission service')
     if (profile.permission.preset !== 'custom') permissions.set(agent.session, profile.permission.preset)
     const { sandbox, approval } = profile.permission
     if (!sandbox || !approval) throw new Error('a2d2: inherited permission configuration is incomplete')
-    const projections = ctx.get('sessionProjections') as unknown as { stateOf(session: Session, key: string): unknown }
     const approvalService = sourceService(ctx, agent, 'approval') as { overrideOf(session: Session): string | undefined }
-    if (projections.stateOf(agent.session, 'sandboxMode') !== sandbox) setSandboxMode(agent.session, sandbox)
+    if (projections?.stateOf(agent.session, 'sandboxMode') !== sandbox) setSandboxMode(agent.session, sandbox)
     if (approvalService.overrideOf(agent.session) !== approval) setApprovalPolicy(agent.session, approval)
   }
   return agent
