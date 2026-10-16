@@ -22,9 +22,33 @@ interface Permissions {
   set(session: Session, name: string): void
 }
 export class LegacyRootSessionError extends Error {
-  constructor(readonly sessionId: SessionId, readonly agentPreset: string) {
-    super(`Legacy successor ${sessionId} cannot safely change its missing or different preset. Its history was preserved. Run /task-runtime recover from the current main session to reserve a fresh successor with preset ${agentPreset}.`)
+  constructor(readonly sessionId: SessionId, readonly agentPreset?: string, reason = 'cannot safely change its missing or different preset') {
+    super(`Legacy successor ${sessionId} ${reason}. Its history was preserved. Run /task-runtime recover from the current main session to reserve a fresh successor${agentPreset ? ` with preset ${agentPreset}` : ' using the recorded source configuration'}.`)
   }
+}
+/** The permission service seeds exactly this triplet before the first turn. */
+async function permissionOrigin(ctx: Context, agent: Agent): Promise<'initial' | 'changed' | 'unknown'> {
+  interface Event { type: string; seq: number; data: Readonly<Record<string, unknown>> }
+  const query = ctx.get('sessionQuery') as unknown as {
+    observeSession(id: SessionId): Promise<Disposable & { events: readonly Event[]; inheritedEventCount: number }>
+  } | undefined
+  if (!query) return 'unknown'
+  using observation = await query.observeSession(agent.id)
+  if (observation.inheritedEventCount !== 0) return 'unknown'
+  const firstTurn = observation.events.find(event => event.type === 'turn/start')
+  if (!firstTurn) return 'unknown'
+  const types = ['permission/preset', 'sandbox/mode', 'approval/policy']
+  const events = observation.events.filter(event => types.includes(event.type))
+  if (events.length < 3 || events.slice(0, 3).some((event, index) => event.type !== types[index] || event.seq >= firstTurn.seq)) return 'unknown'
+  for (const event of events) {
+    // Delegation and incomplete/imported initializations are not proof of a
+    // later explicit configuration change on this root session.
+    if (event.data.source !== undefined) return 'unknown'
+    if (event.type === 'permission/preset' && (typeof event.data.preset !== 'string' || event.data.preset === 'custom' || event.data.preset === '')) return 'unknown'
+    if (event.type === 'sandbox/mode' && !['read-only', 'workspace-write', 'danger-full-access'].includes(String(event.data.mode))) return 'unknown'
+    if (event.type === 'approval/policy' && !['ask', 'never'].includes(String(event.data.policy))) return 'unknown'
+  }
+  return events.length === 3 ? 'initial' : 'changed'
 }
 function sourceService(ctx: Context, agent: Agent, name: string): unknown {
   const presets = ctx.get('agentPresets') as unknown as { serviceFor(agent: Agent, name: string): unknown } | undefined
@@ -110,8 +134,14 @@ export async function createRootSession(ctx: Context, request: {
       }
     }
   }
-  // A started successor can contain deliberate later permission changes.
-  if (existing && started) return agent
+  if (existing && started) {
+    if (!profile.permission) return agent
+    const origin = await permissionOrigin(ctx, agent)
+    if (origin === 'changed') return agent
+    if (origin === 'unknown') throw new LegacyRootSessionError(agent.id, profile.agentPreset, 'has an ambiguous permission history; refusing to retain or overwrite its permissions')
+    // Only constructor defaults were recorded: they are not a user override
+    // and must not outrank the source's saved, possibly stricter policy.
+  }
   if (profile.permission) {
     const permissions = sourceService(ctx, agent, 'permissionPresets') as Permissions | undefined
     if (!permissions) throw new Error('a2d2: successor preset did not compose the source permission service')

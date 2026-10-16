@@ -10,7 +10,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import LlmRuntime, { LlmAdapter, createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SessionQuery from '@deepseek-ai/dsh-session-query'
@@ -95,7 +95,7 @@ async function root() {
   roots.push(path)
   return path
 }
-async function mount(path: string, enabled = true, adapter = new Adapter(), withPresets = false) {
+async function mount(path: string, enabled = true, adapter = new Adapter(), withPresets = false, presetDefault = 'minimal') {
   const ctx = new Context()
   contexts.push(ctx)
   await ctx.plugin(LlmRuntime)
@@ -137,7 +137,7 @@ async function mount(path: string, enabled = true, adapter = new Adapter(), with
     await ctx.plugin(Approval, { policy: 'never' })
     await ctx.plugin(PermissionPresets, { defaultPreset: 'danger-full-access' })
     await ctx.plugin(AgentInstructions, { maxBytes: 32768, dshHome: join(path, 'home') })
-    await ctx.plugin(AgentPresets, { default: 'minimal' })
+    await ctx.plugin(AgentPresets, { default: presetDefault })
     await ctx.agentPresets.register({ id: 'minimal', plugins: [] })
     await ctx.agentPresets.register({ id: 'workspace-agent', plugins: [
       { name: import.meta.resolve('@deepseek-ai/dsh-tool-fs') },
@@ -197,6 +197,74 @@ async function rotate(h: Harness, agent: Agent) {
 }
 
 describe('task runtime over real DSH loop, JSONL persistence, query and workspace services', () => {
+  it.each(['initial', 'changed', 'ambiguous'] as const)('handles %s permissions on a cold started preset-less successor without widening silently', async origin => {
+    const path = await root()
+    let h = await mount(path, true, new Adapter(), true, 'workspace-agent')
+    const source = await initial(h)
+    setSandboxMode(source.session, 'read-only')
+    setApprovalPolicy(source.session, 'never')
+    await h.runner.start(path, source.id)
+    await source.whenIdle()
+    const record = await h.runner.control(path, source.id, 'rotate')
+    await source.whenIdle()
+    await fill(h, source.id)
+    const id = record.operation!.successor
+    if (origin === 'ambiguous') {
+      // A historical root with a real completed turn but no permission seed.
+      // On resume the actual permission service supplies defaults after that
+      // turn; those late seed events cannot establish a user override.
+      const detached = h.ctx.sessions.prepare(id, { meta: { cwd: path } })
+      const handle = await h.ctx.sessionPersistence.create(detached.header)
+      const time = Date.now()
+      await handle.append([
+        { type: 'turn/start', seq: SessionSeq(0), time, data: { turn: 1 } },
+        { type: 'turn/end', seq: SessionSeq(1), time: time + 1, data: { turn: 1, reason: { kind: 'completed' } } },
+      ])
+      await handle.close()
+    } else {
+      await h.ctx.agents.create({ sessionId: id, meta: { cwd: path }, agentOptions: { provider: 'fixture', model: 'model' } })
+    }
+    await h.runner.store.locked(record, async current => {
+      const taken = await h.ctx.a2d2.takeHandoff({ cwd: path, source: source.id, successor: id, runtimeOperation: current!.operation!.id })
+      current!.current = id
+      current!.operation!.step = 'deliver'
+      current!.operation!.continuation = { id: 'legacy-permission-take', message: createUserMessage({
+        content: [{ type: 'text', text: taken.prompt }], source: { kind: 'a2d2-task-runtime', eventId: 'legacy-permission-take', form: 'notice', summary: 'Legacy handoff' },
+      }) }
+      await h.runner.store.save(current!)
+    })
+    if (origin !== 'ambiguous') {
+      const legacy = await h.runner.host.agent(id)
+      expect(legacy.session.header.agentPreset).toBeUndefined()
+      expect(h.ctx.sandboxPolicy.resolve({ session: legacy.session }).mode).toBe('danger-full-access')
+      legacy.followup(createUserMessage({ content: [{ type: 'text', text: 'Prior legacy work' }], source: { kind: 'user' } }))
+      await legacy.whenIdle()
+      if (origin === 'changed') h.ctx.permissionPresets.set(legacy.session, 'workspace-write')
+      await h.runner.host.flush(legacy)
+    }
+    await h.ctx.fiber.dispose()
+    contexts.splice(contexts.indexOf(h.ctx), 1)
+    h = await mount(path, true, new Adapter(), true, 'workspace-agent')
+    await h.runner.recover()
+    const restored = await h.runner.host.agent(id)
+    await restored.whenIdle()
+    expect(restored.session.header.agentPreset).toBeUndefined()
+    expect(h.ctx.agentPresets.composedPreset(restored.ctx)).toBe('workspace-agent')
+    const state = (await h.runner.store.read(record))!
+    if (origin === 'ambiguous') {
+      expect(state.state).toBe('blocked')
+      expect(state.error).toContain('ambiguous permission history')
+      expect(state.recoveryRequired).toMatchObject({ session: id, agentPreset: 'workspace-agent' })
+      expect(await h.runner.allowed(restored)).toBe(false)
+      expect(h.adapter.calls).toBe(0)
+    } else {
+      expect(state.generation, state.error).toBe(1)
+      expect(h.ctx.sandboxPolicy.resolve({ session: restored.session }).mode).toBe(origin === 'initial' ? 'read-only' : 'workspace-write')
+      expect(h.ctx.approval.overrideOf(restored.session)).toBe(origin === 'initial' ? 'never' : 'ask')
+      expect(state.recoveryRequired).toBeUndefined()
+    }
+  })
+
   it.each([
     ['create', false], ['take', false], ['deliver', false],
     ['create', true], ['take', true], ['deliver', true],

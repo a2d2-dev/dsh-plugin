@@ -38,7 +38,7 @@ export interface RunRecord extends TaskAddress {
   failures: number
   error?: string
   recoveredFailure?: string
-  recoveryRequired?: { session: SessionId; agentPreset: string }
+  recoveryRequired?: { session: SessionId; agentPreset?: string }
   inbox: Delivery[]
   updatedAt: string
 }

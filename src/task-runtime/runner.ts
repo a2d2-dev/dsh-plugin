@@ -150,7 +150,7 @@ export class TaskRunner {
         id, source: session, successor: SessionId(`session-${id}`), step: 'prepare',
         createdAt: new Date().toISOString(), profile: previous.profile,
         replaces: previous.successor,
-        recoveryBody: `${redactText(document.body).text}\n\nControlled recovery: inspect the recorded history of session ${previous.successor} for newer work before repeating any side effect. This session was preserved because its preset could not safely be replaced.`,
+        recoveryBody: `${redactText(document.body).text}\n\nControlled recovery: inspect the recorded history of session ${previous.successor} for newer work before repeating any side effect. This session was preserved because its execution configuration could not safely be reused.`,
       }
       current.sessions.push(current.operation.successor)
       current.state = 'running'

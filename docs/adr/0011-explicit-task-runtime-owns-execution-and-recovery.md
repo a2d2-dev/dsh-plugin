@@ -32,6 +32,8 @@
 
 回归使用真实 PresetRegistry、SessionController.create、AgentLoop、文件工具、bash 工具与 AGENTS 加载器：源会话从 minimal 切到非默认 workspace-agent 后，后继和子任务均继承当前 preset，实际执行 read/bash，且权限不回到创建默认。npm rc.2 缺少当前宿主新增的 selectLocalModel，因此该测试仅在模型选择面使用既有本地测试适配器；create/resolve/preset/tool 执行均使用真实宿主实现。
 
-旧版本直接创建的后继可能已存在于 create、take 或 deliver 恢复点。恢复先通过公开 controller 采用既有身份并核对 cwd/workspace，再检查实际 preset 及 turnBoundary：空且 idle 的旧会话通过 `agentPresets.select` 补齐装配，保留 ID；已运行的相同实际装配不重写权限或角色。非空且不兼容时明确记录 `recoveryRequired`，不覆盖已有工作。
+旧版本直接创建的后继可能已存在于 create、take 或 deliver 恢复点。恢复先通过公开 controller 采用既有身份并核对 cwd/workspace，再检查实际 preset 及 turnBoundary：空且 idle 的旧会话通过 `agentPresets.select` 补齐装配，保留 ID；已运行的相同实际装配不重写角色；权限依据持久日志区分初始化与后续变更。非空且不兼容时明确记录 `recoveryRequired`，不覆盖已有工作。
 
 `/task-runtime recover` 是人显式发起的受控替代：保留旧会话及交接边，先持久化新的后继 ID 和已确定的 preset；以原模型交接正文加旧会话历史指针生成接续文档。它不总结或声称理解旧会话的新工作，而要求接任模型先检查记录。已有主指针通过正常 prepare/take 移到替代后继；原会话随后受执行围栏约束。重试保留同一个新 ID，不按次创建。
+
+非空旧后继的权限不能仅凭“已经运行”保留。宿主在首轮前自动写入 permission/preset、sandbox/mode、approval/policy 三个初始化事件；若只有这组完整记录，恢复时仍继承源会话保存的配置，避免将创建默认的宽权限当作后改意图。完整初始化之后的显式权限事件予以保留；缺失、晚于首轮补写、继承前缀或带委派来源等不确定历史进入 recoveryRequired，不能静默继续宽权限执行。
