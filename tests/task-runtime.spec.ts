@@ -20,6 +20,18 @@ import Storage from '@deepseek-ai/dsh-storage'
 import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import WorkspaceRegistry from '@deepseek-ai/dsh-workspace'
+import Loader from '@deepseek-ai/cordis-plugin-loader'
+import Group from '@deepseek-ai/cordis-plugin-group'
+import AgentPresets from '@deepseek-ai/dsh-agent-preset-registry'
+import SessionController from '@deepseek-ai/dsh-api-session-controller'
+import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
+import BashLocal from '@deepseek-ai/dsh-bash-local'
+import SubprocessLocal from '@deepseek-ai/dsh-subprocess-local'
+import { ShellEnvRegistry } from '@deepseek-ai/dsh-shell-env'
+import * as AgentInstructions from '@deepseek-ai/dsh-agent-instructions'
+import PermissionPresets from '@deepseek-ai/dsh-permission-presets'
+import SandboxPolicy, { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
+import Approval, { setApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
 import A2d2Service from '../src/index.ts'
 import * as runtimePlugin from '../src/task-runtime.ts'
 import { RuntimeStore } from '../src/task-runtime/store.ts'
@@ -31,16 +43,23 @@ class Query extends SessionQuery {
   async searchSessions(): Promise<never> { throw new Error('search is outside this fixture') }
   async searchEvents(): Promise<never> { throw new Error('search is outside this fixture') }
 }
+/** The raw subprocess executor has full host access; containment is not this fixture's subject. */
+class FullAccessTestShell extends BashLocal {
+  override get sandboxMode() { return 'danger-full-access' as const }
+}
 class Adapter extends LlmAdapter {
   calls = 0
   text = 'New work'
   nextTool?: string
+  nextToolArgs: Record<string, unknown> = {}
+  requests: GenerateOptions[] = []
   hang = false
   beforeResponse?: (request: GenerateOptions) => Promise<void>
   async listModels(provider: string) { return [{ provider, id: 'model', name: 'Model' }] }
   async resolveModel(provider: string, model: string) { return { provider, id: model, name: model } }
   async *stream(_request: GenerateOptions): AsyncIterable<StreamChunk> {
     this.calls++
+    this.requests.push(_request)
     await this.beforeResponse?.(_request)
     if (this.hang) {
       await new Promise<void>((_resolve, reject) => {
@@ -53,8 +72,9 @@ class Adapter extends LlmAdapter {
       this.nextTool = undefined
       const id = ToolCallId('fixture-call')
       yield { type: 'block-start', index: 0, blockType: 'tool-call' }
-      yield { type: 'tool-call-delta', index: 0, id, name, argumentsDelta: '{}' }
-      yield { type: 'block-end', index: 0, block: { type: 'tool-call', id, name, arguments: '{}' } }
+      const args = JSON.stringify(this.nextToolArgs)
+      yield { type: 'tool-call-delta', index: 0, id, name, argumentsDelta: args }
+      yield { type: 'block-end', index: 0, block: { type: 'tool-call', id, name, arguments: args } }
       yield { type: 'finish', reason: { kind: 'tool-calls' } }
       return
     }
@@ -75,7 +95,7 @@ async function root() {
   roots.push(path)
   return path
 }
-async function mount(path: string, enabled = true, adapter = new Adapter()) {
+async function mount(path: string, enabled = true, adapter = new Adapter(), withPresets = false) {
   const ctx = new Context()
   contexts.push(ctx)
   await ctx.plugin(LlmRuntime)
@@ -94,26 +114,68 @@ async function mount(path: string, enabled = true, adapter = new Adapter()) {
   await ctx.plugin(WorkspaceRegistry)
   await ctx.plugin(StubCommands)
   const selections: string[] = []
-  ctx.provide('sessionController', {
+  const localSelection = async (request: { sessionId: SessionId; provider: string; model: string }) => {
+    const agent = ctx.agents.get(request.sessionId)!
+    selections.push(request.sessionId)
+    agent.ctx.on('agent/request', async (_payload, next) => ({ ...await next(), provider: request.provider, model: request.model }))
+    return { selected: { provider: request.provider, model: request.model } }
+  }
+  if (withPresets) {
+    ctx.baseUrl = new URL('../', import.meta.url).href
+    await ctx.plugin(Loader)
+    ctx.loader.builtins.group = Group
+    ctx.provide('typert', { lookups: { configure: () => () => {} }, contexts: { configureHost: () => () => {} } } as never)
+    ctx.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'fixture', model: 'model' }), saveSelection: async () => {} } as never)
+    ctx.provide('fileUploads', { registerAgentResolver: () => () => {} } as never)
+    ctx.provide('attachments', { imageLimits: { maxImageBytes: 5242880, maxImagesPerMessage: 20, maxMessageImageBytes: 41943040,
+      maxImagePixels: 40000000, maxImageDimension: 2000, mediaTypes: ['image/png'] } } as never)
+    await ctx.plugin(LocalFileSystem, { cwd: path })
+    await ctx.plugin(SubprocessLocal)
+    await ctx.plugin(FullAccessTestShell, { cwd: path })
+    await ctx.plugin(ShellEnvRegistry)
+    await ctx.plugin(SandboxPolicy, { mode: 'danger-full-access', workspaceRoot: path })
+    await ctx.plugin(Approval, { policy: 'never' })
+    await ctx.plugin(PermissionPresets, { defaultPreset: 'danger-full-access' })
+    await ctx.plugin(AgentInstructions, { maxBytes: 32768, dshHome: join(path, 'home') })
+    await ctx.plugin(AgentPresets, { default: 'minimal' })
+    await ctx.agentPresets.register({ id: 'minimal', plugins: [] })
+    await ctx.agentPresets.register({ id: 'workspace-agent', plugins: [
+      { name: import.meta.resolve('@deepseek-ai/dsh-tool-fs') },
+      { name: import.meta.resolve('@deepseek-ai/dsh-tool-bash') },
+    ] })
+    // Real create/resolve/preset setup. The published rc.2 lacks the host's
+    // newer local selector; its existing public-request fixture stays local.
+    const api = new SessionController(ctx, { nativeOpen: false })
+    Object.defineProperty(api, 'selectLocalModel', { value: localSelection, configurable: true, writable: true })
+  } else ctx.provide('sessionController', {
+    async create(request: { sessionId: SessionId; cwd?: string; workspaceId?: string }) {
+      const workspace = request.workspaceId ? ctx.workspaceRegistry.get(request.workspaceId as never) : undefined
+      let agent = ctx.agents.get(request.sessionId)
+      if (!agent) agent = (await ctx.sessionPersistence.stat(request.sessionId))
+        ? (await ctx.agents.resume({ resumeSessionId: request.sessionId, agentOptions: { provider: 'fixture', model: 'model' } })).agent
+        : (await ctx.agents.create({ sessionId: request.sessionId, meta: { cwd: workspace?.path ?? request.cwd } })).agent
+      if (workspace) await workspace.attachSession(agent.id)
+      return { sessionId: agent.id }
+    },
     async resolveAgent(sessionId: SessionId) {
       return { agent: ctx.agents.get(sessionId) ?? (await ctx.agents.resume({ resumeSessionId: sessionId, agentOptions: { provider: 'fixture', model: 'model' } })).agent }
     },
-    async selectLocalModel(request: { sessionId: SessionId; provider: string; model: string }) {
-      const agent = ctx.agents.get(request.sessionId)!
-      selections.push(request.sessionId)
-      agent.ctx.on('agent/request', async (_payload, next) => ({ ...await next(), provider: request.provider, model: request.model }))
-      return { selected: { provider: request.provider, model: request.model } }
-    },
+    selectLocalModel: localSelection,
   } as never)
   await ctx.plugin(A2d2Service, { root: path, stageAgents: { agents: { ceo: ['fixture/model'] } } as never })
   await ctx.plugin(runtimePlugin, { enabled, homeDir: join(path, 'runtime'), pollMs: 3600000, maxAutoTurns: 8, maxFailures: 3 })
   const runner = ctx.a2d2TaskRuntime.runner
-  return { ctx, runner, adapter, selections, path }
+  return { ctx, runner, adapter, selections, path, withPresets }
 }
 type Harness = Awaited<ReturnType<typeof mount>>
 async function initial(h: Harness) {
-  const { agent } = await h.ctx.agents.create({ sessionId: SessionId('session-original'), meta: { cwd: h.path }, agentOptions: { provider: 'fixture', model: 'model' } })
   const workspace = await h.ctx.workspaceRegistry.create(h.path)
+  let agent: Agent
+  if (h.withPresets) {
+    const created = await h.ctx.sessionController.create({ sessionId: SessionId('session-original'), workspaceId: workspace.id, agentPreset: 'minimal' })
+    agent = h.ctx.agents.get(created.sessionId)!
+    await h.ctx.agentPresets.select(agent, 'workspace-agent')
+  } else agent = (await h.ctx.agents.create({ sessionId: SessionId('session-original'), meta: { cwd: h.path }, agentOptions: { provider: 'fixture', model: 'model' } })).agent
   await workspace.attachSession(agent.id)
   await h.ctx.a2d2.bindMainSession({ cwd: h.path, issue: 112, mainSession: agent.id, now: new Date() })
   return agent
@@ -135,6 +197,56 @@ async function rotate(h: Harness, agent: Agent) {
 }
 
 describe('task runtime over real DSH loop, JSONL persistence, query and workspace services', () => {
+  it.each(['workspace-write', 'custom'] as const)('creates successors and subtasks through real preset setup with %s permissions', async permission => {
+    const path = await root()
+    await writeFile(join(path, 'AGENTS.md'), 'PRESET_RULE_112: read the acceptance file before acting.\n')
+    const h = await mount(path, true, new Adapter(), true)
+    const source = await initial(h)
+    if (permission === 'custom') {
+      setSandboxMode(source.session, 'read-only')
+      setApprovalPolicy(source.session, 'never')
+    } else h.ctx.permissionPresets.set(source.session, permission)
+    expect(h.ctx.permissionPresets.current(source.session)).toBe(permission)
+    expect(source.session.header.agentPreset).toBe('minimal')
+    expect(h.ctx.agentPresets.composedPreset(source.ctx)).toBe('workspace-agent')
+    await h.runner.start(path, source.id)
+    await source.whenIdle()
+    const record = await h.runner.control(path, source.id, 'rotate')
+    await source.whenIdle()
+    expect((await h.runner.store.read(record))?.operation?.step, JSON.stringify(await h.runner.store.read(record))).toBe('write')
+    await fill(h, source.id)
+    await h.runner.tick(record)
+    const successorId = (await h.runner.store.read(record))!.current
+    expect(successorId, JSON.stringify(await h.runner.store.read(record))).not.toBe(source.id)
+    h.adapter.nextTool = 'read'
+    h.adapter.nextToolArgs = { file_path: join(path, 'AGENTS.md') }
+    await h.runner.tick(record)
+    const successor = await h.runner.host.agent(successorId)
+    await successor.whenIdle()
+    expect(successor.session.header.agentPreset).toBe('workspace-agent')
+    expect(h.ctx.agentPresets.composedPreset(successor.ctx)).toBe('workspace-agent')
+    expect(h.ctx.permissionPresets.current(successor.session)).toBe(permission)
+    expect(h.ctx.sandboxPolicy.resolve({ session: successor.session })).toMatchObject({ mode: permission === 'custom' ? 'read-only' : 'workspace-write' })
+    expect(h.ctx.approval.overrideOf(successor.session)).toBe(permission === 'custom' ? 'never' : 'ask')
+    const request = h.adapter.requests.at(-1)!
+    expect(request.tools?.map(tool => tool.name)).toEqual(expect.arrayContaining(['read', 'write', 'edit', 'bash']))
+    expect(JSON.stringify(request.messages)).toContain('PRESET_RULE_112')
+    const reads = (await h.runner.host.events(successor.id)).filter(event => event.type === 'tool/result')
+    expect(reads.some(event => !event.data.message.isError && JSON.stringify(event.data.message.content).includes('PRESET_RULE_112'))).toBe(true)
+    h.adapter.nextTool = 'bash'
+    h.adapter.nextToolArgs = { command: 'printf preset-subtask', description: 'Print the preset subtask verification marker' }
+    const opened = await h.ctx.a2d2.openSubtask({ cwd: path, caller: successor.id, issue: 113, now: new Date() })
+    const child = await h.runner.host.agent(opened.session)
+    await child.whenIdle()
+    expect(child.session.header.agentPreset).toBe('workspace-agent')
+    expect(h.ctx.permissionPresets.current(child.session)).toBe(permission)
+    expect(h.ctx.workspaceRegistry.get(record.workspace as never)?.sessionIds).toContain(child.id)
+    const childEvents = await h.runner.host.events(child.id)
+    expect(childEvents.some(event => event.type === 'tool/result' && !event.data.message.isError
+      && JSON.stringify(event.data.message.content).includes('preset-subtask')), JSON.stringify(childEvents.filter(event => event.type === 'tool/result').map(event => event.data))).toBe(true)
+    expect(JSON.stringify(h.adapter.requests.at(-1)!.messages)).toContain('PRESET_RULE_112')
+  })
+
   it('wakes a persisted unconsumed handoff after reconstruction without adding a second model message', async () => {
     const path = await root()
     let h = await mount(path)

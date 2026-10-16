@@ -8,7 +8,7 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { parseCommand } from '@deepseek-ai/dsh-commands'
 import type { CommandDefinition, CommandInvocation } from '@deepseek-ai/dsh-commands'
@@ -52,6 +52,7 @@ type CommandResult = Awaited<ReturnType<CommandDefinition['handler']>>
 type StubAgent = ReturnType<typeof stubAgent>
 
 interface Harness {
+  readonly ctx: Context
   readonly service: A2d2Service
   readonly agent: StubAgent
   registered(): readonly CommandDefinition[]
@@ -95,6 +96,7 @@ async function harness(root: string, cwd = root): Promise<Harness> {
   }
 
   return {
+    ctx,
     service: ctx.a2d2,
     agent,
     registered: () => commands().registered(),
@@ -141,6 +143,18 @@ async function writeSummary(path: string, summary: string): Promise<void> {
 }
 
 describe('/handoff registration', () => {
+  it('refuses the manual flow for a managed task without scheduling a second driver', async () => {
+    const h = await harness(await tempRoot())
+    const control = vi.fn()
+    h.ctx.provide('a2d2TaskRuntime', { runner: { status: async () => ({ current: source }), control } } as never)
+    const prepare = vi.spyOn(h.service, 'prepareHandoff')
+    const result = await h.invoke('carry the work')
+    expect(result).toMatchObject({ kind: 'error', text: expect.stringContaining('/task-runtime rotate') })
+    expect(control).not.toHaveBeenCalled()
+    expect(prepare).not.toHaveBeenCalled()
+    expect(h.agent.followup).not.toHaveBeenCalled()
+  })
+
   it('advertises the command and its input syntax', async () => {
     const root = await tempRoot()
     const { registered } = await harness(root)

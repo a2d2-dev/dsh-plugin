@@ -501,7 +501,7 @@ sessions:
 /task-runtime resume
 ```
 
-`run` 是 `start` 的别名；重复 start 不重复启动。普通 bind 不启动运行器。managed `/handoff` 请求运行器交接，手动 take 不能绕开执行权。后台与浏览器连接无关，在重启时只恢复 homeDir 中已显式登记的任务。
+`run` 是 `start` 的别名；重复 start 不重复启动。普通 bind 不启动运行器。managed `/handoff` 明确拒绝且不调度交接，提示改用 `/task-runtime rotate`；既有 orb 会在 prepare 失败处停止，不创建额外后继。未启用运行器的手动交接保持原行为，手动 take 不能绕开执行权。后台与浏览器连接无关，在重启时只恢复 homeDir 中已显式登记的任务。
 
 `running` 默认继续 active 任务；`waiting-human` 等 LF 回复或 resume（期间外部事件保留），`waiting-event` 等任务事件，`paused` 暂停，`blocked` 表示有限重试或无进展检查失败，`done` 完成。`task_runtime` 模型工具可以报告 continue、wait-human、wait-event、rotate；实际提问、未结算原生子代理、活动子任务和 GitHub watch 也会阻止空推。`complete_task` 仅更新插件任务状态，不关闭 GitHub issue。
 
@@ -510,3 +510,5 @@ sessions:
 恢复时会区分消息已排队与已被模型消费，并通过公开 Agent API 唤醒持久队列，不要求 LF 追加消息。事件先写入 homeDir 下独立 inbox，再并入运行记录；慢交接不占用入箱锁。GitHub 注册返回已结束或失败时，运行器不会把它当作仍需等待的 watch。
 
 每次交接先保存后继 ID，通过公开宿主 API 创建/恢复、继承 workspace、设置 CEO 会话本地模型、接任和投递接续内容。旧会话在 `agent/pre-step` 被拒绝执行。交接期间 GitHub 和子任务事件保存在任务收件箱，接任后投递。消息 ID 先落盘，重试回读会话日志与 inbox 去重；这不是跨存储的绝对一次事务。进展指纹是工具结果/回答的启发式比较，不能代替验收。文件锁限同机器同 PID 命名空间；断电持久性和跨主机共享不在本期承诺内。详见 ADR 0011。
+
+运行器后继与 `open_subtask` 使用公开 `sessionController.create` 创建/接续根会话，继承源会话当前 Agent preset 和 workspace，由宿主在发布会话前装配文件、shell 等工具及提示词。交接在创建前持久化选定 preset 与权限配置，重试保持相同身份；CEO 模型仍使用会话本地选择。继承命名权限 preset 及实际 sandbox/approval 配置（包括 custom），不继承单次审批结果，不写宿主全局默认。

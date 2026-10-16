@@ -35,6 +35,9 @@ afterEach(async () => {
 
 class StubAgents extends Service {
   readonly created: CreateAgentOptions[] = []
+  readonly live = new Map<SessionId, Agent>()
+  readonly selected: unknown[] = []
+  get(id: SessionId) { return this.live.get(id) }
   readonly followups: Array<{ readonly sessionId: SessionId; readonly text: string; readonly sourceKind: string }> = []
 
   constructor(ctx: Context) {
@@ -52,8 +55,22 @@ class StubAgents extends Service {
         this.followups.push({ sessionId: options.sessionId, text, sourceKind: message.source.kind })
       }),
     } as unknown as Agent
+    this.live.set(agent.id, agent)
     return { agent, dispose: async () => {} }
   }
+}
+
+function controller(ctx: Context, root: string): void {
+  const agents = ctx.get('agents') as unknown as StubAgents
+  agents.live.set(parentSession, stubAgent(root, parentSession))
+  ctx.provide('sessionController', {
+    async create(request: { sessionId: SessionId; cwd: string }) {
+      const { agent } = await agents.create({ sessionId: request.sessionId, meta: { cwd: request.cwd } })
+      return { sessionId: agent.id }
+    },
+    async resolveAgent(id: SessionId) { return { agent: agents.get(id) } },
+    async selectLocalModel(request: unknown) { agents.selected.push(request); return { selected: request } },
+  } as never)
 }
 
 class StubLlm extends Service {
@@ -79,6 +96,7 @@ async function mount(
   const ctx = new Context()
   await ctx.plugin(StubAgents)
   await ctx.plugin(StubLlm)
+  controller(ctx, root)
   await ctx.plugin(A2d2Service, { root, ...(stageAgents === undefined ? {} : { stageAgents: stageAgents as never }) })
   return { ctx, service: ctx.a2d2, agents: ctx.get('agents') as unknown as StubAgents }
 }
@@ -96,8 +114,8 @@ describe('openSubtask', () => {
     expect(agents.created[0]).toMatchObject({
       sessionId: opened.session,
       meta: { cwd: root },
-      agentOptions: { provider: 'codex', model: 'gpt-6' },
     })
+    expect(agents.selected[0]).toEqual({ sessionId: opened.session, provider: 'codex', model: 'gpt-6' })
     expect(agents.created[0]).not.toHaveProperty('parentAgent')
     expect(agents.followups).toEqual([{
       sessionId: opened.session,
@@ -139,9 +157,9 @@ describe('openSubtask', () => {
     const opened = await service.openSubtask({ cwd: root, caller: parentSession, issue: 49, now: new Date('2026-10-01T11:00:00.000Z') })
 
     expect(opened.model).toEqual({ provider: 'codex', model: 'gpt-6' })
-    expect(agents.created[0]).toMatchObject({
+    expect(agents.selected[0]).toMatchObject({
       sessionId: opened.session,
-      agentOptions: { provider: 'codex', model: 'gpt-6' },
+      provider: 'codex', model: 'gpt-6',
     })
   })
 
@@ -173,6 +191,7 @@ describe('open_subtask tool', () => {
     await ctx.plugin(StubTools)
     await ctx.plugin(StubAgents)
     await ctx.plugin(StubLlm)
+    controller(ctx, root)
     await ctx.plugin(A2d2Service, { root })
     await ctx.plugin(openSubtaskToolsPlugin)
     await ctx.a2d2.bindMainSession({ cwd: root, issue: 41, mainSession: parentSession, now: new Date('2026-10-01T10:00:00.000Z') })
