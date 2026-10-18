@@ -1,0 +1,33 @@
+{
+  "default": {
+    "provider": "codex",
+    "model": "gpt-6.1-sol",
+    "reasoningEffort": "high"
+  },
+  "agents": {
+    "ceo": [
+      {
+        "route": "codex/gpt-6.1-sol",
+        "reasoningEffort": "xhigh"
+      }
+    ],
+    "engineer": [
+      {
+        "route": "codex/gpt-6.1-sol",
+        "reasoningEffort": "medium"
+      }
+    ],
+    "reviewer": [
+      {
+        "route": "codex/gpt-6.1-sol",
+        "reasoningEffort": "xhigh"
+      }
+    ]
+  },
+  "consult": [
+    {
+      "route": "codex/gpt-6.1-sol",
+      "reasoningEffort": "xhigh"
+    }
+  ]
+}

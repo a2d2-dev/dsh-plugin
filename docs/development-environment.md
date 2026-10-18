@@ -26,6 +26,8 @@ DSH 当前的 CLI 禁止 `--host 0.0.0.0`，webserver 配置也不接受直接�
 
 模型配置从生产 profile 按条目复制：`llm-pi-ai`、`agent-default-model`、`ui-settings-general`、`a2d2`、`typert-gateway`。解析使用项目的 `yaml` 包，保证 YAML 1.2 下模型 reasoning effort 的 `off` 键仍是字符串。生产 `a2d2.root` 被改为开发项目路径。
 
+开发环境默认模型及 A²D² 的 CEO、工程师、评审、咨询统一使用 `codex/gpt-6.1-sol`。reasoning effort 分别为：默认会话 `high`、CEO `xhigh`、工程师 `medium`、评审 `xhigh`、咨询 `xhigh`。历史会话保留自己的模型选择；验收须核对实际 `request/header`，不能只看 profile 默认值。[Codex 派发验收](artifacts/codex-dispatch-2026-10-18/REPORT.md)记录了父会话和子代理的真实路由及完成通知。
+
 开发 profile 的 bundle 列表仅为 `@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app`、`dsh-a2d2`。`a2d2-github-watch` 显式 disabled；未挂载 Feishu、notifier、远端 OAuth 或生产定时任务 bundle。目录选择器使用 `@deepseek-ai/dsh-host-directory-picker-browse`，可以在远程浏览器选择开发项目。
 
 `.credentials.yaml` 和 `web-password` 是私有独立文件副本，权限 `0600`，没有 symlink 或 hardlink 到生产。复制凭据后删除开发副本的 `records.client-connection/browser-session`，由开发实例生成独立浏览器签名，避免不同端口的 cookie 互认。开发登录口令初始与生产相同，之后可独立修改 `/data/_dsh-dev/web-password` 并重启开发服务。`service-env.json` 只允许 `DEEPSEEK_API_KEY` 键；启动器拒绝其他键。不要把这些文件、浏览器 cookie 或完整配置 dump 提交到 Git。

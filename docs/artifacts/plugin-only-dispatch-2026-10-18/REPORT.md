@@ -1,5 +1,7 @@
 # A²D² 插件独立修复、合并与开发部署
 
+后续状态：LF 要求统一使用 Codex 后，已用新的 Codex 父会话完成真实派发与自动结算回传。详见 [Codex 验收报告](../codex-dispatch-2026-10-18/REPORT.md)。下文保留此前 DS Flash 余额不足的现场记录。
+
 ## 当前结果与范围
 
 插件修复 PR [#117](https://github.com/a2d2-dev/dsh-plugin/pull/117) 已合并到一期分支，开发环境已加载提交 `6c9ccb6f0d5d2caea7275fc798caf36436af4f69`，入口为 <http://10.126.126.12:18780/>。一期 PR #114 与开发部署 PR #113 按 LF 的合并部署指令收尾，目标为原定插件基线分支 `baseline/dsh-production-20261015`。
