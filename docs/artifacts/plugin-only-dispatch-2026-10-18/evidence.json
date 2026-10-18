@@ -1,0 +1,30 @@
+{
+  "deployed_commit": "6c9ccb6f0d5d2caea7275fc798caf36436af4f69",
+  "merged_pr": "https://github.com/a2d2-dev/dsh-plugin/pull/117",
+  "entry": "http://10.126.126.12:18780/",
+  "runtime_commit": "a45068d2ec03326c800c68c9bdcd47508e3ccb9c",
+  "runtime_version": "0.2.0-rc.2",
+  "runtime_source_sha256": {
+    "packages/api/session-controller/src/index.ts": "8ab5d8493477a6addb2d8ebc25f2ed46ec94ce09590ee7af1591732d0aa2507f",
+    "packages/api/session-controller/src/commands.ts": "afe09b990001a29397287ac47c571d784f0dcb7b4810d3bcad4ab7583a968e62"
+  },
+  "session": "session-f9408283-4f76-48e4-9703-7d9da47112a4",
+  "parent_model": {
+    "provider": "deepseek-official",
+    "model": "deepseek-flash",
+    "reasoningEffort": "high"
+  },
+  "available_dispatch_tool": true,
+  "tool_calls": 0,
+  "turn_end": {
+    "kind": "error",
+    "code": "QUOTA",
+    "status": 402
+  },
+  "child_dispatch_and_parent_notification": "not reached: parent request rejected for insufficient balance",
+  "services": [
+    "dsh-dev-web-server               RUNNING   pid 1423918, uptime 0:03:31",
+    "dsh-dev-web-proxy                RUNNING   pid 4462, uptime 22:04:20",
+    "dsh-web-server                   RUNNING   pid 931642, uptime 2:11:02"
+  ]
+}
