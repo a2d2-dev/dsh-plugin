@@ -1,0 +1,61 @@
+{
+  "entry": "http://10.126.126.12:18780/",
+  "parent": "session-a5137720-247a-49e5-a04b-3d8bcd6e39fe",
+  "child": "session-37302b02-f8a7-4fcd-a520-589b2299969b",
+  "parent_routes": [
+    {
+      "provider": "codex",
+      "model": "gpt-6.1-sol",
+      "reasoningEffort": "high"
+    },
+    {
+      "provider": "codex",
+      "model": "gpt-6.1-sol",
+      "reasoningEffort": "high"
+    }
+  ],
+  "child_routes": [
+    {
+      "provider": "codex",
+      "model": "gpt-6.1-sol",
+      "reasoningEffort": "medium"
+    }
+  ],
+  "child_tools": [
+    "send_message"
+  ],
+  "parent_notices": [
+    {
+      "seq": 60,
+      "source": "agent-message",
+      "text": [
+        "Agent session-37302b02-f8a7-4fcd-a520-589b2299969b sent a message: ",
+        "DISPATCH_PLUGIN_ONLY_20261018_OK"
+      ]
+    },
+    {
+      "seq": 68,
+      "source": "subagent-settled",
+      "text": [
+        "Background subagent session-37302b02-f8a7-4fcd-a520-589b2299969b finished and will do no further work unless you send it more.",
+        "Its closing message:",
+        "DISPATCH_PLUGIN_ONLY_20261018_OK"
+      ]
+    }
+  ],
+  "parent_confirmation": [
+    {
+      "seq": 61,
+      "text": [
+        "PARENT_RECEIVED_DISPATCH_PLUGIN_ONLY_20261018_OK"
+      ]
+    },
+    {
+      "seq": 69,
+      "text": [
+        "PARENT_RECEIVED_DISPATCH_PLUGIN_ONLY_20261018_OK"
+      ]
+    }
+  ],
+  "result": "passed on existing DSH 0.2.0 development host"
+}
