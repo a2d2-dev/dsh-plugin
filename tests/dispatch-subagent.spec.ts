@@ -83,15 +83,15 @@ describe('dispatchSubagent', () => {
     await expect(service.dispatchSubagent(request)).resolves.toMatchObject({
       model: route, reasoningEffort: 'medium', agent: 'engineer',
     })
-    expect(subagents.startContinuable.mock.calls[0]?.[0].request.agentOptions).toEqual({
+    expect(subagents.startActivation.mock.calls[0]?.[0].request.agentOptions).toEqual({
       provider: 'claude-bray', model: 'claude-opus-5-5', reasoningEffort: 'medium',
     })
     replaceStageAgents(service, stageAgents('engineer', [{ route, reasoningEffort: 'low' }]))
     await service.dispatchSubagent(request)
-    expect(subagents.startContinuable.mock.calls[1]?.[0].request.agentOptions).toHaveProperty('reasoningEffort', 'low')
+    expect(subagents.startActivation.mock.calls[1]?.[0].request.agentOptions).toHaveProperty('reasoningEffort', 'low')
     replaceStageAgents(service, stageAgents('engineer', [{ route, reasoningEffort: 'invalid' }]))
     await expect(service.dispatchSubagent(request)).rejects.toThrow(/does not support reasoning effort/)
-    expect(subagents.startContinuable).toHaveBeenCalledTimes(2)
+    expect(subagents.startActivation).toHaveBeenCalledTimes(2)
   })
 
   it('starts a child with the stage Agent first model candidate present in the model catalog', async () => {
@@ -116,9 +116,10 @@ describe('dispatchSubagent', () => {
     expect(result).toMatchObject({ model: 'codex/gpt-5.5', agent: 'engineer' })
     expect(result.session).toMatch(/^session-/u)
     await expect(service.agentOfSession(root, result.session)).resolves.toBe('engineer')
-    expect(subagents.startContinuable).toHaveBeenCalledOnce()
-    expect(subagents.startContinuable).toHaveBeenCalledWith(expect.objectContaining({
+    expect(subagents.startActivation).toHaveBeenCalledOnce()
+    expect(subagents.startActivation).toHaveBeenCalledWith(expect.objectContaining({
       provider: 'spawn',
+      delivery: 'parent',
       label: 'implement #48',
       childId: result.session,
       request: expect.objectContaining({
@@ -127,7 +128,7 @@ describe('dispatchSubagent', () => {
         agentOptions: { provider: 'codex', model: 'gpt-5.5' },
       }),
     }))
-    expect(subagents.startContinuable.mock.calls[0]?.[0].request).not.toHaveProperty('persona')
+    expect(subagents.startActivation.mock.calls[0]?.[0].request).not.toHaveProperty('persona')
   })
 
   it('does not pass project Agent configuration through the DSH persona field', async () => {
@@ -148,7 +149,7 @@ describe('dispatchSubagent', () => {
 
     expect(result).toMatchObject({ model: 'codex/reviewer', agent: 'reviewer' })
     await expect(service.agentOfSession(root, result.session)).resolves.toBe('reviewer')
-    expect(subagents.startContinuable.mock.calls[0]?.[0].request).not.toHaveProperty('persona')
+    expect(subagents.startActivation.mock.calls[0]?.[0].request).not.toHaveProperty('persona')
   })
 
   it('does not treat missing project Agent configuration as a dispatch failure', async () => {
@@ -165,7 +166,7 @@ describe('dispatchSubagent', () => {
       parent,
       signal: new AbortController().signal,
     })).resolves.toMatchObject({ model: 'codex/gpt-5.5', agent: 'engineer' })
-    expect(subagents.startContinuable).toHaveBeenCalledOnce()
+    expect(subagents.startActivation).toHaveBeenCalledOnce()
   })
 
   it('rejects a caller that is not the project task issue main session', async () => {
@@ -180,7 +181,7 @@ describe('dispatchSubagent', () => {
       parent: stubAgent(root, SessionId('session-other')),
       signal: new AbortController().signal,
     })).rejects.toThrow(/not the main session/)
-    expect(subagents.startContinuable).not.toHaveBeenCalled()
+    expect(subagents.startActivation).not.toHaveBeenCalled()
   })
 
   it.each(['constructor', '__proto__', 'toString'])('rejects %s as an unknown stage before model selection', async (stage) => {
@@ -197,7 +198,7 @@ describe('dispatchSubagent', () => {
       parent,
       signal: new AbortController().signal,
     })).rejects.toThrow(`unknown stage "${stage}"`)
-    expect(subagents.startContinuable).not.toHaveBeenCalled()
+    expect(subagents.startActivation).not.toHaveBeenCalled()
   })
 
   it('uses the changed stage Agent table on the next dispatch', async () => {
@@ -224,8 +225,8 @@ describe('dispatchSubagent', () => {
       signal: new AbortController().signal,
     })
 
-    expect(subagents.startContinuable.mock.calls[0]?.[0].request.agentOptions).toEqual({ provider: 'codex', model: 'old' })
-    expect(subagents.startContinuable.mock.calls[1]?.[0].request.agentOptions).toEqual({ provider: 'codex', model: 'new' })
+    expect(subagents.startActivation.mock.calls[0]?.[0].request.agentOptions).toEqual({ provider: 'codex', model: 'old' })
+    expect(subagents.startActivation.mock.calls[1]?.[0].request.agentOptions).toEqual({ provider: 'codex', model: 'new' })
   })
 })
 
