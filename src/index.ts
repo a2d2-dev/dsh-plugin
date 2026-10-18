@@ -17,6 +17,7 @@ import { randomUUID } from 'node:crypto'
 import { basename, isAbsolute, join } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SubagentRuntime } from '@deepseek-ai/dsh-subagent'
 import type { Agent, AgentRegistry } from '@deepseek-ai/dsh-agent'
 import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed, MessageSource } from '@deepseek-ai/dsh-llm'
@@ -474,19 +475,7 @@ type LlmRuntime = {
   resolveModelInfo(provider: string, model: string): Promise<CandidateModelInfo>
 }
 
-type SubagentsRuntime = {
-  startContinuable(spec: {
-    readonly provider: string
-    readonly label: string
-    readonly childId?: SessionId
-    readonly request: {
-      readonly prompt: readonly { readonly type: 'text'; readonly text: string }[]
-      readonly parent: Agent
-      readonly agentOptions: { readonly provider: string; readonly model: string; readonly reasoningEffort?: string }
-    }
-    readonly signal: AbortSignal
-  }): Promise<{ readonly childId: SessionId }>
-}
+type SubagentsRuntime = Pick<SubagentRuntime, 'startActivation'>
 
 /**
  * Task aggregation over project-local documents.
@@ -897,12 +886,13 @@ export class A2d2Service extends Service {
       `stage "${request.stage}" Agent "${configuredAgent}"`,
       modelCandidatesForStage(settings, request.stage),
     )
-    const route = candidateSelection(model)
+    const { reasoningEffort, ...selection } = candidateSelection(model)
+    const route = { ...selection, ...(reasoningEffort === undefined ? {} : { reasoningEffort: ReasoningEffortId(reasoningEffort) }) }
     const childId = brandString<SessionId>(`session-${randomUUID()}`)
     await this.recordSessionAgent(cwd, childId, configuredAgent)
     const subagents = this.getService<SubagentsRuntime>('subagents')
     if (subagents === undefined) throw new Error('a2d2: subagents service is unavailable')
-    const started = await subagents.startContinuable({
+    const started = await subagents.startActivation({
       provider: 'spawn',
       label: `${request.stage} #${issue}`,
       childId,
@@ -912,6 +902,10 @@ export class A2d2Service extends Service {
         agentOptions: route,
       },
       signal: request.signal,
+      delivery: 'parent',
+    })
+    void started.result.catch((error: unknown) => {
+      this.ctx.logger.error(`a2d2: subagent "${started.childId}" result failed: ${String(error)}`)
     })
     return { session: started.childId, model: candidateRoute(model), agent: configuredAgent,
       ...(route.reasoningEffort === undefined ? {} : { reasoningEffort: route.reasoningEffort }) }

@@ -202,7 +202,7 @@ sessions:
 `dispatch_subagent` 从调用它的主会话派出一个可续跑子代理。参数是 `stage`、`issue` 与 `prompt`；父 Agent、会话 id、cwd 与取消信号取自工具执行上下文。工具只把这些转交给 `ctx.a2d2.dispatchSubagent`，规则都在服务里：
 
 - 只有任务 issue 当前的主会话能派子代理；普通会话会被拒绝。
-- 子代理使用 DSH 的 fresh `spawn` 可续跑 provider。
+- 子代理使用 DSH 0.2.1 的 `startActivation` 与 `spawn` provider，明确指定 `delivery: 'parent'`，完成结果通知父会话。模型与推理强度通过 `request.agentOptions` 传入；结果获取失败会记录错误，不产生未捕获异常。
 - 阶段先映射到 `ceo`、`engineer` 或 `reviewer`；模型取该 Agent 候选中第一个存在于 DSH 宿主模型目录的 `provider/model`，派发时只读一次，因此 settings 改动影响下一次调用，也不会出现返回 Agent 与选模型所用 Agent 不一致。
 - 子会话 id 会预先生成，并在 DSH 创建子代理前记录为该阶段 Agent，使 `agent-prompt` 行能把工程师/评审配置装配进子会话首轮系统提示词。`dispatch_subagent` 不再通过 DSH `persona` 字段传入项目 Agent 配置。
 - 返回值给出子代理会话 id、实际 `provider/model` 与所用阶段 Agent（`ceo`、`engineer` 或 `reviewer`）。
@@ -486,3 +486,5 @@ sessions:
 - **子代理后代是懒加载的** —— 目录按父会话发布，因此新发现的分支会在面板可见且该父目录刷新后出现。
 - **路由取自子会话自己的最新 `request/header`** —— 子代理发起首次请求前该行显示未知；列表也永远无法报告一个子代理"此刻"在跑什么，只能报告它最近一次请求用了什么路由。
 - **目录是请求/响应，不是流** —— 新派出的子代理最多 5 秒后才出现在表内，而 Tab 不可见时不刷新。
+
+会话 ID 兼容旧式 `session-…` 与 Team 生成的 UUID，保留原始 ID，并拒绝路径语法。会话 Agent 初始化要求宿主提供 `sessionController.selectLocalModel`：校验并安装目标会话模型，但不保存默认模型。

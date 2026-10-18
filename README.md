@@ -202,7 +202,7 @@ Every push is `ctx.notifier.push({ title, content, level }, { sourceName: 'dsh-a
 `dispatch_subagent` dispatches a continuable child subagent from the calling main session. Its parameters are `stage`, `issue`, and `prompt`; the parent Agent, session id, cwd, and cancellation signal come from the tool execution context. The tool only hands these to `ctx.a2d2.dispatchSubagent`, which owns the rules:
 
 - Only a task issue's current main session can dispatch; ordinary sessions are refused.
-- The child uses DSH's fresh `spawn` continuable provider.
+- The child uses DSH 0.2.1's `startActivation` with the `spawn` provider and `delivery: 'parent'`, so completion is delivered to the parent session. Model and reasoning effort are passed in `request.agentOptions`. Activation result failures are logged without an unhandled rejection.
 - The stage maps to `ceo`, `engineer`, or `reviewer`; the child model is that Agent's first `provider/model` candidate that is present in DSH's host model catalog, read once at dispatch time so a settings change affects the next call without making the returned Agent disagree with the selected model.
 - The child session id is preallocated and recorded as that stage Agent before DSH creates the child, so the `agent-prompt` row can assemble engineer/reviewer configuration into the child's first system prompt. `dispatch_subagent` never passes project Agent configuration through DSH's `persona` field.
 - The result returns the child session id, the actual `provider/model`, and the stage Agent used (`ceo`, `engineer`, or `reviewer`).
@@ -486,3 +486,5 @@ None. No session's request content changes.
 - **Subagent descendants are lazy** — the catalog is published per parent, so a newly discovered branch appears after that parent catalog refreshes while the panel is visible.
 - **A route comes from the child's own newest `request/header`** — a child shows as unknown until it issues its first request, and the list can never say what a child is running *right now*, only which route its last request used.
 - **The catalog is a request, not a stream** — a newly delegated child appears up to five seconds late, and the tab does not refresh while it is not visible.
+
+Session IDs accept both legacy `session-…` values and UUIDs emitted by Team, preserving the original ID and rejecting path syntax. Session Agent initialization requires the Host-only `sessionController.selectLocalModel` method; it validates and installs a selection without saving a profile default.
