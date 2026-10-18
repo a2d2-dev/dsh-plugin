@@ -1,0 +1,133 @@
+{
+  "child": {
+    "sessionId": "session-a4e40f3e-d4ec-4afb-804c-9c03b14bb8be",
+    "requestConfigs": [
+      {
+        "provider": "codex",
+        "model": "gpt-6.1-sol",
+        "reasoningEffort": "medium",
+        "maxTokens": 128000
+      }
+    ],
+    "toolCalls": [],
+    "notices": [],
+    "assistantMessages": [
+      [
+        {
+          "type": "reasoning",
+          "text": ""
+        },
+        {
+          "type": "text",
+          "text": "DSH_ACTIVATION_SMOKE_20261018_OK"
+        }
+      ]
+    ]
+  },
+  "parent": {
+    "sessionId": "session-451aa891-15fc-48c6-9c5b-a90e818df588",
+    "requestConfigs": [
+      {
+        "provider": "codex",
+        "model": "gpt-6-astra",
+        "reasoningEffort": "high",
+        "maxTokens": 128000
+      },
+      {
+        "provider": "codex",
+        "model": "gpt-6-astra",
+        "reasoningEffort": "high",
+        "maxTokens": 128000
+      }
+    ],
+    "toolCalls": [
+      "bind_main_session",
+      "bind_main_session",
+      "bind_main_session",
+      "bind_main_session",
+      "dispatch_subagent"
+    ],
+    "notices": [
+      {
+        "kind": "subagent-settled",
+        "form": "notice",
+        "summary": "Background subagent session-a4e40f3e-d4ec-4afb-804c-9c03b14bb8be finished and will do no further work unless you send i…",
+        "senderSessionId": "session-a4e40f3e-d4ec-4afb-804c-9c03b14bb8be"
+      }
+    ],
+    "assistantMessages": [
+      [
+        {
+          "type": "text",
+          "text": "我将按指定参数绑定并派发验收子会话，随后报告返回的会话 ID 和实际模型配置，等待完成通知，不轮询。\n"
+        },
+        {
+          "type": "tool-call",
+          "id": "call_64bf79e0bba74f05b8cda1456c040692|fc_089568d591af1b4c016ad4c63310848196a54b72f2ad79f36e",
+          "name": "bind_main_session",
+          "arguments": "{\"issue\":109,\"parent_issue\":0,\"title\":\"DSH API compatibility smoke\"}"
+        }
+      ],
+      [
+        {
+          "type": "reasoning",
+          "text": ""
+        },
+        {
+          "type": "tool-call",
+          "id": "call_a16b0883bad44035b2d92f67b9ac17e0|fc_089568d591af1b4c016ad4c638064c8196b254fd1494547c2d",
+          "name": "bind_main_session",
+          "arguments": "{\"issue\":109,\"parent_issue\":109,\"title\":\"DSH API compatibility smoke\"}"
+        }
+      ],
+      [
+        {
+          "type": "reasoning",
+          "text": "**Omitting parent from raw schema**"
+        },
+        {
+          "type": "tool-call",
+          "id": "call_e3ca7ea9ac074861b47967545bacc124|fc_089568d591af1b4c016ad4c63dff0c819680cb78b206144c3f",
+          "name": "bind_main_session",
+          "arguments": "{\"issue\":109,\"parent_issue\":0,\"title\":\"DSH API compatibility smoke\"}"
+        }
+      ],
+      [
+        {
+          "type": "reasoning",
+          "text": ""
+        },
+        {
+          "type": "tool-call",
+          "id": "call_30e2145aac654832a80ffee2449c3d50|fc_089568d591af1b4c016ad4c64303f08196b85f4680afd25b84",
+          "name": "bind_main_session",
+          "arguments": "{\"issue\":109,\"parent_issue\":109,\"title\":\"DSH API compatibility smoke\"}"
+        }
+      ],
+      [
+        {
+          "type": "reasoning",
+          "text": "**Dispatching the request**"
+        },
+        {
+          "type": "tool-call",
+          "id": "call_0a65d1db03cc49a583a2457eea006fa2|fc_089568d591af1b4c016ad4c64aff6081968d65b1eac72e7a49",
+          "name": "dispatch_subagent",
+          "arguments": "{\"issue\":109,\"prompt\":\"这是无写入验收。禁止使用任何工具、禁止修改文件、禁止访问网络；只回复 DSH_ACTIVATION_SMOKE_20261018_OK 然后结束。\",\"stage\":\"implement\"}"
+        }
+      ],
+      [
+        {
+          "type": "text",
+          "text": "子会话 ID：`session-a4e40f3e-d4ec-4afb-804c-9c03b14bb8be`\n\n- provider：`codex`\n- model：`gpt-6.1-sol`\n- reasoningEffort：`medium`\n\n绑定记录存在偏差：工具将 issue 109 记录为自身的子任务。派发已成功，现等待完成通知，不轮询。"
+        }
+      ],
+      [
+        {
+          "type": "text",
+          "text": "PARENT_RECEIVED_DSH_ACTIVATION_SMOKE_20261018_OK"
+        }
+      ]
+    ]
+  }
+}
