@@ -225,8 +225,14 @@ describe('Agent candidate reasoning effort', () => {
     const root = await mkdtemp(join(tmpdir(), 'a2d2-effort-root-'))
     const ctx = new Context()
     const parent = SessionId('session-parent')
-    const create = vi.fn(async (options: { sessionId: SessionId }) => ({ agent: stubAgent(root, options.sessionId) }))
-    ctx.provide('agents', { create } as never)
+    const live = new Map([[parent, stubAgent(root, parent)]])
+    const create = vi.fn(async (options: { sessionId: SessionId }) => {
+      live.set(options.sessionId, stubAgent(root, options.sessionId))
+      return { sessionId: options.sessionId }
+    })
+    const selectLocalModel = vi.fn(async (request: unknown) => ({ selected: request }))
+    ctx.provide('agents', { get: (id: SessionId) => live.get(id) } as never)
+    ctx.provide('sessionController', { create, resolveAgent: async (id: SessionId) => ({ agent: live.get(id) }), selectLocalModel } as never)
     try {
       await ctx.plugin(StubLlm, { routes: [route] })
       await ctx.plugin(A2d2Service, { root, stageAgents: {
@@ -234,7 +240,7 @@ describe('Agent candidate reasoning effort', () => {
       } as never })
       await ctx.a2d2.bindMainSession({ cwd: root, issue: 105, mainSession: parent, now: new Date() })
       await ctx.a2d2.openSubtask({ cwd: root, caller: parent, issue: 106, now: new Date() })
-      expect(create.mock.calls[0]?.[0]).toMatchObject({ agentOptions: candidateSelection(candidate) })
+      expect(selectLocalModel.mock.calls[0]?.[0]).toMatchObject(candidateSelection(candidate))
     } finally {
       await rm(root, { recursive: true, force: true })
     }

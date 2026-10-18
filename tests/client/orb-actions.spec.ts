@@ -460,6 +460,19 @@ describe('runOrbHandoff', () => {
     expect(s.opened).toEqual([])
   })
 
+  it('does not create or take a successor when the host rejects a runtime-managed handoff', async () => {
+    const current = fakeSession({ command: async () => ({ ok: false }) })
+    const connect = vi.fn(async () => SUCCESSOR)
+    const next = fakeSession()
+    const outcome = await runOrbHandoff(
+      { ...handoffDeps(sessions({ [CURRENT]: current, [SUCCESSOR]: next }), workspaces({ connect })), ...QUICK },
+      CURRENT, undefined,
+    )
+    expect(outcome).toMatchObject({ ok: false, stage: 'prepare' })
+    expect(connect).not.toHaveBeenCalled()
+    expect(next.commands).toEqual([])
+  })
+
   it('stops at summary when the writing turn never starts', async () => {
     const connect = vi.fn(async () => SUCCESSOR)
     const current = fakeSession({ command: async () => accepted })

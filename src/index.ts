@@ -18,8 +18,10 @@ import { basename, isAbsolute, join } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Agent, AgentRegistry } from '@deepseek-ai/dsh-agent'
+import type { SubagentRuntime } from '@deepseek-ai/dsh-subagent'
+import type { SubagentRuntime as ActivationRuntime, SubagentActivationSpec } from '@deepseek-ai/dsh-subagent-activation'
 import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
-import type { ContextFormed, MessageSource } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed, MessageSource, UserMessage } from '@deepseek-ai/dsh-llm'
 import type { Fiber, Volatile } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
@@ -73,6 +75,9 @@ import {
 import type { BoundTask, CreateTaskRequest, Task } from './types.ts'
 import { WaitNotices } from './wait-notice.ts'
 import type { Notifier } from './wait-notice.ts'
+import type { TaskRuntimeService } from './task-runtime.ts'
+import { inheritWorkspace } from './workspace.ts'
+import { createRootSession } from './root-session.ts'
 
 export { TaskId, taskIdForIssue } from './brand.ts'
 export type { TaskId as TaskIdType } from './brand.ts'
@@ -342,6 +347,8 @@ export interface TakenHandoff {
 
 /** Input of {@link A2d2Service.prepareHandoff}. */
 export interface PrepareHandoffRequest {
+  /** Reserved durable operation when the task runtime owns this handoff. */
+  readonly runtimeOperation?: string
   /** The session being handed off. */
   readonly source: SessionId
   /** The source session's working directory, which locates the project. */
@@ -356,6 +363,8 @@ export interface PrepareHandoffRequest {
 
 /** Input of {@link A2d2Service.takeHandoff}. */
 export interface TakeHandoffRequest {
+  /** Reserved durable operation when the task runtime owns this handoff. */
+  readonly runtimeOperation?: string
   /** The session that was handed off; its membership names the task. */
   readonly source: SessionId
   /** The session taking the handoff. */
@@ -474,19 +483,8 @@ type LlmRuntime = {
   resolveModelInfo(provider: string, model: string): Promise<CandidateModelInfo>
 }
 
-type SubagentsRuntime = {
-  startContinuable(spec: {
-    readonly provider: string
-    readonly label: string
-    readonly childId?: SessionId
-    readonly request: {
-      readonly prompt: readonly { readonly type: 'text'; readonly text: string }[]
-      readonly parent: Agent
-      readonly agentOptions: { readonly provider: string; readonly model: string; readonly reasoningEffort?: string }
-    }
-    readonly signal: AbortSignal
-  }): Promise<{ readonly childId: SessionId }>
-}
+type SubagentsRuntime = Partial<Pick<SubagentRuntime, 'startContinuable'>>
+  & Partial<Pick<ActivationRuntime, 'startActivation'>>
 
 /**
  * Task aggregation over project-local documents.
@@ -524,6 +522,7 @@ export class A2d2Service extends Service {
   private readonly entryFiber: Fiber
   /** Wait notices, present while some plugin provides `notifier`. */
   private waitNotices: WaitNotices | undefined
+  private runtimeExecutionGuard?: (agent: Agent, messages: readonly UserMessage[]) => Promise<boolean>
 
   /**
    * Create the service over a resolved store configuration.
@@ -581,6 +580,12 @@ export class A2d2Service extends Service {
     this.publishSessionAgent()
     this.publishPanel()
     this.publishWaitNotices()
+    // The fence belongs to the base task service so unloading the optional
+    // scheduler cannot temporarily re-enable retired main sessions.
+    ctx.on('agent/pre-step', async ({ agent, messages }, next) => {
+      if (this.runtimeExecutionGuard && !await this.runtimeExecutionGuard(agent, messages)) return { kind: 'reject' }
+      return next()
+    })
     // Stated once at load: whether the browser half received these is otherwise
     // only visible by looking at the indicator, which never reports absence.
     this.ctx.logger.info(
@@ -596,6 +601,11 @@ export class A2d2Service extends Service {
    */
   async list(cwd: string): Promise<readonly Task[]> {
     return await this.store.list(cwd)
+  }
+
+  /** Keep the last guard on scheduler unload; a closed runner fails managed sessions closed. */
+  installRuntimeExecutionGuard(guard: (agent: Agent, messages: readonly UserMessage[]) => Promise<boolean>): void {
+    this.runtimeExecutionGuard = guard
   }
 
   /**
@@ -729,13 +739,10 @@ export class A2d2Service extends Service {
     const { reasoningEffort, ...selection } = candidateSelection(selected)
     const model = { ...selection, ...(reasoningEffort === undefined ? {} : { reasoningEffort: ReasoningEffortId(reasoningEffort) }) }
     const session = brandString<SessionId>(`session-${randomUUID()}`)
-    const agents = this.ctx.get('agents') as AgentRegistry | undefined
-    if (agents === undefined) throw new Error('a2d2: agents service is unavailable, so no subtask session can be created')
-    const handle = await agents.create({
-      sessionId: session,
-      meta: { cwd: projectRoot },
-      agentOptions: model,
-    })
+    const agent = await createRootSession(this.ctx, { source: request.caller, sessionId: session, cwd: projectRoot })
+    const controller = this.getService<{ selectLocalModel(request: { sessionId: SessionId } & typeof model): Promise<unknown> }>('sessionController')
+    if (!controller?.selectLocalModel) throw new Error('a2d2: sessionController.selectLocalModel is required for subtask local model selection')
+    await controller.selectLocalModel({ sessionId: session, ...model })
     const task = await this.bindMainSession({
       cwd: projectRoot,
       issue: request.issue,
@@ -743,7 +750,7 @@ export class A2d2Service extends Service {
       mainSession: session,
       now: request.now,
     })
-    handle.agent.followup(createUserMessage({
+    agent.followup(createUserMessage({
       content: [{ type: 'text', text: openSubtaskPrompt(request.issue, parent.issue.number) }],
       source: A2D2_OPEN_SUBTASK_MESSAGE_SOURCE,
     }))
@@ -770,8 +777,19 @@ export class A2d2Service extends Service {
       throw new Error('a2d2: only a task issue main session can complete its task')
     }
 
-    const completed: BoundTask = task.state === 'done' ? task : { ...task, state: 'done' }
-    if (completed !== task) await this.store.write(request.cwd, completed)
+    // Persist parent delivery before completion, so retry uses the same durable event.
+    const runtime = this.getService<TaskRuntimeService>('a2d2TaskRuntime')?.runner
+    const parentAddress = task.issue.parent === undefined ? undefined : {
+      projectRoot: await this.projectRoot(request.cwd), task: taskIdForIssue(task.issue.parent),
+    }
+    const queued = parentAddress === undefined ? false : await runtime?.enqueue(
+      parentAddress, `child-complete:${task.id}`, completeTaskNotification(task.issue.number, summary),
+    ) ?? false
+    const updated = await this.store.updateLocked(request.cwd, task.id, async current => {
+      if (!current?.issue || current.issue.mainSession !== request.caller) throw new Error('a2d2: only the current main session may complete its task')
+      return { task: { ...current, state: 'done' }, write: current.state !== 'done' }
+    })
+    const completed = updated.task as BoundTask
     this.waitNotices?.completed(request.caller, completed.issue.number, summary)
 
     const parentIssue = completed.issue.parent
@@ -782,6 +800,7 @@ export class A2d2Service extends Service {
     if (parentMainSession === undefined) {
       return { task: completed, parentIssue, notifiedParent: false, resumedParent: false }
     }
+    if (queued) return { task: completed, parentIssue, parentMainSession, notifiedParent: true, resumedParent: false }
 
     const agents = this.ctx.get('agents') as AgentRegistry | undefined
     if (agents === undefined) throw new Error('a2d2: agents service is unavailable, so no parent main session can be notified')
@@ -902,18 +921,38 @@ export class A2d2Service extends Service {
     await this.recordSessionAgent(cwd, childId, configuredAgent)
     const subagents = this.getService<SubagentsRuntime>('subagents')
     if (subagents === undefined) throw new Error('a2d2: subagents service is unavailable')
-    const started = await subagents.startContinuable({
+    const spec = {
       provider: 'spawn',
       label: `${request.stage} #${issue}`,
       childId,
       request: {
-        prompt: [{ type: 'text', text: request.prompt }],
+        prompt: [{ type: 'text' as const, text: request.prompt }],
         parent,
-        agentOptions: route,
+        agentOptions: {
+          provider: route.provider,
+          model: route.model,
+          ...(route.reasoningEffort === undefined ? {} : { reasoningEffort: ReasoningEffortId(route.reasoningEffort) }),
+        },
       },
       signal: request.signal,
-    })
-    return { session: started.childId, model: candidateRoute(model), agent: configuredAgent,
+    } satisfies Parameters<SubagentRuntime['startContinuable']>[0]
+    let session: SessionId
+    if (typeof subagents.startActivation === 'function') {
+      const started = await subagents.startActivation({
+        ...spec,
+        request: {
+          ...spec.request,
+          parent: parent as unknown as SubagentActivationSpec['request']['parent'],
+        },
+        delivery: 'parent',
+      })
+      session = started.childId
+    } else if (typeof subagents.startContinuable === 'function') {
+      session = (await subagents.startContinuable(spec)).childId
+    } else {
+      throw new Error('a2d2: host subagents service provides neither startActivation nor startContinuable')
+    }
+    return { session, model: candidateRoute(model), agent: configuredAgent,
       ...(route.reasoningEffort === undefined ? {} : { reasoningEffort: route.reasoningEffort }) }
   }
 
@@ -1334,6 +1373,9 @@ export class A2d2Service extends Service {
    *   working directory, or an explicit task does not exist.
    */
   async prepareHandoff(request: PrepareHandoffRequest): Promise<PreparedHandoff> {
+    await this.getService<TaskRuntimeService>('a2d2TaskRuntime')?.runner.guardHandoff(
+      request.cwd, request.source, undefined, request.runtimeOperation,
+    )
     const source = parseSessionId(request.source)
     if (source === undefined) {
       throw new Error(`a2d2: "${request.source}" is not a usable session id`)
@@ -1388,6 +1430,9 @@ export class A2d2Service extends Service {
    *   summary is not written yet, and when the session belongs to no task.
    */
   async takeHandoff(request: TakeHandoffRequest): Promise<TakenHandoff> {
+    await this.getService<TaskRuntimeService>('a2d2TaskRuntime')?.runner.guardHandoff(
+      request.cwd, request.source, request.successor, request.runtimeOperation,
+    )
     const task = await this.taskOf(request.cwd, request.source)
     const directory = handoffsDirectory(await this.store.projectRoot(request.cwd))
     const parsed = parseHandoffDocument(
@@ -1399,21 +1444,22 @@ export class A2d2Service extends Service {
     if (redacted.count > 0) {
       await writeHandoffDocument(directory, request.source, renderHandoffDocument(document))
     }
-    const registered = await this.registerMember(
-      request.cwd,
-      task.id,
-      request.successor,
-      request.source,
-    )
-    const issue = registered.issue
-    const takenTask = issue?.mainSession === request.source && issue.handoff?.source === request.source
-      ? { ...registered, issue: { ...issue, mainSession: request.successor, handoff: undefined } }
-      : registered
-    if (takenTask !== registered) {
-      await this.store.write(request.cwd, takenTask)
-      if (takenTask.issue !== undefined) {
-        await this.emitMainSessionChanged(request.cwd, takenTask.issue.number, request.successor, request.source)
+    await inheritWorkspace(this.ctx, request.source, request.successor)
+    const result = await this.store.updateLocked(request.cwd, task.id, async current => {
+      if (!current) throw new Error('a2d2: handoff task disappeared')
+      const issue = current.issue
+      if (issue && issue.mainSession !== request.source && issue.mainSession !== request.successor) {
+        throw new Error(`a2d2: source is retired; current main session is ${issue.mainSession}`)
       }
+      const registered = withMember(current, request.successor, request.source)
+      const next = issue?.mainSession === request.source && issue.handoff?.source === request.source
+        ? { ...registered, issue: { ...issue, mainSession: request.successor, handoff: undefined } }
+        : registered
+      return { task: next, write: true }
+    })
+    const takenTask = result.task
+    if (takenTask.issue && task.issue?.mainSession !== takenTask.issue.mainSession) {
+      await this.emitMainSessionChanged(request.cwd, takenTask.issue.number, request.successor, request.source)
     }
     return { task: takenTask, document, prompt: handoffPrompt(document) }
   }

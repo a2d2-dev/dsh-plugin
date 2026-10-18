@@ -18,7 +18,7 @@ import type {} from './index.ts'
 export const name = 'a2d2-open-subtask-tools'
 
 /** Services the tool needs before it can register. */
-export const inject = ['tools', 'a2d2', 'agents', 'llm']
+export const inject = ['tools', 'a2d2', 'agents', 'llm', 'sessionController']
 
 /** Name of the tool that opens a subtask as its own main session. */
 export const OPEN_SUBTASK_TOOL = 'open_subtask'

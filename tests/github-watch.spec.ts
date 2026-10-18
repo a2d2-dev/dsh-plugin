@@ -79,7 +79,7 @@ describe('WatchStore', () => {
     await store.add({ repo: 'A/B', pr: 7, session: 's1', last: null, since: 't2' })
     await store.told({ repo: 'a/b', pr: 7, session: 's1' }, pr({ checks: 'pending' }))
     const reread = await new WatchStore(dir).list()
-    expect(reread).toEqual([{ repo: 'a/b', pr: 7, session: 's1', last: pr({ checks: 'pending' }), since: 't' }])
+    expect(reread).toEqual([{ repo: 'a/b', pr: 7, session: 's1', last: pr({ checks: 'pending' }), since: 't', revision: 1 }])
     await store.remove({ repo: 'a/b', pr: 7, session: 's1' })
     expect(JSON.parse(await readFile(join(dir, WATCHES_FILE), 'utf8'))).toEqual({ version: 1, watches: [] })
   })
@@ -134,6 +134,42 @@ function harness(dir: string, options: { answerTimeoutMs?: number; gone?: Set<st
 }
 
 describe('Watcher', () => {
+  it('preserves both states across a crash after enqueue but before the watch acknowledgement', async () => {
+    const dir = await tempDir()
+    const store = new WatchStore(dir)
+    await store.add({ repo: 'a/b', pr: 7, session: 's1', last: pr(), since: 'stable-watch' })
+    const inbox = new Map<string, string>()
+    const ids: string[] = []
+    let connection!: FakeConnection
+    let failAfterEnqueue = true
+    const options = {
+      store, relay: { baseUrl: 'https://relay.test', token: async () => 't' },
+      connect: (repo: string, emit: (event: RelayEvent) => void) => { connection = new FakeConnection(repo, emit); return connection },
+      inject: async (_session: string, message: Parameters<Inject>[1]) => {
+        if (!message.eventId) throw new Error('missing durable event identity')
+        ids.push(message.eventId)
+        inbox.set(message.eventId, message.text)
+        if (failAfterEnqueue) throw new Error('crash after enqueue')
+        return 'delivered' as const
+      },
+    }
+    let watcher = new Watcher(options)
+    await watcher.start()
+    connection.emit({ type: 'states', prs: [pr({ checks: 'success' })] })
+    await (watcher as unknown as { chain: Promise<unknown> }).chain
+    expect((await store.list())[0]?.revision).toBeUndefined()
+    watcher.stop()
+    failAfterEnqueue = false
+    watcher = new Watcher({ ...options, store: new WatchStore(dir) })
+    await watcher.start()
+    connection.emit({ type: 'states', prs: [pr({ state: 'merged', checks: 'success', mergedAt: 't' })] })
+    await (watcher as unknown as { chain: Promise<unknown> }).chain
+    expect(inbox.size).toBe(2)
+    expect(ids[0]).not.toBe(ids[1])
+    expect(await store.list()).toEqual([])
+    watcher.stop()
+  })
+
   it('answers the tool call with the first state, then reports only differences', async () => {
     const h = harness(await tempDir())
     const call = h.watcher.watch('a/b', 7, 's1')

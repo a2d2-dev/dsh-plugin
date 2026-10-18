@@ -49,3 +49,7 @@
       name: 'dsh-a2d2/agent-prompt'
     - id: a2d2-github-watch
       name: 'dsh-a2d2/github-watch'
+    - id: a2d2-task-runtime
+      name: 'dsh-a2d2/task-runtime'
+      config:
+        enabled: false

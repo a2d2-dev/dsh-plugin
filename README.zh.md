@@ -4,6 +4,8 @@
 
 本仓库存放 **A²D² DeepSeek Harness 插件**：把 A²D² 落地进 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的各组件，作为一个可安装的插件交付。
 
+子代理派发优先使用宿主的 `startActivation`，显式指定 `delivery: 'parent'`；仅在该方法不存在时使用旧宿主的 `startContinuable`。模型与 reasoningEffort 在派发请求的 `agentOptions` 中指定，不需要为派发新增 `selectLocalModel` 或修改 DSH 源码。新接口报错直接返回，不重试旧接口。两种契约的类型来自各自已发布的 DSH 包，别名依赖只用于开发时类型检查。会话 ID 原样兼容旧式 `session-…` 与 UUID，仍拒绝路径输入。
+
 **A²D²（Agentic Agile Driven Development，智能体敏捷驱动开发）是一套开发方法学**——它把敏捷开发的节奏交给智能体来驱动：由高品质模型主持架构与决策，由多模型编排承担执行，让属于同一件工作的会话在推进过程中始终串在一起。方法学本身比这个插件更大（它还涵盖工作流 skill 与多模型编排）；本仓库只是它在 DSH 一侧的具体落点。随着这一落地增长，更多 DSH 侧组件都会归在同一个 `a2d2` 命名空间下、存放于此。
 
 插件当前给 DSH 带来的能力：
@@ -486,3 +488,32 @@ sessions:
 - **子代理后代是懒加载的** —— 目录按父会话发布，因此新发现的分支会在面板可见且该父目录刷新后出现。
 - **路由取自子会话自己的最新 `request/header`** —— 子代理发起首次请求前该行显示未知；列表也永远无法报告一个子代理"此刻"在跑什么，只能报告它最近一次请求用了什么路由。
 - **目录是请求/响应，不是流** —— 新派出的子代理最多 5 秒后才出现在表内，而 Tab 不可见时不刷新。
+
+## 宿主后台任务运行器（一期）
+
+新增 `dsh-a2d2/task-runtime` mount（id `a2d2-task-runtime`），默认 `enabled: false`。仅在独立开发 profile 启用 `enabled: true`；`homeDir` 默认是 `$DSH_HOME/a2d2/task-runtime`（未设置 DSH_HOME 时使用 `~/.dsh`）。开发与生产的 DSH home、会话、存储和项目 `.dsh/a2d2` 必须隔离。
+
+已绑定 issue 且属于 workspace 的主会话可运行：
+
+```text
+/task-runtime start [issue-number] [title]
+/task-runtime status
+/task-runtime rotate [交接重点]
+/task-runtime stop
+/task-runtime resume
+/task-runtime recover
+```
+
+`run` 是 `start` 的别名；重复 start 不重复启动。普通 bind 不启动运行器。managed `/handoff` 明确拒绝且不调度交接，提示改用 `/task-runtime rotate`；既有 orb 会在 prepare 失败处停止，不创建额外后继。未启用运行器的手动交接保持原行为，手动 take 不能绕开执行权。后台与浏览器连接无关，在重启时只恢复 homeDir 中已显式登记的任务。
+
+`running` 默认继续 active 任务；`waiting-human` 等 LF 回复或 resume（期间外部事件保留），`waiting-event` 等任务事件，`paused` 暂停，`blocked` 表示有限重试或无进展检查失败，`done` 完成。`task_runtime` 模型工具可以报告 continue、wait-human、wait-event、rotate；实际提问、未结算原生子代理、活动子任务和 GitHub watch 也会阻止空推。`complete_task` 仅更新插件任务状态，不关闭 GitHub issue。
+
+配置：`pollMs`（默认 2000）、`rotateTokens`（150000）、`maxAutoTurns`（8，每代健康自动轮数，达到后交接）、`maxFailures`（3，操作失败及连续无进展阈值）。状态输出包含当前主会话、代数、workspace、操作步骤、待处理事件和最后错误。排查失败后使用 resume；未完成的交接沿原 operation 和后继 ID 恢复。
+
+恢复时会区分消息已排队与已被模型消费，并通过公开 Agent API 唤醒持久队列，不要求 LF 追加消息。事件先写入 homeDir 下独立 inbox，再并入运行记录；慢交接不占用入箱锁。GitHub 注册返回已结束或失败时，运行器不会把它当作仍需等待的 watch。
+
+每次交接先保存后继 ID，通过公开宿主 API 创建/恢复、继承 workspace、设置 CEO 会话本地模型、接任和投递接续内容。旧会话在 `agent/pre-step` 被拒绝执行。交接期间 GitHub 和子任务事件保存在任务收件箱，接任后投递。消息 ID 先落盘，重试回读会话日志与 inbox 去重；这不是跨存储的绝对一次事务。进展指纹是工具结果/回答的启发式比较，不能代替验收。文件锁限同机器同 PID 命名空间；断电持久性和跨主机共享不在本期承诺内。详见 ADR 0011。
+
+运行器后继与 `open_subtask` 使用公开 `sessionController.create` 创建/接续根会话，继承源会话当前 Agent preset 和 workspace，由宿主在发布会话前装配文件、shell 等工具及提示词。交接在创建前持久化选定 preset 与权限配置，重试保持相同身份；CEO 模型仍使用会话本地选择。继承命名权限 preset 及实际 sandbox/approval 配置（包括 custom），不继承单次审批结果，不写宿主全局默认。
+
+升级恢复旧后继时，create、take、deliver 都验证 preset。尚未开始运行的旧会话通过公开 preset 选择 API 补齐，保留原 ID；已有内容且 preset 不兼容时不覆盖，会在 status 中给出 `recoveryRequired` 和 `/task-runtime recover` 指令。在当前主会话空闲时执行该命令，会保留旧会话，先登记新的替代后继 ID，再携带原模型交接内容及旧会话历史指针接续；模型须检查旧会话的新进展后再执行。普通 resume 不会强改非空会话的 preset。
