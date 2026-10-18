@@ -4,6 +4,8 @@ English | [中文](README.zh.md)
 
 This repository holds the **A²D² DeepSeek Harness plugin**: the components that land A²D² inside [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) as one installable plugin.
 
+Subagent dispatch prefers the host's `startActivation` with `delivery: 'parent'`, using `startContinuable` only when the newer method is absent. The request sets the model and reasoning effort through `agentOptions`; dispatch requires no additional `selectLocalModel` API or DSH source patch. Activation errors propagate without retrying the older method. Published DSH types cover both contracts; the aliased package is a development-only type dependency. Session IDs preserve both legacy `session-…` values and UUIDs while rejecting path syntax.
+
 **A²D² — Agentic Agile Driven Development — is a development methodology** that hands the rhythm of agile development to agents: a high-quality model chairs architecture and decisions, a multi-model orchestration carries execution, and the sessions of one piece of work stay tied together as it moves. The methodology is larger than this plugin (it spans workflow skills and multi-model orchestration too); this repository is only its concrete landing on the DSH side. As that landing grows, further DSH-side components live here under the same `a2d2` namespace.
 
 What the plugin gives DSH today:

@@ -4,6 +4,8 @@
 
 本仓库存放 **A²D² DeepSeek Harness 插件**：把 A²D² 落地进 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的各组件，作为一个可安装的插件交付。
 
+子代理派发优先使用宿主的 `startActivation`，显式指定 `delivery: 'parent'`；仅在该方法不存在时使用旧宿主的 `startContinuable`。模型与 reasoningEffort 在派发请求的 `agentOptions` 中指定，不需要为派发新增 `selectLocalModel` 或修改 DSH 源码。新接口报错直接返回，不重试旧接口。两种契约的类型来自各自已发布的 DSH 包，别名依赖只用于开发时类型检查。会话 ID 原样兼容旧式 `session-…` 与 UUID，仍拒绝路径输入。
+
 **A²D²（Agentic Agile Driven Development，智能体敏捷驱动开发）是一套开发方法学**——它把敏捷开发的节奏交给智能体来驱动：由高品质模型主持架构与决策，由多模型编排承担执行，让属于同一件工作的会话在推进过程中始终串在一起。方法学本身比这个插件更大（它还涵盖工作流 skill 与多模型编排）；本仓库只是它在 DSH 一侧的具体落点。随着这一落地增长，更多 DSH 侧组件都会归在同一个 `a2d2` 命名空间下、存放于此。
 
 插件当前给 DSH 带来的能力：

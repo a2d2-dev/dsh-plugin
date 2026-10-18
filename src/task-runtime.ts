@@ -18,7 +18,7 @@ export interface Config {
   maxAutoTurns?: number
   maxFailures?: number
 }
-export const Config = z.object({
+export const Config: z<Config> = z.object({
   enabled: z.boolean().default(false), homeDir: z.string(), pollMs: z.number().default(2000),
   rotateTokens: z.number().default(150000), maxAutoTurns: z.number().default(8), maxFailures: z.number().default(3),
 })
