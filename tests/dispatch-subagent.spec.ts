@@ -8,7 +8,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
@@ -71,6 +71,37 @@ async function mount(root: string, settings: StageAgentsSettings, catalog: reado
 }
 
 describe('dispatchSubagent', () => {
+  it('dispatches through the activation API when the host no longer has startContinuable', async () => {
+    const root = await tempRoot()
+    const { service, subagents } = await mount(root, stageAgents('engineer', [
+      { route: 'codex/gpt-5.5', reasoningEffort: 'high' },
+    ]), ['codex/gpt-5.5'])
+    const startActivation = vi.fn(async (spec: { childId: SessionId }) => ({ childId: spec.childId }))
+    Object.assign(subagents, { startContinuable: undefined, startActivation })
+    const parent = stubAgent(root, mainSession)
+    await service.bindMainSession({ cwd: root, issue: 41, mainSession, now: new Date() })
+    const result = await service.dispatchSubagent({ cwd: root, stage: 'implement', issue: 48,
+      prompt: 'Read only: report completion.', parent, signal: new AbortController().signal })
+    expect(startActivation).toHaveBeenCalledWith(expect.objectContaining({
+      delivery: 'parent', provider: 'spawn', childId: result.session,
+      request: expect.objectContaining({ parent,
+        agentOptions: { provider: 'codex', model: 'gpt-5.5', reasoningEffort: 'high' } }),
+    }))
+  })
+
+  it('prefers activation and propagates its failure without retrying the legacy API', async () => {
+    const root = await tempRoot()
+    const { service, subagents } = await mount(root, stageAgents('engineer', ['codex/gpt-5.5']), ['codex/gpt-5.5'])
+    const startActivation = vi.fn(async () => { throw new Error('activation rejected') })
+    Object.assign(subagents, { startActivation })
+    const parent = stubAgent(root, mainSession)
+    await service.bindMainSession({ cwd: root, issue: 41, mainSession, now: new Date() })
+    await expect(service.dispatchSubagent({ cwd: root, stage: 'implement', issue: 48,
+      prompt: 'Read only.', parent, signal: new AbortController().signal })).rejects.toThrow('activation rejected')
+    expect(startActivation).toHaveBeenCalledOnce()
+    expect(subagents.startContinuable).not.toHaveBeenCalled()
+  })
+
   it('dispatches explicit effort independently and reads changed effort on the next call', async () => {
     const root = await tempRoot()
     const route = 'claude-bray/claude-opus-5-5'

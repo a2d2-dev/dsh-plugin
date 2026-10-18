@@ -13,6 +13,7 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { CommandDefinition } from '@deepseek-ai/dsh-commands'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { ContinuableStartSpec } from '@deepseek-ai/dsh-subagent'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import { vi } from 'vitest'
@@ -25,19 +26,6 @@ interface StubLlmModel {
   readonly provider: string
   readonly id: string
   readonly name: string
-}
-
-interface StubContinuableStartSpec {
-  readonly provider: string
-  readonly label: string
-  readonly childId?: SessionId
-  readonly request: {
-    readonly prompt: readonly unknown[]
-    readonly parent: Agent
-    readonly agentOptions?: { readonly provider?: string; readonly model?: string }
-    readonly persona?: string
-  }
-  readonly signal: AbortSignal
 }
 
 /** A `commands` registry that records what a plugin registers and returns real disposers. */
@@ -172,7 +160,7 @@ export class StubConnection extends Service {
 
 /** A `subagents` service that records continuable starts without creating DSH children. */
 export class StubSubagents extends Service {
-  readonly startContinuable = vi.fn(async (spec: StubContinuableStartSpec) => ({
+  readonly startContinuable = vi.fn(async (spec: ContinuableStartSpec) => ({
     childId: spec.childId ?? 'session-child' as SessionId,
     messageId: 'message-child',
   }))

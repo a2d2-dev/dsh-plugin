@@ -15,6 +15,17 @@ import {
 } from '../src/handoff.ts'
 
 describe('session id parsing', () => {
+  it.each(['3eb796c2-5159-4686-affe-df8719f6f987', '3EB796C2-5159-4686-AFFE-DF8719F6F987'])(
+    'keeps the Team UUID unchanged: %s', id => {
+      expect(parseSessionId(id)).toBe(id)
+      expect(parseHandoffCommand(`take ${id}`)).toEqual({ kind: 'take', source: id })
+    },
+  )
+  it.each(['/', '..', 'session-..', 'session-a/../b', 'session-a\\b',
+    '3eb796c2-5159-4686-affe-df8719f6f987/..', 'session-a\n'])(
+    'rejects unsafe input %j', id => { expect(parseSessionId(id)).toBeUndefined() },
+  )
+
   it('accepts a session id and rejects a traversal attempt', () => {
     expect(parseSessionId('session-3eb796c2-5159-4686-affe-df8719f6f987'))
       .toBe(SessionId('session-3eb796c2-5159-4686-affe-df8719f6f987'))

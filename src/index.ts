@@ -18,6 +18,8 @@ import { basename, isAbsolute, join } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Agent, AgentRegistry } from '@deepseek-ai/dsh-agent'
+import type { SubagentRuntime } from '@deepseek-ai/dsh-subagent'
+import type { SubagentRuntime as ActivationRuntime, SubagentActivationSpec } from '@deepseek-ai/dsh-subagent-activation'
 import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed, MessageSource, UserMessage } from '@deepseek-ai/dsh-llm'
 import type { Fiber, Volatile } from '@deepseek-ai/cordis'
@@ -481,19 +483,8 @@ type LlmRuntime = {
   resolveModelInfo(provider: string, model: string): Promise<CandidateModelInfo>
 }
 
-type SubagentsRuntime = {
-  startContinuable(spec: {
-    readonly provider: string
-    readonly label: string
-    readonly childId?: SessionId
-    readonly request: {
-      readonly prompt: readonly { readonly type: 'text'; readonly text: string }[]
-      readonly parent: Agent
-      readonly agentOptions: { readonly provider: string; readonly model: string; readonly reasoningEffort?: string }
-    }
-    readonly signal: AbortSignal
-  }): Promise<{ readonly childId: SessionId }>
-}
+type SubagentsRuntime = Partial<Pick<SubagentRuntime, 'startContinuable'>>
+  & Partial<Pick<ActivationRuntime, 'startActivation'>>
 
 /**
  * Task aggregation over project-local documents.
@@ -930,18 +921,38 @@ export class A2d2Service extends Service {
     await this.recordSessionAgent(cwd, childId, configuredAgent)
     const subagents = this.getService<SubagentsRuntime>('subagents')
     if (subagents === undefined) throw new Error('a2d2: subagents service is unavailable')
-    const started = await subagents.startContinuable({
+    const spec = {
       provider: 'spawn',
       label: `${request.stage} #${issue}`,
       childId,
       request: {
-        prompt: [{ type: 'text', text: request.prompt }],
+        prompt: [{ type: 'text' as const, text: request.prompt }],
         parent,
-        agentOptions: route,
+        agentOptions: {
+          provider: route.provider,
+          model: route.model,
+          ...(route.reasoningEffort === undefined ? {} : { reasoningEffort: ReasoningEffortId(route.reasoningEffort) }),
+        },
       },
       signal: request.signal,
-    })
-    return { session: started.childId, model: candidateRoute(model), agent: configuredAgent,
+    } satisfies Parameters<SubagentRuntime['startContinuable']>[0]
+    let session: SessionId
+    if (typeof subagents.startActivation === 'function') {
+      const started = await subagents.startActivation({
+        ...spec,
+        request: {
+          ...spec.request,
+          parent: parent as unknown as SubagentActivationSpec['request']['parent'],
+        },
+        delivery: 'parent',
+      })
+      session = started.childId
+    } else if (typeof subagents.startContinuable === 'function') {
+      session = (await subagents.startContinuable(spec)).childId
+    } else {
+      throw new Error('a2d2: host subagents service provides neither startActivation nor startContinuable')
+    }
+    return { session, model: candidateRoute(model), agent: configuredAgent,
       ...(route.reasoningEffort === undefined ? {} : { reasoningEffort: route.reasoningEffort }) }
   }
 

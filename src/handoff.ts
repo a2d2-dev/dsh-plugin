@@ -37,7 +37,9 @@ export type HandoffCommand =
  * @returns the branded id, or `undefined` when it is not one.
  */
 export function parseSessionId(value: string): SessionId | undefined {
-  return /^session-[a-z0-9][a-z0-9-]*$/.test(value) ? SessionId(value) : undefined
+  const legacy = /^session-[a-z0-9][a-z0-9-]*$/u
+  const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/iu
+  return legacy.test(value) || uuid.test(value) ? SessionId(value) : undefined
 }
 
 /**
