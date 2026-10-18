@@ -22,8 +22,16 @@
 6. DSH `pnpm run typecheck`：5 项检查通过，包括 Host、Client 及 aggregate 检查。
 7. DSH 构建本机 native addon 后，运行 `pnpm exec vitest run packages/subagent/subagent/tests/parent-result.spec.ts packages/subagent/subagent/tests/run-settlement.spec.ts`：5 项通过，覆盖子代理答案/结构化结果进入父会话。它使用测试模型，不证明真实 provider 已执行。
 8. DSH `pnpm run doc-sync` 初次 39 项通过、4 项失败。其中 API catalog、JSDoc 与双语配对已修正，分别重跑检查通过；剩余 `python/sdk/uv.lock:113` commit-hash 引用错误不在本次改动范围。未宣称完整 doc-sync 通过。
-9. 使用 `agent-browser` 打开现有 DSH 地址 `http://10.126.126.12:3080`，得到 `net::ERR_CONNECTION_REFUSED`。未切换入口、未新建服务或放宽沙箱；没有成功页面截图。
+9. 最初使用 `agent-browser` 打开 `http://10.126.126.12:3080`，得到 `net::ERR_CONNECTION_REFUSED`。LF 随后明确一期开发入口为 `http://10.126.126.12:18780/`；重新访问成功，显示密码登录页。先前的连接失败不能说明一期开发环境不可用。未登录执行实际派发，也没有派发成功截图。
+
+## 一期交付基线核对
+
+LF 提供一期交接后，核对 GitHub：功能 PR #114 的分支为 `feat/task-runtime-phase1`，基线为 `baseline/dsh-production-20261015`；开发部署 PR #113 仍 Open，均未合并。
+
+开发部署启动脚本明确使用 `/data/src/github.com/deepseek-ai/deepseek-harness-dev` 和独立的 `/data/_dsh-dev`。该运行时 package 版本为 **0.2.0-rc.2**，源码仍有 `startContinuable`，也已经有 `selectLocalModel`。本次诊断的另一套 `/data/src/github.com/deepseek-ai/deepseek-harness-runtime` 版本为 **0.2.1-rc.2**，才需要新接口迁移与本次会话级选模修复。因此不能直接将本分支装到一期旧版本开发环境，并以其验收新接口。
+
+本次插件修复基于实际报错 checkout 的 `feat/agent-reasoning-effort-complete`，尚未集成到 #114；628 项是本分支测试数，不是 LF 交接中一期 654 项的重跑结果。本轮没有复验一期真实模型交接及重启恢复，也没有变更 Issue #112 或 Project 状态。
 
 ## 当前状态
 
-代码修复与上述自动化检查已完成。未部署、未合并。真实 `dispatch_subagent` 的 provider/model/reasoningEffort、真实父会话完成消息仍未验证，需在现有 DSH 页面可访问且加载修复后验收。自动化回传测试不能替代此验收。
+代码修复与上述自动化检查已完成，两个仓库的任务分支已推送。未部署、未合并。真实 `dispatch_subagent` 的 provider/model/reasoningEffort、真实父会话完成消息仍未验证；需在后续获授权的 0.2.1 开发环境加载修复后验收。自动化回传测试不能替代此验收。生产升级与一期 PR 的集成进入 CEO/review 闭环。
