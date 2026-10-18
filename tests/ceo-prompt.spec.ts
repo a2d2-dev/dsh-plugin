@@ -140,6 +140,34 @@ async function writeAgentFiles(root: string, files: { agents: string; wake: stri
 }
 
 describe('CEO prompt section', () => {
+  it.each(['startup', 'created'] as const)('contains malformed task failures during %s and can install after repair', async (trigger) => {
+    const root = await tempRoot()
+    const directory = join(root, '.dsh', 'a2d2', 'tasks')
+    await mkdir(directory, { recursive: true })
+    await writeFile(join(directory, 'issue-2987.yaml'), [
+      'version: 2', 'id: issue-2987', 'issue:', '  number: 2987',
+      '  mainSession: null', 'name: broken', 'state: active',
+      'createdAt: 2026-10-18T06:01:01.682Z', 'sessions: []',
+    ].join('\n'))
+    const ctx = new Context()
+    await ctx.plugin(StubSystemPrompt)
+    await ctx.plugin(StubAgents)
+    await ctx.plugin(A2d2Service, { root })
+    const lookup = vi.spyOn(ctx.a2d2, 'taskOfMainSession')
+    const main = agent(root, 'session-main')
+    const agents = ctx.get('agents') as unknown as StubAgents
+    if (trigger === 'startup') agents.add(main)
+    await ctx.plugin(ceoPromptPlugin)
+    if (trigger === 'created') agents.add(main)
+    await vi.waitFor(() => { expect(lookup).toHaveBeenCalled() })
+    await expect(lookup.mock.results[0]!.value).rejects.toThrow('mainSession must be a non-empty string')
+    expect(main.prompt.render('a2d2:ceo')).toBeUndefined()
+
+    await rm(join(directory, 'issue-2987.yaml'))
+    await ctx.a2d2.bindMainSession({ cwd: root, issue: 2987, mainSession: main.id, now: new Date() })
+    expect(main.prompt.render('a2d2:ceo')).toBeDefined()
+  })
+
   it('installs only on a running session that was just bound as a main session and rereads SOUL on every assembly', async () => {
     const root = await tempRoot()
     const { agentFilesDir, globalSoulDir } = await writeAgentFiles(root, {

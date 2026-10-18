@@ -137,9 +137,17 @@ export function apply(ctx: Context, config: Config = {}): void {
     installOnce(agent, await ctx.a2d2.projectRoot(cwd))
   }
 
-  for (const agent of agents.list()) void maybeInstall(agent)
-  ctx.on('agent/created', ({ agent }) => {
-    void maybeInstall(agent)
+  const logInstallError = (agent: Agent, error: unknown): void => {
+    ctx.logger.error(`a2d2: failed to install CEO prompt section for session "${agent.id}" in "${sessionCwd(agent)}": ${String(error)}`)
+  }
+
+  for (const agent of agents.list()) void maybeInstall(agent).catch(error => { logInstallError(agent, error) })
+  ctx.on('agent/created', async ({ agent }) => {
+    try {
+      await maybeInstall(agent)
+    } catch (error) {
+      logInstallError(agent, error)
+    }
     return undefined
   })
   ctx.on('agent/disposed', ({ agent }) => {
