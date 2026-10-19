@@ -1,5 +1,7 @@
 # A²D² DDD 架构设计 · 第一阶段评审修订稿 v3
 
+> **历史评审材料**：保留当时的讨论与固定提交证据，不作为并行的当前规范。当前领域定义见 [CONTEXT](../../CONTEXT.md)，当前决策见 [ADR](../adr/)。本轮已按 LF 指示直接替换冲突 ADR；本文中的“拟调整”“旧 ADR”及固定提交链接描述原评审时点。
+
 > **本轮约束：GitHub Issue / Project 不能成为必要条件。** 同一套项目、Agent、任务、指派、执行占用、交接和验收逻辑，必须能够纯本地运行，也能够接入 GitHub 协同。
 >
 > 本稿替代 v2 中“Project 身份等于 GitHub Project node ID”“Task 身份等于 Issue node ID”“关闭 Issue 是完成的必要前置条件”的目标设计。保留 Project Agent、DSH 会话/子会话、显式工作目录、统一委派和执行锁的建模方向。

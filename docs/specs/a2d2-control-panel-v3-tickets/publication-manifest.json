@@ -1,0 +1,32 @@
+{
+  "state": "draft-not-published",
+  "repository": "a2d2-dev/dsh-plugin",
+  "sourceBranch": "spec/dsh-control-panel-v3",
+  "productBaseline": "6c9ccb6f0d5d2caea7275fc798caf36436af4f69",
+  "hostBaseline": "a45068d2ec03326c800c68c9bdcd47508e3ccb9c",
+  "prototypeBaseline": "d6fe008",
+  "parent": {
+    "title": "A²D² v3：DSH 内工作控制面板、会话连续性与持续接活",
+    "bodyFile": "../a2d2-control-panel-v3.md",
+    "labels": ["a2d2:main"]
+  },
+  "tickets": [
+    {"id":"01","title":"DSH 单入口、本地项目与工作详情","bodyFile":"01-local-work-panel.md","blockedBy":[],"labels":["ready-for-agent"]},
+    {"id":"02","title":"单项工作启动、当前协调会话与执行资格","bodyFile":"02-start-and-coordinate.md","blockedBy":["01"],"labels":["ready-for-agent"]},
+    {"id":"03","title":"旧工作记录安全迁移与恢复接管","bodyFile":"03-legacy-migration.md","blockedBy":["02"],"labels":["ready-for-agent"]},
+    {"id":"04","title":"GitHub Issue 来源、唯一接入与本地内容保留","bodyFile":"04-issue-source.md","blockedBy":["01"],"labels":["ready-for-agent"]},
+    {"id":"05","title":"当前项目的真实视图与对应内容","bodyFile":"05-project-views.md","blockedBy":["04"],"labels":["ready-for-agent"]},
+    {"id":"06","title":"可配置上下文接续与历史会话观察","bodyFile":"06-context-continuation.md","blockedBy":["02"],"labels":["ready-for-agent"]},
+    {"id":"07","title":"本地验收完成、父通知与可恢复外部关闭","bodyFile":"07-completion-and-sync.md","blockedBy":["02","04"],"labels":["ready-for-agent"]},
+    {"id":"08","title":"持久化持续接活、串行领取与暂停恢复","bodyFile":"08-continuous-work.md","blockedBy":["05","07"],"labels":["ready-for-agent"]},
+    {"id":"09","title":"PR 目录、工作关联与真实评审会话","bodyFile":"09-pr-review.md","blockedBy":["02","04"],"labels":["ready-for-agent"]}
+  ],
+  "publishingRules": [
+    "Await the one combined confirmation of test seams, granularity, dependencies and publication.",
+    "Push the specification branch; use the resulting exact commit for artifact links. Do not merge or deploy.",
+    "Create a new parent; do not modify or close existing issues 70, 112 or any prior parent.",
+    "Generate temporary body files from these canonical drafts, dropping draft-only notes and replacing Parent/blocker references with actual issue URLs.",
+    "Create native sub-issue relationships and native blocked_by dependencies using numeric database issue IDs.",
+    "Persist returned issue URLs and dependency results; verify each relationship read-only before handing off."
+  ]
+}
