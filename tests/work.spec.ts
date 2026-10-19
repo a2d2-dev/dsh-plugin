@@ -146,3 +146,19 @@ it('admits trusted host resource references and associates compatible Sessions i
     .toMatchObject({ status: 'failed', error: { code: 'incompatible-session' } })
   expect(await app.query({ type: 'task.detail', ref }, operator)).toMatchObject({ status: 'completed', task: { version: 2 } })
 })
+
+it('reserves one stable TaskRef per canonical legacy address atomically without reading or migrating legacy work', async () => {
+  const { directory, app } = await open()
+  const one = await createWork(app, 'legacy-one')
+  const two = await createWork(app, 'legacy-two')
+  const address = { runtimeId: 'previous-host', projectRoot: '/canonical/old-project', taskId: 'issue-45' }
+  const results = await Promise.all([app.execute({ type: 'legacy.map', commandId: 'legacy-map-one', ref: one.ref, expectedVersion: 1, address }, operator),
+    new WorkApplication(directory, noHost).execute({ type: 'legacy.map', commandId: 'legacy-map-two', ref: two.ref, expectedVersion: 1, address }, operator)])
+  expect(results.filter(result => result.status === 'completed')).toHaveLength(1)
+  expect(results.filter(result => result.status === 'conflict')).toMatchObject([{ error: { code: 'legacy-address-in-use' } }])
+  const winner = results[0]!.status === 'completed' ? one.ref : two.ref
+  expect(await new WorkApplication(directory, noHost).query({ type: 'legacy.resolve', address }, operator)).toEqual({ status: 'completed', ref: winner })
+  expect(await app.execute({ type: 'legacy.map', commandId: 'noncanonical-legacy', ref: winner, expectedVersion: 2,
+    address: { ...address, projectRoot: '/canonical/../canonical/old-project' } }, operator))
+    .toMatchObject({ status: 'failed', error: { code: 'noncanonical-legacy-address' } })
+})

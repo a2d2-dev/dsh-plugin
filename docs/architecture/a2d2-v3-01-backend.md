@@ -76,6 +76,10 @@ const result = await response.json() // WorkResult；project.id 是独立 Projec
 
 认证测试覆盖命令、查询和已存在 commandId 的回读；拒绝在 body 读取前成立。额外浏览器 cwd 字段被 strict schema 拒绝。pnpm typecheck 退出 0。
 
+## 旧地址唯一映射契约
+
+legacy.map(ref,address,expectedVersion) 在相同领域事务中保存唯一 (runtimeId,projectRoot,旧 TaskId) → TaskRef。地址必须是绝对、normalize 后相等的历史规范地址；未来迁移调用方须先解析真实旧项目根，不能把别名当另一身份。此入口仅保存地址元数据，不读取旧文件、不复制活动任务、不更换 writer/runner。legacy.resolve 返回唯一已接受 TaskRef；同地址指向另一 TaskRef 返回 legacy-address-in-use。两个应用实例竞争只有一个映射成功，重载可解析同一身份。该片红测无成功映射退出 1，实现后 work + work-host 9/9 通过退出 0。
+
 ## 尚待本阶段完成
 
-唯一旧地址映射、独立进程并发/故障验证与完整检查仍在推进。UI 与浏览器验收未验证，交后续切片。
+独立进程并发/故障验证与完整检查仍在推进。UI 与浏览器验收未验证，交后续切片。

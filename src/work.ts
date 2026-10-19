@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, readFile } from 'node:fs/promises'
-import { isAbsolute, join } from 'node:path'
+import { isAbsolute, join, normalize } from 'node:path'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { commandSchema, querySchema, snapshotSchema } from './work-schema.ts'
 import type { WorkSnapshot } from './work-schema.ts'
@@ -18,6 +18,7 @@ function failed(code: string, message: string): WorkResult { return { status: 'f
 function conflict(currentVersion: number): WorkResult {
   return { status: 'conflict', error: { code: 'version-conflict', message: 'Expected version is stale', currentVersion } }
 }
+function legacyKey(address: { runtimeId: string; projectRoot: string; taskId: string }): string { return JSON.stringify([address.runtimeId, address.projectRoot, address.taskId]) }
 function sameResource(a: ResourceRef, b: ResourceRef): boolean { return a.runtimeId === b.runtimeId && a.workspaceId === b.workspaceId }
 function sameSession(a: { runtimeId: string; sessionId: string }, b: { runtimeId: string; sessionId: string }): boolean { return a.runtimeId === b.runtimeId && a.sessionId === b.sessionId }
 function taskAt(state: WorkSnapshot, ref: TaskRef): WorkTask | undefined {
@@ -116,6 +117,17 @@ export class WorkApplication {
     const task = taskAt(state, command.ref)
     if (!task) return failed('unknown-task', 'Task does not belong to this project')
     if (task.version !== command.expectedVersion) return conflict(task.version)
+    if (command.type === 'legacy.map') {
+      if (!isAbsolute(command.address.projectRoot) || normalize(command.address.projectRoot) !== command.address.projectRoot) {
+        return failed('noncanonical-legacy-address', 'Legacy project root must be an absolute normalized address')
+      }
+      const previous = state.legacyMappings.find(item => legacyKey(item.address) === legacyKey(command.address))
+      if (previous && (previous.ref.projectId !== projectId || previous.ref.taskId !== task.id)) {
+        return { status: 'conflict', error: { code: 'legacy-address-in-use', message: 'Legacy address already maps to another TaskRef' } }
+      }
+      if (!previous) { state.legacyMappings.push({ address: command.address, ref: command.ref }); this.changed(task, command) }
+      return { status: 'completed', ref: command.ref, task }
+    }
     if (command.type === 'task.associate-session') {
       const existing = task.sessions.find(item => sameSession(item.session, command.session))
       if (existing) {
@@ -175,6 +187,10 @@ export class WorkApplication {
     if (!parsed.success) return failed('invalid-query', 'Invalid work query')
     const query = parsed.data
     const state = await this.load()
+    if (query.type === 'legacy.resolve') {
+      const mapping = state.legacyMappings.find(item => legacyKey(item.address) === legacyKey(query.address))
+      return mapping ? { status: 'completed', ref: mapping.ref } : failed('unknown-legacy-address', 'Legacy address has no accepted TaskRef mapping')
+    }
     if (query.type === 'projects.list') return { status: 'completed', projects: state.projects }
     if (query.type === 'resources.list') return { status: 'completed', resources: [...await this.host.resources()] }
     if (query.type === 'session.work') return { status: 'completed', work: state.tasks.flatMap(task =>
