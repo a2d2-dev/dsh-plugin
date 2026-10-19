@@ -36,7 +36,7 @@ async function worker(directory: string, command: unknown, mode: 'execute' | 'lo
     import { WorkApplication } from ${JSON.stringify(new URL('../src/work.ts', import.meta.url).href)};
     import { withFileLock } from '@deepseek-ai/dsh-atomic-write';
     import { join } from 'node:path';
-    const app = new WorkApplication(process.argv[1], { resources: async () => [], sessions: async () => [] });
+    const app = new WorkApplication(process.argv[1], { resources: async () => [{ ref: { runtimeId: 'process-host', workspaceId: 'shared-workspace' }, title: 'Shared resource' }], sessions: async () => [] });
     const command = JSON.parse(process.argv[2]);
     process.on('message', () => {});
     if (process.argv[3] === 'hold-lock') {
@@ -86,6 +86,17 @@ it('serializes independent process writers with one durable command identity and
   expect((await Promise.all([three.execute(), four.execute()])).every(result => result.status === 'completed')).toBe(true)
   expect(await new WorkApplication(directory, host).query({ type: 'projects.list' }, operator))
     .toMatchObject({ status: 'completed', projects: [expect.anything(), expect.anything(), expect.anything()] })
+})
+
+it('enforces resource ownership uniqueness atomically across independent process writers', async () => {
+  const directory = await root()
+  const command = { type: 'project.create', name: 'From shared host resource', resource: { runtimeId: 'process-host', workspaceId: 'shared-workspace' } }
+  const [one, two] = await Promise.all([worker(directory, { ...command, commandId: 'resource-one' }), worker(directory, { ...command, commandId: 'resource-two' })])
+  const results = await Promise.all([one.execute(), two.execute()])
+  expect(results.filter(result => result.status === 'completed')).toHaveLength(1)
+  expect(results.filter(result => result.status === 'conflict')).toMatchObject([{ error: { code: 'resource-in-use' } }])
+  const reloaded = await new WorkApplication(directory, host).query({ type: 'projects.list' }, operator)
+  expect(reloaded.status === 'completed' && reloaded.projects).toHaveLength(1)
 })
 
 it('recovers a committed command after its writer dies before the caller receives the response', async () => {

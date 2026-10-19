@@ -36,15 +36,15 @@ pnpm exec vitest run tests/work.spec.ts
 
 工作拆解按稳定 block ID 保存，不自动生成子 Task 或 Session。第五条红测返回 failed（退出 1），实现后 5/5 通过（退出 0）；重复 block ID 拒绝且不改变原版本。
 
-受信资源端口返回 runtime/workspace 引用，ProjectId 与资源分别保存；资源跨项目唯一归属在快照事务内判断。Session 使用 runtime/session 复合引用，候选受项目资源过滤，关联只保存 related/review 观察关系，不产生协调事实。第六条红测 project.attach-resource 返回 failed（退出 1），实现后 6/6 通过（退出 0）。此条使用可控宿主边界端口，真实 DSH 适配仍待下片验证。
+受信资源端口返回 runtime/workspace 引用，ProjectId 与资源分别保存；资源跨项目唯一归属在快照事务内判断。Session 使用 runtime/session 复合引用，候选受项目资源过滤，关联只保存 related/review 观察关系，不产生协调事实。第六条红测 project.attach-resource 返回 failed（退出 1），实现后 6/6 通过（退出 0）。此条使用可控宿主边界端口；真实 DSH 适配证据见下文生产接线。
 
 ## 宿主与环境基线
 
-只读核验宿主实际 HEAD：a45068d2ec03326c800c68c9bdcd47508e3ccb9c。已读取 atomic-write 与 workspaceRegistry 公共源码，未修改宿主。pnpm 11.7.0。首次 pnpm exec 自动安装依赖时报告未批准构建脚本（subprocess-local、koffi、node-pty），之后 vitest 可运行；完整安装/构建能力后续核实，不将安装告警判作产品缺陷。
+只读核验宿主实际 HEAD：a45068d2ec03326c800c68c9bdcd47508e3ccb9c。已读取 atomic-write、workspaceRegistry 与 SessionPersistence 公共源码，未修改宿主。Node v22.23.1，pnpm 11.7.0。首次 pnpm exec 自动安装依赖时报告未批准构建脚本（subprocess-local、koffi、node-pty），随后相关测试、typecheck、build 与 pack 导出验证均能运行；未更改构建脚本批准策略，不将安装告警判作产品缺陷。
 
 ## 公开接入合同
 
-src/work-types.ts 是不含宿主依赖的客户端类型合同；WORK_ROUTE_PATH=/a2d2/api/work。POST JSON envelope 为 {kind:'command'|'query',value:WorkCommand|WorkQuery}，返回 WorkResult。其余命令类型先固定供并行 UI 编码，行为实现与生产路由仍按下方待办逐片验证，类型存在不等于验收已通过。
+[work-types.ts](../../src/work-types.ts) 是不含宿主依赖的客户端类型合同；WORK_ROUTE_PATH=/a2d2/api/work。POST JSON envelope 为 {kind:'command'|'query',value:WorkCommand|WorkQuery}，返回 WorkResult。所列本阶段命令/查询已有公开实现与生产可信 UI 路由；WorkCompleted 的 project/task/projects/tasks/agents/resources/candidates/work/ref 字段依动作返回，WorkFailure 带具名 error.code/message 与冲突 currentVersion。
 
 ## 宿主生产接线
 
@@ -97,6 +97,21 @@ legacy.map(ref,address,expectedVersion) 在相同领域事务中保存唯一 (ru
 
 最终 pnpm verify:pack-exports 退出 0：实际构建、打包、临时安装并 import 全部 13 个 Node 导出，包括三个新入口。中间一次恢复扩展名时误改 verify 脚本路径得到 MODULE_NOT_FOUND，已恢复原 scripts/verify-pack-exports.mjs 后重新验证通过。构建产物保持忽略，不纳入提交。
 
-## 尚待本阶段完成
+## 最终验证与交接边界
 
-最终相关测试与证据收口、推送仍在推进。UI 与浏览器验收未验证，交后续切片。
+2026-10-19 最终验证结果：
+
+| 命令 | 真实退出结果 | 观察 |
+| --- | --- | --- |
+| pnpm typecheck | 0 | 后端与既有客户端类型检查通过 |
+| pnpm exec vitest run tests/work.spec.ts tests/work-host.spec.ts tests/work-process.spec.ts | 0 | 3 文件 15/15 通过；含新增跨进程资源唯一归属竞争 |
+| pnpm test | 1 | 当次全量 42 文件，677/679 通过；两个原有 task-runtime 测试 5000ms 超时 |
+| pnpm exec vitest run tests/task-runtime.spec.ts -t 'durably accepts an event while successor creation\|observes a real in-flight question' | 1 | 隔离后 question 测试 695ms 通过；slow successor 5455ms 超时，31 项未选 |
+| pnpm build | 0 | 最终统一 entry 构建成功；同时由下一条再次执行验证 |
+| pnpm verify:pack-exports | 0 | 真实 tgz 安装并 import 13 个 Node 生产导出 |
+| git diff --check | 0 | 补丁格式检查通过 |
+| git diff e9dc56bdc022cfdfa259bc5f1e04b931249bb102 -- src/task-runtime.ts src/task-runtime tests/task-runtime.spec.ts | 0、无差异 | 两个超时涉及的原运行器源码与测试未被本票修改 |
+
+超时测试包含真实 DSH 初始化、磁盘 I/O 与一次显式 2300ms 的锁持有。当前证据只证明原测试在此环境超过原 5 秒预算，不能据此声称其业务断言通过，也未把它归结为本票产品回归。原源码、断言与超时均未调整；固定 base 对照诊断交主会话继续。
+
+UI、真实 DSH 浏览器、真实模型调用、活动旧记录迁移均未在本阶段验证；不据后端测试宣称整票浏览器验收完成。本阶段未部署/重启/修改现有 18780/18781 服务，没有外部业务写入。记录作用域保持单宿主同 PID 命名空间，不提供跨机器锁或断电 fsync 保证。
