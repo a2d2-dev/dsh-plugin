@@ -55,3 +55,27 @@ it('deduplicates concurrent commands across application instances and reload, wi
   expect(projects.status === 'completed' && projects.projects).toHaveLength(2)
   expect(await app.execute(command, { operator: false })).toMatchObject({ status: 'failed', error: { code: 'forbidden' } })
 })
+
+async function createWork(app: WorkApplication, key = 'work') {
+  const projectResult = await app.execute({ type: 'project.create', commandId: `${key}-project`, name: 'Local project' }, operator)
+  if (projectResult.status !== 'completed' || !projectResult.project) throw new Error('Expected project')
+  const result = await app.execute({ type: 'task.create', commandId: `${key}-task`, projectId: projectResult.project.id,
+    title: 'Local task', goal: 'Original goal', specification: 'Original specification', acceptance: ['Original criterion'] }, operator)
+  if (result.status !== 'completed' || !result.task) throw new Error('Expected task')
+  return { project: projectResult.project, task: result.task, ref: { projectId: projectResult.project.id, taskId: result.task.id } }
+}
+
+it('updates specifications with versioned acceptance while concurrent stale edits cannot replace accepted work', async () => {
+  const { directory, app } = await open()
+  const { ref } = await createWork(app)
+  const command = { type: 'task.update-spec', commandId: 'edit-spec', ref, expectedVersion: 1,
+    goal: 'Revised goal', specification: 'Revised specification', acceptance: ['Revised criterion'] }
+  const results = await Promise.all([app.execute(command, operator),
+    new WorkApplication(directory, noHost).execute({ ...command, commandId: 'competing-edit' }, operator)])
+  expect(results.filter(result => result.status === 'completed')).toHaveLength(1)
+  expect(results.filter(result => result.status === 'conflict')).toMatchObject([{ error: { code: 'version-conflict', currentVersion: 2 } }])
+  const detail = await new WorkApplication(directory, noHost).query({ type: 'task.detail', ref }, operator)
+  expect(detail).toMatchObject({ status: 'completed', task: { version: 2, goal: 'Revised goal',
+    specification: { version: 2, text: 'Revised specification', acceptance: ['Revised criterion'] },
+    specificationHistory: [{ version: 1, text: 'Original specification', acceptance: ['Original criterion'] }] } })
+})

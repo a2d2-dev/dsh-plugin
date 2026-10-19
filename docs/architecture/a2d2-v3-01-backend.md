@@ -26,9 +26,11 @@ WorkApplication 在独立目录的 work-v3.json 保存 schemaVersion=3 快照；
 pnpm exec vitest run tests/work.spec.ts
 ```
 
-2026-03-15 初始红测：最小公开接缝返回 failed，断言期望 completed，退出 1。实现独立身份与真实持久化后：1/1 通过，退出 0。更早缺失模块的导入失败不作为行为红测证据。
+2026-10-19 初始红测：最小公开接缝返回 failed，断言期望 completed，退出 1。实现独立身份与真实持久化后：1/1 通过，退出 0。更早缺失模块的导入失败不作为行为红测证据。
 
 命令回执与领域记录同事务保存。第二条红测：6 个独立应用实例并发提交同 commandId 生成 6 个身份，退出 1；实现持久 ledger 后 2/2 测试通过，退出 0。同名项目用不同 commandId 创建各自独立身份；同 commandId 内容不同时返回 command-id-reused，未授权重放在读取回执前拒绝。
+
+规格更新采用 Task expectedVersion；旧规格和验收标准进入 specificationHistory，新标准有独立规格版本。第三条红测无成功更新（退出 1），实现后 3/3 通过（退出 0）；两个并发编辑仅一个成功，另一个得到 currentVersion=2 的 version-conflict。
 
 ## 宿主与环境基线
 
