@@ -46,7 +46,11 @@ export class WorkPanelController {
     } catch (error) { if (revision === this.revision) this.update({ loading: false, error: message(error) }) }
   }
   async openTask(ref: TaskRef): Promise<void> {
-    if (this.state.projectId !== ref.projectId) await this.selectProject(ref.projectId)
+    if (this.state.projectId !== ref.projectId) {
+      const projectRevision = this.revision + 1
+      await this.selectProject(ref.projectId)
+      if (this.revision !== projectRevision || this.state.projectId !== ref.projectId) return
+    }
     const revision = ++this.revision
     this.update({ detail: null, loading: true, error: null, detailTab: 'overview' })
     try {
@@ -58,9 +62,12 @@ export class WorkPanelController {
   async refreshTask(): Promise<void> {
     const task = this.state.detail?.task
     if (!task) return
-    const tab = this.state.detailTab
-    await this.openTask({ projectId: task.projectId, taskId: task.id })
-    this.setDetailTab(tab)
+    const revision = ++this.revision
+    this.update({ loading: true, error: null })
+    try {
+      const detail = await this.client.query({ type: 'task.detail', ref: { projectId: task.projectId, taskId: task.id } })
+      if (revision === this.revision) this.update({ detail, loading: false })
+    } catch (error) { if (revision === this.revision) this.update({ loading: false, error: message(error) }) }
   }
   private pendingCommands = new Map<string, string>()
   async submit(command: WorkIntent): Promise<WorkCompleted> {

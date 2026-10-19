@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { createWorkClient } from '../../src/client/work-api.ts'
 
 describe('trusted work HTTP boundary', () => {
+  it('rejects a completed query that omits its project projection instead of showing an empty project list',async()=>{
+    const client=createWorkClient(async()=>new Response(JSON.stringify({status:'completed'})))
+    await expect(client.query({type:'projects.list'})).rejects.toThrow('工作服务返回的数据不符合查询合同')
+  })
   it('queries projects without any session or directory and preserves named refusals', async () => {
     const requests: {url: string; init?: RequestInit}[] = []
     const client = createWorkClient(async (url, init) => {

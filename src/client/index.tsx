@@ -1,19 +1,7 @@
 /**
- * The browser half of the A²D² plugin.
- *
- * Two contributions, both browser-only views of host folds: the floating handoff
- * indicator, mounted into the composer's dock slot, and the subagent model list,
- * registered as a sidebar tab. The indicator registers into an existing
- * session-scoped list slot rather than the root slot, which the layout frame
- * owns. This half collaborates with the host only through cordis services and
- * the host-published `a2d2Indicator` projection — never through another plugin's
- * package.
- *
- * The sidebar is an optional peer: a deployment without it gets the indicator
- * alone, and the tab registration waits for the service rather than failing the
- * bundle.
- *
- * @module @deepseek-ai/dsh-a2d2/client
+ * Browser contributions: one global work panel and a lightweight associated-work
+ * action in native conversations, alongside the existing orb and settings page.
+ * All composition and navigation use published host services and slots.
  */
 
 import { createElement } from 'react'

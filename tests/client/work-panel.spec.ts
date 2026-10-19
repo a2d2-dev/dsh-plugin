@@ -32,6 +32,50 @@ describe('work panel public navigation',()=>{
     panel.close()
     expect(navigation.selectPanel).toHaveBeenLastCalledWith(null)
   })
+  it('does not reveal an earlier task when its project query resolves after a newer project selection',async()=>{
+    const {panel,client}=setup()
+    let release!:()=>void
+    const oldQuery=client.query
+    client.query=async query=>{
+      if(query.type==='project.detail' && query.projectId==='p1') await new Promise<void>(resolve=>{release=resolve})
+      return oldQuery(query)
+    }
+    const earlier=panel.openTask({projectId:'p1',taskId:'t1'})
+    await panel.selectProject('p2')
+    release(); await earlier
+    expect(panel.getSnapshot()).toMatchObject({projectId:'p2',detail:null,tasks:[]})
+  })
+  it('does not revive a superseded task intent after switching away and back to its project',async()=>{
+    const {panel,client}=setup()
+    let release!:()=>void, delayed=false
+    const oldQuery=client.query
+    client.query=async query=>{
+      if(query.type==='project.detail' && query.projectId==='p1' && !delayed){delayed=true;await new Promise<void>(resolve=>{release=resolve})}
+      return oldQuery(query)
+    }
+    const earlier=panel.openTask({projectId:'p1',taskId:'t1'})
+    await panel.selectProject('p2'); await panel.selectProject('p1')
+    release(); await earlier
+    expect(panel.getSnapshot()).toMatchObject({projectId:'p1',detail:null})
+  })
+  it('keeps the user-selected detail tab when a refresh resolves',async()=>{
+    const {panel,client}=setup()
+    await panel.openTask({projectId:'p1',taskId:'t1'});panel.setDetailTab('related')
+    let release!:()=>void
+    const oldQuery=client.query
+    client.query=async query=>{await new Promise<void>(resolve=>{release=resolve});return oldQuery(query)}
+    const refresh=panel.refreshTask()
+    panel.setDetailTab('sessions');release();await refresh
+    expect(panel.getSnapshot().detailTab).toBe('sessions')
+  })
+  it('filters saved content by local association view and search together',async()=>{
+    const {panel,client}=setup()
+    client.query=async query=>query.type==='projects.list'?{status:'completed',projects:[{id:'p1',name:'本地项目',version:1,defaultAgentId:'a1',resources:[]}]}:{status:'completed',tasks:[task,{...task,id:'t2',title:'评审记录',sessions:[{session:{runtimeId:'host-A',sessionId:'native'},purpose:'review'}]}]}
+    await panel.load()
+    panel.setView('associated'); expect(panel.visibleTasks().map(item=>item.title)).toEqual(['评审记录'])
+    panel.setSearch('保存本地工作'); expect(panel.visibleTasks()).toEqual([])
+    panel.setView('unassociated'); expect(panel.visibleTasks().map(item=>item.id)).toEqual(['t1'])
+  })
   it('retries an uncertain spec save with the same command identity and backend version',async()=>{
     const {panel,client}=setup()
     const command = vi.mocked(client.command)

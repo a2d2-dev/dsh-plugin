@@ -12,6 +12,13 @@
 declare module '*.module.css' {
   const classes: {
     readonly panel: string
+    readonly toolbar: string
+    readonly tabs: string
+    readonly metrics: string
+    readonly tableScroll: string
+    readonly formSection: string
+    readonly form: string
+    readonly link: string
     readonly sessionEntry: string
     readonly root: string
     readonly water: string

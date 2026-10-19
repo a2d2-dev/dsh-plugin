@@ -19,6 +19,17 @@ export function createWorkClient(fetcher: typeof fetch = globalThis.fetch.bind(g
       throw new Error(`${result.error.code}: ${result.error.message}`)
     }
     if (!response.ok || result?.status !== 'completed') throw new Error(`工作服务不可用（HTTP ${response.status}）`)
+    if (payload.kind === 'query') {
+      const query = payload.value.type
+      const valid = query === 'projects.list' ? Array.isArray(result.projects)
+        : query === 'resources.list' ? Array.isArray(result.resources)
+        : query === 'project.detail' ? result.project !== undefined && Array.isArray(result.tasks)
+        : query === 'task.detail' ? result.task !== undefined
+        : query === 'session.candidates' ? Array.isArray(result.candidates)
+        : query === 'session.work' ? Array.isArray(result.work)
+        : true
+      if (!valid) throw new Error('工作服务返回的数据不符合查询合同')
+    }
     return result
   }
   return {
