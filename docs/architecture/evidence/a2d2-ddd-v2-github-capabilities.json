@@ -1,0 +1,55 @@
+{
+  "observedAt": "2026-10-19T03:02:57.552791+00:00",
+  "method": "Authenticated read-only GraphQL __type(inputFields) queries; no mutation executed",
+  "inputTypes": {
+    "UpdateIssueInput": [
+      "clientMutationId",
+      "id",
+      "title",
+      "body",
+      "assigneeIds",
+      "assignees",
+      "milestoneId",
+      "labelIds",
+      "labels",
+      "state",
+      "stateInput",
+      "projectIds",
+      "issueTypeId",
+      "issueType",
+      "issueFieldUpdates",
+      "agentAssignment"
+    ],
+    "UpdateIssueCommentInput": [
+      "clientMutationId",
+      "id",
+      "body"
+    ],
+    "UpdateProjectV2ItemFieldValueInput": [
+      "clientMutationId",
+      "projectId",
+      "itemId",
+      "fieldId",
+      "value"
+    ],
+    "LockLockableInput": [
+      "clientMutationId",
+      "lockableId",
+      "lockReason"
+    ],
+    "SetIssueFieldValueInput": [
+      "clientMutationId",
+      "issueId",
+      "issueFields"
+    ]
+  },
+  "interpretation": "Observed input types do not expose expectedVersion/expectedOwner or a demonstrated atomic claim primitive. This does not prove all GitHub APIs lack conditional writes; no lock guarantee may be inferred from these updates. clientMutationId documentation describes client identification, not a verified idempotency guarantee.",
+  "projectAndIssueFields": "GitHub documents organization-level Issue fields separately from per-Project custom fields. Availability for this organization was not checked.",
+  "sources": {
+    "GH-project": "https://docs.github.com/en/issues/planning-and-tracking-with-projects/learning-about-projects/about-projects",
+    "GH-project-fields": "https://docs.github.com/en/issues/planning-and-tracking-with-projects/understanding-fields/about-text-and-number-fields",
+    "GH-issue-fields": "https://docs.github.com/en/issues/planning-and-tracking-with-projects/understanding-fields/about-issue-fields",
+    "GH-issues-api": "https://docs.github.com/en/graphql/reference/issues",
+    "GH-projects-api": "https://docs.github.com/en/graphql/reference/projects"
+  }
+}
