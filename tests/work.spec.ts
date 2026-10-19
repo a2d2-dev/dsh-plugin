@@ -103,3 +103,16 @@ it('creates local children through parent TaskRef and rejects foreign links and 
   expect(await app.execute({ type: 'task.link-child', commandId: 'link-existing', ref, expectedVersion: 2,
     child: { projectId: ref.projectId, taskId: spare.task.id }, childExpectedVersion: 1 }, operator)).toMatchObject({ status: 'completed', task: { version: 3 } })
 })
+
+it('persists requirement breakdown independently of child Tasks and rejects duplicate block identities', async () => {
+  const { directory, app } = await open()
+  const { ref } = await createWork(app)
+  const blocks = [{ id: 'storage', title: 'Persist accepted work', description: 'Retain local facts' },
+    { id: 'host', title: 'Resolve host resources', description: 'Read approved workspace identities' }]
+  expect(await app.execute({ type: 'task.replace-breakdown', commandId: 'breakdown', ref, expectedVersion: 1, blocks }, operator))
+    .toMatchObject({ status: 'completed', task: { version: 2, breakdown: blocks, children: [], sessions: [] } })
+  expect(await app.execute({ type: 'task.replace-breakdown', commandId: 'duplicate-blocks', ref, expectedVersion: 2, blocks: [blocks[0], blocks[0]] }, operator))
+    .toMatchObject({ status: 'failed', error: { code: 'duplicate-block' } })
+  expect(await new WorkApplication(directory, noHost).query({ type: 'task.detail', ref }, operator))
+    .toMatchObject({ status: 'completed', task: { version: 2, breakdown: blocks } })
+})

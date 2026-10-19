@@ -82,6 +82,12 @@ export class WorkApplication {
     const task = taskAt(state, command.ref)
     if (!task) return failed('unknown-task', 'Task does not belong to this project')
     if (task.version !== command.expectedVersion) return conflict(task.version)
+    if (command.type === 'task.replace-breakdown') {
+      if (new Set(command.blocks.map(block => block.id)).size !== command.blocks.length) return failed('duplicate-block', 'Breakdown block IDs must be unique')
+      task.breakdown = command.blocks
+      this.changed(task, command)
+      return { status: 'completed', task }
+    }
     if (command.type === 'task.create-child') {
       const child = this.newTask(state, command, project)
       child.parent = command.ref
