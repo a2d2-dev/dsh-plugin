@@ -35,8 +35,17 @@ describe('A²D² host panel contribution', () => {
     expect(slots.entries).toEqual([])
   })
 
-  it('provides a session-scoped lightweight return entry', async () => {
-    const { slots } = await mount()
-    expect(slots.entries.filter(entry => entry.options.name === 'conversation.session.header.actions')).toHaveLength(1)
+  it('contributes one session-scoped return entry to the input list dock shared by blank and active conversations', async () => {
+    const { slots, fiber } = await mount()
+    const entries = slots.entries.filter(entry => entry.options.id === 'a2d2-session-work')
+    expect(entries).toHaveLength(1)
+    expect(entries[0]!.options.name).toBe('conversation.input.dock')
+    expect(slots.entries.some(entry => entry.options.name === 'conversation.session.header.corner')).toBe(false)
+    for (const sessionId of ['blank-existing', 'nonblank-existing']) {
+      const element = entries[0]!.component({ sessionId } as never)
+      expect(isValidElement<{ sessionId: string }>(element) && element.props.sessionId).toBe(sessionId)
+    }
+    await fiber.dispose()
+    expect(slots.entries).toEqual([])
   })
 })

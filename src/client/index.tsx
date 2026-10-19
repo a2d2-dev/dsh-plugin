@@ -78,7 +78,9 @@ export function apply(ctx: A2d2ClientContext): void {
     name: 'sidebar.panellist', id: 'a2d2-panel', order: 40,
     label: () => 'A²D² 控制面板',
   }, props => createElement(IconA2d2AgentsOutline16, {size: props.size}))), 'a2d2 panel entry')
-  ctx.effect(() => ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
-    name: 'conversation.session.header.actions', id: 'a2d2-session-work', order: 40,
+  // The input list dock is present for both blank Hero and active conversations.
+  // Header actions are hidden for blank Sessions; the header corner is single.
+  ctx.effect(() => ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
+    name: 'conversation.input.dock', id: 'a2d2-session-work', order: 40,
   }, props => createElement(SessionWorkEntry, {controller, sessionId: props.sessionId}))), 'a2d2 session work')
 }
