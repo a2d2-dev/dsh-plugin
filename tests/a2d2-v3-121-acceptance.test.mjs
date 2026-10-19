@@ -1,5 +1,83 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdtemp, mkdir, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { join, dirname, basename, resolve } from 'node:path'
+import { spawnSync } from 'node:child_process'
+
+async function fixture(t, parent, prefix) {
+  assert.equal(await realpath(parent), parent, 'fixture parent must already be canonical')
+  const path = await mkdtemp(join(parent, prefix))
+  const exact = resolve(parent, basename(path))
+  assert.equal(path, exact)
+  t.after(async () => {
+    assert.equal(path, exact)
+    assert.equal(dirname(path), parent)
+    assert.ok(basename(path).startsWith(prefix))
+    assert.equal(await realpath(path), exact, 'refuse cleanup of a replaced fixture root')
+    await rm(exact, { recursive: true, force: true })
+  })
+  return path
+}
+
+async function namespaceFixture(t) {
+  const namespace = '/tmp/a2d2-v3-121'
+  assert.equal(await realpath('/tmp'), '/tmp')
+  try { assert.equal(await realpath(namespace), namespace) } catch (error) {
+    if (error.code !== 'ENOENT') throw error
+    await mkdir(namespace, { mode: 0o700 })
+  }
+  assert.equal(await realpath(namespace), namespace)
+  return fixture(t, namespace, 'root-regression-')
+}
+
+test('prepare rejects a symlink escape before creating anything in the external fixture', async t => {
+  const external = await fixture(t, '/tmp', 'a2d2-v3-121-external-fixture-')
+  const inside = await namespaceFixture(t)
+  await symlink(external, join(inside, 'link'), 'dir')
+  await assert.rejects(() => prepare({ host: '/some/host', root: join(inside, 'link/new-root/nested'), hostOnly: true }), /symlink|canonical/)
+  assert.deepEqual(await readdir(external), [], 'rejecting the root must leave no new external directories or files')
+})
+
+test('prepare rejects noncanonical and dangling/internal symlink roots without new children', async t => {
+  const inside = await namespaceFixture(t)
+  const target = join(inside, 'target')
+  await mkdir(target)
+  await symlink(target, join(inside, 'alias'), 'dir')
+  await symlink(join(inside, 'absent'), join(inside, 'dangling'), 'dir')
+  for (const root of [`${inside}/./new-root`, `${inside}//new-root`, `${inside}/new-root/`, join(inside, 'alias/new-root'), join(inside, 'dangling/new-root')]) {
+    await assert.rejects(() => prepare({ host: '/some/host', root, hostOnly: true }), /canonical|symlink/)
+  }
+  assert.deepEqual(await readdir(target), [])
+  assert.deepEqual((await readdir(inside)).sort(), ['alias', 'dangling', 'target'])
+})
+
+test('prepare completes for a brand-new canonical root using a test-owned host layout fixture', async t => {
+  const inside = await namespaceFixture(t)
+  const host = join(inside, 'host-fixture')
+  const write = async (relative, text) => {
+    const path = join(host, relative)
+    await mkdir(dirname(path), { recursive: true })
+    await writeFile(path, text)
+  }
+  await write('apps/cli/lib/bin.js', "console.log('fixture-cli')\n")
+  await write('packages/bundle/web-app/package.json', '{}')
+  await write('packages/bundle/base/package.json', '{}')
+  for (const name of ['dsh-llm', 'dsh-api-session-controller', 'dsh-api-workspace-controller', 'dsh-client-modules']) {
+    await write(`node_modules/@deepseek-ai/${name}/package.json`, '{"main":"index.js"}')
+    await write(`node_modules/@deepseek-ai/${name}/index.js`, 'module.exports = {}\n')
+  }
+  // Only this test-owned layout fixture gets an empty Git identity; no user checkout.
+  for (const args of [['init', '-q', host], ['-C', host, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@localhost', 'commit', '--allow-empty', '-qm', 'fixture']]) {
+    const result = spawnSync('git', args, { encoding: 'utf8' })
+    assert.equal(result.status, 0, result.stderr)
+  }
+  const root = join(inside, 'brand-new/nested-run')
+  const manifest = await prepare({ host, root, hostOnly: true })
+  assert.equal(manifest.root, root)
+  assert.equal(manifest.cliVersion, 'fixture-cli')
+  assert.equal(await realpath(root), root)
+  assert.deepEqual((await readdir(root)).sort(), ['acceptance.patch.yml', 'browser-profile', 'config', 'evidence', 'guard', 'home', 'ipc', 'logs', 'manifest.json', 'state', 'workspace'])
+})
 
 test('real host counts both model boundaries and turns the disabled adapter throw into finish error', { skip: !process.env.A2D2_ACCEPTANCE_POSITIVE_ROOT }, async () => {
   const result = await request(process.env.A2D2_ACCEPTANCE_POSITIVE_ROOT, 'positive')

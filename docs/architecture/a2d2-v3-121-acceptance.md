@@ -23,7 +23,7 @@
 
 ### 架构设计
 
-`prepare` 要求现有宿主绝对路径及 tgz，或显式 `--host-only`。临时资源必须位于 `/tmp/a2d2-v3-121/<run>`，真实路径不能通过 symlink 逃逸。新环境独占 manifest，重复 prepare 拒绝。子进程只继承 PATH，并设置独立 DSH_HOME、XDG_CONFIG_HOME、XDG_STATE_HOME 和遥测禁用标志，不覆盖 HOME，不继承模型凭据。
+`prepare` 要求现有宿主绝对路径及 tgz，或显式 `--host-only`。临时资源必须位于 `/tmp/a2d2-v3-121/<run>`，root 必须为规范绝对路径（拒绝 `.`、`..`、重复分隔符和尾部分隔符）。任何 mkdir 前先向上查找最近现存父目录，用 lstat 拒绝非目录/悬空 symlink，并要求 realpath 与原路径完全相等，因而也拒绝命名空间内外的 symlink 别名；确认后才创建缺失目录，再核对 root 的规范路径。新环境独占 manifest，重复 prepare 拒绝。子进程只继承 PATH，并设置独立 DSH_HOME、XDG_CONFIG_HOME、XDG_STATE_HOME 和遥测禁用标志，不覆盖 HOME，不继承模型凭据。
 
 LLM 模块通过宿主 base bundle 依赖闭包解析；controller/client-modules 通过 web-app bundle 解析。guard 拷贝到临时独立包，避免宿主把仓库中的 guard 误认为产品客户端包。overlay 全量替换相关 config；host-only 不写不存在的 A²D² 行；产品环境禁用既有 `a2d2-task-runtime`。插件的 v3 工作数据默认位于独立 DSH_HOME。
 
@@ -105,6 +105,14 @@ PNG 存在只能作为冻结前置条件；验收者仍须实际查看截图与 
 重启使用同一个已准备 root，再次运行 `run` 并登记新 managed job ID；不能再次 prepare 或删除 metrics。若需加载新的 tgz，另建全新 root。浏览器需重新交换新进程 token，再通过公开查询检查持久身份及配置。
 
 清理只停止本任务 managed jobs 与 `agent-browser --session a2d2-v3-121 close`。保留临时隔离数据以便复核，不删除宿主或既有 profile，不操作 18780/18781。正式证据只白名单复制 manifest、run／exit、positive、metrics、baseline／check、截图及脱敏测试结果；不复制 private 登录 URL、原始日志或 browser profile。
+
+## 一轮评审后的 R2 隔离整改
+
+原 checkedRoot 先递归 mkdir 后检查 realpath。真实回归由测试自行创建 `/tmp` 外部临时 fixture 及 ticket namespace 下的临时 fixture，把 namespace/link 指向外部，再调用公开 prepare；拒绝后要求外部目录为空。所有 fixture 在 cleanup 前核对保存的精确绝对路径、父目录、名称前缀及 realpath，仅清理本测试创建的根，不删除 namespace 或现有实例。
+
+- 红测：`XDG_STATE_HOME=/tmp/a2d2-v3-gh-state node --test --test-name-pattern='symlink escape' tests/a2d2-v3-121-acceptance.test.mjs`，退出 1；实际外部目录新增 `new-root`，与期望空数组不符。
+- 修复后同命令退出 0，1/1 通过；没有外部新增目录或文件。
+- 工具测试命令 `XDG_STATE_HOME=/tmp/a2d2-v3-gh-state node --test tests/a2d2-v3-121-acceptance.test.mjs`：6 项通过、2 项 real-host 显式 skip，退出 0。新增覆盖规范路径语法、内部及悬空 symlink 的拒绝，及全新规范 root 的完整 prepare。后者使用测试自建的最小宿主布局/CLI fixture，不冒称真实 DSH 宿主安装或产品验收。
 
 ## 本阶段实际验证
 

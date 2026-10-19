@@ -1,9 +1,9 @@
 import { spawn, spawnSync } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { createRequire } from 'node:module'
-import { readFile, writeFile, mkdir, realpath, open } from 'node:fs/promises'
+import { readFile, writeFile, mkdir, realpath, lstat, open } from 'node:fs/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { isAbsolute, join, dirname } from 'node:path'
+import { isAbsolute, join, dirname, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { setTimeout as delay } from 'node:timers/promises'
 
@@ -29,9 +29,22 @@ function command(program, args, options = {}) {
   return result.stdout.trim()
 }
 async function checkedRoot(root) {
-  if (!isAbsolute(root) || !root.startsWith(namespace) || root.includes('/../')) throw new Error('root must be inside ticket temporary namespace')
+  if (typeof root !== 'string' || !isAbsolute(root) || !root.startsWith(namespace) || resolve(root) !== root) throw new Error('root must be a canonical path inside ticket temporary namespace')
+  // Find the nearest existing ancestor without creating anything. lstat also catches
+  // dangling symlinks; realpath equality rejects symlinks anywhere in its parents.
+  let parent = root
+  while (true) {
+    let entry
+    try { entry = await lstat(parent) } catch (error) {
+      if (error.code !== 'ENOENT') throw error
+      parent = dirname(parent)
+      continue
+    }
+    if (!entry.isDirectory() || await realpath(parent) !== parent) throw new Error('root has a symlink or noncanonical parent')
+    break
+  }
   await mkdir(root, { recursive: true, mode: 0o700 })
-  if (!(await realpath(root)).startsWith(namespace)) throw new Error('root escapes ticket temporary namespace through a symlink')
+  if (await realpath(root) !== root) throw new Error('root escapes its canonical path through a symlink')
   return root
 }
 export async function prepare({ host, root, plugin, hostOnly = false }) {
