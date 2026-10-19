@@ -33,7 +33,7 @@
 | C1 | CEO 产品文案核对 | **修正文案**：去除“当前票不启动执行”的开发票据术语，保留准确的当前未启动状态 | **已关闭**：`9e31834` 文案及渲染测试已核对 |
 | R4 | 真实浏览器验收准备 | **修**：guard seed 使用公开 WorkspaceController 返回的 `workspace.workspaceId`，不使用不存在的 `workspace.id`；验证创建 Session 的引用与实际 cwd | **已关闭**：`44175de` 的真实 controller 测试及最终产品 03 号公开记录均证明两个 Session 的正确 cwd、workspaceId 与实际成员关系；后续新 origin 首用问题独立归 R6 |
 | R5 | 首轮真实浏览器 AC7 缺陷 | **修**：blank Session 不渲染 header.actions；将工作入口迁到 blank/普通会话共享的公开 `conversation.input.dock` list，保留已有 single corner 控件 | **已关闭**：`f482b15`；CEO 已回读新包 26 号真实记录及 23 号截图：blank 会话入口可见，同一已选 Session 新增子工作关联后无需刷新即显示第二入口，点击返回正确 Project/Task 四标签；前后 timeOrigin 相同 |
-| R6 | 最终验收环境语义 | **修工具**：同 root 重启应复用首次实际 origin，不能把更换端口后的新站点首用流程当作同实例恢复；保护/非法/占用端口明确拒绝 | `6077dae` / `27c8648` 已经 CEO 代码核查和独立 28 项工具测试通过；待真实 DSH 稳定 origin 补验。产品源码、guard 和安装包完全未变 |
+| R6 | 最终验收环境语义 | **修工具**：同 root 重启应复用首次实际 origin，不能把更换端口后的新站点首用流程当作同实例恢复；保护/非法/占用端口明确拒绝 | **已关闭**：`6077dae` / `27c8648`；CEO 独立工具测试 28 项通过，并重算真实 stable-origin 的 07/13/baseline/metrics/exit 文件：两进程同 origin、2 个相同 Session、配置及完整领域数据相等、累计双计数 0、两进程退出 0；产品源码和包未变 |
 
 采用一轮制：统一高级整改后 CEO 直接核对以上清单，不再次派评审扩大范围。产品浏览器发现若击穿验收，仍在本票修复。
 
@@ -67,4 +67,16 @@
 
 工具修复 `6077dae` 与说明 `27c8648` 只改变 `acceptance.mjs`、聚焦工具测试和文档。CEO 已全文核对 origin 验证、端口占用拒绝、实际 ready origin 核对及自有子进程停止逻辑，并独立运行两份 Node 工具测试：**28 通过，2 个 real-host 用例显式未选，退出 0**。相对 R6 起点的产品 `src`、guard、package 和锁文件 diff 为空；不重复无变化产品构建与 696 项测试。
 
-新复验固定工具/证据整合提交 `56679a69286f473d786735576c81ffa3a61d4238`，继续使用上述相同产品包，在另一 fresh root 只补稳定 origin 的真实重启、完整公开数据、原有 Session 身份/配置及跨进程模型计数。此前产品场景的通过证据继续有效，最终补验完成前整票仍未验收关闭。
+新复验固定工具/证据整合提交 `56679a69286f473d786735576c81ffa3a61d4238`，使用相同产品包，在另一 fresh root 补验。**真实 DSH 稳定 origin gate 已通过**：两个 run/PID 不同，baseURL 均为 `http://127.0.0.1:39683`；原有两个 Session 身份与实际目录/模型/权限完全相同，完整公开领域查询相同，两个进程累计 gateway/adapter 都为 0，退出记录均为 code 0。
+
+CEO 已查看真实恢复截图，并独立读取 07 号 before、13 号 gate、baseline、原始 append-only metrics 与两份 exit JSON，重算 origin、身份集合、实际配置、完整域相等和模型计数，验证退出 0。额外的“自动重连后必须 0 个可用 Agent”诊断假设不属于验收标准，其退出 1 与解释仍保留；未修改基线或删除任何会话。
+
+## 最终接受
+
+**#121 已满足既定九条验收，所有本票评审/验收裁决已闭合。** Standards 初轮 2 项 P2、Spec 初轮 1 项 P2（重叠原文项）保留原始 REQUEST_CHANGES 结论；整改后由 CEO 按一轮制逐项复核并接受，没有伪造评审者的二轮批准。
+
+- [逐 AC 最终证据与范围](../artifacts/a2d2-v3-121-2026-10-19/product-final/README.md)
+- [稳定 origin 原始 gate](../artifacts/a2d2-v3-121-2026-10-19/product-final/stable-origin/13-stable-origin-gate-passed.json)
+- [稳定 origin 执行及清理报告](../artifacts/a2d2-v3-121-2026-10-19/product-final/stable-origin/README.md)
+
+最终验收使用固定产品代码 `433e986` 与包 SHA256 `81466a33342c0256873bbf30dac693ee0cff2c075246a4ad859d94663ce0a82b`。之后只有验收工具、文档和证据变更，未更改该产品包。正式和历史自有 Web jobs 均已停止并收集，专属浏览器已关闭。既有 18780/18781 服务没有部署、重启或接管；PR 交付保持未合并，父任务 #120 的其余票不在本次执行范围。
