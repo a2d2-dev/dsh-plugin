@@ -1,0 +1,127 @@
+{
+  "result": {
+    "children": [
+      {
+        "activity": [
+          {
+            "commandId": "c7b5c464-4143-4b90-ac81-c1bf38767680",
+            "type": "task.create-child",
+            "version": 1
+          }
+        ],
+        "agentId": "19e2129d-5d1a-412f-a76b-b687b20b7486",
+        "breakdown": [],
+        "children": [],
+        "goal": "独立子Task目标",
+        "id": "13197725-c6f6-49d5-a8f8-b1c7c2effffe",
+        "parent": {
+          "projectId": "10440418-8249-48d9-a961-c6b96386a36c",
+          "taskId": "bbae4af3-ee6d-4809-9963-ea928a477842"
+        },
+        "projectId": "10440418-8249-48d9-a961-c6b96386a36c",
+        "sessions": [],
+        "specification": {
+          "acceptance": [
+            "父子引用持久且身份独立"
+          ],
+          "text": "子规格，不创建Issue或Session",
+          "version": 1
+        },
+        "specificationHistory": [],
+        "title": "本地子工作甲",
+        "version": 1
+      }
+    ],
+    "status": "completed",
+    "task": {
+      "activity": [
+        {
+          "commandId": "3e29d224-767b-4583-9c34-e61bccbb9603",
+          "type": "task.create",
+          "version": 1
+        },
+        {
+          "commandId": "acceptance-121-multiline-api-1",
+          "type": "task.update-spec",
+          "version": 2
+        },
+        {
+          "commandId": "2e9be649-39b2-4269-9fb9-e5c87fbda462",
+          "type": "task.update-spec",
+          "version": 3
+        },
+        {
+          "commandId": "e72dabbe-26b2-408f-a5d2-8b6c6e8f7df1",
+          "type": "task.replace-breakdown",
+          "version": 4
+        },
+        {
+          "commandId": "c7b5c464-4143-4b90-ac81-c1bf38767680",
+          "type": "task.create-child",
+          "version": 5
+        },
+        {
+          "commandId": "d5a20ec0-b8c4-49ec-a3ae-c7f059fd958e",
+          "type": "task.associate-session",
+          "version": 6
+        }
+      ],
+      "agentId": "19e2129d-5d1a-412f-a76b-b687b20b7486",
+      "breakdown": [
+        {
+          "description": "核对本地身份、规格及真实导航；不启动执行。",
+          "id": "dc4f94b7-cadc-4183-bcf2-9b0a3a05ae99",
+          "title": "需求块甲"
+        }
+      ],
+      "children": [
+        {
+          "projectId": "10440418-8249-48d9-a961-c6b96386a36c",
+          "taskId": "13197725-c6f6-49d5-a8f8-b1c7c2effffe"
+        }
+      ],
+      "goal": "API目标第一行\n    API目标缩进",
+      "id": "bbae4af3-ee6d-4809-9963-ea928a477842",
+      "projectId": "10440418-8249-48d9-a961-c6b96386a36c",
+      "sessions": [
+        {
+          "purpose": "related",
+          "session": {
+            "runtimeId": "e0bfdec6-2f39-4435-b28b-26c3f425be3a",
+            "sessionId": "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d"
+          }
+        }
+      ],
+      "specification": {
+        "acceptance": [
+          "单条验收第一行",
+          "同一条第二行",
+          "第二条独立验收"
+        ],
+        "text": "API规格\n    原文保留",
+        "version": 3
+      },
+      "specificationHistory": [
+        {
+          "acceptance": [
+            "第一条验收",
+            "第二条验收"
+          ],
+          "text": "规格甲第一行\n    缩进规格第二行",
+          "version": 1
+        },
+        {
+          "acceptance": [
+            "  单条验收第一行\n    同一条第二行\n",
+            "第二条独立验收\n"
+          ],
+          "text": "  API规格\n    原文保留\n",
+          "version": 2
+        }
+      ],
+      "title": "同名验收工作",
+      "version": 6
+    }
+  },
+  "status": 200
+}

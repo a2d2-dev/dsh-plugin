@@ -1,0 +1,29 @@
+{
+  "anonymousForgedOperator": {
+    "status": 401,
+    "body": {
+      "status": "failed",
+      "error": {
+        "code": "unauthenticated",
+        "message": "Sign in to DSH in this browser to use this route."
+      }
+    }
+  },
+  "authenticatedHostileOrigin": {
+    "status": 403,
+    "body": {
+      "status": "failed",
+      "error": {
+        "code": "untrusted",
+        "message": "The request authority or origin is not trusted."
+      }
+    }
+  },
+  "authenticatedProjects": {
+    "status": 200,
+    "body": {
+      "status": "completed",
+      "projects": []
+    }
+  }
+}

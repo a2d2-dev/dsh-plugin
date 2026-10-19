@@ -1,0 +1,497 @@
+{
+  "equal": true,
+  "before": {
+    "projects": {
+      "httpStatus": 200,
+      "status": "completed",
+      "projects": [
+        {
+          "id": "10440418-8249-48d9-a961-c6b96386a36c",
+          "name": "验收项目甲",
+          "version": 1,
+          "defaultAgentId": "19e2129d-5d1a-412f-a76b-b687b20b7486",
+          "resources": [
+            {
+              "runtimeId": "e0bfdec6-2f39-4435-b28b-26c3f425be3a",
+              "workspaceId": "9c1e496f-54ae-4116-aeb1-7c2840f8662a"
+            }
+          ]
+        },
+        {
+          "id": "21ebf699-105c-415e-b1d4-abece43973f7",
+          "name": "验收项目乙",
+          "version": 1,
+          "defaultAgentId": "425a8baa-5a9b-47f2-ac62-341735accb6f",
+          "resources": []
+        }
+      ]
+    },
+    "details": [
+      {
+        "httpStatus": 200,
+        "status": "completed",
+        "project": {
+          "id": "10440418-8249-48d9-a961-c6b96386a36c",
+          "name": "验收项目甲",
+          "version": 1,
+          "defaultAgentId": "19e2129d-5d1a-412f-a76b-b687b20b7486",
+          "resources": [
+            {
+              "runtimeId": "e0bfdec6-2f39-4435-b28b-26c3f425be3a",
+              "workspaceId": "9c1e496f-54ae-4116-aeb1-7c2840f8662a"
+            }
+          ]
+        },
+        "agents": [
+          {
+            "id": "19e2129d-5d1a-412f-a76b-b687b20b7486",
+            "projectId": "10440418-8249-48d9-a961-c6b96386a36c",
+            "role": "coordinator",
+            "policy": {
+              "version": 1,
+              "modelCandidates": [],
+              "instructions": "Coordinate accepted work and its acceptance criteria.",
+              "capabilities": [
+                "coordination"
+              ]
+            }
+          }
+        ],
+        "tasks": [
+          {
+            "id": "bbae4af3-ee6d-4809-9963-ea928a477842",
+            "projectId": "10440418-8249-48d9-a961-c6b96386a36c",
+            "title": "同名验收工作",
+            "goal": "API目标第一行\n    API目标缩进",
+            "version": 6,
+            "agentId": "19e2129d-5d1a-412f-a76b-b687b20b7486",
+            "specification": {
+              "version": 3,
+              "text": "API规格\n    原文保留",
+              "acceptance": [
+                "单条验收第一行",
+                "同一条第二行",
+                "第二条独立验收"
+              ]
+            },
+            "specificationHistory": [
+              {
+                "version": 1,
+                "text": "规格甲第一行\n    缩进规格第二行",
+                "acceptance": [
+                  "第一条验收",
+                  "第二条验收"
+                ]
+              },
+              {
+                "version": 2,
+                "text": "  API规格\n    原文保留\n",
+                "acceptance": [
+                  "  单条验收第一行\n    同一条第二行\n",
+                  "第二条独立验收\n"
+                ]
+              }
+            ],
+            "breakdown": [
+              {
+                "id": "dc4f94b7-cadc-4183-bcf2-9b0a3a05ae99",
+                "title": "需求块甲",
+                "description": "核对本地身份、规格及真实导航；不启动执行。"
+              }
+            ],
+            "children": [
+              {
+                "projectId": "10440418-8249-48d9-a961-c6b96386a36c",
+                "taskId": "13197725-c6f6-49d5-a8f8-b1c7c2effffe"
+              }
+            ],
+            "sessions": [
+              {
+                "session": {
+                  "runtimeId": "e0bfdec6-2f39-4435-b28b-26c3f425be3a",
+                  "sessionId": "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d"
+                },
+                "purpose": "related"
+              }
+            ],
+            "activity": [
+              {
+                "commandId": "3e29d224-767b-4583-9c34-e61bccbb9603",
+                "type": "task.create",
+                "version": 1
+              },
+              {
+                "commandId": "acceptance-121-multiline-api-1",
+                "type": "task.update-spec",
+                "version": 2
+              },
+              {
+                "commandId": "2e9be649-39b2-4269-9fb9-e5c87fbda462",
+                "type": "task.update-spec",
+                "version": 3
+              },
+              {
+                "commandId": "e72dabbe-26b2-408f-a5d2-8b6c6e8f7df1",
+                "type": "task.replace-breakdown",
+                "version": 4
+              },
+              {
+                "commandId": "c7b5c464-4143-4b90-ac81-c1bf38767680",
+                "type": "task.create-child",
+                "version": 5
+              },
+              {
+                "commandId": "d5a20ec0-b8c4-49ec-a3ae-c7f059fd958e",
+                "type": "task.associate-session",
+                "version": 6
+              }
+            ]
+          },
+          {
+            "id": "13197725-c6f6-49d5-a8f8-b1c7c2effffe",
+            "projectId": "10440418-8249-48d9-a961-c6b96386a36c",
+            "title": "本地子工作甲",
+            "goal": "独立子Task目标",
+            "version": 1,
+            "agentId": "19e2129d-5d1a-412f-a76b-b687b20b7486",
+            "specification": {
+              "version": 1,
+              "text": "子规格，不创建Issue或Session",
+              "acceptance": [
+                "父子引用持久且身份独立"
+              ]
+            },
+            "specificationHistory": [],
+            "breakdown": [],
+            "parent": {
+              "projectId": "10440418-8249-48d9-a961-c6b96386a36c",
+              "taskId": "bbae4af3-ee6d-4809-9963-ea928a477842"
+            },
+            "children": [],
+            "sessions": [],
+            "activity": [
+              {
+                "commandId": "c7b5c464-4143-4b90-ac81-c1bf38767680",
+                "type": "task.create-child",
+                "version": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "httpStatus": 200,
+        "status": "completed",
+        "project": {
+          "id": "21ebf699-105c-415e-b1d4-abece43973f7",
+          "name": "验收项目乙",
+          "version": 1,
+          "defaultAgentId": "425a8baa-5a9b-47f2-ac62-341735accb6f",
+          "resources": []
+        },
+        "agents": [
+          {
+            "id": "425a8baa-5a9b-47f2-ac62-341735accb6f",
+            "projectId": "21ebf699-105c-415e-b1d4-abece43973f7",
+            "role": "coordinator",
+            "policy": {
+              "version": 1,
+              "modelCandidates": [],
+              "instructions": "Coordinate accepted work and its acceptance criteria.",
+              "capabilities": [
+                "coordination"
+              ]
+            }
+          }
+        ],
+        "tasks": [
+          {
+            "id": "928b8a89-f8b1-48cf-b40a-3bda98884eb3",
+            "projectId": "21ebf699-105c-415e-b1d4-abece43973f7",
+            "title": "同名验收工作",
+            "goal": "乙项目独立目标",
+            "version": 1,
+            "agentId": "425a8baa-5a9b-47f2-ac62-341735accb6f",
+            "specification": {
+              "version": 1,
+              "text": "乙规格，与甲完全独立",
+              "acceptance": [
+                "乙记录不覆盖甲"
+              ]
+            },
+            "specificationHistory": [],
+            "breakdown": [],
+            "children": [],
+            "sessions": [],
+            "activity": [
+              {
+                "commandId": "447a29c5-e02d-499a-89ff-d32ae9eb2a1b",
+                "type": "task.create",
+                "version": 1
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "after": {
+    "projects": {
+      "httpStatus": 200,
+      "status": "completed",
+      "projects": [
+        {
+          "id": "10440418-8249-48d9-a961-c6b96386a36c",
+          "name": "验收项目甲",
+          "version": 1,
+          "defaultAgentId": "19e2129d-5d1a-412f-a76b-b687b20b7486",
+          "resources": [
+            {
+              "runtimeId": "e0bfdec6-2f39-4435-b28b-26c3f425be3a",
+              "workspaceId": "9c1e496f-54ae-4116-aeb1-7c2840f8662a"
+            }
+          ]
+        },
+        {
+          "id": "21ebf699-105c-415e-b1d4-abece43973f7",
+          "name": "验收项目乙",
+          "version": 1,
+          "defaultAgentId": "425a8baa-5a9b-47f2-ac62-341735accb6f",
+          "resources": []
+        }
+      ]
+    },
+    "details": [
+      {
+        "httpStatus": 200,
+        "status": "completed",
+        "project": {
+          "id": "10440418-8249-48d9-a961-c6b96386a36c",
+          "name": "验收项目甲",
+          "version": 1,
+          "defaultAgentId": "19e2129d-5d1a-412f-a76b-b687b20b7486",
+          "resources": [
+            {
+              "runtimeId": "e0bfdec6-2f39-4435-b28b-26c3f425be3a",
+              "workspaceId": "9c1e496f-54ae-4116-aeb1-7c2840f8662a"
+            }
+          ]
+        },
+        "agents": [
+          {
+            "id": "19e2129d-5d1a-412f-a76b-b687b20b7486",
+            "projectId": "10440418-8249-48d9-a961-c6b96386a36c",
+            "role": "coordinator",
+            "policy": {
+              "version": 1,
+              "modelCandidates": [],
+              "instructions": "Coordinate accepted work and its acceptance criteria.",
+              "capabilities": [
+                "coordination"
+              ]
+            }
+          }
+        ],
+        "tasks": [
+          {
+            "id": "bbae4af3-ee6d-4809-9963-ea928a477842",
+            "projectId": "10440418-8249-48d9-a961-c6b96386a36c",
+            "title": "同名验收工作",
+            "goal": "API目标第一行\n    API目标缩进",
+            "version": 6,
+            "agentId": "19e2129d-5d1a-412f-a76b-b687b20b7486",
+            "specification": {
+              "version": 3,
+              "text": "API规格\n    原文保留",
+              "acceptance": [
+                "单条验收第一行",
+                "同一条第二行",
+                "第二条独立验收"
+              ]
+            },
+            "specificationHistory": [
+              {
+                "version": 1,
+                "text": "规格甲第一行\n    缩进规格第二行",
+                "acceptance": [
+                  "第一条验收",
+                  "第二条验收"
+                ]
+              },
+              {
+                "version": 2,
+                "text": "  API规格\n    原文保留\n",
+                "acceptance": [
+                  "  单条验收第一行\n    同一条第二行\n",
+                  "第二条独立验收\n"
+                ]
+              }
+            ],
+            "breakdown": [
+              {
+                "id": "dc4f94b7-cadc-4183-bcf2-9b0a3a05ae99",
+                "title": "需求块甲",
+                "description": "核对本地身份、规格及真实导航；不启动执行。"
+              }
+            ],
+            "children": [
+              {
+                "projectId": "10440418-8249-48d9-a961-c6b96386a36c",
+                "taskId": "13197725-c6f6-49d5-a8f8-b1c7c2effffe"
+              }
+            ],
+            "sessions": [
+              {
+                "session": {
+                  "runtimeId": "e0bfdec6-2f39-4435-b28b-26c3f425be3a",
+                  "sessionId": "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d"
+                },
+                "purpose": "related"
+              }
+            ],
+            "activity": [
+              {
+                "commandId": "3e29d224-767b-4583-9c34-e61bccbb9603",
+                "type": "task.create",
+                "version": 1
+              },
+              {
+                "commandId": "acceptance-121-multiline-api-1",
+                "type": "task.update-spec",
+                "version": 2
+              },
+              {
+                "commandId": "2e9be649-39b2-4269-9fb9-e5c87fbda462",
+                "type": "task.update-spec",
+                "version": 3
+              },
+              {
+                "commandId": "e72dabbe-26b2-408f-a5d2-8b6c6e8f7df1",
+                "type": "task.replace-breakdown",
+                "version": 4
+              },
+              {
+                "commandId": "c7b5c464-4143-4b90-ac81-c1bf38767680",
+                "type": "task.create-child",
+                "version": 5
+              },
+              {
+                "commandId": "d5a20ec0-b8c4-49ec-a3ae-c7f059fd958e",
+                "type": "task.associate-session",
+                "version": 6
+              }
+            ]
+          },
+          {
+            "id": "13197725-c6f6-49d5-a8f8-b1c7c2effffe",
+            "projectId": "10440418-8249-48d9-a961-c6b96386a36c",
+            "title": "本地子工作甲",
+            "goal": "独立子Task目标",
+            "version": 1,
+            "agentId": "19e2129d-5d1a-412f-a76b-b687b20b7486",
+            "specification": {
+              "version": 1,
+              "text": "子规格，不创建Issue或Session",
+              "acceptance": [
+                "父子引用持久且身份独立"
+              ]
+            },
+            "specificationHistory": [],
+            "breakdown": [],
+            "parent": {
+              "projectId": "10440418-8249-48d9-a961-c6b96386a36c",
+              "taskId": "bbae4af3-ee6d-4809-9963-ea928a477842"
+            },
+            "children": [],
+            "sessions": [],
+            "activity": [
+              {
+                "commandId": "c7b5c464-4143-4b90-ac81-c1bf38767680",
+                "type": "task.create-child",
+                "version": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "httpStatus": 200,
+        "status": "completed",
+        "project": {
+          "id": "21ebf699-105c-415e-b1d4-abece43973f7",
+          "name": "验收项目乙",
+          "version": 1,
+          "defaultAgentId": "425a8baa-5a9b-47f2-ac62-341735accb6f",
+          "resources": []
+        },
+        "agents": [
+          {
+            "id": "425a8baa-5a9b-47f2-ac62-341735accb6f",
+            "projectId": "21ebf699-105c-415e-b1d4-abece43973f7",
+            "role": "coordinator",
+            "policy": {
+              "version": 1,
+              "modelCandidates": [],
+              "instructions": "Coordinate accepted work and its acceptance criteria.",
+              "capabilities": [
+                "coordination"
+              ]
+            }
+          }
+        ],
+        "tasks": [
+          {
+            "id": "928b8a89-f8b1-48cf-b40a-3bda98884eb3",
+            "projectId": "21ebf699-105c-415e-b1d4-abece43973f7",
+            "title": "同名验收工作",
+            "goal": "乙项目独立目标",
+            "version": 1,
+            "agentId": "425a8baa-5a9b-47f2-ac62-341735accb6f",
+            "specification": {
+              "version": 1,
+              "text": "乙规格，与甲完全独立",
+              "acceptance": [
+                "乙记录不覆盖甲"
+              ]
+            },
+            "specificationHistory": [],
+            "breakdown": [],
+            "children": [],
+            "sessions": [],
+            "activity": [
+              {
+                "commandId": "447a29c5-e02d-499a-89ff-d32ae9eb2a1b",
+                "type": "task.create",
+                "version": 1
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "resources": {
+    "httpStatus": 200,
+    "status": "completed",
+    "resources": [
+      {
+        "ref": {
+          "runtimeId": "e0bfdec6-2f39-4435-b28b-26c3f425be3a",
+          "workspaceId": "d21e331d-b3b5-4b18-963e-80f8bc651ac7"
+        },
+        "title": "workspace"
+      },
+      {
+        "ref": {
+          "runtimeId": "e0bfdec6-2f39-4435-b28b-26c3f425be3a",
+          "workspaceId": "9c1e496f-54ae-4116-aeb1-7c2840f8662a"
+        },
+        "title": "default-workspace"
+      }
+    ]
+  },
+  "runtimeIds": [
+    "e0bfdec6-2f39-4435-b28b-26c3f425be3a",
+    "e0bfdec6-2f39-4435-b28b-26c3f425be3a"
+  ]
+}

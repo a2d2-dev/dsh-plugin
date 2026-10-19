@@ -1,0 +1,29 @@
+{
+  "productCommit": "9588b5347595b4adc045a747271284912ea0088a",
+  "productTgzSha256": "eb2d89ed65c1addb06cceb8e6abe5130249bd2ae9bb3ace2e95bd4d574f426e0",
+  "toolCommit": "72b62006f0737e5f3da04257818edd7bb9ad9b74",
+  "root": "/tmp/a2d2-v3-121/product-first-pass-9588b53",
+  "ancestorCheck": {
+    "/tmp": "lstat: directory and not symlink",
+    "/tmp/a2d2-v3-121": "lstat: directory and not symlink",
+    "rootBeforePrepare": "ENOENT; new child under checked ancestors"
+  },
+  "seedObservedResponse": {
+    "sessionId": "session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab",
+    "agentPreset": "standard"
+  },
+  "seedDiagnosis": {
+    "actualPublicWorkspaceIdentity": "workspace.workspaceId",
+    "toolAccessed": "created.workspace.id",
+    "consequence": "undefined workspaceId passed to public sessions.create; real Session created at default cwd without Workspace attachment",
+    "publicMembershipEvidence": "46-public-workspace-seed-membership.json"
+  },
+  "restartGuardCheck": {
+    "exitCode": 1,
+    "error": "Missing public configuration projections for Session session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab"
+  },
+  "overallAccepted": false,
+  "environmentRetained": true,
+  "sourceModified": false,
+  "credentialHandlingIncident": "One interactive diagnostic network listing included this isolated first-process login URL; it was not copied into evidence or sent externally. First process stopped, invalidating that token. Subsequent diagnostics used sanitized HTTP records only."
+}
