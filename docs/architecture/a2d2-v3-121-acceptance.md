@@ -118,6 +118,8 @@ PNG 存在只能作为冻结前置条件；验收者仍须实际查看截图与 
 
 第一轮工具误读 `created.workspace.id`；公开 WorkspaceController 返回的是 `workspace.workspaceId`。传入 undefined 会使 SessionController 选择默认 cwd，旧 seed 不能证明所选资源与 Session cwd 匹配。原 host-only / 第一轮记录如实保留，不能将它们追记成修正后 seed 的通过证据。
 
+独立浏览器 lane 随后向 CEO 报告：旧包同 root 重启后领域 2 Project / 2 Agent / 3 Task 与 runtimeId 一致，但错误 seed 未把 Session attach 到目标 workspace；动态端口前端首次 restore 又创建 Session，集合 2→3，旧 Session cold 导致 guard 缺投影拒绝。该失败作为旧验收 fixture 污染保留；本执行者未操作或复验其实例。修复后的默认 controller 契约已检查真实 workspace membership；fresh root 的 Web 重启集合不增仍交指定 lane 验证。
+
 新增默认运行的契约测试通过真实 guard IPC → 公开 WorkspaceController/SessionController → 真实 WorkspaceRegistry、AgentLoop、SessionStore 与 JSONL 持久化建立无 prompt 会话；只控制无关 RPC plumbing 和此用例未用的 capability。观察真实 create 请求、seed 返回引用、公开 inspect 的 cwd、live Session header cwd、workspace membership，并要求 gateway/adapter 指标均无调用。它不启动 Web 服务，不接管既有验收实例。
 
 - fixture 首次缺少真实 AgentLoop factory，测试退出 1；补齐装配后才进入行为红测，不将该装配错误计作产品复现。
