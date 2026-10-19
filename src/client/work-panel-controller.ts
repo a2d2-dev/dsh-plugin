@@ -23,6 +23,9 @@ export class WorkPanelController {
   getSnapshot = (): WorkPanelState => this.state
   subscribe = (listener: () => void): (() => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener) } }
   private update(value: Partial<WorkPanelState>): void { this.state = { ...this.state, ...value }; this.listeners.forEach(listener => listener()) }
+  async initialize(): Promise<void> {
+    if (!this.state.loading && !this.state.projects.length) await this.load()
+  }
   async load(): Promise<void> {
     const revision = ++this.revision
     this.update({ loading: true, error: null })
@@ -58,7 +61,19 @@ export class WorkPanelController {
       if (revision === this.revision) this.update({ detail, loading: false })
     } catch (error) { if (revision === this.revision) this.update({ loading: false, error: message(error) }) }
   }
-  async revealTask(ref: TaskRef): Promise<void> { this.navigation.selectPanel('a2d2-panel'); await this.openTask(ref) }
+  async revealTask(ref: TaskRef): Promise<void> {
+    const revision = ++this.revision
+    this.update({ loading: true, error: null })
+    this.navigation.selectPanel('a2d2-panel')
+    try {
+      if (!this.state.projects.length) {
+        const result = await this.client.query({ type: 'projects.list' })
+        if (revision !== this.revision) return
+        this.update({ projects: result.projects ?? [] })
+      }
+      if (revision === this.revision) await this.openTask(ref)
+    } catch (error) { if (revision === this.revision) this.update({ loading: false, error: message(error) }) }
+  }
   async refreshTask(): Promise<void> {
     const task = this.state.detail?.task
     if (!task) return

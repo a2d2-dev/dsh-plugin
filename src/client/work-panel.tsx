@@ -14,7 +14,7 @@ export function WorkPanel({ controller }: { controller: WorkPanelController }) {
   const [form, setForm] = useState<FormKind>(null)
   const [object, setObject] = useState<'projects'|'issues'|'prs'>('projects')
   const [notice,setNotice] = useState('')
-  useEffect(() => { void controller.load() }, [controller])
+  useEffect(() => { void controller.initialize() }, [controller])
   useEffect(() => { setForm(null); setNotice('') }, [state.projectId])
   const project = state.projects.find(project => project.id === state.projectId)
   const task = state.detail?.task
@@ -103,6 +103,7 @@ function TaskForm({controller,kind,task,onSaved}:{controller:WorkPanelController
       const change=task?{ref:{projectId:task.projectId,taskId:task.id},expectedVersion:task.version}:null
       const result=await controller.submit(kind==='spec' && change ? {type:'task.update-spec',...change,...content} : kind==='child' && change ? {type:'task.create-child',...change,...content,title:title.trim()} : {type:'task.create',projectId,...content,title:title.trim()})
       if(!result.task) throw Error('工作服务未返回保存的工作')
+      if(controller.getSnapshot().projectId !== projectId) return
       await onSaved(result.task)
     }catch(error){setError(message(error))}finally{setBusy(false)}
   }
@@ -140,6 +141,8 @@ export function SessionWorkEntry({controller, sessionId}: {controller: WorkPanel
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
     const abort = new AbortController()
+    setWork([])
+    setError(null)
     async function load() {
       try {
         const resources = await controller.client.query({type:'resources.list'}, abort.signal)

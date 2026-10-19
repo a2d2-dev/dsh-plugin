@@ -1,4 +1,5 @@
 import type { WorkCommand, WorkCompleted, WorkQuery, WorkRequest, WorkResult } from '../work-types.ts'
+import { WORK_ROUTE_PATH } from '../work-types.ts'
 
 /** Same-origin operator-authenticated work boundary. There is no local product fallback. */
 export interface WorkClient {
@@ -7,7 +8,7 @@ export interface WorkClient {
 }
 export function createWorkClient(fetcher: typeof fetch = globalThis.fetch.bind(globalThis)): WorkClient {
   async function request(payload: WorkRequest, signal?: AbortSignal): Promise<WorkCompleted> {
-    const response = await fetcher('/a2d2/api/work', {
+    const response = await fetcher(WORK_ROUTE_PATH, {
       method: 'POST', credentials: 'same-origin',
       headers: { 'content-type': 'application/json', accept: 'application/json' },
       body: JSON.stringify(payload), signal,

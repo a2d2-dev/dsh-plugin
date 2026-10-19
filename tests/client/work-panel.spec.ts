@@ -17,6 +17,15 @@ function setup() {
   return {panel:new WorkPanelController(client,navigation),client,queries,navigation}
 }
 describe('work panel public navigation',()=>{
+  it('initializes the mounted panel without superseding an in-flight task return',async()=>{
+    const {panel}=setup()
+    const reveal=panel.revealTask({projectId:'p1',taskId:'t1'})
+    await panel.initialize();await reveal
+    expect(panel.getSnapshot().detail?.task?.id).toBe('t1')
+    panel.setDetailTab('related')
+    await panel.initialize()
+    expect(panel.getSnapshot()).toMatchObject({detail:{task:{id:'t1'}},detailTab:'related'})
+  })
   it('queries concrete projects and retains list position across details, clears it on project change',async()=>{
     const {panel,client,navigation,queries}=setup()
     await panel.load()
