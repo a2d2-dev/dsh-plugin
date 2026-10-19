@@ -20,6 +20,7 @@ const taskSchema = z.object({
 }).strict()
 const snapshotSchema = z.object({
   schemaVersion: z.literal(3), projects: z.array(projectSchema), agents: z.array(agentSchema), tasks: z.array(taskSchema),
+  commands: z.array(z.object({ commandId: text, fingerprint: z.string(), result: z.object({ status: z.literal('completed'), project: projectSchema.optional(), task: taskSchema.optional() }).strict() }).strict()),
 }).strict()
 export type Project = z.infer<typeof projectSchema>
 export type ProjectAgent = z.infer<typeof agentSchema>
@@ -60,7 +61,7 @@ export class WorkApplication {
   private async load(): Promise<Snapshot> {
     try { return snapshotSchema.parse(JSON.parse(await readFile(this.file, 'utf8'))) }
     catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { schemaVersion: 3, projects: [], agents: [], tasks: [] }
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { schemaVersion: 3, projects: [], agents: [], tasks: [], commands: [] }
       throw error
     }
   }
@@ -72,6 +73,9 @@ export class WorkApplication {
     await mkdir(this.directory, { recursive: true, mode: 0o700 })
     return withFileLock(this.file, async () => {
       const state = await this.load()
+      const fingerprint = JSON.stringify(command)
+      const previous = state.commands.find(item => item.commandId === command.commandId)
+      if (previous) return previous.fingerprint === fingerprint ? previous.result : { status: 'conflict', error: { code: 'command-id-reused', message: 'Command ID already has different content' } }
       let result: WorkCompleted
       if (command.type === 'project.create') {
         const project: Project = { id: randomUUID(), name: command.name, version: 1, defaultAgentId: randomUUID() }
@@ -87,6 +91,7 @@ export class WorkApplication {
         state.tasks.push(task)
         result = { status: 'completed', task }
       }
+      state.commands.push({ commandId: command.commandId, fingerprint, result })
       await writeFileAtomic(this.file, `${JSON.stringify(state)}\n`, { mode: 0o600, dirMode: 0o700 })
       return result
     })

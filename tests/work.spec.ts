@@ -40,3 +40,18 @@ it('reloads an independent local project, default Project Agents and complete Ta
   const view = await reloaded.query({ type: 'project.detail', projectId: project.id }, operator)
   expect(view).toMatchObject({ status: 'completed', project, agents: [expect.objectContaining({ projectId: project.id, role: 'coordinator' })] })
 })
+
+it('deduplicates concurrent commands across application instances and reload, without overwriting same-name projects', async () => {
+  const { directory, app } = await open()
+  const command = { type: 'project.create', commandId: 'retry-create', name: 'Same name' }
+  const results = await Promise.all(Array.from({ length: 6 }, () => new WorkApplication(directory, noHost).execute(command, operator)))
+  expect(results.every(result => result.status === 'completed')).toBe(true)
+  const ids = results.map(result => result.status === 'completed' ? result.project?.id : undefined)
+  expect(new Set(ids).size).toBe(1)
+  expect(await new WorkApplication(directory, noHost).execute(command, operator)).toEqual(results[0])
+  expect(await app.execute({ ...command, name: 'Different content' }, operator)).toMatchObject({ status: 'conflict', error: { code: 'command-id-reused' } })
+  await app.execute({ ...command, commandId: 'another-create' }, operator)
+  const projects = await app.query({ type: 'projects.list' }, operator)
+  expect(projects.status === 'completed' && projects.projects).toHaveLength(2)
+  expect(await app.execute(command, { operator: false })).toMatchObject({ status: 'failed', error: { code: 'forbidden' } })
+})

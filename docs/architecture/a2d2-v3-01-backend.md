@@ -28,6 +28,8 @@ pnpm exec vitest run tests/work.spec.ts
 
 2026-03-15 初始红测：最小公开接缝返回 failed，断言期望 completed，退出 1。实现独立身份与真实持久化后：1/1 通过，退出 0。更早缺失模块的导入失败不作为行为红测证据。
 
+命令回执与领域记录同事务保存。第二条红测：6 个独立应用实例并发提交同 commandId 生成 6 个身份，退出 1；实现持久 ledger 后 2/2 测试通过，退出 0。同名项目用不同 commandId 创建各自独立身份；同 commandId 内容不同时返回 command-id-reused，未授权重放在读取回执前拒绝。
+
 ## 宿主与环境基线
 
 只读核验宿主实际 HEAD：a45068d2ec03326c800c68c9bdcd47508e3ccb9c。已读取 atomic-write 与 workspaceRegistry 公共源码，未修改宿主。pnpm 11.7.0。首次 pnpm exec 自动安装依赖时报告未批准构建脚本（subprocess-local、koffi、node-pty），之后 vitest 可运行；完整安装/构建能力后续核实，不将安装告警判作产品缺陷。
