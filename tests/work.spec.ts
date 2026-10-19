@@ -79,3 +79,27 @@ it('updates specifications with versioned acceptance while concurrent stale edit
     specification: { version: 2, text: 'Revised specification', acceptance: ['Revised criterion'] },
     specificationHistory: [{ version: 1, text: 'Original specification', acceptance: ['Original criterion'] }] } })
 })
+
+it('creates local children through parent TaskRef and rejects foreign links and cycles before changing work', async () => {
+  const { directory, app } = await open()
+  const { ref } = await createWork(app)
+  const created = await app.execute({ type: 'task.create-child', commandId: 'create-child', ref, expectedVersion: 1,
+    title: 'Independent child', goal: 'Child goal', specification: 'Child specification', acceptance: ['Child accepted'] }, operator)
+  expect(created).toMatchObject({ status: 'completed', task: { parent: ref, title: 'Independent child' } })
+  if (created.status !== 'completed' || !created.task) throw new Error('Expected child')
+  const childRef = { projectId: ref.projectId, taskId: created.task.id }
+  const reload = new WorkApplication(directory, noHost)
+  expect(await reload.query({ type: 'task.detail', ref }, operator)).toMatchObject({ status: 'completed', task: { version: 2, children: [childRef] }, children: [{ id: childRef.taskId }] })
+  const foreign = await createWork(app, 'foreign')
+  expect(await app.execute({ type: 'task.link-child', commandId: 'foreign-child', ref, expectedVersion: 2, child: foreign.ref, childExpectedVersion: 1 }, operator))
+    .toMatchObject({ status: 'failed', error: { code: 'cross-project-reference' } })
+  expect(await app.execute({ type: 'task.link-child', commandId: 'cycle', ref: childRef, expectedVersion: 1, child: ref, childExpectedVersion: 2 }, operator))
+    .toMatchObject({ status: 'failed', error: { code: 'task-cycle' } })
+  expect(await app.query({ type: 'task.detail', ref: { ...ref, taskId: foreign.task.id } }, operator))
+    .toMatchObject({ status: 'failed', error: { code: 'unknown-task' } })
+  const spare = await app.execute({ type: 'task.create', commandId: 'spare-task', projectId: ref.projectId,
+    title: 'Existing child', goal: 'Existing goal', specification: 'Existing spec', acceptance: ['Accepted'] }, operator)
+  if (spare.status !== 'completed' || !spare.task) throw new Error('Expected task')
+  expect(await app.execute({ type: 'task.link-child', commandId: 'link-existing', ref, expectedVersion: 2,
+    child: { projectId: ref.projectId, taskId: spare.task.id }, childExpectedVersion: 1 }, operator)).toMatchObject({ status: 'completed', task: { version: 3 } })
+})

@@ -82,6 +82,31 @@ export class WorkApplication {
     const task = taskAt(state, command.ref)
     if (!task) return failed('unknown-task', 'Task does not belong to this project')
     if (task.version !== command.expectedVersion) return conflict(task.version)
+    if (command.type === 'task.create-child') {
+      const child = this.newTask(state, command, project)
+      child.parent = command.ref
+      task.children.push({ projectId, taskId: child.id })
+      this.changed(task, command)
+      return { status: 'completed', task: child }
+    }
+    if (command.type === 'task.link-child') {
+      if (command.child.projectId !== projectId) return failed('cross-project-reference', 'Parent and child must belong to the same project')
+      const child = taskAt(state, command.child)
+      if (!child) return failed('unknown-task', 'Child Task does not belong to this project')
+      if (child.version !== command.childExpectedVersion) return conflict(child.version)
+      let ancestor: WorkTask | undefined = task
+      while (ancestor) {
+        if (ancestor.id === child.id) return failed('task-cycle', 'Parent relationship would form a cycle')
+        ancestor = ancestor.parent ? taskAt(state, ancestor.parent) : undefined
+      }
+      if (child.parent && child.parent.taskId !== task.id) return failed('child-already-linked', 'Child already has another parent')
+      if (task.children.some(ref => ref.taskId === child.id)) return { status: 'completed', task }
+      child.parent = command.ref
+      task.children.push(command.child)
+      this.changed(child, command)
+      this.changed(task, command)
+      return { status: 'completed', task }
+    }
     if (command.type === 'task.update-spec') {
       task.specificationHistory.push(task.specification)
       task.specification = { version: task.specification.version + 1, text: command.specification, acceptance: command.acceptance }
@@ -105,6 +130,9 @@ export class WorkApplication {
     if (query.type === 'project.detail') return { status: 'completed', project,
       agents: state.agents.filter(item => item.projectId === projectId), tasks: state.tasks.filter(item => item.projectId === projectId) }
     const task = taskAt(state, query.ref)
-    return task ? { status: 'completed', task } : failed('unknown-task', 'Task does not belong to this project')
+    return task ? { status: 'completed', task,
+      ...(task.parent ? { parent: taskAt(state, task.parent) } : {}),
+      children: task.children.map(ref => taskAt(state, ref)!).filter(Boolean),
+    } : failed('unknown-task', 'Task does not belong to this project')
   }
 }

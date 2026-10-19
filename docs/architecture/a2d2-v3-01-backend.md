@@ -32,6 +32,8 @@ pnpm exec vitest run tests/work.spec.ts
 
 规格更新采用 Task expectedVersion；旧规格和验收标准进入 specificationHistory，新标准有独立规格版本。第三条红测无成功更新（退出 1），实现后 3/3 通过（退出 0）；两个并发编辑仅一个成功，另一个得到 currentVersion=2 的 version-conflict。
 
+父 TaskRef 创建子任务与已有子任务关联同事务保存双向关系；跨项目和循环关系拒绝。第四条红测 task.create-child 返回 failed（退出 1），实现后 4/4 通过（退出 0），重载可读完整父子详情。
+
 ## 宿主与环境基线
 
 只读核验宿主实际 HEAD：a45068d2ec03326c800c68c9bdcd47508e3ccb9c。已读取 atomic-write 与 workspaceRegistry 公共源码，未修改宿主。pnpm 11.7.0。首次 pnpm exec 自动安装依赖时报告未批准构建脚本（subprocess-local、koffi、node-pty），之后 vitest 可运行；完整安装/构建能力后续核实，不将安装告警判作产品缺陷。
