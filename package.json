@@ -6,6 +6,18 @@
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
   "exports": {
+    "./work": {
+      "types": "./lib/types/work.d.ts",
+      "default": "./lib/work.js"
+    },
+    "./work-types": {
+      "types": "./lib/types/work-types.d.ts",
+      "default": "./lib/work-types.js"
+    },
+    "./work-plugin": {
+      "types": "./lib/types/work-plugin.d.ts",
+      "default": "./lib/work-plugin.js"
+    },
     "./task-runtime": {
       "types": "./lib/types/task-runtime.d.ts",
       "default": "./lib/task-runtime.js"
