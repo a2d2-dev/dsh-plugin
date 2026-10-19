@@ -1,0 +1,23 @@
+{
+  "01-seed-first.json": "a93ea338310ba75663c0764c28d323e0ae02b8ed73716e633eb602d61ff623ed",
+  "02-seed-second.json": "4d1b75e22facfea916927aaab3b45d66ce521e3d0dd17cf24dbbffcedddc6d27",
+  "03-seed-membership-verified.json": "f0240feb518b880b811b604344386b6f75b6a454ed3332536042f59f0038a46b",
+  "04-public-representative-work-created.json": "a296af5d78edc8395420ff2fdf98d74d2a8986f283c63d98f2400e61ab0f953d",
+  "05-native-selected-before-restart.png": "ce370e4421027d2f4ee69a3e62dbb0623b0568cfc76e22b440b0878ae00eb8ca",
+  "06-baseline-cli.json": "c3913d870336a3c0bbbb9141de9c0da0fc039bfb4e2d7a02d39a44dadd6e4355",
+  "07-complete-state-before-restart.json": "40064218bc822a567b732a77e3c9ee0d34273488ca0d7b6865ab23e336097a41",
+  "08-fixed-tool-package-host-hashes.json": "7da7bee261c8a06788e8d76841092d9b558b6b506a28482995fbb0e075d7dea5",
+  "09-new-ready-same-origin.json": "f89b84a6b986570a2d234e8e49027b9d531ce18f75b5c1497fd0f56e1786bcb6",
+  "10-restart-id-set-and-complete-domain.json": "e8674d2daefd1e1b50947cc6f16aa02e11848ce396e46ca9443087acd100c015",
+  "11-native-original-cold-session-restored.png": "d47baf495c2a85b255957ff519ba5835865afe74940fe822f875461263ec6350",
+  "12-strict-config-check-after-native-restore.json": "3e857002006e3fa748a89c89c58a217789d4ad5fd389057598185c3704c4eda9",
+  "13-stable-origin-gate-passed.json": "913cfac167f489e37d31c4268f7f6a8f27774929fc59f636e4d8b9a7f29b5171",
+  "14-extra-agent-availability-diagnostic.json": "53b268bad2a7179726d1a7d9971dc566546a06c976d7dcff8839470c1e6d97a4",
+  "1792432504010-check.json": "a52c84f2424383edecc47392af29fd3ac349061dff3c75ad8c9970bb7b18ff0b",
+  "9ae7a866-f098-4fd8-9233-03a8cb2dd242-exit.json": "6380f7ebf1263a94abaaef4f5a1323cf0f4fbc88e37d8f1792ae68f163e18807",
+  "9ae7a866-f098-4fd8-9233-03a8cb2dd242-run.json": "0e38b23abaf63834822f1f9a085c6503edf1c6d70f3921815b09e815ded79e54",
+  "a4b3ad40-bc0f-468f-b532-fe171ae6757d-exit.json": "6380f7ebf1263a94abaaef4f5a1323cf0f4fbc88e37d8f1792ae68f163e18807",
+  "a4b3ad40-bc0f-468f-b532-fe171ae6757d-run.json": "6722b1bb679dac63ff7b7a8db0312bb4e98125399da9f14183e07acc4c20d36c",
+  "baseline.json": "c3913d870336a3c0bbbb9141de9c0da0fc039bfb4e2d7a02d39a44dadd6e4355",
+  "metrics.jsonl": "1f05dcedc25f4f652f57e98c534b5321c434e673159554930907baf93505fa8a"
+}

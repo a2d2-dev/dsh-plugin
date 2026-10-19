@@ -1,0 +1,200 @@
+{
+  "associationDuplicate": {
+    "sameTask": true,
+    "versionBefore": 6,
+    "versionAfter": 6,
+    "associationCount": 1
+  },
+  "checksBeforeRestart": [
+    {
+      "file": "08-check-after-create-and-api-update.json",
+      "gateway": 0,
+      "adapter": 0,
+      "sessionIds": [
+        "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d",
+        "session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab"
+      ],
+      "sessionConfigurationUnchanged": true
+    },
+    {
+      "file": "12-check-after-ui-update.json",
+      "gateway": 0,
+      "adapter": 0,
+      "sessionIds": [
+        "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d",
+        "session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab"
+      ],
+      "sessionConfigurationUnchanged": true
+    },
+    {
+      "file": "16-check-after-child.json",
+      "gateway": 0,
+      "adapter": 0,
+      "sessionIds": [
+        "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d",
+        "session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab"
+      ],
+      "sessionConfigurationUnchanged": true
+    },
+    {
+      "file": "1792427877528-check.json",
+      "gateway": 0,
+      "adapter": 0,
+      "sessionIds": [
+        "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d",
+        "session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab"
+      ],
+      "sessionConfigurationUnchanged": true
+    },
+    {
+      "file": "1792428058879-check.json",
+      "gateway": 0,
+      "adapter": 0,
+      "sessionIds": [
+        "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d",
+        "session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab"
+      ],
+      "sessionConfigurationUnchanged": true
+    },
+    {
+      "file": "1792428103176-check.json",
+      "gateway": 0,
+      "adapter": 0,
+      "sessionIds": [
+        "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d",
+        "session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab"
+      ],
+      "sessionConfigurationUnchanged": true
+    },
+    {
+      "file": "1792428213970-check.json",
+      "gateway": 0,
+      "adapter": 0,
+      "sessionIds": [
+        "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d",
+        "session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab"
+      ],
+      "sessionConfigurationUnchanged": true
+    },
+    {
+      "file": "1792428320415-check.json",
+      "gateway": 0,
+      "adapter": 0,
+      "sessionIds": [
+        "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d",
+        "session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab"
+      ],
+      "sessionConfigurationUnchanged": true
+    },
+    {
+      "file": "1792428355733-check.json",
+      "gateway": 0,
+      "adapter": 0,
+      "sessionIds": [
+        "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d",
+        "session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab"
+      ],
+      "sessionConfigurationUnchanged": true
+    },
+    {
+      "file": "1792428381260-check.json",
+      "gateway": 0,
+      "adapter": 0,
+      "sessionIds": [
+        "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d",
+        "session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab"
+      ],
+      "sessionConfigurationUnchanged": true
+    },
+    {
+      "file": "1792428518200-check.json",
+      "gateway": 0,
+      "adapter": 0,
+      "sessionIds": [
+        "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d",
+        "session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab"
+      ],
+      "sessionConfigurationUnchanged": true
+    },
+    {
+      "file": "1792428549498-check.json",
+      "gateway": 0,
+      "adapter": 0,
+      "sessionIds": [
+        "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d",
+        "session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab"
+      ],
+      "sessionConfigurationUnchanged": true
+    },
+    {
+      "file": "1792428593889-check.json",
+      "gateway": 0,
+      "adapter": 0,
+      "sessionIds": [
+        "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d",
+        "session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab"
+      ],
+      "sessionConfigurationUnchanged": true
+    },
+    {
+      "file": "20-check-after-project-switch.json",
+      "gateway": 0,
+      "adapter": 0,
+      "sessionIds": [
+        "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d",
+        "session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab"
+      ],
+      "sessionConfigurationUnchanged": true
+    },
+    {
+      "file": "22-check-after-association.json",
+      "gateway": 0,
+      "adapter": 0,
+      "sessionIds": [
+        "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d",
+        "session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab"
+      ],
+      "sessionConfigurationUnchanged": true
+    },
+    {
+      "file": "26-check-native-navigation.json",
+      "gateway": 0,
+      "adapter": 0,
+      "sessionIds": [
+        "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d",
+        "session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab"
+      ],
+      "sessionConfigurationUnchanged": true
+    },
+    {
+      "file": "31-check-after-close.json",
+      "gateway": 0,
+      "adapter": 0,
+      "sessionIds": [
+        "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d",
+        "session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab"
+      ],
+      "sessionConfigurationUnchanged": true
+    },
+    {
+      "file": "34-check-after-http-boundaries.json",
+      "gateway": 0,
+      "adapter": 0,
+      "sessionIds": [
+        "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d",
+        "session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab"
+      ],
+      "sessionConfigurationUnchanged": true
+    },
+    {
+      "file": "37-check-after-refresh.json",
+      "gateway": 0,
+      "adapter": 0,
+      "sessionIds": [
+        "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d",
+        "session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab"
+      ],
+      "sessionConfigurationUnchanged": true
+    }
+  ]
+}

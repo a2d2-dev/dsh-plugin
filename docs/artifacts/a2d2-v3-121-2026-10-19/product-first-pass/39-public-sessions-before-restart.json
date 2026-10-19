@@ -1,0 +1,52 @@
+{
+  "httpStatus": 200,
+  "result": {
+    "result": {
+      "error": {
+        "code": "gateway/bad-request",
+        "details": {
+          "issues": [
+            {
+              "code": "invalid_value",
+              "message": "Invalid input: expected \"client-request\"",
+              "path": [
+                "type"
+              ],
+              "values": [
+                "client-request"
+              ]
+            },
+            {
+              "code": "invalid_type",
+              "expected": "string",
+              "message": "Invalid input: expected string, received undefined",
+              "path": [
+                "rpcId"
+              ]
+            },
+            {
+              "code": "invalid_type",
+              "expected": "string",
+              "message": "Invalid input: expected string, received undefined",
+              "path": [
+                "method"
+              ]
+            },
+            {
+              "code": "invalid_type",
+              "expected": "nonoptional",
+              "message": "Invalid input: expected nonoptional, received undefined",
+              "path": [
+                "payload"
+              ]
+            }
+          ]
+        },
+        "message": "invalid client-request message"
+      },
+      "ok": false
+    },
+    "rpcId": "invalid-request",
+    "type": "server-response"
+  }
+}

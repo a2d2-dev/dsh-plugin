@@ -1,0 +1,28 @@
+{
+  "request": {
+    "acceptance": [
+      "单条验收第一行",
+      "同一条第二行",
+      "第二条独立验收"
+    ],
+    "commandId": "acceptance-stale-positive-version",
+    "expectedVersion": 5,
+    "goal": "API目标第一行\n    API目标缩进",
+    "ref": {
+      "projectId": "10440418-8249-48d9-a961-c6b96386a36c",
+      "taskId": "bbae4af3-ee6d-4809-9963-ea928a477842"
+    },
+    "specification": "API规格\n    原文保留",
+    "type": "task.update-spec"
+  },
+  "result": {
+    "error": {
+      "code": "version-conflict",
+      "currentVersion": 6,
+      "message": "Expected version is stale"
+    },
+    "httpStatus": 409,
+    "status": "conflict"
+  },
+  "unchanged": true
+}

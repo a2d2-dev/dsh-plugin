@@ -1,0 +1,70 @@
+{
+  "processId": "971f5f9b-328a-4994-9c5f-49f5ef0705c8",
+  "pid": 3441526,
+  "providers": [
+    "acceptance-disabled"
+  ],
+  "gateway": 0,
+  "adapter": 0,
+  "births": 2,
+  "bornSessionIds": [
+    "session-dfa13dc0-f8e2-4aae-b4bf-6a163f40b4bd",
+    "session-3b94b9cf-c18c-496e-a313-a37e2c3f65a0"
+  ],
+  "sessions": [
+    {
+      "sessionId": "session-3b94b9cf-c18c-496e-a313-a37e2c3f65a0",
+      "cwd": "/tmp/a2d2-v3-121/product-stable-origin-56679a6/workspace",
+      "model": {
+        "selection": {
+          "lastUsed": null,
+          "next": null
+        },
+        "default": {
+          "provider": "acceptance-disabled",
+          "model": "no-model"
+        }
+      },
+      "permissions": {
+        "selection": {
+          "currentValue": "workspace-write"
+        },
+        "sandbox": {
+          "mode": "workspace-write",
+          "workspaceRoot": "/tmp/a2d2-v3-121/product-stable-origin-56679a6/workspace",
+          "sessionId": "session-3b94b9cf-c18c-496e-a313-a37e2c3f65a0"
+        },
+        "approval": "ask"
+      }
+    },
+    {
+      "sessionId": "session-dfa13dc0-f8e2-4aae-b4bf-6a163f40b4bd",
+      "cwd": "/tmp/a2d2-v3-121/product-stable-origin-56679a6/workspace",
+      "model": {
+        "selection": {
+          "lastUsed": null,
+          "next": null
+        },
+        "default": {
+          "provider": "acceptance-disabled",
+          "model": "no-model"
+        }
+      },
+      "permissions": {
+        "selection": {
+          "currentValue": "workspace-write"
+        },
+        "sandbox": {
+          "mode": "workspace-write",
+          "workspaceRoot": "/tmp/a2d2-v3-121/product-stable-origin-56679a6/workspace",
+          "sessionId": "session-dfa13dc0-f8e2-4aae-b4bf-6a163f40b4bd"
+        },
+        "approval": "ask"
+      }
+    }
+  ],
+  "pageEvidence": {
+    "path": "/tmp/a2d2-v3-121/product-stable-origin-56679a6/evidence/05-native-selected-before-restart.png",
+    "sha256": "ce370e4421027d2f4ee69a3e62dbb0623b0568cfc76e22b440b0878ae00eb8ca"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "runId": "aea3a504-c103-496f-a61a-425945d2e8e4",
+  "pid": 3289773,
+  "supervisorPid": 3289761,
+  "startedAt": "2026-10-19T17:11:28.199Z",
+  "baseURL": "http://127.0.0.1:34569",
+  "hostCommit": "a45068d2ec03326c800c68c9bdcd47508e3ccb9c",
+  "cliVersion": "0.2.0-rc.2",
+  "plugin": {
+    "path": "/tmp/a2d2-v3-121/artifacts/candidate-8d33081/dsh-a2d2-0.0.1.tgz",
+    "sha256": "81466a33342c0256873bbf30dac693ee0cff2c075246a4ad859d94663ce0a82b"
+  },
+  "managedJobId": "bash-551"
+}

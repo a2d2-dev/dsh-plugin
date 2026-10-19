@@ -1,0 +1,42 @@
+{
+  "ref": {
+    "projectId": "b93226e6-f217-415e-abbb-4efa5db95f0f",
+    "taskId": "9e9d68fd-85b0-4ff3-af3e-218338b1c321"
+  },
+  "expected": {
+    "goal": "  UI目标甲\n    第二行\n",
+    "specification": "  UI规格甲\n    内容缩进\n\n",
+    "acceptance": [
+      "  第一条首行\n    同一条第二行\n",
+      "  第二条独立验收\n"
+    ]
+  },
+  "observed": {
+    "id": "9e9d68fd-85b0-4ff3-af3e-218338b1c321",
+    "projectId": "b93226e6-f217-415e-abbb-4efa5db95f0f",
+    "title": "同名最终工作",
+    "goal": "  UI目标甲\n    第二行\n",
+    "version": 1,
+    "agentId": "bf634b4a-b906-4836-acd9-ad10df25103d",
+    "specification": {
+      "version": 1,
+      "text": "  UI规格甲\n    内容缩进\n\n",
+      "acceptance": [
+        "  第一条首行\n    同一条第二行\n",
+        "  第二条独立验收\n"
+      ]
+    },
+    "specificationHistory": [],
+    "breakdown": [],
+    "children": [],
+    "sessions": [],
+    "activity": [
+      {
+        "commandId": "ec760dbd-febf-4e0d-a3bb-7e7c463cb3b3",
+        "type": "task.create",
+        "version": 1
+      }
+    ]
+  },
+  "passed": true
+}

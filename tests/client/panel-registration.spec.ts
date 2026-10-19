@@ -3,113 +3,49 @@ import { isValidElement } from 'react'
 import { describe, expect, it } from 'vitest'
 import { apply, inject } from '../../src/client/index.tsx'
 
-class StubSlots extends Service {
-  constructor(ctx: Context) {
-    super(ctx, 'slots')
-  }
-
-  inject(): () => void {
-    return () => {}
-  }
-
-  register(): () => void {
-    return () => {}
+interface Registration { name: string; id?: string; key?: string; label?: () => string }
+class Slots extends Service {
+  entries: { options: Registration; component: (props: never) => unknown }[] = []
+  constructor(ctx: Context) { super(ctx, 'slots') }
+  inject(_name: string, callback: () => () => void): () => void { return callback() }
+  register(options: Registration, component: (props: never) => unknown): () => void {
+    const entry = { options, component }; this.entries.push(entry)
+    return () => { this.entries.splice(this.entries.indexOf(entry), 1) }
   }
 }
-
-interface RegisteredTab {
-  readonly id: string
-  readonly title: string
-  readonly order?: number
-  readonly single?: boolean
-  readonly icon?: unknown
-  readonly component: unknown
-}
-
-class StubSidebar extends Service {
-  readonly tabs: RegisteredTab[] = []
-
-  constructor(ctx: Context) {
-    super(ctx, 'betterSidebar')
-  }
-
-  registerTab(tab: RegisteredTab): () => void {
-    this.tabs.push(tab)
-    return () => {
-      const index = this.tabs.indexOf(tab)
-      if (index >= 0) this.tabs.splice(index, 1)
-    }
-  }
-}
-
-async function mount(withSidebar: boolean): Promise<{ ctx: Context; sidebar?: StubSidebar }> {
+async function mount() {
   const ctx = new Context()
-  await ctx.plugin(StubSlots).await()
-  ctx.provide('sessions', {} as never)
-  ctx.provide('remote', { session: {} } as never)
-  ctx.provide('remote.session', {} as never)
-  if (withSidebar) await ctx.plugin(StubSidebar).await()
-  await ctx.plugin({ inject: [...inject], apply }).await()
-  await Promise.resolve()
-  return { ctx, sidebar: ctx.get('betterSidebar') as unknown as StubSidebar | undefined }
+  await ctx.plugin(Slots).await()
+  for (const name of inject.filter(name => name !== 'slots')) ctx.provide(name, {} as never)
+  const fiber = ctx.plugin({ inject: [...inject], apply }); await fiber.await()
+  return { ctx, fiber, slots: ctx.get('slots') as unknown as Slots }
 }
 
-describe('A²D² panel tab registration', () => {
-  it('registers the A²D² panel tab with the replacement id and title', async () => {
-    const { sidebar } = await mount(true)
-
-    expect(sidebar?.tabs).toHaveLength(1)
-    expect(sidebar?.tabs[0]).toMatchObject({
-      id: 'a2d2-panel',
-      title: 'A²D²',
-      order: 40,
-      single: true,
-    })
+describe('A²D² host panel contribution', () => {
+  it('adds exactly one global entry and a matching main key without replacing the host shell', async () => {
+    const { slots, fiber } = await mount()
+    const entries = slots.entries.filter(entry => entry.options.name === 'sidebar.panellist')
+    expect(entries).toHaveLength(1)
+    expect(entries[0]?.options).toMatchObject({ id: 'a2d2-panel' })
+    expect(entries[0]?.options.label?.()).toBe('A²D² 控制面板')
+    expect(isValidElement(entries[0]!.component({ size: 16, active: false } as never))).toBe(true)
+    expect(slots.entries.filter(entry => entry.options.name === 'main').map(entry => entry.options.key)).toEqual(['a2d2-panel'])
+    expect(slots.entries.filter(entry => ['root', 'sidebar', 'main.conversation'].includes(entry.options.name))).toEqual([])
+    await fiber.dispose()
+    expect(slots.entries).toEqual([])
   })
 
-  it('registers a renderable icon for the A²D² panel tab', async () => {
-    const { sidebar } = await mount(true)
-
-    const icon = sidebar?.tabs[0]?.icon
-
-    expect(icon).toEqual(expect.any(Function))
-    expect(isValidElement((icon as (size: number) => unknown)(20))).toBe(true)
-  })
-
-  it('skips the tab when better-sidebar is absent', async () => {
-    const { sidebar } = await mount(false)
-
-    expect(sidebar).toBeUndefined()
-  })
-
-  it('registers the A²D² panel tab when better-sidebar is provided after apply', async () => {
-    const { ctx } = await mount(false)
-
-    const sidebarFiber = ctx.plugin(StubSidebar)
-    await sidebarFiber.await()
-    await Promise.resolve()
-    const sidebar = ctx.get('betterSidebar') as unknown as StubSidebar | undefined
-
-    expect(sidebar?.tabs).toHaveLength(1)
-    expect(sidebar?.tabs[0]).toMatchObject({
-      id: 'a2d2-panel',
-      title: 'A²D²',
-      order: 40,
-      single: true,
-    })
-  })
-
-  it('unregisters the A²D² panel tab when better-sidebar is withdrawn', async () => {
-    const { ctx } = await mount(false)
-    const sidebarFiber = ctx.plugin(StubSidebar)
-    await sidebarFiber.await()
-    await Promise.resolve()
-    const sidebar = ctx.get('betterSidebar') as unknown as StubSidebar | undefined
-
-    expect(sidebar?.tabs).toHaveLength(1)
-
-    await sidebarFiber.dispose()
-
-    expect(sidebar?.tabs).toEqual([])
+  it('contributes one session-scoped return entry to the input list dock shared by blank and active conversations', async () => {
+    const { slots, fiber } = await mount()
+    const entries = slots.entries.filter(entry => entry.options.id === 'a2d2-session-work')
+    expect(entries).toHaveLength(1)
+    expect(entries[0]!.options.name).toBe('conversation.input.dock')
+    expect(slots.entries.some(entry => entry.options.name === 'conversation.session.header.corner')).toBe(false)
+    for (const sessionId of ['blank-existing', 'nonblank-existing']) {
+      const element = entries[0]!.component({ sessionId } as never)
+      expect(isValidElement<{ sessionId: string }>(element) && element.props.sessionId).toBe(sessionId)
+    }
+    await fiber.dispose()
+    expect(slots.entries).toEqual([])
   })
 })

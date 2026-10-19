@@ -1,0 +1,67 @@
+{
+  "unchanged": true,
+  "processId": "7d8c255f-8acc-4281-b92a-a832ef11ed11",
+  "pid": 3152484,
+  "providers": [
+    "acceptance-disabled"
+  ],
+  "gateway": 0,
+  "adapter": 0,
+  "births": 2,
+  "bornSessionIds": [
+    "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d",
+    "session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab"
+  ],
+  "sessions": [
+    {
+      "sessionId": "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d",
+      "cwd": "/tmp/a2d2-v3-121/product-first-pass-9588b53/workspace/deepseek-harness/default-workspace",
+      "model": {
+        "selection": {
+          "lastUsed": null,
+          "next": null
+        },
+        "default": {
+          "provider": "acceptance-disabled",
+          "model": "no-model"
+        }
+      },
+      "permissions": {
+        "selection": {
+          "currentValue": "workspace-write"
+        },
+        "sandbox": {
+          "mode": "workspace-write",
+          "workspaceRoot": "/tmp/a2d2-v3-121/product-first-pass-9588b53/workspace/deepseek-harness/default-workspace",
+          "sessionId": "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d"
+        },
+        "approval": "ask"
+      }
+    },
+    {
+      "sessionId": "session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab",
+      "cwd": "/tmp/a2d2-v3-121/product-first-pass-9588b53/workspace",
+      "model": {
+        "selection": {
+          "lastUsed": null,
+          "next": null
+        },
+        "default": {
+          "provider": "acceptance-disabled",
+          "model": "no-model"
+        }
+      },
+      "permissions": {
+        "selection": {
+          "currentValue": "workspace-write"
+        },
+        "sandbox": {
+          "mode": "workspace-write",
+          "workspaceRoot": "/tmp/a2d2-v3-121/product-first-pass-9588b53/workspace",
+          "sessionId": "session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab"
+        },
+        "approval": "ask"
+      }
+    }
+  ]
+}

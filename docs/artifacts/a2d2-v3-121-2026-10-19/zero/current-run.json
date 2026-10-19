@@ -1,0 +1,11 @@
+{
+  "runId": "c10a6f41-bbb5-41af-b26e-6276e8bac94c",
+  "pid": 3113163,
+  "supervisorPid": 3113147,
+  "startedAt": "2026-10-19T16:25:59.376Z",
+  "baseURL": "http://127.0.0.1:46803",
+  "hostCommit": "a45068d2ec03326c800c68c9bdcd47508e3ccb9c",
+  "cliVersion": "0.2.0-rc.2",
+  "plugin": null,
+  "managedJobId": "bash-381"
+}

@@ -1,0 +1,51 @@
+{
+  "before": {
+    "baseURL": "http://127.0.0.1:34569",
+    "nativeInputVisible": true,
+    "timeOrigin": 1792429943533.9,
+    "workLinks": [
+      "最终验收甲 / 同名最终工作 · 工作与进展"
+    ]
+  },
+  "after": {
+    "baseURL": "http://127.0.0.1:34569",
+    "timeOrigin": 1792429943533.9,
+    "workLinks": [
+      "最终验收甲 / 同名最终工作 · 工作与进展",
+      "最终验收甲 / 最终子工作甲 · 工作与进展"
+    ]
+  },
+  "dom": {
+    "detailTabs": [
+      "概览",
+      "会话",
+      "相关工作",
+      "活动"
+    ],
+    "headings": [
+      "A²D² 控制面板",
+      "最终子工作甲"
+    ],
+    "project": "最终验收甲"
+  },
+  "parentSession": {
+    "session": {
+      "runtimeId": "f09a695c-18a8-42da-80bb-7b5647af6d22",
+      "sessionId": "session-d05a22e4-cea3-48d9-8454-39680dbfa9b7"
+    },
+    "purpose": "related"
+  },
+  "childSession": {
+    "session": {
+      "runtimeId": "f09a695c-18a8-42da-80bb-7b5647af6d22",
+      "sessionId": "session-d05a22e4-cea3-48d9-8454-39680dbfa9b7"
+    },
+    "purpose": "related"
+  },
+  "childRef": {
+    "projectId": "b93226e6-f217-415e-abbb-4efa5db95f0f",
+    "taskId": "41e0e72d-69ac-4f37-acd7-5ce0236caa6b"
+  },
+  "noDocumentRefresh": true,
+  "passed": true
+}

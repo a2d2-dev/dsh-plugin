@@ -35,6 +35,8 @@
 - insert:
     - id: a2d2
       name: 'dsh-a2d2'
+    - id: a2d2-work
+      name: 'dsh-a2d2/work-plugin'
     - id: a2d2-command
       name: 'dsh-a2d2/command'
     - id: a2d2-tools

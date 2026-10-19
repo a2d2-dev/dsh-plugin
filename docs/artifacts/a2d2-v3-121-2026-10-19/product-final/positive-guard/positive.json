@@ -1,0 +1,25 @@
+{
+  "processId": "2c585132-9d78-4ec5-8c6b-1a5e7d4203c1",
+  "before": {
+    "gateway": 0,
+    "adapter": 0,
+    "births": 0,
+    "bornSessionIds": []
+  },
+  "after": {
+    "gateway": 1,
+    "adapter": 1,
+    "births": 0,
+    "bornSessionIds": []
+  },
+  "finish": {
+    "type": "finish",
+    "reason": {
+      "kind": "error",
+      "failure": {
+        "message": "A2D2_ACCEPTANCE_MODEL_DISABLED",
+        "code": "UNKNOWN"
+      }
+    }
+  }
+}

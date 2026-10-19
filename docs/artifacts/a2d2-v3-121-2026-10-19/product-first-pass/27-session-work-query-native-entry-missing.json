@@ -1,0 +1,18 @@
+{
+  "httpStatus": 200,
+  "nativeWorkButtonCount": 0,
+  "result": {
+    "status": "completed",
+    "work": [
+      {
+        "projectName": "验收项目甲",
+        "purpose": "related",
+        "ref": {
+          "projectId": "10440418-8249-48d9-a961-c6b96386a36c",
+          "taskId": "bbae4af3-ee6d-4809-9963-ea928a477842"
+        },
+        "title": "同名验收工作"
+      }
+    ]
+  }
+}
