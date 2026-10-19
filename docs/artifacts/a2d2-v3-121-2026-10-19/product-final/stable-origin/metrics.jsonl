@@ -1,0 +1,8 @@
+{"processId":"971f5f9b-328a-4994-9c5f-49f5ef0705c8","pid":3441526,"time":"2026-10-19T17:49:43.898Z","kind":"guard-started"}
+{"processId":"971f5f9b-328a-4994-9c5f-49f5ef0705c8","pid":3441526,"time":"2026-10-19T17:49:44.836Z","kind":"driver-ready"}
+{"processId":"971f5f9b-328a-4994-9c5f-49f5ef0705c8","pid":3441526,"time":"2026-10-19T17:50:19.640Z","kind":"session-born","sessionId":"session-dfa13dc0-f8e2-4aae-b4bf-6a163f40b4bd"}
+{"processId":"971f5f9b-328a-4994-9c5f-49f5ef0705c8","pid":3441526,"time":"2026-10-19T17:50:20.294Z","kind":"session-born","sessionId":"session-3b94b9cf-c18c-496e-a313-a37e2c3f65a0"}
+{"processId":"377f2992-ea39-4430-95be-a2bcdeacb0d6","pid":3454422,"time":"2026-10-19T17:52:54.838Z","kind":"guard-started"}
+{"processId":"377f2992-ea39-4430-95be-a2bcdeacb0d6","pid":3454422,"time":"2026-10-19T17:52:55.637Z","kind":"driver-ready"}
+{"processId":"377f2992-ea39-4430-95be-a2bcdeacb0d6","pid":3454422,"time":"2026-10-19T17:52:59.829Z","kind":"session-born","sessionId":"session-3b94b9cf-c18c-496e-a313-a37e2c3f65a0"}
+{"processId":"377f2992-ea39-4430-95be-a2bcdeacb0d6","pid":3454422,"time":"2026-10-19T17:55:03.630Z","kind":"session-born","sessionId":"session-dfa13dc0-f8e2-4aae-b4bf-6a163f40b4bd"}
