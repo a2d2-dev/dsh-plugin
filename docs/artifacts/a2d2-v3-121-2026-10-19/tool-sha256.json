@@ -1,0 +1,5 @@
+{
+  "scripts/a2d2-v3-121/acceptance.mjs": "bcff92452221485651e677b667fdb538c33036cda88cfc347b7da465be9ac5d6",
+  "scripts/a2d2-v3-121/guard.mjs": "b0af33780f442ddf2c1209062e47339da8499da2aa87ef507c7a2d6b658715b8",
+  "tests/a2d2-v3-121-acceptance.test.mjs": "7eadcc51bfce972c143d39d0f26435533d39c5372ea79da8cd0da685d335d2d9"
+}

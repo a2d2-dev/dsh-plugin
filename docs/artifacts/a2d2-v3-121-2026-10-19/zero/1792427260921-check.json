@@ -1,0 +1,40 @@
+{
+  "processId": "b17024ca-8a2c-4dc5-a533-5e5ed2067327",
+  "pid": 3113163,
+  "providers": [
+    "acceptance-disabled"
+  ],
+  "gateway": 0,
+  "adapter": 0,
+  "births": 1,
+  "bornSessionIds": [
+    "session-ac81293e-fe83-4562-adcb-ff0bb15c645a"
+  ],
+  "sessions": [
+    {
+      "sessionId": "session-ac81293e-fe83-4562-adcb-ff0bb15c645a",
+      "cwd": "/tmp/a2d2-v3-121/host-zero-final/workspace/deepseek-harness/default-workspace",
+      "model": {
+        "selection": {
+          "lastUsed": null,
+          "next": null
+        },
+        "default": {
+          "provider": "acceptance-disabled",
+          "model": "no-model"
+        }
+      },
+      "permissions": {
+        "selection": {
+          "currentValue": "workspace-write"
+        },
+        "sandbox": {
+          "mode": "workspace-write",
+          "workspaceRoot": "/tmp/a2d2-v3-121/host-zero-final/workspace/deepseek-harness/default-workspace",
+          "sessionId": "session-ac81293e-fe83-4562-adcb-ff0bb15c645a"
+        },
+        "approval": "ask"
+      }
+    }
+  ]
+}

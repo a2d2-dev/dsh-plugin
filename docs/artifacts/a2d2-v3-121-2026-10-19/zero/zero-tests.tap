@@ -1,0 +1,40 @@
+TAP version 13
+# Subtest: real host counts both model boundaries and turns the disabled adapter throw into finish error
+ok 1 - real host counts both model boundaries and turns the disabled adapter throw into finish error # SKIP
+  ---
+  duration_ms: 1.188591
+  type: 'test'
+  ...
+# Subtest: fresh real host has real Session configuration and no model invocation
+ok 2 - fresh real host has real Session configuration and no model invocation
+  ---
+  duration_ms: 111.821717
+  type: 'test'
+  ...
+# Subtest: prepare refuses a relative host and any root outside the ticket temporary namespace
+ok 3 - prepare refuses a relative host and any root outside the ticket temporary namespace
+  ---
+  duration_ms: 1.38946
+  type: 'test'
+  ...
+# Subtest: isolated launch environment does not inherit credentials or HOME
+ok 4 - isolated launch environment does not inherit credentials or HOME
+  ---
+  duration_ms: 0.267002
+  type: 'test'
+  ...
+# Subtest: acceptance rejects replaced Session identities, configuration drift and any model call
+ok 5 - acceptance rejects replaced Session identities, configuration drift and any model call
+  ---
+  duration_ms: 0.8341
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 1
+# todo 0
+# duration_ms 253.904962

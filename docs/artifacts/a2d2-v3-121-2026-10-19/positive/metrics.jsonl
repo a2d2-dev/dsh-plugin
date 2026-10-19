@@ -1,0 +1,4 @@
+{"processId":"1468b5f6-3769-44af-98b3-b993d2ce6286","pid":3106460,"time":"2026-10-19T16:24:23.049Z","kind":"guard-started"}
+{"processId":"1468b5f6-3769-44af-98b3-b993d2ce6286","pid":3106460,"time":"2026-10-19T16:24:24.240Z","kind":"driver-ready"}
+{"processId":"1468b5f6-3769-44af-98b3-b993d2ce6286","pid":3106460,"time":"2026-10-19T16:24:43.475Z","kind":"gateway"}
+{"processId":"1468b5f6-3769-44af-98b3-b993d2ce6286","pid":3106460,"time":"2026-10-19T16:24:43.477Z","kind":"adapter"}
