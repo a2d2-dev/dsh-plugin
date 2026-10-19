@@ -99,7 +99,7 @@ it('enforces resource ownership uniqueness atomically across independent process
   expect(reloaded.status === 'completed' && reloaded.projects).toHaveLength(1)
 })
 
-it('recovers a committed command after its writer dies before the caller receives the response', async () => {
+it('replays the same committed command after receiving its response and killing the writer', async () => {
   const directory = await root()
   const command = { type: 'project.create', commandId: 'lost-response', name: 'Committed once' }
   const crashed = await worker(directory, command, 'lose-reply')

@@ -85,7 +85,7 @@ legacy.map(ref,address,expectedVersion) 在相同领域事务中保存唯一 (ru
 2026-10-19，work / work-host / work-process 三个相关测试文件共 14/14 通过，退出 0。work-process 启动实际独立 Node 进程，使用公开 WorkApplication 接缝和真实文件系统：
 
 - 两进程同时创建相同 commandId 得到同一回执；不同 commandId 的同名项目全部保留。
-- 子进程完成提交后由测试 SIGKILL 模拟调用方未收到结果，重载重试仍返回同一身份，无第二份记录。
+- 测试先通过 IPC 收到子进程提交回执，再 SIGKILL writer；重载重试仍返回同一回执与身份，无第二份记录。此例只证明已提交且已收到回执后的 writer 崩溃重放，不证明调用方未收到回执的故障窗口；R3 仅更正用例名称及本说明，未增加窗口、修改原断言或超时。
 - 活进程持有 writer 锁时另一命令超时拒绝，查询仅保留先前事实；杀死持锁进程后，公开命令接管死 PID 锁并成功保存，重载仍有原记录。
 - 未知 schemaVersion 会拒绝写入且原字节不变；恢复原文件后可查询已接受数据，不把不可读状态当空库。
 
