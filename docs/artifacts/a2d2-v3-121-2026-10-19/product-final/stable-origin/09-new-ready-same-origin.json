@@ -1,0 +1,35 @@
+{
+  "initial": {
+    "runId": "9ae7a866-f098-4fd8-9233-03a8cb2dd242",
+    "pid": 3441526,
+    "supervisorPid": 3441514,
+    "startedAt": "2026-10-19T17:49:42.163Z",
+    "baseURL": "http://127.0.0.1:39683",
+    "hostCommit": "a45068d2ec03326c800c68c9bdcd47508e3ccb9c",
+    "cliVersion": "0.2.0-rc.2",
+    "plugin": {
+      "path": "/tmp/a2d2-v3-121/artifacts/candidate-8d33081/dsh-a2d2-0.0.1.tgz",
+      "sha256": "81466a33342c0256873bbf30dac693ee0cff2c075246a4ad859d94663ce0a82b"
+    },
+    "managedJobId": "bash-632"
+  },
+  "current": {
+    "runId": "a4b3ad40-bc0f-468f-b532-fe171ae6757d",
+    "pid": 3454422,
+    "supervisorPid": 3454410,
+    "startedAt": "2026-10-19T17:52:53.202Z",
+    "baseURL": "http://127.0.0.1:39683",
+    "hostCommit": "a45068d2ec03326c800c68c9bdcd47508e3ccb9c",
+    "cliVersion": "0.2.0-rc.2",
+    "plugin": {
+      "path": "/tmp/a2d2-v3-121/artifacts/candidate-8d33081/dsh-a2d2-0.0.1.tgz",
+      "sha256": "81466a33342c0256873bbf30dac693ee0cff2c075246a4ad859d94663ce0a82b"
+    },
+    "managedJobId": null
+  },
+  "readyObservedFromManagedJob": "bash-639",
+  "sameOrigin": true,
+  "differentRunId": true,
+  "differentPid": true,
+  "passed": true
+}

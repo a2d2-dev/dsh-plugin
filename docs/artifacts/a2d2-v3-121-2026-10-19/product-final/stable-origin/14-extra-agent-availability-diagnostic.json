@@ -1,0 +1,14 @@
+{
+  "diagnostic": "Extra assertion expecting 0 publicly available Agents before explicit token reopen",
+  "exitCode": 1,
+  "expectedAvailableAgentCount": 0,
+  "actualAvailableAgentCount": 1,
+  "actualError": "AssertionError: 1 !== 0",
+  "idSetAssertionBeforeThisCheck": "passed: exact two baseline IDs",
+  "completeDomainAssertionBeforeThisCheck": "passed: deepEqual to first process",
+  "explanation": "The same browser profile and tab stayed open across a stable-origin process restart. Its native connection automatically reconnected and restored the already selected existing Session before the explicit token reopen. This is expected native recovery; requiring 0 available Agents was an extra diagnostic assumption, not an acceptance criterion.",
+  "productFailure": false,
+  "originalRecordsOrSelectionModifiedToSatisfyAssertion": false,
+  "rerunOrRecreatedZeroAgentState": false,
+  "finalGateEvidence": "13-stable-origin-gate-passed.json"
+}

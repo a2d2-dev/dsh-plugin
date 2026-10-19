@@ -1,0 +1,443 @@
+{
+  "initialRun": {
+    "runId": "9ae7a866-f098-4fd8-9233-03a8cb2dd242",
+    "pid": 3441526,
+    "supervisorPid": 3441514,
+    "startedAt": "2026-10-19T17:49:42.163Z",
+    "baseURL": "http://127.0.0.1:39683",
+    "hostCommit": "a45068d2ec03326c800c68c9bdcd47508e3ccb9c",
+    "cliVersion": "0.2.0-rc.2",
+    "plugin": {
+      "path": "/tmp/a2d2-v3-121/artifacts/candidate-8d33081/dsh-a2d2-0.0.1.tgz",
+      "sha256": "81466a33342c0256873bbf30dac693ee0cff2c075246a4ad859d94663ce0a82b"
+    },
+    "managedJobId": "bash-632"
+  },
+  "full": {
+    "projects": {
+      "httpStatus": 200,
+      "status": "completed",
+      "projects": [
+        {
+          "id": "8e29bdb3-152d-454a-a609-4c15abd23535",
+          "name": "稳定Origin验收项目",
+          "version": 1,
+          "defaultAgentId": "bc0c5d1d-36fd-429f-b7e0-faec14b54b41",
+          "resources": [
+            {
+              "runtimeId": "594c86d4-1ec0-4475-a80e-768058687863",
+              "workspaceId": "b051db4f-7c5a-46cb-b23c-27efbf620a7b"
+            }
+          ]
+        }
+      ]
+    },
+    "details": [
+      {
+        "httpStatus": 200,
+        "status": "completed",
+        "project": {
+          "id": "8e29bdb3-152d-454a-a609-4c15abd23535",
+          "name": "稳定Origin验收项目",
+          "version": 1,
+          "defaultAgentId": "bc0c5d1d-36fd-429f-b7e0-faec14b54b41",
+          "resources": [
+            {
+              "runtimeId": "594c86d4-1ec0-4475-a80e-768058687863",
+              "workspaceId": "b051db4f-7c5a-46cb-b23c-27efbf620a7b"
+            }
+          ]
+        },
+        "agents": [
+          {
+            "id": "bc0c5d1d-36fd-429f-b7e0-faec14b54b41",
+            "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+            "role": "coordinator",
+            "policy": {
+              "version": 1,
+              "modelCandidates": [],
+              "instructions": "Coordinate accepted work and its acceptance criteria.",
+              "capabilities": [
+                "coordination"
+              ]
+            }
+          }
+        ],
+        "tasks": [
+          {
+            "id": "e45a661e-8564-4819-8ec4-0428d749d6f2",
+            "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+            "title": "稳定重启工作甲",
+            "goal": "  完整目标\n    保留缩进\n",
+            "version": 5,
+            "agentId": "bc0c5d1d-36fd-429f-b7e0-faec14b54b41",
+            "specification": {
+              "version": 2,
+              "text": "  更新规格\n    尾换行保留\n",
+              "acceptance": [
+                "  多行验收首行\n    第二行\n",
+                "第二独立条目\n"
+              ]
+            },
+            "specificationHistory": [
+              {
+                "version": 1,
+                "text": "  初版规格\n",
+                "acceptance": [
+                  "第一条\n同一条第二行",
+                  "第二条\n"
+                ]
+              }
+            ],
+            "breakdown": [
+              {
+                "id": "stable-block",
+                "title": "稳定恢复块",
+                "description": "原生恢复已有cold会话且集合配置不变"
+              }
+            ],
+            "children": [
+              {
+                "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+                "taskId": "ed82b468-c560-45a2-b841-143fabe78086"
+              }
+            ],
+            "sessions": [
+              {
+                "session": {
+                  "runtimeId": "594c86d4-1ec0-4475-a80e-768058687863",
+                  "sessionId": "session-dfa13dc0-f8e2-4aae-b4bf-6a163f40b4bd"
+                },
+                "purpose": "related"
+              }
+            ],
+            "activity": [
+              {
+                "commandId": "stable-parent",
+                "type": "task.create",
+                "version": 1
+              },
+              {
+                "commandId": "stable-child",
+                "type": "task.create-child",
+                "version": 2
+              },
+              {
+                "commandId": "stable-breakdown",
+                "type": "task.replace-breakdown",
+                "version": 3
+              },
+              {
+                "commandId": "stable-parent-session",
+                "type": "task.associate-session",
+                "version": 4
+              },
+              {
+                "commandId": "stable-parent-spec",
+                "type": "task.update-spec",
+                "version": 5
+              }
+            ]
+          },
+          {
+            "id": "ed82b468-c560-45a2-b841-143fabe78086",
+            "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+            "title": "稳定重启工作乙",
+            "goal": "子目标",
+            "version": 2,
+            "agentId": "bc0c5d1d-36fd-429f-b7e0-faec14b54b41",
+            "specification": {
+              "version": 1,
+              "text": "子规格",
+              "acceptance": [
+                "子验收"
+              ]
+            },
+            "specificationHistory": [],
+            "breakdown": [],
+            "parent": {
+              "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+              "taskId": "e45a661e-8564-4819-8ec4-0428d749d6f2"
+            },
+            "children": [],
+            "sessions": [
+              {
+                "session": {
+                  "runtimeId": "594c86d4-1ec0-4475-a80e-768058687863",
+                  "sessionId": "session-3b94b9cf-c18c-496e-a313-a37e2c3f65a0"
+                },
+                "purpose": "related"
+              }
+            ],
+            "activity": [
+              {
+                "commandId": "stable-child",
+                "type": "task.create-child",
+                "version": 1
+              },
+              {
+                "commandId": "stable-child-session",
+                "type": "task.associate-session",
+                "version": 2
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "sessions": {
+    "items": [
+      {
+        "sessionId": "session-3b94b9cf-c18c-496e-a313-a37e2c3f65a0",
+        "updatedAt": 1792432220289,
+        "agentAvailable": true,
+        "running": false,
+        "blank": true,
+        "cwd": "/tmp/a2d2-v3-121/product-stable-origin-56679a6/workspace",
+        "projections": {
+          "kind": "sequenced",
+          "asOfSeq": 2,
+          "values": {
+            "title": null,
+            "goal": null,
+            "tokenUsage": {
+              "uncachedInputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            },
+            "contextPressure": {},
+            "contextBreakdown": {
+              "systemTokens": 0,
+              "toolsTokens": 0,
+              "messageTokens": 0
+            },
+            "inbox": {
+              "next-turn": [],
+              "next-step": []
+            },
+            "sessionStats": {
+              "turns": 0,
+              "steps": 0,
+              "llmMs": 0,
+              "toolMs": 0,
+              "ttftMs": 0,
+              "ttftSteps": 0,
+              "decodeMs": 0,
+              "decodeTokens": 0
+            },
+            "turnOutline": [],
+            "agentPreset": "standard",
+            "userQuestions": {
+              "active": [],
+              "settled": []
+            },
+            "subagentCatalog": [],
+            "subagentTiming": {
+              "settledMs": 0
+            },
+            "subagent": null,
+            "a2d2Indicator": {
+              "thresholds": {
+                "warnAtTokens": 150000,
+                "criticalAtTokens": 1000000
+              },
+              "currency": "¥"
+            },
+            "permissions": {
+              "currentValue": "workspace-write"
+            },
+            "todos": null,
+            "plan": {
+              "active": false,
+              "pending": false
+            },
+            "modelSelection": {
+              "lastUsed": null,
+              "next": null
+            },
+            "sessionListMetadata": {
+              "blank": true,
+              "lastPromptAt": null
+            },
+            "imageLimits": {
+              "maxImageBytes": 20971520,
+              "maxImagesPerMessage": 20,
+              "maxMessageImageBytes": 209715200,
+              "maxImagePixels": 64000000,
+              "maxImageDimension": 8192,
+              "mediaTypes": [
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "sessionId": "session-dfa13dc0-f8e2-4aae-b4bf-6a163f40b4bd",
+        "updatedAt": 1792432219628,
+        "agentAvailable": true,
+        "running": false,
+        "blank": true,
+        "cwd": "/tmp/a2d2-v3-121/product-stable-origin-56679a6/workspace",
+        "projections": {
+          "kind": "sequenced",
+          "asOfSeq": 2,
+          "values": {
+            "title": null,
+            "goal": null,
+            "tokenUsage": {
+              "uncachedInputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            },
+            "contextPressure": {},
+            "contextBreakdown": {
+              "systemTokens": 0,
+              "toolsTokens": 0,
+              "messageTokens": 0
+            },
+            "inbox": {
+              "next-turn": [],
+              "next-step": []
+            },
+            "sessionStats": {
+              "turns": 0,
+              "steps": 0,
+              "llmMs": 0,
+              "toolMs": 0,
+              "ttftMs": 0,
+              "ttftSteps": 0,
+              "decodeMs": 0,
+              "decodeTokens": 0
+            },
+            "turnOutline": [],
+            "agentPreset": "standard",
+            "userQuestions": {
+              "active": [],
+              "settled": []
+            },
+            "subagentCatalog": [],
+            "subagentTiming": {
+              "settledMs": 0
+            },
+            "subagent": null,
+            "a2d2Indicator": {
+              "thresholds": {
+                "warnAtTokens": 150000,
+                "criticalAtTokens": 1000000
+              },
+              "currency": "¥"
+            },
+            "permissions": {
+              "currentValue": "workspace-write"
+            },
+            "todos": null,
+            "plan": {
+              "active": false,
+              "pending": false
+            },
+            "modelSelection": {
+              "lastUsed": null,
+              "next": null
+            },
+            "sessionListMetadata": {
+              "blank": true,
+              "lastPromptAt": null
+            },
+            "imageLimits": {
+              "maxImageBytes": 20971520,
+              "maxImagesPerMessage": 20,
+              "maxMessageImageBytes": 209715200,
+              "maxImagePixels": 64000000,
+              "maxImageDimension": 8192,
+              "mediaTypes": [
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif"
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+  "baseline": {
+    "processId": "971f5f9b-328a-4994-9c5f-49f5ef0705c8",
+    "pid": 3441526,
+    "providers": [
+      "acceptance-disabled"
+    ],
+    "gateway": 0,
+    "adapter": 0,
+    "births": 2,
+    "bornSessionIds": [
+      "session-dfa13dc0-f8e2-4aae-b4bf-6a163f40b4bd",
+      "session-3b94b9cf-c18c-496e-a313-a37e2c3f65a0"
+    ],
+    "sessions": [
+      {
+        "sessionId": "session-3b94b9cf-c18c-496e-a313-a37e2c3f65a0",
+        "cwd": "/tmp/a2d2-v3-121/product-stable-origin-56679a6/workspace",
+        "model": {
+          "selection": {
+            "lastUsed": null,
+            "next": null
+          },
+          "default": {
+            "provider": "acceptance-disabled",
+            "model": "no-model"
+          }
+        },
+        "permissions": {
+          "selection": {
+            "currentValue": "workspace-write"
+          },
+          "sandbox": {
+            "mode": "workspace-write",
+            "workspaceRoot": "/tmp/a2d2-v3-121/product-stable-origin-56679a6/workspace",
+            "sessionId": "session-3b94b9cf-c18c-496e-a313-a37e2c3f65a0"
+          },
+          "approval": "ask"
+        }
+      },
+      {
+        "sessionId": "session-dfa13dc0-f8e2-4aae-b4bf-6a163f40b4bd",
+        "cwd": "/tmp/a2d2-v3-121/product-stable-origin-56679a6/workspace",
+        "model": {
+          "selection": {
+            "lastUsed": null,
+            "next": null
+          },
+          "default": {
+            "provider": "acceptance-disabled",
+            "model": "no-model"
+          }
+        },
+        "permissions": {
+          "selection": {
+            "currentValue": "workspace-write"
+          },
+          "sandbox": {
+            "mode": "workspace-write",
+            "workspaceRoot": "/tmp/a2d2-v3-121/product-stable-origin-56679a6/workspace",
+            "sessionId": "session-dfa13dc0-f8e2-4aae-b4bf-6a163f40b4bd"
+          },
+          "approval": "ask"
+        }
+      }
+    ],
+    "pageEvidence": {
+      "path": "/tmp/a2d2-v3-121/product-stable-origin-56679a6/evidence/05-native-selected-before-restart.png",
+      "sha256": "ce370e4421027d2f4ee69a3e62dbb0623b0568cfc76e22b440b0878ae00eb8ca"
+    }
+  },
+  "nativeSelectionMethod": "Task child details -> sessions tab -> Open Session; no localStorage or direct selection writes",
+  "passed": true
+}

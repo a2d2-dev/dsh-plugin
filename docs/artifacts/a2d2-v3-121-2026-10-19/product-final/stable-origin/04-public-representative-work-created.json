@@ -1,0 +1,576 @@
+{
+  "steps": [
+    {
+      "command": {
+        "type": "project.create",
+        "commandId": "stable-project",
+        "name": "稳定Origin验收项目",
+        "resource": {
+          "runtimeId": "594c86d4-1ec0-4475-a80e-768058687863",
+          "workspaceId": "b051db4f-7c5a-46cb-b23c-27efbf620a7b"
+        }
+      },
+      "result": {
+        "httpStatus": 200,
+        "status": "completed",
+        "project": {
+          "id": "8e29bdb3-152d-454a-a609-4c15abd23535",
+          "name": "稳定Origin验收项目",
+          "version": 1,
+          "defaultAgentId": "bc0c5d1d-36fd-429f-b7e0-faec14b54b41",
+          "resources": [
+            {
+              "runtimeId": "594c86d4-1ec0-4475-a80e-768058687863",
+              "workspaceId": "b051db4f-7c5a-46cb-b23c-27efbf620a7b"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "command": {
+        "type": "task.create",
+        "commandId": "stable-parent",
+        "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+        "title": "稳定重启工作甲",
+        "goal": "  完整目标\n    保留缩进\n",
+        "specification": "  初版规格\n",
+        "acceptance": [
+          "第一条\n同一条第二行",
+          "第二条\n"
+        ]
+      },
+      "result": {
+        "httpStatus": 200,
+        "status": "completed",
+        "task": {
+          "id": "e45a661e-8564-4819-8ec4-0428d749d6f2",
+          "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+          "title": "稳定重启工作甲",
+          "goal": "  完整目标\n    保留缩进\n",
+          "version": 1,
+          "specification": {
+            "version": 1,
+            "text": "  初版规格\n",
+            "acceptance": [
+              "第一条\n同一条第二行",
+              "第二条\n"
+            ]
+          },
+          "agentId": "bc0c5d1d-36fd-429f-b7e0-faec14b54b41",
+          "specificationHistory": [],
+          "breakdown": [],
+          "children": [],
+          "sessions": [],
+          "activity": [
+            {
+              "commandId": "stable-parent",
+              "type": "task.create",
+              "version": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "command": {
+        "type": "task.create-child",
+        "commandId": "stable-child",
+        "ref": {
+          "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+          "taskId": "e45a661e-8564-4819-8ec4-0428d749d6f2"
+        },
+        "expectedVersion": 1,
+        "title": "稳定重启工作乙",
+        "goal": "子目标",
+        "specification": "子规格",
+        "acceptance": [
+          "子验收"
+        ]
+      },
+      "result": {
+        "httpStatus": 200,
+        "status": "completed",
+        "task": {
+          "id": "ed82b468-c560-45a2-b841-143fabe78086",
+          "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+          "title": "稳定重启工作乙",
+          "goal": "子目标",
+          "version": 1,
+          "specification": {
+            "version": 1,
+            "text": "子规格",
+            "acceptance": [
+              "子验收"
+            ]
+          },
+          "agentId": "bc0c5d1d-36fd-429f-b7e0-faec14b54b41",
+          "specificationHistory": [],
+          "breakdown": [],
+          "children": [],
+          "sessions": [],
+          "activity": [
+            {
+              "commandId": "stable-child",
+              "type": "task.create-child",
+              "version": 1
+            }
+          ],
+          "parent": {
+            "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+            "taskId": "e45a661e-8564-4819-8ec4-0428d749d6f2"
+          }
+        }
+      }
+    },
+    {
+      "command": {
+        "type": "task.replace-breakdown",
+        "commandId": "stable-breakdown",
+        "ref": {
+          "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+          "taskId": "e45a661e-8564-4819-8ec4-0428d749d6f2"
+        },
+        "expectedVersion": 2,
+        "blocks": [
+          {
+            "id": "stable-block",
+            "title": "稳定恢复块",
+            "description": "原生恢复已有cold会话且集合配置不变"
+          }
+        ]
+      },
+      "result": {
+        "httpStatus": 200,
+        "status": "completed",
+        "task": {
+          "id": "e45a661e-8564-4819-8ec4-0428d749d6f2",
+          "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+          "title": "稳定重启工作甲",
+          "goal": "  完整目标\n    保留缩进\n",
+          "version": 3,
+          "agentId": "bc0c5d1d-36fd-429f-b7e0-faec14b54b41",
+          "specification": {
+            "version": 1,
+            "text": "  初版规格\n",
+            "acceptance": [
+              "第一条\n同一条第二行",
+              "第二条\n"
+            ]
+          },
+          "specificationHistory": [],
+          "breakdown": [
+            {
+              "id": "stable-block",
+              "title": "稳定恢复块",
+              "description": "原生恢复已有cold会话且集合配置不变"
+            }
+          ],
+          "children": [
+            {
+              "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+              "taskId": "ed82b468-c560-45a2-b841-143fabe78086"
+            }
+          ],
+          "sessions": [],
+          "activity": [
+            {
+              "commandId": "stable-parent",
+              "type": "task.create",
+              "version": 1
+            },
+            {
+              "commandId": "stable-child",
+              "type": "task.create-child",
+              "version": 2
+            },
+            {
+              "commandId": "stable-breakdown",
+              "type": "task.replace-breakdown",
+              "version": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "command": {
+        "type": "task.associate-session",
+        "commandId": "stable-parent-session",
+        "ref": {
+          "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+          "taskId": "e45a661e-8564-4819-8ec4-0428d749d6f2"
+        },
+        "expectedVersion": 3,
+        "session": {
+          "runtimeId": "594c86d4-1ec0-4475-a80e-768058687863",
+          "sessionId": "session-dfa13dc0-f8e2-4aae-b4bf-6a163f40b4bd"
+        },
+        "purpose": "related"
+      },
+      "result": {
+        "httpStatus": 200,
+        "status": "completed",
+        "task": {
+          "id": "e45a661e-8564-4819-8ec4-0428d749d6f2",
+          "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+          "title": "稳定重启工作甲",
+          "goal": "  完整目标\n    保留缩进\n",
+          "version": 4,
+          "agentId": "bc0c5d1d-36fd-429f-b7e0-faec14b54b41",
+          "specification": {
+            "version": 1,
+            "text": "  初版规格\n",
+            "acceptance": [
+              "第一条\n同一条第二行",
+              "第二条\n"
+            ]
+          },
+          "specificationHistory": [],
+          "breakdown": [
+            {
+              "id": "stable-block",
+              "title": "稳定恢复块",
+              "description": "原生恢复已有cold会话且集合配置不变"
+            }
+          ],
+          "children": [
+            {
+              "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+              "taskId": "ed82b468-c560-45a2-b841-143fabe78086"
+            }
+          ],
+          "sessions": [
+            {
+              "session": {
+                "runtimeId": "594c86d4-1ec0-4475-a80e-768058687863",
+                "sessionId": "session-dfa13dc0-f8e2-4aae-b4bf-6a163f40b4bd"
+              },
+              "purpose": "related"
+            }
+          ],
+          "activity": [
+            {
+              "commandId": "stable-parent",
+              "type": "task.create",
+              "version": 1
+            },
+            {
+              "commandId": "stable-child",
+              "type": "task.create-child",
+              "version": 2
+            },
+            {
+              "commandId": "stable-breakdown",
+              "type": "task.replace-breakdown",
+              "version": 3
+            },
+            {
+              "commandId": "stable-parent-session",
+              "type": "task.associate-session",
+              "version": 4
+            }
+          ]
+        }
+      }
+    },
+    {
+      "command": {
+        "type": "task.associate-session",
+        "commandId": "stable-child-session",
+        "ref": {
+          "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+          "taskId": "ed82b468-c560-45a2-b841-143fabe78086"
+        },
+        "expectedVersion": 1,
+        "session": {
+          "runtimeId": "594c86d4-1ec0-4475-a80e-768058687863",
+          "sessionId": "session-3b94b9cf-c18c-496e-a313-a37e2c3f65a0"
+        },
+        "purpose": "related"
+      },
+      "result": {
+        "httpStatus": 200,
+        "status": "completed",
+        "task": {
+          "id": "ed82b468-c560-45a2-b841-143fabe78086",
+          "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+          "title": "稳定重启工作乙",
+          "goal": "子目标",
+          "version": 2,
+          "agentId": "bc0c5d1d-36fd-429f-b7e0-faec14b54b41",
+          "specification": {
+            "version": 1,
+            "text": "子规格",
+            "acceptance": [
+              "子验收"
+            ]
+          },
+          "specificationHistory": [],
+          "breakdown": [],
+          "parent": {
+            "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+            "taskId": "e45a661e-8564-4819-8ec4-0428d749d6f2"
+          },
+          "children": [],
+          "sessions": [
+            {
+              "session": {
+                "runtimeId": "594c86d4-1ec0-4475-a80e-768058687863",
+                "sessionId": "session-3b94b9cf-c18c-496e-a313-a37e2c3f65a0"
+              },
+              "purpose": "related"
+            }
+          ],
+          "activity": [
+            {
+              "commandId": "stable-child",
+              "type": "task.create-child",
+              "version": 1
+            },
+            {
+              "commandId": "stable-child-session",
+              "type": "task.associate-session",
+              "version": 2
+            }
+          ]
+        }
+      }
+    },
+    {
+      "command": {
+        "type": "task.update-spec",
+        "commandId": "stable-parent-spec",
+        "ref": {
+          "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+          "taskId": "e45a661e-8564-4819-8ec4-0428d749d6f2"
+        },
+        "expectedVersion": 4,
+        "goal": "  完整目标\n    保留缩进\n",
+        "specification": "  更新规格\n    尾换行保留\n",
+        "acceptance": [
+          "  多行验收首行\n    第二行\n",
+          "第二独立条目\n"
+        ]
+      },
+      "result": {
+        "httpStatus": 200,
+        "status": "completed",
+        "task": {
+          "id": "e45a661e-8564-4819-8ec4-0428d749d6f2",
+          "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+          "title": "稳定重启工作甲",
+          "goal": "  完整目标\n    保留缩进\n",
+          "version": 5,
+          "agentId": "bc0c5d1d-36fd-429f-b7e0-faec14b54b41",
+          "specification": {
+            "version": 2,
+            "text": "  更新规格\n    尾换行保留\n",
+            "acceptance": [
+              "  多行验收首行\n    第二行\n",
+              "第二独立条目\n"
+            ]
+          },
+          "specificationHistory": [
+            {
+              "version": 1,
+              "text": "  初版规格\n",
+              "acceptance": [
+                "第一条\n同一条第二行",
+                "第二条\n"
+              ]
+            }
+          ],
+          "breakdown": [
+            {
+              "id": "stable-block",
+              "title": "稳定恢复块",
+              "description": "原生恢复已有cold会话且集合配置不变"
+            }
+          ],
+          "children": [
+            {
+              "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+              "taskId": "ed82b468-c560-45a2-b841-143fabe78086"
+            }
+          ],
+          "sessions": [
+            {
+              "session": {
+                "runtimeId": "594c86d4-1ec0-4475-a80e-768058687863",
+                "sessionId": "session-dfa13dc0-f8e2-4aae-b4bf-6a163f40b4bd"
+              },
+              "purpose": "related"
+            }
+          ],
+          "activity": [
+            {
+              "commandId": "stable-parent",
+              "type": "task.create",
+              "version": 1
+            },
+            {
+              "commandId": "stable-child",
+              "type": "task.create-child",
+              "version": 2
+            },
+            {
+              "commandId": "stable-breakdown",
+              "type": "task.replace-breakdown",
+              "version": 3
+            },
+            {
+              "commandId": "stable-parent-session",
+              "type": "task.associate-session",
+              "version": 4
+            },
+            {
+              "commandId": "stable-parent-spec",
+              "type": "task.update-spec",
+              "version": 5
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "project": {
+    "id": "8e29bdb3-152d-454a-a609-4c15abd23535",
+    "name": "稳定Origin验收项目",
+    "version": 1,
+    "defaultAgentId": "bc0c5d1d-36fd-429f-b7e0-faec14b54b41",
+    "resources": [
+      {
+        "runtimeId": "594c86d4-1ec0-4475-a80e-768058687863",
+        "workspaceId": "b051db4f-7c5a-46cb-b23c-27efbf620a7b"
+      }
+    ]
+  },
+  "ref": {
+    "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+    "taskId": "e45a661e-8564-4819-8ec4-0428d749d6f2"
+  },
+  "childRef": {
+    "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+    "taskId": "ed82b468-c560-45a2-b841-143fabe78086"
+  },
+  "parent": {
+    "id": "e45a661e-8564-4819-8ec4-0428d749d6f2",
+    "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+    "title": "稳定重启工作甲",
+    "goal": "  完整目标\n    保留缩进\n",
+    "version": 5,
+    "agentId": "bc0c5d1d-36fd-429f-b7e0-faec14b54b41",
+    "specification": {
+      "version": 2,
+      "text": "  更新规格\n    尾换行保留\n",
+      "acceptance": [
+        "  多行验收首行\n    第二行\n",
+        "第二独立条目\n"
+      ]
+    },
+    "specificationHistory": [
+      {
+        "version": 1,
+        "text": "  初版规格\n",
+        "acceptance": [
+          "第一条\n同一条第二行",
+          "第二条\n"
+        ]
+      }
+    ],
+    "breakdown": [
+      {
+        "id": "stable-block",
+        "title": "稳定恢复块",
+        "description": "原生恢复已有cold会话且集合配置不变"
+      }
+    ],
+    "children": [
+      {
+        "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+        "taskId": "ed82b468-c560-45a2-b841-143fabe78086"
+      }
+    ],
+    "sessions": [
+      {
+        "session": {
+          "runtimeId": "594c86d4-1ec0-4475-a80e-768058687863",
+          "sessionId": "session-dfa13dc0-f8e2-4aae-b4bf-6a163f40b4bd"
+        },
+        "purpose": "related"
+      }
+    ],
+    "activity": [
+      {
+        "commandId": "stable-parent",
+        "type": "task.create",
+        "version": 1
+      },
+      {
+        "commandId": "stable-child",
+        "type": "task.create-child",
+        "version": 2
+      },
+      {
+        "commandId": "stable-breakdown",
+        "type": "task.replace-breakdown",
+        "version": 3
+      },
+      {
+        "commandId": "stable-parent-session",
+        "type": "task.associate-session",
+        "version": 4
+      },
+      {
+        "commandId": "stable-parent-spec",
+        "type": "task.update-spec",
+        "version": 5
+      }
+    ]
+  },
+  "child": {
+    "id": "ed82b468-c560-45a2-b841-143fabe78086",
+    "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+    "title": "稳定重启工作乙",
+    "goal": "子目标",
+    "version": 2,
+    "agentId": "bc0c5d1d-36fd-429f-b7e0-faec14b54b41",
+    "specification": {
+      "version": 1,
+      "text": "子规格",
+      "acceptance": [
+        "子验收"
+      ]
+    },
+    "specificationHistory": [],
+    "breakdown": [],
+    "parent": {
+      "projectId": "8e29bdb3-152d-454a-a609-4c15abd23535",
+      "taskId": "e45a661e-8564-4819-8ec4-0428d749d6f2"
+    },
+    "children": [],
+    "sessions": [
+      {
+        "session": {
+          "runtimeId": "594c86d4-1ec0-4475-a80e-768058687863",
+          "sessionId": "session-3b94b9cf-c18c-496e-a313-a37e2c3f65a0"
+        },
+        "purpose": "related"
+      }
+    ],
+    "activity": [
+      {
+        "commandId": "stable-child",
+        "type": "task.create-child",
+        "version": 1
+      },
+      {
+        "commandId": "stable-child-session",
+        "type": "task.associate-session",
+        "version": 2
+      }
+    ]
+  },
+  "passed": true
+}
