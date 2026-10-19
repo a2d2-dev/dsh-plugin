@@ -32,7 +32,7 @@
 | R3 | Spec 证据建议 | **记账并收紧说明**：更正已有测试名称/说明的证明范围；不补新故障窗口、不改变原断言 | **已关闭**：`7127b6d` 仅改名称/表述，原步骤与断言保留 |
 | C1 | CEO 产品文案核对 | **修正文案**：去除“当前票不启动执行”的开发票据术语，保留准确的当前未启动状态 | **已关闭**：`9e31834` 文案及渲染测试已核对 |
 | R4 | 真实浏览器验收准备 | **修**：guard seed 使用公开 WorkspaceController 返回的 `workspace.workspaceId`，不使用不存在的 `workspace.id`；验证创建 Session 的引用与实际 cwd | `44175de` 的真实 controller 测试已核对，包含正确 cwd 和 Workspace 成员关系；待 fresh root 重启验收 |
-| R5 | 首轮真实浏览器 AC7 缺陷 | **修**：blank Session 不渲染 header.actions；将工作入口迁到 blank/普通会话共享的公开 `conversation.input.dock` list，保留已有 single corner 控件 | `f482b15` 已核对公开宿主两种状态渲染及注册/返回测试；待最终原生来回导航 |
+| R5 | 首轮真实浏览器 AC7 缺陷 | **修**：blank Session 不渲染 header.actions；将工作入口迁到 blank/普通会话共享的公开 `conversation.input.dock` list，保留已有 single corner 控件 | **已关闭**：`f482b15`；CEO 已回读新包 26 号真实记录及 23 号截图：blank 会话入口可见，同一已选 Session 新增子工作关联后无需刷新即显示第二入口，点击返回正确 Project/Task 四标签；前后 timeOrigin 相同 |
 
 采用一轮制：统一高级整改后 CEO 直接核对以上清单，不再次派评审扩大范围。产品浏览器发现若击穿验收，仍在本票修复。
 
