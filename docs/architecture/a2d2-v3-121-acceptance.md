@@ -25,6 +25,8 @@
 
 `prepare` 要求现有宿主绝对路径及 tgz，或显式 `--host-only`。临时资源必须位于 `/tmp/a2d2-v3-121/<run>`，root 必须为规范绝对路径（拒绝 `.`、`..`、重复分隔符和尾部分隔符）。任何 mkdir 前先向上查找最近现存父目录，用 lstat 拒绝非目录/悬空 symlink，并要求 realpath 与原路径完全相等，因而也拒绝命名空间内外的 symlink 别名；确认后才创建缺失目录，再核对 root 的规范路径。新环境独占 manifest，重复 prepare 拒绝。子进程只继承 PATH，并设置独立 DSH_HOME、XDG_CONFIG_HOME、XDG_STATE_HOME 和遥测禁用标志，不覆盖 HOME，不继承模型凭据。
 
+`run` 首次在没有 `current-run.json` 时使用 `--port 0`，将真实 ready 的 `http://127.0.0.1:<port>` origin 保存为该 root 的站点身份。后续启动自动读取并验证记录，复用同一端口，无需手工端口参数。记录必须为规范 HTTP / 字面地址 `127.0.0.1` / 有效显式非保护端口，不含路径、凭据、query 或 fragment；保护端口 18780/18781、其他 host/protocol、损坏记录均在创建日志和启动 Web 子进程前拒绝。复用前以短暂 loopback 监听检查占用，`EADDRINUSE` 明确失败，不杀端口占用者、不尝试其他端口。CLI 实际 ready origin 还须与记录一致；若子进程绕开请求端口，工具停止本次自有子进程并失败，保存 private 日志与 exit，不替换原站点及私有登录记录。
+
 LLM 模块通过宿主 base bundle 依赖闭包解析；controller/client-modules 通过 web-app bundle 解析。guard 拷贝到临时独立包，避免宿主把仓库中的 guard 误认为产品客户端包。overlay 全量替换相关 config；host-only 不写不存在的 A²D² 行；产品环境禁用既有 `a2d2-task-runtime`。插件的 v3 工作数据默认位于独立 DSH_HOME。
 
 guard 只提供合法模型目录元数据，`adapter.stream` 计数后抛出固定错误；公共 waterfall 计数并拒绝任何非 guard provider。每次 IPC 命令还核查实际 provider 目录只有 guard。只记录事件种类、时间、进程和 Session ID，不保存模型消息正文。
@@ -36,7 +38,7 @@ guard 只提供合法模型目录元数据，`adapter.stream` 计数后抛出固
 | 组件 | 职责 | 状态归属 |
 | --- | --- | --- |
 | prepare | 核验宿主、安装指定 tgz、生成 overlay 与独立 guard 包 | manifest、隔离 profile |
-| run | 前台监管真实 CLI 子进程，转发停止信号，记录 ready 与退出 | private 日志、run 记录 |
+| run | 前台监管真实 CLI 子进程，首次记录实际 origin、重启复用端口，转发停止信号，记录 ready 与退出 | private 日志、current-run 与各轮 evidence |
 | guard | 唯一禁用模型目录、双计数、会话出生、公开 controller 驱动 | append-only metrics 与 IPC |
 | baseline/check | 比较完整 Session 身份和配置，拒绝模型调用 | 截图 SHA、baseline、阶段 snapshot |
 | agent-browser | 独立浏览器真实页面、交互与截图 | 独立 profile，PNG 正式证据 |
@@ -102,7 +104,9 @@ PNG 存在只能作为冻结前置条件；验收者仍须实际查看截图与 
 
 真实宿主缺少 bundle／guard 加载失败／命令超时／缺少公开配置投影／页面未 ready 时显式失败，不能报告零调用通过。失败原因只在私有原始日志中诊断，正式证据采用脱敏结果。
 
-重启使用同一个已准备 root，再次运行 `run` 并登记新 managed job ID；不能再次 prepare 或删除 metrics。若需加载新的 tgz，另建全新 root。浏览器需重新交换新进程 token，再通过公开查询检查持久身份及配置。
+重启前先停止本 root 自有的 managed job 并收集 exit，再次对同一个已准备 root 运行 `run` 并登记新的 managed job ID。工具从保存的 `current-run.json.baseURL` 自动复用真实端口，浏览器继续使用同一个 browser-profile，在相同 origin 交换新进程 token 后检查原 selection、持久身份及配置。不能再次 prepare、删除 current-run、替换 browser-profile，或清空 metrics/baseline 来把新站点首用当成重启。各轮 run/exit 独立留证，模型指标继续跨进程追加。
+
+若端口被占用，工具退出 1 并明确报告占用错误；原 current-run、private 登录文件、profile 与指标保持不变。调用者应核对自有旧 job 是否已退出，不得杀其他进程或改端口绕过失败。若记录非法或损坏也直接拒绝，不能退回端口 0。若需加载新的 tgz，另建全新验收环境并保留旧失败环境；新环境的通过不追认旧基线。
 
 清理只停止本任务 managed jobs 与 `agent-browser --session a2d2-v3-121 close`。保留临时隔离数据以便复核，不删除宿主或既有 profile，不操作 18780/18781。正式证据只白名单复制 manifest、run／exit、positive、metrics、baseline／check、截图及脱敏测试结果；不复制 private 登录 URL、原始日志或 browser profile。
 
@@ -126,6 +130,28 @@ PNG 存在只能作为冻结前置条件；验收者仍须实际查看截图与 
 - 行为红测：`XDG_STATE_HOME=/tmp/a2d2-v3-gh-state node --test --test-name-pattern='guard seed' tests/a2d2-v3-121-acceptance.test.mjs`，退出 1；实际 Session cwd 为进程默认 worktree，期望为测试所选 `root/workspace`。
 - 修复 guard 的两处字段读取后，同命令 1/1 通过，退出 0。
 - 完整工具命令 `XDG_STATE_HOME=/tmp/a2d2-v3-gh-state node --test tests/a2d2-v3-121-acceptance.test.mjs`：7 项通过，2 项需要独立真实 Web 的 real-host 测试仍显式 skip，退出 0。该真实 controller 契约证据不替代 CEO lane 的新包真实 seed / 浏览器复验。
+
+## R6：同一隔离 root 的 Web origin 连续性
+
+本项为验收工具重启语义整改，代码/回归提交 `6077dae`。起点为干净 `e6f3ae5df501d8090b8f15d415e6e8da367920b6`，保持同一功能分支；只改本工具、新增聚焦工具测试与本说明。所有产品源码、guard、依赖、锁文件、宿主及现有服务均未修改，产品包保持 CEO 已验证版本，不重新 build/pack。
+
+CEO 提供的真实 lane 证据表明，`product-final-8d33081` 环境的公开 seed 及 Workspace 挂载正确，浏览器重启前仍为原 2 Session ID、完整领域数据一致。旧 `run` 每次硬编码 `--port 0`，使 origin 从端口 34569 变为 42801；同 browser-profile 在新 origin 没有原 localStorage selection，真实宿主按首用 restoreSelection 流程创建第 3 个 Session。该失败与 R4 误读 workspace ID 的旧 seed 缺陷分别记账，不修改 DSH restoreSelection/header/会话数据来迎合验收。本执行者未操作或重新核验该真实实例；其原 root、公开查询/失败记录和跨进程指标继续保留，不改基线掩盖。
+
+新增 [run 生命周期回归](../../tests/a2d2-v3-121-run.test.mjs) 使用测试自建的真实 loopback HTTP CLI fixture，经公开 `acceptance.mjs run` 子进程执行两次启动、HTTP 访问与停止。首次参数为 0，重启参数必须等于首次真实端口，两个实际 origin 相等。测试还核对同 home/browser-profile 标记、跨轮 run/exit 留证、指标原前缀保留、private 登录文件 0600 与公开输出无登录 token。fixture 不是 DSH 产品验收；所有监听/子进程均由测试创建，清理前核对精确 supervisor PID/spawn 参数、自有 listener 地址及 fixture 绝对路径/realpath，只清理自有资源。
+
+红绿命令均使用 `XDG_STATE_HOME=/tmp/a2d2-v3-gh-state`：
+
+| 命令 | 红测实际反馈 | 修复后实际结果 |
+| --- | --- | --- |
+| `node --test tests/a2d2-v3-121-run.test.mjs`（最初仅核心生命周期用例） | 退出 1；重启请求端口为 0，期望首次真实端口 36079 | 同核心用例 1/1 通过，退出 0，真实 HTTP 两轮同 origin |
+| `node --test --test-name-pattern='occupied saved port' tests/a2d2-v3-121-run.test.mjs` | 退出 1；只有“Host exited without Web readiness”泛错，缺少明确占用反馈 | 加入启动前占用检查后通过，退出 0；明确 EADDRINUSE、无 Web spawn/新日志，占用者仍可响应 |
+| `node --test --test-name-pattern='CLI announcing' tests/a2d2-v3-121-run.test.mjs` | 退出 1；自建 CLI 绕开请求端口后仍误报 ready | 1/1 通过，退出 0；停止本次自有 child，不覆盖 current-run / private 登录文件 |
+| `node --test tests/a2d2-v3-121-run.test.mjs tests/a2d2-v3-121-acceptance.test.mjs` | — | 总 30 项（含 16 个非法记录子用例），28 通过、2 个真实 Web 用例显式 skip，退出 0 |
+| `node --check scripts/a2d2-v3-121/acceptance.mjs`、`node --check tests/a2d2-v3-121-run.test.mjs`、`git diff --check` | — | 均退出 0 |
+
+非法记录回归直接验证 Web 未 spawn、logs 为空、旧 current-run 不变；包括非 loopback、其他 loopback 名称、非法协议/端口、无效 JSON、凭据/query/非 origin 路径及保护端口。18780/18781 只作为拒绝输入，测试从未监听或启动到这些端口；其余真实监听均用系统分配的自有临时端口。没有新增人工端口配置或通用服务管理接口。
+
+真实复验仍由既有 browser lane 执行：使用同一已验证产品包，在新的独立验收环境首次 ready 后记录 baseURL、稳定页面 selection 并冻结基线；停止/收集 managed job 后，同 root 执行原 `run` 命令，确认 baseURL 完全一致，登记新 job，沿同 browser-profile 交换私有新 token，再比较 Session ID 集合、配置、领域数据与累计模型指标。保留旧新 origin 首用失败环境，不能把其结果当作同站点重启；不得删除原 current-run/baseline/metrics 后重跑来变成通过。R1/R5 已有真实浏览器通过事实由 CEO lane 保留，本工具执行者没有亲自浏览器验证或提供截图；R6 的真实 DSH 稳定 origin 重启结果待该 lane 提供，关闭裁决由 CEO 完成。
 
 ## 本阶段实际验证
 
