@@ -2,7 +2,7 @@
 
 ## Parent
 
-[A²D² v3 开发规格草案](../a2d2-control-panel-v3.md)。发布前草案；计划标签 `ready-for-agent`。
+主任务 [#120](https://github.com/a2d2-dev/dsh-plugin/issues/120)；本票 [#126](https://github.com/a2d2-dev/dsh-plugin/issues/126)。已确认并发布，执行标签 `ready-for-agent`。
 
 ## What to build
 
@@ -25,7 +25,7 @@
 
 ## Blocked by
 
-- 02 — 单项工作启动、当前协调会话与执行资格。
+- 02 — 单项工作启动、当前协调会话与执行资格（[#122](https://github.com/a2d2-dev/dsh-plugin/issues/122)）。
 
 ## Boundaries and evidence
 

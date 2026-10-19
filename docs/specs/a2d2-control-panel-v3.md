@@ -1,6 +1,6 @@
 # A²D² v3：DSH 内工作控制面板与连续执行
 
-**状态：开发规格草案，等待一次测试接缝与拆票确认后发布到 tracker。** 交互方向已由 LF 确认；本规格沿用当前 ADR，不重新讨论已定概念。文案、密度和字段排列可在实现中细化。
+**状态：已由 LF 确认测试设计、9票粒度、依赖及发布，主任务为 [#120](https://github.com/a2d2-dev/dsh-plugin/issues/120)。** 本规格沿用当前 ADR，不重新讨论已定概念。文案、密度和字段排列可在实现中细化。实际工单与关系见[发布记录](a2d2-control-panel-v3-tickets/publication-result.json)。
 
 ## Problem Statement
 
@@ -207,4 +207,4 @@ Issue／本地工作详情采用已确认的紧凑布局：顶部标题与操作
 - 当前 [领域词汇](../../CONTEXT.md) 和 [ADR 索引](../adr/README.md) 已按 LF 要求直接清理冲突规则；不再维持两套并列规范。
 - [能力核查](../architecture/a2d2-v3-implementation-evidence.md)保存固定代码位置、宿主接口、只读 API 证据及测试限制，避免这些易变细节散入开发票据。
 - 目标源账号／Project 权限和最终宿主构建需在实现时核验；本轮已确认公开 schema 能力与已有凭据读取方式，没有将任意目标实例冒称通过验收。
-- 票据为 [9 个纵向切片草案](a2d2-control-panel-v3-tickets/README.md)。本地文件是发布前草案，tracker 仍为 GitHub，没有切换为本地任务管理。
+- 票据为 [9 个已确认实现切片](a2d2-control-panel-v3-tickets/README.md)。已发布为主任务 #120 的原生子 Issue；本地文档保留规格来源，tracker 仍为 GitHub。
