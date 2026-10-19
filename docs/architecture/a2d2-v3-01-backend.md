@@ -34,6 +34,10 @@ pnpm exec vitest run tests/work.spec.ts
 
 只读核验宿主实际 HEAD：a45068d2ec03326c800c68c9bdcd47508e3ccb9c。已读取 atomic-write 与 workspaceRegistry 公共源码，未修改宿主。pnpm 11.7.0。首次 pnpm exec 自动安装依赖时报告未批准构建脚本（subprocess-local、koffi、node-pty），之后 vitest 可运行；完整安装/构建能力后续核实，不将安装告警判作产品缺陷。
 
+## 公开接入合同
+
+src/work-types.ts 是不含宿主依赖的客户端类型合同；WORK_ROUTE_PATH=/a2d2/api/work。POST JSON envelope 为 {kind:'command'|'query',value:WorkCommand|WorkQuery}，返回 WorkResult。其余命令类型先固定供并行 UI 编码，行为实现与生产路由仍按下方待办逐片验证，类型存在不等于验收已通过。
+
 ## 尚待本阶段完成
 
 命令去重、版本冲突、工作拆解/父子关系、宿主资源校验、生产可信 UI 路由、并发/故障验证与完整检查正在后续纵向切片实现。本文仅描述已核实事实，未完成项不算验收通过。
