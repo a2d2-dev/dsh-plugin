@@ -91,6 +91,12 @@ legacy.map(ref,address,expectedVersion) 在相同领域事务中保存唯一 (ru
 
 完整文本测试发现 trim 会破坏规格代码缩进和尾部换行：红测退出 1；改为仅检查非空但保留原文，三文件 14/14 绿测退出 0。此处没有扩大超时或 mock 内部 CRUD 来跳过失败。
 
+## 构建与生产包证据
+
+原构建 entry 未含新后端，曾出现 pnpm build 退出 0 而 import('dsh-a2d2/work-plugin') 因缺文件退出 1；不能以该次 build 成功代替生产装配成立。主会话明确扩权允许必要 tsdown.config.ts 接线后，将 work、work-types、work-plugin 加入原有同一 entry 清单，沿用 .js 产物和原 build 脚本。未保留第二构建路径。
+
+最终 pnpm verify:pack-exports 退出 0：实际构建、打包、临时安装并 import 全部 13 个 Node 导出，包括三个新入口。中间一次恢复扩展名时误改 verify 脚本路径得到 MODULE_NOT_FOUND，已恢复原 scripts/verify-pack-exports.mjs 后重新验证通过。构建产物保持忽略，不纳入提交。
+
 ## 尚待本阶段完成
 
-全量回归、build、最终静态检查与推送仍在推进。UI 与浏览器验收未验证，交后续切片。
+最终相关测试与证据收口、推送仍在推进。UI 与浏览器验收未验证，交后续切片。

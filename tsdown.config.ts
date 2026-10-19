@@ -151,7 +151,7 @@ function cssPlugin(): BuildPlugin {
 
 export default [
   {
-    entry: { 'task-runtime': 'src/task-runtime.ts', index: 'src/index.ts', command: 'src/command.ts', tools: 'src/tools.ts', 'open-subtask-tools': 'src/open-subtask-tools.ts', 'complete-task-tools': 'src/complete-task-tools.ts', 'ceo-prompt': 'src/ceo-prompt.ts', 'agent-prompt': 'src/agent-prompt.ts', 'github-watch': 'src/github-watch.ts', invariant: 'src/invariant.ts' },
+    entry: { work: 'src/work.ts', 'work-types': 'src/work-types.ts', 'work-plugin': 'src/work-plugin.ts', 'task-runtime': 'src/task-runtime.ts', index: 'src/index.ts', command: 'src/command.ts', tools: 'src/tools.ts', 'open-subtask-tools': 'src/open-subtask-tools.ts', 'complete-task-tools': 'src/complete-task-tools.ts', 'ceo-prompt': 'src/ceo-prompt.ts', 'agent-prompt': 'src/agent-prompt.ts', 'github-watch': 'src/github-watch.ts', invariant: 'src/invariant.ts' },
     outDir: 'lib',
     format: ['esm'],
     platform: 'node',
