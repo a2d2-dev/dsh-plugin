@@ -46,6 +46,36 @@ pnpm exec vitest run tests/work.spec.ts
 
 src/work-types.ts 是不含宿主依赖的客户端类型合同；WORK_ROUTE_PATH=/a2d2/api/work。POST JSON envelope 为 {kind:'command'|'query',value:WorkCommand|WorkQuery}，返回 WorkResult。其余命令类型先固定供并行 UI 编码，行为实现与生产路由仍按下方待办逐片验证，类型存在不等于验收已通过。
 
+## 宿主生产接线
+
+bundle 的 a2d2-work 行挂载 dsh-a2d2/work-plugin，独立于 live Session、Agent 和 LLM。默认记录目录为 ${DSH_HOME:-~/.dsh}/a2d2/work-v3；runtime-v1.json 原子生成并保存稳定 runtimeId，work-v3.json 保存领域快照。可通过服务端配置 directory 指定隔离目录，浏览器没有路径参数。
+
+DshWorkHost 只读取 workspaceRegistry.list/status、经过宿主验证的 sessionIds 与 sessionPersistence.stat 或 live header，并在关联前检查实际 canonical cwd 与 workspace.path 相等。仅服务器已登记且目录有效的 workspace 可作为资源；不恢复 Session、不调用 SessionController、不申请执行资格。资源全局只能属于一个领域项目，避免同一资源被隐式用于跨项目关联。
+
+POST /a2d2/api/work 使用 application/json、1 MiB 上限与 strict schema；首先复用 connection.requestRejection 的宿主 operator 登录/Host/Origin 边界，然后才读 body。WorkResult completed 对应 HTTP 200、conflict 对应 409、具名业务失败对应 400；宿主能力缺失或记录不可安全访问为 503。响应无凭据和服务器异常路径。公开生产入口不是 fixture 内部 Store CRUD。
+
+### API 使用场景
+
+以下为合同调用示例，需在已登录 DSH 的同源客户端调用：
+
+```ts
+const response = await fetch('/a2d2/api/work', {
+  method: 'POST', headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ kind: 'command', value: {
+    type: 'project.create', commandId: crypto.randomUUID(), name: '本地需求',
+  } }),
+})
+const result = await response.json() // WorkResult；project.id 是独立 ProjectId
+```
+
+随后 task.create 保存完整内容，task.detail(ref) 查询；resources.list 取得可接入引用，project.create(resource) 或 project.attach-resource 接入。session.candidates(projectId) 返回兼容持久/在线会话，task.associate-session 保存观察关联，session.work(session) 反向查询。各 mutation 的 expectedVersion 是目标 Project 或 Task 当前版本；task.link-child 还要求 childExpectedVersion。相同 commandId 同内容重放已保存回执；拒绝/冲突不提交新的领域事实。
+
+### 真实宿主隔离验证
+
+生产插件测试先因未注册 handler 得到行为红测（退出 1）；实现后 work + work-host 共 8/8 通过（退出 0）。使用真实 SessionStore、JsonlSessionPersistence、StorageDomain/StorageJson 与 WorkspaceRegistry；认证/路由注册使用结构化宿主边界替身，不冒称浏览器实证。Session 采用宿主真实 v4 header 并 flush 后发现，关闭 Context 后重建仍能按 ProjectId 查询；未装载 Agent/LLM，关联前后 Session stat（header/revision/eventCount）不变，未启动模型或创建 live Session。更早 Session fixture 的格式与 flush 前置失败不计入产品红测。
+
+认证测试覆盖命令、查询和已存在 commandId 的回读；拒绝在 body 读取前成立。额外浏览器 cwd 字段被 strict schema 拒绝。pnpm typecheck 退出 0。
+
 ## 尚待本阶段完成
 
-命令去重、版本冲突、工作拆解/父子关系、宿主资源校验、生产可信 UI 路由、并发/故障验证与完整检查正在后续纵向切片实现。本文仅描述已核实事实，未完成项不算验收通过。
+唯一旧地址映射、独立进程并发/故障验证与完整检查仍在推进。UI 与浏览器验收未验证，交后续切片。
