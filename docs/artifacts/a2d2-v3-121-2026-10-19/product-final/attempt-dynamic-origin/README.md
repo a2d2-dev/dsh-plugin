@@ -28,7 +28,9 @@
 | 真实认证／跨 Origin／跨 Project／不兼容资源／版本／commandId 拒绝均符合预期，拒绝前后完整领域结果相同 | [15 HTTP 边界](15-two-projects-and-http-boundaries.json) |
 | 公开旧地址映射唯一、重复分配另一 Task 拒绝、v3 文件与旧 tasks 目录分离 | [33 地址与存储](33-legacy-address-and-storage-isolation.json)；仅合同探针，没有复制／迁移旧活动 Task；真实旧 writer 互操作未在浏览器 lane 执行 |
 | 刷新前后完整 Project／Agent／Task／历史／关联及旧地址映射完全相同 | [36 刷新比较](36-after-refresh-public-state.json) |
-| **重启后浏览器登录前**，零 live Session 的公开完整 ID 集合仍为原两个，全部工作查询和映射保持相同 | [38 冷态公开查询](38-restart-cold-public-id-set-and-domain.json) |
+| **重启后浏览器登录前**，冷态公开列表显示 0 个可用 Agent，完整 ID 集合仍为原两个，全部工作查询和映射保持相同 | [38 冷态公开查询](38-restart-cold-public-id-set-and-domain.json) |
+
+38 号原始 JSON 的 `liveSessionCount` 字段实际由公开 `session/list` 的 `agentAvailable` 计数得到，准确含义为“可用 Agent 数量”。本轮没有另测 `ctx.sessions.list()=0`，不能据此断言 SessionStore 内完全没有 live 对象。原始 JSON 及其指纹保持不变。无 live Session 依赖另有后端真实 SessionStore 的自动证据，不扩大本浏览器 lane 的结论。
 
 ## 严格失败与根因
 
