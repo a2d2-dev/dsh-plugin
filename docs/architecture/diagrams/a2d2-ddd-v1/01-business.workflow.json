@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {"title": "A²D² 核心业务场景", "subtitle": "第一阶段评审 · 五条典型路径，不是必须依次执行的五个阶段"},
+  "lanes": [
+    {"id":"establish","label":"S1 建立任务与显式托管 · LF / CEO"},
+    {"id":"delegate","label":"S2 分解与委派 · CEO / 工程师 / 评审"},
+    {"id":"rotate","label":"S3 主会话交接 · 任务运行器"},
+    {"id":"recover","label":"S4 等待、事件与恢复 · 运行器 / DSH","variant":"exception"},
+    {"id":"complete","label":"S5 验收与完成 · CEO / 插件"}
+  ],
+  "nodes": [
+    {"id":"issue","lane":"establish","col":0,"type":"external","label":"创建 Issue","sublabel":"目标与验收"},
+    {"id":"bind","lane":"establish","col":2,"type":"backend","label":"绑定主会话","sublabel":"绑定不等于托管","width":126},
+    {"id":"start","lane":"establish","col":5,"type":"security","label":"显式启动","sublabel":"LF 启用后台执行"},
+    {"id":"choose","lane":"delegate","col":0,"type":"backend","label":"判断执行方式","sublabel":"是否需要独立设计"},
+    {"id":"dispatch","lane":"delegate","col":2,"type":"backend","label":"派发或开子任务","sublabel":"子代理 / 独立主会话","width":132},
+    {"id":"result","lane":"delegate","col":5,"type":"messagebus","label":"结果回传","sublabel":"CEO 复核与推进"},
+    {"id":"boundary","lane":"rotate","col":0,"type":"security","label":"安全交接边界","sublabel":"源空闲 / 子代理结算"},
+    {"id":"successor","lane":"rotate","col":2,"type":"backend","label":"准备并创建后继","sublabel":"固定身份 / 持久步骤","width":132},
+    {"id":"take","lane":"rotate","col":5,"type":"backend","label":"接任与投递","sublabel":"阶段不因换代推进"},
+    {"id":"waiting","lane":"recover","col":0,"type":"messagebus","label":"事件或中断","sublabel":"等待 / 重启"},
+    {"id":"inbox","lane":"recover","col":2,"type":"database","label":"持久化与回读","sublabel":"任务事件 / 操作记录","width":132},
+    {"id":"resume","lane":"recover","col":5,"type":"backend","label":"恢复或阻塞","sublabel":"按故障类型恢复"},
+    {"id":"accept","lane":"complete","col":0,"type":"backend","label":"确认验收通过","sublabel":"CEO 遵循业务规则"},
+    {"id":"close","lane":"complete","col":2,"type":"external","label":"同步并关闭 Issue","sublabel":"CEO 使用 gh","width":132},
+    {"id":"done","lane":"complete","col":5,"type":"messagebus","label":"本地完成","sublabel":"通知父任务 / 停止续跑"}
+  ],
+  "edges": [
+    {"from":"issue","to":"bind","variant":"emphasis"},{"from":"bind","to":"start","variant":"emphasis"},
+    {"from":"choose","to":"dispatch","variant":"emphasis"},{"from":"dispatch","to":"result","variant":"dashed"},
+    {"from":"boundary","to":"successor","variant":"emphasis"},{"from":"successor","to":"take","variant":"emphasis"},
+    {"from":"waiting","to":"inbox","variant":"dashed"},{"from":"inbox","to":"resume","variant":"emphasis"},
+    {"from":"accept","to":"close","variant":"emphasis"},{"from":"close","to":"done","variant":"emphasis"}
+  ],
+  "cards": [
+    {"dot":"emerald","title":"业务与执行分离","items":["工作流阶段由业务判断推进","会话代次只表示执行接续","子代理结束仍需 CEO 复核"]},
+    {"dot":"amber","title":"非原子长流程","items":["Issue 与本地记录不是同一事务","S3 / S4 可能暂停、重试或受阻","完整状态与时序在边界评审后补充"]},
+    {"dot":"cyan","title":"证据范围","items":["实现基线 6c9ccb6","规则执行主体见正文 R 表","箭头不代表每一步已被代码强制"]}
+  ]
+}
