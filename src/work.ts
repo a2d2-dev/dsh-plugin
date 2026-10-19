@@ -4,7 +4,7 @@ import { isAbsolute, join } from 'node:path'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { commandSchema, querySchema, snapshotSchema } from './work-schema.ts'
 import type { WorkSnapshot } from './work-schema.ts'
-import type { HostResource, Project, SessionCandidate, TaskRef, WorkCommand, WorkCompleted, WorkResult, WorkTask } from './work-types.ts'
+import type { HostResource, Project, ResourceRef, SessionCandidate, TaskRef, WorkCommand, WorkResult, WorkTask } from './work-types.ts'
 export type * from './work-types.ts'
 
 /** Only trusted adapters construct authorization; browser payloads cannot supply it. */
@@ -18,6 +18,8 @@ function failed(code: string, message: string): WorkResult { return { status: 'f
 function conflict(currentVersion: number): WorkResult {
   return { status: 'conflict', error: { code: 'version-conflict', message: 'Expected version is stale', currentVersion } }
 }
+function sameResource(a: ResourceRef, b: ResourceRef): boolean { return a.runtimeId === b.runtimeId && a.workspaceId === b.workspaceId }
+function sameSession(a: { runtimeId: string; sessionId: string }, b: { runtimeId: string; sessionId: string }): boolean { return a.runtimeId === b.runtimeId && a.sessionId === b.sessionId }
 function taskAt(state: WorkSnapshot, ref: TaskRef): WorkTask | undefined {
   return state.tasks.find(item => item.id === ref.taskId && item.projectId === ref.projectId)
 }
@@ -44,6 +46,8 @@ export class WorkApplication {
     await mkdir(this.directory, { recursive: true, mode: 0o700 })
     return withFileLock(this.file, async () => {
       const state = await this.load()
+      const refusal = await this.authorize(state, command)
+      if (refusal) return refusal
       const fingerprint = JSON.stringify(command)
       const previous = state.commands.find(item => item.commandId === command.commandId)
       if (previous) return previous.fingerprint === fingerprint ? previous.result : { status: 'conflict', error: { code: 'command-id-reused', message: 'Command ID already has different content' } }
@@ -54,6 +58,25 @@ export class WorkApplication {
       await writeFileAtomic(this.file, `${JSON.stringify(state)}\n`, { mode: 0o600, dirMode: 0o700 })
       return result
     })
+  }
+  private async candidates(project: Project): Promise<SessionCandidate[]> {
+    const resources = (await this.host.resources()).filter(item => project.resources.some(ref => sameResource(ref, item.ref)))
+    const candidates = (await Promise.all(resources.map(resource => this.host.sessions(resource)))).flat()
+    return candidates.filter(item => resources.some(resource => sameResource(resource.ref, item.resource)
+      && item.ref.runtimeId === resource.ref.runtimeId))
+  }
+  private async authorize(state: WorkSnapshot, command: WorkCommand): Promise<WorkResult | undefined> {
+    if ('ref' in command && !taskAt(state, command.ref)) return failed('unknown-task', 'Task does not belong to this project')
+    if ('child' in command && command.child.projectId !== command.ref.projectId) return failed('cross-project-reference', 'Parent and child must belong to the same project')
+    if ('resource' in command && command.resource && !(await this.host.resources()).some(item => sameResource(item.ref, command.resource!))) {
+      return failed('unavailable-resource', 'Resource is not allowed by this host')
+    }
+    if (command.type === 'task.associate-session') {
+      const project = state.projects.find(item => item.id === command.ref.projectId)
+      if (!project || !(await this.candidates(project)).some(item => sameSession(item.ref, command.session))) {
+        return failed('incompatible-session', 'Session is not a compatible member of this project resource')
+      }
+    }
   }
   private newTask(state: WorkSnapshot, command: Extract<WorkCommand, { type: 'task.create' | 'task.create-child' }>, project: Project): WorkTask {
     const task: WorkTask = { id: randomUUID(), projectId: project.id, title: command.title, goal: command.goal, version: 1,
@@ -68,7 +91,10 @@ export class WorkApplication {
   }
   private async apply(state: WorkSnapshot, command: WorkCommand): Promise<WorkResult> {
     if (command.type === 'project.create') {
-      const project: Project = { id: randomUUID(), name: command.name, version: 1, defaultAgentId: randomUUID(), resources: [] }
+      if (command.resource && state.projects.some(item => item.resources.some(ref => sameResource(ref, command.resource!)))) {
+        return { status: 'conflict', error: { code: 'resource-in-use', message: 'Resource already belongs to another project' } }
+      }
+      const project: Project = { id: randomUUID(), name: command.name, version: 1, defaultAgentId: randomUUID(), resources: command.resource ? [command.resource] : [] }
       state.projects.push(project)
       state.agents.push({ id: project.defaultAgentId, projectId: project.id, role: 'coordinator',
         policy: { version: 1, modelCandidates: [], instructions: 'Coordinate accepted work and its acceptance criteria.', capabilities: ['coordination'] } })
@@ -77,11 +103,32 @@ export class WorkApplication {
     const projectId = 'projectId' in command ? command.projectId : command.ref.projectId
     const project = state.projects.find(item => item.id === projectId)
     if (!project) return failed('unknown-project', 'Project does not exist')
+    if (command.type === 'project.attach-resource') {
+      if (project.version !== command.expectedVersion) return conflict(project.version)
+      if (state.projects.some(item => item.id !== project.id && item.resources.some(ref => sameResource(ref, command.resource)))) {
+        return { status: 'conflict', error: { code: 'resource-in-use', message: 'Resource already belongs to another project' } }
+      }
+      if (!project.resources.some(ref => sameResource(ref, command.resource))) { project.resources.push(command.resource); project.version++ }
+      return { status: 'completed', project }
+    }
     if (command.type === 'task.create') return { status: 'completed', task: this.newTask(state, command, project) }
     if (!('ref' in command)) return failed('unsupported-command', 'Command is not implemented')
     const task = taskAt(state, command.ref)
     if (!task) return failed('unknown-task', 'Task does not belong to this project')
     if (task.version !== command.expectedVersion) return conflict(task.version)
+    if (command.type === 'task.associate-session') {
+      const existing = task.sessions.find(item => sameSession(item.session, command.session))
+      if (existing) {
+        if (existing.purpose !== command.purpose) return failed('association-purpose-conflict', 'Session is already associated with another purpose')
+        return { status: 'completed', task }
+      }
+      if (state.tasks.some(item => item.projectId !== projectId && item.sessions.some(binding => sameSession(binding.session, command.session)))) {
+        return failed('cross-project-reference', 'Session is associated with work in another project')
+      }
+      task.sessions.push({ session: command.session, purpose: command.purpose })
+      this.changed(task, command)
+      return { status: 'completed', task }
+    }
     if (command.type === 'task.replace-breakdown') {
       if (new Set(command.blocks.map(block => block.id)).size !== command.blocks.length) return failed('duplicate-block', 'Breakdown block IDs must be unique')
       task.breakdown = command.blocks
@@ -129,6 +176,16 @@ export class WorkApplication {
     const query = parsed.data
     const state = await this.load()
     if (query.type === 'projects.list') return { status: 'completed', projects: state.projects }
+    if (query.type === 'resources.list') return { status: 'completed', resources: [...await this.host.resources()] }
+    if (query.type === 'session.work') return { status: 'completed', work: state.tasks.flatMap(task =>
+      task.sessions.filter(binding => sameSession(binding.session, query.session)).map(binding => ({
+        ref: { projectId: task.projectId, taskId: task.id }, title: task.title,
+        projectName: state.projects.find(project => project.id === task.projectId)!.name, purpose: binding.purpose,
+      }))) }
+    if (query.type === 'session.candidates') {
+      const project = state.projects.find(item => item.id === query.projectId)
+      return project ? { status: 'completed', candidates: await this.candidates(project) } : failed('unknown-project', 'Project does not exist')
+    }
     if (query.type !== 'project.detail' && query.type !== 'task.detail') return failed('unsupported-query', 'Query is not implemented')
     const projectId = query.type === 'project.detail' ? query.projectId : query.ref.projectId
     const project = state.projects.find(item => item.id === projectId)

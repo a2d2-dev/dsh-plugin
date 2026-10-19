@@ -116,3 +116,33 @@ it('persists requirement breakdown independently of child Tasks and rejects dupl
   expect(await new WorkApplication(directory, noHost).query({ type: 'task.detail', ref }, operator))
     .toMatchObject({ status: 'completed', task: { version: 2, breakdown: blocks } })
 })
+
+it('admits trusted host resource references and associates compatible Sessions idempotently without taking coordination', async () => {
+  const { directory } = await open()
+  const resource = { ref: { runtimeId: 'host-a', workspaceId: 'workspace-a' }, title: 'Allowed resource' }
+  const session = { ref: { runtimeId: 'host-a', sessionId: 'existing-session' }, resource: resource.ref, title: 'Existing session' }
+  let available = true
+  const host = { resources: async () => available ? [resource] : [], sessions: async () => [session] }
+  const app = new WorkApplication(directory, host)
+  const { ref, project } = await createWork(app)
+  expect(await app.execute({ type: 'project.attach-resource', commandId: 'attach', projectId: project.id, expectedVersion: 1, resource: resource.ref }, operator))
+    .toMatchObject({ status: 'completed', project: { version: 2, resources: [resource.ref] } })
+  expect(await app.query({ type: 'session.candidates', projectId: project.id }, operator)).toMatchObject({ status: 'completed', candidates: [session] })
+  const command = { type: 'task.associate-session', commandId: 'associate', ref, expectedVersion: 1, session: session.ref, purpose: 'related' }
+  expect(await app.execute(command, operator)).toMatchObject({ status: 'completed', task: { version: 2, sessions: [{ session: session.ref, purpose: 'related' }] } })
+  expect(await app.execute({ ...command, commandId: 'repeat-associate', expectedVersion: 2 }, operator))
+    .toMatchObject({ status: 'completed', task: { version: 2, sessions: [{ session: session.ref, purpose: 'related' }] } })
+  expect(await new WorkApplication(directory, host).query({ type: 'session.work', session: session.ref }, operator))
+    .toMatchObject({ status: 'completed', work: [{ ref, purpose: 'related' }] })
+  const other = await createWork(app, 'other-project')
+  expect(await app.execute({ ...command, commandId: 'foreign-session', ref: other.ref }, operator))
+    .toMatchObject({ status: 'failed', error: { code: 'incompatible-session' } })
+  expect(await app.execute({ type: 'project.create', commandId: 'resource-collision', name: 'Other', resource: resource.ref }, operator))
+    .toMatchObject({ status: 'conflict', error: { code: 'resource-in-use' } })
+  expect(await app.execute({ type: 'project.create', commandId: 'arbitrary-path', name: 'Unsafe', cwd: '/unapproved' }, operator))
+    .toMatchObject({ status: 'failed', error: { code: 'invalid-command' } })
+  available = false
+  expect(await app.execute({ ...command, commandId: 'removed-resource', expectedVersion: 2 }, operator))
+    .toMatchObject({ status: 'failed', error: { code: 'incompatible-session' } })
+  expect(await app.query({ type: 'task.detail', ref }, operator)).toMatchObject({ status: 'completed', task: { version: 2 } })
+})

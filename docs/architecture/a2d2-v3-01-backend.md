@@ -36,6 +36,8 @@ pnpm exec vitest run tests/work.spec.ts
 
 工作拆解按稳定 block ID 保存，不自动生成子 Task 或 Session。第五条红测返回 failed（退出 1），实现后 5/5 通过（退出 0）；重复 block ID 拒绝且不改变原版本。
 
+受信资源端口返回 runtime/workspace 引用，ProjectId 与资源分别保存；资源跨项目唯一归属在快照事务内判断。Session 使用 runtime/session 复合引用，候选受项目资源过滤，关联只保存 related/review 观察关系，不产生协调事实。第六条红测 project.attach-resource 返回 failed（退出 1），实现后 6/6 通过（退出 0）。此条使用可控宿主边界端口，真实 DSH 适配仍待下片验证。
+
 ## 宿主与环境基线
 
 只读核验宿主实际 HEAD：a45068d2ec03326c800c68c9bdcd47508e3ccb9c。已读取 atomic-write 与 workspaceRegistry 公共源码，未修改宿主。pnpm 11.7.0。首次 pnpm exec 自动安装依赖时报告未批准构建脚本（subprocess-local、koffi、node-pty），之后 vitest 可运行；完整安装/构建能力后续核实，不将安装告警判作产品缺陷。
