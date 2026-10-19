@@ -61,8 +61,8 @@ export async function apply(ctx, config) {
       if (action === 'snapshot') return snapshot()
       if (action === 'seed') {
         const created = await driver.workspaceController.create({ path: join(root, 'workspace') })
-        const session = await driver.sessionController.create({ workspaceId: created.workspace.id })
-        return { workspaceId: created.workspace.id, ...session }
+        const session = await driver.sessionController.create({ workspaceId: created.workspace.workspaceId })
+        return { workspaceId: created.workspace.workspaceId, ...session }
       }
       if (action === 'positive') {
         const before = counts()

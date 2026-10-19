@@ -29,7 +29,7 @@ LLM 模块通过宿主 base bundle 依赖闭包解析；controller/client-module
 
 guard 只提供合法模型目录元数据，`adapter.stream` 计数后抛出固定错误；公共 waterfall 计数并拒绝任何非 guard provider。每次 IPC 命令还核查实际 provider 目录只有 guard。只记录事件种类、时间、进程和 Session ID，不保存模型消息正文。
 
-公开 Session／Workspace controller 通过仅存在于临时文件系统的 IPC 调用；不新增产品路由，不直接写任何 Task store。`seed` 创建真实 Workspace 与无 prompt 的真实 Session；不应在冻结基线后调用。首次空环境 restoreSelection 创建默认会话属真实宿主启动行为，必须在页面稳定后再定基线。
+公开 Session／Workspace controller 通过仅存在于临时文件系统的 IPC 调用；不新增产品路由，不直接写任何 Task store。`seed` 创建真实 Workspace，并将公开返回的 `created.workspace.workspaceId` 传给 `sessionController.create`，返回同一 workspaceId 与无 prompt 的真实 Session；不应在冻结基线后调用。首次空环境 restoreSelection 创建默认会话属真实宿主启动行为，必须在页面稳定后再定基线。
 
 ### 组件模块
 
@@ -113,6 +113,17 @@ PNG 存在只能作为冻结前置条件；验收者仍须实际查看截图与 
 - 红测：`XDG_STATE_HOME=/tmp/a2d2-v3-gh-state node --test --test-name-pattern='symlink escape' tests/a2d2-v3-121-acceptance.test.mjs`，退出 1；实际外部目录新增 `new-root`，与期望空数组不符。
 - 修复后同命令退出 0，1/1 通过；没有外部新增目录或文件。
 - 工具测试命令 `XDG_STATE_HOME=/tmp/a2d2-v3-gh-state node --test tests/a2d2-v3-121-acceptance.test.mjs`：6 项通过、2 项 real-host 显式 skip，退出 0。新增覆盖规范路径语法、内部及悬空 symlink 的拒绝，及全新规范 root 的完整 prepare。后者使用测试自建的最小宿主布局/CLI fixture，不冒称真实 DSH 宿主安装或产品验收。
+
+## 真实验收新发现 R4：seed 资源引用整改
+
+第一轮工具误读 `created.workspace.id`；公开 WorkspaceController 返回的是 `workspace.workspaceId`。传入 undefined 会使 SessionController 选择默认 cwd，旧 seed 不能证明所选资源与 Session cwd 匹配。原 host-only / 第一轮记录如实保留，不能将它们追记成修正后 seed 的通过证据。
+
+新增默认运行的契约测试通过真实 guard IPC → 公开 WorkspaceController/SessionController → 真实 WorkspaceRegistry、AgentLoop、SessionStore 与 JSONL 持久化建立无 prompt 会话；只控制无关 RPC plumbing 和此用例未用的 capability。观察真实 create 请求、seed 返回引用、公开 inspect 的 cwd、live Session header cwd、workspace membership，并要求 gateway/adapter 指标均无调用。它不启动 Web 服务，不接管既有验收实例。
+
+- fixture 首次缺少真实 AgentLoop factory，测试退出 1；补齐装配后才进入行为红测，不将该装配错误计作产品复现。
+- 行为红测：`XDG_STATE_HOME=/tmp/a2d2-v3-gh-state node --test --test-name-pattern='guard seed' tests/a2d2-v3-121-acceptance.test.mjs`，退出 1；实际 Session cwd 为进程默认 worktree，期望为测试所选 `root/workspace`。
+- 修复 guard 的两处字段读取后，同命令 1/1 通过，退出 0。
+- 完整工具命令 `XDG_STATE_HOME=/tmp/a2d2-v3-gh-state node --test tests/a2d2-v3-121-acceptance.test.mjs`：7 项通过，2 项需要独立真实 Web 的 real-host 测试仍显式 skip，退出 0。该真实 controller 契约证据不替代 CEO lane 的新包真实 seed / 浏览器复验。
 
 ## 本阶段实际验证
 

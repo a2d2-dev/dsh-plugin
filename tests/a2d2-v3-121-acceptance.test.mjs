@@ -1,8 +1,27 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { join, dirname, basename, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
+import { Context } from '@deepseek-ai/cordis'
+import LlmRuntime from '@deepseek-ai/dsh-llm'
+import SessionStore from '@deepseek-ai/dsh-session'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import SessionQuery from '@deepseek-ai/dsh-session-query'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import ToolRuntime from '@deepseek-ai/dsh-tools'
+import AgentRegistry from '@deepseek-ai/dsh-agent'
+import AgentLoop from '@deepseek-ai/dsh-agent-loop'
+import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
+import Storage from '@deepseek-ai/dsh-storage'
+import * as StorageJson from '@deepseek-ai/dsh-storage-json'
+import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
+import WorkspaceRegistry from '@deepseek-ai/dsh-workspace'
+import WorkspaceController from '@deepseek-ai/dsh-api-workspace-controller'
+import SessionController from '@deepseek-ai/dsh-api-session-controller'
+import * as guard from '../scripts/a2d2-v3-121/guard.mjs'
 
 async function fixture(t, parent, prefix) {
   assert.equal(await realpath(parent), parent, 'fixture parent must already be canonical')
@@ -100,6 +119,58 @@ test('fresh real host has real Session configuration and no model invocation', {
   assert.equal(result.sessions[0].permissions.sandbox.mode, 'workspace-write')
   assert.equal(result.sessions[0].permissions.approval, 'ask')
 })
+test('guard seed passes the public Workspace identity and creates a real Session in the selected resource cwd', async t => {
+  const ctx = new Context()
+  // Register disposal before the fixture cleanup, including the IPC timer.
+  t.after(async () => { await ctx.fiber.dispose() })
+  const root = await namespaceFixture(t)
+  for (const name of ['workspace', 'evidence', 'ipc']) await mkdir(join(root, name))
+  await ctx.plugin(LlmRuntime)
+  await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(SystemPrompt)
+  await ctx.plugin(ToolRuntime)
+  await ctx.plugin(AgentRegistry)
+  await ctx.plugin(AgentLoop, { agents: [] })
+  await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'sessions') })
+  class Query extends SessionQuery {
+    async searchSessions() { throw Error('search is outside seed acceptance') }
+    async searchEvents() { throw Error('search is outside seed acceptance') }
+  }
+  await ctx.plugin(Query)
+  await ctx.plugin(Storage)
+  await ctx.plugin(StorageJson, { root: join(root, 'storage') })
+  await ctx.plugin(StorageDomain, { backend: 'json' })
+  await ctx.plugin(WorkspaceRegistry)
+  await ctx.plugin(LocalFileSystem, { cwd: join(root, 'workspace') })
+  // Only unrelated RPC plumbing and unused capabilities are controlled. Both
+  // controllers, the registry, Agent/Session creation and persistence are real.
+  ctx.provide('typert', { lookups: { configure: () => () => {} }, contexts: { configureHost: () => () => {} } })
+  ctx.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'acceptance-disabled', model: 'no-model' }) })
+  ctx.provide('fileUploads', { registerAgentResolver: () => () => {} })
+  ctx.provide('attachments', { imageLimits: {} })
+  for (const name of ['sandboxPolicy', 'permissionPresets', 'approval']) ctx.provide(name, {})
+  new WorkspaceController(ctx, { documentsDirectory: join(root, 'workspace') })
+  new SessionController(ctx, { nativeOpen: false })
+  const selected = (await ctx.workspaceController.create({ path: join(root, 'workspace') })).workspace
+  assert.equal(typeof selected.workspaceId, 'string')
+  assert.equal(selected.id, undefined, 'the public Workspace projection has no id field')
+  const calls = []
+  const create = ctx.sessionController.create.bind(ctx.sessionController)
+  ctx.sessionController.create = async request => { calls.push(request); return create(request) }
+  await ctx.plugin(guard, { root, llm: fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-llm')) }).await()
+  const seeded = await request(root, 'seed')
+  const live = ctx.sessions.get(seeded.sessionId)
+  assert.ok(live, 'seed must create an actual live Session')
+  assert.equal(live.header.cwd, selected.path, 'Session cwd must match the selected resource, not the process default')
+  assert.equal((await ctx.sessionController.inspect(seeded.sessionId)).meta.cwd, selected.path)
+  assert.deepEqual(calls, [{ workspaceId: selected.workspaceId }])
+  assert.equal(seeded.workspaceId, selected.workspaceId)
+  assert.ok(ctx.workspaceRegistry.get(selected.workspaceId).sessionIds.includes(seeded.sessionId))
+  const rows = (await readFile(join(root, 'evidence/metrics.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse)
+  assert.equal(rows.filter(row => ['gateway', 'adapter'].includes(row.kind)).length, 0)
+})
+
 import { isolatedEnvironment, assertUnchanged, prepare, request } from '../scripts/a2d2-v3-121/acceptance.mjs'
 
 test('prepare refuses a relative host and any root outside the ticket temporary namespace', async () => {
