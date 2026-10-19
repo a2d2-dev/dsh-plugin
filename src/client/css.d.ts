@@ -11,6 +11,8 @@
 
 declare module '*.module.css' {
   const classes: {
+    readonly panel: string
+    readonly sessionEntry: string
     readonly root: string
     readonly water: string
     readonly readout: string
