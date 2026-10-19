@@ -1,6 +1,6 @@
 import { z } from 'zod'
 const id = z.string().uuid()
-const text = z.string().trim().min(1).max(100_000)
+const text = z.string().min(1).max(100_000).refine(value => value.trim().length > 0, 'Text must not be blank')
 const referenceId = z.string().min(1).max(256)
 export const taskRefSchema = z.object({ projectId: id, taskId: id }).strict()
 export const resourceRefSchema = z.object({ runtimeId: referenceId, workspaceId: referenceId }).strict()

@@ -162,3 +162,14 @@ it('reserves one stable TaskRef per canonical legacy address atomically without 
     address: { ...address, projectRoot: '/canonical/../canonical/old-project' } }, operator))
     .toMatchObject({ status: 'failed', error: { code: 'noncanonical-legacy-address' } })
 })
+
+it('retains complete accepted text including meaningful indentation and trailing newlines', async () => {
+  const { app } = await open()
+  const { project } = await createWork(app)
+  const goal = '  Explain the complete offline workflow\n'
+  const specification = '\n    preserve code indentation\n    preserve final line\n'
+  const acceptance = ['  Criterion with deliberate formatting\n']
+  const result = await app.execute({ type: 'task.create', commandId: 'complete-text', projectId: project.id,
+    title: 'Formatted work', goal, specification, acceptance }, operator)
+  expect(result).toMatchObject({ status: 'completed', task: { goal, specification: { text: specification, acceptance } } })
+})

@@ -80,6 +80,17 @@ const result = await response.json() // WorkResult；project.id 是独立 Projec
 
 legacy.map(ref,address,expectedVersion) 在相同领域事务中保存唯一 (runtimeId,projectRoot,旧 TaskId) → TaskRef。地址必须是绝对、normalize 后相等的历史规范地址；未来迁移调用方须先解析真实旧项目根，不能把别名当另一身份。此入口仅保存地址元数据，不读取旧文件、不复制活动任务、不更换 writer/runner。legacy.resolve 返回唯一已接受 TaskRef；同地址指向另一 TaskRef 返回 legacy-address-in-use。两个应用实例竞争只有一个映射成功，重载可解析同一身份。该片红测无成功映射退出 1，实现后 work + work-host 9/9 通过退出 0。
 
+## 并发、失败与恢复证据
+
+2026-10-19，work / work-host / work-process 三个相关测试文件共 14/14 通过，退出 0。work-process 启动实际独立 Node 进程，使用公开 WorkApplication 接缝和真实文件系统：
+
+- 两进程同时创建相同 commandId 得到同一回执；不同 commandId 的同名项目全部保留。
+- 子进程完成提交后由测试 SIGKILL 模拟调用方未收到结果，重载重试仍返回同一身份，无第二份记录。
+- 活进程持有 writer 锁时另一命令超时拒绝，查询仅保留先前事实；杀死持锁进程后，公开命令接管死 PID 锁并成功保存，重载仍有原记录。
+- 未知 schemaVersion 会拒绝写入且原字节不变；恢复原文件后可查询已接受数据，不把不可读状态当空库。
+
+完整文本测试发现 trim 会破坏规格代码缩进和尾部换行：红测退出 1；改为仅检查非空但保留原文，三文件 14/14 绿测退出 0。此处没有扩大超时或 mock 内部 CRUD 来跳过失败。
+
 ## 尚待本阶段完成
 
-独立进程并发/故障验证与完整检查仍在推进。UI 与浏览器验收未验证，交后续切片。
+全量回归、build、最终静态检查与推送仍在推进。UI 与浏览器验收未验证，交后续切片。
