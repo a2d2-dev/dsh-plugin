@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "A²D² 子域全景 · 平台无关领域核",
+    "subtitle": "任务规则属于 A²D²；持久化与外部协同通过端口接入，GitHub 不是必要条件"
+  },
+  "components": [
+    {
+      "id": "coordination",
+      "type": "backend",
+      "label": "D1 项目任务管理与推进",
+      "sublabel": "目标 / 指派 / 阶段 / 验收",
+      "pos": [
+        70,
+        110
+      ],
+      "size": [
+        190,
+        72
+      ]
+    },
+    {
+      "id": "continuity",
+      "type": "backend",
+      "label": "D2 执行协调与连续性",
+      "sublabel": "执行锁 / 交接 / 事件恢复",
+      "pos": [
+        70,
+        260
+      ],
+      "size": [
+        190,
+        72
+      ]
+    },
+    {
+      "id": "agents",
+      "type": "security",
+      "label": "D3 项目 Agent 与策略",
+      "sublabel": "身份 / 角色模板 / 能力",
+      "pos": [
+        360,
+        110
+      ],
+      "size": [
+        190,
+        72
+      ]
+    },
+    {
+      "id": "visibility",
+      "type": "frontend",
+      "label": "D4 观察与人机介入",
+      "sublabel": "本地视图 / 会话 / 同步状态",
+      "pos": [
+        360,
+        260
+      ],
+      "size": [
+        190,
+        72
+      ]
+    },
+    {
+      "id": "tracking",
+      "type": "database",
+      "label": "D5 工作记录与协同适配",
+      "sublabel": "本地持久化 / 可选外部映射",
+      "pos": [
+        360,
+        410
+      ],
+      "size": [
+        190,
+        72
+      ]
+    },
+    {
+      "id": "execution",
+      "type": "cloud",
+      "label": "D6 通用执行底座",
+      "sublabel": "DSH / cwd / CLI provider",
+      "pos": [
+        650,
+        260
+      ],
+      "size": [
+        190,
+        72
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "核心子域 · 领域规则与连续执行",
+      "wraps": [
+        "coordination",
+        "continuity"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "支撑能力 · 策略、观察与适配",
+      "wraps": [
+        "agents",
+        "visibility",
+        "tracking"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "通用外部执行能力",
+      "wraps": [
+        "execution"
+      ]
+    }
+  ],
+  "connections": [],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "不把外部平台建成领域核",
+      "items": [
+        "Task 不再定义成 Issue",
+        "Project 不再定义成 GitHub Project",
+        "Repository 也可以是纯本地仓库"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "两种运行方式共享业务",
+      "items": [
+        "本地模式只装本地记录能力",
+        "GitHub 模式增加协同适配",
+        "切换不改变 Task / Agent 身份"
+      ]
+    },
+    {
+      "dot": "slate",
+      "title": "适配不是第二套任务规则",
+      "items": [
+        "本地记录持有已接受的领域事实",
+        "外部变更经过校验与冲突处理",
+        "数据库和 API 不决定聚合边界"
+      ]
+    }
+  ]
+}
