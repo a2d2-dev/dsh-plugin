@@ -1,0 +1,51 @@
+{
+  "project": {
+    "id": "10440418-8249-48d9-a961-c6b96386a36c",
+    "name": "验收项目甲",
+    "version": 1,
+    "defaultAgentId": "19e2129d-5d1a-412f-a76b-b687b20b7486",
+    "resources": [
+      {
+        "runtimeId": "e0bfdec6-2f39-4435-b28b-26c3f425be3a",
+        "workspaceId": "9c1e496f-54ae-4116-aeb1-7c2840f8662a"
+      }
+    ]
+  },
+  "task": {
+    "id": "bbae4af3-ee6d-4809-9963-ea928a477842",
+    "projectId": "10440418-8249-48d9-a961-c6b96386a36c",
+    "title": "同名验收工作",
+    "goal": "目标甲第一行\n    缩进目标第二行",
+    "version": 1,
+    "agentId": "19e2129d-5d1a-412f-a76b-b687b20b7486",
+    "specification": {
+      "version": 1,
+      "text": "规格甲第一行\n    缩进规格第二行",
+      "acceptance": [
+        "第一条验收",
+        "第二条验收"
+      ]
+    },
+    "specificationHistory": [],
+    "breakdown": [],
+    "children": [],
+    "sessions": [],
+    "activity": [
+      {
+        "commandId": "3e29d224-767b-4583-9c34-e61bccbb9603",
+        "type": "task.create",
+        "version": 1
+      }
+    ]
+  },
+  "expectedUi": {
+    "goal": "  目标甲第一行\n    缩进目标第二行\n",
+    "specification": "  规格甲第一行\n    缩进规格第二行\n",
+    "acceptance": [
+      "第一条验收",
+      "第二条验收"
+    ]
+  },
+  "goalPreserved": false,
+  "specificationPreserved": false
+}

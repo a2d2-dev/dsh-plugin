@@ -1,0 +1,37 @@
+{
+  "httpStatus": 200,
+  "request": {
+    "method": "workspace/create",
+    "payload": {
+      "args": {
+        "request": {
+          "path": "/tmp/a2d2-v3-121/product-first-pass-9588b53/workspace"
+        }
+      }
+    },
+    "rpcId": "acceptance-inspect-existing-workspace",
+    "type": "client-request"
+  },
+  "response": {
+    "result": {
+      "ok": true,
+      "value": {
+        "created": false,
+        "workspace": {
+          "createdAt": "2026-10-19T16:37:15.543Z",
+          "path": "/tmp/a2d2-v3-121/product-first-pass-9588b53/workspace",
+          "sessionIds": [
+            "session-5e7342f8-f5be-42c4-9b8b-3207c2853c23"
+          ],
+          "title": "workspace",
+          "updatedAt": "2026-10-19T16:51:45.199Z",
+          "workspaceId": "d21e331d-b3b5-4b18-963e-80f8bc651ac7"
+        }
+      }
+    },
+    "rpcId": "acceptance-inspect-existing-workspace",
+    "type": "server-response"
+  },
+  "seededSessionAttached": false,
+  "seededSessionId": "session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab"
+}

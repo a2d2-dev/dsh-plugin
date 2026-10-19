@@ -1,0 +1,62 @@
+{
+  "command": {
+    "type": "task.update-spec",
+    "commandId": "acceptance-121-multiline-api-1",
+    "ref": {
+      "projectId": "10440418-8249-48d9-a961-c6b96386a36c",
+      "taskId": "bbae4af3-ee6d-4809-9963-ea928a477842"
+    },
+    "expectedVersion": 1,
+    "goal": "  API目标第一行\n    API目标缩进\n",
+    "specification": "  API规格\n    原文保留\n",
+    "acceptance": [
+      "  单条验收第一行\n    同一条第二行\n",
+      "第二条独立验收\n"
+    ]
+  },
+  "result": {
+    "httpStatus": 200,
+    "status": "completed",
+    "task": {
+      "id": "bbae4af3-ee6d-4809-9963-ea928a477842",
+      "projectId": "10440418-8249-48d9-a961-c6b96386a36c",
+      "title": "同名验收工作",
+      "goal": "  API目标第一行\n    API目标缩进\n",
+      "version": 2,
+      "agentId": "19e2129d-5d1a-412f-a76b-b687b20b7486",
+      "specification": {
+        "version": 2,
+        "text": "  API规格\n    原文保留\n",
+        "acceptance": [
+          "  单条验收第一行\n    同一条第二行\n",
+          "第二条独立验收\n"
+        ]
+      },
+      "specificationHistory": [
+        {
+          "version": 1,
+          "text": "规格甲第一行\n    缩进规格第二行",
+          "acceptance": [
+            "第一条验收",
+            "第二条验收"
+          ]
+        }
+      ],
+      "breakdown": [],
+      "children": [],
+      "sessions": [],
+      "activity": [
+        {
+          "commandId": "3e29d224-767b-4583-9c34-e61bccbb9603",
+          "type": "task.create",
+          "version": 1
+        },
+        {
+          "commandId": "acceptance-121-multiline-api-1",
+          "type": "task.update-spec",
+          "version": 2
+        }
+      ]
+    }
+  }
+}

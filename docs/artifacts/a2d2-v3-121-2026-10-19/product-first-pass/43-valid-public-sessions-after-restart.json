@@ -1,0 +1,129 @@
+{
+  "httpStatus": 200,
+  "request": {
+    "method": "session/list",
+    "payload": {
+      "args": {
+        "_request": {}
+      }
+    },
+    "rpcId": "acceptance-valid-list-after-restart",
+    "type": "client-request"
+  },
+  "response": {
+    "result": {
+      "ok": true,
+      "value": {
+        "items": [
+          {
+            "agentAvailable": true,
+            "blank": true,
+            "cwd": "/tmp/a2d2-v3-121/product-first-pass-9588b53/workspace",
+            "projections": {
+              "asOfSeq": 2,
+              "kind": "sequenced",
+              "values": {
+                "a2d2Indicator": {
+                  "currency": "¥",
+                  "thresholds": {
+                    "criticalAtTokens": 1000000,
+                    "warnAtTokens": 150000
+                  }
+                },
+                "agentPreset": "standard",
+                "contextBreakdown": {
+                  "messageTokens": 0,
+                  "systemTokens": 0,
+                  "toolsTokens": 0
+                },
+                "contextPressure": {},
+                "goal": null,
+                "imageLimits": {
+                  "maxImageBytes": 20971520,
+                  "maxImageDimension": 8192,
+                  "maxImagePixels": 64000000,
+                  "maxImagesPerMessage": 20,
+                  "maxMessageImageBytes": 209715200,
+                  "mediaTypes": [
+                    "image/png",
+                    "image/jpeg",
+                    "image/webp",
+                    "image/gif"
+                  ]
+                },
+                "inbox": {
+                  "next-step": [],
+                  "next-turn": []
+                },
+                "modelSelection": {
+                  "lastUsed": null,
+                  "next": null
+                },
+                "permissions": {
+                  "currentValue": "workspace-write"
+                },
+                "plan": {
+                  "active": false,
+                  "pending": false
+                },
+                "sessionListMetadata": {
+                  "blank": true,
+                  "lastPromptAt": null
+                },
+                "sessionStats": {
+                  "decodeMs": 0,
+                  "decodeTokens": 0,
+                  "llmMs": 0,
+                  "steps": 0,
+                  "toolMs": 0,
+                  "ttftMs": 0,
+                  "ttftSteps": 0,
+                  "turns": 0
+                },
+                "subagent": null,
+                "subagentCatalog": [],
+                "subagentTiming": {
+                  "settledMs": 0
+                },
+                "title": null,
+                "todos": null,
+                "tokenUsage": {
+                  "cacheReadTokens": 0,
+                  "cacheWriteTokens": 0,
+                  "outputTokens": 0,
+                  "uncachedInputTokens": 0
+                },
+                "turnOutline": [],
+                "userQuestions": {
+                  "active": [],
+                  "settled": []
+                }
+              }
+            },
+            "running": false,
+            "sessionId": "session-5e7342f8-f5be-42c4-9b8b-3207c2853c23",
+            "updatedAt": 1792428705101
+          },
+          {
+            "agentAvailable": false,
+            "blank": false,
+            "cwd": "/tmp/a2d2-v3-121/product-first-pass-9588b53/workspace",
+            "running": false,
+            "sessionId": "session-78e1dde5-602a-41fe-a7f5-8ef15cf406ab",
+            "updatedAt": 1792427837923
+          },
+          {
+            "agentAvailable": false,
+            "blank": false,
+            "cwd": "/tmp/a2d2-v3-121/product-first-pass-9588b53/workspace/deepseek-harness/default-workspace",
+            "running": false,
+            "sessionId": "session-2dd5b1d5-8de1-400b-aa85-cd421d607c8d",
+            "updatedAt": 1792427803468
+          }
+        ]
+      }
+    },
+    "rpcId": "acceptance-valid-list-after-restart",
+    "type": "server-response"
+  }
+}
