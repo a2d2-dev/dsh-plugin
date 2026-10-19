@@ -1,19 +1,7 @@
 /**
- * The browser half of the A²D² plugin.
- *
- * Two contributions, both browser-only views of host folds: the floating handoff
- * indicator, mounted into the composer's dock slot, and the subagent model list,
- * registered as a sidebar tab. The indicator registers into an existing
- * session-scoped list slot rather than the root slot, which the layout frame
- * owns. This half collaborates with the host only through cordis services and
- * the host-published `a2d2Indicator` projection — never through another plugin's
- * package.
- *
- * The sidebar is an optional peer: a deployment without it gets the indicator
- * alone, and the tab registration waits for the service rather than failing the
- * bundle.
- *
- * @module @deepseek-ai/dsh-a2d2/client
+ * Browser contributions: one global work panel and a lightweight associated-work
+ * action in native conversations, alongside the existing orb and settings page.
+ * All composition and navigation use published host services and slots.
  */
 
 import { createElement } from 'react'
@@ -21,26 +9,20 @@ import { A2d2ConfigSection, loadModelRouteCatalog } from './config-page.tsx'
 import { IconA2d2AgentsOutline16 } from './icons.tsx'
 import { HandoffOrb } from './orb.tsx'
 import type { OrbChatFacts } from './orb.tsx'
-import { A2d2Panel } from './panel.tsx'
-import type { A2d2ClientContext, ClientSidebarService } from './context.ts'
+import { WorkPanel, SessionWorkEntry } from './work-panel.tsx'
+import { createWorkClient } from './work-api.ts'
+import { WorkPanelController } from './work-panel-controller.ts'
+import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
+import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
+import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
+import type { A2d2ClientContext } from './context.ts'
 
 /** Services this bundle needs before it can mount anything. */
 // `remote.session` is guarded by cordis: reading it from a fiber that did not
 // inject it throws "cannot get property … without inject" (title, route and
 // model-catalog reads all go through it).
-export const inject = ['slots', 'sessions', 'remote', 'remote.session']
+export const inject = ['slots', 'sessions', 'remote', 'remote.session', 'remote.workspace', 'layout', 'uiWorkspace']
 
-/** The sidebar tab this bundle contributes, in the fields the sidebar's `+` menu reads. */
-const A2D2_PANEL_TAB = {
-  /** Stable tab type id; the sidebar keys deduplication and activation on it. */
-  id: 'a2d2-panel',
-  /** Menu title, in the language the indicator's own copy uses. */
-  title: 'A²D²',
-  /** Sidebar/menu glyph matching the host's 16px outline tab icon style. */
-  icon: (size: number) => createElement(IconA2d2AgentsOutline16, { size }),
-  /** Menu position, after the sidebar's own browsing tabs. */
-  order: 40,
-} as const
 
 /**
  * Mount the indicator for every composed conversation shell, and the subagent
@@ -85,19 +67,18 @@ export function apply(ctx: A2d2ClientContext): void {
     },
   }, A2d2ConfigSection)), 'a2d2 config settings section')
 
-  ctx.inject(['betterSidebar'], (sidebarCtx) => {
-    const sidebar = sidebarCtx.get('betterSidebar') as ClientSidebarService | undefined
-    if (sidebar === undefined) return
-    sidebarCtx.effect(() => sidebar.registerTab({
-      ...A2D2_PANEL_TAB,
-      single: true,
-      component: function A2d2PanelEntry(props): ReturnType<typeof createElement> {
-        return createElement(A2d2Panel, {
-          ctx,
-          sessionId: props.scope.sessionId,
-          visible: props.visible,
-        })
-      },
-    }), 'a2d2 panel tab')
+  const controller = new WorkPanelController(createWorkClient(), {
+    selectPanel: id => ctx.layout.selectPanel(id as MainPanelId | null),
+    openSession: id => ctx.uiWorkspace.openSession(id as Parameters<typeof ctx.uiWorkspace.openSession>[0]),
   })
+  ctx.effect(() => ctx.slots.inject('main', () => ctx.slots.register({
+    name: 'main', key: 'a2d2-panel' as MainPanelId,
+  }, () => createElement(WorkPanel, { controller }))), 'a2d2 main panel')
+  ctx.effect(() => ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
+    name: 'sidebar.panellist', id: 'a2d2-panel', order: 40,
+    label: () => 'A²D² 控制面板',
+  }, props => createElement(IconA2d2AgentsOutline16, {size: props.size}))), 'a2d2 panel entry')
+  ctx.effect(() => ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
+    name: 'conversation.session.header.actions', id: 'a2d2-session-work', order: 40,
+  }, props => createElement(SessionWorkEntry, {controller, sessionId: props.sessionId}))), 'a2d2 session work')
 }
