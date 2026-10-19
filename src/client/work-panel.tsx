@@ -39,7 +39,7 @@ export function WorkPanel({ controller }: { controller: WorkPanelController }) {
         {state.detailTab==='overview' && <>
           <Section title="状态概览"><div className={styles.metrics}><span>本地工作已保存</span><span>{task.sessions.length} 个关联会话</span><span>规格第 {task.specification.version} 版</span></div></Section>
           <Section title="目标与规格"><h3>目标</h3><p>{task.goal}</p><h3>规格</h3><p>{task.specification.text}</p><h3>验收标准</h3><ul>{task.specification.acceptance.map((criterion,index)=><li key={index}>{criterion}</li>)}</ul></Section>
-          <Section title="处理会话"><p>尚无当前处理会话。关联会话用于观察工作，当前票不启动执行。</p><button onClick={()=>controller.setDetailTab('sessions')}>查看关联会话</button></Section>
+          <Section title="处理会话"><p>尚未开始处理。可先关联已有会话查看相关工作。</p><button onClick={()=>controller.setDetailTab('sessions')}>查看关联会话</button></Section>
         </>}
         {state.detailTab==='sessions' && <Sessions controller={controller} task={task} onSaved={()=>done('会话已关联')} />}
         {state.detailTab==='related' && <>
@@ -91,15 +91,15 @@ function ProjectForm({controller,attach,onSaved}:{controller:WorkPanelController
 }
 function TaskForm({controller,kind,task,onSaved}:{controller:WorkPanelController;kind:'task'|'child'|'spec';task?:WorkTask;onSaved:(task:WorkTask)=>Promise<void>}) {
   const existing=kind==='spec'?task:undefined
-  const [title,setTitle]=useState(''),[goal,setGoal]=useState(existing?.goal??''),[spec,setSpec]=useState(existing?.specification.text??''),[acceptance,setAcceptance]=useState(existing?.specification.acceptance.join('\n')??'')
+  const [title,setTitle]=useState(''),[goal,setGoal]=useState(existing?.goal??''),[spec,setSpec]=useState(existing?.specification.text??''),[acceptance,setAcceptance]=useState<string[]>(existing?.specification.acceptance??[''])
   const [error,setError]=useState(''),[busy,setBusy]=useState(false)
   async function submit(event:FormEvent) {
     event.preventDefault();setBusy(true);setError('')
     try {
-      const content={goal:goal.trim(),specification:spec.trim(),acceptance:acceptance.split('\n').map(text=>text.trim()).filter(Boolean)}
+      const content={goal,specification:spec,acceptance}
       const projectId=controller.getSnapshot().projectId
       if(!projectId) throw Error('请先选择项目')
-      if(!content.goal || !content.specification || !content.acceptance.length) throw Error('请填写目标、规格和至少一条验收标准')
+      if(!content.goal.trim() || !content.specification.trim() || !content.acceptance.length || content.acceptance.some(text=>!text.trim())) throw Error('请填写目标、规格和至少一条验收标准')
       const change=task?{ref:{projectId:task.projectId,taskId:task.id},expectedVersion:task.version}:null
       const result=await controller.submit(kind==='spec' && change ? {type:'task.update-spec',...change,...content} : kind==='child' && change ? {type:'task.create-child',...change,...content,title:title.trim()} : {type:'task.create',projectId,...content,title:title.trim()})
       if(!result.task) throw Error('工作服务未返回保存的工作')
@@ -111,7 +111,7 @@ function TaskForm({controller,kind,task,onSaved}:{controller:WorkPanelController
     {kind!=='spec' && <label>工作标题<input required value={title} onChange={event=>setTitle(event.target.value)}/></label>}
     <label>目标<textarea required value={goal} onChange={event=>setGoal(event.target.value)}/></label>
     <label>规格<textarea required value={spec} onChange={event=>setSpec(event.target.value)}/></label>
-    <label>验收标准（每行一条）<textarea required value={acceptance} onChange={event=>setAcceptance(event.target.value)}/></label>
+    <fieldset><legend>验收标准</legend>{acceptance.map((text,index)=><div key={index}><label>验收标准 {index+1}<textarea required value={text} onChange={event=>setAcceptance(acceptance.map((item,itemIndex)=>itemIndex===index?event.target.value:item))}/></label><button type="button" onClick={()=>setAcceptance(acceptance.filter((_,itemIndex)=>itemIndex!==index))}>移除验收标准 {index+1}</button></div>)}<button type="button" onClick={()=>setAcceptance([...acceptance,''])}>添加验收标准</button></fieldset>
     <ErrorText error={error}/><button type="submit" disabled={busy}>{busy?'正在保存…':'保存工作'}</button>
   </form>
 }

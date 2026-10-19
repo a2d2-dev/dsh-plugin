@@ -11,7 +11,7 @@ describe('local work detail presentation',()=>{
     const panel=new WorkPanelController({command:async()=>{throw Error('unexpected write')},query:async query=>query.type==='task.detail'?{status:'completed',task}:{status:'completed',projects:[{id:'p1',name:'本地项目',version:1,defaultAgentId:'a1',resources:[]}]}},{selectPanel:()=>{},openSession:()=>{}})
     await panel.load(); await panel.openTask({projectId:'p1',taskId:'t1'})
     const html=renderToStaticMarkup(createElement(WorkPanel,{controller:panel}))
-    for(const text of ['本地规格工作','概览','会话','相关工作','活动','保留真实目标','已保存的规格','刷新可读取','尚无当前处理会话']) expect(html).toContain(text)
+    for(const text of ['本地规格工作','概览','会话','相关工作','活动','保留真实目标','已保存的规格','刷新可读取','尚未开始处理。可先关联已有会话查看相关工作。']) expect(html).toContain(text)
     expect(html).not.toContain('进入当前会话')
     expect(html).not.toContain('a1')
     panel.setDetailTab('sessions')
