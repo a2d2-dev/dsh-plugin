@@ -1,0 +1,124 @@
+{
+  "before": {
+    "id": "9e9d68fd-85b0-4ff3-af3e-218338b1c321",
+    "projectId": "b93226e6-f217-415e-abbb-4efa5db95f0f",
+    "title": "同名最终工作",
+    "goal": "  UI仅修改目标\n    保留缩进及尾换行\n",
+    "version": 3,
+    "agentId": "bf634b4a-b906-4836-acd9-ad10df25103d",
+    "specification": {
+      "version": 3,
+      "text": "  API规格原文\n    缩进规格\n\n",
+      "acceptance": [
+        "  API单条第一行\n    同一条第二行\n",
+        "\n  API第二条\n"
+      ]
+    },
+    "specificationHistory": [
+      {
+        "version": 1,
+        "text": "  UI规格甲\n    内容缩进\n\n",
+        "acceptance": [
+          "  第一条首行\n    同一条第二行\n",
+          "  第二条独立验收\n"
+        ]
+      },
+      {
+        "version": 2,
+        "text": "  API规格原文\n    缩进规格\n\n",
+        "acceptance": [
+          "  API单条第一行\n    同一条第二行\n",
+          "\n  API第二条\n"
+        ]
+      }
+    ],
+    "breakdown": [],
+    "children": [],
+    "sessions": [],
+    "activity": [
+      {
+        "commandId": "ec760dbd-febf-4e0d-a3bb-7e7c463cb3b3",
+        "type": "task.create",
+        "version": 1
+      },
+      {
+        "commandId": "final-api-rich-input",
+        "type": "task.update-spec",
+        "version": 2
+      },
+      {
+        "commandId": "96f624e0-dd3a-450e-ad47-31e1e45f15c6",
+        "type": "task.update-spec",
+        "version": 3
+      }
+    ]
+  },
+  "after": {
+    "id": "9e9d68fd-85b0-4ff3-af3e-218338b1c321",
+    "projectId": "b93226e6-f217-415e-abbb-4efa5db95f0f",
+    "title": "同名最终工作",
+    "goal": "  UI仅修改目标\n    保留缩进及尾换行\n",
+    "version": 4,
+    "agentId": "bf634b4a-b906-4836-acd9-ad10df25103d",
+    "specification": {
+      "version": 4,
+      "text": "  API规格原文\n    缩进规格\n\n",
+      "acceptance": [
+        "  API单条第一行\n    同一条第二行\n",
+        "\n  API第二条\n"
+      ]
+    },
+    "specificationHistory": [
+      {
+        "version": 1,
+        "text": "  UI规格甲\n    内容缩进\n\n",
+        "acceptance": [
+          "  第一条首行\n    同一条第二行\n",
+          "  第二条独立验收\n"
+        ]
+      },
+      {
+        "version": 2,
+        "text": "  API规格原文\n    缩进规格\n\n",
+        "acceptance": [
+          "  API单条第一行\n    同一条第二行\n",
+          "\n  API第二条\n"
+        ]
+      },
+      {
+        "version": 3,
+        "text": "  API规格原文\n    缩进规格\n\n",
+        "acceptance": [
+          "  API单条第一行\n    同一条第二行\n",
+          "\n  API第二条\n"
+        ]
+      }
+    ],
+    "breakdown": [],
+    "children": [],
+    "sessions": [],
+    "activity": [
+      {
+        "commandId": "ec760dbd-febf-4e0d-a3bb-7e7c463cb3b3",
+        "type": "task.create",
+        "version": 1
+      },
+      {
+        "commandId": "final-api-rich-input",
+        "type": "task.update-spec",
+        "version": 2
+      },
+      {
+        "commandId": "96f624e0-dd3a-450e-ad47-31e1e45f15c6",
+        "type": "task.update-spec",
+        "version": 3
+      },
+      {
+        "commandId": "18d00e80-a3dd-4373-91f9-61973af7a1df",
+        "type": "task.update-spec",
+        "version": 4
+      }
+    ]
+  },
+  "passed": true
+}

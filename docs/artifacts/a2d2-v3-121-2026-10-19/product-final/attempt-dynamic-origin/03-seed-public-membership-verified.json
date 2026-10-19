@@ -1,0 +1,211 @@
+{
+  "seeds": [
+    {
+      "workspaceId": "867f6de3-1086-479a-95cd-af3fbec6f0de",
+      "sessionId": "session-9b05c29d-29db-477b-aabb-9d81d3027f09",
+      "agentPreset": "standard"
+    },
+    {
+      "workspaceId": "867f6de3-1086-479a-95cd-af3fbec6f0de",
+      "sessionId": "session-d05a22e4-cea3-48d9-8454-39680dbfa9b7",
+      "agentPreset": "standard"
+    }
+  ],
+  "workspace": {
+    "workspace": {
+      "workspaceId": "867f6de3-1086-479a-95cd-af3fbec6f0de",
+      "path": "/tmp/a2d2-v3-121/product-final-8d33081/workspace",
+      "title": "workspace",
+      "sessionIds": [
+        "session-d05a22e4-cea3-48d9-8454-39680dbfa9b7",
+        "session-9b05c29d-29db-477b-aabb-9d81d3027f09"
+      ],
+      "createdAt": "2026-10-19T17:12:05.578Z",
+      "updatedAt": "2026-10-19T17:12:06.491Z"
+    },
+    "created": false
+  },
+  "sessions": {
+    "items": [
+      {
+        "sessionId": "session-d05a22e4-cea3-48d9-8454-39680dbfa9b7",
+        "updatedAt": 1792429926470,
+        "agentAvailable": true,
+        "running": false,
+        "blank": true,
+        "cwd": "/tmp/a2d2-v3-121/product-final-8d33081/workspace",
+        "projections": {
+          "kind": "sequenced",
+          "asOfSeq": 2,
+          "values": {
+            "title": null,
+            "goal": null,
+            "tokenUsage": {
+              "uncachedInputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            },
+            "contextPressure": {},
+            "contextBreakdown": {
+              "systemTokens": 0,
+              "toolsTokens": 0,
+              "messageTokens": 0
+            },
+            "inbox": {
+              "next-turn": [],
+              "next-step": []
+            },
+            "sessionStats": {
+              "turns": 0,
+              "steps": 0,
+              "llmMs": 0,
+              "toolMs": 0,
+              "ttftMs": 0,
+              "ttftSteps": 0,
+              "decodeMs": 0,
+              "decodeTokens": 0
+            },
+            "turnOutline": [],
+            "agentPreset": "standard",
+            "userQuestions": {
+              "active": [],
+              "settled": []
+            },
+            "subagentCatalog": [],
+            "subagentTiming": {
+              "settledMs": 0
+            },
+            "subagent": null,
+            "a2d2Indicator": {
+              "thresholds": {
+                "warnAtTokens": 150000,
+                "criticalAtTokens": 1000000
+              },
+              "currency": "¥"
+            },
+            "permissions": {
+              "currentValue": "workspace-write"
+            },
+            "todos": null,
+            "plan": {
+              "active": false,
+              "pending": false
+            },
+            "modelSelection": {
+              "lastUsed": null,
+              "next": null
+            },
+            "sessionListMetadata": {
+              "blank": true,
+              "lastPromptAt": null
+            },
+            "imageLimits": {
+              "maxImageBytes": 20971520,
+              "maxImagesPerMessage": 20,
+              "maxMessageImageBytes": 209715200,
+              "maxImagePixels": 64000000,
+              "maxImageDimension": 8192,
+              "mediaTypes": [
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "sessionId": "session-9b05c29d-29db-477b-aabb-9d81d3027f09",
+        "updatedAt": 1792429925951,
+        "agentAvailable": true,
+        "running": false,
+        "blank": true,
+        "cwd": "/tmp/a2d2-v3-121/product-final-8d33081/workspace",
+        "projections": {
+          "kind": "sequenced",
+          "asOfSeq": 2,
+          "values": {
+            "title": null,
+            "goal": null,
+            "tokenUsage": {
+              "uncachedInputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            },
+            "contextPressure": {},
+            "contextBreakdown": {
+              "systemTokens": 0,
+              "toolsTokens": 0,
+              "messageTokens": 0
+            },
+            "inbox": {
+              "next-turn": [],
+              "next-step": []
+            },
+            "sessionStats": {
+              "turns": 0,
+              "steps": 0,
+              "llmMs": 0,
+              "toolMs": 0,
+              "ttftMs": 0,
+              "ttftSteps": 0,
+              "decodeMs": 0,
+              "decodeTokens": 0
+            },
+            "turnOutline": [],
+            "agentPreset": "standard",
+            "userQuestions": {
+              "active": [],
+              "settled": []
+            },
+            "subagentCatalog": [],
+            "subagentTiming": {
+              "settledMs": 0
+            },
+            "subagent": null,
+            "a2d2Indicator": {
+              "thresholds": {
+                "warnAtTokens": 150000,
+                "criticalAtTokens": 1000000
+              },
+              "currency": "¥"
+            },
+            "permissions": {
+              "currentValue": "workspace-write"
+            },
+            "todos": null,
+            "plan": {
+              "active": false,
+              "pending": false
+            },
+            "modelSelection": {
+              "lastUsed": null,
+              "next": null
+            },
+            "sessionListMetadata": {
+              "blank": true,
+              "lastPromptAt": null
+            },
+            "imageLimits": {
+              "maxImageBytes": 20971520,
+              "maxImagesPerMessage": 20,
+              "maxMessageImageBytes": 209715200,
+              "maxImagePixels": 64000000,
+              "maxImageDimension": 8192,
+              "mediaTypes": [
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif"
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+  "passed": true
+}

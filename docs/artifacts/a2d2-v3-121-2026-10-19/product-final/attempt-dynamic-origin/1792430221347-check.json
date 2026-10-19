@@ -1,0 +1,66 @@
+{
+  "processId": "df9dd0fb-bd47-494e-9e99-5f236dbc350b",
+  "pid": 3289773,
+  "providers": [
+    "acceptance-disabled"
+  ],
+  "gateway": 0,
+  "adapter": 0,
+  "births": 2,
+  "bornSessionIds": [
+    "session-9b05c29d-29db-477b-aabb-9d81d3027f09",
+    "session-d05a22e4-cea3-48d9-8454-39680dbfa9b7"
+  ],
+  "sessions": [
+    {
+      "sessionId": "session-9b05c29d-29db-477b-aabb-9d81d3027f09",
+      "cwd": "/tmp/a2d2-v3-121/product-final-8d33081/workspace",
+      "model": {
+        "selection": {
+          "lastUsed": null,
+          "next": null
+        },
+        "default": {
+          "provider": "acceptance-disabled",
+          "model": "no-model"
+        }
+      },
+      "permissions": {
+        "selection": {
+          "currentValue": "workspace-write"
+        },
+        "sandbox": {
+          "mode": "workspace-write",
+          "workspaceRoot": "/tmp/a2d2-v3-121/product-final-8d33081/workspace",
+          "sessionId": "session-9b05c29d-29db-477b-aabb-9d81d3027f09"
+        },
+        "approval": "ask"
+      }
+    },
+    {
+      "sessionId": "session-d05a22e4-cea3-48d9-8454-39680dbfa9b7",
+      "cwd": "/tmp/a2d2-v3-121/product-final-8d33081/workspace",
+      "model": {
+        "selection": {
+          "lastUsed": null,
+          "next": null
+        },
+        "default": {
+          "provider": "acceptance-disabled",
+          "model": "no-model"
+        }
+      },
+      "permissions": {
+        "selection": {
+          "currentValue": "workspace-write"
+        },
+        "sandbox": {
+          "mode": "workspace-write",
+          "workspaceRoot": "/tmp/a2d2-v3-121/product-final-8d33081/workspace",
+          "sessionId": "session-d05a22e4-cea3-48d9-8454-39680dbfa9b7"
+        },
+        "approval": "ask"
+      }
+    }
+  ]
+}

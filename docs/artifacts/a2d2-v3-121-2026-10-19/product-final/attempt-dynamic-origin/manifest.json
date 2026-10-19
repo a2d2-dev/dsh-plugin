@@ -1,0 +1,21 @@
+{
+  "root": "/tmp/a2d2-v3-121/product-final-8d33081",
+  "host": "/data/src/github.com/deepseek-ai/deepseek-harness-dev",
+  "cli": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/apps/cli/lib/bin.js",
+  "anchor": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/bundle/web-app/package.json",
+  "llm": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/llm/llm/lib/index.js",
+  "modules": {
+    "@deepseek-ai/dsh-api-session-controller": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/api/session-controller/lib/index.js",
+    "@deepseek-ai/dsh-api-workspace-controller": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/api/workspace-controller/lib/index.js",
+    "@deepseek-ai/dsh-client-modules": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/client/modules/lib/index.js"
+  },
+  "hostCommit": "a45068d2ec03326c800c68c9bdcd47508e3ccb9c",
+  "cliVersion": "0.2.0-rc.2",
+  "nodeVersion": "v22.23.1",
+  "hostOnly": false,
+  "plugin": {
+    "path": "/tmp/a2d2-v3-121/artifacts/candidate-8d33081/dsh-a2d2-0.0.1.tgz",
+    "sha256": "81466a33342c0256873bbf30dac693ee0cff2c075246a4ad859d94663ce0a82b"
+  },
+  "preparedAt": "2026-10-19T17:10:59.559Z"
+}
