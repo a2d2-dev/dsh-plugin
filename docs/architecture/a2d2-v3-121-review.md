@@ -31,8 +31,9 @@
 | R2 | Standards P2-2 | **修**：任何 mkdir 前验证现存规范父路径；用真实隔离临时 fixture 证明逃逸拒绝前外部目标没有新增内容 | **已关闭**：`a689c56`；CEO 核对前置校验及真实 fs 测试，独立工具测试 7 项通过 |
 | R3 | Spec 证据建议 | **记账并收紧说明**：更正已有测试名称/说明的证明范围；不补新故障窗口、不改变原断言 | **已关闭**：`7127b6d` 仅改名称/表述，原步骤与断言保留 |
 | C1 | CEO 产品文案核对 | **修正文案**：去除“当前票不启动执行”的开发票据术语，保留准确的当前未启动状态 | **已关闭**：`9e31834` 文案及渲染测试已核对 |
-| R4 | 真实浏览器验收准备 | **修**：guard seed 使用公开 WorkspaceController 返回的 `workspace.workspaceId`，不使用不存在的 `workspace.id`；验证创建 Session 的引用与实际 cwd | `44175de` 的真实 controller 测试已核对，包含正确 cwd 和 Workspace 成员关系；待 fresh root 重启验收 |
+| R4 | 真实浏览器验收准备 | **修**：guard seed 使用公开 WorkspaceController 返回的 `workspace.workspaceId`，不使用不存在的 `workspace.id`；验证创建 Session 的引用与实际 cwd | **已关闭**：`44175de` 的真实 controller 测试及最终产品 03 号公开记录均证明两个 Session 的正确 cwd、workspaceId 与实际成员关系；后续新 origin 首用问题独立归 R6 |
 | R5 | 首轮真实浏览器 AC7 缺陷 | **修**：blank Session 不渲染 header.actions；将工作入口迁到 blank/普通会话共享的公开 `conversation.input.dock` list，保留已有 single corner 控件 | **已关闭**：`f482b15`；CEO 已回读新包 26 号真实记录及 23 号截图：blank 会话入口可见，同一已选 Session 新增子工作关联后无需刷新即显示第二入口，点击返回正确 Project/Task 四标签；前后 timeOrigin 相同 |
+| R6 | 最终验收环境语义 | **修工具**：同 root 重启应复用首次实际 origin，不能把更换端口后的新站点首用流程当作同实例恢复；保护/非法/占用端口明确拒绝 | `6077dae` / `27c8648` 已经 CEO 代码核查和独立 28 项工具测试通过；待真实 DSH 稳定 origin 补验。产品源码、guard 和安装包完全未变 |
 
 采用一轮制：统一高级整改后 CEO 直接核对以上清单，不再次派评审扩大范围。产品浏览器发现若击穿验收，仍在本票修复。
 
@@ -58,4 +59,12 @@
 - `pnpm verify:pack-exports`：退出 0，真实构建、打包、临时安装并导入 13 个 Node 导出。
 - `git diff --check`：退出 0。
 
-复验包：`/tmp/a2d2-v3-121/artifacts/candidate-8d33081/dsh-a2d2-0.0.1.tgz`，SHA256 `81466a33342c0256873bbf30dac693ee0cff2c075246a4ad859d94663ce0a82b`。已指定独立浏览器 lane 使用该包和同一固定工具提交，在全新隔离 root 复验；此处仍未将浏览器 gate 提前标通过。
+复验包：`/tmp/a2d2-v3-121/artifacts/candidate-8d33081/dsh-a2d2-0.0.1.tgz`，SHA256 `81466a33342c0256873bbf30dac693ee0cff2c075246a4ad859d94663ce0a82b`。真实 UI 已关闭 R1/R4/R5；同一包的通过结果与动态 origin 失败均保留在 [product-final](../artifacts/a2d2-v3-121-2026-10-19/product-final/README.md)，不覆盖原始指标。
+
+## R6：稳定 origin 补验前的工具复核
+
+动态端口从 34569 改为 42801 后，浏览器没有原站点的会话选择，宿主按首次进入路径创建空会话。重启浏览器前，两条原 Session ID 与全部领域数据仍一致。此项属于验收工具未保持“同实例/同站点”的前提，不能归为已证实的产品回归，也不能把污染后的 3 IDs 改报通过。
+
+工具修复 `6077dae` 与说明 `27c8648` 只改变 `acceptance.mjs`、聚焦工具测试和文档。CEO 已全文核对 origin 验证、端口占用拒绝、实际 ready origin 核对及自有子进程停止逻辑，并独立运行两份 Node 工具测试：**28 通过，2 个 real-host 用例显式未选，退出 0**。相对 R6 起点的产品 `src`、guard、package 和锁文件 diff 为空；不重复无变化产品构建与 696 项测试。
+
+新复验固定工具/证据整合提交 `56679a69286f473d786735576c81ffa3a61d4238`，继续使用上述相同产品包，在另一 fresh root 只补稳定 origin 的真实重启、完整公开数据、原有 Session 身份/配置及跨进程模型计数。此前产品场景的通过证据继续有效，最终补验完成前整票仍未验收关闭。
