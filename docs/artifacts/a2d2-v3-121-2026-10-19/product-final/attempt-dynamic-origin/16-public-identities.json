@@ -1,0 +1,57 @@
+{
+  "a": {
+    "project": {
+      "id": "b93226e6-f217-415e-abbb-4efa5db95f0f",
+      "name": "最终验收甲",
+      "version": 1,
+      "defaultAgentId": "bf634b4a-b906-4836-acd9-ad10df25103d",
+      "resources": [
+        {
+          "runtimeId": "f09a695c-18a8-42da-80bb-7b5647af6d22",
+          "workspaceId": "867f6de3-1086-479a-95cd-af3fbec6f0de"
+        }
+      ]
+    },
+    "taskRef": {
+      "projectId": "b93226e6-f217-415e-abbb-4efa5db95f0f",
+      "taskId": "9e9d68fd-85b0-4ff3-af3e-218338b1c321"
+    }
+  },
+  "b": {
+    "project": {
+      "id": "320ef404-b3ea-4072-944f-944f2e504539",
+      "name": "最终验收乙",
+      "version": 1,
+      "defaultAgentId": "1f951c7a-fd58-49f9-a578-21b231f031a8",
+      "resources": []
+    },
+    "taskRef": {
+      "projectId": "320ef404-b3ea-4072-944f-944f2e504539",
+      "taskId": "b4e41cea-a87c-4d86-9eaf-58cfe020167c"
+    }
+  },
+  "candidates": [
+    {
+      "ref": {
+        "runtimeId": "f09a695c-18a8-42da-80bb-7b5647af6d22",
+        "sessionId": "session-d05a22e4-cea3-48d9-8454-39680dbfa9b7"
+      },
+      "resource": {
+        "runtimeId": "f09a695c-18a8-42da-80bb-7b5647af6d22",
+        "workspaceId": "867f6de3-1086-479a-95cd-af3fbec6f0de"
+      },
+      "title": "session-d05a22e4-cea3-48d9-8454-39680dbfa9b7"
+    },
+    {
+      "ref": {
+        "runtimeId": "f09a695c-18a8-42da-80bb-7b5647af6d22",
+        "sessionId": "session-9b05c29d-29db-477b-aabb-9d81d3027f09"
+      },
+      "resource": {
+        "runtimeId": "f09a695c-18a8-42da-80bb-7b5647af6d22",
+        "workspaceId": "867f6de3-1086-479a-95cd-af3fbec6f0de"
+      },
+      "title": "session-9b05c29d-29db-477b-aabb-9d81d3027f09"
+    }
+  ]
+}

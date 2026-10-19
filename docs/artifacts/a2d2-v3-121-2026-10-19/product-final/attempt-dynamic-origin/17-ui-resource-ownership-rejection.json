@@ -1,0 +1,4 @@
+{
+  "resourceOwnershipRejected": true,
+  "text": "A²D² 控制面板\n\n项目、工作与关联会话\n\n关闭面板\n\n工作已保存\n\n当前项目 \n最终验收甲\n最终验收乙\n接入 / 创建项目\n接入已有资源\n← 返回项目内容\n同名最终工作\n\n最终验收乙 · 本地工作\n\n刷新详情\n更新规格\n概览\n会话\n相关工作\n活动\n状态概览\n本地工作已保存\n0 个关联会话\n规格第 1 版\n目标与规格\n目标\n\n乙独立目标\n\n规格\n\n乙独立规格\n\n验收标准\n乙项目独立身份\n处理会话\n\n尚未开始处理。可先关联已有会话查看相关工作。\n\n查看关联会话\n接入已有资源\n取消编辑\n已有宿主资源\n选择资源\nworkspace\n\n项目默认负责策略由后端建立。选择资源不会启动或重配会话。\n\nresource-in-use: Resource already belongs to another project\n\n保存项目"
+}

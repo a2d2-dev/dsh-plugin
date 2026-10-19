@@ -1,0 +1,9 @@
+{
+  "checkoutCommit": "8d3308112f3affb91767b5976a8d1d2d950c921b",
+  "productCodeCommit": "433e9860ca76026a05d001c0552da0a4b45c84bf",
+  "packageSha256": "81466a33342c0256873bbf30dac693ee0cff2c075246a4ad859d94663ce0a82b",
+  "files": {
+    "scripts/a2d2-v3-121/acceptance.mjs": "72e8918b189aa350782123f4520a2a24aa94866ffb8cfa11672d2ac7d8949358",
+    "scripts/a2d2-v3-121/guard.mjs": "442573774fd2c16eb858af534230cbfb8f7029ff8d483085926b14531454e62d"
+  }
+}
