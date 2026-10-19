@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { readFile, writeFile, mkdir, realpath, lstat, open } from 'node:fs/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { isAbsolute, join, dirname, resolve } from 'node:path'
+import { createServer } from 'node:net'
 import { parseArgs } from 'node:util'
 import { setTimeout as delay } from 'node:timers/promises'
 
@@ -107,25 +108,51 @@ export async function request(root, action) {
   }
   throw new Error(`guard command ${action} timed out; do not interpret as zero calls`)
 }
+function checkedOrigin(value) {
+  let url
+  try { url = new URL(value) } catch { throw new Error('Invalid recorded Web origin') }
+  const port = Number(url.port)
+  if (typeof value !== 'string' || value !== url.origin || url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || !Number.isInteger(port) || port < 1 || port > 65535 || [18780, 18781].includes(port)) throw new Error('Recorded Web origin must be an unprotected http://127.0.0.1:<port> origin')
+  return url
+}
+async function recordedOrigin(root) {
+  let previous
+  try { previous = await json(join(root, 'current-run.json')) } catch (error) {
+    if (error.code === 'ENOENT') return null
+    throw new Error('Cannot read current-run record; refusing to choose a new Web origin')
+  }
+  return checkedOrigin(previous?.baseURL)
+}
+async function requireAvailablePort(port) {
+  const probe = createServer()
+  await new Promise((resolve, reject) => {
+    probe.once('error', error => reject(new Error(`Saved Web port ${port} is unavailable (${error.code}); refusing to change origin`)))
+    probe.listen({ host: '127.0.0.1', port: Number(port), exclusive: true }, () => probe.close(error => error ? reject(error) : resolve()))
+  })
+}
 export async function run(root) {
   await checkedRoot(root)
+  const previous = await recordedOrigin(root)
+  if (previous) await requireAvailablePort(previous.port)
   const manifest = await json(join(root, 'manifest.json'))
   if (command('git', ['-C', manifest.host, 'rev-parse', 'HEAD']) !== manifest.hostCommit) throw new Error('Host commit changed after preparation')
   if (manifest.plugin && createHash('sha256').update(await readFile(manifest.plugin.path)).digest('hex') !== manifest.plugin.sha256) throw new Error('Plugin tgz changed after preparation')
   const runId = randomUUID()
   const log = await open(join(root, 'logs', `${runId}.log`), 'wx', 0o600)
-  const child = spawn(process.execPath, [manifest.cli, 'web', '--patch', join(root, 'acceptance.patch.yml'), '--no-open', '--host', '127.0.0.1', '--port', '0'], { cwd: join(root, 'workspace'), env: isolatedEnvironment(root), stdio: ['ignore', 'pipe', 'pipe'] })
+  const child = spawn(process.execPath, [manifest.cli, 'web', '--patch', join(root, 'acceptance.patch.yml'), '--no-open', '--host', '127.0.0.1', '--port', previous?.port ?? '0'], { cwd: join(root, 'workspace'), env: isolatedEnvironment(root), stdio: ['ignore', 'pipe', 'pipe'] })
   let announced = false
+  let captureError
   let pending = ''
   const startedAt = new Date().toISOString()
   const capture = async data => {
     await log.write(data)
     pending = (pending + data.toString()).slice(-64_000)
     const match = pending.match(/dsh web: (http:\/\/127\.0\.0\.1:\d+\S*)/)
-    if (announced || !match) return
-    announced = true
+    if (captureError || announced || !match) return
     const login = new URL(match[1])
-    if (['18780', '18781'].includes(login.port)) { child.kill('SIGTERM'); throw new Error('refusing existing-service port') }
+    checkedOrigin(login.origin)
+    if (previous && login.origin !== previous.origin) throw new Error('CLI changed the saved Web origin; refusing to continue')
+    announced = true
     await writeFile(join(root, 'login-url.private'), login.href, { mode: 0o600 })
     const run = { runId, pid: child.pid, supervisorPid: process.pid, startedAt, baseURL: login.origin, hostCommit: manifest.hostCommit, cliVersion: manifest.cliVersion, plugin: manifest.plugin, managedJobId: null }
     await save(join(root, 'current-run.json'), run)
@@ -134,7 +161,11 @@ export async function run(root) {
   }
   // Serialize output writes so raw credentials stay only in the private log.
   let output = Promise.resolve()
-  for (const stream of [child.stdout, child.stderr]) stream.on('data', data => { output = output.then(() => capture(data)) })
+  for (const stream of [child.stdout, child.stderr]) stream.on('data', data => {
+    output = output.then(() => capture(data)).catch(error => {
+      if (!captureError) { captureError = error; child.kill('SIGTERM') }
+    })
+  })
   const stop = () => child.kill('SIGTERM')
   process.once('SIGTERM', stop)
   process.once('SIGINT', stop)
@@ -147,6 +178,7 @@ export async function run(root) {
   process.removeListener('SIGINT', stop)
   console.log(JSON.stringify({ stopped: true, runId, ...exit }))
   process.exitCode = exit.code ?? (exit.signal === 'SIGTERM' ? 0 : 1)
+  if (captureError) throw captureError
   if (!announced) throw new Error('Host exited without Web readiness; zero-call acceptance invalid')
 }
 async function main() {
