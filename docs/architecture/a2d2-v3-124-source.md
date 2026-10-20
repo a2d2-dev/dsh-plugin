@@ -24,6 +24,8 @@ GitHub 写入、任务启动／续跑／完成、旧迁移、客户端来源 UI�
 
 [GitHubSource](../../src/work-sources/github.ts) 异步 `execFile('gh', ['auth','token','--hostname','github.com'])`，继承服务器显式环境，10 秒超时；不会改 HOME、搜索其他账号目录或接受浏览器凭据配置。每个 GitHub GET 有 15 秒超时，只访问生成的 `https://api.github.com/user` 与仓库 Issue 路径，拒绝所有 redirect。仓库改名后配置规范仓库，再用相同 node ID 接入即可复用原 Task；不会跟随远端任意 Location。
 
+`source.configure` 与生产读取适配器共享仓库范围校验：owner 使用 1–39 位字母数字／内部连字符；repository 使用 1–100 位字母数字、点、下划线、连字符，允许 `.github`、`_work`、`-work`，单独的 `.`／`..` 无效。两个组件均拒绝路径片段、斜杠／反斜杠、百分号编码和 URL 查询／片段注入；固定 GitHub.com GET 域与拒绝 redirect 的约束保持不变。
+
 `@me` 每次绑定该凭据的 `/user`，返回 login、nodeId、name。列表剔除 PR；详情遇 PR 返回 `github-not-issue`。保留标题、原文（可合法为空）、负责人、标签、远端状态、node ID、`updatedAt` 和 `observedAt`。分页参数为有界正整数，绝不执行远端 Link URL；原始页满时保守返回 `nextPage`，因此末尾满页可能需一次空页确认。PR 会占 GitHub 原始页位置，剔除后空页仍可能有下一页。无自动抓取所有页。
 
 刷新先在短事务内保存请求代次，再在锁外等待网络，最后重新锁定并检查 enabled、来源版本和该查询最新代次。停用再启用也会提高来源版本，旧在途响应失效。不同查询返回同节点时比较远端更新时间及本地请求序号。进程退出后可重新显式刷新，无后台轮询器。

@@ -1,11 +1,11 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { z } from 'zod'
+import { repositorySchema } from './schema.ts'
 import type { GitHubIdentity, GitHubIssue, GitHubRepository, GitHubSourcePort, IssuePageRequest, SourceFailure } from './types.ts'
 export type * from './types.ts'
 const exec = promisify(execFile)
-const segment = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,99}$/
-export function validRepository(value: GitHubRepository): boolean { return segment.test(value.owner) && segment.test(value.repository) }
+export function validRepository(value: GitHubRepository): boolean { return repositorySchema.safeParse(value).success }
 export class SourceError extends Error implements SourceFailure {
   constructor(readonly code: string, message: string, readonly retryAt?: string) { super(message) }
 }

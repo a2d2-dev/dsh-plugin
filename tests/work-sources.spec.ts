@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { WorkApplication } from '../src/work.ts'
 import type { GitHubIssue, GitHubSourcePort, WorkSource } from '../src/work-sources/types.ts'
-import { SourceError } from '../src/work-sources/github.ts'
+import { GitHubSource, SourceError } from '../src/work-sources/github.ts'
 import type { WorkResult } from '../src/work-types.ts'
 const roots: string[] = []
 const operator = { operator: true }
@@ -22,6 +22,29 @@ async function open(source: GitHubSourcePort | undefined = port) {
   return { app, directory, project, source: configured.source! }
 }
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done }); return { promise, resolve } }
+it('configures, reads and imports a legal .github repository through the production adapter', async () => {
+  const { project, directory } = await open()
+  const repository = { owner: 'a2d2-dev', repository: '.github' }
+  const url = 'https://github.com/a2d2-dev/.github/issues/1'
+  const adapter = new GitHubSource({ credential: async () => 'secret', fetch: async (input, init) => {
+    expect(init?.method).toBe('GET')
+    expect(init?.redirect).toBe('manual')
+    if (String(input) === 'https://api.github.com/user') return Response.json({ login: identity.login, node_id: identity.nodeId, name: identity.name })
+    expect(String(input)).toBe('https://api.github.com/repos/a2d2-dev/.github/issues/1')
+    return Response.json({ node_id: 'I_dotgithub', number: 1, title: 'Repository guidance', body: 'Accepted original guidance', html_url: url, state: 'open', updated_at: issue.updatedAt, labels: [], assignees: [] })
+  } })
+  const app = new WorkApplication(directory, noHost, adapter)
+  const configured = completed(await app.execute({ type: 'source.configure', commandId: 'dotgithub-source', projectId: project.id, repository }, operator)).source!
+  expect(await app.query({ type: 'source.issue', projectId: project.id, sourceId: configured.id, number: 1, refresh: true }, operator)).toMatchObject({ status: 'completed', issue: { nodeId: 'I_dotgithub', url, repository, body: 'Accepted original guidance' } })
+  expect(await app.execute({ type: 'source.import', commandId: 'dotgithub-import', projectId: project.id, sourceId: configured.id, url }, operator)).toMatchObject({ status: 'completed', task: { specification: { text: 'Accepted original guidance' } }, binding: { nodeId: 'I_dotgithub', urls: [url] } })
+})
+it.each(['.', '..', '../repo', 'repo/child', 'repo\\child', '%2e%2e', '%252f', 'repo?x=1', 'repo#x', 'repo@evil.test', 'repo\n', ''])('rejects unsafe configure owner or repository component %j', async component => {
+  const { app, project } = await open()
+  for (const repository of [{ ...issue.repository, owner: component }, { ...issue.repository, repository: component }]) {
+    expect(await app.execute({ type: 'source.configure', commandId: `unsafe-${repository.owner}-${repository.repository}`, projectId: project.id, repository }, operator)).toMatchObject({ status: 'failed', error: { code: 'invalid-command' } })
+  }
+  expect(completed(await app.query({ type: 'source.list', projectId: project.id }, operator)).sources).toHaveLength(1)
+})
 it('does not hold the work lock during network I/O and discards a late response after disable and re-enable', async () => {
   const started = deferred<void>(), remote = deferred<Awaited<ReturnType<GitHubSourcePort['list']>>>()
   const { app, project, source } = await open({ ...port, list: async () => { started.resolve(); return remote.promise } })
