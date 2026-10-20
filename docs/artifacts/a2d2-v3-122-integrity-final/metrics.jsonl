@@ -1,0 +1,11 @@
+{"processId":"73c01c81-05fd-4daf-96fd-4c3161913f4d","pid":1749045,"time":"2026-10-20T03:57:22.532Z","kind":"guard-started"}
+{"processId":"73c01c81-05fd-4daf-96fd-4c3161913f4d","pid":1749045,"time":"2026-10-20T03:57:23.417Z","kind":"driver-ready"}
+{"processId":"73c01c81-05fd-4daf-96fd-4c3161913f4d","pid":1749045,"time":"2026-10-20T03:57:42.911Z","kind":"session-born","sessionId":"session-a2d2-122-positive"}
+{"processId":"73c01c81-05fd-4daf-96fd-4c3161913f4d","pid":1749045,"time":"2026-10-20T03:57:43.052Z","kind":"session-born","sessionId":"session-a2d2-122-current"}
+{"processId":"73c01c81-05fd-4daf-96fd-4c3161913f4d","pid":1749045,"time":"2026-10-20T03:57:43.349Z","kind":"session-born","sessionId":"session-a2d2-122-retired"}
+{"processId":"73c01c81-05fd-4daf-96fd-4c3161913f4d","pid":1749045,"time":"2026-10-20T03:57:43.616Z","kind":"session-born","sessionId":"session-a2d2-122-review"}
+{"processId":"73c01c81-05fd-4daf-96fd-4c3161913f4d","pid":1749045,"time":"2026-10-20T03:57:44.486Z","kind":"authorized","sessionId":"session-a2d2-122-positive","calls":1,"phase":"host-positive"}
+{"processId":"73c01c81-05fd-4daf-96fd-4c3161913f4d","pid":1749045,"time":"2026-10-20T03:57:44.486Z","kind":"prompt-submitted","sessionId":"session-a2d2-122-positive","requestId":"c0e41a2f-6a08-4ab8-b1b1-7b5333e69997","phase":"host-positive"}
+{"processId":"73c01c81-05fd-4daf-96fd-4c3161913f4d","pid":1749045,"time":"2026-10-20T03:57:44.503Z","kind":"assembly","sessionId":"session-a2d2-122-positive","provider":"a2d2-acceptance","model":"deterministic"}
+{"processId":"73c01c81-05fd-4daf-96fd-4c3161913f4d","pid":1749045,"time":"2026-10-20T03:57:45.036Z","kind":"gateway","sessionId":"session-a2d2-122-positive","provider":"a2d2-acceptance","model":"deterministic"}
+{"processId":"73c01c81-05fd-4daf-96fd-4c3161913f4d","pid":1749045,"time":"2026-10-20T03:57:45.037Z","kind":"adapter","sessionId":"session-a2d2-122-positive","provider":"a2d2-acceptance","model":"deterministic","phase":"host-positive"}

@@ -1,0 +1,25 @@
+{
+  "toolCommit": "d1b2a01",
+  "newRootVerified": true,
+  "oldRootRejectedBeforeIPC": true,
+  "oldRootExit": 1,
+  "error": "Wrapper changed after preparation",
+  "behaviorRed": {
+    "command": "node --test tests/a2d2-v3-122-assembly.test.mjs",
+    "exit": 1,
+    "error": "Missing expected rejection"
+  },
+  "green": {
+    "command": "node --test tests/a2d2-v3-121-run.test.mjs tests/a2d2-v3-122-model.test.mjs tests/a2d2-v3-122-assembly.test.mjs",
+    "exit": 0,
+    "passed": 23,
+    "skipped": 0
+  },
+  "hostPositiveExit": 0,
+  "hostJob": "bash-827",
+  "hostExit": {
+    "code": 0,
+    "signal": null
+  },
+  "browserScope": "No second browser claim; prior unchanged guard/model native screenshots remain separately recorded"
+}

@@ -51,4 +51,4 @@ mark/check 严格用于同一稳定生命周期内的纯读阶段。重启会合
 
 test-first：首轮缺模块为装配失败，不计行为红测；保留禁用语义后运行用例，授权请求抛 `A2D2_122_NOT_AUTHORIZED`（exit 1）；增加指定 Session 单次预算后 1 passed / 0 skipped（exit 0）。测试接缝为任务明确批准的外部 LLM/adapter，不使用产品 mock。
 
-真实 lane 清理后补 wrapper 自身完整性：原工具记录 wrapperSHA 却未校验，后续同 root 换入口文件可能误用旧指纹。新增公开 prepare/verify 接缝回归，篡改 fixture 的 wrapperSHA 后应拒绝：红测 `Missing expected rejection` exit1；加一条当前入口 SHA 相等断言后两项 122 测试通过（2 passed / 0 skipped，exit0）。既有真实 root/assembly/baseline 保留，不追改旧指纹；最终工具需要 fresh root。verify 在任何 run/IPC 前执行该检查，fixture 保留在独占 122-integrity-* root，不启动宿主。
+真实 lane 清理后补 wrapper 自身完整性：原工具记录 wrapperSHA 却未校验，后续同 root 换入口文件可能误用旧指纹。新增公开 prepare/verify 接缝回归，篡改 fixture 的 wrapperSHA 后应拒绝：红测 `Missing expected rejection` exit1；加一条当前入口 SHA 相等断言后两项 122 测试通过（2 passed / 0 skipped，exit0）。既有真实 root/assembly/baseline 保留，不追改旧指纹；最终工具需要 fresh root。verify 在任何 run/IPC 前执行该检查，fixture 保留在独占 122-integrity-* root，不启动宿主。最终工具 `d1b2a01` 的 fresh root 真实正控、public-read 零增量、job bash-827 正常退出以及23 passed / 0 skipped 的最终测试见 [完整性复验报告](../artifacts/a2d2-v3-122-integrity-final/README.md)。实际 guard/model hash 与首轮真实浏览器和同origin重启证据一致。
