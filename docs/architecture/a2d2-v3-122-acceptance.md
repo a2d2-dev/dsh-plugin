@@ -62,7 +62,7 @@ node scripts/a2d2-v3-122/acceptance.mjs grant-task --root "$ROOT" \
 
 每个 grant 只绑定这一执行身份，后继或 epoch/owner 变化需再显式 grant，不自动迁移剩余预算。任一时刻只有一个 grant，显式新 grant 可替换空闲旧 grant；查询或流执行中替换/并发请求拒绝，不消费错误预算。全部公共核对通过后扣一次，开始后的中止不退还。预算不从 metrics 恢复，进程重启需重新 grant。gateway/adapter 尝试、拒绝、授权、绑定和准入均追加留证。公开查询不与模型调用组成原子事务，本工具核验每次准入时的事实，运行中的生产围栏仍由产品保证。
 
-宿主 positive 保留原 Session grant，不依赖产品能力。新增测试明确使用公开查询合同示例验证模型边界和 CLI，不将示例当作真实 WorkApplication/Task store 集成。实际 b14 产品 kickoff、等待/接续与旧会话围栏交后续真实产品 lane；旧 c3 宿主证据不追认新工具版本。
+宿主 positive 保留原 Session grant，不依赖产品能力。新增测试明确使用公开查询合同示例验证模型边界和 CLI，不将示例当作真实 WorkApplication/Task store 集成。实际 b14 产品 kickoff、等待/接续与旧会话围栏交后续真实产品 lane；旧 c3 宿主证据不追认新工具版本。TaskRef工具checkpoint `ae5759b` 的35 passed/0 skipped、pending wait行为红绿、fresh host-only真实CLI无app拒绝及旧positive保持通过，见 [本轮工具证据](../artifacts/a2d2-v3-122-task-grant/README.md)。
 
 ## 当前验证
 

@@ -1,0 +1,13 @@
+{"processId":"6b829d3f-88e3-4581-adad-7b6388aad140","pid":2000731,"time":"2026-10-20T04:59:19.971Z","kind":"guard-started"}
+{"processId":"6b829d3f-88e3-4581-adad-7b6388aad140","pid":2000731,"time":"2026-10-20T04:59:22.386Z","kind":"driver-ready"}
+{"processId":"6b829d3f-88e3-4581-adad-7b6388aad140","pid":2000731,"time":"2026-10-20T05:00:00.472Z","kind":"rejected","reason":"WORK_APPLICATION_UNAVAILABLE","queryType":"task.detail"}
+{"processId":"6b829d3f-88e3-4581-adad-7b6388aad140","pid":2000731,"time":"2026-10-20T05:00:01.038Z","kind":"session-born","sessionId":"session-a2d2-122-positive"}
+{"processId":"6b829d3f-88e3-4581-adad-7b6388aad140","pid":2000731,"time":"2026-10-20T05:00:01.275Z","kind":"session-born","sessionId":"session-a2d2-122-current"}
+{"processId":"6b829d3f-88e3-4581-adad-7b6388aad140","pid":2000731,"time":"2026-10-20T05:00:01.516Z","kind":"session-born","sessionId":"session-a2d2-122-retired"}
+{"processId":"6b829d3f-88e3-4581-adad-7b6388aad140","pid":2000731,"time":"2026-10-20T05:00:01.727Z","kind":"session-born","sessionId":"session-a2d2-122-review"}
+{"processId":"6b829d3f-88e3-4581-adad-7b6388aad140","pid":2000731,"time":"2026-10-20T05:00:02.001Z","kind":"authorized","mode":"session","grantId":"b063e3b2-f1d1-4c7d-b6fc-c6172d503f07","sessionId":"session-a2d2-122-positive","calls":1,"phase":"host-positive"}
+{"processId":"6b829d3f-88e3-4581-adad-7b6388aad140","pid":2000731,"time":"2026-10-20T05:00:02.001Z","kind":"prompt-submitted","sessionId":"session-a2d2-122-positive","requestId":"d3db8566-29dc-4bb1-8c53-e58c9ef62f3f","phase":"host-positive"}
+{"processId":"6b829d3f-88e3-4581-adad-7b6388aad140","pid":2000731,"time":"2026-10-20T05:00:02.020Z","kind":"assembly","sessionId":"session-a2d2-122-positive","provider":"a2d2-acceptance","model":"deterministic"}
+{"processId":"6b829d3f-88e3-4581-adad-7b6388aad140","pid":2000731,"time":"2026-10-20T05:00:02.494Z","kind":"gateway","sessionId":"session-a2d2-122-positive","provider":"a2d2-acceptance","model":"deterministic"}
+{"processId":"6b829d3f-88e3-4581-adad-7b6388aad140","pid":2000731,"time":"2026-10-20T05:00:02.495Z","kind":"admitted","sessionId":"session-a2d2-122-positive","grantId":"b063e3b2-f1d1-4c7d-b6fc-c6172d503f07","phase":"host-positive","admitted":true,"remainingCalls":0}
+{"processId":"6b829d3f-88e3-4581-adad-7b6388aad140","pid":2000731,"time":"2026-10-20T05:00:02.496Z","kind":"adapter","sessionId":"session-a2d2-122-positive","provider":"a2d2-acceptance","model":"deterministic","grantId":"b063e3b2-f1d1-4c7d-b6fc-c6172d503f07","phase":"host-positive"}

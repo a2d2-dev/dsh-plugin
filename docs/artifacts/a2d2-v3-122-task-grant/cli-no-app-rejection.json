@@ -1,0 +1,20 @@
+{
+  "command": [
+    "node",
+    "scripts/a2d2-v3-122/acceptance.mjs",
+    "grant-task",
+    "--root",
+    "/tmp/a2d2-v3-121/122-task-grant-contract",
+    "--project-id",
+    "existing-task-required",
+    "--task-id",
+    "no-app-smoke",
+    "--calls",
+    "1",
+    "--phase",
+    "startup"
+  ],
+  "exitCode": 1,
+  "error": "Error: Error: A2D2_122_NOT_AUTHORIZED: WORK_APPLICATION_UNAVAILABLE\n    at ModelBoundary.deny (file:///tmp/a2d2-v3-121/122-task-grant-contract/guard/model.mjs:17:11)\n    at ModelBoundary.query (file:///tmp/a2d2-v3-121/122-task-grant-contract/guard/model.mjs:33:71)\n    at ModelBoundary.authorizeTask (file:///tmp/a2d2-v3-121/122-task-grant-contract/guard/model.mjs:56:33)\n    at execute (file:///tmp/a2d2-v3-121/122-task-grant-contract/guard/guard.mjs:62:58)\n    at Timeout._onTimeout (file:///tmp/a2d2-v3-121/122-task-grant-contract/guard/guard.mjs:110:51)\n    at listOnTimeout (node:internal/timers:585:17)\n    at process.processTimers (node:internal/timers:521:7)\n    at request (file:///data/src/github.com/a2d2-dev/dsh-plugin.worktrees/a2d2-v3-02-host-acceptance/scripts/a2d2-v3-121/acceptance.mjs:104:29)\n    at async main (file:///data/src/github.com/a2d2-dev/dsh-plugin.worktrees/a2d2-v3-02-host-acceptance/scripts/a2d2-v3-122/acceptance.mjs:100:20)\n",
+  "scope": "actual private IPC absence rejection; no product Task fabricated"
+}

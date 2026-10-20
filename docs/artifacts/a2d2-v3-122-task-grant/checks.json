@@ -1,0 +1,49 @@
+{
+  "scope": "TaskRef model seam unit/public-contract tests + real host-only IPC rejection and legacy positive, not product kickoff",
+  "toolCommit": "ae5759b",
+  "root": "/tmp/a2d2-v3-121/122-task-grant-contract",
+  "modelGrantRed": {
+    "exitCode": 1,
+    "error": "authorizeTask is not a function"
+  },
+  "pendingWaitBehaviorRed": {
+    "exitCode": 1,
+    "error": "Missing expected rejection (pending wait was admitted)"
+  },
+  "tests": {
+    "exitCode": 0,
+    "passed": 35,
+    "failed": 0,
+    "skipped": 0
+  },
+  "realCLIGrantNoApp": {
+    "expectedExit": 1,
+    "reason": "WORK_APPLICATION_UNAVAILABLE",
+    "beforeModelCounts": {
+      "gateway": 0,
+      "adapter": 0
+    }
+  },
+  "realLegacyPositive": {
+    "exitCode": 0,
+    "gateway": 1,
+    "adapter": 1
+  },
+  "cleanup": {
+    "managedWebJob": "bash-1025",
+    "childPid": 2000731,
+    "supervisorPid": 2000719,
+    "processesGone": true,
+    "port": 38049,
+    "portResult": "ECONNREFUSED",
+    "exitCode": 0,
+    "browserStarted": false
+  },
+  "jobs": {
+    "bash-1020": "commit/push exit0",
+    "bash-1025": "Web exit0",
+    "bash-1027": "tests exit0",
+    "bash-1028": "IPC expected rejection + positive exit0"
+  },
+  "productIntegration": "pending downstream b14 verified tgz lane"
+}
