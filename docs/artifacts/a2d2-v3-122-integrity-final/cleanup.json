@@ -1,0 +1,40 @@
+{
+  "cleanup": [
+    {
+      "root": "/tmp/a2d2-v3-121/122-host-positive-606fcee",
+      "pid": 1708921,
+      "supervisorPid": 1708867,
+      "processesGone": true
+    },
+    {
+      "root": "/tmp/a2d2-v3-121/122-host-positive-606fcee",
+      "pid": 1727567,
+      "supervisorPid": 1727555,
+      "processesGone": true
+    },
+    {
+      "root": "/tmp/a2d2-v3-121/122-host-integrity-final",
+      "pid": 1749045,
+      "supervisorPid": 1748987,
+      "processesGone": true
+    }
+  ],
+  "ports": [
+    {
+      "port": 43267,
+      "result": "ECONNREFUSED"
+    },
+    {
+      "port": 40291,
+      "result": "ECONNREFUSED"
+    }
+  ],
+  "browserSession": "a2d2-v3-122-host",
+  "browserClosed": true,
+  "managedWebJobs": [
+    "bash-768",
+    "bash-795",
+    "bash-827"
+  ],
+  "allExitCodes": 0
+}

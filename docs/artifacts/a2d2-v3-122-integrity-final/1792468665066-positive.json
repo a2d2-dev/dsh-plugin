@@ -1,0 +1,80 @@
+{
+  "scope": "real host loop positive; not product task.start",
+  "processId": "73c01c81-05fd-4daf-96fd-4c3161913f4d",
+  "sessionId": "session-a2d2-122-positive",
+  "requestId": "c0e41a2f-6a08-4ab8-b1b1-7b5333e69997",
+  "before": {
+    "gateway": 0,
+    "adapter": 0
+  },
+  "after": {
+    "gateway": 1,
+    "adapter": 1
+  },
+  "assemblies": [
+    {
+      "provider": "a2d2-acceptance",
+      "model": "deterministic"
+    }
+  ],
+  "request": {
+    "provider": "a2d2-acceptance",
+    "model": "deterministic"
+  },
+  "defaultBefore": {
+    "provider": "acceptance-disabled",
+    "model": "no-model"
+  },
+  "defaultAfter": {
+    "provider": "acceptance-disabled",
+    "model": "no-model"
+  },
+  "reply": {
+    "seq": 15,
+    "text": "A2D2_122_DETERMINISTIC_HOST_REPLY"
+  },
+  "end": {
+    "type": "turn/end",
+    "seq": 17,
+    "time": 1792468665043,
+    "data": {
+      "turn": 1,
+      "reason": {
+        "kind": "completed"
+      }
+    }
+  },
+  "fixtures": {
+    "workspaceId": "4ebccd54-d88c-404d-830b-02957e92f517",
+    "preset": {
+      "id": "standard"
+    },
+    "sessions": {
+      "positive": {
+        "sessionId": "session-a2d2-122-positive",
+        "agentPreset": "standard"
+      },
+      "current": {
+        "sessionId": "session-a2d2-122-current",
+        "agentPreset": "standard"
+      },
+      "retired": {
+        "sessionId": "session-a2d2-122-retired",
+        "agentPreset": "standard"
+      },
+      "review": {
+        "sessionId": "session-a2d2-122-review",
+        "agentPreset": "standard"
+      }
+    },
+    "before": {
+      "gateway": 0,
+      "adapter": 0
+    },
+    "after": {
+      "gateway": 0,
+      "adapter": 0
+    },
+    "scope": "host Session fixtures only; no Task ownership assigned"
+  }
+}
