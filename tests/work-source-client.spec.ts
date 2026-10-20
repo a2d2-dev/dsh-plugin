@@ -3,11 +3,11 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { WorkApplication } from '../../src/work.ts'
-import { createWorkHandler } from '../../src/work-route.ts'
-import { createWorkClient } from '../../src/client/work-api.ts'
-import { WorkPanelController } from '../../src/client/work-panel-controller.ts'
-import type { GitHubIssue, GitHubSourcePort } from '../../src/work-sources/types.ts'
+import { WorkApplication } from '../src/work.ts'
+import { createWorkHandler } from '../src/work-route.ts'
+import { createWorkClient } from '../src/client/work-api.ts'
+import { WorkPanelController } from '../src/client/work-panel-controller.ts'
+import type { GitHubIssue, GitHubSourcePort } from '../src/work-sources/types.ts'
 
 /** Real TCP HTTP, application transactions and disk. Only external GitHub/host read ports use fixed responses. */
 describe('source UI controller to production HTTP and disk',()=>{

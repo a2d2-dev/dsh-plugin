@@ -1,5 +1,7 @@
 # #124 第一阶段：GitHub Issue 来源后端
 
+第二阶段的客户端入口、导航、安全呈现与验证边界见 [GitHub Issue 来源 UI 架构](./a2d2-v3-124-ui.md)。下文保留第一阶段后端的范围和证据。
+
 ## 背景
 
 [#124](https://github.com/a2d2-dev/dsh-plugin/issues/124) 在固定基线 `1f562b107ad9adc046b1f0bb01929185b5c7d234` 上实现“GitHub 已有工作 → 本地 Task”。遵循 [ADR 0003](../adr/0003-local-work-records-and-optional-collaboration.md)：来源观察和已接受业务事实分别保存。本阶段没有部署或重启 18782。
