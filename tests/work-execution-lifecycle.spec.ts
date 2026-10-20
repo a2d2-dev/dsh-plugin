@@ -23,6 +23,7 @@ it('settles a real lost-receipt command before cleanup and blocks recovery after
     title: 'Cleanup', goal: 'Keep accepted writes alive until settled', specification: 'Close after the receipt is recorded', acceptance: ['No write after removal'] }, operator)
   if (task.status !== 'completed' || !task.task) throw new Error('Missing task')
   const ref = { projectId: project.project.id, taskId: task.task.id }
+  const agentId = project.project.defaultAgentId
   let receiptAtDisposal: WorkResult | undefined
   h.ctx.effect(() => async () => {
     receiptAtDisposal = await new WorkApplication(h.app.directory, h.host).query({ type: 'task.execution', ref }, operator)
@@ -42,7 +43,7 @@ it('settles a real lost-receipt command before cleanup and blocks recovery after
   let recovered = false
   const continuation = (async () => {
     await h.app.execute({ type: 'task.start', commandId: 'lost-receipt', ref, expectedVersion: 1,
-      resource: { runtimeId: 'runtime', workspaceId: h.workspace.id }, agentId: project.project.defaultAgentId,
+      resource: { runtimeId: 'runtime', workspaceId: h.workspace.id }, agentId,
       agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }, operator)
     await fixtures.dispose(h.ctx)
     const restored = await fixtures.mount(path)
@@ -69,4 +70,32 @@ it('settles a real lost-receipt command before cleanup and blocks recovery after
     await cleanup
     await fixtures.close()
   }
+})
+
+it('reports retained fixtures when an accepted stage cannot settle within cleanup budget', async () => {
+  const fixtures = new ExecutionFixtures()
+  const path = await fixtures.root()
+  const h = await fixtures.mount(path)
+  const reached = barrier()
+  const release = barrier()
+  const operation = fixtures.run(async () => {
+    const receipt = await h.app.execute({ type: 'project.create', commandId: 'accepted', name: 'Retained work' }, { operator: true })
+    reached.release()
+    await release.promise
+    return receipt
+  }).then(() => undefined, error => error as Error)
+  try {
+    await reached.promise
+    await expect(fixtures.close(0)).rejects.toThrow(`Execution fixture work did not settle; retained: ${path}`)
+    await expect(stat(path)).resolves.toBeDefined()
+    expect(h.ctx.agentDefaultModel.currentSelection()).toMatchObject({ model: 'default' })
+    expect(await new WorkApplication(h.app.directory, h.host).query({ type: 'projects.list' }, { operator: true }))
+      .toMatchObject({ status: 'completed', projects: [{ name: 'Retained work' }] })
+    await expect(h.app.execute({ type: 'project.create', commandId: 'late', name: 'Late work' }, { operator: true })).rejects.toThrow('Execution fixture is closing')
+  } finally {
+    release.release()
+    await operation
+    await fixtures.close()
+  }
+  await expect(stat(path)).rejects.toMatchObject({ code: 'ENOENT' })
 })
