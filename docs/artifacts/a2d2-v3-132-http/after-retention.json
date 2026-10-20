@@ -1,0 +1,66 @@
+{
+  "time": "2026-10-20T07:49:20.751Z",
+  "records": {
+    "projects": [
+      {
+        "id": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+        "sha256": "552b30fb95ad6c20ff11b2b1926b471113b6b623fad9525cdf5e933e4b5867d0"
+      }
+    ],
+    "agents": [
+      {
+        "id": "a4b8b515-554a-4fe7-99c1-f0581a3da464",
+        "sha256": "56f1d0eb6727423ea53d369a27181b03ae728f1ccc08404026225107793a56d7"
+      }
+    ],
+    "tasks": [
+      {
+        "id": "76e75fb5-a0ee-45cb-94e0-8dc9cb849411",
+        "sha256": "e2975e85b29fc5365978a2ceac84a47a24b6a34c636421b53d2d63e09464cb90"
+      },
+      {
+        "id": "0880f27a-5367-4679-b562-27c080cff7ab",
+        "sha256": "92db7bf90a25d62044b4641f9669f088a06afcec92c0db5bdaaea0f019913a9c"
+      }
+    ],
+    "commands": [
+      {
+        "id": "preview-demo-project",
+        "sha256": "d199d9c3c25b72064c284ae7fa44837baa33a379e8a887813cbe9128c58750a1"
+      },
+      {
+        "id": "preview-demo-parent",
+        "sha256": "4e77a8687ca2e492267bbfc837b185dda28fd7ccf6258aa8a01c39b1be891fdc"
+      },
+      {
+        "id": "preview-demo-child",
+        "sha256": "f85e5a280d72e8cb6b713ab96e3651feb93a663c92ba38a17c2934eabafd7906"
+      },
+      {
+        "id": "preview-demo-breakdown",
+        "sha256": "7d1927cf04570841869c1778cae4b463a695fae32572659257fe1083ab054362"
+      },
+      {
+        "id": "preview-demo-session",
+        "sha256": "d8acf599b626b0655af7f3d41c3ff3c45ffa9945399809d31464f9737293e6f2"
+      }
+    ],
+    "legacyMappings": []
+  },
+  "sessions": [
+    {
+      "file": "--data-_dsh-dev-previews-a2d2-v3-121-workspace--/session-f9282a68-4c3f-4251-adcb-bcd6f24d7515/session.lock",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "--data-_dsh-dev-previews-a2d2-v3-121-workspace--/session-f9282a68-4c3f-4251-adcb-bcd6f24d7515/session.v4.jsonl.zstd",
+      "sha256": "0aafc7c806deac5c4c17c2722888dcdbf884cf8acd0af9b8d90391a08caba0a8"
+    }
+  ],
+  "modelCalls": {
+    "gateway": 0,
+    "adapter": 0
+  },
+  "allExistingRecordHashesPreserved": true,
+  "allSessionFilesPreserved": true
+}
