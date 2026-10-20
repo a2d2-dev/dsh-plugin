@@ -1,4 +1,6 @@
 import { join } from 'node:path'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
@@ -30,6 +32,34 @@ import { StubCommands } from './stubs.ts'
 import { DshWorkHost } from '../src/work-host.ts'
 import { DshWorkExecutionHost } from '../src/work-execution/dsh-host.ts'
 import { WorkApplication } from '../src/work.ts'
+import type { WorkHost } from '../src/work.ts'
+
+export class ExecutionFixtures {
+  private readonly contexts = new Set<Context>()
+  private readonly roots = new Set<string>()
+  constructor(readonly signal?: AbortSignal) {}
+  async root() {
+    const path = await mkdtemp(join(tmpdir(), 'a2d2-execution-'))
+    this.roots.add(path)
+    return path
+  }
+  async mount(path: string) {
+    return mountExecution(path, ctx => this.contexts.add(ctx))
+  }
+  application(directory: string, host: WorkHost) { return new WorkApplication(directory, host) }
+  run<T>(operation: () => Promise<T>): Promise<T> { return operation() }
+  async dispose(ctx: Context) {
+    await ctx.fiber.dispose()
+    this.contexts.delete(ctx)
+  }
+  async close() {
+    for (const ctx of [...this.contexts].reverse()) await ctx.fiber.dispose()
+    for (const path of this.roots) {
+      if (!path.startsWith(join(tmpdir(), 'a2d2-execution-'))) throw new Error('Unexpected cleanup path')
+      await rm(path, { recursive: true, force: true })
+    }
+  }
+}
 
 class Query extends SessionQuery {
   async searchSessions(): Promise<never> { throw new Error('Search is not part of the execution contract') }
@@ -48,8 +78,9 @@ export class Model extends LlmAdapter {
     yield { type: 'finish', reason: { kind: 'stop' } }
   }
 }
-export async function mountExecution(path: string) {
+export async function mountExecution(path: string, register: (ctx: Context) => void = () => {}) {
   const ctx = new Context()
+  register(ctx)
   await ctx.plugin(LlmRuntime)
   const model = new Model()
   ctx.llm.registerAdapter(['contract'], model)
