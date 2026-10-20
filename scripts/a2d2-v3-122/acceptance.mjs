@@ -73,8 +73,16 @@ export async function verify(root) {
   }
   return assembly
 }
+export function taskGrant(values) {
+  const projectId = values['project-id']
+  const taskId = values['task-id']
+  const calls = Number(values.calls)
+  if (typeof projectId !== 'string' || !projectId.trim() || typeof taskId !== 'string' || !taskId.trim()
+    || !/^[1-9][0-9]*$/.test(values.calls ?? '') || !Number.isSafeInteger(calls) || !/^[a-z0-9-]+$/.test(values.phase ?? '')) throw new Error('grant-task requires --project-id --task-id --calls <positive integer> --phase <name>')
+  return { type: 'grant-task', ref: { projectId, taskId }, calls, phase: values.phase }
+}
 async function main() {
-  const { positionals: [action], values } = parseArgs({ allowPositionals: true, options: { root: { type: 'string' }, host: { type: 'string' }, plugin: { type: 'string' }, 'host-only': { type: 'boolean' }, phase: { type: 'string' }, job: { type: 'string' } } })
+  const { positionals: [action], values } = parseArgs({ allowPositionals: true, options: { root: { type: 'string' }, host: { type: 'string' }, plugin: { type: 'string' }, 'host-only': { type: 'boolean' }, phase: { type: 'string' }, job: { type: 'string' }, 'project-id': { type: 'string' }, 'task-id': { type: 'string' }, calls: { type: 'string' } } })
   const root = rootName(values.root)
   if (action === 'prepare') return console.log(JSON.stringify(await prepare({ root, host: values.host, plugin: values.plugin, hostOnly: values['host-only'] }), null, 2))
   await verify(root)
@@ -86,6 +94,12 @@ async function main() {
     await save(join(root, 'current-run.json'), current, 'w')
     await save(join(root, 'evidence', `${current.runId}-run.json`), current, 'w')
     return console.log(JSON.stringify(current))
+  }
+  if (action === 'grant-task') {
+    const grant = taskGrant(values)
+    const result = await request(root, grant)
+    await save(join(root, 'evidence', `${Date.now()}-grant-task.json`), result)
+    return console.log(JSON.stringify(result, null, 2))
   }
   if (['positive', 'fixture', 'snapshot'].includes(action)) {
     const result = await request(root, action)
@@ -110,6 +124,6 @@ async function main() {
     }
     return console.log(JSON.stringify({ passed: true, phase: values.phase, action, gateway: current.gateway, adapter: current.adapter }))
   }
-  throw new Error('Usage: prepare|run|job|fixture|positive|snapshot|mark|check --root /tmp/a2d2-v3-121/122-<run> [--host <checkout> --host-only|--plugin <tgz>] [--phase <name>]')
+  throw new Error('Usage: prepare|run|job|grant-task|fixture|positive|snapshot|mark|check --root /tmp/a2d2-v3-121/122-<run> [--host <checkout> --host-only|--plugin <tgz>] [--phase <name>]')
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main().catch(error => { console.error(error.stack); process.exitCode = 1 })

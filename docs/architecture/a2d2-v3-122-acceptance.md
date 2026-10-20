@@ -39,13 +39,30 @@ node scripts/a2d2-v3-122/acceptance.mjs check --root "$ROOT" --phase host-browse
 | 持久 Task inbox、等待/恢复 | 待公开 TaskId 控制与投递/消费查询；不把宿主 inbox 代替 Task inbox |
 | 手动接续检查点 | prepare/write/create/take/deliver 及固定后继均待公开产品接口；不发明私有后门 |
 
-最终接入需要已验证 tgz 及 SHA、公开命令/查询契约、受控失败窗口和浏览器入口。新建独立 root 官方安装，不替换已冻结实例；显式 start/continue 才授予确定性预算，列表/历史/旧会话阶段按零增量检查。未来参数化产品授权入口待契约确定后补齐，当前仅开放宿主 positive。
+最终接入需要已验证 tgz 及 SHA、公开命令/查询契约、受控失败窗口和浏览器入口。新建独立 root 官方安装，不替换已冻结实例；显式 start/continue 才授予确定性预算，列表/历史/旧会话阶段按零增量检查。参数化 TaskRef 授权入口已在下面落地，产品动作仍待后续真实 lane。
 
 ## 实际宿主与生产锁包的能力差异
 
 2026-10-20 的真实宿主正控、原生截图、纯读零增量、同 origin 重启及正常清理见 [实际报告](../artifacts/a2d2-v3-122-host-2026-10-20/README.md)。宿主实际 controller lib SHA `bc889fbd3e95a994d9019f08feb9ce9033f4c6c918b6932f14b1c0fd109241a6` 提供 selectLocalModel；其 package 标记虽为 0.2.0-rc.2，**生产原锁包没有该方法**。本工具仅证明该 actual artifact 上的局部模型配置正控，生产仍须在最终 tgz 上验证自己的公开 installModelSelection/持久化配置路径，不能以版本名回填能力。
 
 mark/check 严格用于同一稳定生命周期内的纯读阶段。重启会合法追加 session/end-seed、推进序号并规范化 cold header；[重放 gate](../artifacts/a2d2-v3-122-host-2026-10-20/replay-gate.mjs)逐字段只允许已观察的这些差异，其余 meta、eventTypes、完整持久投影、身份、cwd、preset/default 和累计计数严格比较。retired 输入拒绝可产生 blocked turn，最终需另验模型/工具零增量及 current 不变，不能套纯读全等。
+
+## TaskRef 显式模型预算（b14ed41 kickoff 接线）
+
+当前入口增加本地私有 `grant-task`，用于产品 task.start 事前尚不知道随机 Session ID 的场景。必须使用本次 wrapper/guard/model 的 fresh root，先通过公开产品命令建立 Task，再显式授权并等待 CLI 成功回执，之后才点击“开始处理”或调用 task.start：
+
+```sh
+node scripts/a2d2-v3-122/acceptance.mjs grant-task --root "$ROOT" \
+  --project-id "$PROJECT_ID" --task-id "$TASK_ID" --calls 1 --phase startup
+```
+
+私有 IPC 请求为 `{"action":{"type":"grant-task","ref":{"projectId":"…","taskId":"…"},"calls":1,"phase":"startup"}}`；仍由 #121 request 在自有 root/ipc 下传送，不新增产品 HTTP 路由。guard 动态取得真实公开 `a2d2Work`，仅调用 `query(value,{operator:true})`。无应用、错误 Task/Project、查询失败均拒绝，不从浏览器或模型消息推导授权。
+
+授权时 task.detail 核对已存在 Task，task.execution 允许尚无 Execution。已有执行时以 session.work 的唯一 control 反向映射核对并绑定；否则在首次模型请求中核对后绑定 executionId、owner、epoch、runtimeId、sessionId。每次 gateway 重新 task.execution → session.work → task.execution，要求同 Task、唯一 control、Execution/epoch 一致、当前 Session 匹配、资源 runtime 一致、确定性 route、ready/running 且无待应用 wait/pause。跨两次正向查询改变也拒绝；related/review/retired/unknown Session 不取得预算。
+
+每个 grant 只绑定这一执行身份，后继或 epoch/owner 变化需再显式 grant，不自动迁移剩余预算。任一时刻只有一个 grant，显式新 grant 可替换空闲旧 grant；查询或流执行中替换/并发请求拒绝，不消费错误预算。全部公共核对通过后扣一次，开始后的中止不退还。预算不从 metrics 恢复，进程重启需重新 grant。gateway/adapter 尝试、拒绝、授权、绑定和准入均追加留证。公开查询不与模型调用组成原子事务，本工具核验每次准入时的事实，运行中的生产围栏仍由产品保证。
+
+宿主 positive 保留原 Session grant，不依赖产品能力。新增测试明确使用公开查询合同示例验证模型边界和 CLI，不将示例当作真实 WorkApplication/Task store 集成。实际 b14 产品 kickoff、等待/接续与旧会话围栏交后续真实产品 lane；旧 c3 宿主证据不追认新工具版本。
 
 ## 当前验证
 

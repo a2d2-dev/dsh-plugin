@@ -18,7 +18,11 @@ export async function apply(ctx, config) {
     return { gateway: rows.filter(row => row.kind === 'gateway').length, adapter: rows.filter(row => row.kind === 'adapter').length }
   }
   record('guard-started')
-  const boundary = new ModelBoundary(record)
+  const boundary = new ModelBoundary(record, query => {
+    const application = ctx.get('a2d2Work')
+    if (!application || typeof application.query !== 'function') throw Object.assign(new Error('Public WorkApplication unavailable'), { code: 'WORK_APPLICATION_UNAVAILABLE' })
+    return application.query(query, { operator: true })
+  })
   ctx.effect(() => ctx.llm.registerAdapter([PROVIDER], boundary.adapter(LlmAdapter)), 'deterministic external model boundary')
   ctx.on('llm/stream', (options, next) => boundary.gateway(options, next), { global: true })
   ctx.on('session/created', session => record('session-born', { sessionId: session.id }), { global: true })
@@ -55,6 +59,7 @@ export async function apply(ctx, config) {
     }
     async function execute(action) {
       assert.deepEqual(driver.llm.listProviders().map(row => row.id), [PROVIDER], 'Only deterministic model may be registered')
+      if (action?.type === 'grant-task') return boundary.authorizeTask(action)
       if (action === 'snapshot') return snapshot()
       if (action === 'fixture') return fixture()
       if (action === 'positive') {
