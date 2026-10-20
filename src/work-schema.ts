@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { bindingSchema, repositorySchema, sourceSchema } from './work-sources/schema.ts'
 const id = z.string().uuid()
 const text = z.string().min(1).max(100_000).refine(value => value.trim().length > 0, 'Text must not be blank')
 const referenceId = z.string().min(1).max(256)
@@ -9,7 +10,8 @@ export const legacyAddressSchema = z.object({ runtimeId: referenceId, projectRoo
 export const policySchema = z.object({ version: z.number().int().positive(), modelCandidates: z.array(z.string()), instructions: z.string(), capabilities: z.array(z.string()) }).strict()
 export const projectSchema = z.object({ id, name: text, version: z.number().int().positive(), defaultAgentId: id, resources: z.array(resourceRefSchema) }).strict()
 export const agentSchema = z.object({ id, projectId: id, role: z.literal('coordinator'), policy: policySchema }).strict()
-export const specificationSchema = z.object({ version: z.number().int().positive(), text, acceptance: z.array(text).min(1).max(1000) }).strict()
+export const specificationSchema = z.object({ version: z.number().int().positive(), text: z.string().max(1_000_000), acceptance: z.array(text).max(1000), missing: z.array(z.enum(['body', 'acceptance'])).optional() }).strict().refine(value =>
+  (value.text.trim().length > 0 || value.missing?.includes('body')) && (value.acceptance.length > 0 || value.missing?.includes('acceptance')), 'Missing source material must be explicit')
 const block = z.object({ id: referenceId, title: text, description: text }).strict()
 export const taskSchema = z.object({
   id, projectId: id, title: text, goal: text, version: z.number().int().positive(), agentId: id,
@@ -22,6 +24,10 @@ const command = { commandId: referenceId }
 const content = { title: text, goal: text, specification: text, acceptance: z.array(text).min(1).max(1000) }
 const change = { ...command, ref: taskRefSchema, expectedVersion: z.number().int().positive() }
 export const commandSchema = z.discriminatedUnion('type', [
+  z.object({ ...command, type: z.literal('source.configure'), projectId: id, repository: repositorySchema }).strict(),
+  z.object({ ...command, type: z.literal('source.set-enabled'), projectId: id, sourceId: id, expectedVersion: z.number().int().positive(), enabled: z.boolean() }).strict(),
+  z.object({ ...command, type: z.literal('source.import'), projectId: id, sourceId: id, nodeId: referenceId }).strict(),
+  z.object({ ...change, type: z.literal('source.link'), sourceId: id, nodeId: referenceId }).strict(),
   z.object({ ...command, type: z.literal('project.create'), name: text, resource: resourceRefSchema.optional() }).strict(),
   z.object({ ...command, type: z.literal('project.attach-resource'), projectId: id, expectedVersion: z.number().int().positive(), resource: resourceRefSchema }).strict(),
   z.object({ ...command, ...content, type: z.literal('task.create'), projectId: id }).strict(),
@@ -33,6 +39,10 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ ...change, type: z.literal('legacy.map'), address: legacyAddressSchema }).strict(),
 ])
 export const querySchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('work.capabilities') }).strict(),
+  z.object({ type: z.literal('source.list'), projectId: id }).strict(),
+  z.object({ type: z.literal('source.issues'), projectId: id, sourceId: id, refresh: z.boolean().optional(), page: z.number().int().min(1).max(100_000), perPage: z.number().int().min(1).max(100), assignee: z.enum(['@me', '*']), state: z.enum(['open', 'closed', 'all']) }).strict(),
+  z.object({ type: z.literal('source.issue'), projectId: id, sourceId: id, refresh: z.boolean().optional(), number: z.number().int().positive() }).strict(),
   z.object({ type: z.literal('projects.list') }).strict(),
   z.object({ type: z.literal('resources.list') }).strict(),
   z.object({ type: z.literal('project.detail'), projectId: id }).strict(),
@@ -41,9 +51,10 @@ export const querySchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('session.work'), session: sessionRefSchema }).strict(),
   z.object({ type: z.literal('legacy.resolve'), address: legacyAddressSchema }).strict(),
 ])
-const receiptSchema = z.object({ status: z.literal('completed'), project: projectSchema.optional(), task: taskSchema.optional(), ref: taskRefSchema.optional() }).strict()
+const receiptSchema = z.object({ status: z.literal('completed'), project: projectSchema.optional(), task: taskSchema.optional(), ref: taskRefSchema.optional(), source: sourceSchema.optional(), binding: bindingSchema.optional() }).strict()
 export const snapshotSchema = z.object({
   schemaVersion: z.literal(3), projects: z.array(projectSchema), agents: z.array(agentSchema), tasks: z.array(taskSchema),
+  sources: z.array(sourceSchema).default([]), externalBindings: z.array(bindingSchema).default([]),
   commands: z.array(z.object({ commandId: referenceId, fingerprint: z.string(), result: receiptSchema }).strict()),
   legacyMappings: z.array(z.object({ address: legacyAddressSchema, ref: taskRefSchema }).strict()),
 }).strict()
