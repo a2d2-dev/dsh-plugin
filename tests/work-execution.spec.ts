@@ -1,10 +1,11 @@
 import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { WorkApplication } from '../src/work.ts'
+import { installWorkTools, installWorkControlRecovery } from '../src/work-execution/tools.ts'
 
 import { mountExecution } from './work-execution-fixture.ts'
 import type { Context } from '@deepseek-ai/cordis'
@@ -31,6 +32,90 @@ async function setup(permissionPreset = 'workspace-write') {
   if (t.status !== 'completed' || !t.task) throw new Error('Missing task')
   return { ...h, directory: app.directory, app, resource, ref: { projectId: p.project.id, taskId: t.task.id }, agentId: p.project.defaultAgentId }
 }
+it.each(['wait', 'pause'] as const)('accepts a real model self-%s before applying it at the settled maintenance boundary', async action => {
+  const h = await setup()
+  installWorkTools(h.ctx, h.app, 'runtime')
+  installWorkControlRecovery(h.ctx, h.app)
+  h.model.nextTool = { name: 'work_control', arguments: { action, text: 'Which acceptance decision should I use?' } }
+  const started = await h.app.execute({ type: 'task.start', commandId: 'tool-wait', ref: h.ref, expectedVersion: 1, resource: h.resource,
+    agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }, operator)
+  if (started.status !== 'completed' || !started.execution) throw new Error(JSON.stringify(started))
+  const agent = h.ctx.agents.get(SessionId(started.execution.session.sessionId))!
+  await agent.whenIdle()
+  await vi.waitFor(async () => expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({
+    status: 'completed', execution: { state: action === 'wait' ? 'waiting' : 'paused', control: { action, status: 'applied', reason: 'Which acceptance decision should I use?' } },
+  }))
+  expect(h.model.requests).toHaveLength(1)
+  const inspection = await h.ctx.sessionController.inspect(agent.id)
+  expect(JSON.stringify(inspection.events.filter(item => item.type === 'tool/result'))).toContain('accepted')
+  expect(inspection.events.filter(item => item.type === 'tool/result')).toEqual([expect.objectContaining({ data: expect.objectContaining({ message: expect.objectContaining({ isError: false }) }) })])
+  expect(inspection.events.filter(item => item.type === 'turn/end')).toEqual([expect.objectContaining({ data: { turn: 1, reason: { kind: 'blocked' } } })])
+  const native = createUserMessage({ content: [{ type: 'text', text: 'Native answer remains queued until explicit resume' }], source: { kind: 'user' } })
+  agent.followup(native)
+  await agent.whenIdle()
+  expect(h.model.requests).toHaveLength(1)
+  const fence = { ref: h.ref, executionId: started.execution.id, owner: started.execution.owner, epoch: started.execution.epoch }
+  expect(await h.app.execute({ type: 'task.control', commandId: 'resume-tool-wait', ...fence, action: 'resume', text: 'Use the accepted answer' }, operator)).toMatchObject({ status: 'completed', execution: { state: 'ready' } })
+  await vi.waitFor(async () => expect(h.model.requests, JSON.stringify(await h.app.query({ type: 'task.execution', ref: h.ref }, operator))).toHaveLength(2))
+  await agent.whenIdle()
+  expect(h.model.requests[1]!.messages).toEqual(expect.arrayContaining([expect.objectContaining({ id: native.id })]))
+})
+
+it('resolves real tool identity on the server and refuses foreign or absent calling Sessions', async () => {
+  const h = await setup()
+  installWorkTools(h.ctx, h.app, 'runtime')
+  const started = await h.app.execute({ type: 'task.start', commandId: 'tool-identity', ref: h.ref, expectedVersion: 1, resource: h.resource,
+    agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }, operator)
+  if (started.status !== 'completed' || !started.execution) throw new Error(JSON.stringify(started))
+  const agent = h.ctx.agents.get(SessionId(started.execution.session.sessionId))!
+  await agent.whenIdle()
+  const execute = (id: string, args: Record<string, unknown>, caller?: typeof agent) => h.ctx.tools.execute({
+    callId: ToolCallId(id), name: 'work_control', arguments: args, agent: caller, signal: new AbortController().signal,
+  })
+  expect(await execute('own-progress', { action: 'progress', text: 'Concrete accepted work' }, agent)).toMatchObject({ isError: false })
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { progress: 'Concrete accepted work' } })
+  const stale = await execute('stale-progress', { action: 'progress', text: 'Stale progress', expected_epoch: 2 }, agent)
+  expect(JSON.stringify(stale)).toContain('stale-execution-authority')
+  expect(await execute('own-status', { action: 'status' }, agent)).toMatchObject({ isError: false, content: [expect.objectContaining({ text: expect.stringContaining('Concrete accepted work') })] })
+  const foreign = await h.ctx.sessionController.create({ workspaceId: h.workspace.id, agentPreset: 'contract' })
+  const other = h.ctx.agents.get(foreign.sessionId)!
+  const denied = await execute('foreign-progress', { action: 'progress', text: 'Forged work' }, other)
+  expect(JSON.stringify(denied)).toContain('forbidden')
+  const forged = await execute('forged-owner', { action: 'progress', text: 'Forged owner', actor: { operator: true }, owner: started.execution.owner, epoch: started.execution.epoch }, other)
+  expect(JSON.stringify(forged)).not.toContain('"progress":"Forged owner"')
+  expect(await execute('absent-agent', { action: 'status' })).toMatchObject({ isError: true })
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { progress: 'Concrete accepted work', owner: started.execution.owner, epoch: 1 } })
+  expect(h.model.requests).toHaveLength(1)
+})
+
+it('recovers a real tool accepted intent after Context loss before the settled recovery consumer runs', async () => {
+  const h = await setup()
+  // The optional consumer is absent at this receipt window; the actual tool,
+  // loop, persistence and base admission fences remain mounted.
+  installWorkTools(h.ctx, h.app, 'runtime')
+  h.model.nextTool = { name: 'work_control', arguments: { action: 'pause', text: 'Preserve this explicit pause across restart' } }
+  const started = await h.app.execute({ type: 'task.start', commandId: 'accepted-before-restart', ref: h.ref, expectedVersion: 1, resource: h.resource,
+    agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }, operator)
+  if (started.status !== 'completed' || !started.execution) throw new Error(JSON.stringify(started))
+  await h.ctx.agents.get(SessionId(started.execution.session.sessionId))!.whenIdle()
+  const accepted = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(accepted).toMatchObject({ execution: { control: { action: 'pause', status: 'accepted' } } })
+  if (accepted.status !== 'completed' || !accepted.execution) throw new Error('No persisted intent')
+  const commandId = accepted.execution.control!.commandId
+  await h.ctx.fiber.dispose()
+  contexts.splice(contexts.indexOf(h.ctx), 1)
+  const restored = await mountExecution(h.workspace.path)
+  contexts.push(restored.ctx)
+  installWorkControlRecovery(restored.ctx, restored.app)
+  await vi.waitFor(async () => expect(await restored.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: {
+    id: started.execution!.id, owner: started.execution!.owner, epoch: 1, session: started.execution!.session,
+    state: 'paused', control: { commandId, action: 'pause', status: 'applied' },
+  } }))
+  expect(await restored.ctx.sessionPersistence.list()).toHaveLength(1)
+  expect(h.model.requests).toHaveLength(1)
+  expect(restored.model.requests).toHaveLength(0)
+})
+
 it('durably accepts one execution for competing starts and command replay without claiming it has run', async () => {
   const { directory, app, ref, agentId, resource, host, ctx, model } = await setup()
   const command = { type: 'task.start', commandId: 'start-one', ref, expectedVersion: 1, resource,

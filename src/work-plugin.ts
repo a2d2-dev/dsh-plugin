@@ -10,6 +10,7 @@ import { WorkApplication } from './work.ts'
 import { DshWorkHost } from './work-host.ts'
 import { createWorkHandler } from './work-route.ts'
 import { WORK_ROUTE_PATH } from './work-types.ts'
+import { installWorkTools, installWorkControlRecovery } from './work-execution/tools.ts'
 import type { RequestRejection } from './route-auth.ts'
 
 export const name = 'a2d2-work'
@@ -39,6 +40,8 @@ export async function apply(ctx: Context, config: Config = {}): Promise<void> {
   const runtimeId = await runtimeIdentity(directory)
   const app = new WorkApplication(directory, new DshWorkHost(ctx, runtimeId))
   ctx.provide('a2d2Work', app)
+  ctx.inject(['tools'], toolsCtx => { installWorkTools(toolsCtx, app, runtimeId) })
+  ctx.inject(['agents'], executionCtx => { installWorkControlRecovery(executionCtx, app) })
   const getService = <T>(key: string): T => (ctx.get as (key: string) => unknown).call(ctx, key) as T
   const server = getService<{ register(route: { kind: 'exact'; path: string; handler: ReturnType<typeof createWorkHandler> }): () => void }>('webServer')
   const connection = getService<{ requestRejection: RequestRejection }>('connection')

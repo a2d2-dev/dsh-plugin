@@ -10,7 +10,10 @@ import Storage from '@deepseek-ai/dsh-storage'
 import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import WorkspaceRegistry from '@deepseek-ai/dsh-workspace'
-import { afterEach, expect, it } from 'vitest'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import ToolRuntime from '@deepseek-ai/dsh-tools'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { afterEach, expect, it, vi } from 'vitest'
 import * as plugin from '../src/work-plugin.ts'
 import { WORK_ROUTE_PATH } from '../src/work-types.ts'
 import type { WorkCompleted, WorkRequest, WorkResult } from '../src/work-types.ts'
@@ -114,6 +117,19 @@ it('exposes real local commands and trusted persisted host Sessions through the 
     .toMatchObject({ status: 'completed', task: { id: task.id, sessions: [{ session: candidates[0]!.ref }] } })
   expect(completed((await call(reload.server, { kind: 'query', value: { type: 'resources.list' } })).body).resources?.[0]?.ref.runtimeId)
     .toBe(resources[0]!.ref.runtimeId)
+})
+
+it('registers the production model tool when ToolRuntime arrives without adding configuration or requiring an Agent for queries', async () => {
+  const { ctx, server } = await mount(await root())
+  expect(ctx.get('tools')).toBeUndefined()
+  await ctx.plugin(SystemPrompt)
+  await ctx.plugin(ToolRuntime)
+  await vi.waitFor(() => expect(ctx.tools.get('work_control')).toBeDefined())
+  expect(await ctx.tools.execute({ callId: ToolCallId('unbound-production-call'), name: 'work_control', arguments: { action: 'status' }, signal: new AbortController().signal }))
+    .toMatchObject({ isError: true })
+  expect(await call(server, { kind: 'query', value: { type: 'projects.list' } })).toMatchObject({ status: 200, body: { status: 'completed', projects: [] } })
+  expect(ctx.get('agents')).toBeUndefined()
+  expect(ctx.get('llm')).toBeUndefined()
 })
 
 it('uses host operator authentication for reads, writes and retry receipts before reading request bodies', async () => {

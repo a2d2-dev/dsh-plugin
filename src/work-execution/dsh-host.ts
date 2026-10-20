@@ -100,6 +100,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
   }
   async settle(execution: WorkExecution): Promise<void> {
     const agent = await this.runtime.agent(SessionId(execution.session.sessionId))
+    await agent.whenIdle()
     await agent.runMaintenance(async () => { await this.runtime.flush(agent) })
   }
   async deliver(execution: WorkExecution, event: WorkEvent): Promise<'delivered' | 'consumed'> {
@@ -128,6 +129,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     const created = await this.ctx.sessionController.create({ sessionId: id, workspaceId: execution.resource.workspaceId as never, agentPreset: execution.agentPreset })
     if (created.sessionId !== id) throw new WorkExecutionError('host-session-identity-changed', 'Host did not preserve the reserved Session identity')
     const agent = await this.runtime.agent(id)
+    await agent.whenIdle()
     await agent.runMaintenance(async () => {
       const events = await this.runtime.events(id)
       const started = events.some(item => item.type === 'turn/start')

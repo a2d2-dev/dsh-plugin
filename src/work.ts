@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile } from 'node:fs/promises'
 import { isAbsolute, join, normalize } from 'node:path'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
@@ -62,6 +62,16 @@ export class WorkApplication {
       throw error
     }
   }
+  /** Trusted ToolRunContext adapter supplies only its real Session and call identity. */
+  async sessionControl(session: import('./work-types.ts').SessionRef, callId: string, action: string, text?: string, expectedEpoch?: number): Promise<WorkResult> {
+    const execution = (await this.load()).executions.find(item => sameSession(item.session, session))
+    if (!execution) return failed('forbidden', 'Calling Session is not a current Task coordinator')
+    if (action === 'status') return { status: 'completed', execution, executionRuntime: this.host.execution?.status(execution) ?? 'inactive' }
+    const commandId = `tool:${createHash('sha256').update(JSON.stringify([session.runtimeId, session.sessionId, callId])).digest('hex')}`
+    return this.execute({ type: 'task.control', commandId, ref: execution.ref,
+      executionId: execution.id, owner: execution.owner, epoch: expectedEpoch ?? execution.epoch, action, text },
+    { operator: false, session, agentId: execution.agentId })
+  }
   async execute(input: unknown, actor: WorkActor): Promise<WorkResult> {
     if (!actor.operator && !actor.session) return failed('forbidden', 'Host operator or trusted Session authorization is required')
     const parsed = commandSchema.safeParse(input)
@@ -93,12 +103,20 @@ export class WorkApplication {
       await writeFileAtomic(this.file, `${JSON.stringify(state)}\n`, { mode: 0o600, dirMode: 0o700 })
       return result
     })
-    if (command.type === 'task.control' && command.action === 'progress') return receipt
+    if (command.type === 'task.control' && (!actor.operator || command.action === 'progress')) return receipt
     if ((command.type === 'task.start' || 'executionId' in command) && receipt.status === 'completed' && receipt.execution) {
       if (command.type === 'task.input' && ['accepted', 'creating'].includes(receipt.execution.state)) return receipt
       return this.ensureExecution(receipt.execution.id, command.commandId)
     }
     return receipt
+  }
+  /** Recovery drives persisted intentions only; it never creates a new control request. */
+  async reconcileControls(): Promise<void> {
+    if (!this.host.execution) return
+    for (const execution of (await this.load()).executions) {
+      if (execution.control?.status !== 'accepted' || this.host.execution.status(execution) === 'running') continue
+      await this.ensureExecution(execution.id, execution.control.commandId)
+    }
   }
   private async ensureExecution(id: string, commandId: string): Promise<WorkResult> {
     const lease = join(this.directory, `${id}.execution`)
