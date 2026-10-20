@@ -67,12 +67,35 @@ describe('work panel public navigation',()=>{
     release(); await earlier
     expect(panel.getSnapshot()).toMatchObject({projectId:'p1',detail:null})
   })
+  it.each(['task','project','back'] as const)('cancels execution reads on %s navigation and ignores late results',async destination=>{
+    const {panel,client}=setup()
+    await panel.load()
+    const oldQuery=client.query
+    let release!:()=>void,signal:AbortSignal|undefined
+    client.query=async(query,abort)=>{
+      if(query.type==='task.execution' && query.ref.taskId==='t1') {
+        signal=abort
+        await new Promise<void>(resolve=>{release=resolve})
+        throw Error('late old execution failure')
+      }
+      if(query.type==='task.detail' && query.ref.taskId==='t2') return {status:'completed',task:{...task,id:'t2'}}
+      return oldQuery(query,abort)
+    }
+    const earlier=panel.openTask({projectId:'p1',taskId:'t1'})
+    if(destination==='task') await panel.openTask({projectId:'p1',taskId:'t2'})
+    else if(destination==='project') await panel.selectProject('p2')
+    else panel.back()
+    expect(signal?.aborted).toBe(true)
+    release();await earlier
+    expect(panel.getSnapshot()).toMatchObject({execution:null,executionError:null,loading:false})
+    expect(panel.getSnapshot().detail?.task?.id).toBe(destination==='task'?'t2':undefined)
+  })
   it('keeps the user-selected detail tab when a refresh resolves',async()=>{
     const {panel,client}=setup()
     await panel.openTask({projectId:'p1',taskId:'t1'});panel.setDetailTab('related')
     let release!:()=>void
     const oldQuery=client.query
-    client.query=async query=>{await new Promise<void>(resolve=>{release=resolve});return oldQuery(query)}
+    client.query=async query=>{if(query.type==='task.detail')await new Promise<void>(resolve=>{release=resolve});return oldQuery(query)}
     const refresh=panel.refreshTask()
     panel.setDetailTab('sessions');release();await refresh
     expect(panel.getSnapshot().detailTab).toBe('sessions')
@@ -94,6 +117,22 @@ describe('work panel public navigation',()=>{
     await panel.submit(save)
     expect(command.mock.calls[0]?.[0]).toEqual(command.mock.calls[1]?.[0])
     expect(command.mock.calls[1]?.[0]).toMatchObject({...save,commandId:expect.any(String)})
+  })
+  it('enters only the authoritative current session after the host has established it',async()=>{
+    const {panel,client,navigation}=setup()
+    const oldQuery=client.query
+    client.query=async query=>query.type==='task.execution'?{status:'completed',execution:{
+      id:'e1',ref:{projectId:'p1',taskId:'t1'},agentId:'a1',owner:'owner',epoch:1,
+      resource:{runtimeId:'host-A',workspaceId:'workspace'},session:{runtimeId:'host-A',sessionId:'current'},sessionMode:'create',
+      agentPreset:'worker',model:{provider:'provider',model:'model'},permissionPreset:'permission',policy:{version:1,modelCandidates:[],instructions:'',capabilities:[]},
+      state:'ready',history:[],events:[],actual:{runtimeId:'host-A',cwd:'/work',agentPreset:'worker',provider:'provider',model:'model',permissionPreset:'permission',sandbox:'workspace-write',approval:'never'},
+    }}:oldQuery(query)
+    await panel.openTask({projectId:'p1',taskId:'t1'})
+    panel.openCurrentSession()
+    expect(navigation.openSession).toHaveBeenCalledExactlyOnceWith('current')
+    expect(client.command).not.toHaveBeenCalled()
+    panel.back(); panel.openCurrentSession()
+    expect(navigation.openSession).toHaveBeenCalledTimes(1)
   })
   it('opens an existing associated native session through host navigation and returns to the exact task',async()=>{
     const {panel,navigation}=setup()

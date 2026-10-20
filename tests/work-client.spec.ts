@@ -38,10 +38,13 @@ describe('client to production work HTTP integration',()=>{
       detail=await client.query({type:'task.detail',ref})
       await panel.submit({type:'task.associate-session',ref,expectedVersion:detail.task!.version,session:{runtimeId,sessionId},purpose:'related'})
       handler=createWorkHandler(new WorkApplication(directory,host),()=>undefined)
+      const querySpy=vi.spyOn(client,'query')
       const reloaded=new WorkPanelController(client,{selectPanel:vi.fn(),openSession:vi.fn()})
       await reloaded.initialize();await reloaded.openTask(ref)
       const saved=reloaded.getSnapshot().detail!
       expect(saved.task).toMatchObject({id:task.id,goal:'保留修订目标',specification:{version:2,text:'第二版规格',acceptance:['刷新保留修订','不要求GitHub']},breakdown:[{title:'数据保存',description:'从真实记录回读'}],sessions:[{session:{runtimeId,sessionId},purpose:'related'}]})
+      expect(querySpy).toHaveBeenCalledWith({type:'task.execution',ref},expect.any(AbortSignal))
+      expect(reloaded.getSnapshot()).toMatchObject({execution:null,executionError:null})
       expect(saved.children?.map(item=>item.id)).toEqual([child.id])
       expect((await client.query({type:'session.work',session:{runtimeId,sessionId}})).work).toEqual([{ref,title:'无Issue本地工作',projectName:'离线项目',purpose:'related'}])
       expect((await client.query({type:'session.work',session:{runtimeId,sessionId:randomUUID()}})).work).toEqual([])

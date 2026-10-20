@@ -15,6 +15,7 @@ declare module '*.module.css' {
     readonly toolbar: string
     readonly tabs: string
     readonly metrics: string
+    readonly executionFacts: string
     readonly tableScroll: string
     readonly formSection: string
     readonly form: string

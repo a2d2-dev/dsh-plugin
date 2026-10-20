@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import type { DetailTab, LocalView, WorkPanelController } from './work-panel-controller.ts'
-import type { AssociatedWork, BreakdownBlock, HostResource, SessionCandidate, WorkTask } from '../work-types.ts'
+import type { AssociatedWork, BreakdownBlock, HostResource, SessionCandidate, WorkExecution, WorkTask } from '../work-types.ts'
 import { message } from './work-panel-controller.ts'
 import styles from './work-panel.module.css'
 
@@ -37,11 +37,11 @@ export function WorkPanel({ controller }: { controller: WorkPanelController }) {
       <nav className={styles.tabs} role="tablist" aria-label="工作详情标签">{detailTabs.map(([id,label]) => <button key={id} role="tab" aria-selected={state.detailTab===id} onClick={() => {controller.setDetailTab(id);setForm(null)}}>{label}</button>)}</nav>
       <div role="tabpanel" aria-label={detailTabs.find(([id])=>id===state.detailTab)?.[1]}>
         {state.detailTab==='overview' && <>
-          <Section title="状态概览"><div className={styles.metrics}><span>本地工作已保存</span><span>{task.sessions.length} 个关联会话</span><span>规格第 {task.specification.version} 版</span></div></Section>
+          <Section title="状态概览"><div className={styles.metrics}><span>本地工作已保存</span><span>执行状态：{state.loading ? '读取中' : state.executionError ? '读取失败' : state.execution ? executionLabels[state.execution.state] : '未开始'}</span><span>{task.sessions.length} 个关联会话</span><span>规格第 {task.specification.version} 版</span></div></Section>
           <Section title="目标与规格"><h3>目标</h3><p>{task.goal}</p><h3>规格</h3><p>{task.specification.text}</p><h3>验收标准</h3><ul>{task.specification.acceptance.map((criterion,index)=><li key={index}>{criterion}</li>)}</ul></Section>
-          <Section title="处理会话"><p>尚未开始处理。可先关联已有会话查看相关工作。</p><button onClick={()=>controller.setDetailTab('sessions')}>查看关联会话</button></Section>
+          <CurrentExecution controller={controller}/>
         </>}
-        {state.detailTab==='sessions' && <Sessions controller={controller} task={task} onSaved={()=>done('会话已关联')} />}
+        {state.detailTab==='sessions' && <><CurrentExecution controller={controller}/><Sessions key={`${task.projectId}/${task.id}`} controller={controller} task={task} onSaved={()=>done('会话已关联')} /></>}
         {state.detailTab==='related' && <>
           <Section title="工作拆解"><button onClick={()=>setForm('breakdown')}>更新拆解</button>{task.breakdown.length ? task.breakdown.map(block=><article key={block.id}><h3>{block.title}</h3><p>{block.description}</p></article>) : <p>尚无工作拆解。</p>}</Section>
           <Section title="相关工作"><div className={styles.toolbar}><button onClick={()=>setForm('child')}>创建子工作</button></div>{state.detail?.parent && <p>父工作：<TaskLink controller={controller} task={state.detail.parent}/></p>}{state.detail?.children?.map(child=><p key={child.id}><TaskLink controller={controller} task={child}/></p>)}{!task.children.length && <p>尚无子工作。子工作可独立保存目标、规格和验收。</p>}</Section>
@@ -62,6 +62,24 @@ export function WorkPanel({ controller }: { controller: WorkPanelController }) {
       {form==='project' || form==='attach' ? <ProjectForm key={`${form}/${state.projectId}`} controller={controller} attach={form==='attach'} onSaved={async projectId=>{setForm(null); await controller.load(); await controller.selectProject(projectId);setNotice('项目已保存')}}/> : form==='breakdown' && task ? <BreakdownForm key={task.version} controller={controller} task={task} onSaved={()=>done('拆解已保存')}/> : <TaskForm key={`${form}/${task?.id ?? ''}/${task?.version ?? ''}`} controller={controller} kind={form as 'task'|'child'|'spec'} task={task} onSaved={async saved=>{setForm(null);setNotice('工作已保存');await controller.openTask({projectId:saved.projectId,taskId:saved.id})}}/>}
     </section>}
   </main>
+}
+const executionLabels: Record<WorkExecution['state'], string> = {accepted:'已登记',creating:'创建中',ready:'就绪',running:'处理中',waiting:'等待',paused:'暂停',failed:'失败'}
+function CurrentExecution({controller}:{controller:WorkPanelController}) {
+  const {execution,executionError,loading}=controller.getSnapshot()
+  return <Section title="当前处理会话">
+    {loading ? <p role="status">正在读取执行…</p> : executionError ? <ErrorText error={executionError}/> : !execution ? <><p>尚未开始处理。可先关联已有会话查看相关工作。</p><button onClick={()=>controller.setDetailTab('sessions')}>查看关联会话</button></> : <>
+      <p>执行状态：{executionLabels[execution.state]}</p>
+      {execution.progress && <p>工作进展：{execution.progress}</p>}
+      {execution.control && <p>{({wait:'等待',pause:'暂停',resume:'恢复'})[execution.control.action]}请求{execution.control.status==='accepted'?'已接受，等待生效':'已生效'}{execution.control.reason && `：${execution.control.reason}`}</p>}
+      {execution.error && <ErrorText error={`${execution.error.code}: ${execution.error.message}`}/>}
+      <p>{controller.currentSession() ? '当前会话' : execution.actual ? '会话（当前不可进入）' : '预留会话（当前不可进入）'}：{execution.session.sessionId}</p>
+      {controller.currentSession() && <button onClick={()=>controller.openCurrentSession()}>进入当前会话</button>}
+      {execution.actual ? <details><summary>实际执行环境</summary><dl className={styles.executionFacts}>
+        {Object.entries({宿主:execution.actual.runtimeId,工作目录:execution.actual.cwd,Agent预设:execution.actual.agentPreset,Provider:execution.actual.provider,模型:execution.actual.model,权限预设:execution.actual.permissionPreset,沙箱:execution.actual.sandbox,审批:execution.actual.approval}).map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
+      </dl></details> : <p>尚未确认实际执行环境。</p>}
+      {execution.events.length > 0 && <details><summary>输入与结果（{execution.events.length}）</summary><ul>{execution.events.map(event=><li key={event.id}><p>{event.kind==='input'?'输入':'结果'}：{event.text}</p><p>{({accepted:'已接受',delivered:'已投递',consumed:'已消费'})[event.delivery]} · 尚未验收</p></li>)}</ul></details>}
+    </>}
+  </Section>
 }
 function Section({title,children}:{title:string;children:ReactNode}) {return <section><h2>{title}</h2>{children}</section>}
 function TaskLink({controller,task}:{controller:WorkPanelController;task:WorkTask}) {return <button className={styles.link} onClick={()=>void controller.openTask({projectId:task.projectId,taskId:task.id})}>{task.title}</button>}

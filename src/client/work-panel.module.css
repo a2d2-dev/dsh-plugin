@@ -34,6 +34,10 @@
 .tabs button { white-space: nowrap; background: transparent; border-color: transparent; }
 .tabs button[aria-selected=true] { background: var(--dsw-alias-interactive-bg-hover, #eceefa); color: var(--dsw-alias-label-primary, #555b99); border-color: var(--work-line); }
 .metrics { display: flex; flex-wrap: wrap; gap: 24px; }
+.executionFacts { display: grid; gap: 8px; }
+.executionFacts > div { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 12px; }
+.executionFacts dt { color: var(--work-muted); }
+.executionFacts dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .tableScroll { overflow-x: auto; }
 .panel table { width: 100%; border-collapse: collapse; text-align: left; }
 .panel th, .panel td { padding: 12px 10px; border-bottom: 1px solid var(--work-line); vertical-align: top; }
