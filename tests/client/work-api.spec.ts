@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { createWorkClient } from '../../src/client/work-api.ts'
 
 describe('trusted work HTTP boundary', () => {
+  it('retains the last observed page and canonical reference when a source request fails', async () => {
+    const failure = {status:'failed', error:{code:'github-forbidden',message:'权限不足'}, page:{identity:{login:'imneov',nodeId:'U1',name:'LiuFeng'},items:[],observedAt:'2026-10-20'},ref:{projectId:'p1',taskId:'t112'}}
+    const client=createWorkClient(async()=>new Response(JSON.stringify(failure),{status:424}))
+    await expect(client.query({type:'source.issues',projectId:'p1',sourceId:'s1',page:1,perPage:20,assignee:'@me',state:'open',refresh:true})).rejects.toMatchObject({result:failure})
+  })
   it('rejects a completed query that omits its project projection instead of showing an empty project list',async()=>{
     const client=createWorkClient(async()=>new Response(JSON.stringify({status:'completed'})))
     await expect(client.query({type:'projects.list'})).rejects.toThrow('工作服务返回的数据不符合查询合同')

@@ -1,12 +1,20 @@
 import { browserUUID } from './browser-uuid.ts'
-import type { WorkClient } from './work-api.ts'
+import { WorkClientError, type WorkClient } from './work-api.ts'
+import type { ExternalBinding, GitHubIssue, IssuePage, IssuePageRequest, WorkSource } from '../work-sources/types.ts'
 import type { Project, SessionRef, TaskRef, WorkCommand, WorkCompleted, WorkTask } from '../work-types.ts'
 type WithoutCommandId<T> = T extends unknown ? Omit<T, 'commandId'> : never
 export type WorkIntent = WithoutCommandId<WorkCommand>
 
 export type DetailTab = 'overview' | 'sessions' | 'related' | 'activity'
 export type LocalView = 'all' | 'unassociated' | 'associated'
+export interface SourcePanelState extends IssuePageRequest {
+  sources: WorkSource[]; sourceId: string | null; listing: IssuePage | null; issue: GitHubIssue | null
+  bindings: ExternalBinding[]; loading: boolean; error: string | null; cached: boolean
+  canonical: TaskRef | null
+}
+const emptySource = (): SourcePanelState => ({sources:[],sourceId:null,listing:null,issue:null,bindings:[],page:1,perPage:20,assignee:'@me',state:'open',loading:false,error:null,cached:true,canonical:null})
 export interface WorkPanelState {
+  object: 'projects' | 'issues' | 'prs'; source: SourcePanelState
   projects: Project[]; projectId: string | null; tasks: WorkTask[]
   detail: WorkCompleted | null; detailTab: DetailTab; search: string; view: LocalView
   loading: boolean; error: string | null
@@ -17,7 +25,7 @@ export interface WorkNavigation {
 }
 /** One root-owned state survives panel unmounts and native-session round trips. */
 export class WorkPanelController {
-  private state: WorkPanelState = { projects: [], projectId: null, tasks: [], detail: null, detailTab: 'overview', search: '', view: 'all', loading: false, error: null }
+  private state: WorkPanelState = { object:'projects', source:emptySource(), projects: [], projectId: null, tasks: [], detail: null, detailTab: 'overview', search: '', view: 'all', loading: false, error: null }
   private listeners = new Set<() => void>()
   private revision = 0
   constructor(readonly client: WorkClient, private readonly navigation: WorkNavigation) {}
@@ -43,7 +51,8 @@ export class WorkPanelController {
   async selectProject(projectId: string): Promise<void> {
     const revision = ++this.revision
     const changed = projectId !== this.state.projectId
-    this.update({ projectId, loading: true, error: null, ...(changed ? { detail: null, search: '', view: 'all', tasks: [] } : {}) })
+    if (changed) ++this.sourceRevision
+    this.update({ projectId, loading: true, error: null, ...(changed ? { detail: null, search: '', view: 'all', tasks: [], object:'projects' as const, source:emptySource() } : {}) })
     try {
       const result = await this.client.query({ type: 'project.detail', projectId })
       if (revision === this.revision) this.update({ tasks: result.tasks ?? [], loading: false })
@@ -85,6 +94,71 @@ export class WorkPanelController {
       if (revision === this.revision) this.update({ detail, loading: false })
     } catch (error) { if (revision === this.revision) this.update({ loading: false, error: message(error) }) }
   }
+  private sourceRevision = 0
+  private updateSource(value: Partial<SourcePanelState>): void { this.update({source:{...this.state.source,...value}}) }
+  setObject(object: WorkPanelState['object']): void { this.update({object}) }
+  async showSources(): Promise<void> {
+    const projectId=this.state.projectId
+    if (!projectId) return
+    const revision=++this.sourceRevision
+    this.update({object:'issues'})
+    this.updateSource({loading:true,error:null})
+    try {
+      const result=await this.client.query({type:'source.list',projectId})
+      if(revision!==this.sourceRevision) return
+      const sources=result.sources ?? []
+      const sourceId=sources.find(item=>item.id===this.state.source.sourceId)?.id ?? sources[0]?.id ?? null
+      this.updateSource({sources,sourceId,loading:false})
+      if(sourceId) await this.browseIssues({},false)
+    } catch(error) {if(revision===this.sourceRevision) this.updateSource({loading:false,error:message(error)})}
+  }
+  async configureSource(owner:string,repository:string):Promise<void> {
+    const projectId=this.state.projectId,revision=++this.sourceRevision
+    if(!projectId) throw Error('请先选择项目')
+    const result=await this.submit({type:'source.configure',projectId,repository:{owner:owner.trim(),repository:repository.trim()}})
+    if(revision!==this.sourceRevision) return
+    if(!result.source) throw Error('工作服务未返回来源')
+    const sources=[...this.state.source.sources.filter(item=>item.id!==result.source!.id),result.source]
+    this.update({object:'issues'})
+    this.updateSource({...emptySource(),sources,sourceId:result.source.id})
+    await this.browseIssues({},true)
+  }
+  async selectSource(sourceId:string):Promise<void> {
+    ++this.sourceRevision
+    this.updateSource({...emptySource(),sources:this.state.source.sources,sourceId})
+    await this.browseIssues({},false)
+  }
+  async browseIssues(change:Partial<IssuePageRequest>={},refresh=false):Promise<void> {
+    const {projectId}=this.state, previous=this.state.source
+    if(!projectId || !previous.sourceId) return
+    const revision=++this.sourceRevision
+    const changed=Object.entries(change).some(([key,value])=>previous[key as keyof IssuePageRequest]!==value)
+    this.updateSource({...change,loading:true,error:null,issue:null,bindings:[],canonical:null,...(changed?{listing:null}:{})})
+    const {sourceId,page,perPage,assignee,state}=this.state.source
+    try {
+      const result=await this.client.query({type:'source.issues',projectId,sourceId:sourceId!,page,perPage,assignee,state,refresh})
+      if(revision===this.sourceRevision) this.receiveSource(result,refresh,false)
+    }catch(error){if(revision===this.sourceRevision) this.sourceFailed(error,false)}
+  }
+  async openIssue(number:number,refresh=true):Promise<void> {
+    const {projectId}=this.state,{sourceId}=this.state.source
+    if(!projectId || !sourceId) return
+    const revision=++this.sourceRevision
+    this.updateSource({issue:null,bindings:[],canonical:null,loading:true,error:null})
+    try {
+      const result=await this.client.query({type:'source.issue',projectId,sourceId,number,refresh})
+      if(revision===this.sourceRevision) this.receiveSource(result,refresh,true)
+    }catch(error){if(revision===this.sourceRevision) this.sourceFailed(error,true)}
+  }
+  private receiveSource(result:Pick<WorkCompleted,'source'|'page'|'issue'|'bindings'>,refresh:boolean,detail:boolean):void {
+    const sources=result.source?this.state.source.sources.map(source=>source.id===result.source!.id?result.source!:source):this.state.source.sources
+    this.updateSource({sources,loading:false,cached:!refresh,error:result.source?.lastError?`${result.source.lastError.code}: ${result.source.lastError.message}`:null,...(detail?{issue:result.issue??null,bindings:result.bindings??[]}:{listing:result.page??null})})
+  }
+  private sourceFailed(error:unknown,detail:boolean):void {
+    if(error instanceof WorkClientError) this.receiveSource(error.result,false,detail)
+    this.updateSource({loading:false,cached:true,error:message(error)})
+  }
+  backToIssues():void {++this.sourceRevision;this.updateSource({issue:null,bindings:[],canonical:null,loading:false,error:null})}
   private pendingCommands = new Map<string, string>()
   async submit(command: WorkIntent): Promise<WorkCompleted> {
     const key = JSON.stringify(command)
