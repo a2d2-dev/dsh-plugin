@@ -14,6 +14,12 @@ import { afterEach, expect, it } from 'vitest'
 import * as plugin from '../src/work-plugin.ts'
 import { WORK_ROUTE_PATH } from '../src/work-types.ts'
 import type { WorkCompleted, WorkRequest, WorkResult } from '../src/work-types.ts'
+import type { GitHubSourcePort } from '../src/work-sources/types.ts'
+import { SourceError } from '../src/work-sources/github.ts'
+const githubPort: GitHubSourcePort = {
+  list: async () => ({ identity: { login: 'imneov', nodeId: 'U_1', name: 'LiuFeng' }, items: [], observedAt: '2026-10-20T00:00:00Z' }),
+  detail: async (repository, number) => ({ identity: { login: 'imneov', nodeId: 'U_1', name: 'LiuFeng' }, issue: { nodeId: 'I_112', url: `https://github.com/${repository.owner}/${repository.repository}/issues/${number}`, number, repository, title: 'Existing issue', body: 'External source body', labels: [], assignees: ['imneov'], state: 'open', updatedAt: '2026-10-19T00:00:00Z', observedAt: '2026-10-20T00:00:00Z' } }),
+}
 
 const roots: string[] = []
 const contexts: Context[] = []
@@ -45,7 +51,7 @@ async function root() {
   roots.push(path)
   return path
 }
-async function mount(path: string) {
+async function mount(path: string, source?: GitHubSourcePort, github = true) {
   const ctx = new Context()
   contexts.push(ctx)
   await ctx.plugin(SessionStore)
@@ -56,7 +62,8 @@ async function mount(path: string) {
   await ctx.plugin(WorkspaceRegistry)
   await ctx.plugin(WebServer)
   await ctx.plugin(Connection)
-  await ctx.plugin(plugin, { directory: join(path, 'work-v3') })
+  if (source) ctx.provide('a2d2GitHubSource', source)
+  await ctx.plugin(plugin, { directory: join(path, 'work-v3'), github })
   await new Promise(resolve => setTimeout(resolve, 0))
   const server = ctx.get('webServer') as unknown as WebServer
   return { ctx, server }
@@ -83,7 +90,7 @@ function completed(result: WorkResult): WorkCompleted {
 
 it('exposes real local commands and trusted persisted host Sessions through the production plugin without a live Session or model', async () => {
   const path = await root()
-  const { ctx, server } = await mount(path)
+  const { ctx, server } = await mount(path, githubPort)
   const directory = await root()
   const workspace = await ctx.workspaceRegistry.create(directory)
   const sessionId = SessionId('persisted-existing-session')
@@ -107,15 +114,38 @@ it('exposes real local commands and trusted persisted host Sessions through the 
   expect(ctx.sessions.list()).toHaveLength(0)
   expect(ctx.get('agents')).toBeUndefined()
   expect(ctx.get('llm')).toBeUndefined()
+  expect((await call(server, { kind: 'query', value: { type: 'work.capabilities' } })).body).toMatchObject({ status: 'completed', capabilities: { githubRead: true, githubWrite: false, taskStart: false } })
+  const source = completed((await call(server, { kind: 'command', value: { type: 'source.configure', commandId: 'source', projectId: project.id, repository: { owner: 'a2d2-dev', repository: 'dsh-plugin' } } })).body).source!
+  expect((await call(server, { kind: 'query', value: { type: 'source.issue', projectId: project.id, sourceId: source.id, number: 112, refresh: true } })).body).toMatchObject({ status: 'completed', issue: { nodeId: 'I_112', body: 'External source body' } })
+  expect((await call(server, { kind: 'command', value: { type: 'source.link', commandId: 'link', sourceId: source.id, ref, expectedVersion: 2, nodeId: 'I_112' } })).body).toMatchObject({ status: 'completed', task: { specification: task.specification, sessions: [{ session: candidates[0]!.ref }] } })
   await ctx.fiber.dispose()
   contexts.splice(contexts.indexOf(ctx), 1)
-  const reload = await mount(path)
+  const reload = await mount(path, undefined, false)
+  expect((await call(reload.server, { kind: 'query', value: { type: 'work.capabilities' } })).body).toMatchObject({ capabilities: { githubRead: false } })
+  expect((await call(reload.server, { kind: 'query', value: { type: 'session.candidates', projectId: project.id } })).body).toMatchObject({ status: 'completed', candidates })
   expect((await call(reload.server, { kind: 'query', value: { type: 'task.detail', ref } })).body)
     .toMatchObject({ status: 'completed', task: { id: task.id, sessions: [{ session: candidates[0]!.ref }] } })
   expect(completed((await call(reload.server, { kind: 'query', value: { type: 'resources.list' } })).body).resources?.[0]?.ref.runtimeId)
     .toBe(resources[0]!.ref.runtimeId)
 })
 
+it('rejects browser host/path/credential input and separates upstream 401 from DSH login before source I/O', async () => {
+  let sourceCalls = 0
+  const { server } = await mount(await root(), { ...githubPort, list: async () => { sourceCalls++; throw new SourceError('github-unauthorized', 'GitHub credentials were rejected (401)') } })
+  const project = completed((await call(server, { kind: 'command', value: { type: 'project.create', commandId: 'auth-project', name: 'Source work' } })).body).project!
+  const source = completed((await call(server, { kind: 'command', value: { type: 'source.configure', commandId: 'auth-source', projectId: project.id, repository: { owner: 'a2d2-dev', repository: 'dsh-plugin' } } })).body).source!
+  const value = { type: 'source.issues', projectId: project.id, sourceId: source.id, page: 1, perPage: 20, assignee: '@me', state: 'open', refresh: true }
+  const request = { kind: 'query', value }
+  expect(await call(server, request, { cookie: '' })).toMatchObject({ status: 401, bodyRead: false, body: { error: { code: 'unauthenticated' } } })
+  expect(await call(server, request, { origin: 'http://evil.test' })).toMatchObject({ status: 403, bodyRead: false })
+  for (const forbidden of [{ host: 'evil.test' }, { path: '/user' }, { credentialDirectory: '/root/.config/gh' }, { token: 'browser-token' }]) {
+    expect(await call(server, { kind: 'query', value: { ...value, ...forbidden } })).toMatchObject({ status: 400, body: { error: { code: 'invalid-request' } } })
+  }
+  expect(sourceCalls).toBe(0)
+  expect(await call(server, request)).toMatchObject({ status: 424, body: { status: 'failed', error: { code: 'github-unauthorized' } } })
+  expect(sourceCalls).toBe(1)
+  expect(await call(server, { kind: 'query', value: { type: 'project.detail', projectId: project.id } })).toMatchObject({ status: 200, body: { tasks: [] } })
+})
 it('uses host operator authentication for reads, writes and retry receipts before reading request bodies', async () => {
   const { server } = await mount(await root())
   const command = { kind: 'command', value: { type: 'project.create', commandId: 'authenticated-create', name: 'Private work' } }

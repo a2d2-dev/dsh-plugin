@@ -10,14 +10,16 @@ import { WorkApplication } from './work.ts'
 import { DshWorkHost } from './work-host.ts'
 import { createWorkHandler } from './work-route.ts'
 import { WORK_ROUTE_PATH } from './work-types.ts'
+import { GitHubSource } from './work-sources/github.ts'
+import type { GitHubSourcePort } from './work-sources/types.ts'
 import type { RequestRejection } from './route-auth.ts'
 
 export const name = 'a2d2-work'
 export const inject = ['webServer', 'connection']
-export interface Config { directory?: string }
-export const Config: schema<Config> = schema.object({ directory: schema.string() })
+export interface Config { directory?: string; github?: boolean }
+export const Config: schema<Config> = schema.object({ directory: schema.string(), github: schema.boolean() })
 declare module '@deepseek-ai/cordis' {
-  interface Context { a2d2Work: WorkApplication }
+  interface Context { a2d2Work: WorkApplication; a2d2GitHubSource?: GitHubSourcePort }
 }
 const runtimeSchema = z.object({ schemaVersion: z.literal(1), runtimeId: z.string().uuid() }).strict()
 /** A stable host identity scoped to this v3 record authority, never derived from cwd or browser input. */
@@ -37,7 +39,8 @@ export async function apply(ctx: Context, config: Config = {}): Promise<void> {
   const directory = config.directory ?? join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'a2d2', 'work-v3')
   if (!isAbsolute(directory)) throw new Error('a2d2-work directory must be absolute')
   const runtimeId = await runtimeIdentity(directory)
-  const app = new WorkApplication(directory, new DshWorkHost(ctx, runtimeId))
+  const source = config.github === false ? undefined : ctx.get('a2d2GitHubSource') ?? new GitHubSource()
+  const app = new WorkApplication(directory, new DshWorkHost(ctx, runtimeId), source)
   ctx.provide('a2d2Work', app)
   const getService = <T>(key: string): T => (ctx.get as (key: string) => unknown).call(ctx, key) as T
   const server = getService<{ register(route: { kind: 'exact'; path: string; handler: ReturnType<typeof createWorkHandler> }): () => void }>('webServer')
