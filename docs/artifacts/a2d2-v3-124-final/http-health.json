@@ -1,0 +1,7 @@
+{
+  "origin": "http://10.126.126.12:18782",
+  "unauthenticatedStatus": 401,
+  "loginMarkupPresent": true,
+  "bodyBytes": 1532,
+  "expectedAuthBoundary": true
+}
