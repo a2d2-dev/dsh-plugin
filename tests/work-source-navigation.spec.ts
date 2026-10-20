@@ -61,6 +61,19 @@ async function setup(directory: string) {
 }
 
 describe('source receipts respect the latest public navigation', () => {
+  it('does not deliver a stale configuration failure to the old form after newer source navigation', async () => {
+    await withSource(async ({ panel, delay }) => {
+      const receipt = delay('source.configure')
+      const pending = panel.configureSource('invalid owner', 'repository').then(() => null, error => error)
+      expect(await receipt.saved).toMatchObject({ status: 'failed' })
+      await panel.openIssue(124)
+      const selected = panel.getSnapshot()
+      receipt.release()
+      expect(await pending).toBeNull()
+      expect(panel.getSnapshot()).toEqual(selected)
+      await expect(panel.configureSource('invalid owner', 'repository')).rejects.toThrow()
+    })
+  })
   it.each(['source.import', 'source.link', 'source.configure'] as const)('%s does not undo a newer selection or reload of the same project', async type => {
     for (const navigate of ['select', 'load'] as const) await withSource(async ({ panel, client, project, taskB, delay }) => {
       const receipt = delay(type)
