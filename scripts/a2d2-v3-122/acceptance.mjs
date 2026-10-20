@@ -60,10 +60,11 @@ export async function prepare(options) {
   await save(join(root, 'assembly.json'), assembly)
   return assembly
 }
-async function verify(root) {
+export async function verify(root) {
   await owned(root)
   const assembly = await json(join(root, 'assembly.json'))
   assert.equal(assembly.root, root)
+  assert.equal(await sha(fileURLToPath(import.meta.url)), assembly.wrapperSHA, 'Wrapper changed after preparation')
   for (const [file, key] of [['manifest.json', 'manifestSHA'], ['acceptance.patch.yml', 'patchSHA'], ['guard/guard.mjs', 'guardSHA'], ['guard/model.mjs', 'modelSHA']]) assert.equal(await sha(join(root, file)), assembly[key], `${file} changed after preparation`)
   assert.equal(await sha(join(directory, '../a2d2-v3-121/acceptance.mjs')), assembly.source.lifecycleSHA)
   for (const pkg of Object.values(assembly.packages)) {
