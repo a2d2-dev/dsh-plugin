@@ -61,6 +61,29 @@ async function setup(directory: string) {
 }
 
 describe('source receipts respect the latest public navigation', () => {
+  it.each(['source.import', 'source.link', 'source.configure'] as const)('%s finishes saving without changing a closed panel or a native Session navigation', async type => {
+    for (const exit of ['close', 'session'] as const) await withSource(async ({ panel, client, requests, navigationEvents, project, taskB, delay }) => {
+      const receipt = delay(type)
+      const pending = type === 'source.configure' ? panel.configureSource('another-owner', 'another-repo') : panel.acceptIssue(type === 'source.link' ? taskB : undefined)
+      expect(await receipt.saved).toMatchObject({ status: 'completed' })
+      if (exit === 'close') panel.close()
+      else panel.openSession({ runtimeId: 'host-A', sessionId: 'native-session' })
+      receipt.release()
+      await pending
+      expect(panel.getSnapshot()).toMatchObject({ object: 'issues', detail: null, loading: false, source: { issue: { number: 124 }, loading: false } })
+      expect(navigationEvents).toEqual([exit === 'close' ? ['panel', null] : ['session', 'native-session']])
+      if (type === 'source.configure') {
+        expect((await client.query({ type: 'source.list', projectId: project.id })).sources).toHaveLength(2)
+      } else {
+        const tasks = (await client.query({ type: 'project.detail', projectId: project.id })).tasks!
+        expect(tasks).toHaveLength(type === 'source.import' ? 2 : 1)
+        const accepted = tasks.find(task => type === 'source.import' ? task.title === 'Issue A' : task.id === taskB.id)!
+        expect((await client.query({ type: 'task.detail', ref: { projectId: project.id, taskId: accepted.id } })).bindings).toMatchObject([{ nodeId: 'I124' }])
+      }
+      const commands = requests.filter(request => request.kind === 'command' && request.value.type === type)
+      expect(commands).toHaveLength(type === 'source.configure' ? 2 : 1)
+    })
+  })
   it('keeps same-project Task B when import A is saved but its response arrives after navigation', async () => {
     await withSource(async ({ panel, client, requests, project, taskB, delay }) => {
       const receipt = delay('source.import')
