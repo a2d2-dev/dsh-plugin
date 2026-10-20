@@ -15,7 +15,7 @@ export function WorkPanel({ controller }: { controller: WorkPanelController }) {
   const [form, setForm] = useState<FormKind>(null)
   const object = state.object
   const [notice,setNotice] = useState('')
-  useEffect(() => { void controller.initialize() }, [controller])
+  useEffect(() => { void controller.initialize(); return () => controller.leavePanel() }, [controller])
   useEffect(() => { setForm(null); setNotice('') }, [state.projectId])
   const project = state.projects.find(project => project.id === state.projectId)
   const task = state.detail?.task

@@ -37,6 +37,7 @@ export class WorkPanelController {
     if (!this.state.loading && !this.state.projects.length) await this.load()
   }
   async load(): Promise<void> {
+    this.invalidateSourceNavigation()
     const revision = ++this.revision
     this.update({ loading: true, error: null })
     try {
@@ -50,9 +51,10 @@ export class WorkPanelController {
     } catch (error) { if (revision === this.revision) this.update({ loading: false, error: message(error) }) }
   }
   async selectProject(projectId: string): Promise<void> {
+    this.invalidateSourceNavigation()
     const revision = ++this.revision
     const changed = projectId !== this.state.projectId
-    if (changed) { ++this.sourceRevision; this.sourceOrigin=null }
+    if (changed) this.sourceOrigin=null
     this.update({ projectId, loading: true, error: null, ...(changed ? { detail: null, search: '', view: 'all', tasks: [], object:'projects' as const, source:emptySource() } : {}) })
     try {
       const result = await this.client.query({ type: 'project.detail', projectId })
@@ -76,6 +78,7 @@ export class WorkPanelController {
     } catch (error) { if (revision === this.revision) this.update({ loading: false, error: message(error) }) }
   }
   async revealTask(ref: TaskRef): Promise<void> {
+    this.invalidateSourceNavigation()
     const revision = ++this.revision
     this.update({ loading: true, error: null })
     this.navigation.selectPanel('a2d2-panel')
@@ -213,12 +216,13 @@ export class WorkPanelController {
     return result
   }
   back(): void {
-    ++this.revision; ++this.sourceRevision
+    ++this.revision; this.invalidateSourceNavigation()
     const origin=this.sourceOrigin;this.sourceOrigin=null
     this.update({...(origin??{}),detail:null,loading:false,error:null})
   }
-  close(): void { ++this.revision; this.invalidateSourceNavigation(); this.update({loading:false}); this.navigation.selectPanel(null) }
-  openSession(session: SessionRef): void { ++this.revision; this.invalidateSourceNavigation(); this.update({loading:false}); this.navigation.openSession(session.sessionId) }
+  leavePanel(): void { ++this.revision; this.invalidateSourceNavigation(); this.update({loading:false}) }
+  close(): void { this.leavePanel(); this.navigation.selectPanel(null) }
+  openSession(session: SessionRef): void { this.leavePanel(); this.navigation.openSession(session.sessionId) }
   setSearch(search: string): void { this.update({ search }) }
   setView(view: LocalView): void { this.update({ view }) }
   setDetailTab(detailTab: DetailTab): void { this.update({ detailTab }) }
