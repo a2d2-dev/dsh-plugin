@@ -125,13 +125,15 @@ export class WorkPanelController {
   async configureSource(owner:string,repository:string):Promise<void> {
     const projectId=this.state.projectId,revision=++this.sourceRevision
     if(!projectId) throw Error('请先选择项目')
-    const result=await this.submit({type:'source.configure',projectId,repository:{owner:owner.trim(),repository:repository.trim()}})
-    if(revision!==this.sourceRevision) return
-    if(!result.source) throw Error('工作服务未返回来源')
-    const sources=[...this.state.source.sources.filter(item=>item.id!==result.source!.id),result.source]
-    this.update({object:'issues'})
-    this.updateSource({...emptySource(),sources,sourceId:result.source.id})
-    await this.browseIssues({},true)
+    try {
+      const result=await this.submit({type:'source.configure',projectId,repository:{owner:owner.trim(),repository:repository.trim()}})
+      if(revision!==this.sourceRevision) return
+      if(!result.source) throw Error('工作服务未返回来源')
+      const sources=[...this.state.source.sources.filter(item=>item.id!==result.source!.id),result.source]
+      this.update({object:'issues'})
+      this.updateSource({...emptySource(),sources,sourceId:result.source.id})
+      await this.browseIssues({},true)
+    } catch(error) { if(revision===this.sourceRevision) throw error }
   }
   async selectSource(sourceId:string):Promise<void> {
     ++this.sourceRevision

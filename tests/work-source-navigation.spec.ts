@@ -61,6 +61,52 @@ async function setup(directory: string) {
 }
 
 describe('source receipts respect the latest public navigation', () => {
+  it.each(['source.import', 'source.link', 'source.configure'] as const)('%s shows its real result when the user stays at the source', async type => {
+    await withSource(async ({ panel, client, project, taskB, delay }) => {
+      const receipt = delay(type)
+      const pending = type === 'source.configure' ? panel.configureSource('another-owner', 'another-repo') : panel.acceptIssue(type === 'source.link' ? taskB : undefined)
+      const result = await receipt.saved
+      expect(result.status).toBe('completed')
+      receipt.release()
+      await pending
+      if (result.status !== 'completed') throw Error('Expected real completed command')
+      if (type === 'source.configure') {
+        expect(panel.getSnapshot()).toMatchObject({ object: 'issues', detail: null, source: { sourceId: result.source!.id, loading: false, listing: { items: [{ number: 124 }] } } })
+      } else {
+        expect(panel.getSnapshot()).toMatchObject({ detail: { task: { id: result.ref!.taskId }, bindings: [{ nodeId: 'I124' }] }, detailTab: 'overview', source: { loading: false } })
+        expect(panel.getSnapshot().tasks).toEqual((await client.query({ type: 'project.detail', projectId: project.id })).tasks)
+        if (type === 'source.link') expect(panel.getSnapshot().detail?.task).toMatchObject({ id: taskB.id, version: 2, goal: 'Keep B', specification: taskB.specification })
+      }
+    })
+  })
+  it.each(['source.link', 'source.configure'] as const)('%s cannot replace a newer same-project Task, view, or error', async type => {
+    await withSource(async ({ panel, project, taskB, delay }) => {
+      const receipt = delay(type)
+      const pending = type === 'source.configure' ? panel.configureSource('another-owner', 'another-repo') : panel.acceptIssue(taskB)
+      expect(await receipt.saved).toMatchObject({ status: 'completed' })
+      panel.setObject('projects')
+      await panel.openTask({ projectId: project.id, taskId: taskB.id })
+      panel.setView('unassociated'); panel.setSearch('Task B'); panel.setDetailTab('related')
+      const selected = panel.getSnapshot()
+      receipt.release()
+      await pending
+      expect(panel.getSnapshot()).toMatchObject({ object: 'projects', detail: selected.detail, detailTab: 'related', view: 'unassociated', search: 'Task B', error: selected.error, source: selected.source })
+    })
+  })
+  it.each(['success', 'conflict'] as const)('keeps newer navigation errors after a late accept %s', async outcome => {
+    await withSource(async ({ panel, project, taskB, delay }) => {
+      const receipt = delay(outcome === 'success' ? 'source.import' : 'source.link')
+      const pending = panel.acceptIssue(outcome === 'conflict' ? { ...taskB, version: taskB.version + 1 } : undefined)
+      expect(await receipt.saved).toMatchObject({ status: outcome === 'success' ? 'completed' : 'conflict' })
+      panel.setObject('projects')
+      await panel.openTask({ projectId: project.id, taskId: '00000000-0000-4000-8000-000000000000' })
+      const selected = panel.getSnapshot()
+      expect(selected.error).toBeTruthy()
+      receipt.release()
+      await pending
+      expect(panel.getSnapshot()).toMatchObject({ object: selected.object, detail: selected.detail, error: selected.error, loading: selected.loading, source: selected.source })
+    })
+  })
   it('does not deliver a stale configuration failure to the old form after newer source navigation', async () => {
     await withSource(async ({ panel, delay }) => {
       const receipt = delay('source.configure')
