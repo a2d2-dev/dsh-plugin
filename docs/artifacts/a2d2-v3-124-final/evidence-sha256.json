@@ -1,5 +1,5 @@
 {
-  "mode": "explicit evidence files only; no browser profile, credentials or private logs",
+  "mode": "explicit evidence files only; includes approved raw guard metrics; no browser profile, credentials or private host logs",
   "files": [
     {
       "file": "01-old-task-detail.png",
@@ -238,8 +238,8 @@
     },
     {
       "file": "README.md",
-      "bytes": 14746,
-      "sha256": "9ee0d81ddf8d8ca99c0ec444be1b438221c7024e19db4c20722c7aa1fa0507a7"
+      "bytes": 15495,
+      "sha256": "5344763d59a8d28b8db7321c8000d2e124d2bcd379b473dbfece379dc2a4cca8"
     },
     {
       "file": "after-import-retention.json",
@@ -312,6 +312,11 @@
       "sha256": "a98f3d3263e4e5b27707a426e55a008dbeabd7a6be7f9644f5cf8be562fd18da"
     },
     {
+      "file": "final-runtime-status.json",
+      "bytes": 2101,
+      "sha256": "5c12caa44d33793c286414b7e0f34ebb738f42c843d30fe7ced25eda9b83ff2b"
+    },
+    {
       "file": "final-verdict.json",
       "bytes": 5647,
       "sha256": "884478867d0003238f3df95ad10840b0619e1744df71fe4bec7dede662aa23c2"
@@ -327,6 +332,11 @@
       "sha256": "a69a59d3f0b9272d0cd3a9a82672d80499cf5ddd9e80abe0cdeb2cbdbe00eda6"
     },
     {
+      "file": "freeze-runtime.mjs",
+      "bytes": 2452,
+      "sha256": "6d6c3e173c3db504a7ea5babe1d130b95219f54678c1d5214e8a3a4df862b5f6"
+    },
+    {
       "file": "http-health.json",
       "bytes": 160,
       "sha256": "193cccc3457e2e041b86b772638c71396e4dd4cda80b4c9ff8e27c261f841bdc"
@@ -335,6 +345,11 @@
       "file": "issue112-current-body-verification.json",
       "bytes": 5811,
       "sha256": "3a2390485633401d262483ab47a9a54019afcd5c1e9305d28aba25be907105ff"
+    },
+    {
+      "file": "metrics.jsonl",
+      "bytes": 2276,
+      "sha256": "ac9863223d1fb6959b6c6f81ea8dfa02ccc7f31089a9e5e1682754ccb4ac6731"
     },
     {
       "file": "native-browser.json",

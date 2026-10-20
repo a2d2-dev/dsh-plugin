@@ -96,6 +96,8 @@ preview 仅改变 `dsh-a2d2` file dependency、对应 lockfile、launcher 的包
 
 历史及当前run模型gateway/adapter都为0，未发prompt、未点启动/续跑；未改guard来制造通过。浏览器关闭后preview仍RUNNING PID149203，无回滚、无用户数据快照恢复。
 
+为便于只凭提交独立重算，另以排他写冻结真实 [原始metrics副本](./metrics.jsonl)：17行、2276 bytes、SHA256 `ac9863223d1fb6959b6c6f81ea8dfa02ccc7f31089a9e5e1682754ccb4ac6731`，与preview原文件bytes完全相同。其三条session-born均为同一旧Session，gateway/adapter记录各0条，没有token或消息正文。原metrics/guard未修改。[最终运行及关闭证据](./final-runtime-status.json) 保存supervisor命令exit0/RUNNING PID149203原始stdout、自有browser关闭动作的真实时间/输出，以及精确profile匹配的Chrome主进程列表为空；[只读冻结工具](./freeze-runtime.mjs) 保留对应采集步骤。本补充没有重开浏览器、重新部署或扩大产品测试范围。
+
 ## 失败、根因与范围限制
 
 [自动化尝试记录](./automation-attempts.json) 如实保留四类失败：
