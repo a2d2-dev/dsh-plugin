@@ -1,5 +1,5 @@
-import { join } from 'node:path'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { basename, dirname, join, resolve } from 'node:path'
+import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
@@ -37,26 +37,83 @@ import type { WorkHost } from '../src/work.ts'
 export class ExecutionFixtures {
   private readonly contexts = new Set<Context>()
   private readonly roots = new Set<string>()
+  private readonly pending = new Set<Promise<unknown>>()
+  private readonly base = resolve(tmpdir())
+  private stopped = false
+  private cleanup?: Promise<void>
   constructor(readonly signal?: AbortSignal) {}
-  async root() {
-    const path = await mkdtemp(join(tmpdir(), 'a2d2-execution-'))
-    this.roots.add(path)
-    return path
+  private assertOpen() {
+    if (this.stopped || this.signal?.aborted) throw new Error('Execution fixture is closing')
   }
-  async mount(path: string) {
-    return mountExecution(path, ctx => this.contexts.add(ctx))
+  async run<T>(operation: () => Promise<T>): Promise<T> {
+    this.assertOpen()
+    const pending = Promise.resolve().then(() => { this.assertOpen(); return operation() })
+    this.pending.add(pending)
+    try {
+      const result = await pending
+      // A cancelled caller must not resume into a remount or another command.
+      this.assertOpen()
+      return result
+    } finally { this.pending.delete(pending) }
   }
-  application(directory: string, host: WorkHost) { return new WorkApplication(directory, host) }
-  run<T>(operation: () => Promise<T>): Promise<T> { return operation() }
-  async dispose(ctx: Context) {
-    await ctx.fiber.dispose()
-    this.contexts.delete(ctx)
+  root() {
+    return this.run(async () => {
+      const path = await mkdtemp(join(this.base, 'a2d2-execution-'))
+      this.roots.add(path)
+      return path
+    })
   }
-  async close() {
-    for (const ctx of [...this.contexts].reverse()) await ctx.fiber.dispose()
+  mount(path: string) {
+    return this.run(async () => {
+      if (!this.roots.has(path)) throw new Error('Execution fixture does not own this directory')
+      const h = await mountExecution(path, ctx => this.contexts.add(ctx))
+      this.trackApplication(h.app)
+      return h
+    })
+  }
+  application(directory: string, host: WorkHost) {
+    this.assertOpen()
+    return this.trackApplication(new WorkApplication(directory, host))
+  }
+  private trackApplication(app: WorkApplication) {
+    const execute = app.execute.bind(app)
+    const query = app.query.bind(app)
+    app.execute = (...args) => this.run(() => execute(...args))
+    app.query = (...args) => this.run(() => query(...args))
+    return app
+  }
+  dispose(ctx: Context) {
+    return this.run(async () => {
+      await ctx.fiber.dispose()
+      this.contexts.delete(ctx)
+    })
+  }
+  close(settleMs = 5000): Promise<void> {
+    this.stopped = true
+    return this.cleanup ??= this.finishClose(settleMs).catch(error => {
+      this.cleanup = undefined
+      throw error
+    })
+  }
+  private async finishClose(settleMs: number) {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([
+        Promise.allSettled([...this.pending]),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(`Execution fixture work did not settle; retained: ${[...this.roots].join(', ')}`)), settleMs)
+        }),
+      ])
+    } finally { clearTimeout(timer) }
+    // Context disposal does not own WorkApplication promises; it is safe only after the join.
+    for (const ctx of [...this.contexts].reverse()) {
+      await ctx.fiber.dispose()
+      this.contexts.delete(ctx)
+    }
     for (const path of this.roots) {
-      if (!path.startsWith(join(tmpdir(), 'a2d2-execution-'))) throw new Error('Unexpected cleanup path')
+      if (dirname(path) !== this.base || !basename(path).startsWith('a2d2-execution-') || await realpath(path) !== path) throw new Error(`Unexpected cleanup path; retained: ${path}`)
       await rm(path, { recursive: true, force: true })
+      this.roots.delete(path)
     }
   }
 }
