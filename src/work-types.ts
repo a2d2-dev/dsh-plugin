@@ -29,8 +29,8 @@ interface TaskChange extends Command { ref: TaskRef; expectedVersion: number }
 export type WorkCommand =
   | (Command & { type: 'source.configure'; projectId: string; repository: { owner: string; repository: string } })
   | (Command & { type: 'source.set-enabled'; projectId: string; sourceId: string; expectedVersion: number; enabled: boolean })
-  | (Command & { type: 'source.import'; projectId: string; sourceId: string; nodeId: string })
-  | (TaskChange & { type: 'source.link'; sourceId: string; nodeId: string })
+  | (Command & { type: 'source.import'; projectId: string; sourceId: string; nodeId?: string; url?: string })
+  | (TaskChange & { type: 'source.link'; sourceId: string; nodeId?: string; url?: string })
   | (Command & { type: 'project.create'; name: string; resource?: ResourceRef })
   | (Command & { type: 'project.attach-resource'; projectId: string; expectedVersion: number; resource: ResourceRef })
   | (Command & TaskContent & { type: 'task.create'; projectId: string })

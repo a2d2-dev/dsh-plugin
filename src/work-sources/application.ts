@@ -29,15 +29,17 @@ export function applySourceCommand(state: WorkSnapshot, command: SourceCommand):
     return { status: 'completed', source }
   }
   if (!source.enabled) return fail('source-disabled', 'Source is disabled; retained local work remains available')
-  const observed = source.observations.find(item => item.issue.nodeId === command.nodeId)?.issue
+  const observed = source.observations.find(item => command.nodeId ? item.issue.nodeId === command.nodeId : urlKey(item.issue.url) === urlKey(command.url!))?.issue
   if (!observed) return fail('source-content-unavailable', 'No retrieved Issue content is available; a URL alone cannot create accepted work')
-  const nodeMatch = state.externalBindings.find(item => item.nodeId === observed.nodeId)
-  const urlMatch = state.externalBindings.find(item => item.urls.some(url => urlKey(url) === urlKey(observed.url)))
+  const byIndex = (key: string) => { const ref = state.externalIndex[key]; return ref && state.externalBindings.find(item => item.ref.taskId === ref.taskId && item.ref.projectId === ref.projectId && (key.startsWith('github:node:') ? key === `github:node:${item.nodeId}` : item.urls.some(url => key === `github:url:${urlKey(url)}`))) }
+  const nodeMatch = byIndex(`github:node:${observed.nodeId}`)
+  const urlMatch = byIndex(`github:url:${urlKey(observed.url)}`)
   if ((nodeMatch && urlMatch && nodeMatch !== urlMatch) || (urlMatch && urlMatch.nodeId !== observed.nodeId)) return { status: 'conflict', error: { code: 'external-mapping-conflict', message: 'External node and URL map to different work; automatic merging is forbidden' }, binding: urlMatch }
   const previous = nodeMatch ?? urlMatch
   if (previous) {
     if (previous.ref.projectId !== projectId || (command.type === 'source.link' && previous.ref.taskId !== command.ref.taskId)) return { status: 'conflict', error: { code: 'external-object-owned', message: 'Issue already belongs to the returned canonical TaskRef' }, binding: previous, ref: previous.ref }
     if (!previous.urls.includes(urlKey(observed.url))) previous.urls.push(urlKey(observed.url))
+    state.externalIndex[`github:url:${urlKey(observed.url)}`] = previous.ref
     if (!previous.sourceIds.includes(source.id)) previous.sourceIds.push(source.id)
     if (observed.updatedAt >= previous.lastObserved.updatedAt) previous.lastObserved = observed
     return { status: 'completed', binding: previous, task: state.tasks.find(item => item.id === previous.ref.taskId)!, ref: previous.ref }
@@ -58,6 +60,8 @@ export function applySourceCommand(state: WorkSnapshot, command: SourceCommand):
   }
   const binding: ExternalBinding = { provider: 'github', nodeId: observed.nodeId, urls: [urlKey(observed.url)], ref: { projectId, taskId: task.id }, sourceIds: [source.id], accepted: observed, lastObserved: observed }
   state.externalBindings.push(binding)
+  state.externalIndex[`github:node:${binding.nodeId}`] = binding.ref
+  state.externalIndex[`github:url:${urlKey(observed.url)}`] = binding.ref
   return { status: 'completed', task, binding, ref: binding.ref }
 }
 function pageKey(query: SourceRead) { return query.type === 'source.issue' ? `issue:${query.number}` : JSON.stringify([query.page, query.perPage, query.assignee, query.state]) }

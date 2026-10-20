@@ -37,7 +37,7 @@ export class WorkApplication {
   private async load(): Promise<WorkSnapshot> {
     try { return snapshotSchema.parse(JSON.parse(await readFile(this.file, 'utf8'))) }
     catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { schemaVersion: 3, projects: [], agents: [], tasks: [], commands: [], legacyMappings: [], sources: [], externalBindings: [] }
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { schemaVersion: 3, projects: [], agents: [], tasks: [], commands: [], legacyMappings: [], sources: [], externalBindings: [], externalIndex: {} }
       throw error
     }
   }
@@ -68,6 +68,7 @@ export class WorkApplication {
       if (result.status !== 'completed') return result
       // Receipt owns a detached snapshot: subsequent commands must not alter retry results.
       state.commands.push({ commandId: command.commandId, fingerprint, result: structuredClone(result) })
+      snapshotSchema.parse(state)
       await writeFileAtomic(this.file, `${JSON.stringify(state)}\n`, { mode: 0o600, dirMode: 0o700 })
       return result
     })
