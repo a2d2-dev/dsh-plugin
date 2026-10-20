@@ -11,7 +11,7 @@ import type { HostResource, Project, ResourceRef, SessionCandidate, TaskRef, Wor
 export type * from './work-types.ts'
 
 /** Only trusted adapters construct authorization; browser payloads cannot supply it. */
-export interface WorkActor { readonly operator: boolean }
+export interface WorkActor { readonly operator: boolean; readonly session?: import('./work-types.ts').SessionRef; readonly agentId?: string }
 /** Read-only host port: no session creation, mutation, model invocation or coordination capability. */
 export interface WorkHost {
   execution?: WorkExecutionHost
@@ -44,10 +44,11 @@ export class WorkApplication {
     }
   }
   async execute(input: unknown, actor: WorkActor): Promise<WorkResult> {
-    if (!actor.operator) return failed('forbidden', 'Host operator authorization is required')
+    if (!actor.operator && !actor.session) return failed('forbidden', 'Host operator or trusted Session authorization is required')
     const parsed = commandSchema.safeParse(input)
     if (!parsed.success) return failed('invalid-command', 'Invalid work command')
     const command = parsed.data
+    if (!actor.operator && !('executionId' in command)) return failed('forbidden', 'Session actors can only control their current execution')
     if (command.type === 'task.start') {
       if (!this.host.execution) return failed('host-capability-unavailable', 'This host has no managed execution capability')
       try { await this.host.execution.check({ ...command, sessionMode: command.session ? 'reuse' : 'create', session: command.session ?? { runtimeId: command.resource.runtimeId, sessionId: `session-${randomUUID()}` } }) }
@@ -56,6 +57,10 @@ export class WorkApplication {
     await mkdir(this.directory, { recursive: true, mode: 0o700 })
     const receipt = await withFileLock<WorkResult>(this.file, async () => {
       const state = await this.load()
+      if (!actor.operator) {
+        const execution = 'executionId' in command ? state.executions.find(item => item.id === command.executionId) : undefined
+        if (!execution || actor.agentId !== execution.agentId || !actor.session || !sameSession(actor.session, execution.session)) return failed('forbidden', 'Caller is not the responsible current Session and Project Agent')
+      }
       const refusal = await this.authorize(state, command)
       if (refusal) return refusal
       const fingerprint = JSON.stringify(command)
@@ -68,6 +73,7 @@ export class WorkApplication {
       await writeFileAtomic(this.file, `${JSON.stringify(state)}\n`, { mode: 0o600, dirMode: 0o700 })
       return result
     })
+    if (command.type === 'task.control' && command.action === 'progress') return receipt
     if ((command.type === 'task.start' || 'executionId' in command) && receipt.status === 'completed' && receipt.execution) {
       if (command.type === 'task.input' && ['accepted', 'creating'].includes(receipt.execution.state)) return receipt
       return this.ensureExecution(receipt.execution.id, command.commandId)

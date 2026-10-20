@@ -63,6 +63,12 @@ TaskRef control/input/reconcile需 executionId/owner/epoch，进展保存为独�
 
 `pnpm add -D @deepseek-ai/dsh-agent-default-model@0.2.0-rc.2 --ignore-scripts`退出0，只增加真实默认模型合同服务的直接devDependency；随后pnpm peers check退出1，指出base已有subagent-activation@0.2.1-rc.2等与0.2.0 peers不一致，未引入新的跨版本执行装配。调查候选0.2.1-rc.2的隔离安装退出0，但该版本仍无selectLocalModel且create语义改为blank reuse，不采用；新建调查目录经绝对路径核验后已移除。生产依赖版本保持原baseline。
 
+### 控制者与等待输入
+
+WorkActor只能由可信入口构造：HTTP仍只传operator=true；未来模型适配可传operator=false、宿主session和agentId。Session actor只允许当前ProjectAgent与当前Session在固定executionId/owner/epoch下提交控制，不能仅凭复制owner token越权。progress只保存事实，不激活宿主；等待中的新输入保存accepted且不投递，明确resume才处理；同input commandId重放无第二次请求。
+
+新增actor行为红测：自身Session提交progress被forbidden拒绝，退出1；实现可信当前Session授权后定向1通过、5未选，退出0。该场景同时验证外Session拒绝、过时代次拒绝、等待结果接受但不空推、resume后仅多1条真实请求、重复结果无第二条、pause经维护边界applied。
+
 ## 验证
 
 第一条行为红测：`pnpm exec vitest run tests/work-execution.spec.ts`，退出 1，因 task.start 返回 invalid-command 而非 accepted 执行。实现后执行相同测试及 tests/work.spec.ts：2 文件 9/9 通过，0 skip，退出 0。typecheck 与 git diff --check 均退出 0。
