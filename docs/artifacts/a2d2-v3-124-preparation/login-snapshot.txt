@@ -1,0 +1,3 @@
+- heading "DeepSeek Harness" [level=1, ref=e1]
+- textbox "Password" [required, ref=e2]
+- button "Sign in" [ref=e3]
