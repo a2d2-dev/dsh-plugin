@@ -1,3 +1,4 @@
+import { browserUUID } from './browser-uuid.ts'
 import type { WorkClient } from './work-api.ts'
 import type { Project, SessionRef, TaskRef, WorkCommand, WorkCompleted, WorkTask } from '../work-types.ts'
 type WithoutCommandId<T> = T extends unknown ? Omit<T, 'commandId'> : never
@@ -87,7 +88,7 @@ export class WorkPanelController {
   private pendingCommands = new Map<string, string>()
   async submit(command: WorkIntent): Promise<WorkCompleted> {
     const key = JSON.stringify(command)
-    const commandId = this.pendingCommands.get(key) ?? crypto.randomUUID()
+    const commandId = this.pendingCommands.get(key) ?? browserUUID()
     this.pendingCommands.set(key, commandId)
     const result = await this.client.command({ ...command, commandId })
     this.pendingCommands.delete(key)

@@ -1,0 +1,14 @@
+{
+  "sourceCommit": "1d0facef2f24f98e0dda31f86d57f97f87977b0d",
+  "tarball": "/data/_dsh-dev/previews/a2d2-v3-121/artifacts/http132-1d0face/dsh-a2d2-0.0.1.tgz",
+  "sha256": "3ba6225b0da7eb20f05724b4c686ba058d6f52d8e41bd98964ae566a10e22767",
+  "clientSha256": "f8d77443584a553a7bab124866f3f0e9775d5bca3a347be4f3e9e2e1fca2b7e5",
+  "rollbackPackageSha256": "81466a33342c0256873bbf30dac693ee0cff2c075246a4ad859d94663ce0a82b",
+  "installExitCode": 0,
+  "unchangedDataDirectories": [
+    "home/a2d2",
+    "home/sessions",
+    "home/storages",
+    "workspace"
+  ]
+}

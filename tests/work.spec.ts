@@ -147,6 +147,26 @@ it('admits trusted host resource references and associates compatible Sessions i
   expect(await app.query({ type: 'task.detail', ref }, operator)).toMatchObject({ status: 'completed', task: { version: 2 } })
 })
 
+it('projects resource owners from durable Projects while preserving host visibility and resource uniqueness', async () => {
+  const { directory } = await open()
+  const occupied = { ref: { runtimeId: 'host-a', workspaceId: 'occupied' }, title: 'workspace' }
+  const free = { ref: { runtimeId: 'host-a', workspaceId: 'free' }, title: 'free workspace' }
+  const host = { resources: async () => [occupied, free], sessions: async () => [] }
+  const app = new WorkApplication(directory, host)
+  const created = await app.execute({ type: 'project.create', commandId: 'owner', name: 'Existing project', resource: occupied.ref }, operator)
+  if (created.status !== 'completed' || !created.project) throw Error('Expected project')
+  const before = await app.query({ type: 'projects.list' }, operator)
+  const reopened = new WorkApplication(directory, host)
+  expect(await reopened.query({ type: 'resources.list' }, operator)).toEqual({ status: 'completed', resources: [
+    { ...occupied, owner: { projectId: created.project.id, projectName: 'Existing project' } }, free,
+  ] })
+  expect(await app.query({ type: 'projects.list' }, operator)).toEqual(before)
+  expect(await app.execute({ type: 'project.create', commandId: 'collision', name: 'Another', resource: occupied.ref }, operator))
+    .toMatchObject({ status: 'conflict', error: { code: 'resource-in-use' } })
+  expect(await new WorkApplication(directory, { ...host, resources: async () => [free] }).query({ type: 'resources.list' }, operator))
+    .toEqual({ status: 'completed', resources: [free] })
+})
+
 it('reserves one stable TaskRef per canonical legacy address atomically without reading or migrating legacy work', async () => {
   const { directory, app } = await open()
   const one = await createWork(app, 'legacy-one')

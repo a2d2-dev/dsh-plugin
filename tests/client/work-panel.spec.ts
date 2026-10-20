@@ -1,4 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+const getRandomValues = crypto.getRandomValues.bind(crypto)
+afterEach(() => vi.unstubAllGlobals())
 import { WorkPanelController } from '../../src/client/work-panel-controller.ts'
 import type { WorkClient } from '../../src/client/work-api.ts'
 import type { WorkQuery, WorkTask } from '../../src/work-types.ts'
@@ -84,6 +86,21 @@ describe('work panel public navigation',()=>{
     panel.setView('associated'); expect(panel.visibleTasks().map(item=>item.title)).toEqual(['评审记录'])
     panel.setSearch('保存本地工作'); expect(panel.visibleTasks()).toEqual([])
     panel.setView('unassociated'); expect(panel.visibleTasks().map(item=>item.id)).toEqual(['t1'])
+  })
+  it('submits UUID v4 commands with HTTP Crypto and reuses identity after an unknown network result',async()=>{
+    vi.stubGlobal('crypto', { getRandomValues })
+    expect(crypto.randomUUID).toBeUndefined()
+    const {panel,client}=setup()
+    const command=vi.mocked(client.command)
+    command.mockRejectedValueOnce(new Error('connection lost')).mockResolvedValue({status:'completed'})
+    const intent={type:'project.create' as const,name:'HTTP local project'}
+    await expect(panel.submit(intent)).rejects.toThrow('connection lost')
+    await panel.submit(intent)
+    const first=command.mock.calls[0]![0]
+    expect(first.commandId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    expect(command.mock.calls[1]![0]).toEqual(first)
+    await panel.submit(intent)
+    expect(command.mock.calls[2]![0].commandId).not.toBe(first.commandId)
   })
   it('retries an uncertain spec save with the same command identity and backend version',async()=>{
     const {panel,client}=setup()
