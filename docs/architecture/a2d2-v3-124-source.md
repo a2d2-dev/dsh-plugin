@@ -105,3 +105,13 @@ GH_CONFIG_DIR=/root/.config/gh XDG_STATE_HOME=/tmp/a2d2-v3-gh-state node scripts
 完整回归 `pnpm test`：50 文件、716 tests 通过，exit 0；随后补充子 Issue 重复／跨仓库同号和已接受本地修改测试，最终来源相关三文件 24 tests 通过，exit 0。`pnpm typecheck`、src-only `tsc -p tsconfig.build.json --noEmit`、`pnpm build`、打包安装后的 14 个 Node exports 校验与真实 smoke 均 exit 0，无 skip。浏览器／部署验收未执行。
 
 前端后续应安全呈现不可信原文，区分 `lastError`、缓存内容、待确认标准和能力边界；接入返回 canonical ref 后再导航，不凭 Issue number 拼 TaskId。#132 的 UUID／资源提示独立提交应在 UI 集成时复核。本阶段未验证 18782 浏览器／整体部署、GitHub 写操作、真实任务执行／完成，也未实现 #125 完整视图。
+
+### 单轮 review 整改验证
+
+整改起点为 `875c52899d87e012ebe82ffbc852f478d633a438`，review base 固定为 `1f562b107ad9adc046b1f0bb01929185b5c7d234`。本轮仅处理已裁决 R1／R2：
+
+- R1 根因：配置 schema 和生产适配器重复使用首字符必须字母数字的正则，且共用 owner／repository 规则。`pnpm exec vitest run tests/work-sources.spec.ts -t 'configures, reads and imports a legal .github'` 先 exit 1，修后 exit 0；`pnpm exec vitest run tests/github-source.spec.ts -t 'reads legal repository'` 先 3 failed／1 passed，修后 4 passed。危险组件在配置与适配器两个公开入口均被拒绝；HTTP 固定响应仅置于外部网络边界，真实应用、存储与适配器未替换。
+- R2 根因：当前来源按观察 URL 查找并提前返回，未读取已保存别名的唯一索引。`pnpm exec vitest run tests/work-sources.spec.ts -t 'reuses the canonical Task when a renamed source'` 先 exit 1，修后 exit 0；场景实际配置两个来源，保存 old／new URL 后再次以旧 URL 接入，并覆盖无端口重开、同 commandId 并发重试。补充未知 URL、当前来源无 node／仅同号其他 node 和跨 Project 归属负向回归，原 node／URL 索引冲突回归保持通过。
+- 最终 `pnpm exec vitest run tests/github-source.spec.ts tests/work-sources.spec.ts tests/work-host.spec.ts` 为 3 文件／56 tests 通过；`pnpm exec tsc -p tsconfig.build.json --noEmit`、`pnpm typecheck`、`pnpm verify:pack-exports`（含完整 build 与安装包 14 个 Node exports）均 exit 0。构建只有既存 tsdown `external`／`noExternal` 弃用提示。
+
+本轮未重跑全量。CEO 的独立全量结果为 716／718，两项失败为旧运行器 afterEach `ENOTEMPTY` 与 5000ms cold-create timeout；CEO 另在固定 base、相同依赖下复现 `ENOTEMPTY`，cold-create 通过，单独基线记账。本轮未修改 runtime、timeout、依赖或锁文件，也未提交编译产物。先前真实 GitHub smoke 是原实现证据，本轮未重跑真实 GitHub 网络、UI／截图、服务或部署；没有 GitHub 业务写入。HTTP 200 非法 JSON 的错误分类限制见上文，未扩大修复。
