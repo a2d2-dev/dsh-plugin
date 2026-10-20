@@ -1,0 +1,150 @@
+{
+  "product": "b14ed4175a7ca9e807f0ba1f483803d96ba5acbe",
+  "resourceResult": {
+    "http": 200,
+    "body": {
+      "status": "completed",
+      "resources": [
+        {
+          "ref": {
+            "runtimeId": "9bcb186a-66ac-4ef5-94e9-d63cfbc99de8",
+            "workspaceId": "5c315e1e-22eb-446f-b7d1-8dffb08b0bd0"
+          },
+          "title": "workspace"
+        }
+      ]
+    },
+    "request": {
+      "kind": "query",
+      "value": {
+        "type": "resources.list"
+      }
+    }
+  },
+  "projectResult": {
+    "http": 200,
+    "body": {
+      "status": "completed",
+      "project": {
+        "id": "11bf796b-a631-493b-a416-91d6fea93c78",
+        "name": "admission-diagnostic",
+        "version": 1,
+        "defaultAgentId": "b9cb03cc-c141-45f5-9901-335af41f9b43",
+        "resources": [
+          {
+            "runtimeId": "9bcb186a-66ac-4ef5-94e9-d63cfbc99de8",
+            "workspaceId": "5c315e1e-22eb-446f-b7d1-8dffb08b0bd0"
+          }
+        ]
+      }
+    },
+    "request": {
+      "kind": "command",
+      "value": {
+        "commandId": "8eba6fe7-4e67-4101-b8fe-803f99e0cc43",
+        "type": "project.create",
+        "name": "admission-diagnostic",
+        "resource": {
+          "runtimeId": "9bcb186a-66ac-4ef5-94e9-d63cfbc99de8",
+          "workspaceId": "5c315e1e-22eb-446f-b7d1-8dffb08b0bd0"
+        }
+      }
+    }
+  },
+  "taskResult": {
+    "http": 200,
+    "body": {
+      "status": "completed",
+      "task": {
+        "id": "595665b3-b24f-43a5-93a7-a23468845b84",
+        "projectId": "11bf796b-a631-493b-a416-91d6fea93c78",
+        "title": "Check real host admission",
+        "goal": "Deterministic admission",
+        "version": 1,
+        "specification": {
+          "version": 1,
+          "text": "Preflight only; no fake Context",
+          "acceptance": [
+            "No execution on preflight rejection"
+          ]
+        },
+        "agentId": "b9cb03cc-c141-45f5-9901-335af41f9b43",
+        "specificationHistory": [],
+        "breakdown": [],
+        "children": [],
+        "sessions": [],
+        "activity": [
+          {
+            "commandId": "993fcf13-77eb-4bd4-812b-0b27b7c403a2",
+            "type": "task.create",
+            "version": 1
+          }
+        ]
+      }
+    },
+    "request": {
+      "kind": "command",
+      "value": {
+        "commandId": "993fcf13-77eb-4bd4-812b-0b27b7c403a2",
+        "type": "task.create",
+        "projectId": "11bf796b-a631-493b-a416-91d6fea93c78",
+        "title": "Check real host admission",
+        "goal": "Deterministic admission",
+        "specification": "Preflight only; no fake Context",
+        "acceptance": [
+          "No execution on preflight rejection"
+        ]
+      }
+    }
+  },
+  "start": {
+    "http": 400,
+    "body": {
+      "status": "failed",
+      "error": {
+        "code": "host-admission-failed",
+        "message": "Host execution admission failed"
+      }
+    },
+    "request": {
+      "kind": "command",
+      "value": {
+        "commandId": "1f83d6a1-7f1a-4733-86e0-2e470cd09b21",
+        "type": "task.start",
+        "ref": {
+          "projectId": "11bf796b-a631-493b-a416-91d6fea93c78",
+          "taskId": "595665b3-b24f-43a5-93a7-a23468845b84"
+        },
+        "expectedVersion": 1,
+        "agentId": "b9cb03cc-c141-45f5-9901-335af41f9b43",
+        "resource": {
+          "runtimeId": "9bcb186a-66ac-4ef5-94e9-d63cfbc99de8",
+          "workspaceId": "5c315e1e-22eb-446f-b7d1-8dffb08b0bd0"
+        },
+        "agentPreset": "standard",
+        "model": {
+          "provider": "a2d2-acceptance",
+          "model": "deterministic"
+        },
+        "permissionPreset": "read-only"
+      }
+    }
+  },
+  "execution": {
+    "http": 200,
+    "body": {
+      "status": "completed"
+    },
+    "request": {
+      "kind": "query",
+      "value": {
+        "type": "task.execution",
+        "ref": {
+          "projectId": "11bf796b-a631-493b-a416-91d6fea93c78",
+          "taskId": "595665b3-b24f-43a5-93a7-a23468845b84"
+        }
+      }
+    }
+  },
+  "tgzSHA256": "71f71859b202c64f9fd061994088fa6303f2eab9139c0f4713424e31696538e4"
+}

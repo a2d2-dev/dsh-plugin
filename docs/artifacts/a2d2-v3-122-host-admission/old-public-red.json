@@ -1,0 +1,149 @@
+{
+  "product": "07297921961d01f0da7ac15336f33131b5188a6a",
+  "resourceResult": {
+    "http": 200,
+    "body": {
+      "status": "completed",
+      "resources": [
+        {
+          "ref": {
+            "runtimeId": "8e18a6eb-6701-4b67-9b08-4ffef6888721",
+            "workspaceId": "ae06b951-3318-43f7-a721-0a7354dc5aba"
+          },
+          "title": "workspace"
+        }
+      ]
+    },
+    "request": {
+      "kind": "query",
+      "value": {
+        "type": "resources.list"
+      }
+    }
+  },
+  "projectResult": {
+    "http": 200,
+    "body": {
+      "status": "completed",
+      "project": {
+        "id": "0a45fb22-eee8-4011-b23f-72e84faeffc9",
+        "name": "admission-diagnostic",
+        "version": 1,
+        "defaultAgentId": "53616647-3c0d-4097-92b2-a881a040104b",
+        "resources": [
+          {
+            "runtimeId": "8e18a6eb-6701-4b67-9b08-4ffef6888721",
+            "workspaceId": "ae06b951-3318-43f7-a721-0a7354dc5aba"
+          }
+        ]
+      }
+    },
+    "request": {
+      "kind": "command",
+      "value": {
+        "commandId": "867ed908-3ad0-4733-8005-af28e3d5ed08",
+        "type": "project.create",
+        "name": "admission-diagnostic",
+        "resource": {
+          "runtimeId": "8e18a6eb-6701-4b67-9b08-4ffef6888721",
+          "workspaceId": "ae06b951-3318-43f7-a721-0a7354dc5aba"
+        }
+      }
+    }
+  },
+  "taskResult": {
+    "http": 200,
+    "body": {
+      "status": "completed",
+      "task": {
+        "id": "a631bc5e-78cc-4f1b-b2f9-f1c4144e33eb",
+        "projectId": "0a45fb22-eee8-4011-b23f-72e84faeffc9",
+        "title": "Check real host admission",
+        "goal": "Deterministic admission",
+        "version": 1,
+        "specification": {
+          "version": 1,
+          "text": "Preflight only; no fake Context",
+          "acceptance": [
+            "No execution on preflight rejection"
+          ]
+        },
+        "agentId": "53616647-3c0d-4097-92b2-a881a040104b",
+        "specificationHistory": [],
+        "breakdown": [],
+        "children": [],
+        "sessions": [],
+        "activity": [
+          {
+            "commandId": "eea1c355-85c7-44f8-98ac-fb441c473591",
+            "type": "task.create",
+            "version": 1
+          }
+        ]
+      }
+    },
+    "request": {
+      "kind": "command",
+      "value": {
+        "commandId": "eea1c355-85c7-44f8-98ac-fb441c473591",
+        "type": "task.create",
+        "projectId": "0a45fb22-eee8-4011-b23f-72e84faeffc9",
+        "title": "Check real host admission",
+        "goal": "Deterministic admission",
+        "specification": "Preflight only; no fake Context",
+        "acceptance": [
+          "No execution on preflight rejection"
+        ]
+      }
+    }
+  },
+  "start": {
+    "http": 400,
+    "body": {
+      "status": "failed",
+      "error": {
+        "code": "host-admission-failed",
+        "message": "Host execution admission failed"
+      }
+    },
+    "request": {
+      "kind": "command",
+      "value": {
+        "commandId": "18431bcc-c2f9-4423-8ec8-12a2aadc78f8",
+        "type": "task.start",
+        "ref": {
+          "projectId": "0a45fb22-eee8-4011-b23f-72e84faeffc9",
+          "taskId": "a631bc5e-78cc-4f1b-b2f9-f1c4144e33eb"
+        },
+        "expectedVersion": 1,
+        "agentId": "53616647-3c0d-4097-92b2-a881a040104b",
+        "resource": {
+          "runtimeId": "8e18a6eb-6701-4b67-9b08-4ffef6888721",
+          "workspaceId": "ae06b951-3318-43f7-a721-0a7354dc5aba"
+        },
+        "agentPreset": "standard",
+        "model": {
+          "provider": "a2d2-acceptance",
+          "model": "deterministic"
+        },
+        "permissionPreset": "read-only"
+      }
+    }
+  },
+  "execution": {
+    "http": 200,
+    "body": {
+      "status": "completed"
+    },
+    "request": {
+      "kind": "query",
+      "value": {
+        "type": "task.execution",
+        "ref": {
+          "projectId": "0a45fb22-eee8-4011-b23f-72e84faeffc9",
+          "taskId": "a631bc5e-78cc-4f1b-b2f9-f1c4144e33eb"
+        }
+      }
+    }
+  }
+}

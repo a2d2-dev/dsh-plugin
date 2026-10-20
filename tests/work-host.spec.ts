@@ -11,6 +11,7 @@ import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import WorkspaceRegistry from '@deepseek-ai/dsh-workspace'
 import { afterEach, expect, it } from 'vitest'
+import { mountExecution } from './work-execution-fixture.ts'
 import * as plugin from '../src/work-plugin.ts'
 import { WORK_ROUTE_PATH } from '../src/work-types.ts'
 import type { WorkCompleted, WorkRequest, WorkResult } from '../src/work-types.ts'
@@ -114,6 +115,36 @@ it('exposes real local commands and trusted persisted host Sessions through the 
     .toMatchObject({ status: 'completed', task: { id: task.id, sessions: [{ session: candidates[0]!.ref }] } })
   expect(completed((await call(reload.server, { kind: 'query', value: { type: 'resources.list' } })).body).resources?.[0]?.ref.runtimeId)
     .toBe(resources[0]!.ref.runtimeId)
+})
+
+it('starts through the production plugin Context with real execution services and one deterministic kickoff', async () => {
+  const path = await root()
+  const { ctx, model } = await mountExecution(path, 'read-only')
+  contexts.push(ctx)
+  await ctx.plugin(WebServer)
+  await ctx.plugin(Connection)
+  await ctx.plugin(plugin, { directory: join(path, 'production-work') })
+  const server = ctx.get('webServer') as unknown as WebServer
+  const resources = completed((await call(server, { kind: 'query', value: { type: 'resources.list' } })).body).resources!
+  const resource = resources[0]!.ref
+  const project = completed((await call(server, { kind: 'command', value: { type: 'project.create', commandId: 'project', name: 'Production execution', resource } })).body).project!
+  const task = completed((await call(server, { kind: 'command', value: { type: 'task.create', commandId: 'task', projectId: project.id,
+    title: 'Start with real services', goal: 'Admit from the production Context', specification: 'Resolve services through the mounted plugin', acceptance: ['One deterministic kickoff'] } })).body).task!
+  const ref = { projectId: project.id, taskId: task.id }
+  const command = { kind: 'command', value: { type: 'task.start', commandId: 'start', ref, expectedVersion: 1,
+    agentId: project.defaultAgentId, resource, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'read-only' } } as const
+  const started = await call(server, command)
+  expect(started, JSON.stringify(started)).toMatchObject({ status: 200, body: { status: 'completed', execution: { state: 'ready', actual: { cwd: path, permissionPreset: 'read-only', provider: 'contract', model: 'selected' } } } })
+  const execution = completed(started.body).execution!
+  const agent = ctx.agents.get(SessionId(execution.session.sessionId))!
+  await agent.whenIdle()
+  expect(model.requests).toHaveLength(1)
+  expect(model.requests[0]).toMatchObject({ provider: 'contract', model: 'selected' })
+  expect(ctx.agentDefaultModel.currentSelection()).toEqual({ provider: 'contract', model: 'default' })
+  expect((await call(server, command)).body).toMatchObject({ execution: { id: execution.id, session: execution.session } })
+  await agent.whenIdle()
+  expect(model.requests).toHaveLength(1)
+  expect(await ctx.sessionPersistence.list()).toHaveLength(1)
 })
 
 it('uses host operator authentication for reads, writes and retry receipts before reading request bodies', async () => {
