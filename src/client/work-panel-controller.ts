@@ -217,8 +217,8 @@ export class WorkPanelController {
     const origin=this.sourceOrigin;this.sourceOrigin=null
     this.update({...(origin??{}),detail:null,loading:false,error:null})
   }
-  close(): void { this.navigation.selectPanel(null) }
-  openSession(session: SessionRef): void { this.navigation.openSession(session.sessionId) }
+  close(): void { ++this.revision; this.invalidateSourceNavigation(); this.update({loading:false}); this.navigation.selectPanel(null) }
+  openSession(session: SessionRef): void { ++this.revision; this.invalidateSourceNavigation(); this.update({loading:false}); this.navigation.openSession(session.sessionId) }
   setSearch(search: string): void { this.update({ search }) }
   setView(view: LocalView): void { this.update({ view }) }
   setDetailTab(detailTab: DetailTab): void { this.update({ detailTab }) }
