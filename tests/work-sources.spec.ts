@@ -87,6 +87,39 @@ it('blocks URL-only work that has never been fetched, then reuses normalized URL
   const imported = completed(await app.execute(command, operator))
   expect(await app.execute({ ...command, commandId: 'url-again', url: issue.url }, operator)).toMatchObject({ status: 'completed', task: { id: imported.task!.id } })
 })
+it('reuses an imported child after repeated pages while same-number Issues in another repository remain distinct', async () => {
+  const otherIssue = { ...issue, nodeId: 'I_other_repo_112', url: 'https://github.com/a2d2-dev/other/issues/112', repository: { owner: 'a2d2-dev', repository: 'other' } }
+  const { app, project, source } = await open({ ...port, list: async repository => ({ identity, items: repository.repository === 'other' ? [otherIssue] : [issue, issue], observedAt: issue.observedAt }) })
+  await app.query(pageQuery(source), operator)
+  const command = { type: 'source.import', projectId: project.id, sourceId: source.id, nodeId: issue.nodeId }
+  const child = completed(await app.execute({ ...command, commandId: 'child-import' }, operator)).task!
+  const parent = completed(await app.execute({ type: 'task.create', commandId: 'parent', projectId: project.id, title: 'Parent', goal: 'Organize child', specification: 'Keep unique child work', acceptance: ['One child identity'] }, operator)).task!
+  const ref = { projectId: project.id, taskId: parent.id }
+  await app.execute({ type: 'task.link-child', commandId: 'link-child', ref, expectedVersion: 1, child: { projectId: project.id, taskId: child.id }, childExpectedVersion: 1 }, operator)
+  await app.query(pageQuery(source, true, 2), operator)
+  expect(await app.execute({ ...command, commandId: 'repeat-child' }, operator)).toMatchObject({ status: 'completed', task: { id: child.id, parent: ref } })
+  const other = completed(await app.execute({ type: 'source.configure', commandId: 'same-number-source', projectId: project.id, repository: otherIssue.repository }, operator)).source!
+  await app.query(pageQuery(other), operator)
+  const separate = completed(await app.execute({ ...command, commandId: 'other-repo-import', sourceId: other.id, nodeId: otherIssue.nodeId }, operator)).task!
+  expect(separate.id).not.toBe(child.id)
+  expect(completed(await app.query({ type: 'task.detail', ref }, operator)).children).toMatchObject([{ id: child.id }])
+})
+it('retains an explicitly revised local specification through remote state changes and disabled-source rereads', async () => {
+  let current = issue, calls = 0
+  const { app, project, source } = await open({ ...port, list: async () => { calls++; return { identity, items: [current], observedAt: current.observedAt } } })
+  await app.query(pageQuery(source), operator)
+  const imported = completed(await app.execute({ type: 'source.import', commandId: 'import-before-edit', projectId: project.id, sourceId: source.id, nodeId: issue.nodeId }, operator))
+  const ref = imported.ref!
+  const revised = completed(await app.execute({ type: 'task.update-spec', commandId: 'accept-local-spec', ref, expectedVersion: 1, goal: 'Accepted revised goal', specification: 'User-approved local specification', acceptance: ['User-approved criterion'] }, operator)).task!
+  current = { ...issue, body: 'Remote conflicting content', state: 'closed', updatedAt: '2026-10-20T00:00:00Z' }
+  await app.query(pageQuery(source), operator)
+  expect(await app.query({ type: 'task.detail', ref }, operator)).toMatchObject({ task: revised, bindings: [{ accepted: issue, lastObserved: current }] })
+  await app.execute({ type: 'source.set-enabled', commandId: 'disable-with-work', projectId: project.id, sourceId: source.id, expectedVersion: 1, enabled: false }, operator)
+  expect(await app.query(pageQuery(source), operator)).toMatchObject({ status: 'failed', error: { code: 'source-disabled' } })
+  expect(calls).toBe(2)
+  expect(await app.query(pageQuery(source, false), operator)).toMatchObject({ status: 'completed', page: { items: [current] } })
+  expect(await app.query({ type: 'task.detail', ref }, operator)).toMatchObject({ status: 'completed', task: revised, bindings: [{ accepted: issue }] })
+})
 const pageQuery = (source: WorkSource, refresh = true, page = 1) => ({ type: 'source.issues', projectId: source.projectId, sourceId: source.id, refresh, page, perPage: 2, assignee: '@me', state: 'open' })
 it('browses without creating work then atomically accepts source content, binding and retry receipt without invented acceptance', async () => {
   const { app, directory, project, source } = await open()

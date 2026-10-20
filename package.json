@@ -6,6 +6,10 @@
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
   "exports": {
+    "./work-sources": {
+      "types": "./lib/types/work-sources.d.ts",
+      "default": "./lib/work-sources.js"
+    },
     "./work": {
       "types": "./lib/types/work.d.ts",
       "default": "./lib/work.js"
