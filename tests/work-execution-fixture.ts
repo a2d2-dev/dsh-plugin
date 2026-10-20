@@ -101,7 +101,7 @@ export async function mountExecution(path: string, permissionPreset = 'workspace
   } })
   await ctx.plugin(AgentPresets, { default: 'contract' })
   await ctx.agentPresets.register({ id: 'contract', plugins: [{ name: import.meta.resolve('@deepseek-ai/dsh-tool-fs') }] })
-  new SessionController(ctx, { nativeOpen: false })
+  await ctx.plugin(SessionController, { nativeOpen: false })
   await ctx.plugin(A2d2Service, { root: path })
   const workspace = await ctx.workspaceRegistry.create(path)
   const host = new DshWorkHost(ctx, 'runtime')

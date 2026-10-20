@@ -55,7 +55,9 @@ export class RuntimeHost {
   }
   async profile(source: SessionId) { return rootSessionProfile(this.ctx, source) }
   async flush(agent: Agent): Promise<void> {
-    if (!await this.ctx.sessions.flush(agent.session)) throw new Error(`Session ${agent.id} is no longer live`)
+    const sessions = this.ctx.get('sessions')
+    if (!sessions) throw new Error('DSH sessions is required to flush managed execution')
+    if (!await sessions.flush(agent.session)) throw new Error(`Session ${agent.id} is no longer live`)
   }
   async events(id: SessionId): Promise<readonly Event[]> {
     using observation = await this.query.observeSession(id)

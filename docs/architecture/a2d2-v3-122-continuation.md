@@ -15,7 +15,7 @@
 
 ### 非目标及未完成 AC
 
-B1 不实现手动接续、完整 prepare/write/create/take/deliver、退休 Session 的持久失权、历史只读投影或客户端 UI。独立分支负责真实 Web host-admission-failed 的服务获取修复，本分支没有更改其 admission check；可选工具注册测试不能替代真实 Web 执行 lane。独立 fixture 生命周期补丁 `1608832` 的选择性整合仍是显式后续项，不改变原 5 秒预算或既有断言。
+B1 不实现手动接续、完整 prepare/write/create/take/deliver、退休 Session 的持久失权、历史只读投影或客户端 UI。下文“B2 前置整合检查点”记录后续选择性整合；独立 fixture 生命周期补丁 `1608832` 不改变原 5 秒预算或既有断言。
 
 ## 架构
 
@@ -105,3 +105,15 @@ await app.query({ type: 'task.execution', ref }, operator)
 3. B2 从旧 `src/task-runtime/runner.ts` 抽取或共享 prepare/write/create/take/deliver 的深层恢复机制；固定 operation/source/successor/profile/完整 UserMessage ID，新权威采用 TaskRef/ExecutionId/owner/epoch。源材料须含本地目标、规格、具体决定、证据、未完项和下一步。take 在真实维护边界原子更新 current/retired/epoch 与双向占用，完整覆盖副作用已发生但回执丢失窗口。
 4. B3 以 base-owned 持久 guard 覆盖退休冷 Session、native inbox/维护排队输入与迟到工具锁内提交；独立消费者卸载后仍 fail-closed。历史查询只走真实 SessionQuery.observeSession/inspect，有 TaskRef/SessionRef 关系与 runtime/workspace 校验及分页/裁剪。公开 DTO 给 UI 分支，普通 follow/openSession 不算只读历史。
 5. 每片串行验证后立即 commit/push 并报告 SHA；本阶段没有创建 PR、合并、部署或修改宿主。最后仍须分别 typecheck 与 src-only build/pack，并完整报告整票未满足 AC。
+
+## B2 前置整合检查点：生产 Context
+
+本片从 `9f52e9754e4959477b01b1bbf2b29d4b7609c217` 开始，选择性整合独立宿主分支 `fc6b376` → `9b448075` 的产品修复和生产插件回归。保留 B1 ensure/settle 的 `whenIdle`、真实模型工具注册及全部 19 项 execution 行为。没有整文件覆盖旧基线。
+
+生产 work-plugin Context 仅声明浏览服务依赖，直接访问 workspaceRegistry 等执行服务会抛 `without inject`，此前被包装为 `host-admission-failed`。DshWorkExecutionHost 现在通过公开动态 `ctx.get` 取得执行服务，并在预约前核对 Controller 的 create/inspect/modelCatalog/resolveAgent；共享 RuntimeHost.flush 同样动态取得 sessions。fixture 通过 `ctx.plugin(SessionController)` 装配真实静态依赖，保留真实 fs/bash sandbox、workspace 参数和局部模型选择。
+
+核心场景仍通过公开 `task.start` / `task.execution`：缺 create 或 modelCatalog 时 HTTP400 `host-capability-unavailable`，不保存 execution、不创建 Session、不调用模型；能力恢复后 ready/actual 对应选定目录与权限，kickoff 一次，重试保持同 Execution/Session，宿主默认模型不变。本片未启动 Web server，也未接管 18780/18781。
+
+本轮先运行原生产 Context 回归，退出1：1失败、3未选，实际 HTTP400 admission。修复后定向退出0：1通过、3未选。串行运行四个 work 文件退出0：36/36通过、0未选，包括原19 execution用例。首次 pnpm 启动前依赖自检报告 ignored native builds；Vitest 仍实际启动并给出上述红断言，随后使用本地 Node 入口，未修改依赖、lockfile 或脚本批准策略。
+
+独立产品 lane 的真实 tgz HTTP + TaskRef 单调用预算证据归 `b93604a3702def9a54f9a36a198b39c4f216e68e`，其旧红证据保留在源提交；该 lane 不作为本片集成 artifact 的产品验证。最终产品 lane 须重新构建本分支真实 tgz，再执行 UI/start/current 导航。B2/B3 全部 AC 仍保留。
