@@ -111,6 +111,26 @@ const specification = '\n    preserve code indentation\n'
 const acceptance = ['先验证A\n再验证B']
 
 describe('production Issue source acceptance controls', () => {
+  it('keeps an accepted import saved without changing navigation after the production panel unmounts', async () => {
+    const identity={login:'source-reader',nodeId:'U1',name:null}
+    const issue={nodeId:'I124',number:124,url:'https://github.com/a2d2-dev/dsh-plugin/issues/124',repository:{owner:'a2d2-dev',repository:'dsh-plugin'},title:'Unmounted import',body:'Accepted body',state:'open' as const,assignees:[],labels:[],updatedAt:'2026-10-20T00:00:00Z',observedAt:'2026-10-21T00:00:00Z'}
+    await withPanel(async panel => {
+      await panel.configureSource('a2d2-dev','dsh-plugin');await panel.openIssue(124)
+      const mounted=await mountWorkPanel({controller:panel},'WorkPanel')
+      let release!:()=>void, saved!:()=>void
+      const response=new Promise<void>(done=>{release=done}), committed=new Promise<void>(done=>{saved=done})
+      const command=panel.client.command.bind(panel.client)
+      panel.client.command=async value=>{const result=await command(value);saved();await response;return result}
+      const pending=panel.acceptIssue()
+      try {
+        await committed
+        mounted.unmount()
+      } finally { release() }
+      await pending
+      expect(panel.getSnapshot()).toMatchObject({object:'issues',detail:null,source:{loading:false,issue:{number:124}}})
+      expect((await panel.client.query({type:'project.detail',projectId:panel.getSnapshot().projectId!})).tasks).toMatchObject([{title:'Unmounted import'}])
+    },undefined,{list:async()=>({identity,items:[issue],observedAt:issue.observedAt}),detail:async()=>({identity,issue})})
+  })
   it('accepts an observed null body through the enabled UI action and preserves missing body and acceptance indicators', async () => {
     const identity={login:'imneov',nodeId:'U1',name:'LiuFeng'}
     const issue={nodeId:'I112',number:112,url:'https://github.com/a2d2-dev/dsh-plugin/issues/112',repository:{owner:'a2d2-dev',repository:'dsh-plugin'},title:'Observed empty Issue body',body:null,state:'open' as const,assignees:['imneov'],labels:[],updatedAt:'2026-10-20T00:00:00Z',observedAt:'2026-10-21T00:00:00Z'}

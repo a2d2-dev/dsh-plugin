@@ -61,6 +61,20 @@ async function setup(directory: string) {
 }
 
 describe('source receipts respect the latest public navigation', () => {
+  it.each(['source.import', 'source.link', 'source.configure'] as const)('%s does not undo a newer selection or reload of the same project', async type => {
+    for (const navigate of ['select', 'load'] as const) await withSource(async ({ panel, client, project, taskB, delay }) => {
+      const receipt = delay(type)
+      const pending = type === 'source.configure' ? panel.configureSource('another-owner', 'another-repo') : panel.acceptIssue(type === 'source.link' ? taskB : undefined)
+      expect(await receipt.saved).toMatchObject({ status: 'completed' })
+      if (navigate === 'select') await panel.selectProject(project.id)
+      else await panel.load()
+      const selected = panel.getSnapshot()
+      receipt.release()
+      await pending
+      expect(panel.getSnapshot()).toMatchObject({ object: selected.object, detail: selected.detail, source: selected.source, error: selected.error, loading: false })
+      if (type !== 'source.configure') expect(panel.getSnapshot().tasks).toEqual((await client.query({ type: 'project.detail', projectId: project.id })).tasks)
+    })
+  })
   it.each(['source.import', 'source.link', 'source.configure'] as const)('%s finishes saving without changing a closed panel or a native Session navigation', async type => {
     for (const exit of ['close', 'session'] as const) await withSource(async ({ panel, client, requests, navigationEvents, project, taskB, delay }) => {
       const receipt = delay(type)
