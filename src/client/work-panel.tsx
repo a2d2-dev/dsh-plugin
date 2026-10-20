@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import type { DetailTab, LocalView, WorkPanelController } from './work-panel-controller.ts'
 import type { AssociatedWork, BreakdownBlock, HostResource, SessionCandidate, WorkTask } from '../work-types.ts'
+import { browserUUID } from './browser-uuid.ts'
 import { message } from './work-panel-controller.ts'
 import styles from './work-panel.module.css'
 
@@ -85,7 +86,8 @@ function ProjectForm({controller,attach,onSaved}:{controller:WorkPanelController
   }
   return <form onSubmit={event=>void submit(event)} className={styles.form}>
     {!attach && <label>项目名称<input required value={name} onChange={event=>setName(event.target.value)}/></label>}
-    <label>{attach?'已有宿主资源':'已有宿主资源（可选）'}<select required={attach} value={resource} onChange={event=>setResource(event.target.value)}><option value="">{loading?'正在读取资源…':attach?'选择资源':'独立本地项目'}</option>{resources.map((item,index)=><option key={`${item.ref.runtimeId}/${item.ref.workspaceId}`} value={index}>{item.title}</option>)}</select></label>
+    <label>{attach?'已有宿主资源':'已有宿主资源（可选）'}<select required={attach} value={resource} onChange={event=>setResource(event.target.value)}><option value="">{loading?'正在读取资源…':attach?'选择资源':'独立本地项目'}</option>{resources.map((item,index)=><option key={`${item.ref.runtimeId}/${item.ref.workspaceId}`} value={index} disabled={Boolean(item.owner)}>{item.title}{item.owner ? ` · 已归属：${item.owner.projectName}（不可选）` : ''}</option>)}</select></label>
+    <p>已归属项目的资源不可选。{attach ? '项目无需绑定目录，也可继续保存本地工作。' : '可选择“独立本地项目”，不绑定目录也能保存项目与工作。'}</p>
     <p>项目默认负责策略由后端建立。选择资源不会启动或重配会话。</p><ErrorText error={error}/><button disabled={busy || loading} type="submit">{busy?'正在保存…':'保存项目'}</button>
   </form>
 }
@@ -121,7 +123,7 @@ function BreakdownForm({controller,task,onSaved}:{controller:WorkPanelController
     event.preventDefault();setBusy(true);setError('')
     try {await controller.submit({type:'task.replace-breakdown',ref:{projectId:task.projectId,taskId:task.id},expectedVersion:task.version,blocks});await onSaved()}catch(error){setError(message(error))}finally{setBusy(false)}
   }
-  return <form onSubmit={event=>void submit(event)} className={styles.form}>{blocks.map((block,index)=><fieldset key={block.id}><legend>工作块 {index+1}</legend><label>标题<input required value={block.title} onChange={event=>setBlocks(blocks.map(item=>item.id===block.id?{...item,title:event.target.value}:item))}/></label><label>说明<textarea required value={block.description} onChange={event=>setBlocks(blocks.map(item=>item.id===block.id?{...item,description:event.target.value}:item))}/></label><button type="button" onClick={()=>setBlocks(blocks.filter(item=>item.id!==block.id))}>移除工作块 {index+1}</button></fieldset>)}<div className={styles.toolbar}><button type="button" onClick={()=>setBlocks([...blocks,{id:crypto.randomUUID(),title:'',description:''}])}>添加工作块</button><button type="submit" disabled={busy}>{busy?'正在保存…':'保存拆解'}</button></div><ErrorText error={error}/></form>
+  return <form onSubmit={event=>void submit(event)} className={styles.form}>{blocks.map((block,index)=><fieldset key={block.id}><legend>工作块 {index+1}</legend><label>标题<input required value={block.title} onChange={event=>setBlocks(blocks.map(item=>item.id===block.id?{...item,title:event.target.value}:item))}/></label><label>说明<textarea required value={block.description} onChange={event=>setBlocks(blocks.map(item=>item.id===block.id?{...item,description:event.target.value}:item))}/></label><button type="button" onClick={()=>setBlocks(blocks.filter(item=>item.id!==block.id))}>移除工作块 {index+1}</button></fieldset>)}<div className={styles.toolbar}><button type="button" onClick={()=>setBlocks([...blocks,{id:browserUUID(),title:'',description:''}])}>添加工作块</button><button type="submit" disabled={busy}>{busy?'正在保存…':'保存拆解'}</button></div><ErrorText error={error}/></form>
 }
 function Sessions({controller,task,onSaved}:{controller:WorkPanelController;task:WorkTask;onSaved:()=>Promise<void>}) {
   const [candidates,setCandidates]=useState<SessionCandidate[]>([]),[selected,setSelected]=useState(''),[purpose,setPurpose]=useState<'related'|'review'>('related'),[error,setError]=useState(''),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false)

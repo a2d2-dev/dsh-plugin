@@ -192,7 +192,10 @@ export class WorkApplication {
       return mapping ? { status: 'completed', ref: mapping.ref } : failed('unknown-legacy-address', 'Legacy address has no accepted TaskRef mapping')
     }
     if (query.type === 'projects.list') return { status: 'completed', projects: state.projects }
-    if (query.type === 'resources.list') return { status: 'completed', resources: [...await this.host.resources()] }
+    if (query.type === 'resources.list') return { status: 'completed', resources: (await this.host.resources()).map(resource => {
+      const owner = state.projects.find(project => project.resources.some(ref => sameResource(ref, resource.ref)))
+      return { ref: resource.ref, title: resource.title, ...(owner ? { owner: { projectId: owner.id, projectName: owner.name } } : {}) }
+    }) }
     if (query.type === 'session.work') return { status: 'completed', work: state.tasks.flatMap(task =>
       task.sessions.filter(binding => sameSession(binding.session, query.session)).map(binding => ({
         ref: { projectId: task.projectId, taskId: task.id }, title: task.title,

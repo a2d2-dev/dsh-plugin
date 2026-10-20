@@ -2,7 +2,8 @@
 export interface TaskRef { projectId: string; taskId: string }
 export interface ResourceRef { runtimeId: string; workspaceId: string }
 export interface SessionRef { runtimeId: string; sessionId: string }
-export interface HostResource { ref: ResourceRef; title: string }
+/** Owner is a read-only resources.list projection, never a persisted resource identity. */
+export interface HostResource { ref: ResourceRef; title: string; readonly owner?: { readonly projectId: string; readonly projectName: string } }
 export interface SessionCandidate { ref: SessionRef; resource: ResourceRef; title: string }
 export interface AgentPolicy { version: number; modelCandidates: string[]; instructions: string; capabilities: string[] }
 export interface ProjectAgent { id: string; projectId: string; role: 'coordinator'; policy: AgentPolicy }

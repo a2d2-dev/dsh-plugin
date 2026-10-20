@@ -8,6 +8,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { WorkApplication } from '../src/work.ts'
 import type { WorkHost } from '../src/work.ts'
 import { WorkPanelController, message } from '../src/client/work-panel-controller.ts'
+import { browserUUID } from '../src/client/browser-uuid.ts'
+import { webcrypto } from 'node:crypto'
+import { afterEach } from 'vitest'
+afterEach(() => vi.unstubAllGlobals())
 import type { WorkTask } from '../src/work-types.ts'
 
 // Execute the production TSX and its actual JSX onChange/onSubmit callbacks in memory.
@@ -20,11 +24,11 @@ async function mountWorkPanel(props: Record<string, unknown>, component = 'TaskF
   const effects: (() => void)[] = [], cleanups: (() => void)[] = []
   const module = { exports: {} as Record<string, (props: Record<string, unknown>) => any> }
   const source = await readFile(new URL('../src/client/work-panel.tsx', import.meta.url), 'utf8')
-  const compiled = ts.transpileModule(`${source}\nexport { TaskForm, SessionWorkEntry }`, {
+  const compiled = ts.transpileModule(`${source}\nexport { TaskForm, SessionWorkEntry, BreakdownForm, ProjectForm }`, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2023 },
   }).outputText
   runInNewContext(compiled, {
-    module, exports: module.exports, AbortController,
+    module, exports: module.exports, AbortController, crypto: globalThis.crypto,
     require: (id: string) => id === 'react' ? {
       useEffect: (effect: () => void | (() => void), dependencies: unknown[]) => {
         const index = cursor++, previous = state[index] as unknown[] | undefined
@@ -37,7 +41,7 @@ async function mountWorkPanel(props: Record<string, unknown>, component = 'TaskF
         if (!(index in state)) state[index] = initial
         return [state[index], (value: unknown) => { state[index] = typeof value === 'function' ? value(state[index]) : value }]
       },
-    } : id.endsWith('.css') ? { default: {} } : id === './work-panel-controller.ts' ? { message } : require(id),
+    } : id.endsWith('.css') ? { default: {} } : id === './work-panel-controller.ts' ? { message } : id === './browser-uuid.ts' ? { browserUUID } : require(id),
   })
   const render = () => {
     cursor = 0
@@ -102,6 +106,57 @@ async function withPanel(run: (panel: WorkPanelController) => Promise<void>, hos
 const goal = '\n  保留完整目标\n'
 const specification = '\n    preserve code indentation\n'
 const acceptance = ['先验证A\n再验证B']
+
+describe('production resource selection', () => {
+  it('labels owned resources as unavailable while allowing a project without a directory', async () => {
+    const resource = { ref: { runtimeId: 'host-owner', workspaceId: 'occupied' }, title: 'workspace' }
+    await withPanel(async panel => {
+      const owner = panel.getSnapshot().projects[0]!
+      await panel.submit({ type: 'project.attach-resource', projectId: owner.id, expectedVersion: owner.version, resource: resource.ref })
+      for (const attach of [false, true]) {
+        const form = await mountWorkPanel({ controller: panel, attach, onSaved: vi.fn() }, 'ProjectForm')
+        await vi.waitFor(() => expect(form.nodes('option')).toHaveLength(2))
+        const option = form.nodes('option')[1]
+        expect(option.props.disabled).toBe(true)
+        expect([option.props.children].flat(Infinity).join('')).toContain('已归属：表单往返（不可选）')
+        form.unmount()
+      }
+      const saved = vi.fn()
+      const form = await mountWorkPanel({ controller: panel, attach: false, onSaved: saved }, 'ProjectForm')
+      await vi.waitFor(() => expect(form.nodes('option')).toHaveLength(2))
+      form.change(form.inputs()[0], '无目录的本地项目')
+      form.submit()
+      await vi.waitFor(() => expect(saved).toHaveBeenCalledOnce())
+      const result = await panel.client.query({ type: 'projects.list' })
+      expect(result.projects?.find(project => project.name === '无目录的本地项目')?.resources).toEqual([])
+      form.unmount()
+    }, { resources: async () => [resource], sessions: async () => [] })
+  })
+})
+
+describe('production HTTP breakdown form', () => {
+  it('adds and saves distinct UUID v4 blocks when Crypto only provides getRandomValues', async () => {
+    vi.stubGlobal('crypto', { getRandomValues: webcrypto.getRandomValues.bind(webcrypto) })
+    await withPanel(async panel => {
+      const task = (await panel.submit({ type: 'task.create', projectId: panel.getSnapshot().projectId!, title: 'HTTP 拆解', goal, specification, acceptance })).task!
+      const saved = vi.fn()
+      const form = await mountWorkPanel({ controller: panel, task, onSaved: saved }, 'BreakdownForm')
+      form.click('添加工作块')
+      form.change(form.inputs()[0], 'HTTP 工作块一')
+      form.change(form.textareas()[0], '使用真实随机源')
+      form.click('添加工作块')
+      form.change(form.inputs()[1], 'HTTP 工作块二')
+      form.change(form.textareas()[1], '独立稳定身份')
+      form.submit()
+      await vi.waitFor(() => expect(saved).toHaveBeenCalledOnce())
+      await panel.openTask({ projectId: task.projectId, taskId: task.id })
+      const blocks = panel.getSnapshot().detail!.task!.breakdown
+      expect(blocks.map(block => block.title)).toEqual(['HTTP 工作块一', 'HTTP 工作块二'])
+      expect(new Set(blocks.map(block => block.id)).size).toBe(2)
+      for (const block of blocks) expect(block.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    })
+  })
+})
 
 describe('production session work entry', () => {
   it('returns linked blank/nonblank session references to the correct task and renders nothing for an unassociated session', async () => {
