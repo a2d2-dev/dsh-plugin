@@ -1,0 +1,17 @@
+{
+  "@deepseek-ai/dsh-agent-loop": {
+    "entry": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/core/agent-loop/lib/index.js",
+    "sha256": "00c4814d63f3d1e2754eb09144832d19b30499d6ea444730473f740b587948c2",
+    "version": "0.2.0-rc.2"
+  },
+  "@deepseek-ai/dsh-session-persistence-jsonl": {
+    "entry": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/session/session-persistence-jsonl/lib/index.js",
+    "sha256": "0845707017acc2b4a8a75eab2244fa3fd88587b8094ab32014321dce7ca1e31b",
+    "version": "0.2.0-rc.2"
+  },
+  "@deepseek-ai/dsh-agent-preset-registry": {
+    "entry": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/preset/agent-preset-registry/lib/index.js",
+    "sha256": "ed62d573b8cc6d7ed3e3cb7932dbf5e237f5a603b3cc9d9e586187db00e821cc",
+    "version": "0.2.0-rc.2"
+  }
+}

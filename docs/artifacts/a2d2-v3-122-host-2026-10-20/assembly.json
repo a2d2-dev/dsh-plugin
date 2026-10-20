@@ -1,0 +1,80 @@
+{
+  "scope": "#122 host tools, final product pending",
+  "root": "/tmp/a2d2-v3-121/122-host-positive-606fcee",
+  "plugin": null,
+  "source": {
+    "manifestSHA": "680305960b50b77329d8bf41a02dd52ef7bf1f558ee293f20a4497a647f18b24",
+    "patchSHA": "2c4ea0a3bbb6e06d145ce848b2c43a2512f7f201e5a34e82fffd695551324ffb",
+    "guardSHA": "442573774fd2c16eb858af534230cbfb8f7029ff8d483085926b14531454e62d",
+    "lifecycleSHA": "a3f1457e87949ef51345edc820028a9e19c21f2b3b39e82284ccfbf2d79419f8"
+  },
+  "provider": "a2d2-acceptance",
+  "model": "deterministic",
+  "packages": {
+    "cli": {
+      "entry": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/apps/cli/lib/bin.js",
+      "sha256": "1a03dee18683483ff6a1b27b2a1e650230da6bcca9a0f55f7d81b3308c3f307f",
+      "package": {
+        "name": "@deepseek-ai/dsh",
+        "version": "0.2.0-rc.2",
+        "path": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/apps/cli/package.json",
+        "sha256": "96845d9efaa4ab078f1405fbe28445b606b5ab79377fd607866dd46b0c0b52c1"
+      }
+    },
+    "llm": {
+      "entry": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/llm/llm/lib/index.js",
+      "sha256": "9132c8a8053ee82b9fb1ded4f98c85cf557f288a15a85c552c6b1fb319ead120",
+      "package": {
+        "name": "@deepseek-ai/dsh-llm",
+        "version": "0.2.0-rc.2",
+        "path": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/llm/llm/package.json",
+        "sha256": "ed579a752bc9db66aaef70d647e1dae6d7e7dfbda8efd34d1650b69e8c3c88ee"
+      }
+    },
+    "@deepseek-ai/dsh-api-session-controller": {
+      "entry": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/api/session-controller/lib/index.js",
+      "sha256": "bc889fbd3e95a994d9019f08feb9ce9033f4c6c918b6932f14b1c0fd109241a6",
+      "package": {
+        "name": "@deepseek-ai/dsh-api-session-controller",
+        "version": "0.2.0-rc.2",
+        "path": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/api/session-controller/package.json",
+        "sha256": "620cbfa09a1bdea3475eb49c0da97d3a6529908b16cca8063ea66b3ea71a1135"
+      }
+    },
+    "@deepseek-ai/dsh-api-workspace-controller": {
+      "entry": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/api/workspace-controller/lib/index.js",
+      "sha256": "8a6e3b407ff9a445358cee97183452c3ca391d8ff10dab53f5416fd4ad37ead5",
+      "package": {
+        "name": "@deepseek-ai/dsh-api-workspace-controller",
+        "version": "0.2.0-rc.2",
+        "path": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/api/workspace-controller/package.json",
+        "sha256": "ee42f72cffb70d13a974285cddee005ccc98d77f01a490724be2c225b339b140"
+      }
+    },
+    "@deepseek-ai/dsh-client-modules": {
+      "entry": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/client/modules/lib/index.js",
+      "sha256": "03ea21df556256a61289bae762bd1831fff43d035d49b8926d6c0f0b30b0e073",
+      "package": {
+        "name": "@deepseek-ai/dsh-client-modules",
+        "version": "0.2.0-rc.2",
+        "path": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/client/modules/package.json",
+        "sha256": "4b24105c3a7aa3dfb36e4ba9efe1e94d784c8fed6928574f67c4f73029e8d912"
+      }
+    },
+    "agent": {
+      "entry": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/core/agent/lib/index.js",
+      "sha256": "7b9aa39474de83115cf890dd7f8904cf0d59df0811cb335ab85565a04f1aac93",
+      "package": {
+        "name": "@deepseek-ai/dsh-agent",
+        "version": "0.2.0-rc.2",
+        "path": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/core/agent/package.json",
+        "sha256": "5a1933ae764443b0f725af0a069d810e55cb83857f0a99eaf78fe70b0ee1d01b"
+      }
+    }
+  },
+  "manifestSHA": "680305960b50b77329d8bf41a02dd52ef7bf1f558ee293f20a4497a647f18b24",
+  "patchSHA": "3b98eab4610ae1385f6231e45bbd74db17c25cd750993aa72c9808cef1a0b590",
+  "guardSHA": "7763d7a8043903a440514b6bc1fbed57b3d316f660ec5fbbd017f2dfca87ed90",
+  "modelSHA": "a1680290d0d06f15cfe9261599411a6f3f5359211161a872462df3ca3cb8251d",
+  "wrapperSHA": "7ff56d8463d96dc130362cb55be23a519d062b233a0407458496f20c3fba914a"
+}
