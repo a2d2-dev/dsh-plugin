@@ -21,17 +21,24 @@ export const taskSchema = z.object({
 export const modelSchema = z.object({ provider: referenceId, model: referenceId }).strict()
 export const executionSchema = z.object({
   id, ref: taskRefSchema, agentId: id, owner: id, epoch: z.number().int().positive(), resource: resourceRefSchema,
-  session: sessionRefSchema, agentPreset: referenceId, model: modelSchema, permissionPreset: referenceId, policy: policySchema,
+  session: sessionRefSchema, sessionMode: z.enum(['create', 'reuse']).default('create'), agentPreset: referenceId, model: modelSchema, permissionPreset: referenceId, policy: policySchema,
   state: z.enum(['accepted', 'creating', 'ready', 'running', 'waiting', 'paused', 'failed']),
   history: z.array(z.object({ state: z.enum(['accepted', 'creating', 'ready', 'running', 'waiting', 'paused', 'failed']), commandId: referenceId }).strict()),
   actual: z.object({ runtimeId: referenceId, cwd: text, agentPreset: referenceId, provider: referenceId, model: referenceId,
     permissionPreset: referenceId, sandbox: referenceId, approval: referenceId }).strict().optional(),
+  events: z.array(z.object({ id: referenceId, text, kind: z.enum(['input', 'result']), delivery: z.enum(['accepted', 'delivered', 'consumed']), acceptance: z.literal('unassessed') }).strict()).default([]),
+  progress: text.optional(),
+  control: z.object({ commandId: referenceId, action: z.enum(['wait', 'pause', 'resume']), status: z.enum(['accepted', 'applied']), reason: text.optional() }).strict().optional(),
   error: z.object({ code: referenceId, message: text }).strict().optional(),
 }).strict()
 const command = { commandId: referenceId }
 const content = { title: text, goal: text, specification: text, acceptance: z.array(text).min(1).max(1000) }
 const change = { ...command, ref: taskRefSchema, expectedVersion: z.number().int().positive() }
+const fence = { ...command, ref: taskRefSchema, executionId: id, owner: id, epoch: z.number().int().positive() }
 export const commandSchema = z.discriminatedUnion('type', [
+  z.object({ ...fence, type: z.literal('task.control'), action: z.enum(['progress', 'wait', 'pause', 'resume']), text }).strict(),
+  z.object({ ...fence, type: z.literal('task.input'), text, kind: z.enum(['input', 'result']) }).strict(),
+  z.object({ ...fence, type: z.literal('task.reconcile') }).strict(),
   z.object({ ...command, type: z.literal('project.create'), name: text, resource: resourceRefSchema.optional() }).strict(),
   z.object({ ...command, type: z.literal('project.attach-resource'), projectId: id, expectedVersion: z.number().int().positive(), resource: resourceRefSchema }).strict(),
   z.object({ ...command, ...content, type: z.literal('task.create'), projectId: id }).strict(),

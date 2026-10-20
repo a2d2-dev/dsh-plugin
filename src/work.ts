@@ -4,6 +4,9 @@ import { isAbsolute, join, normalize } from 'node:path'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { commandSchema, querySchema, snapshotSchema } from './work-schema.ts'
 import type { WorkSnapshot } from './work-schema.ts'
+import { WorkExecutionError } from './work-execution/host.ts'
+import type { WorkExecutionHost } from './work-execution/host.ts'
+export type { WorkExecutionHost } from './work-execution/host.ts'
 import type { HostResource, Project, ResourceRef, SessionCandidate, TaskRef, WorkCommand, WorkResult, WorkTask } from './work-types.ts'
 export type * from './work-types.ts'
 
@@ -11,6 +14,7 @@ export type * from './work-types.ts'
 export interface WorkActor { readonly operator: boolean }
 /** Read-only host port: no session creation, mutation, model invocation or coordination capability. */
 export interface WorkHost {
+  execution?: WorkExecutionHost
   resources(): Promise<readonly HostResource[]>
   sessions(resource: HostResource): Promise<readonly SessionCandidate[]>
 }
@@ -44,8 +48,13 @@ export class WorkApplication {
     const parsed = commandSchema.safeParse(input)
     if (!parsed.success) return failed('invalid-command', 'Invalid work command')
     const command = parsed.data
+    if (command.type === 'task.start') {
+      if (!this.host.execution) return failed('host-capability-unavailable', 'This host has no managed execution capability')
+      try { await this.host.execution.check({ ...command, sessionMode: command.session ? 'reuse' : 'create', session: command.session ?? { runtimeId: command.resource.runtimeId, sessionId: `session-${randomUUID()}` } }) }
+      catch (error) { return failed(error instanceof WorkExecutionError ? error.code : 'host-admission-failed', error instanceof WorkExecutionError ? error.message : 'Host execution admission failed') }
+    }
     await mkdir(this.directory, { recursive: true, mode: 0o700 })
-    return withFileLock(this.file, async () => {
+    const receipt = await withFileLock<WorkResult>(this.file, async () => {
       const state = await this.load()
       const refusal = await this.authorize(state, command)
       if (refusal) return refusal
@@ -59,6 +68,57 @@ export class WorkApplication {
       await writeFileAtomic(this.file, `${JSON.stringify(state)}\n`, { mode: 0o600, dirMode: 0o700 })
       return result
     })
+    if ((command.type === 'task.start' || 'executionId' in command) && receipt.status === 'completed' && receipt.execution) {
+      if (command.type === 'task.input' && ['accepted', 'creating'].includes(receipt.execution.state)) return receipt
+      return this.ensureExecution(receipt.execution.id, command.commandId)
+    }
+    return receipt
+  }
+  private async ensureExecution(id: string, commandId: string): Promise<WorkResult> {
+    return withFileLock(join(this.directory, `${id}.execution`), async () => {
+      const save = async (change: (execution: import('./work-types.ts').WorkExecution) => void) => withFileLock(this.file, async () => {
+        const state = await this.load()
+        const execution = state.executions.find(item => item.id === id)!
+        change(execution)
+        await writeFileAtomic(this.file, `${JSON.stringify(state)}\n`, { mode: 0o600, dirMode: 0o700 })
+        return execution
+      })
+      let execution = (await this.load()).executions.find(item => item.id === id)!
+      try {
+        if (['accepted', 'creating', 'failed'].includes(execution.state)) execution = await save(item => { item.state = 'creating'; delete item.error; item.history.push({ state: 'creating', commandId }) })
+        const actual = await this.host.execution!.ensure(execution, async () => {
+          const current = (await this.load()).executions.find(item => item.id === id)
+          return !!current && current.owner === execution.owner && current.epoch === execution.epoch
+            && !['paused', 'waiting', 'failed', 'creating', 'accepted'].includes(current.state)
+            && !(current.control?.status === 'accepted' && current.control.action !== 'resume')
+        })
+        execution = await save(item => {
+          item.actual = actual
+          if (item.state === 'creating') { item.state = 'ready'; item.history.push({ state: 'ready', commandId }) }
+        })
+        const control = execution.control
+        if (control?.status === 'accepted') {
+          await this.host.execution!.settle(execution)
+          execution = await save(item => {
+            if (item.control?.commandId !== control.commandId) return
+            item.state = control.action === 'pause' ? 'paused' : control.action === 'wait' ? 'waiting' : 'ready'
+            item.control!.status = 'applied'
+            item.history.push({ state: item.state, commandId })
+          })
+        }
+        for (const event of execution.events) {
+          if (event.delivery === 'consumed') continue
+          const delivery = ['waiting', 'paused'].includes(execution.state)
+            ? await this.host.execution!.observe(execution, event)
+            : await this.host.execution!.deliver(execution, event)
+          execution = await save(item => { item.events.find(value => value.id === event.id)!.delivery = delivery })
+        }
+      } catch (error) {
+        execution = await save(item => { item.state = 'failed'; item.error = { code: error instanceof WorkExecutionError ? error.code : 'host-create-unknown',
+          message: error instanceof WorkExecutionError ? error.message : 'Host outcome is unknown; retry recovers the reserved Session and message identities' }; item.history.push({ state: 'failed', commandId }) })
+      }
+      return { status: 'completed', execution }
+    })
   }
   private async candidates(project: Project): Promise<SessionCandidate[]> {
     const resources = (await this.host.resources()).filter(item => project.resources.some(ref => sameResource(ref, item.ref)))
@@ -69,6 +129,10 @@ export class WorkApplication {
   private async authorize(state: WorkSnapshot, command: WorkCommand): Promise<WorkResult | undefined> {
     if ('ref' in command && !taskAt(state, command.ref)) return failed('unknown-task', 'Task does not belong to this project')
     if ('child' in command && command.child.projectId !== command.ref.projectId) return failed('cross-project-reference', 'Parent and child must belong to the same project')
+    if ('executionId' in command) {
+      const execution = state.executions.find(item => item.id === command.executionId && item.ref.taskId === command.ref.taskId && item.ref.projectId === command.ref.projectId)
+      if (!execution || execution.owner !== command.owner || execution.epoch !== command.epoch) return failed('stale-execution-authority', 'Execution identity, owner or epoch is stale')
+    }
     if ('resource' in command && command.resource && !(await this.host.resources()).some(item => sameResource(item.ref, command.resource!))) {
       return failed('unavailable-resource', 'Resource is not allowed by this host')
     }
@@ -116,6 +180,16 @@ export class WorkApplication {
     if (!('ref' in command)) return failed('unsupported-command', 'Command is not implemented')
     const task = taskAt(state, command.ref)
     if (!task) return failed('unknown-task', 'Task does not belong to this project')
+    if ('executionId' in command) {
+      const execution = state.executions.find(item => item.id === command.executionId && item.ref.taskId === task.id)
+      if (!execution || execution.owner !== command.owner || execution.epoch !== command.epoch) return failed('stale-execution-authority', 'Execution identity, owner or epoch is stale')
+      if (command.type === 'task.input') execution.events.push({ id: randomUUID(), text: command.text, kind: command.kind, delivery: 'accepted', acceptance: 'unassessed' })
+      if (command.type === 'task.control') {
+        if (command.action === 'progress') execution.progress = command.text
+        else execution.control = { commandId: command.commandId, action: command.action, status: 'accepted', reason: command.text }
+      }
+      return { status: 'completed', execution }
+    }
     if (command.type === 'task.start') {
       const previous = state.executions.find(item => item.ref.taskId === task.id)
       if (previous) {
@@ -134,10 +208,11 @@ export class WorkApplication {
       const session = command.session ?? { runtimeId: command.resource.runtimeId, sessionId: `session-${randomUUID()}` }
       if (session.runtimeId !== command.resource.runtimeId) return failed('incompatible-session', 'Session and execution resource must share a runtime')
       if (state.executions.some(item => sameSession(item.session, session))) return failed('session-in-use', 'Session already coordinates another execution')
-      if (state.tasks.some(item => item.sessions.some(binding => sameSession(binding.session, session)))) return failed('association-only-session', 'Observed or review Sessions cannot be promoted by starting work')
+      if (state.tasks.some(item => item.sessions.some(binding => sameSession(binding.session, session)
+        && (binding.purpose === 'review' || item.projectId !== task.projectId || item.id !== task.id)))) return failed('association-only-session', 'Review or another Task association cannot grant coordination')
       const execution = { id: randomUUID(), ref: command.ref, agentId: agent.id, owner: randomUUID(), epoch: 1,
-        resource: command.resource, session, agentPreset: command.agentPreset, model: command.model, permissionPreset: command.permissionPreset,
-        policy: structuredClone(agent.policy), state: 'accepted' as const, history: [{ state: 'accepted' as const, commandId: command.commandId }] }
+        resource: command.resource, session, sessionMode: command.session ? 'reuse' as const : 'create' as const, agentPreset: command.agentPreset, model: command.model, permissionPreset: command.permissionPreset,
+        policy: structuredClone(agent.policy), events: [], state: 'accepted' as const, history: [{ state: 'accepted' as const, commandId: command.commandId }] }
       state.executions.push(execution)
       task.agentId = agent.id
       this.changed(task, command)

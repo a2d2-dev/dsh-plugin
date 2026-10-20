@@ -4,13 +4,16 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import type { WorkspaceRegistry } from '@deepseek-ai/dsh-workspace'
 import type { WorkHost } from './work.ts'
+import { DshWorkExecutionHost } from './work-execution/dsh-host.ts'
+import type { WorkExecutionHost } from './work-execution/host.ts'
 import type { HostResource, SessionCandidate } from './work-types.ts'
 
 export class WorkHostUnavailable extends Error {}
 
 /** Reads registered resources and durable session facts; never resumes or reconfigures a Session. */
 export class DshWorkHost implements WorkHost {
-  constructor(private readonly ctx: Context, readonly runtimeId: string) {}
+  execution: WorkExecutionHost
+  constructor(private readonly ctx: Context, readonly runtimeId: string) { this.execution = new DshWorkExecutionHost(ctx, runtimeId) }
   private registry(): WorkspaceRegistry {
     const registry = this.ctx.get('workspaceRegistry') as unknown as WorkspaceRegistry | undefined
     if (!registry) throw new WorkHostUnavailable('DSH workspaceRegistry is required for host resources')

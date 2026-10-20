@@ -22,13 +22,18 @@ export interface WorkTask {
   activity: WorkActivity[]
 }
 export interface LegacyAddress { runtimeId: string; projectRoot: string; taskId: string }
+export interface ExecutionRef { ref: TaskRef; executionId: string }
+export interface WorkEvent { id: string; text: string; kind: 'input' | 'result'; delivery: 'accepted' | 'delivered' | 'consumed'; acceptance: 'unassessed' }
 export interface WorkExecution {
   id: string; ref: TaskRef; agentId: string; owner: string; epoch: number
-  resource: ResourceRef; session: SessionRef; agentPreset: string
+  resource: ResourceRef; session: SessionRef; sessionMode: 'create' | 'reuse'; agentPreset: string
   model: { provider: string; model: string }; permissionPreset: string; policy: AgentPolicy
   state: 'accepted' | 'creating' | 'ready' | 'running' | 'waiting' | 'paused' | 'failed'
   history: { state: WorkExecution['state']; commandId: string }[]
   actual?: { runtimeId: string; cwd: string; agentPreset: string; provider: string; model: string; permissionPreset: string; sandbox: string; approval: string }
+  events: WorkEvent[]
+  progress?: string
+  control?: { commandId: string; action: 'wait' | 'pause' | 'resume'; status: 'accepted' | 'applied'; reason?: string }
   error?: { code: string; message: string }
 }
 interface Command { commandId: string }
@@ -44,6 +49,9 @@ export type WorkCommand =
   | (TaskChange & { type: 'task.link-child'; child: TaskRef; childExpectedVersion: number })
   | (TaskChange & { type: 'task.associate-session'; session: SessionRef; purpose: 'related' | 'review' })
   | (TaskChange & { type: 'legacy.map'; address: LegacyAddress })
+  | (Command & ExecutionRef & { type: 'task.control'; owner: string; epoch: number; action: 'progress' | 'wait' | 'pause' | 'resume'; text: string })
+  | (Command & ExecutionRef & { type: 'task.input'; owner: string; epoch: number; text: string; kind: 'input' | 'result' })
+  | (Command & ExecutionRef & { type: 'task.reconcile'; owner: string; epoch: number })
   | (TaskChange & { type: 'task.start'; agentId: string; resource: ResourceRef; session?: SessionRef; agentPreset: string; model: { provider: string; model: string }; permissionPreset: string })
 export type WorkQuery =
   | { type: 'projects.list' }
