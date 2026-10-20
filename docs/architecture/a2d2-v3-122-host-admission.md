@@ -53,4 +53,32 @@
 | 5文件扩展组合（并行build时） | 1；59通过、5失败、0skip；work-execution read/read-only与legacy cold create/take超时5秒，另legacy handoff清理ENOTEMPTY；保留，未提高预算或改断言 |
 | 原预算定向复核 | 0；work-execution 2通过/13未选，legacy runtime 4通过/29未选；不能据此断言原超时首因 |
 
-红证据checkpoint `fc6b376` 已推送。首次commit因环境未设git identity退出128；后续用与base一致的命令级 identity提交，未改全局git配置。
+红证据checkpoint `fc6b376`、修复checkpoint `9b44807` 均已推送。首次commit因环境未设git identity退出128；后续用与base一致的命令级 identity提交，未改全局git配置。一次diff检查因本文EOF空行退出2，已纠正。
+
+## 第三阶段：真实安装产品 gate
+
+最终 tgz SHA256 `1ca0228ab9c393dc04303baa4a351eba2da08cf2f67fe4221d23817d173099fe`，位于 `/tmp/a2d2-122-admission-diagnostic/fixed/dsh-a2d2-0.0.1.tgz`。经官方 CLI 安装到 fresh root `/tmp/a2d2-v3-121/122-admission-fixed-20261020`，真实 origin `http://127.0.0.1:39481`，未启动浏览器。
+
+模型边界使用 git archive 冻结的 `ae5759b` 工具（guard/model不改）。实际宿主默认权限为 workspace-write，而b14新执行只允许继承的默认权限；为维持本任务read-only，prepare之前的自有工具变体仅在 isolatedEnvironment 增加公开宿主环境设置 `DSH_PERMISSION_MODE=read-only`，生命周期 SHA256 `638cf9a8aae038b2564098778a0a1d35fe84e0434caf7d5449f52c2e7a3cb206`。这是fixture配置，不放宽产品权限。新root自prepare起guard/manifest/assembly均不再修改，最终verify通过；没有preload instrumentation。
+
+全部工作事实来自同一真实公开HTTP `/a2d2/api/work`，真实Project Agent及resource。结果：
+
+- 错误模型返回400 `unavailable-model`；随后无execution，完整Session snapshot不变，模型0/0。
+- 公开创建Task后，通过工具CLI `grant-task --project-id ... --task-id ... --calls 1 --phase startup` 明确授权。模型边界从公开 `task.execution` 和 `session.work` 核验并pin唯一TaskRef/Execution/owner/epoch/Session。
+- 正确start返回200 ready。Execution `5efd58b9-e0a1-44b0-bd30-6bb0c75f1bb4`，Session `session-c7c4949d-86db-4fc5-828b-b520da6a81e9`；actual为选定workspace、standard、a2d2-acceptance/deterministic、read-only sandbox与ask approval。真实身份集合只增加此一个Session。
+- gateway/adapter由0/0到1/1，无rejected记录；公开Session page读到实际request/header模型路由、`A2D2_122_DETERMINISTIC_HOST_REPLY` assistant seq16与completed turn/end。全局默认仍acceptance-disabled/no-model。
+- 同commandId重放返回同Execution/Session，计数保持1/1。
+
+辅助失败保留：首个HTTP留证脚本exit1，原因是Session page RPC参数少了 `request` 封装，宿主返回 `gateway/arguments-invalid`。随后同一个已成功执行仅修正只读RPC并验证start重放，脚本exit0；没有再次grant或追加模型调用。未改产品结果或旧失败证据。
+
+最后原预算串行五文件复核exit1：62/64通过、0skip；四个work文件31/31通过，legacy runtime的slow-successor event、two-handoffs两项超时5000ms。没有提高预算、修改这些断言或声称其首因已确定。首轮59/64与两组定向通过均保留于[validation](../artifacts/a2d2-v3-122-host-admission/validation.json)。
+
+四个自有managed Web均已ownership核对后停止并收集exit0，PID与端口均消失；三个红root模型均0/0，最终root1/1。root、原始私有日志和全部fingerprint保留；GH意外缓存已核对绝对路径后清除；18780/18781未触碰。[cleanup](../artifacts/a2d2-v3-122-host-admission/cleanup.json)。
+
+可运行组合限定为上述真实宿主artifact + 本修复tgz + 正确只读fixture + ae5759b TaskRef授权边界。浏览器task.start/current Session导航、不同controller artifact、legacy runtime全组时间稳定性均未通过本轮gate；不以源码或离线重放替代。未改WorkApplication领域/权威/continuation、UI、宿主或依赖，也未合并。
+
+脱敏核心证据见[fixed-public-gate](../artifacts/a2d2-v3-122-host-admission/fixed-public-gate.json)。离线断言仅核验这些既有证据：
+
+```sh
+node docs/artifacts/a2d2-v3-122-host-admission/replay-gate.mjs
+```

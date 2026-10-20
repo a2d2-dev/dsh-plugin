@@ -1,0 +1,79 @@
+{
+  "passed": true,
+  "roots": [
+    {
+      "root": "/tmp/a2d2-v3-121/122-admission-old-20261020",
+      "runId": "9b0a8c75-4e0d-40dc-bf79-fe77941a0f84",
+      "managedJobId": "bash-1001",
+      "baseURL": "http://127.0.0.1:35057",
+      "processesStopped": true,
+      "portClosed": true,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "modelCalls": {
+        "gateway": 0,
+        "adapter": 0
+      },
+      "rejected": 0
+    },
+    {
+      "root": "/tmp/a2d2-v3-121/122-admission-probe-20261020",
+      "runId": "e5039c89-e9c8-4ee7-a49b-8f40554faac2",
+      "managedJobId": "bash-1014",
+      "baseURL": "http://127.0.0.1:46393",
+      "processesStopped": true,
+      "portClosed": true,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "modelCalls": {
+        "gateway": 0,
+        "adapter": 0
+      },
+      "rejected": 0
+    },
+    {
+      "root": "/tmp/a2d2-v3-121/122-admission-b14-20261020",
+      "runId": "71b790bc-84fb-4814-b525-ca002e6c2208",
+      "managedJobId": "bash-1032",
+      "baseURL": "http://127.0.0.1:41191",
+      "processesStopped": true,
+      "portClosed": true,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "modelCalls": {
+        "gateway": 0,
+        "adapter": 0
+      },
+      "rejected": 0
+    },
+    {
+      "root": "/tmp/a2d2-v3-121/122-admission-fixed-20261020",
+      "runId": "015a4db9-c7cb-4d15-b1d7-dcc824c01928",
+      "managedJobId": "bash-1069",
+      "baseURL": "http://127.0.0.1:39481",
+      "processesStopped": true,
+      "portClosed": true,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "modelCalls": {
+        "gateway": 1,
+        "adapter": 1
+      },
+      "rejected": 0
+    }
+  ],
+  "ghIncidentalCacheRemoved": true,
+  "protectedServicesUntouched": [
+    18780,
+    18781
+  ],
+  "browserStarted": false
+}

@@ -1,0 +1,22 @@
+{
+  "timeoutBudgetChanged": false,
+  "assertionsWeakened": false,
+  "records": [
+    {"job":"bash-1022","command":"pnpm exec vitest run tests/work-host.spec.ts -t 'starts through the production plugin Context'","exit":1,"passed":0,"failed":1,"skipped":2,"finding":"b14 production Context returns host-admission-failed"},
+    {"job":"bash-1026","command":"pnpm build && pnpm pack --pack-destination /tmp/a2d2-122-admission-diagnostic","exit":0,"finding":"unmodified b14 src-only build and tgz, SHA71f71859b202c64f9fd061994088fa6303f2eab9139c0f4713424e31696538e4"},
+    {"job":"bash-1041","command":"pnpm exec vitest run tests/work-host.spec.ts -t 'starts through the production plugin Context'","exit":1,"passed":0,"failed":1,"skipped":2,"finding":"dynamic service fix applied; remaining fixture assembly fault not yet instrumented"},
+    {"job":"bash-1044","command":"pnpm exec vitest run tests/work-host.spec.ts -t 'starts through the production plugin Context'","exit":1,"passed":0,"failed":1,"skipped":2,"finding":"public check probe identifies Controller internal agentDefaultModel without inject; fixture used constructor instead of ctx.plugin"},
+    {"job":"bash-1047","command":"pnpm exec vitest run tests/work-host.spec.ts -t 'starts through the production plugin Context'","exit":0,"passed":1,"failed":0,"skipped":2,"finding":"real Controller plugin lifecycle corrects fixture"},
+    {"job":"bash-1049","command":"pnpm exec vitest run tests/work-host.spec.ts -t 'starts through the production plugin Context'","exit":1,"passed":0,"failed":1,"skipped":2,"finding":"missing public controller.create is accepted before later failure; preflight method checks required"},
+    {"job":"bash-1051","command":"pnpm exec vitest run tests/work-host.spec.ts && pnpm typecheck","exit":0,"passed":3,"failed":0,"skipped":0,"finding":"missing methods refuse without execution/Session/model; real start and retry pass; backend/client typecheck both exit0"},
+    {"job":"bash-1052","command":"pnpm exec vitest run tests/work.spec.ts tests/work-execution.spec.ts tests/work-host.spec.ts tests/work-process.spec.ts tests/task-runtime.spec.ts","exit":1,"passed":59,"failed":5,"skipped":0,"finding":"ran alongside build; work read/read-only and legacy cold create/take exceeded 5000ms; additional legacy handoff cleanup ENOTEMPTY; timeout first cause unproven"},
+    {"job":"bash-1054","command":"pnpm verify:pack-exports && pnpm pack --pack-destination /tmp/a2d2-122-admission-diagnostic/fixed","exit":0,"packedExports":13,"finding":"src-only server/client declarations, bundle, installed Node exports pass; fixed tgz SHA1ca0228ab9c393dc04303baa4a351eba2da08cf2f67fe4221d23817d173099fe"},
+    {"job":"bash-1060","command":"pnpm exec vitest run tests/work-execution.spec.ts -t 'composes a real preset|enforces read-only'","exit":0,"passed":2,"failed":0,"skipped":13},
+    {"job":"bash-1060","command":"pnpm exec vitest run tests/task-runtime.spec.ts -t 'recovers a legacy blank successor at .*cold=true|wakes a persisted unconsumed'","exit":0,"passed":4,"failed":0,"skipped":29,"finding":"original budget; does not prove original timeout cause"},
+    {"job":"bash-1075","command":"pnpm exec vitest run tests/work.spec.ts tests/work-execution.spec.ts tests/work-host.spec.ts tests/work-process.spec.ts tests/task-runtime.spec.ts --maxWorkers=1","exit":1,"passed":62,"failed":2,"skipped":0,"finding":"all four work files pass 31/31; legacy runtime slow-successor event and two-handoffs tests exceed original 5000ms; no functional assertion failure; legacy timing stability remains unresolved"},
+    {"job":"bash-1071","command":"node /tmp/a2d2-122-admission-diagnostic/fixed-public-gate.mjs /tmp/a2d2-v3-121/122-admission-fixed-20261020","exit":1,"finding":"actual refusal/start/one model request passed; auxiliary session/page RPC omitted request argument wrapper and was rejected"},
+    {"command":"node /tmp/a2d2-122-admission-diagnostic/fixed-public-gate-resume.mjs","exit":0,"finding":"same execution corrected public history read, deterministic reply/end, actual request route and idempotent start; still one gateway/adapter call"}
+  ],
+  "notVerified": ["browser task.start/current Session navigation gate", "legacy runtime full-suite timing stability", "different controller artifact semantics", "OS shell containment"],
+  "preservedOldUIFailure": "0664518 / product07297921961d01f0da7ac15336f33131b5188a6a"
+}

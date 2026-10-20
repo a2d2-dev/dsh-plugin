@@ -1,0 +1,1062 @@
+{
+  "passed": true,
+  "sourceFixCommit": "9b44807",
+  "sourceSHA256": {
+    "src/work-execution/dsh-host.ts": "645476811c20568f508e1c9f98720670cc9eca1ec596cc9261f57deb46c447fd",
+    "src/task-runtime/host.ts": "dabf38b63ebe679d66fed1bff8a1a61e5be7dc1fe74b882f023c32f1acf64d13",
+    "package.json": "bcc7b592b1db73222429338156c9c9518cfa39c3a9e33a9979717398e21eb39f",
+    "pnpm-lock.yaml": "6e679fb51cadb1e424648a59963d3e626936a34daa3e00832293c83b44aeb9cf"
+  },
+  "scope": "actual installed production tgz HTTP gate; browser gate pending",
+  "assembly": {
+    "scope": "#122 host tools, final product pending",
+    "root": "/tmp/a2d2-v3-121/122-admission-fixed-20261020",
+    "plugin": {
+      "path": "/tmp/a2d2-122-admission-diagnostic/fixed/dsh-a2d2-0.0.1.tgz",
+      "sha256": "1ca0228ab9c393dc04303baa4a351eba2da08cf2f67fe4221d23817d173099fe"
+    },
+    "source": {
+      "manifestSHA": "f2ad2436e222911cf395ea66391e7fb055921df3e1be3ab447137e4d66b74467",
+      "patchSHA": "0063b1f01f0ad3bf3ba061ca532cdd60b225b621404179eccbbbd1e7b01e5b3f",
+      "guardSHA": "442573774fd2c16eb858af534230cbfb8f7029ff8d483085926b14531454e62d",
+      "lifecycleSHA": "638cf9a8aae038b2564098778a0a1d35fe84e0434caf7d5449f52c2e7a3cb206"
+    },
+    "provider": "a2d2-acceptance",
+    "model": "deterministic",
+    "packages": {
+      "cli": {
+        "entry": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/apps/cli/lib/bin.js",
+        "sha256": "1a03dee18683483ff6a1b27b2a1e650230da6bcca9a0f55f7d81b3308c3f307f",
+        "package": {
+          "name": "@deepseek-ai/dsh",
+          "version": "0.2.0-rc.2",
+          "path": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/apps/cli/package.json",
+          "sha256": "96845d9efaa4ab078f1405fbe28445b606b5ab79377fd607866dd46b0c0b52c1"
+        }
+      },
+      "llm": {
+        "entry": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/llm/llm/lib/index.js",
+        "sha256": "9132c8a8053ee82b9fb1ded4f98c85cf557f288a15a85c552c6b1fb319ead120",
+        "package": {
+          "name": "@deepseek-ai/dsh-llm",
+          "version": "0.2.0-rc.2",
+          "path": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/llm/llm/package.json",
+          "sha256": "ed579a752bc9db66aaef70d647e1dae6d7e7dfbda8efd34d1650b69e8c3c88ee"
+        }
+      },
+      "@deepseek-ai/dsh-api-session-controller": {
+        "entry": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/api/session-controller/lib/index.js",
+        "sha256": "bc889fbd3e95a994d9019f08feb9ce9033f4c6c918b6932f14b1c0fd109241a6",
+        "package": {
+          "name": "@deepseek-ai/dsh-api-session-controller",
+          "version": "0.2.0-rc.2",
+          "path": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/api/session-controller/package.json",
+          "sha256": "620cbfa09a1bdea3475eb49c0da97d3a6529908b16cca8063ea66b3ea71a1135"
+        }
+      },
+      "@deepseek-ai/dsh-api-workspace-controller": {
+        "entry": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/api/workspace-controller/lib/index.js",
+        "sha256": "8a6e3b407ff9a445358cee97183452c3ca391d8ff10dab53f5416fd4ad37ead5",
+        "package": {
+          "name": "@deepseek-ai/dsh-api-workspace-controller",
+          "version": "0.2.0-rc.2",
+          "path": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/api/workspace-controller/package.json",
+          "sha256": "ee42f72cffb70d13a974285cddee005ccc98d77f01a490724be2c225b339b140"
+        }
+      },
+      "@deepseek-ai/dsh-client-modules": {
+        "entry": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/client/modules/lib/index.js",
+        "sha256": "03ea21df556256a61289bae762bd1831fff43d035d49b8926d6c0f0b30b0e073",
+        "package": {
+          "name": "@deepseek-ai/dsh-client-modules",
+          "version": "0.2.0-rc.2",
+          "path": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/client/modules/package.json",
+          "sha256": "4b24105c3a7aa3dfb36e4ba9efe1e94d784c8fed6928574f67c4f73029e8d912"
+        }
+      },
+      "agent": {
+        "entry": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/core/agent/lib/index.js",
+        "sha256": "7b9aa39474de83115cf890dd7f8904cf0d59df0811cb335ab85565a04f1aac93",
+        "package": {
+          "name": "@deepseek-ai/dsh-agent",
+          "version": "0.2.0-rc.2",
+          "path": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/core/agent/package.json",
+          "sha256": "5a1933ae764443b0f725af0a069d810e55cb83857f0a99eaf78fe70b0ee1d01b"
+        }
+      }
+    },
+    "manifestSHA": "f2ad2436e222911cf395ea66391e7fb055921df3e1be3ab447137e4d66b74467",
+    "patchSHA": "968cf7b8cdd1bb8d564e174217d7e0b63c35c976a1ce7f02ea42fe9282fa3fe9",
+    "guardSHA": "372c96b2d3b4cc7deb7a067e8beb8826458f3b85bc9de23bd2b41814a788e9fc",
+    "modelSHA": "7609e81fde12bcfc965b6fea1d5f85b5f04cfd3415002e35646f6c1147667efb",
+    "wrapperSHA": "f552554f88bf4071e65c0a395f49aa3b9b5a3af9920811d9671242487b74eb02"
+  },
+  "fixture": {
+    "toolCommit": "ae5759b",
+    "isolatedEnvironmentAddition": {
+      "DSH_PERMISSION_MODE": "read-only"
+    },
+    "lifecycleSHA256": "638cf9a8aae038b2564098778a0a1d35fe84e0434caf7d5449f52c2e7a3cb206",
+    "guardUnmodifiedFromCheckpoint": true,
+    "preloadInstrumentation": false
+  },
+  "public": {
+    "resources": {
+      "http": 200,
+      "body": {
+        "status": "completed",
+        "resources": [
+          {
+            "ref": {
+              "runtimeId": "b29d4786-497c-4ef2-a730-046979526807",
+              "workspaceId": "201b5a63-500e-44a1-a8f9-544c87e0cfab"
+            },
+            "title": "workspace"
+          }
+        ]
+      },
+      "request": {
+        "kind": "query",
+        "value": {
+          "type": "resources.list"
+        }
+      }
+    },
+    "project": {
+      "http": 200,
+      "body": {
+        "status": "completed",
+        "project": {
+          "id": "be81a118-be0e-4753-914b-648c1c6d61ba",
+          "name": "Fixed production admission",
+          "version": 1,
+          "defaultAgentId": "55229f9a-9e40-4d32-b497-af90bcfea929",
+          "resources": [
+            {
+              "runtimeId": "b29d4786-497c-4ef2-a730-046979526807",
+              "workspaceId": "201b5a63-500e-44a1-a8f9-544c87e0cfab"
+            }
+          ]
+        }
+      },
+      "request": {
+        "kind": "command",
+        "value": {
+          "commandId": "bd8d60dd-e06e-4810-ac1e-0f2e26041d95",
+          "type": "project.create",
+          "name": "Fixed production admission",
+          "resource": {
+            "runtimeId": "b29d4786-497c-4ef2-a730-046979526807",
+            "workspaceId": "201b5a63-500e-44a1-a8f9-544c87e0cfab"
+          }
+        }
+      }
+    },
+    "task": {
+      "http": 200,
+      "body": {
+        "status": "completed",
+        "task": {
+          "id": "24eefe4d-5141-4118-9ae8-a22130dec2b0",
+          "projectId": "be81a118-be0e-4753-914b-648c1c6d61ba",
+          "title": "Authorized deterministic startup",
+          "goal": "Verify real production admission",
+          "version": 1,
+          "specification": {
+            "version": 1,
+            "text": "One explicitly authorized deterministic kickoff on read-only resources",
+            "acceptance": [
+              "Real ready/actual and persisted deterministic reply",
+              "Retry preserves identity and one request"
+            ]
+          },
+          "agentId": "55229f9a-9e40-4d32-b497-af90bcfea929",
+          "specificationHistory": [],
+          "breakdown": [],
+          "children": [],
+          "sessions": [],
+          "activity": [
+            {
+              "commandId": "56ee83e7-db1f-4eaa-8ef0-7a1df12b48e4",
+              "type": "task.create",
+              "version": 1
+            }
+          ]
+        }
+      },
+      "request": {
+        "kind": "command",
+        "value": {
+          "commandId": "56ee83e7-db1f-4eaa-8ef0-7a1df12b48e4",
+          "type": "task.create",
+          "projectId": "be81a118-be0e-4753-914b-648c1c6d61ba",
+          "title": "Authorized deterministic startup",
+          "goal": "Verify real production admission",
+          "specification": "One explicitly authorized deterministic kickoff on read-only resources",
+          "acceptance": [
+            "Real ready/actual and persisted deterministic reply",
+            "Retry preserves identity and one request"
+          ]
+        }
+      }
+    },
+    "options": {
+      "http": 200,
+      "body": {
+        "status": "completed",
+        "executionOptions": {
+          "agentPresets": [
+            "standard"
+          ],
+          "permissionPresets": [
+            "read-only"
+          ],
+          "models": [
+            {
+              "provider": "a2d2-acceptance",
+              "model": "deterministic"
+            }
+          ],
+          "defaults": {
+            "agentPreset": "standard",
+            "permissionPreset": "read-only",
+            "model": {
+              "provider": "a2d2-acceptance",
+              "model": "deterministic"
+            }
+          },
+          "agentId": "55229f9a-9e40-4d32-b497-af90bcfea929",
+          "resources": [
+            {
+              "ref": {
+                "runtimeId": "b29d4786-497c-4ef2-a730-046979526807",
+                "workspaceId": "201b5a63-500e-44a1-a8f9-544c87e0cfab"
+              },
+              "title": "workspace"
+            }
+          ]
+        }
+      },
+      "request": {
+        "kind": "query",
+        "value": {
+          "type": "task.execution-options",
+          "ref": {
+            "projectId": "be81a118-be0e-4753-914b-648c1c6d61ba",
+            "taskId": "24eefe4d-5141-4118-9ae8-a22130dec2b0"
+          }
+        }
+      }
+    },
+    "refused": {
+      "http": 400,
+      "body": {
+        "status": "failed",
+        "error": {
+          "code": "unavailable-model",
+          "message": "Model is not in the real host catalog"
+        }
+      },
+      "request": {
+        "kind": "command",
+        "value": {
+          "commandId": "12d73be6-8af8-46bd-85ba-634e03613ce2",
+          "type": "task.start",
+          "ref": {
+            "projectId": "be81a118-be0e-4753-914b-648c1c6d61ba",
+            "taskId": "24eefe4d-5141-4118-9ae8-a22130dec2b0"
+          },
+          "expectedVersion": 1,
+          "agentId": "55229f9a-9e40-4d32-b497-af90bcfea929",
+          "resource": {
+            "runtimeId": "b29d4786-497c-4ef2-a730-046979526807",
+            "workspaceId": "201b5a63-500e-44a1-a8f9-544c87e0cfab"
+          },
+          "agentPreset": "standard",
+          "model": {
+            "provider": "a2d2-acceptance",
+            "model": "unavailable"
+          },
+          "permissionPreset": "read-only"
+        }
+      }
+    },
+    "afterRefusal": {
+      "http": 200,
+      "body": {
+        "status": "completed"
+      },
+      "request": {
+        "kind": "query",
+        "value": {
+          "type": "task.execution",
+          "ref": {
+            "projectId": "be81a118-be0e-4753-914b-648c1c6d61ba",
+            "taskId": "24eefe4d-5141-4118-9ae8-a22130dec2b0"
+          }
+        }
+      }
+    },
+    "grant": {
+      "mode": "task",
+      "grantId": "1f2c56d2-130c-499c-99a3-afd1b9069dca",
+      "ref": {
+        "projectId": "be81a118-be0e-4753-914b-648c1c6d61ba",
+        "taskId": "24eefe4d-5141-4118-9ae8-a22130dec2b0"
+      },
+      "calls": 1,
+      "phase": "startup"
+    },
+    "start": {
+      "http": 200,
+      "body": {
+        "status": "completed",
+        "execution": {
+          "id": "5efd58b9-e0a1-44b0-bd30-6bb0c75f1bb4",
+          "ref": {
+            "projectId": "be81a118-be0e-4753-914b-648c1c6d61ba",
+            "taskId": "24eefe4d-5141-4118-9ae8-a22130dec2b0"
+          },
+          "agentId": "55229f9a-9e40-4d32-b497-af90bcfea929",
+          "owner": "2efaab97-269e-4261-b770-25a1c2f320c8",
+          "epoch": 1,
+          "resource": {
+            "runtimeId": "b29d4786-497c-4ef2-a730-046979526807",
+            "workspaceId": "201b5a63-500e-44a1-a8f9-544c87e0cfab"
+          },
+          "session": {
+            "runtimeId": "b29d4786-497c-4ef2-a730-046979526807",
+            "sessionId": "session-c7c4949d-86db-4fc5-828b-b520da6a81e9"
+          },
+          "sessionMode": "create",
+          "agentPreset": "standard",
+          "model": {
+            "provider": "a2d2-acceptance",
+            "model": "deterministic"
+          },
+          "permissionPreset": "read-only",
+          "policy": {
+            "version": 1,
+            "modelCandidates": [],
+            "instructions": "Coordinate accepted work and its acceptance criteria.",
+            "capabilities": [
+              "coordination"
+            ]
+          },
+          "state": "ready",
+          "history": [
+            {
+              "state": "accepted",
+              "commandId": "fc92a8b0-4a20-42be-b55e-262938e1f889"
+            },
+            {
+              "state": "creating",
+              "commandId": "fc92a8b0-4a20-42be-b55e-262938e1f889"
+            },
+            {
+              "state": "ready",
+              "commandId": "fc92a8b0-4a20-42be-b55e-262938e1f889"
+            }
+          ],
+          "actual": {
+            "runtimeId": "b29d4786-497c-4ef2-a730-046979526807",
+            "cwd": "/tmp/a2d2-v3-121/122-admission-fixed-20261020/workspace",
+            "agentPreset": "standard",
+            "provider": "a2d2-acceptance",
+            "model": "deterministic",
+            "permissionPreset": "read-only",
+            "sandbox": "read-only",
+            "approval": "ask"
+          },
+          "events": [
+            {
+              "id": "kickoff:5efd58b9-e0a1-44b0-bd30-6bb0c75f1bb4",
+              "text": "Coordinate accepted work and its acceptance criteria.\n\nTask 24eefe4d-5141-4118-9ae8-a22130dec2b0: Authorized deterministic startup\nGoal: Verify real production admission\n\nSpecification:\nOne explicitly authorized deterministic kickoff on read-only resources\n\nAcceptance criteria:\n- Real ready/actual and persisted deterministic reply\n- Retry preserves identity and one request",
+              "kind": "input",
+              "delivery": "delivered",
+              "acceptance": "unassessed"
+            }
+          ]
+        }
+      },
+      "request": {
+        "kind": "command",
+        "value": {
+          "type": "task.start",
+          "commandId": "fc92a8b0-4a20-42be-b55e-262938e1f889",
+          "ref": {
+            "projectId": "be81a118-be0e-4753-914b-648c1c6d61ba",
+            "taskId": "24eefe4d-5141-4118-9ae8-a22130dec2b0"
+          },
+          "expectedVersion": 1,
+          "agentId": "55229f9a-9e40-4d32-b497-af90bcfea929",
+          "resource": {
+            "runtimeId": "b29d4786-497c-4ef2-a730-046979526807",
+            "workspaceId": "201b5a63-500e-44a1-a8f9-544c87e0cfab"
+          },
+          "agentPreset": "standard",
+          "model": {
+            "provider": "a2d2-acceptance",
+            "model": "deterministic"
+          },
+          "permissionPreset": "read-only"
+        }
+      }
+    },
+    "work": {
+      "http": 200,
+      "body": {
+        "status": "completed",
+        "work": [
+          {
+            "ref": {
+              "projectId": "be81a118-be0e-4753-914b-648c1c6d61ba",
+              "taskId": "24eefe4d-5141-4118-9ae8-a22130dec2b0"
+            },
+            "title": "Authorized deterministic startup",
+            "projectName": "Fixed production admission",
+            "purpose": "control",
+            "executionId": "5efd58b9-e0a1-44b0-bd30-6bb0c75f1bb4",
+            "epoch": 1
+          }
+        ]
+      },
+      "request": {
+        "kind": "query",
+        "value": {
+          "type": "session.work",
+          "session": {
+            "runtimeId": "b29d4786-497c-4ef2-a730-046979526807",
+            "sessionId": "session-c7c4949d-86db-4fc5-828b-b520da6a81e9"
+          }
+        }
+      }
+    }
+  },
+  "refusalSnapshotUnchanged": true,
+  "before": {
+    "gateway": 0,
+    "adapter": 0,
+    "defaultModel": {
+      "provider": "acceptance-disabled",
+      "model": "no-model"
+    },
+    "sessions": [
+      {
+        "sessionId": "session-a2d2-122-current",
+        "meta": {
+          "version": 4,
+          "id": "session-a2d2-122-current",
+          "createdAt": 1792473419577,
+          "cwd": "/tmp/a2d2-v3-121/122-admission-fixed-20261020/workspace",
+          "isSeeded": false,
+          "agentPreset": "standard"
+        },
+        "eventTypes": [
+          "permission/preset",
+          "sandbox/mode",
+          "approval/policy"
+        ],
+        "sandbox": {
+          "mode": "read-only",
+          "workspaceRoot": "/tmp/a2d2-v3-121/122-admission-fixed-20261020/workspace",
+          "sessionId": "session-a2d2-122-current"
+        },
+        "approval": "ask",
+        "permissions": {
+          "currentValue": "read-only"
+        },
+        "modelSelection": {
+          "lastUsed": null,
+          "next": null
+        }
+      },
+      {
+        "sessionId": "session-a2d2-122-positive",
+        "meta": {
+          "version": 4,
+          "id": "session-a2d2-122-positive",
+          "createdAt": 1792473419087,
+          "cwd": "/tmp/a2d2-v3-121/122-admission-fixed-20261020/workspace",
+          "isSeeded": false,
+          "agentPreset": "standard"
+        },
+        "eventTypes": [
+          "permission/preset",
+          "sandbox/mode",
+          "approval/policy"
+        ],
+        "sandbox": {
+          "mode": "read-only",
+          "workspaceRoot": "/tmp/a2d2-v3-121/122-admission-fixed-20261020/workspace",
+          "sessionId": "session-a2d2-122-positive"
+        },
+        "approval": "ask",
+        "permissions": {
+          "currentValue": "read-only"
+        },
+        "modelSelection": {
+          "lastUsed": null,
+          "next": null
+        }
+      },
+      {
+        "sessionId": "session-a2d2-122-retired",
+        "meta": {
+          "version": 4,
+          "id": "session-a2d2-122-retired",
+          "createdAt": 1792473419831,
+          "cwd": "/tmp/a2d2-v3-121/122-admission-fixed-20261020/workspace",
+          "isSeeded": false,
+          "agentPreset": "standard"
+        },
+        "eventTypes": [
+          "permission/preset",
+          "sandbox/mode",
+          "approval/policy"
+        ],
+        "sandbox": {
+          "mode": "read-only",
+          "workspaceRoot": "/tmp/a2d2-v3-121/122-admission-fixed-20261020/workspace",
+          "sessionId": "session-a2d2-122-retired"
+        },
+        "approval": "ask",
+        "permissions": {
+          "currentValue": "read-only"
+        },
+        "modelSelection": {
+          "lastUsed": null,
+          "next": null
+        }
+      },
+      {
+        "sessionId": "session-a2d2-122-review",
+        "meta": {
+          "version": 4,
+          "id": "session-a2d2-122-review",
+          "createdAt": 1792473420031,
+          "cwd": "/tmp/a2d2-v3-121/122-admission-fixed-20261020/workspace",
+          "isSeeded": false,
+          "agentPreset": "standard"
+        },
+        "eventTypes": [
+          "permission/preset",
+          "sandbox/mode",
+          "approval/policy"
+        ],
+        "sandbox": {
+          "mode": "read-only",
+          "workspaceRoot": "/tmp/a2d2-v3-121/122-admission-fixed-20261020/workspace",
+          "sessionId": "session-a2d2-122-review"
+        },
+        "approval": "ask",
+        "permissions": {
+          "currentValue": "read-only"
+        },
+        "modelSelection": {
+          "lastUsed": null,
+          "next": null
+        }
+      }
+    ]
+  },
+  "after": {
+    "gateway": 1,
+    "adapter": 1,
+    "defaultModel": {
+      "provider": "acceptance-disabled",
+      "model": "no-model"
+    },
+    "sessions": [
+      {
+        "sessionId": "session-a2d2-122-current",
+        "meta": {
+          "version": 4,
+          "id": "session-a2d2-122-current",
+          "createdAt": 1792473419577,
+          "cwd": "/tmp/a2d2-v3-121/122-admission-fixed-20261020/workspace",
+          "isSeeded": false,
+          "agentPreset": "standard"
+        },
+        "eventTypes": [
+          "permission/preset",
+          "sandbox/mode",
+          "approval/policy"
+        ],
+        "sandbox": {
+          "mode": "read-only",
+          "workspaceRoot": "/tmp/a2d2-v3-121/122-admission-fixed-20261020/workspace",
+          "sessionId": "session-a2d2-122-current"
+        },
+        "approval": "ask",
+        "permissions": {
+          "currentValue": "read-only"
+        },
+        "modelSelection": {
+          "lastUsed": null,
+          "next": null
+        }
+      },
+      {
+        "sessionId": "session-a2d2-122-positive",
+        "meta": {
+          "version": 4,
+          "id": "session-a2d2-122-positive",
+          "createdAt": 1792473419087,
+          "cwd": "/tmp/a2d2-v3-121/122-admission-fixed-20261020/workspace",
+          "isSeeded": false,
+          "agentPreset": "standard"
+        },
+        "eventTypes": [
+          "permission/preset",
+          "sandbox/mode",
+          "approval/policy"
+        ],
+        "sandbox": {
+          "mode": "read-only",
+          "workspaceRoot": "/tmp/a2d2-v3-121/122-admission-fixed-20261020/workspace",
+          "sessionId": "session-a2d2-122-positive"
+        },
+        "approval": "ask",
+        "permissions": {
+          "currentValue": "read-only"
+        },
+        "modelSelection": {
+          "lastUsed": null,
+          "next": null
+        }
+      },
+      {
+        "sessionId": "session-a2d2-122-retired",
+        "meta": {
+          "version": 4,
+          "id": "session-a2d2-122-retired",
+          "createdAt": 1792473419831,
+          "cwd": "/tmp/a2d2-v3-121/122-admission-fixed-20261020/workspace",
+          "isSeeded": false,
+          "agentPreset": "standard"
+        },
+        "eventTypes": [
+          "permission/preset",
+          "sandbox/mode",
+          "approval/policy"
+        ],
+        "sandbox": {
+          "mode": "read-only",
+          "workspaceRoot": "/tmp/a2d2-v3-121/122-admission-fixed-20261020/workspace",
+          "sessionId": "session-a2d2-122-retired"
+        },
+        "approval": "ask",
+        "permissions": {
+          "currentValue": "read-only"
+        },
+        "modelSelection": {
+          "lastUsed": null,
+          "next": null
+        }
+      },
+      {
+        "sessionId": "session-a2d2-122-review",
+        "meta": {
+          "version": 4,
+          "id": "session-a2d2-122-review",
+          "createdAt": 1792473420031,
+          "cwd": "/tmp/a2d2-v3-121/122-admission-fixed-20261020/workspace",
+          "isSeeded": false,
+          "agentPreset": "standard"
+        },
+        "eventTypes": [
+          "permission/preset",
+          "sandbox/mode",
+          "approval/policy"
+        ],
+        "sandbox": {
+          "mode": "read-only",
+          "workspaceRoot": "/tmp/a2d2-v3-121/122-admission-fixed-20261020/workspace",
+          "sessionId": "session-a2d2-122-review"
+        },
+        "approval": "ask",
+        "permissions": {
+          "currentValue": "read-only"
+        },
+        "modelSelection": {
+          "lastUsed": null,
+          "next": null
+        }
+      },
+      {
+        "sessionId": "session-c7c4949d-86db-4fc5-828b-b520da6a81e9",
+        "meta": {
+          "version": 4,
+          "id": "session-c7c4949d-86db-4fc5-828b-b520da6a81e9",
+          "createdAt": 1792473421269,
+          "cwd": "/tmp/a2d2-v3-121/122-admission-fixed-20261020/workspace",
+          "isSeeded": false,
+          "delegationDepth": 0,
+          "agentPreset": "standard"
+        },
+        "eventTypes": [
+          "model/selection",
+          "session/end-seed",
+          "permission/preset",
+          "sandbox/mode",
+          "approval/policy",
+          "agent/inbox/spliced",
+          "turn/start",
+          "agent/inbox/spliced",
+          "step/start",
+          "system/message",
+          "user/message",
+          "user/message",
+          "user/message",
+          "request/header",
+          "request/context",
+          "session/title",
+          "assistant/message",
+          "step/end",
+          "turn/end"
+        ],
+        "sandbox": {
+          "mode": "read-only",
+          "workspaceRoot": "/tmp/a2d2-v3-121/122-admission-fixed-20261020/workspace",
+          "sessionId": "session-c7c4949d-86db-4fc5-828b-b520da6a81e9"
+        },
+        "approval": "ask",
+        "permissions": {
+          "currentValue": "read-only"
+        },
+        "modelSelection": {
+          "lastUsed": {
+            "provider": "a2d2-acceptance",
+            "model": "deterministic"
+          },
+          "next": {
+            "provider": "a2d2-acceptance",
+            "model": "deterministic"
+          }
+        }
+      }
+    ]
+  },
+  "persistedPublicSessionPage": {
+    "http": 200,
+    "ok": true,
+    "events": [
+      {
+        "type": "request/header",
+        "seq": 13,
+        "provider": "a2d2-acceptance",
+        "model": "deterministic"
+      },
+      {
+        "type": "assistant/message",
+        "seq": 16,
+        "time": 1792473422584,
+        "data": {
+          "turn": 1,
+          "step": 1,
+          "message": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "A2D2_122_DETERMINISTIC_HOST_REPLY"
+              }
+            ],
+            "source": {
+              "kind": "model",
+              "provider": "a2d2-acceptance",
+              "model": "deterministic"
+            },
+            "id": "f9ff6fcc-84b0-4d75-8e41-082b6f335ae0"
+          },
+          "stream": [
+            {
+              "type": "chunk",
+              "time": 1792473422581,
+              "chunk": {
+                "type": "block-start",
+                "index": 0,
+                "blockType": "text"
+              }
+            },
+            {
+              "type": "text-chunks",
+              "time0": 1792473422582,
+              "index": 0,
+              "dt": [],
+              "texts": [
+                "A2D2_122_DETERMINISTIC_HOST_REPLY"
+              ]
+            },
+            {
+              "type": "chunk",
+              "time": 1792473422582,
+              "chunk": {
+                "type": "block-end",
+                "index": 0,
+                "block": {
+                  "type": "text",
+                  "text": "A2D2_122_DETERMINISTIC_HOST_REPLY"
+                }
+              }
+            },
+            {
+              "type": "chunk",
+              "time": 1792473422582,
+              "chunk": {
+                "type": "finish",
+                "reason": {
+                  "kind": "stop"
+                }
+              }
+            }
+          ]
+        },
+        "surfaceOp": "append"
+      },
+      {
+        "type": "turn/end",
+        "seq": 18,
+        "time": 1792473422588,
+        "data": {
+          "turn": 1,
+          "reason": {
+            "kind": "completed"
+          }
+        }
+      }
+    ]
+  },
+  "retry": {
+    "http": 200,
+    "body": {
+      "status": "completed",
+      "execution": {
+        "id": "5efd58b9-e0a1-44b0-bd30-6bb0c75f1bb4",
+        "ref": {
+          "projectId": "be81a118-be0e-4753-914b-648c1c6d61ba",
+          "taskId": "24eefe4d-5141-4118-9ae8-a22130dec2b0"
+        },
+        "agentId": "55229f9a-9e40-4d32-b497-af90bcfea929",
+        "owner": "2efaab97-269e-4261-b770-25a1c2f320c8",
+        "epoch": 1,
+        "resource": {
+          "runtimeId": "b29d4786-497c-4ef2-a730-046979526807",
+          "workspaceId": "201b5a63-500e-44a1-a8f9-544c87e0cfab"
+        },
+        "session": {
+          "runtimeId": "b29d4786-497c-4ef2-a730-046979526807",
+          "sessionId": "session-c7c4949d-86db-4fc5-828b-b520da6a81e9"
+        },
+        "sessionMode": "create",
+        "agentPreset": "standard",
+        "model": {
+          "provider": "a2d2-acceptance",
+          "model": "deterministic"
+        },
+        "permissionPreset": "read-only",
+        "policy": {
+          "version": 1,
+          "modelCandidates": [],
+          "instructions": "Coordinate accepted work and its acceptance criteria.",
+          "capabilities": [
+            "coordination"
+          ]
+        },
+        "state": "ready",
+        "history": [
+          {
+            "state": "accepted",
+            "commandId": "fc92a8b0-4a20-42be-b55e-262938e1f889"
+          },
+          {
+            "state": "creating",
+            "commandId": "fc92a8b0-4a20-42be-b55e-262938e1f889"
+          },
+          {
+            "state": "ready",
+            "commandId": "fc92a8b0-4a20-42be-b55e-262938e1f889"
+          }
+        ],
+        "actual": {
+          "runtimeId": "b29d4786-497c-4ef2-a730-046979526807",
+          "cwd": "/tmp/a2d2-v3-121/122-admission-fixed-20261020/workspace",
+          "agentPreset": "standard",
+          "provider": "a2d2-acceptance",
+          "model": "deterministic",
+          "permissionPreset": "read-only",
+          "sandbox": "read-only",
+          "approval": "ask"
+        },
+        "events": [
+          {
+            "id": "kickoff:5efd58b9-e0a1-44b0-bd30-6bb0c75f1bb4",
+            "text": "Coordinate accepted work and its acceptance criteria.\n\nTask 24eefe4d-5141-4118-9ae8-a22130dec2b0: Authorized deterministic startup\nGoal: Verify real production admission\n\nSpecification:\nOne explicitly authorized deterministic kickoff on read-only resources\n\nAcceptance criteria:\n- Real ready/actual and persisted deterministic reply\n- Retry preserves identity and one request",
+            "kind": "input",
+            "delivery": "consumed",
+            "acceptance": "unassessed"
+          }
+        ]
+      }
+    }
+  },
+  "metrics": [
+    {
+      "processId": "5c080023-da11-4a82-8650-d574757ebb64",
+      "pid": 2067488,
+      "time": "2026-10-20T05:16:20.444Z",
+      "kind": "guard-started"
+    },
+    {
+      "processId": "5c080023-da11-4a82-8650-d574757ebb64",
+      "pid": 2067488,
+      "time": "2026-10-20T05:16:21.577Z",
+      "kind": "driver-ready"
+    },
+    {
+      "processId": "5c080023-da11-4a82-8650-d574757ebb64",
+      "pid": 2067488,
+      "time": "2026-10-20T05:16:59.102Z",
+      "kind": "session-born",
+      "sessionId": "session-a2d2-122-positive"
+    },
+    {
+      "processId": "5c080023-da11-4a82-8650-d574757ebb64",
+      "pid": 2067488,
+      "time": "2026-10-20T05:16:59.584Z",
+      "kind": "session-born",
+      "sessionId": "session-a2d2-122-current"
+    },
+    {
+      "processId": "5c080023-da11-4a82-8650-d574757ebb64",
+      "pid": 2067488,
+      "time": "2026-10-20T05:16:59.838Z",
+      "kind": "session-born",
+      "sessionId": "session-a2d2-122-retired"
+    },
+    {
+      "processId": "5c080023-da11-4a82-8650-d574757ebb64",
+      "pid": 2067488,
+      "time": "2026-10-20T05:17:00.038Z",
+      "kind": "session-born",
+      "sessionId": "session-a2d2-122-review"
+    },
+    {
+      "processId": "5c080023-da11-4a82-8650-d574757ebb64",
+      "pid": 2067488,
+      "time": "2026-10-20T05:17:01.209Z",
+      "kind": "authorized",
+      "mode": "task",
+      "grantId": "1f2c56d2-130c-499c-99a3-afd1b9069dca",
+      "ref": {
+        "projectId": "be81a118-be0e-4753-914b-648c1c6d61ba",
+        "taskId": "24eefe4d-5141-4118-9ae8-a22130dec2b0"
+      },
+      "calls": 1,
+      "phase": "startup"
+    },
+    {
+      "processId": "5c080023-da11-4a82-8650-d574757ebb64",
+      "pid": 2067488,
+      "time": "2026-10-20T05:17:01.825Z",
+      "kind": "session-born",
+      "sessionId": "session-c7c4949d-86db-4fc5-828b-b520da6a81e9"
+    },
+    {
+      "processId": "5c080023-da11-4a82-8650-d574757ebb64",
+      "pid": 2067488,
+      "time": "2026-10-20T05:17:02.575Z",
+      "kind": "gateway",
+      "sessionId": "session-c7c4949d-86db-4fc5-828b-b520da6a81e9",
+      "provider": "a2d2-acceptance",
+      "model": "deterministic"
+    },
+    {
+      "processId": "5c080023-da11-4a82-8650-d574757ebb64",
+      "pid": 2067488,
+      "time": "2026-10-20T05:17:02.579Z",
+      "kind": "task-pinned",
+      "grantId": "1f2c56d2-130c-499c-99a3-afd1b9069dca",
+      "phase": "startup",
+      "ref": {
+        "projectId": "be81a118-be0e-4753-914b-648c1c6d61ba",
+        "taskId": "24eefe4d-5141-4118-9ae8-a22130dec2b0"
+      },
+      "executionId": "5efd58b9-e0a1-44b0-bd30-6bb0c75f1bb4",
+      "owner": "2efaab97-269e-4261-b770-25a1c2f320c8",
+      "epoch": 1,
+      "runtimeId": "b29d4786-497c-4ef2-a730-046979526807",
+      "sessionId": "session-c7c4949d-86db-4fc5-828b-b520da6a81e9"
+    },
+    {
+      "processId": "5c080023-da11-4a82-8650-d574757ebb64",
+      "pid": 2067488,
+      "time": "2026-10-20T05:17:02.580Z",
+      "kind": "admitted",
+      "sessionId": "session-c7c4949d-86db-4fc5-828b-b520da6a81e9",
+      "grantId": "1f2c56d2-130c-499c-99a3-afd1b9069dca",
+      "phase": "startup",
+      "admitted": true,
+      "ref": {
+        "projectId": "be81a118-be0e-4753-914b-648c1c6d61ba",
+        "taskId": "24eefe4d-5141-4118-9ae8-a22130dec2b0"
+      },
+      "binding": {
+        "executionId": "5efd58b9-e0a1-44b0-bd30-6bb0c75f1bb4",
+        "owner": "2efaab97-269e-4261-b770-25a1c2f320c8",
+        "epoch": 1,
+        "runtimeId": "b29d4786-497c-4ef2-a730-046979526807",
+        "sessionId": "session-c7c4949d-86db-4fc5-828b-b520da6a81e9"
+      },
+      "remainingCalls": 0
+    },
+    {
+      "processId": "5c080023-da11-4a82-8650-d574757ebb64",
+      "pid": 2067488,
+      "time": "2026-10-20T05:17:02.581Z",
+      "kind": "adapter",
+      "sessionId": "session-c7c4949d-86db-4fc5-828b-b520da6a81e9",
+      "provider": "a2d2-acceptance",
+      "model": "deterministic",
+      "grantId": "1f2c56d2-130c-499c-99a3-afd1b9069dca",
+      "phase": "startup",
+      "ref": {
+        "projectId": "be81a118-be0e-4753-914b-648c1c6d61ba",
+        "taskId": "24eefe4d-5141-4118-9ae8-a22130dec2b0"
+      },
+      "binding": {
+        "executionId": "5efd58b9-e0a1-44b0-bd30-6bb0c75f1bb4",
+        "owner": "2efaab97-269e-4261-b770-25a1c2f320c8",
+        "epoch": 1,
+        "runtimeId": "b29d4786-497c-4ef2-a730-046979526807",
+        "sessionId": "session-c7c4949d-86db-4fc5-828b-b520da6a81e9"
+      }
+    }
+  ],
+  "auxiliaryFailurePreserved": {
+    "initialScriptExit": 1,
+    "page": {
+      "http": 200,
+      "body": {
+        "type": "server-response",
+        "rpcId": "f1df626a-7dc7-4e00-b18c-80cf5779edc5",
+        "result": {
+          "ok": false,
+          "error": {
+            "code": "gateway/arguments-invalid",
+            "message": "typert gateway: session/page: args fields do not match the descriptor: missing \"request\"; unexpected \"address\", \"throughSeq\", \"maxMessages\"",
+            "details": {
+              "endpoint": "session/page"
+            }
+          }
+        }
+      }
+    },
+    "failure": {
+      "message": "Expected values to be strictly equal:\n\nfalse !== true\n",
+      "stack": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\nfalse !== true\n\n    at file:///tmp/a2d2-122-admission-diagnostic/fixed-public-gate.mjs:55:46\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+    },
+    "correctedSameExecutionScriptExit": 0
+  }
+}
