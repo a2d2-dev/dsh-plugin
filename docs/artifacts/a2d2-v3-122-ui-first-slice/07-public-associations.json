@@ -1,0 +1,156 @@
+{
+  "execution": {
+    "body": {
+      "status": "completed"
+    },
+    "http": 200,
+    "request": {
+      "kind": "query",
+      "value": {
+        "ref": {
+          "projectId": "5d253cfe-6ffc-45d5-afe8-145281bdf893",
+          "taskId": "c5cbc587-ac2a-4039-bc98-08e37e7459df"
+        },
+        "type": "task.execution"
+      }
+    }
+  },
+  "rows": [
+    {
+      "body": {
+        "status": "completed",
+        "task": {
+          "activity": [
+            {
+              "commandId": "9305c36a-66f0-498a-bfa3-17f35ecd7ba7",
+              "type": "task.create",
+              "version": 1
+            },
+            {
+              "commandId": "938a8d7e-9d19-439f-b9e7-51e9ce5fd682",
+              "type": "task.associate-session",
+              "version": 2
+            }
+          ],
+          "agentId": "c17382cf-1491-4034-ad89-cd26e8b735de",
+          "breakdown": [],
+          "children": [],
+          "goal": "在真实DSH中观察执行事实",
+          "id": "c5cbc587-ac2a-4039-bc98-08e37e7459df",
+          "projectId": "5d253cfe-6ffc-45d5-afe8-145281bdf893",
+          "sessions": [
+            {
+              "purpose": "related",
+              "session": {
+                "runtimeId": "8281cb18-8ef7-4915-8e42-9915598185be",
+                "sessionId": "session-a2d2-122-positive"
+              }
+            }
+          ],
+          "specification": {
+            "acceptance": [
+              "无模型调用；导航指向真实当前Session"
+            ],
+            "text": "通过公开task.start创建ready执行，验证实际环境和当前会话",
+            "version": 1
+          },
+          "specificationHistory": [],
+          "title": "122 首片执行事实与当前会话",
+          "version": 2
+        }
+      },
+      "http": 200,
+      "request": {
+        "kind": "command",
+        "value": {
+          "commandId": "938a8d7e-9d19-439f-b9e7-51e9ce5fd682",
+          "expectedVersion": 1,
+          "purpose": "related",
+          "ref": {
+            "projectId": "5d253cfe-6ffc-45d5-afe8-145281bdf893",
+            "taskId": "c5cbc587-ac2a-4039-bc98-08e37e7459df"
+          },
+          "session": {
+            "runtimeId": "8281cb18-8ef7-4915-8e42-9915598185be",
+            "sessionId": "session-a2d2-122-positive"
+          },
+          "type": "task.associate-session"
+        }
+      }
+    },
+    {
+      "body": {
+        "status": "completed",
+        "task": {
+          "activity": [
+            {
+              "commandId": "9305c36a-66f0-498a-bfa3-17f35ecd7ba7",
+              "type": "task.create",
+              "version": 1
+            },
+            {
+              "commandId": "938a8d7e-9d19-439f-b9e7-51e9ce5fd682",
+              "type": "task.associate-session",
+              "version": 2
+            },
+            {
+              "commandId": "582f6182-f808-42dd-a257-462b2ad4c08f",
+              "type": "task.associate-session",
+              "version": 3
+            }
+          ],
+          "agentId": "c17382cf-1491-4034-ad89-cd26e8b735de",
+          "breakdown": [],
+          "children": [],
+          "goal": "在真实DSH中观察执行事实",
+          "id": "c5cbc587-ac2a-4039-bc98-08e37e7459df",
+          "projectId": "5d253cfe-6ffc-45d5-afe8-145281bdf893",
+          "sessions": [
+            {
+              "purpose": "related",
+              "session": {
+                "runtimeId": "8281cb18-8ef7-4915-8e42-9915598185be",
+                "sessionId": "session-a2d2-122-positive"
+              }
+            },
+            {
+              "purpose": "review",
+              "session": {
+                "runtimeId": "8281cb18-8ef7-4915-8e42-9915598185be",
+                "sessionId": "session-a2d2-122-review"
+              }
+            }
+          ],
+          "specification": {
+            "acceptance": [
+              "无模型调用；导航指向真实当前Session"
+            ],
+            "text": "通过公开task.start创建ready执行，验证实际环境和当前会话",
+            "version": 1
+          },
+          "specificationHistory": [],
+          "title": "122 首片执行事实与当前会话",
+          "version": 3
+        }
+      },
+      "http": 200,
+      "request": {
+        "kind": "command",
+        "value": {
+          "commandId": "582f6182-f808-42dd-a257-462b2ad4c08f",
+          "expectedVersion": 2,
+          "purpose": "review",
+          "ref": {
+            "projectId": "5d253cfe-6ffc-45d5-afe8-145281bdf893",
+            "taskId": "c5cbc587-ac2a-4039-bc98-08e37e7459df"
+          },
+          "session": {
+            "runtimeId": "8281cb18-8ef7-4915-8e42-9915598185be",
+            "sessionId": "session-a2d2-122-review"
+          },
+          "type": "task.associate-session"
+        }
+      }
+    }
+  ]
+}

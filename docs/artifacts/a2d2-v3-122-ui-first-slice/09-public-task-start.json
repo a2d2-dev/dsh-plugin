@@ -1,0 +1,51 @@
+{
+  "execution": {
+    "body": {
+      "status": "completed"
+    },
+    "http": 200,
+    "request": {
+      "kind": "query",
+      "value": {
+        "ref": {
+          "projectId": "5d253cfe-6ffc-45d5-afe8-145281bdf893",
+          "taskId": "c5cbc587-ac2a-4039-bc98-08e37e7459df"
+        },
+        "type": "task.execution"
+      }
+    }
+  },
+  "start": {
+    "body": {
+      "error": {
+        "code": "host-admission-failed",
+        "message": "Host execution admission failed"
+      },
+      "status": "failed"
+    },
+    "http": 400,
+    "request": {
+      "kind": "command",
+      "value": {
+        "agentId": "c17382cf-1491-4034-ad89-cd26e8b735de",
+        "agentPreset": "standard",
+        "commandId": "b8d7c90d-3b6a-4410-8ce2-378bdae2cd0f",
+        "expectedVersion": 3,
+        "model": {
+          "model": "deterministic",
+          "provider": "a2d2-acceptance"
+        },
+        "permissionPreset": "read-only",
+        "ref": {
+          "projectId": "5d253cfe-6ffc-45d5-afe8-145281bdf893",
+          "taskId": "c5cbc587-ac2a-4039-bc98-08e37e7459df"
+        },
+        "resource": {
+          "runtimeId": "8281cb18-8ef7-4915-8e42-9915598185be",
+          "workspaceId": "54af6603-62e5-47e6-83b6-848556cb9895"
+        },
+        "type": "task.start"
+      }
+    }
+  }
+}

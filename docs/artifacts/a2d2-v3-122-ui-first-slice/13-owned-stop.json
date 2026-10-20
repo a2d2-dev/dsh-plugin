@@ -1,0 +1,9 @@
+{
+  "managedJobId": "bash-935",
+  "supervisorPid": 1875455,
+  "childPid": 1875467,
+  "baseURL": "http://127.0.0.1:43343",
+  "ownershipVerified": true,
+  "signal": "SIGTERM",
+  "browserCloseExit": 0
+}

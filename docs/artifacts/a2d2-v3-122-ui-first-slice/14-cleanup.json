@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "rootRetained": true,
+  "managedJobId": "bash-935",
+  "collectedExitCode": 0,
+  "absentPids": [
+    1875455,
+    1875467
+  ],
+  "port": 43343,
+  "portResult": "ECONNREFUSED",
+  "browserSession": "a2d2-122-ui-0729792",
+  "browserCloseExitCode": 0
+}

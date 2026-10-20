@@ -1,0 +1,14 @@
+{
+  "observedSubsetPassed": true,
+  "productStartGate": "blocked: host-admission-failed",
+  "sessionCounts": [
+    0,
+    1,
+    5,
+    5
+  ],
+  "gateway": 0,
+  "adapter": 0,
+  "readyActualCurrentNavigation": "not verified",
+  "cleanupPassed": true
+}

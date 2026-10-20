@@ -1,0 +1,33 @@
+{
+  "workspaceId": "54af6603-62e5-47e6-83b6-848556cb9895",
+  "preset": {
+    "id": "standard"
+  },
+  "sessions": {
+    "positive": {
+      "sessionId": "session-a2d2-122-positive",
+      "agentPreset": "standard"
+    },
+    "current": {
+      "sessionId": "session-a2d2-122-current",
+      "agentPreset": "standard"
+    },
+    "retired": {
+      "sessionId": "session-a2d2-122-retired",
+      "agentPreset": "standard"
+    },
+    "review": {
+      "sessionId": "session-a2d2-122-review",
+      "agentPreset": "standard"
+    }
+  },
+  "before": {
+    "gateway": 0,
+    "adapter": 0
+  },
+  "after": {
+    "gateway": 0,
+    "adapter": 0
+  },
+  "scope": "host Session fixtures only; no Task ownership assigned"
+}

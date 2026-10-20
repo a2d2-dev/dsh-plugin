@@ -1,0 +1,38 @@
+{
+  "productSourceCommit": "07297921961d01f0da7ac15336f33131b5188a6a",
+  "uiSourceCommit": "e2ae5c3a48bc290818f7b0506fbb7e6626f4d236",
+  "typeOnlyFix": true,
+  "verifyPackExports": {
+    "job": "bash-925",
+    "exitCode": 0
+  },
+  "pack": {
+    "job": "bash-931",
+    "exitCode": 0,
+    "sha256": "b48c4e693b5f3b4647118f287158b7d8131eb348d1f45c73306a0a9b33ba01f6"
+  },
+  "prepare": {
+    "job": "bash-932",
+    "exitCode": 0
+  },
+  "client": {
+    "sha256": "235767eb9dfb073f599cff7c4e8981d3757ec91d1b5cd57756c029327480fc0b",
+    "installedPath": "/tmp/a2d2-v3-121/122-ui-first-slice-0729792/home/profiles/web/node_modules/dsh-a2d2/lib/client.js",
+    "installedSHA": "235767eb9dfb073f599cff7c4e8981d3757ec91d1b5cd57756c029327480fc0b"
+  },
+  "additionalHostArtifacts": {
+    "@deepseek-ai/dsh-agent-loop": {
+      "path": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/core/agent-loop/lib/index.js",
+      "sha256": "00c4814d63f3d1e2754eb09144832d19b30499d6ea444730473f740b587948c2"
+    },
+    "@deepseek-ai/dsh-session-persistence-jsonl": {
+      "path": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/session/session-persistence-jsonl/lib/index.js",
+      "sha256": "0845707017acc2b4a8a75eab2244fa3fd88587b8094ab32014321dce7ca1e31b"
+    },
+    "@deepseek-ai/dsh-agent-preset-registry": {
+      "path": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/preset/agent-preset-registry/lib/index.js",
+      "sha256": "ed62d573b8cc6d7ed3e3cb7932dbf5e237f5a603b3cc9d9e586187db00e821cc",
+      "source": "explicit artifact path; not resolved through web-app anchor"
+    }
+  }
+}

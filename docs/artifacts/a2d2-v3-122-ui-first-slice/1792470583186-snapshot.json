@@ -1,0 +1,115 @@
+{
+  "processId": "a265e5c1-4cdf-4159-8c1f-16443a43c4fe",
+  "pid": 1875467,
+  "gateway": 0,
+  "adapter": 0,
+  "defaultModel": {
+    "provider": "acceptance-disabled",
+    "model": "no-model"
+  },
+  "sessions": [
+    {
+      "sessionId": "session-b8ead1bd-a8a2-4e4f-abb5-348b78df6a35",
+      "meta": {
+        "version": 4,
+        "id": "session-b8ead1bd-a8a2-4e4f-abb5-348b78df6a35",
+        "createdAt": 1792470519049,
+        "cwd": "/tmp/a2d2-v3-121/122-ui-first-slice-0729792/workspace/deepseek-harness/default-workspace",
+        "isSeeded": false,
+        "agentPreset": "standard"
+      },
+      "eventTypes": [
+        "permission/preset",
+        "sandbox/mode",
+        "approval/policy"
+      ],
+      "live": true,
+      "projections": {
+        "asOfSeq": 2,
+        "values": {
+          "title": null,
+          "goal": null,
+          "tokenUsage": {
+            "uncachedInputTokens": 0,
+            "outputTokens": 0,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          },
+          "contextPressure": {},
+          "contextBreakdown": {
+            "systemTokens": 0,
+            "toolsTokens": 0,
+            "messageTokens": 0
+          },
+          "inbox": {
+            "next-turn": [],
+            "next-step": []
+          },
+          "sessionStats": {
+            "turns": 0,
+            "steps": 0,
+            "llmMs": 0,
+            "toolMs": 0,
+            "ttftMs": 0,
+            "ttftSteps": 0,
+            "decodeMs": 0,
+            "decodeTokens": 0
+          },
+          "turnOutline": [],
+          "agentPreset": "standard",
+          "userQuestions": {
+            "active": [],
+            "settled": []
+          },
+          "subagentCatalog": [],
+          "subagentTiming": {
+            "settledMs": 0
+          },
+          "subagent": null,
+          "a2d2Indicator": {
+            "thresholds": {
+              "warnAtTokens": 150000,
+              "criticalAtTokens": 1000000
+            },
+            "currency": "¥"
+          },
+          "permissions": {
+            "currentValue": "workspace-write"
+          },
+          "todos": null,
+          "plan": {
+            "active": false,
+            "pending": false
+          },
+          "modelSelection": {
+            "lastUsed": null,
+            "next": null
+          },
+          "sessionListMetadata": {
+            "blank": true,
+            "lastPromptAt": null
+          },
+          "imageLimits": {
+            "maxImageBytes": 20971520,
+            "maxImagesPerMessage": 20,
+            "maxMessageImageBytes": 209715200,
+            "maxImagePixels": 64000000,
+            "maxImageDimension": 8192,
+            "mediaTypes": [
+              "image/png",
+              "image/jpeg",
+              "image/webp",
+              "image/gif"
+            ]
+          }
+        }
+      },
+      "sandbox": {
+        "mode": "workspace-write",
+        "workspaceRoot": "/tmp/a2d2-v3-121/122-ui-first-slice-0729792/workspace/deepseek-harness/default-workspace",
+        "sessionId": "session-b8ead1bd-a8a2-4e4f-abb5-348b78df6a35"
+      },
+      "approval": "ask"
+    }
+  ]
+}

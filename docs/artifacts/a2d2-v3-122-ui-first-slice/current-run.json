@@ -1,0 +1,14 @@
+{
+  "runId": "08267484-5809-4d45-b0b3-31ad86e78738",
+  "pid": 1875467,
+  "supervisorPid": 1875455,
+  "startedAt": "2026-10-20T04:27:49.349Z",
+  "baseURL": "http://127.0.0.1:43343",
+  "hostCommit": "a45068d2ec03326c800c68c9bdcd47508e3ccb9c",
+  "cliVersion": "0.2.0-rc.2",
+  "plugin": {
+    "path": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/a2d2-v3-02-panel/dsh-a2d2-0.0.1.tgz",
+    "sha256": "b48c4e693b5f3b4647118f287158b7d8131eb348d1f45c73306a0a9b33ba01f6"
+  },
+  "managedJobId": "bash-935"
+}

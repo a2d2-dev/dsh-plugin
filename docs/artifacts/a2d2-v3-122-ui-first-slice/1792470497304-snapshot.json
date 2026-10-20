@@ -1,0 +1,11 @@
+{
+  "processId": "a265e5c1-4cdf-4159-8c1f-16443a43c4fe",
+  "pid": 1875467,
+  "gateway": 0,
+  "adapter": 0,
+  "defaultModel": {
+    "provider": "acceptance-disabled",
+    "model": "no-model"
+  },
+  "sessions": []
+}

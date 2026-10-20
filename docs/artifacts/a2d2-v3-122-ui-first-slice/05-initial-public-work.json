@@ -1,0 +1,167 @@
+{
+  "candidates": {
+    "body": {
+      "candidates": [
+        {
+          "ref": {
+            "runtimeId": "8281cb18-8ef7-4915-8e42-9915598185be",
+            "sessionId": "session-a2d2-122-review"
+          },
+          "resource": {
+            "runtimeId": "8281cb18-8ef7-4915-8e42-9915598185be",
+            "workspaceId": "54af6603-62e5-47e6-83b6-848556cb9895"
+          },
+          "title": "session-a2d2-122-review"
+        },
+        {
+          "ref": {
+            "runtimeId": "8281cb18-8ef7-4915-8e42-9915598185be",
+            "sessionId": "session-a2d2-122-retired"
+          },
+          "resource": {
+            "runtimeId": "8281cb18-8ef7-4915-8e42-9915598185be",
+            "workspaceId": "54af6603-62e5-47e6-83b6-848556cb9895"
+          },
+          "title": "session-a2d2-122-retired"
+        },
+        {
+          "ref": {
+            "runtimeId": "8281cb18-8ef7-4915-8e42-9915598185be",
+            "sessionId": "session-a2d2-122-current"
+          },
+          "resource": {
+            "runtimeId": "8281cb18-8ef7-4915-8e42-9915598185be",
+            "workspaceId": "54af6603-62e5-47e6-83b6-848556cb9895"
+          },
+          "title": "session-a2d2-122-current"
+        },
+        {
+          "ref": {
+            "runtimeId": "8281cb18-8ef7-4915-8e42-9915598185be",
+            "sessionId": "session-a2d2-122-positive"
+          },
+          "resource": {
+            "runtimeId": "8281cb18-8ef7-4915-8e42-9915598185be",
+            "workspaceId": "54af6603-62e5-47e6-83b6-848556cb9895"
+          },
+          "title": "session-a2d2-122-positive"
+        }
+      ],
+      "status": "completed"
+    },
+    "http": 200
+  },
+  "execution": {
+    "body": {
+      "status": "completed"
+    },
+    "http": 200
+  },
+  "project": {
+    "body": {
+      "agents": [
+        {
+          "id": "c17382cf-1491-4034-ad89-cd26e8b735de",
+          "policy": {
+            "capabilities": [
+              "coordination"
+            ],
+            "instructions": "Coordinate accepted work and its acceptance criteria.",
+            "modelCandidates": [],
+            "version": 1
+          },
+          "projectId": "5d253cfe-6ffc-45d5-afe8-145281bdf893",
+          "role": "coordinator"
+        }
+      ],
+      "project": {
+        "defaultAgentId": "c17382cf-1491-4034-ad89-cd26e8b735de",
+        "id": "5d253cfe-6ffc-45d5-afe8-145281bdf893",
+        "name": "122 首片真实执行验收",
+        "resources": [
+          {
+            "runtimeId": "8281cb18-8ef7-4915-8e42-9915598185be",
+            "workspaceId": "54af6603-62e5-47e6-83b6-848556cb9895"
+          }
+        ],
+        "version": 1
+      },
+      "status": "completed",
+      "tasks": [
+        {
+          "activity": [
+            {
+              "commandId": "9305c36a-66f0-498a-bfa3-17f35ecd7ba7",
+              "type": "task.create",
+              "version": 1
+            }
+          ],
+          "agentId": "c17382cf-1491-4034-ad89-cd26e8b735de",
+          "breakdown": [],
+          "children": [],
+          "goal": "在真实DSH中观察执行事实",
+          "id": "c5cbc587-ac2a-4039-bc98-08e37e7459df",
+          "projectId": "5d253cfe-6ffc-45d5-afe8-145281bdf893",
+          "sessions": [],
+          "specification": {
+            "acceptance": [
+              "无模型调用；导航指向真实当前Session"
+            ],
+            "text": "通过公开task.start创建ready执行，验证实际环境和当前会话",
+            "version": 1
+          },
+          "specificationHistory": [],
+          "title": "122 首片执行事实与当前会话",
+          "version": 1
+        }
+      ]
+    },
+    "http": 200
+  },
+  "projects": {
+    "body": {
+      "projects": [
+        {
+          "defaultAgentId": "c17382cf-1491-4034-ad89-cd26e8b735de",
+          "id": "5d253cfe-6ffc-45d5-afe8-145281bdf893",
+          "name": "122 首片真实执行验收",
+          "resources": [
+            {
+              "runtimeId": "8281cb18-8ef7-4915-8e42-9915598185be",
+              "workspaceId": "54af6603-62e5-47e6-83b6-848556cb9895"
+            }
+          ],
+          "version": 1
+        }
+      ],
+      "status": "completed"
+    },
+    "http": 200
+  },
+  "ref": {
+    "projectId": "5d253cfe-6ffc-45d5-afe8-145281bdf893",
+    "taskId": "c5cbc587-ac2a-4039-bc98-08e37e7459df"
+  },
+  "resources": {
+    "body": {
+      "resources": [
+        {
+          "ref": {
+            "runtimeId": "8281cb18-8ef7-4915-8e42-9915598185be",
+            "workspaceId": "54af6603-62e5-47e6-83b6-848556cb9895"
+          },
+          "title": "workspace"
+        },
+        {
+          "ref": {
+            "runtimeId": "8281cb18-8ef7-4915-8e42-9915598185be",
+            "workspaceId": "b589beb7-c80c-430a-bd21-a9aa5ce79a16"
+          },
+          "title": "default-workspace"
+        }
+      ],
+      "status": "completed"
+    },
+    "http": 200
+  }
+}
