@@ -30,7 +30,7 @@ GitHub 写入、任务启动／续跑／完成、旧迁移、客户端来源 UI�
 
 刷新先在短事务内保存请求代次，再在锁外等待网络，最后重新锁定并检查 enabled、来源版本和该查询最新代次。停用再启用也会提高来源版本，旧在途响应失效。不同查询返回同节点时比较远端更新时间及本地请求序号。进程退出后可重新显式刷新，无后台轮询器。
 
-ExternalBinding 以稳定 node ID 和规范化 URL 建立持久唯一索引；原子事务校验索引与 TaskRef 一致。新 URL 别名在显式接入时保存。重复页和并行命令复用映射；同号跨仓库按不同 node／URL 区分。跨 Project 命中返回 `external-object-owned` 及 canonical TaskRef，不复制或改变原归属。节点／URL 指向不同绑定返回 `external-mapping-conflict`，不合并活动工作。
+ExternalBinding 以稳定 node ID 和规范化 URL 建立持久唯一索引；原子事务校验索引与 TaskRef 一致。新 URL 别名在显式接入时保存。URL 接入先从该受信唯一索引解析 node，再要求当前来源有该 node 的完整观察；尚无索引时，仅可匹配当前来源已取得的 URL 观察。索引中的旧 URL 不必再次出现在当前来源观察里，但索引本身不能替代内容观察。重复页和并行命令复用映射；同号跨仓库按不同 node／URL 区分。跨 Project 命中返回 `external-object-owned` 及 canonical TaskRef，不复制或改变原归属。节点／URL 指向不同绑定返回 `external-mapping-conflict`，不合并活动工作。
 
 接受快照 `binding.accepted` 保持不变，后续观察只更新 `binding.lastObserved`。关联已有 Task 不覆盖规格、目标、Agent、父子或 Session；仅增加关联活动及领域版本。本基线没有完成字段／完成命令，观察路径不写任何完成结论。
 
@@ -50,7 +50,9 @@ ExternalBinding 以稳定 node ID 和规范化 URL 建立持久唯一索引；�
 
 浏览器仅提交 ProjectId／SourceId、Issue number 或已观察 node／URL。服务器解析仓库范围，网络结果成为观察；显式接入才在同一事务中提交 Task、内容快照、ExternalBinding、node／URL 索引和 commandId 回执。错误与空页分开，失败响应尽可能带 `page`／`issue` 最后已知内容；缓存查询带来源 `lastError`。失败不清除 Task、已有观察或分页记录。`refresh:false`（默认）始终只读本地。
 
-DSH 未登录／不可信请求返回 HTTP 401／403，读取请求体前拒绝。GitHub 401／403／404／缺凭据返回 HTTP 424，分别以 `github-unauthorized`、`github-forbidden`、`github-not-found`、`github-credentials-unavailable` 识别；限流为 429，附可取得的 `retryAt`；网络／暂不可用／缺读取能力为 503；无效远端响应为 502。消息不含 token 或远端原始错误正文。
+DSH 未登录／不可信请求返回 HTTP 401／403，读取请求体前拒绝。GitHub 401／403／404／缺凭据返回 HTTP 424，分别以 `github-unauthorized`、`github-forbidden`、`github-not-found`、`github-credentials-unavailable` 识别；限流为 429，附可取得的 `retryAt`；网络／暂不可用／缺读取能力为 503；无效远端结构为 502。消息不含 token 或远端原始错误正文。
+
+已知分类限制：HTTP 200 的非法 JSON 会在 `response.json()` 抛错，当前仍由传输 catch 归为 `github-offline`（503）。本次单轮裁决将其记账，不扩大 R1／R2 必要修复，也不重构错误系统。
 
 ## 场景
 
@@ -65,7 +67,18 @@ DSH 未登录／不可信请求返回 HTTP 401／403，读取请求体前拒绝�
 {"type":"source.import","commandId":"accept-112","projectId":"<ProjectId>","sourceId":"<SourceId>","nodeId":"<observed Issue nodeId>"}
 ```
 
-列表响应有 `page.items`／identity／nextPage；详情有 `issue`。接入返回 `task`、`binding`、canonical `ref`。也可提供 `url` 代替 nodeId（恰好一个）；URL 只匹配已取得观察，不作为网络入口。`source.link` 用 `ref,expectedVersion,sourceId,nodeId|url` 关联已有工作。`source.list` 列出当前 Project 来源。再次提交同一 commandId 返回原回执。
+列表响应有 `page.items`／identity／nextPage；详情有 `issue`。接入返回 `task`、`binding`、canonical `ref`。也可提供 `url` 代替 nodeId（恰好一个）；URL 通过受信索引或当前来源观察解析，不作为网络入口。`source.link` 用 `ref,expectedVersion,sourceId,nodeId|url` 关联已有工作。`source.list` 列出当前 Project 来源。再次提交同一 commandId 返回原回执。
+
+### 两来源改名与旧 URL 再次接入
+
+前置：S1 的 `a2d2-dev/dsh-plugin#112` 已按 node 接入；仓库改名为 `a2d2-dev/renamed`，在同一 Project 显式配置 S2 并刷新取得同 node 的完整新观察。以下为依次提交的 command `value`：
+
+```json
+{"type":"source.import","commandId":"renamed-node","projectId":"<ProjectId>","sourceId":"<S2 SourceId>","nodeId":"<same observed nodeId>"}
+{"type":"source.import","commandId":"renamed-old-url","projectId":"<ProjectId>","sourceId":"<S2 SourceId>","url":"https://github.com/a2d2-dev/dsh-plugin/issues/112"}
+```
+
+两次均返回原 canonical `ref` 和 Task；binding 保存新旧 URL，`accepted` 保留首次原文，`lastObserved` 来自 S2。旧 URL → 唯一索引 → node → S2 完整观察 → 原 Task 的解析在同一命令事务内完成。移除来源读取端口后，用新 commandId 重复旧 URL import 仍成功；同一 commandId 的并发／重启重试返回原回执。S2 尚未观察该 node、只观察到同号不同 node，或提交未知 URL 时返回 `source-content-unavailable`，不会产生占位工作。其他 Project 已观察同 node 后按旧 URL 接入，仍返回 `external-object-owned` 和原 canonical ref，不改变归属。
 
 ### 离线续读与停用
 
