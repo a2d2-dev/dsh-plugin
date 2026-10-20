@@ -1,0 +1,34 @@
+{
+  "failures": [
+    {
+      "command": "node --test tests/a2d2-v3-122-model.test.mjs (pre-implementation)",
+      "exitCode": 1,
+      "kind": "assembly only; missing model.mjs; not behavior red"
+    },
+    {
+      "command": "node --test tests/a2d2-v3-122-model.test.mjs (disabled boundary)",
+      "exitCode": 1,
+      "kind": "behavior red: authorized invocation rejected with A2D2_122_NOT_AUTHORIZED"
+    },
+    {
+      "command": "node --test tests/a2d2-v3-121-run.test.mjs tests/a2d2-v3-121-acceptance.test.mjs tests/a2d2-v3-122-model.test.mjs",
+      "job": "bash-769",
+      "exitCode": 1,
+      "passed": 22,
+      "failed": 1,
+      "skipped": 0,
+      "kind": "old acceptance test import lacks @deepseek-ai/cordis in this worktree; no dependency mutation"
+    },
+    {
+      "command": "agent-browser wait --text Type a message",
+      "job": "bash-776",
+      "exitCode": 1,
+      "kind": "wrong expected composer text; timeout30s; actual rendered textbox later inspected"
+    },
+    {
+      "command": "check --phase host-browse after restart",
+      "exitCode": 1,
+      "kind": "pure-read equality used across host lifecycle: session/end-seed, asOfSeq17→18, delegationDepth absent→0; baseline retained"
+    }
+  ]
+}

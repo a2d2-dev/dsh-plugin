@@ -1,0 +1,49 @@
+{
+  "passed": true,
+  "scope": "recorded real host positive, read-only browse, stable-origin restart; product pending",
+  "origin": "http://127.0.0.1:43267",
+  "pids": [
+    1708921,
+    1727567
+  ],
+  "jobs": [
+    "bash-768",
+    "bash-795"
+  ],
+  "exits": [
+    0,
+    0
+  ],
+  "counts": {
+    "gateway": 1,
+    "adapter": 1
+  },
+  "sessionCount": 4,
+  "differences": [
+    {
+      "sessionId": "session-a2d2-122-current",
+      "field": "meta.delegationDepth",
+      "allowed": "absent→0 on cold query normalization"
+    },
+    {
+      "sessionId": "session-a2d2-122-positive",
+      "field": "eventTypes/asOfSeq",
+      "allowed": "one shutdown session/end-seed appended; sequence 17→18"
+    },
+    {
+      "sessionId": "session-a2d2-122-positive",
+      "field": "meta.delegationDepth",
+      "allowed": "absent→0 on cold query normalization"
+    },
+    {
+      "sessionId": "session-a2d2-122-retired",
+      "field": "meta.delegationDepth",
+      "allowed": "absent→0 on cold query normalization"
+    },
+    {
+      "sessionId": "session-a2d2-122-review",
+      "field": "meta.delegationDepth",
+      "allowed": "absent→0 on cold query normalization"
+    }
+  ]
+}

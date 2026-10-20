@@ -1,0 +1,14 @@
+{"processId":"5413ff7b-622a-4c00-a9a3-2ff79ec70895","pid":1708921,"time":"2026-10-20T03:47:31.574Z","kind":"guard-started"}
+{"processId":"5413ff7b-622a-4c00-a9a3-2ff79ec70895","pid":1708921,"time":"2026-10-20T03:47:32.434Z","kind":"driver-ready"}
+{"processId":"5413ff7b-622a-4c00-a9a3-2ff79ec70895","pid":1708921,"time":"2026-10-20T03:47:47.725Z","kind":"session-born","sessionId":"session-a2d2-122-positive"}
+{"processId":"5413ff7b-622a-4c00-a9a3-2ff79ec70895","pid":1708921,"time":"2026-10-20T03:47:47.893Z","kind":"session-born","sessionId":"session-a2d2-122-current"}
+{"processId":"5413ff7b-622a-4c00-a9a3-2ff79ec70895","pid":1708921,"time":"2026-10-20T03:47:48.239Z","kind":"session-born","sessionId":"session-a2d2-122-retired"}
+{"processId":"5413ff7b-622a-4c00-a9a3-2ff79ec70895","pid":1708921,"time":"2026-10-20T03:47:48.558Z","kind":"session-born","sessionId":"session-a2d2-122-review"}
+{"processId":"5413ff7b-622a-4c00-a9a3-2ff79ec70895","pid":1708921,"time":"2026-10-20T03:47:48.874Z","kind":"authorized","sessionId":"session-a2d2-122-positive","calls":1,"phase":"host-positive"}
+{"processId":"5413ff7b-622a-4c00-a9a3-2ff79ec70895","pid":1708921,"time":"2026-10-20T03:47:48.875Z","kind":"prompt-submitted","sessionId":"session-a2d2-122-positive","requestId":"d8c4df03-2110-4312-b4fc-b60c6088fb02","phase":"host-positive"}
+{"processId":"5413ff7b-622a-4c00-a9a3-2ff79ec70895","pid":1708921,"time":"2026-10-20T03:47:48.892Z","kind":"assembly","sessionId":"session-a2d2-122-positive","provider":"a2d2-acceptance","model":"deterministic"}
+{"processId":"5413ff7b-622a-4c00-a9a3-2ff79ec70895","pid":1708921,"time":"2026-10-20T03:47:49.734Z","kind":"gateway","sessionId":"session-a2d2-122-positive","provider":"a2d2-acceptance","model":"deterministic"}
+{"processId":"5413ff7b-622a-4c00-a9a3-2ff79ec70895","pid":1708921,"time":"2026-10-20T03:47:49.736Z","kind":"adapter","sessionId":"session-a2d2-122-positive","provider":"a2d2-acceptance","model":"deterministic","phase":"host-positive"}
+{"processId":"9ffa41ae-8460-43e8-a129-85cb0b74799d","pid":1727567,"time":"2026-10-20T03:52:00.589Z","kind":"guard-started"}
+{"processId":"9ffa41ae-8460-43e8-a129-85cb0b74799d","pid":1727567,"time":"2026-10-20T03:52:01.380Z","kind":"driver-ready"}
+{"processId":"9ffa41ae-8460-43e8-a129-85cb0b74799d","pid":1727567,"time":"2026-10-20T03:52:03.742Z","kind":"session-born","sessionId":"session-a2d2-122-positive"}

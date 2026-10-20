@@ -41,6 +41,12 @@ node scripts/a2d2-v3-122/acceptance.mjs check --root "$ROOT" --phase host-browse
 
 最终接入需要已验证 tgz 及 SHA、公开命令/查询契约、受控失败窗口和浏览器入口。新建独立 root 官方安装，不替换已冻结实例；显式 start/continue 才授予确定性预算，列表/历史/旧会话阶段按零增量检查。未来参数化产品授权入口待契约确定后补齐，当前仅开放宿主 positive。
 
+## 实际宿主与生产锁包的能力差异
+
+2026-10-20 的真实宿主正控、原生截图、纯读零增量、同 origin 重启及正常清理见 [实际报告](../artifacts/a2d2-v3-122-host-2026-10-20/README.md)。宿主实际 controller lib SHA `bc889fbd3e95a994d9019f08feb9ce9033f4c6c918b6932f14b1c0fd109241a6` 提供 selectLocalModel；其 package 标记虽为 0.2.0-rc.2，**生产原锁包没有该方法**。本工具仅证明该 actual artifact 上的局部模型配置正控，生产仍须在最终 tgz 上验证自己的公开 installModelSelection/持久化配置路径，不能以版本名回填能力。
+
+mark/check 严格用于同一稳定生命周期内的纯读阶段。重启会合法追加 session/end-seed、推进序号并规范化 cold header；[重放 gate](../artifacts/a2d2-v3-122-host-2026-10-20/replay-gate.mjs)逐字段只允许已观察的这些差异，其余 meta、eventTypes、完整持久投影、身份、cwd、preset/default 和累计计数严格比较。retired 输入拒绝可产生 blocked turn，最终需另验模型/工具零增量及 current 不变，不能套纯读全等。
+
 ## 当前验证
 
-test-first：首轮缺模块为装配失败，不计行为红测；保留禁用语义后运行用例，授权请求抛 `A2D2_122_NOT_AUTHORIZED`（exit 1）；增加指定 Session 单次预算后 1 passed / 0 skipped（exit 0）。测试接缝为任务明确批准的外部 LLM/adapter，不使用产品 mock。真实宿主记录随后在 artifacts 追加。
+test-first：首轮缺模块为装配失败，不计行为红测；保留禁用语义后运行用例，授权请求抛 `A2D2_122_NOT_AUTHORIZED`（exit 1）；增加指定 Session 单次预算后 1 passed / 0 skipped（exit 0）。测试接缝为任务明确批准的外部 LLM/adapter，不使用产品 mock。

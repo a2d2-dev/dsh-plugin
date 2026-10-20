@@ -1,0 +1,856 @@
+{
+  "passed": true,
+  "phase": "host-browse",
+  "delta": {
+    "gateway": 0,
+    "adapter": 0
+  },
+  "before": {
+    "processId": "5413ff7b-622a-4c00-a9a3-2ff79ec70895",
+    "pid": 1708921,
+    "gateway": 1,
+    "adapter": 1,
+    "defaultModel": {
+      "provider": "acceptance-disabled",
+      "model": "no-model"
+    },
+    "sessions": [
+      {
+        "sessionId": "session-a2d2-122-current",
+        "meta": {
+          "version": 4,
+          "id": "session-a2d2-122-current",
+          "createdAt": 1792468067886,
+          "cwd": "/tmp/a2d2-v3-121/122-host-positive-606fcee/workspace",
+          "isSeeded": false,
+          "agentPreset": "standard"
+        },
+        "eventTypes": [
+          "permission/preset",
+          "sandbox/mode",
+          "approval/policy"
+        ],
+        "live": true,
+        "projections": {
+          "asOfSeq": 2,
+          "values": {
+            "title": null,
+            "goal": null,
+            "tokenUsage": {
+              "uncachedInputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            },
+            "contextPressure": {},
+            "contextBreakdown": {
+              "systemTokens": 0,
+              "toolsTokens": 0,
+              "messageTokens": 0
+            },
+            "inbox": {
+              "next-turn": [],
+              "next-step": []
+            },
+            "sessionStats": {
+              "turns": 0,
+              "steps": 0,
+              "llmMs": 0,
+              "toolMs": 0,
+              "ttftMs": 0,
+              "ttftSteps": 0,
+              "decodeMs": 0,
+              "decodeTokens": 0
+            },
+            "turnOutline": [],
+            "agentPreset": "standard",
+            "userQuestions": {
+              "active": [],
+              "settled": []
+            },
+            "subagentCatalog": [],
+            "subagentTiming": {
+              "settledMs": 0
+            },
+            "subagent": null,
+            "permissions": {
+              "currentValue": "workspace-write"
+            },
+            "todos": null,
+            "plan": {
+              "active": false,
+              "pending": false
+            },
+            "modelSelection": {
+              "lastUsed": null,
+              "next": null
+            },
+            "sessionListMetadata": {
+              "blank": true,
+              "lastPromptAt": null
+            },
+            "imageLimits": {
+              "maxImageBytes": 20971520,
+              "maxImagesPerMessage": 20,
+              "maxMessageImageBytes": 209715200,
+              "maxImagePixels": 64000000,
+              "maxImageDimension": 8192,
+              "mediaTypes": [
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif"
+              ]
+            }
+          }
+        },
+        "sandbox": {
+          "mode": "workspace-write",
+          "workspaceRoot": "/tmp/a2d2-v3-121/122-host-positive-606fcee/workspace",
+          "sessionId": "session-a2d2-122-current"
+        },
+        "approval": "ask"
+      },
+      {
+        "sessionId": "session-a2d2-122-positive",
+        "meta": {
+          "version": 4,
+          "id": "session-a2d2-122-positive",
+          "createdAt": 1792468067712,
+          "cwd": "/tmp/a2d2-v3-121/122-host-positive-606fcee/workspace",
+          "isSeeded": false,
+          "agentPreset": "standard"
+        },
+        "eventTypes": [
+          "permission/preset",
+          "sandbox/mode",
+          "approval/policy",
+          "model/selection",
+          "agent/inbox/spliced",
+          "turn/start",
+          "agent/inbox/spliced",
+          "step/start",
+          "system/message",
+          "user/message",
+          "user/message",
+          "user/message",
+          "request/header",
+          "request/context",
+          "session/title",
+          "assistant/message",
+          "step/end",
+          "turn/end"
+        ],
+        "live": true,
+        "projections": {
+          "asOfSeq": 17,
+          "values": {
+            "title": "Explicit host positive control; respond",
+            "goal": null,
+            "tokenUsage": {
+              "uncachedInputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            },
+            "contextPressure": {},
+            "contextBreakdown": {
+              "systemTokens": 1454,
+              "toolsTokens": 5157,
+              "messageTokens": 1393
+            },
+            "inbox": {
+              "next-turn": [],
+              "next-step": []
+            },
+            "sessionStats": {
+              "turns": 1,
+              "steps": 1,
+              "llmMs": 297,
+              "toolMs": 0,
+              "ttftMs": 296,
+              "ttftSteps": 1,
+              "decodeMs": 0,
+              "decodeTokens": 0
+            },
+            "turnOutline": [
+              {
+                "turn": 1,
+                "seq": 5,
+                "prompt": "Explicit host positive control; respond with the…",
+                "response": "A2D2_122_DETERMINISTIC_HOST_REPLY"
+              }
+            ],
+            "agentPreset": "standard",
+            "userQuestions": {
+              "active": [],
+              "settled": []
+            },
+            "subagentCatalog": [],
+            "subagentTiming": {
+              "settledMs": 0
+            },
+            "subagent": null,
+            "permissions": {
+              "currentValue": "workspace-write"
+            },
+            "todos": null,
+            "plan": {
+              "active": false,
+              "pending": false
+            },
+            "modelSelection": {
+              "lastUsed": {
+                "provider": "a2d2-acceptance",
+                "model": "deterministic"
+              },
+              "next": {
+                "provider": "a2d2-acceptance",
+                "model": "deterministic"
+              }
+            },
+            "sessionListMetadata": {
+              "blank": false,
+              "lastPromptAt": 1792468069445
+            },
+            "imageLimits": {
+              "maxImageBytes": 20971520,
+              "maxImagesPerMessage": 20,
+              "maxMessageImageBytes": 209715200,
+              "maxImagePixels": 64000000,
+              "maxImageDimension": 8192,
+              "mediaTypes": [
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif"
+              ]
+            }
+          }
+        },
+        "sandbox": {
+          "mode": "workspace-write",
+          "workspaceRoot": "/tmp/a2d2-v3-121/122-host-positive-606fcee/workspace",
+          "sessionId": "session-a2d2-122-positive"
+        },
+        "approval": "ask"
+      },
+      {
+        "sessionId": "session-a2d2-122-retired",
+        "meta": {
+          "version": 4,
+          "id": "session-a2d2-122-retired",
+          "createdAt": 1792468068233,
+          "cwd": "/tmp/a2d2-v3-121/122-host-positive-606fcee/workspace",
+          "isSeeded": false,
+          "agentPreset": "standard"
+        },
+        "eventTypes": [
+          "permission/preset",
+          "sandbox/mode",
+          "approval/policy"
+        ],
+        "live": true,
+        "projections": {
+          "asOfSeq": 2,
+          "values": {
+            "title": null,
+            "goal": null,
+            "tokenUsage": {
+              "uncachedInputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            },
+            "contextPressure": {},
+            "contextBreakdown": {
+              "systemTokens": 0,
+              "toolsTokens": 0,
+              "messageTokens": 0
+            },
+            "inbox": {
+              "next-turn": [],
+              "next-step": []
+            },
+            "sessionStats": {
+              "turns": 0,
+              "steps": 0,
+              "llmMs": 0,
+              "toolMs": 0,
+              "ttftMs": 0,
+              "ttftSteps": 0,
+              "decodeMs": 0,
+              "decodeTokens": 0
+            },
+            "turnOutline": [],
+            "agentPreset": "standard",
+            "userQuestions": {
+              "active": [],
+              "settled": []
+            },
+            "subagentCatalog": [],
+            "subagentTiming": {
+              "settledMs": 0
+            },
+            "subagent": null,
+            "permissions": {
+              "currentValue": "workspace-write"
+            },
+            "todos": null,
+            "plan": {
+              "active": false,
+              "pending": false
+            },
+            "modelSelection": {
+              "lastUsed": null,
+              "next": null
+            },
+            "sessionListMetadata": {
+              "blank": true,
+              "lastPromptAt": null
+            },
+            "imageLimits": {
+              "maxImageBytes": 20971520,
+              "maxImagesPerMessage": 20,
+              "maxMessageImageBytes": 209715200,
+              "maxImagePixels": 64000000,
+              "maxImageDimension": 8192,
+              "mediaTypes": [
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif"
+              ]
+            }
+          }
+        },
+        "sandbox": {
+          "mode": "workspace-write",
+          "workspaceRoot": "/tmp/a2d2-v3-121/122-host-positive-606fcee/workspace",
+          "sessionId": "session-a2d2-122-retired"
+        },
+        "approval": "ask"
+      },
+      {
+        "sessionId": "session-a2d2-122-review",
+        "meta": {
+          "version": 4,
+          "id": "session-a2d2-122-review",
+          "createdAt": 1792468068553,
+          "cwd": "/tmp/a2d2-v3-121/122-host-positive-606fcee/workspace",
+          "isSeeded": false,
+          "agentPreset": "standard"
+        },
+        "eventTypes": [
+          "permission/preset",
+          "sandbox/mode",
+          "approval/policy"
+        ],
+        "live": true,
+        "projections": {
+          "asOfSeq": 2,
+          "values": {
+            "title": null,
+            "goal": null,
+            "tokenUsage": {
+              "uncachedInputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            },
+            "contextPressure": {},
+            "contextBreakdown": {
+              "systemTokens": 0,
+              "toolsTokens": 0,
+              "messageTokens": 0
+            },
+            "inbox": {
+              "next-turn": [],
+              "next-step": []
+            },
+            "sessionStats": {
+              "turns": 0,
+              "steps": 0,
+              "llmMs": 0,
+              "toolMs": 0,
+              "ttftMs": 0,
+              "ttftSteps": 0,
+              "decodeMs": 0,
+              "decodeTokens": 0
+            },
+            "turnOutline": [],
+            "agentPreset": "standard",
+            "userQuestions": {
+              "active": [],
+              "settled": []
+            },
+            "subagentCatalog": [],
+            "subagentTiming": {
+              "settledMs": 0
+            },
+            "subagent": null,
+            "permissions": {
+              "currentValue": "workspace-write"
+            },
+            "todos": null,
+            "plan": {
+              "active": false,
+              "pending": false
+            },
+            "modelSelection": {
+              "lastUsed": null,
+              "next": null
+            },
+            "sessionListMetadata": {
+              "blank": true,
+              "lastPromptAt": null
+            },
+            "imageLimits": {
+              "maxImageBytes": 20971520,
+              "maxImagesPerMessage": 20,
+              "maxMessageImageBytes": 209715200,
+              "maxImagePixels": 64000000,
+              "maxImageDimension": 8192,
+              "mediaTypes": [
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif"
+              ]
+            }
+          }
+        },
+        "sandbox": {
+          "mode": "workspace-write",
+          "workspaceRoot": "/tmp/a2d2-v3-121/122-host-positive-606fcee/workspace",
+          "sessionId": "session-a2d2-122-review"
+        },
+        "approval": "ask"
+      }
+    ]
+  },
+  "current": {
+    "processId": "5413ff7b-622a-4c00-a9a3-2ff79ec70895",
+    "pid": 1708921,
+    "gateway": 1,
+    "adapter": 1,
+    "defaultModel": {
+      "provider": "acceptance-disabled",
+      "model": "no-model"
+    },
+    "sessions": [
+      {
+        "sessionId": "session-a2d2-122-current",
+        "meta": {
+          "version": 4,
+          "id": "session-a2d2-122-current",
+          "createdAt": 1792468067886,
+          "cwd": "/tmp/a2d2-v3-121/122-host-positive-606fcee/workspace",
+          "isSeeded": false,
+          "agentPreset": "standard"
+        },
+        "eventTypes": [
+          "permission/preset",
+          "sandbox/mode",
+          "approval/policy"
+        ],
+        "live": true,
+        "projections": {
+          "asOfSeq": 2,
+          "values": {
+            "title": null,
+            "goal": null,
+            "tokenUsage": {
+              "uncachedInputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            },
+            "contextPressure": {},
+            "contextBreakdown": {
+              "systemTokens": 0,
+              "toolsTokens": 0,
+              "messageTokens": 0
+            },
+            "inbox": {
+              "next-turn": [],
+              "next-step": []
+            },
+            "sessionStats": {
+              "turns": 0,
+              "steps": 0,
+              "llmMs": 0,
+              "toolMs": 0,
+              "ttftMs": 0,
+              "ttftSteps": 0,
+              "decodeMs": 0,
+              "decodeTokens": 0
+            },
+            "turnOutline": [],
+            "agentPreset": "standard",
+            "userQuestions": {
+              "active": [],
+              "settled": []
+            },
+            "subagentCatalog": [],
+            "subagentTiming": {
+              "settledMs": 0
+            },
+            "subagent": null,
+            "permissions": {
+              "currentValue": "workspace-write"
+            },
+            "todos": null,
+            "plan": {
+              "active": false,
+              "pending": false
+            },
+            "modelSelection": {
+              "lastUsed": null,
+              "next": null
+            },
+            "sessionListMetadata": {
+              "blank": true,
+              "lastPromptAt": null
+            },
+            "imageLimits": {
+              "maxImageBytes": 20971520,
+              "maxImagesPerMessage": 20,
+              "maxMessageImageBytes": 209715200,
+              "maxImagePixels": 64000000,
+              "maxImageDimension": 8192,
+              "mediaTypes": [
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif"
+              ]
+            }
+          }
+        },
+        "sandbox": {
+          "mode": "workspace-write",
+          "workspaceRoot": "/tmp/a2d2-v3-121/122-host-positive-606fcee/workspace",
+          "sessionId": "session-a2d2-122-current"
+        },
+        "approval": "ask"
+      },
+      {
+        "sessionId": "session-a2d2-122-positive",
+        "meta": {
+          "version": 4,
+          "id": "session-a2d2-122-positive",
+          "createdAt": 1792468067712,
+          "cwd": "/tmp/a2d2-v3-121/122-host-positive-606fcee/workspace",
+          "isSeeded": false,
+          "agentPreset": "standard"
+        },
+        "eventTypes": [
+          "permission/preset",
+          "sandbox/mode",
+          "approval/policy",
+          "model/selection",
+          "agent/inbox/spliced",
+          "turn/start",
+          "agent/inbox/spliced",
+          "step/start",
+          "system/message",
+          "user/message",
+          "user/message",
+          "user/message",
+          "request/header",
+          "request/context",
+          "session/title",
+          "assistant/message",
+          "step/end",
+          "turn/end"
+        ],
+        "live": true,
+        "projections": {
+          "asOfSeq": 17,
+          "values": {
+            "title": "Explicit host positive control; respond",
+            "goal": null,
+            "tokenUsage": {
+              "uncachedInputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            },
+            "contextPressure": {},
+            "contextBreakdown": {
+              "systemTokens": 1454,
+              "toolsTokens": 5157,
+              "messageTokens": 1393
+            },
+            "inbox": {
+              "next-turn": [],
+              "next-step": []
+            },
+            "sessionStats": {
+              "turns": 1,
+              "steps": 1,
+              "llmMs": 297,
+              "toolMs": 0,
+              "ttftMs": 296,
+              "ttftSteps": 1,
+              "decodeMs": 0,
+              "decodeTokens": 0
+            },
+            "turnOutline": [
+              {
+                "turn": 1,
+                "seq": 5,
+                "prompt": "Explicit host positive control; respond with the…",
+                "response": "A2D2_122_DETERMINISTIC_HOST_REPLY"
+              }
+            ],
+            "agentPreset": "standard",
+            "userQuestions": {
+              "active": [],
+              "settled": []
+            },
+            "subagentCatalog": [],
+            "subagentTiming": {
+              "settledMs": 0
+            },
+            "subagent": null,
+            "permissions": {
+              "currentValue": "workspace-write"
+            },
+            "todos": null,
+            "plan": {
+              "active": false,
+              "pending": false
+            },
+            "modelSelection": {
+              "lastUsed": {
+                "provider": "a2d2-acceptance",
+                "model": "deterministic"
+              },
+              "next": {
+                "provider": "a2d2-acceptance",
+                "model": "deterministic"
+              }
+            },
+            "sessionListMetadata": {
+              "blank": false,
+              "lastPromptAt": 1792468069445
+            },
+            "imageLimits": {
+              "maxImageBytes": 20971520,
+              "maxImagesPerMessage": 20,
+              "maxMessageImageBytes": 209715200,
+              "maxImagePixels": 64000000,
+              "maxImageDimension": 8192,
+              "mediaTypes": [
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif"
+              ]
+            }
+          }
+        },
+        "sandbox": {
+          "mode": "workspace-write",
+          "workspaceRoot": "/tmp/a2d2-v3-121/122-host-positive-606fcee/workspace",
+          "sessionId": "session-a2d2-122-positive"
+        },
+        "approval": "ask"
+      },
+      {
+        "sessionId": "session-a2d2-122-retired",
+        "meta": {
+          "version": 4,
+          "id": "session-a2d2-122-retired",
+          "createdAt": 1792468068233,
+          "cwd": "/tmp/a2d2-v3-121/122-host-positive-606fcee/workspace",
+          "isSeeded": false,
+          "agentPreset": "standard"
+        },
+        "eventTypes": [
+          "permission/preset",
+          "sandbox/mode",
+          "approval/policy"
+        ],
+        "live": true,
+        "projections": {
+          "asOfSeq": 2,
+          "values": {
+            "title": null,
+            "goal": null,
+            "tokenUsage": {
+              "uncachedInputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            },
+            "contextPressure": {},
+            "contextBreakdown": {
+              "systemTokens": 0,
+              "toolsTokens": 0,
+              "messageTokens": 0
+            },
+            "inbox": {
+              "next-turn": [],
+              "next-step": []
+            },
+            "sessionStats": {
+              "turns": 0,
+              "steps": 0,
+              "llmMs": 0,
+              "toolMs": 0,
+              "ttftMs": 0,
+              "ttftSteps": 0,
+              "decodeMs": 0,
+              "decodeTokens": 0
+            },
+            "turnOutline": [],
+            "agentPreset": "standard",
+            "userQuestions": {
+              "active": [],
+              "settled": []
+            },
+            "subagentCatalog": [],
+            "subagentTiming": {
+              "settledMs": 0
+            },
+            "subagent": null,
+            "permissions": {
+              "currentValue": "workspace-write"
+            },
+            "todos": null,
+            "plan": {
+              "active": false,
+              "pending": false
+            },
+            "modelSelection": {
+              "lastUsed": null,
+              "next": null
+            },
+            "sessionListMetadata": {
+              "blank": true,
+              "lastPromptAt": null
+            },
+            "imageLimits": {
+              "maxImageBytes": 20971520,
+              "maxImagesPerMessage": 20,
+              "maxMessageImageBytes": 209715200,
+              "maxImagePixels": 64000000,
+              "maxImageDimension": 8192,
+              "mediaTypes": [
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif"
+              ]
+            }
+          }
+        },
+        "sandbox": {
+          "mode": "workspace-write",
+          "workspaceRoot": "/tmp/a2d2-v3-121/122-host-positive-606fcee/workspace",
+          "sessionId": "session-a2d2-122-retired"
+        },
+        "approval": "ask"
+      },
+      {
+        "sessionId": "session-a2d2-122-review",
+        "meta": {
+          "version": 4,
+          "id": "session-a2d2-122-review",
+          "createdAt": 1792468068553,
+          "cwd": "/tmp/a2d2-v3-121/122-host-positive-606fcee/workspace",
+          "isSeeded": false,
+          "agentPreset": "standard"
+        },
+        "eventTypes": [
+          "permission/preset",
+          "sandbox/mode",
+          "approval/policy"
+        ],
+        "live": true,
+        "projections": {
+          "asOfSeq": 2,
+          "values": {
+            "title": null,
+            "goal": null,
+            "tokenUsage": {
+              "uncachedInputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            },
+            "contextPressure": {},
+            "contextBreakdown": {
+              "systemTokens": 0,
+              "toolsTokens": 0,
+              "messageTokens": 0
+            },
+            "inbox": {
+              "next-turn": [],
+              "next-step": []
+            },
+            "sessionStats": {
+              "turns": 0,
+              "steps": 0,
+              "llmMs": 0,
+              "toolMs": 0,
+              "ttftMs": 0,
+              "ttftSteps": 0,
+              "decodeMs": 0,
+              "decodeTokens": 0
+            },
+            "turnOutline": [],
+            "agentPreset": "standard",
+            "userQuestions": {
+              "active": [],
+              "settled": []
+            },
+            "subagentCatalog": [],
+            "subagentTiming": {
+              "settledMs": 0
+            },
+            "subagent": null,
+            "permissions": {
+              "currentValue": "workspace-write"
+            },
+            "todos": null,
+            "plan": {
+              "active": false,
+              "pending": false
+            },
+            "modelSelection": {
+              "lastUsed": null,
+              "next": null
+            },
+            "sessionListMetadata": {
+              "blank": true,
+              "lastPromptAt": null
+            },
+            "imageLimits": {
+              "maxImageBytes": 20971520,
+              "maxImagesPerMessage": 20,
+              "maxMessageImageBytes": 209715200,
+              "maxImagePixels": 64000000,
+              "maxImageDimension": 8192,
+              "mediaTypes": [
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif"
+              ]
+            }
+          }
+        },
+        "sandbox": {
+          "mode": "workspace-write",
+          "workspaceRoot": "/tmp/a2d2-v3-121/122-host-positive-606fcee/workspace",
+          "sessionId": "session-a2d2-122-review"
+        },
+        "approval": "ask"
+      }
+    ]
+  }
+}
