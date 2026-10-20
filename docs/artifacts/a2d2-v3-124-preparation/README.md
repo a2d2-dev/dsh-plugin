@@ -72,7 +72,11 @@
 
 ## 待执行的真实浏览器验收步骤
 
-真实浏览器只用 `http://10.126.126.12:18782/`，专属 agent-browser session，先获取当前 snapshot 再操作 ref。固定密码仅由内部自动化进程读取 `/data/_dsh-dev/web-password` 后输入登录流程；不回显、不写报告/截图/命令工具参数、不保存 token URL 或含凭据的 HAR/状态文件。GitHub token 由服务器来源适配器读取，浏览器不接收 token。
+真实浏览器只用 `http://10.126.126.12:18782/`，最终认证验收复用此前 HTTP132 自有 profile `/data/_dsh-dev/previews/a2d2-v3-121/browser-http132`（旧 session 名 `a2d2-http132`），以及该 profile 中已有的原生 selection。先核对 profile 占用，不能并发启动同一 profile；本阶段未认证的 `/tmp/a2d2-124-prep-browser` 只用于登录页预检，不用于最终首用验收。先获取当前 snapshot 再操作 ref，不直接写 localStorage、改 selection 或移植存储状态。
+
+首次选择可能触发宿主创建空 Session（#121 动态 origin 已有历史证据）。如复用后仍发生，保留该 Session，记录触发的真实 UI 动作、创建时间/ID、guard `session-born` 及前后 Session 集合，明确属于宿主导航行为；不删除新 Session 后声称集合未变。允许报告“既有 IDs 与原 bytes 前缀保留，新增宿主空 Session 已归因”，不能报告“ID 集合完全一致”。不发送 prompt、不启动模型，gateway/adapter 仍须 0；新增 Session 不替代既有兼容 Session 关联的验收要求。`retention.mjs compare` 的 `checkPassed` 检查既有记录/原 bytes/guard/model，不会单凭新增文件失败；最终必须另外逐条审查 `addedSessionFiles` 和 guard 的新增 Session ID，只有它们均为空才能称 Session 集合不变。若新增则附真实身份及归因，不能仅凭 `checkPassed:true` 放行该结论。
+
+固定密码仅由内部自动化进程读取 `/data/_dsh-dev/web-password` 后输入登录流程；不回显、不写报告/截图/命令工具参数、不保存 token URL 或含凭据的 HAR/状态文件。GitHub token 由服务器来源适配器读取，浏览器不接收 token。
 
 | 场景 | 页面动作 | 判据及证据 |
 | --- | --- | --- |
