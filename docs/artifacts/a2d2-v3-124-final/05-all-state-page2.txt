@@ -1,0 +1,165 @@
+- generic [ref=e1] clickable [onclick]
+  - generic
+    - button "New session" [ref=e3]
+    - button "Collapse sidebar" [ref=e4]
+    - button "New session" [ref=e5]
+      - StaticText "New Session"
+    - navigation "Global panels" [ref=e6]
+      - button "Plugins" [ref=e12]
+        - StaticText "Plugins"
+      - button "A²D² 控制面板" [ref=e13]
+        - StaticText "A²D² 控制面板"
+    - StaticText "Workspaces"
+    - generic [ref=e7] clickable [onclick]
+      - button "Search sessions" [expanded=false, ref=e14]
+      - textbox "Search session names" [ref=e15]
+    - button "View options" [ref=e8]
+    - button "Add workspace" [ref=e9]
+    - generic
+      - tree "Sessions"
+        - generic
+          - treeitem "workspace" [level=1, expanded=true, ref=e34]
+            - StaticText "workspace"
+          - treeitem "Untitled 13h" [level=1, ref=e35]
+            - StaticText "Untitled"
+            - StaticText "13h"
+    - button "Settings" [expanded=false, ref=e16]
+      - StaticText "Settings"
+    - main "A²D² 控制面板" [ref=e2]
+      - sectionheader
+        - heading "A²D² 控制面板" [level=1, ref=e17]
+        - paragraph
+          - StaticText "项目、工作与关联会话"
+        - button "关闭面板" [ref=e18]
+      - LabelText
+        - StaticText "当前项目 "
+        - combobox "当前项目" [expanded=false, ref=e19]: 演示项目 · 本地工作
+          - MenuListPopup
+            - option "演示项目 · 本地工作" [selected, ref=e36]
+            - option "验收_HTTP132_20261020_独立项目" [ref=e37]
+      - button "接入 / 创建项目" [ref=e10]
+      - button "接入已有资源" [ref=e11]
+      - tablist "工作对象"
+        - tab "Issue" [selected, ref=e20]
+        - tab "PR" [ref=e21]
+        - tab "项目" [ref=e22]
+      - generic
+        - heading "GitHub Issue 来源" [level=2, ref=e23]
+        - paragraph
+          - StaticText "为当前本地项目配置 GitHub 仓库来源。此处读取仓库 Issue；GitHub Project 完整视图尚未提供。"
+        - group
+          - DisclosureTriangle "配置仓库来源" [expanded=false]
+            - StaticText "配置仓库来源"
+        - LabelText
+          - StaticText "仓库来源 "
+          - combobox "仓库来源" [expanded=false, ref=e30]: a2d2-dev/dsh-plugin
+            - MenuListPopup
+              - option "a2d2-dev/dsh-plugin" [selected, ref=e79]
+        - button "重新读取来源配置" [ref=e24]
+        - button "停用来源" [ref=e25]
+        - paragraph
+          - StaticText "来源状态：已启用 · 最近确认的凭据身份：imneov / LiuFeng。我的 Issue 使用此身份。"
+        - LabelText
+          - StaticText "负责人 "
+          - combobox "Issue 负责人" [expanded=false, ref=e31]: 全部 Issue
+            - MenuListPopup
+              - option "我的 Issue" [disabled, ref=e80]
+              - option "全部 Issue" [disabled, ref=e81]
+        - LabelText
+          - StaticText "远端状态 "
+          - combobox "Issue 远端状态" [expanded=false, ref=e32]: 全部状态
+            - MenuListPopup
+              - option "Open" [disabled, ref=e82]
+              - option "Closed" [disabled, ref=e83]
+              - option "全部状态" [disabled, ref=e84]
+        - button "刷新 Issue 列表" [ref=e26]
+        - button "读取缓存列表" [ref=e27]
+        - form
+          - LabelText
+            - StaticText "按 Issue 编号打开完整详情 "
+            - spinbutton "按 Issue 编号打开完整详情 " [required, ref=e38]
+          - button "打开 Issue" [ref=e33]
+        - paragraph
+          - StaticText "本次读取列表 · 第 2 页 · 观察时间：2026-10-20T15:36:21.316Z"
+        - table "GitHub Issue 列表"
+          - rowgroup
+            - row
+              - columnheader "Issue" [ref=e85]
+              - columnheader "远端状态" [ref=e86]
+              - columnheader "负责人" [ref=e87]
+              - columnheader "标签" [ref=e88]
+          - row
+            - cell "#112 一期：插件托管任务长程运行、主会话接续与事件归属" [ref=e39]
+              - button "#112 一期：插件托管任务长程运行、主会话接续与事件归属" [ref=e89]
+                - StaticText "#112 一期：插件托管任务长程运行、主会话接续与事件归属"
+            - cell "open" [ref=e40]
+            - cell "imneov" [ref=e41]
+            - cell "a2d2:main" [ref=e42]
+          - row
+            - cell "#96 偶发：全量 pnpm test 并行负载下约 1/10 失败一条" [ref=e43]
+              - button "#96 偶发：全量 pnpm test 并行负载下约 1/10 失败一条" [ref=e90]
+                - StaticText "#96 偶发：全量 pnpm test 并行负载下约 1/10 失败一条"
+            - cell "open" [ref=e44]
+            - cell "无" [ref=e45]
+            - cell "ready-for-agent" [ref=e46]
+          - row
+            - cell "#110 修复 #105：正确的本地模型调用、初始化重试和不可验证强度拒绝" [ref=e47]
+              - button "#110 修复 #105：正确的本地模型调用、初始化重试和不可验证强度拒绝" [ref=e91]
+                - StaticText "#110 修复 #105：正确的本地模型调用、初始化重试和不可验证强度拒绝"
+            - cell "open" [ref=e48]
+            - cell "无" [ref=e49]
+            - cell "ready-for-agent" [ref=e50]
+          - row
+            - cell "#109 修复 #105：DSH 正式会话本地模型选择接口，不写全局默认" [ref=e51]
+              - button "#109 修复 #105：DSH 正式会话本地模型选择接口，不写全局默认" [ref=e92]
+                - StaticText "#109 修复 #105：DSH 正式会话本地模型选择接口，不写全局默认"
+            - cell "open" [ref=e52]
+            - cell "无" [ref=e53]
+            - cell "ready-for-agent" [ref=e54]
+          - row
+            - cell "#108 验收 #105：真实 GUI 独立强度保存与子会话档位证据" [ref=e55]
+              - button "#108 验收 #105：真实 GUI 独立强度保存与子会话档位证据" [ref=e93]
+                - StaticText "#108 验收 #105：真实 GUI 独立强度保存与子会话档位证据"
+            - cell "open" [ref=e56]
+            - cell "无" [ref=e57]
+            - cell "ready-for-agent" [ref=e58]
+          - row
+            - cell "#105 Agent 模型候选独立配置推理强度，贯通设置页与会话创建" [ref=e59]
+              - button "#105 Agent 模型候选独立配置推理强度，贯通设置页与会话创建" [ref=e94]
+                - StaticText "#105 Agent 模型候选独立配置推理强度，贯通设置页与会话创建"
+            - cell "open" [ref=e60]
+            - cell "无" [ref=e61]
+            - cell "a2d2:main" [ref=e62]
+          - row
+            - cell "#107 评审 #105：逐候选强度与会话默认隔离的完整改动" [ref=e63]
+              - button "#107 评审 #105：逐候选强度与会话默认隔离的完整改动" [ref=e95]
+                - StaticText "#107 评审 #105：逐候选强度与会话默认隔离的完整改动"
+            - cell "open" [ref=e64]
+            - cell "无" [ref=e65]
+            - cell "ready-for-agent" [ref=e66]
+          - row
+            - cell "#70 highway-card 跟进 ADR 0004/0005/0007/0009：按阶段指定 Agent" [ref=e67]
+              - button "#70 highway-card 跟进 ADR 0004/0005/0007/0009：按阶段指定 Agent" [ref=e96]
+                - StaticText "#70 highway-card 跟进 ADR 0004/0005/0007/0009：按阶段指定 Agent"
+            - cell "open" [ref=e68]
+            - cell "无" [ref=e69]
+            - cell "a2d2:main" [ref=e70]
+          - row
+            - cell "#103 A2D2 配置页跟随宿主主题变量，窄屏规则改 container query" [ref=e71]
+              - button "#103 A2D2 配置页跟随宿主主题变量，窄屏规则改 container query" [ref=e97]
+                - StaticText "#103 A2D2 配置页跟随宿主主题变量，窄屏规则改 container query"
+            - cell "open" [ref=e72]
+            - cell "无" [ref=e73]
+            - cell "ready-for-agent" [ref=e74]
+          - row
+            - cell "#92 A2D2 配置页布局挤压：阶段行 Agent 标签竖排、模型状态挤成一列" [ref=e75]
+              - button "#92 A2D2 配置页布局挤压：阶段行 Agent 标签竖排、模型状态挤成一列" [ref=e98]
+                - StaticText "#92 A2D2 配置页布局挤压：阶段行 Agent 标签竖排、模型状态挤成一列"
+            - cell "open" [ref=e76]
+            - cell "无" [ref=e77]
+            - cell "ready-for-agent" [ref=e78]
+        - button "上一页" [ref=e28]
+        - StaticText "第 "
+        - StaticText "2"
+        - StaticText " 页"
+        - button "下一页" [ref=e29]

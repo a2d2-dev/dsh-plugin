@@ -1,0 +1,83 @@
+- generic [ref=e1] clickable [onclick]
+  - generic
+    - button "New session" [ref=e3]
+    - button "Collapse sidebar" [ref=e4]
+    - button "New session" [ref=e5]
+      - StaticText "New Session"
+    - navigation "Global panels" [ref=e6]
+      - button "Plugins" [ref=e12]
+        - StaticText "Plugins"
+      - button "A²D² 控制面板" [ref=e13]
+        - StaticText "A²D² 控制面板"
+    - StaticText "Workspaces"
+    - generic [ref=e7] clickable [onclick]
+      - button "Search sessions" [expanded=false, ref=e14]
+      - textbox "Search session names" [ref=e15]
+    - button "View options" [ref=e8]
+    - button "Add workspace" [ref=e9]
+    - generic
+      - tree "Sessions"
+        - generic
+          - treeitem "workspace" [level=1, expanded=true, ref=e32]
+            - StaticText "workspace"
+          - treeitem "Untitled 13h" [level=1, ref=e33]
+            - StaticText "Untitled"
+            - StaticText "13h"
+    - button "Settings" [expanded=false, ref=e16]
+      - StaticText "Settings"
+    - main "A²D² 控制面板" [ref=e2]
+      - sectionheader
+        - heading "A²D² 控制面板" [level=1, ref=e17]
+        - paragraph
+          - StaticText "项目、工作与关联会话"
+        - button "关闭面板" [ref=e18]
+      - LabelText
+        - StaticText "当前项目 "
+        - combobox "当前项目" [expanded=false, ref=e19]: 演示项目 · 本地工作
+          - MenuListPopup
+            - option "演示项目 · 本地工作" [selected, ref=e34]
+            - option "验收_HTTP132_20261020_独立项目" [ref=e35]
+      - button "接入 / 创建项目" [ref=e10]
+      - button "接入已有资源" [ref=e11]
+      - tablist "工作对象"
+        - tab "Issue" [selected, ref=e20]
+        - tab "PR" [ref=e21]
+        - tab "项目" [ref=e22]
+      - generic
+        - heading "GitHub Issue 来源" [level=2, ref=e23]
+        - paragraph
+          - StaticText "为当前本地项目配置 GitHub 仓库来源。此处读取仓库 Issue；GitHub Project 完整视图尚未提供。"
+        - group
+          - DisclosureTriangle "配置仓库来源" [expanded=false]
+            - StaticText "配置仓库来源"
+        - LabelText
+          - StaticText "仓库来源 "
+          - combobox "仓库来源" [expanded=false, ref=e28]: a2d2-dev/dsh-plugin
+            - MenuListPopup
+              - option "a2d2-dev/dsh-plugin" [selected, ref=e37]
+        - button "重新读取来源配置" [disabled, ref=e24]
+        - button "停用来源" [disabled, ref=e25]
+        - status
+          - StaticText "正在读取来源…"
+        - paragraph
+          - StaticText "来源状态：已启用 · 最近确认的凭据身份：imneov / LiuFeng。我的 Issue 使用此身份。"
+        - LabelText
+          - StaticText "负责人 "
+          - combobox "Issue 负责人" [expanded=false, disabled, ref=e29]: 全部 Issue
+            - MenuListPopup
+              - option "我的 Issue" [disabled, ref=e38]
+              - option "全部 Issue" [disabled, ref=e39]
+        - LabelText
+          - StaticText "远端状态 "
+          - combobox "Issue 远端状态" [expanded=false, disabled, ref=e30]: Open
+            - MenuListPopup
+              - option "Open" [disabled, ref=e40]
+              - option "Closed" [disabled, ref=e41]
+              - option "全部状态" [disabled, ref=e42]
+        - button "刷新 Issue 列表" [disabled, ref=e26]
+        - button "读取缓存列表" [disabled, ref=e27]
+        - form
+          - LabelText
+            - StaticText "按 Issue 编号打开完整详情 "
+            - spinbutton "按 Issue 编号打开完整详情 " [required, ref=e36]
+          - button "打开 Issue" [disabled, ref=e31]
