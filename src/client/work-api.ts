@@ -31,6 +31,9 @@ export function createWorkClient(fetcher: typeof fetch = globalThis.fetch.bind(g
         : query === 'task.detail' ? result.task !== undefined
         : query === 'session.candidates' ? Array.isArray(result.candidates)
         : query === 'session.work' ? Array.isArray(result.work)
+        : query === 'source.list' ? Array.isArray(result.sources)
+        : query === 'source.issues' ? result.source !== undefined && result.page !== undefined && Array.isArray(result.page.items) && result.page.identity !== undefined
+        : query === 'source.issue' ? result.source !== undefined && result.issue !== undefined
         : true
       if (!valid) throw new Error('工作服务返回的数据不符合查询合同')
     }

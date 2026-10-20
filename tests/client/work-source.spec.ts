@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { WorkPanelController } from '../../src/client/work-panel-controller.ts'
-import { createWorkClient } from '../../src/client/work-api.ts'
+import { createWorkClient, WorkClientError } from '../../src/client/work-api.ts'
 import type { WorkRequest } from '../../src/work-types.ts'
 import type { GitHubIssue, WorkSource } from '../../src/work-sources/types.ts'
 
@@ -22,6 +22,29 @@ function setup() {
   return {panel:new WorkPanelController(client,{selectPanel:()=>{},openSession:()=>{}}),requests,client}
 }
 describe('GitHub source public client behavior',()=>{
+  it('retains displayed cached contents when a structured permission refusal omits a page',async()=>{
+    const {panel,client}=setup()
+    await panel.selectProject('p1');await panel.showSources()
+    client.query=async()=>{throw new WorkClientError({status:'failed',error:{code:'github-forbidden',message:'Permission denied'},source})}
+    await panel.browseIssues({},true)
+    expect(panel.getSnapshot().source).toMatchObject({cached:true,error:'github-forbidden: Permission denied',listing:{items:[{number:112}]}})
+  })
+  it('retains full Issue content and its local mapping during an offline refresh',async()=>{
+    const {panel,client}=setup()
+    await panel.selectProject('p1');await panel.showSources();await panel.openIssue(112)
+    client.query=async()=>{throw Error('offline')}
+    await panel.openIssue(112)
+    expect(panel.getSnapshot().source).toMatchObject({cached:true,error:'offline',issue:{number:112,body:'Full original specification'}})
+  })
+  it('disables the exact source version and retains the observed body without issuing another remote refresh',async()=>{
+    const {panel,client}=setup()
+    await panel.selectProject('p1');await panel.showSources();await panel.openIssue(112)
+    const commands:unknown[]=[]
+    client.command=async value=>{commands.push(value);return {status:'completed',source:{...source,enabled:false,version:2}}}
+    await panel.setSourceEnabled(false)
+    expect(commands).toEqual([{type:'source.set-enabled',projectId:'p1',sourceId:'s1',expectedVersion:1,enabled:false,commandId:expect.any(String)}])
+    expect(panel.getSnapshot().source).toMatchObject({sources:[{enabled:false,version:2}],issue:{body:'Full original specification'}})
+  })
   it('keeps the last page visible on a transport failure and distinguishes it from an empty result',async()=>{
     const {panel,client}=setup()
     await panel.selectProject('p1');await panel.showSources()
@@ -37,6 +60,19 @@ describe('GitHub source public client behavior',()=>{
     await panel.configureSource('a2d2-dev','dsh-plugin')
     expect(requests.filter(r=>r.kind==='command')).toEqual([{kind:'command',value:{type:'source.configure',projectId:'p1',repository:{owner:'a2d2-dev',repository:'dsh-plugin'},commandId:expect.stringMatching(/^[a-f0-9-]{36}$/)}}])
     expect(panel.getSnapshot().source).toMatchObject({sourceId:'s1',assignee:'@me',listing:{identity:{login:'imneov'}}})
+  })
+  it('accepts only on an explicit action and opens the returned canonical TaskRef while preserving source position',async()=>{
+    const {panel,client}=setup()
+    await panel.selectProject('p1');await panel.showSources();await panel.browseIssues({page:2,assignee:'*'},true);await panel.openIssue(112)
+    const commands:unknown[]=[]
+    client.command=async value=>{commands.push(value);return {status:'completed',ref:{projectId:'p1',taskId:'canonical-uuid'}}}
+    const query=client.query.bind(client)
+    client.query=async value=>value.type==='task.detail'?{status:'completed',task:{id:value.ref.taskId,projectId:'p1',title:issue.title} as import('../../src/work-types.ts').WorkTask}:query(value)
+    await panel.acceptIssue()
+    expect(commands).toEqual([{type:'source.import',projectId:'p1',sourceId:'s1',nodeId:'I112',commandId:expect.any(String)}])
+    expect(panel.getSnapshot()).toMatchObject({detail:{task:{id:'canonical-uuid'}},detailTab:'overview'})
+    panel.back()
+    expect(panel.getSnapshot()).toMatchObject({object:'issues',source:{page:2,assignee:'*',issue:{number:112}}})
   })
   it('browses a concrete project source and complete issue without accepting work, retaining source filters and page on return',async()=>{
     const {panel,requests}=setup()

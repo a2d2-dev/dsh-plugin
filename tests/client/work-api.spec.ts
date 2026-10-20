@@ -7,6 +7,10 @@ describe('trusted work HTTP boundary', () => {
     const client=createWorkClient(async()=>new Response(JSON.stringify(failure),{status:424}))
     await expect(client.query({type:'source.issues',projectId:'p1',sourceId:'s1',page:1,perPage:20,assignee:'@me',state:'open',refresh:true})).rejects.toMatchObject({result:failure})
   })
+  it('rejects incomplete source projections rather than presenting an empty successful source',async()=>{
+    const client=createWorkClient(async()=>Response.json({status:'completed'}))
+    for(const query of [{type:'source.list',projectId:'p1'},{type:'source.issues',projectId:'p1',sourceId:'s1',page:1,perPage:20,assignee:'@me',state:'open'},{type:'source.issue',projectId:'p1',sourceId:'s1',number:112}] as const) await expect(client.query(query)).rejects.toThrow('工作服务返回的数据不符合查询合同')
+  })
   it('rejects a completed query that omits its project projection instead of showing an empty project list',async()=>{
     const client=createWorkClient(async()=>new Response(JSON.stringify({status:'completed'})))
     await expect(client.query({type:'projects.list'})).rejects.toThrow('工作服务返回的数据不符合查询合同')

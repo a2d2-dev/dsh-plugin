@@ -19,6 +19,7 @@ declare module '*.module.css' {
     readonly formSection: string
     readonly form: string
     readonly link: string
+    readonly sourceBody: string
     readonly sessionEntry: string
     readonly root: string
     readonly water: string

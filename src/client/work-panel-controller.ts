@@ -144,7 +144,7 @@ export class WorkPanelController {
     const {projectId}=this.state,{sourceId}=this.state.source
     if(!projectId || !sourceId) return
     const revision=++this.sourceRevision
-    this.updateSource({issue:null,bindings:[],canonical:null,loading:true,error:null})
+    this.updateSource({...(this.state.source.issue?.number===number?{}:{issue:null,bindings:[]}),canonical:null,loading:true,error:null})
     try {
       const result=await this.client.query({type:'source.issue',projectId,sourceId,number,refresh})
       if(revision===this.sourceRevision) this.receiveSource(result,refresh,true)
@@ -152,11 +152,41 @@ export class WorkPanelController {
   }
   private receiveSource(result:Pick<WorkCompleted,'source'|'page'|'issue'|'bindings'>,refresh:boolean,detail:boolean):void {
     const sources=result.source?this.state.source.sources.map(source=>source.id===result.source!.id?result.source!:source):this.state.source.sources
-    this.updateSource({sources,loading:false,cached:!refresh,error:result.source?.lastError?`${result.source.lastError.code}: ${result.source.lastError.message}`:null,...(detail?{issue:result.issue??null,bindings:result.bindings??[]}:{listing:result.page??null})})
+    this.updateSource({sources,loading:false,cached:!refresh,error:result.source?.lastError?`${result.source.lastError.code}: ${result.source.lastError.message}`:null,...(detail?{...(result.issue?{issue:result.issue}:{}),...(result.bindings?{bindings:result.bindings}:{})}:result.page?{listing:result.page}:{})})
   }
   private sourceFailed(error:unknown,detail:boolean):void {
     if(error instanceof WorkClientError) this.receiveSource(error.result,false,detail)
     this.updateSource({loading:false,cached:true,error:message(error)})
+  }
+  async setSourceEnabled(enabled:boolean):Promise<void> {
+    const {projectId}=this.state,source=this.state.source.sources.find(item=>item.id===this.state.source.sourceId)
+    if(!projectId || !source) return
+    const revision=++this.sourceRevision
+    this.updateSource({loading:true,error:null})
+    try {
+      const result=await this.submit({type:'source.set-enabled',projectId,sourceId:source.id,expectedVersion:source.version,enabled})
+      if(revision!==this.sourceRevision) return
+      if(!result.source) throw Error('工作服务未返回来源')
+      this.updateSource({loading:false,sources:this.state.source.sources.map(item=>item.id===source.id?result.source!:item)})
+    }catch(error){if(revision===this.sourceRevision)this.updateSource({loading:false,error:message(error)})}
+  }
+  async acceptIssue(existing?:WorkTask):Promise<void> {
+    const {projectId}=this.state,{sourceId,issue}=this.state.source
+    if(!projectId || !sourceId || !issue) throw Error('请先读取完整 Issue')
+    const revision=++this.sourceRevision
+    this.updateSource({loading:true,error:null,canonical:null})
+    try {
+      const result=await this.submit(existing
+        ? {type:'source.link',ref:{projectId:existing.projectId,taskId:existing.id},expectedVersion:existing.version,sourceId,nodeId:issue.nodeId}
+        : {type:'source.import',projectId,sourceId,nodeId:issue.nodeId})
+      if(revision!==this.sourceRevision) return
+      if(!result.ref) throw Error('工作服务未返回 canonical TaskRef')
+      this.updateSource({loading:false,...(result.binding?{bindings:[result.binding]}:{})})
+      await this.openTask(result.ref)
+    } catch(error) {
+      if(revision!==this.sourceRevision) return
+      this.updateSource({loading:false,error:message(error),canonical:error instanceof WorkClientError?error.result.ref??null:null})
+    }
   }
   backToIssues():void {++this.sourceRevision;this.updateSource({issue:null,bindings:[],canonical:null,loading:false,error:null})}
   private pendingCommands = new Map<string, string>()
