@@ -4,6 +4,30 @@ const repository = { owner: 'a2d2-dev', repository: 'dsh-plugin' }
 const issue = { node_id: 'I_112', number: 112, title: 'Existing work', body: 'Original issue body', html_url: 'https://github.com/a2d2-dev/dsh-plugin/issues/112', state: 'open', updated_at: '2026-10-19T12:00:00Z', assignees: [{ login: 'imneov' }], labels: [{ name: 'ready-for-agent' }] }
 const user = { login: 'imneov', node_id: 'U_1', name: 'LiuFeng' }
 describe('GitHub source boundary', () => {
+  it.each(['.github', '_work', '-work', 'work.'])('reads legal repository %s with generated GitHub-only GETs', async name => {
+    const scope = { owner: repository.owner, repository: name }
+    const content = { ...issue, html_url: `https://github.com/a2d2-dev/${name}/issues/112` }
+    const source = new GitHubSource({ credential: async () => 'secret', fetch: async (url, init) => {
+      expect(init?.method).toBe('GET')
+      expect(init?.redirect).toBe('manual')
+      if (String(url) === 'https://api.github.com/user') return Response.json(user)
+      const path = new URL(String(url))
+      expect(path.origin).toBe('https://api.github.com')
+      expect(path.pathname).toBe(`/repos/a2d2-dev/${name}/issues${path.search ? '' : '/112'}`)
+      return Response.json(path.search ? [content] : content)
+    } })
+    expect(await source.list(scope, { page: 1, perPage: 20, assignee: '*', state: 'open' })).toMatchObject({ items: [{ repository: scope, body: issue.body }] })
+    expect(await source.detail(scope, 112)).toMatchObject({ issue: { repository: scope, body: issue.body } })
+  })
+  it.each(['.', '..', '../repo', 'repo/child', 'repo\\child', '%2e%2e', '%252f', 'repo?x=1', 'repo#x', 'repo@evil.test', 'repo\n', ''])('rejects unsafe owner or repository component %j before credential or network access', async component => {
+    let calls = 0
+    const source = new GitHubSource({ credential: async () => { calls++; return 'secret' }, fetch: async () => { calls++; return Response.json(user) } })
+    for (const scope of [{ ...repository, owner: component }, { ...repository, repository: component }]) {
+      await expect(source.list(scope, { page: 1, perPage: 20, assignee: '*', state: 'open' })).rejects.toMatchObject({ code: 'github-invalid-scope' })
+      await expect(source.detail(scope, 112)).rejects.toMatchObject({ code: 'github-invalid-scope' })
+    }
+    expect(calls).toBe(0)
+  })
   it('binds @me to credential identity and excludes PRs with explicit pagination', async () => {
     const urls: string[] = []
     const source = new GitHubSource({ credential: async () => 'secret', fetch: async (url, init) => {

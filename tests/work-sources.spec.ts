@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { WorkApplication } from '../src/work.ts'
 import type { GitHubIssue, GitHubSourcePort, WorkSource } from '../src/work-sources/types.ts'
-import { SourceError } from '../src/work-sources/github.ts'
+import { GitHubSource, SourceError } from '../src/work-sources/github.ts'
 import type { WorkResult } from '../src/work-types.ts'
 const roots: string[] = []
 const operator = { operator: true }
@@ -22,6 +22,29 @@ async function open(source: GitHubSourcePort | undefined = port) {
   return { app, directory, project, source: configured.source! }
 }
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done }); return { promise, resolve } }
+it('configures, reads and imports a legal .github repository through the production adapter', async () => {
+  const { project, directory } = await open()
+  const repository = { owner: 'a2d2-dev', repository: '.github' }
+  const url = 'https://github.com/a2d2-dev/.github/issues/1'
+  const adapter = new GitHubSource({ credential: async () => 'secret', fetch: async (input, init) => {
+    expect(init?.method).toBe('GET')
+    expect(init?.redirect).toBe('manual')
+    if (String(input) === 'https://api.github.com/user') return Response.json({ login: identity.login, node_id: identity.nodeId, name: identity.name })
+    expect(String(input)).toBe('https://api.github.com/repos/a2d2-dev/.github/issues/1')
+    return Response.json({ node_id: 'I_dotgithub', number: 1, title: 'Repository guidance', body: 'Accepted original guidance', html_url: url, state: 'open', updated_at: issue.updatedAt, labels: [], assignees: [] })
+  } })
+  const app = new WorkApplication(directory, noHost, adapter)
+  const configured = completed(await app.execute({ type: 'source.configure', commandId: 'dotgithub-source', projectId: project.id, repository }, operator)).source!
+  expect(await app.query({ type: 'source.issue', projectId: project.id, sourceId: configured.id, number: 1, refresh: true }, operator)).toMatchObject({ status: 'completed', issue: { nodeId: 'I_dotgithub', url, repository, body: 'Accepted original guidance' } })
+  expect(await app.execute({ type: 'source.import', commandId: 'dotgithub-import', projectId: project.id, sourceId: configured.id, url }, operator)).toMatchObject({ status: 'completed', task: { specification: { text: 'Accepted original guidance' } }, binding: { nodeId: 'I_dotgithub', urls: [url] } })
+})
+it.each(['.', '..', '../repo', 'repo/child', 'repo\\child', '%2e%2e', '%252f', 'repo?x=1', 'repo#x', 'repo@evil.test', 'repo\n', ''])('rejects unsafe configure owner or repository component %j', async component => {
+  const { app, project } = await open()
+  for (const repository of [{ ...issue.repository, owner: component }, { ...issue.repository, repository: component }]) {
+    expect(await app.execute({ type: 'source.configure', commandId: `unsafe-${repository.owner}-${repository.repository}`, projectId: project.id, repository }, operator)).toMatchObject({ status: 'failed', error: { code: 'invalid-command' } })
+  }
+  expect(completed(await app.query({ type: 'source.list', projectId: project.id }, operator)).sources).toHaveLength(1)
+})
 it('does not hold the work lock during network I/O and discards a late response after disable and re-enable', async () => {
   const started = deferred<void>(), remote = deferred<Awaited<ReturnType<GitHubSourcePort['list']>>>()
   const { app, project, source } = await open({ ...port, list: async () => { started.resolve(); return remote.promise } })
@@ -133,6 +156,50 @@ it('browses without creating work then atomically accepts source content, bindin
   expect(await reload.execute(command, operator)).toEqual(imported)
   expect(await reload.execute({ ...command, commandId: 'import-again' }, operator)).toMatchObject({ status: 'completed', task: { id: imported.task!.id } })
   expect(await reload.query({ type: 'task.detail', ref: imported.binding!.ref }, operator)).toMatchObject({ status: 'completed', task: imported.task, bindings: [imported.binding] })
+})
+it('reuses the canonical Task when a renamed source imports its trusted old URL, including offline retries', async () => {
+  const renamed = { ...issue, url: 'https://github.com/a2d2-dev/renamed/issues/112', repository: { owner: 'a2d2-dev', repository: 'renamed' }, body: 'New remote content', updatedAt: '2026-10-20T00:00:00Z' }
+  const { app, directory, project, source } = await open({ ...port, list: async repository => ({ identity, items: [repository.repository === 'renamed' ? renamed : issue], observedAt: issue.observedAt }) })
+  await app.query(pageQuery(source), operator)
+  const first = completed(await app.execute({ type: 'source.import', commandId: 'original-node', projectId: project.id, sourceId: source.id, nodeId: issue.nodeId }, operator))
+  const second = completed(await app.execute({ type: 'source.configure', commandId: 'renamed-source', projectId: project.id, repository: renamed.repository }, operator)).source!
+  await app.query(pageQuery(second), operator)
+  expect(await app.execute({ type: 'source.import', commandId: 'renamed-node', projectId: project.id, sourceId: second.id, nodeId: issue.nodeId }, operator)).toMatchObject({ status: 'completed', ref: first.ref, task: first.task, binding: { urls: [issue.url, renamed.url], accepted: issue, lastObserved: renamed } })
+  const command = { type: 'source.import', commandId: 'renamed-old-url', projectId: project.id, sourceId: second.id, url: issue.url }
+  const reused = completed(await app.execute(command, operator))
+  expect(reused).toMatchObject({ ref: first.ref, task: first.task, binding: { urls: [issue.url, renamed.url], accepted: issue, lastObserved: renamed } })
+  const offline = new WorkApplication(directory, noHost)
+  expect(await offline.execute(command, operator)).toEqual(reused)
+  const retries = await Promise.all(Array.from({ length: 2 }, () => new WorkApplication(directory, noHost).execute({ ...command, commandId: 'renamed-old-url-offline' }, operator)))
+  expect(retries[0]).toEqual(retries[1])
+  expect(retries[0]).toMatchObject({ status: 'completed', ref: first.ref, task: first.task })
+  expect(completed(await offline.query({ type: 'project.detail', projectId: project.id }, operator)).tasks).toEqual([first.task])
+})
+it('blocks trusted aliases without the current-source node observation and blocks unknown URLs offline', async () => {
+  const unrelated = { ...issue, nodeId: 'I_unrelated', url: 'https://github.com/a2d2-dev/renamed/issues/112', repository: { owner: 'a2d2-dev', repository: 'renamed' } }
+  const { app, directory, project, source } = await open({ ...port, list: async repository => ({ identity, items: [repository.repository === 'renamed' ? unrelated : issue], observedAt: issue.observedAt }) })
+  await app.query(pageQuery(source), operator)
+  const first = completed(await app.execute({ type: 'source.import', commandId: 'guard-original', projectId: project.id, sourceId: source.id, nodeId: issue.nodeId }, operator))
+  const second = completed(await app.execute({ type: 'source.configure', commandId: 'guard-renamed', projectId: project.id, repository: unrelated.repository }, operator)).source!
+  const command = { type: 'source.import', commandId: 'alias-not-observed', projectId: project.id, sourceId: second.id, url: issue.url }
+  expect(await app.execute(command, operator)).toMatchObject({ status: 'failed', error: { code: 'source-content-unavailable' } })
+  await app.query(pageQuery(second), operator)
+  const offline = new WorkApplication(directory, noHost)
+  expect(await offline.execute(command, operator)).toMatchObject({ status: 'failed', error: { code: 'source-content-unavailable' } })
+  expect(await offline.execute({ ...command, commandId: 'unknown-url', url: 'https://github.com/a2d2-dev/renamed/issues/999' }, operator)).toMatchObject({ status: 'failed', error: { code: 'source-content-unavailable' } })
+  expect(completed(await offline.query({ type: 'project.detail', projectId: project.id }, operator)).tasks).toEqual([first.task])
+})
+it('returns canonical ownership for a trusted old URL observed by a different Project', async () => {
+  const renamed = { ...issue, url: 'https://github.com/a2d2-dev/renamed/issues/112', repository: { owner: 'a2d2-dev', repository: 'renamed' } }
+  const { app, directory, project, source } = await open({ ...port, list: async repository => ({ identity, items: [repository.repository === 'renamed' ? renamed : issue], observedAt: issue.observedAt }) })
+  await app.query(pageQuery(source), operator)
+  const first = completed(await app.execute({ type: 'source.import', commandId: 'owner-original', projectId: project.id, sourceId: source.id, nodeId: issue.nodeId }, operator))
+  const other = completed(await app.execute({ type: 'project.create', commandId: 'owner-other', name: 'Other Project' }, operator)).project!
+  const second = completed(await app.execute({ type: 'source.configure', commandId: 'owner-renamed', projectId: other.id, repository: renamed.repository }, operator)).source!
+  await app.query(pageQuery(second), operator)
+  const offline = new WorkApplication(directory, noHost)
+  expect(await offline.execute({ type: 'source.import', commandId: 'owner-alias', projectId: other.id, sourceId: second.id, url: issue.url }, operator)).toMatchObject({ status: 'conflict', error: { code: 'external-object-owned' }, ref: first.ref, binding: { nodeId: issue.nodeId } })
+  expect(completed(await offline.query({ type: 'project.detail', projectId: other.id }, operator)).tasks).toEqual([])
 })
 it('reuses a stable node across duplicate pages, URL case aliases and repository rename, rejecting mapping and cross-project conflicts', async () => {
   let current = issue

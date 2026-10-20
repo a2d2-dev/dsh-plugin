@@ -29,9 +29,11 @@ export function applySourceCommand(state: WorkSnapshot, command: SourceCommand):
     return { status: 'completed', source }
   }
   if (!source.enabled) return fail('source-disabled', 'Source is disabled; retained local work remains available')
-  const observed = source.observations.find(item => command.nodeId ? item.issue.nodeId === command.nodeId : urlKey(item.issue.url) === urlKey(command.url!))?.issue
-  if (!observed) return fail('source-content-unavailable', 'No retrieved Issue content is available; a URL alone cannot create accepted work')
   const byIndex = (key: string) => { const ref = state.externalIndex[key]; return ref && state.externalBindings.find(item => item.ref.taskId === ref.taskId && item.ref.projectId === ref.projectId && (key.startsWith('github:node:') ? key === `github:node:${item.nodeId}` : item.urls.some(url => key === `github:url:${urlKey(url)}`))) }
+  const requestedUrlMatch = command.url ? byIndex(`github:url:${urlKey(command.url)}`) : undefined
+  const nodeId = command.nodeId ?? requestedUrlMatch?.nodeId
+  const observed = source.observations.find(item => nodeId ? item.issue.nodeId === nodeId : urlKey(item.issue.url) === urlKey(command.url!))?.issue
+  if (!observed) return fail('source-content-unavailable', 'No retrieved Issue content is available; a URL alone cannot create accepted work')
   const nodeMatch = byIndex(`github:node:${observed.nodeId}`)
   const urlMatch = byIndex(`github:url:${urlKey(observed.url)}`)
   if ((nodeMatch && urlMatch && nodeMatch !== urlMatch) || (urlMatch && urlMatch.nodeId !== observed.nodeId)) return { status: 'conflict', error: { code: 'external-mapping-conflict', message: 'External node and URL map to different work; automatic merging is forbidden' }, binding: urlMatch }
