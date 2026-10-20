@@ -1,0 +1,34 @@
+{
+  "base": "2d0beb9f6dfeb7757315dc86614f0ea26bc3e4f0",
+  "branch": "fix/a2d2-v3-02-fixture-cleanup",
+  "runtime": { "node": "22.23.1", "vitest": "4.1.11", "testTimeoutMs": 5000 },
+  "scope": "Test fixture lifecycle only; original CEO timeout cause remains unknown",
+  "historical_diagnosis": {
+    "ceo_original": { "passed": 20, "failed": 1, "checkpoint": "controller", "durationMs": 7007, "exit": 1, "errors": ["timeout5000", "ENOTEMPTY"] },
+    "tmp_natural": { "device": 64768, "singleRuns": 4, "combinationRuns": 4, "passed": 88, "skipped": 20, "failed": 0, "exit": 0 },
+    "data_natural": { "device": 64769, "combinationRuns": 1, "passed": 21, "failed": 0, "controllerMs": 2038, "exit": 0 },
+    "injected_before_fix": { "delayMsOnce": 4400, "passed": 0, "failed": 1, "skipped": 5, "durationMs": 6848, "exit": 1, "errors": ["timeout5000", "ENOTEMPTY"], "naturalReproduction": false }
+  },
+  "fixture_fix_validation": [
+    { "stage": "red", "command": "node node_modules/vitest/vitest.mjs run tests/work-execution-lifecycle.spec.ts --configLoader runner --no-cache", "passed": 0, "failed": 1, "skipped": 0, "exit": 1, "failure": "project.create after cancellation/close resolved completed instead of rejecting" },
+    { "stage": "green", "command": "node node_modules/vitest/vitest.mjs run tests/work-execution-lifecycle.spec.ts --configLoader runner --no-cache", "passed": 1, "failed": 0, "skipped": 0, "exit": 0 },
+    { "stage": "integration", "command": "node node_modules/vitest/vitest.mjs run tests/work-execution.spec.ts tests/work-execution-lifecycle.spec.ts --configLoader runner --no-cache", "passed": 8, "failed": 0, "skipped": 0, "exit": 0 },
+    { "stage": "types", "command": "node node_modules/typescript/bin/tsc --noEmit", "exit": 0 },
+    { "stage": "original-combination", "command": "node node_modules/vitest/vitest.mjs run tests/work.spec.ts tests/work-execution.spec.ts tests/work-host.spec.ts tests/work-process.spec.ts", "passed": 20, "failed": 1, "skipped": 0, "exit": 1, "failedCheckpoint": "header", "durationMs": 5578, "errors": ["timeout5000"], "remainingFixtureDirectories": 0 },
+    { "stage": "negative-injection", "command": "node node_modules/vitest/vitest.mjs run tests/work-execution.spec.ts -t 'recovers fixed execution after the real controller checkpoint receipt is lost' --configLoader runner --no-cache", "passed": 0, "failed": 1, "skipped": 5, "exit": 1, "delayMsOnce": 4400, "durationMs": 7027, "errors": ["timeout5000"], "naturalReproduction": false, "remainingFixtureDirectories": 0 }
+  ],
+  "negative_trace_worker_ms": {
+    "lastWriteEnd": 7733.962827,
+    "executionLockRelease": 7734.415981,
+    "sessionLeaseClose": 7754.798885,
+    "rootRemoveStart": 7755.803366,
+    "rootRemoveEnd": 7757.462568,
+    "writeEventsAfterRemoveStarted": 0,
+    "filesystemErrors": 0
+  },
+  "limitations": [
+    "Natural timeout in the final combination affected header, not the CEO controller checkpoint; it does not locate the original cause",
+    "Injected sync delay validates teardown ordering only; it does not prove historical fsync latency or product recovery success",
+    "A fixture whose accepted work does not settle is retained with an explicit error; production cancellation behavior is unchanged"
+  ]
+}

@@ -1,4 +1,6 @@
-import { join } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
+import { mkdtemp, realpath, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
@@ -31,6 +33,91 @@ import { StubCommands } from './stubs.ts'
 import { DshWorkHost } from '../src/work-host.ts'
 import A2d2Service from '../src/index.ts'
 import { WorkApplication } from '../src/work.ts'
+import type { WorkHost } from '../src/work.ts'
+
+export class ExecutionFixtures {
+  private readonly contexts = new Set<Context>()
+  private readonly roots = new Set<string>()
+  private readonly pending = new Set<Promise<unknown>>()
+  private readonly base = resolve(tmpdir())
+  private stopped = false
+  private cleanup?: Promise<void>
+  constructor(readonly signal?: AbortSignal) {}
+  private assertOpen() {
+    if (this.stopped || this.signal?.aborted) throw new Error('Execution fixture is closing')
+  }
+  async run<T>(operation: () => Promise<T>): Promise<T> {
+    this.assertOpen()
+    const pending = Promise.resolve().then(() => { this.assertOpen(); return operation() })
+    this.pending.add(pending)
+    try {
+      const result = await pending
+      // A cancelled caller must not resume into a remount or another command.
+      this.assertOpen()
+      return result
+    } finally { this.pending.delete(pending) }
+  }
+  root() {
+    return this.run(async () => {
+      const path = await mkdtemp(join(this.base, 'a2d2-execution-'))
+      this.roots.add(path)
+      return path
+    })
+  }
+  mount(path: string, permissionPreset = 'workspace-write') {
+    return this.run(async () => {
+      if (!this.roots.has(path)) throw new Error('Execution fixture does not own this directory')
+      const h = await mountExecution(path, permissionPreset, ctx => this.contexts.add(ctx))
+      this.trackApplication(h.app)
+      return h
+    })
+  }
+  application(directory: string, host: WorkHost) {
+    this.assertOpen()
+    return this.trackApplication(new WorkApplication(directory, host))
+  }
+  private trackApplication(app: WorkApplication) {
+    const execute = app.execute.bind(app)
+    const query = app.query.bind(app)
+    app.execute = (...args) => this.run(() => execute(...args))
+    app.query = (...args) => this.run(() => query(...args))
+    return app
+  }
+  dispose(ctx: Context) {
+    return this.run(async () => {
+      await ctx.fiber.dispose()
+      this.contexts.delete(ctx)
+    })
+  }
+  close(settleMs = 5000): Promise<void> {
+    this.stopped = true
+    return this.cleanup ??= this.finishClose(settleMs).catch(error => {
+      this.cleanup = undefined
+      throw error
+    })
+  }
+  private async finishClose(settleMs: number) {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([
+        Promise.allSettled([...this.pending]),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(`Execution fixture work did not settle; retained: ${[...this.roots].join(', ')}`)), settleMs)
+        }),
+      ])
+    } finally { clearTimeout(timer) }
+    // Context disposal does not own WorkApplication promises; it is safe only after the join.
+    for (const ctx of [...this.contexts].reverse()) {
+      await ctx.fiber.dispose()
+      this.contexts.delete(ctx)
+    }
+    for (const path of this.roots) {
+      if (dirname(path) !== this.base || !basename(path).startsWith('a2d2-execution-') || await realpath(path) !== path) throw new Error(`Unexpected cleanup path; retained: ${path}`)
+      await rm(path, { recursive: true, force: true })
+      this.roots.delete(path)
+    }
+  }
+}
 
 class Query extends SessionQuery {
   async searchSessions(): Promise<never> { throw new Error('Search is not part of the execution contract') }
@@ -60,8 +147,9 @@ export class Model extends LlmAdapter {
     yield { type: 'finish', reason: { kind: 'stop' } }
   }
 }
-export async function mountExecution(path: string, permissionPreset = 'workspace-write') {
+export async function mountExecution(path: string, permissionPreset = 'workspace-write', register: (ctx: Context) => void = () => {}) {
   const ctx = new Context()
+  register(ctx)
   await ctx.plugin(LlmRuntime)
   const model = new Model()
   ctx.llm.registerAdapter(['contract'], model)

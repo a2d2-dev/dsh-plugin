@@ -1,29 +1,18 @@
-import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
-import { WorkApplication } from '../src/work.ts'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { installWorkTools, installWorkControlRecovery } from '../src/work-execution/tools.ts'
 
-import { mountExecution } from './work-execution-fixture.ts'
-import type { Context } from '@deepseek-ai/cordis'
-const contexts: Context[] = []
-const roots: string[] = []
+import { ExecutionFixtures } from './work-execution-fixture.ts'
+let fixtures: ExecutionFixtures
 const operator = { operator: true }
-afterEach(async () => {
-  for (const ctx of contexts.splice(0).reverse()) await ctx.fiber.dispose()
-  for (const path of roots.splice(0)) {
-    if (!path.startsWith(join(tmpdir(), 'a2d2-execution-'))) throw new Error('Unexpected cleanup path')
-    await rm(path, { recursive: true, force: true })
-  }
-})
+beforeEach(({ signal }) => { fixtures = new ExecutionFixtures(signal) })
+afterEach(() => fixtures.close())
 async function setup(permissionPreset = 'workspace-write') {
-  const directory = await mkdtemp(join(tmpdir(), 'a2d2-execution-'))
-  roots.push(directory)
-  const h = await mountExecution(directory, permissionPreset)
-  contexts.push(h.ctx)
+  const directory = await fixtures.root()
+  const h = await fixtures.mount(directory, permissionPreset)
   const app = h.app
   const resource = { runtimeId: 'runtime', workspaceId: h.workspace.id }
   const p = await app.execute({ type: 'project.create', commandId: 'project', name: 'Coordination', resource }, operator)
@@ -41,23 +30,23 @@ it.each(['wait', 'pause'] as const)('accepts a real model self-%s before applyin
     agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }, operator)
   if (started.status !== 'completed' || !started.execution) throw new Error(JSON.stringify(started))
   const agent = h.ctx.agents.get(SessionId(started.execution.session.sessionId))!
-  await agent.whenIdle()
+  await fixtures.run(() => agent.whenIdle())
   await vi.waitFor(async () => expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({
     status: 'completed', execution: { state: action === 'wait' ? 'waiting' : 'paused', control: { action, status: 'applied', reason: 'Which acceptance decision should I use?' } },
   }))
   expect(h.model.requests).toHaveLength(1)
-  const inspection = await h.ctx.sessionController.inspect(agent.id)
+  const inspection = await fixtures.run(() => h.ctx.sessionController.inspect(agent.id))
   expect(JSON.stringify(inspection.events.filter(item => item.type === 'tool/result'))).toContain('accepted')
   expect(inspection.events.filter(item => item.type === 'tool/result')).toEqual([expect.objectContaining({ data: expect.objectContaining({ message: expect.objectContaining({ isError: false }) }) })])
   expect(inspection.events.filter(item => item.type === 'turn/end')).toEqual([expect.objectContaining({ data: { turn: 1, reason: { kind: 'blocked' } } })])
   const native = createUserMessage({ content: [{ type: 'text', text: 'Native answer remains queued until explicit resume' }], source: { kind: 'user' } })
   agent.followup(native)
-  await agent.whenIdle()
+  await fixtures.run(() => agent.whenIdle())
   expect(h.model.requests).toHaveLength(1)
   const fence = { ref: h.ref, executionId: started.execution.id, owner: started.execution.owner, epoch: started.execution.epoch }
   expect(await h.app.execute({ type: 'task.control', commandId: 'resume-tool-wait', ...fence, action: 'resume', text: 'Use the accepted answer' }, operator)).toMatchObject({ status: 'completed', execution: { state: 'ready' } })
   await vi.waitFor(async () => expect(h.model.requests, JSON.stringify(await h.app.query({ type: 'task.execution', ref: h.ref }, operator))).toHaveLength(2))
-  await agent.whenIdle()
+  await fixtures.run(() => agent.whenIdle())
   expect(h.model.requests[1]!.messages).toEqual(expect.arrayContaining([expect.objectContaining({ id: native.id })]))
 })
 
@@ -68,16 +57,16 @@ it('resolves real tool identity on the server and refuses foreign or absent call
     agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }, operator)
   if (started.status !== 'completed' || !started.execution) throw new Error(JSON.stringify(started))
   const agent = h.ctx.agents.get(SessionId(started.execution.session.sessionId))!
-  await agent.whenIdle()
-  const execute = (id: string, args: Record<string, unknown>, caller?: typeof agent) => h.ctx.tools.execute({
+  await fixtures.run(() => agent.whenIdle())
+  const execute = (id: string, args: Record<string, unknown>, caller?: typeof agent) => fixtures.run(() => h.ctx.tools.execute({
     callId: ToolCallId(id), name: 'work_control', arguments: args, agent: caller, signal: new AbortController().signal,
-  })
+  }))
   expect(await execute('own-progress', { action: 'progress', text: 'Concrete accepted work' }, agent)).toMatchObject({ isError: false })
   expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { progress: 'Concrete accepted work' } })
   const stale = await execute('stale-progress', { action: 'progress', text: 'Stale progress', expected_epoch: 2 }, agent)
   expect(JSON.stringify(stale)).toContain('stale-execution-authority')
   expect(await execute('own-status', { action: 'status' }, agent)).toMatchObject({ isError: false, content: [expect.objectContaining({ text: expect.stringContaining('Concrete accepted work') })] })
-  const foreign = await h.ctx.sessionController.create({ workspaceId: h.workspace.id, agentPreset: 'contract' })
+  const foreign = await fixtures.run(() => h.ctx.sessionController.create({ workspaceId: h.workspace.id, agentPreset: 'contract' }))
   const other = h.ctx.agents.get(foreign.sessionId)!
   const denied = await execute('foreign-progress', { action: 'progress', text: 'Forged work' }, other)
   expect(JSON.stringify(denied)).toContain('forbidden')
@@ -97,21 +86,19 @@ it('recovers a real tool accepted intent after Context loss before the settled r
   const started = await h.app.execute({ type: 'task.start', commandId: 'accepted-before-restart', ref: h.ref, expectedVersion: 1, resource: h.resource,
     agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }, operator)
   if (started.status !== 'completed' || !started.execution) throw new Error(JSON.stringify(started))
-  await h.ctx.agents.get(SessionId(started.execution.session.sessionId))!.whenIdle()
+  await fixtures.run(() => h.ctx.agents.get(SessionId(started.execution!.session.sessionId))!.whenIdle())
   const accepted = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
   expect(accepted).toMatchObject({ execution: { control: { action: 'pause', status: 'accepted' } } })
   if (accepted.status !== 'completed' || !accepted.execution) throw new Error('No persisted intent')
   const commandId = accepted.execution.control!.commandId
-  await h.ctx.fiber.dispose()
-  contexts.splice(contexts.indexOf(h.ctx), 1)
-  const restored = await mountExecution(h.workspace.path)
-  contexts.push(restored.ctx)
+  await fixtures.dispose(h.ctx)
+  const restored = await fixtures.mount(h.workspace.path)
   installWorkControlRecovery(restored.ctx, restored.app)
   await vi.waitFor(async () => expect(await restored.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: {
     id: started.execution!.id, owner: started.execution!.owner, epoch: 1, session: started.execution!.session,
     state: 'paused', control: { commandId, action: 'pause', status: 'applied' },
   } }))
-  expect(await restored.ctx.sessionPersistence.list()).toHaveLength(1)
+  expect(await fixtures.run(() => restored.ctx.sessionPersistence.list())).toHaveLength(1)
   expect(h.model.requests).toHaveLength(1)
   expect(restored.model.requests).toHaveLength(0)
 })
@@ -120,17 +107,17 @@ it('durably accepts one execution for competing starts and command replay withou
   const { directory, app, ref, agentId, resource, host, ctx, model } = await setup()
   const command = { type: 'task.start', commandId: 'start-one', ref, expectedVersion: 1, resource,
     agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }
-  const results = await Promise.all([app.execute(command, operator), new WorkApplication(directory, host).execute({ ...command, commandId: 'start-two' }, operator)])
+  const results = await Promise.all([app.execute(command, operator), fixtures.application(directory, host).execute({ ...command, commandId: 'start-two' }, operator)])
   expect(results).toEqual([expect.objectContaining({ status: 'completed', execution: expect.objectContaining({ state: expect.stringMatching(/^(accepted|creating|ready)$/), epoch: 1, agentId, ref }) }), expect.objectContaining({ status: 'completed', execution: expect.objectContaining({ state: expect.stringMatching(/^(accepted|creating|ready)$/), epoch: 1, agentId, ref }) })])
   const one = results[0] as any
   expect((results[1] as any).execution.id).toBe(one.execution.id)
   const agent = ctx.agents.get(one.execution.session.sessionId)!
-  await agent.whenIdle()
+  await fixtures.run(() => agent.whenIdle())
   expect(model.requests).toHaveLength(1)
   expect(model.requests[0]!.messages).toEqual(expect.arrayContaining([expect.objectContaining({ role: 'user', content: expect.arrayContaining([expect.objectContaining({ text: expect.stringContaining('Persist execution before host effects') })]) })]))
-  const replay = await new WorkApplication(directory, host).execute(command, operator)
+  const replay = await fixtures.application(directory, host).execute(command, operator)
   expect(replay).toMatchObject({ status: 'completed', execution: { id: one.execution.id, owner: one.execution.owner, epoch: 1 } })
-  await agent.whenIdle()
+  await fixtures.run(() => agent.whenIdle())
   expect(model.requests).toHaveLength(1)
   expect(await app.query({ type: 'task.execution', ref }, operator)).toMatchObject({ status: 'completed', execution: { id: one.execution.id, state: 'ready', owner: one.execution.owner } })
 })
@@ -146,14 +133,14 @@ it('runs on the selected local model, waits without empty turns, and separates c
   const execution = started.execution
   const fence = { ref: h.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch }
   expect(started.execution.events).toMatchObject([{ id: `kickoff:${execution.id}`, delivery: expect.stringMatching(/delivered|consumed/), acceptance: 'unassessed' }])
-  const agent = await h.ctx.sessionController.resolveAgent(execution.session.sessionId as never)
+  const agent = await fixtures.run(() => h.ctx.sessionController.resolveAgent(execution.session.sessionId as never))
   if ('error' in agent) throw new Error('No Agent')
-  await agent.agent.whenIdle()
+  await fixtures.run(() => agent.agent.whenIdle())
   expect(h.model.requests).toHaveLength(1)
   expect(h.model.requests[0]).toMatchObject({ provider: 'contract', model: 'selected' })
   expect(agent.agent.session.requestHeader()?.config).toMatchObject({ provider: 'contract', model: 'selected' })
   expect(JSON.stringify(h.model.requests[0]!.messages.find(message => message.role === 'system'))).toContain('Effective route contract/selected')
-  expect(await h.ctx.sessionController.projections({ sessionId: agent.agent.id }, new AbortController().signal)).toMatchObject({ values: { modelSelection: { lastUsed: { provider: 'contract', model: 'selected' }, next: { provider: 'contract', model: 'selected' } } } })
+  expect(await fixtures.run(() => h.ctx.sessionController.projections({ sessionId: agent.agent.id }, new AbortController().signal))).toMatchObject({ values: { modelSelection: { lastUsed: { provider: 'contract', model: 'selected' }, next: { provider: 'contract', model: 'selected' } } } })
   expect(h.ctx.agentDefaultModel.currentSelection()).toEqual(before)
   expect(defaultSaves).not.toHaveBeenCalled()
   const waited = await h.app.execute({ type: 'task.control', commandId: 'wait', ...fence, action: 'wait', text: 'Need a decision' }, operator)
@@ -167,7 +154,7 @@ it('runs on the selected local model, waits without empty turns, and separates c
   expect(await h.app.execute({ type: 'task.control', commandId: 'own-progress', ...fence, action: 'progress', text: 'Waiting for decision' }, { operator: false, session: execution.session, agentId: h.agentId })).toMatchObject({ status: 'completed', execution: { progress: 'Waiting for decision' } })
   expect(await h.app.execute({ type: 'task.control', commandId: 'stale', ...fence, epoch: 2, action: 'resume', text: 'Invalid epoch' }, operator)).toMatchObject({ status: 'failed', error: { code: 'stale-execution-authority' } })
   expect(await h.app.execute({ type: 'task.control', commandId: 'resume', ...fence, action: 'resume', text: 'Process the accepted decision' }, operator)).toMatchObject({ status: 'completed', execution: { control: { status: 'applied' } } })
-  await agent.agent.whenIdle()
+  await fixtures.run(() => agent.agent.whenIdle())
   expect(h.model.requests).toHaveLength(2)
   await h.app.execute(waitingInput, operator)
   expect(h.model.requests).toHaveLength(2)
@@ -183,14 +170,14 @@ it.each(['header', 'selection', 'controller', 'kickoff'] as const)('recovers fix
     const deliver = h.host.execution.deliver.bind(h.host.execution)
     vi.spyOn(h.host.execution, 'deliver').mockImplementationOnce(async (execution, event) => {
       await deliver(execution, event)
-      await h.ctx.agents.get(execution.session.sessionId as never)!.whenIdle()
+      await fixtures.run(() => h.ctx.agents.get(execution.session.sessionId as never)!.whenIdle())
       throw new Error('Real kickoff was consumed; its application receipt was lost')
     })
   } else if (checkpoint === 'controller') {
     const create = h.ctx.sessionController.create.bind(h.ctx.sessionController)
     vi.spyOn(h.ctx.sessionController, 'create').mockImplementationOnce(async request => {
       const result = await create(request)
-      await h.ctx.sessions.flush(h.ctx.agents.get(result.sessionId)!.session)
+      await fixtures.run(() => h.ctx.sessions.flush(h.ctx.agents.get(result.sessionId)!.session))
       throw new Error('Actual host created and flushed; client receipt lost')
     })
   } else {
@@ -208,40 +195,38 @@ it.each(['header', 'selection', 'controller', 'kickoff'] as const)('recovers fix
   if (lost.status !== 'completed' || !lost.execution) throw new Error('No retained execution')
   const id = lost.execution.id
   const session = lost.execution.session
-  expect(await h.ctx.sessionPersistence.list()).toHaveLength(1)
+  expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(1)
   expect(h.model.requests).toHaveLength(checkpoint === 'kickoff' ? 1 : 0)
-  await h.ctx.fiber.dispose()
-  contexts.splice(contexts.indexOf(h.ctx), 1)
-  const restored = await mountExecution(path)
-  contexts.push(restored.ctx)
+  await fixtures.dispose(h.ctx)
+  const restored = await fixtures.mount(path)
   const result = await restored.app.execute(command, operator)
   expect(result, JSON.stringify(result)).toMatchObject({ status: 'completed', execution: { id, session, state: 'ready', owner: lost.execution.owner, epoch: 1 } })
-  expect(await restored.ctx.sessionPersistence.list()).toHaveLength(1)
+  expect(await fixtures.run(() => restored.ctx.sessionPersistence.list())).toHaveLength(1)
   if (result.status !== 'completed' || !result.execution) throw new Error('No restored execution')
   expect(result.execution.events[0]!.id).toBe(`kickoff:${id}`)
   const agent = restored.ctx.agents.get(session.sessionId as never)!
-  await agent.whenIdle()
+  await fixtures.run(() => agent.whenIdle())
   expect([...h.model.requests, ...restored.model.requests]).toHaveLength(1)
   expect([...h.model.requests, ...restored.model.requests][0]).toMatchObject({ model: 'selected' })
   await restored.app.execute(command, operator)
-  await agent.whenIdle()
+  await fixtures.run(() => agent.whenIdle())
   expect([...h.model.requests, ...restored.model.requests]).toHaveLength(1)
   expect(restored.ctx.agentDefaultModel.currentSelection()).toMatchObject({ model: 'default' })
 })
 
 it('allows one Task to coordinate a compatible reused Session while rejecting the competing Task atomically', async () => {
   const h = await setup()
-  const session = await h.ctx.sessionController.create({ sessionId: 'reused-coordinator' as never, workspaceId: h.workspace.id, agentPreset: 'contract' })
+  const session = await fixtures.run(() => h.ctx.sessionController.create({ sessionId: 'reused-coordinator' as never, workspaceId: h.workspace.id, agentPreset: 'contract' }))
   const second = await h.app.execute({ type: 'task.create', commandId: 'second', projectId: h.ref.projectId,
     title: 'Second', goal: 'Never mix tasks', specification: 'One Session one execution', acceptance: ['Only one owner'] }, operator)
   if (second.status !== 'completed' || !second.task) throw new Error('Missing second task')
   const command = { type: 'task.start', commandId: 'reuse-one', ref: h.ref, expectedVersion: 1, resource: h.resource,
     session: { runtimeId: 'runtime', sessionId: session.sessionId }, agentId: h.agentId,
     agentPreset: 'contract', model: { provider: 'contract', model: 'default' }, permissionPreset: 'workspace-write' }
-  const results = await Promise.all([h.app.execute(command, operator), new WorkApplication(h.directory, h.host).execute({ ...command, commandId: 'reuse-two', ref: { ...h.ref, taskId: second.task.id } }, operator)])
+  const results = await Promise.all([h.app.execute(command, operator), fixtures.application(h.directory, h.host).execute({ ...command, commandId: 'reuse-two', ref: { ...h.ref, taskId: second.task.id } }, operator)])
   expect(results.filter(value => value.status === 'completed')).toHaveLength(1)
   expect(results.filter(value => value.status === 'failed')).toMatchObject([{ error: { code: 'session-in-use' } }])
-  expect(await h.ctx.sessionPersistence.list()).toHaveLength(1)
+  expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(1)
 })
 
 it('offers allowed host execution choices and rejects arbitrary model or permission before saving an execution', async () => {
@@ -258,17 +243,17 @@ it('offers allowed host execution choices and rejects arbitrary model or permiss
   expect(await h.app.execute(command, operator)).toMatchObject({ status: 'failed', error: { code: 'unavailable-model' } })
   expect(await h.app.execute({ ...command, commandId: 'raised-permission', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'danger-full-access' }, operator)).toMatchObject({ status: 'failed', error: { code: 'disallowed-permission-preset' } })
   expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toEqual({ status: 'completed' })
-  expect(await h.ctx.sessionPersistence.list()).toHaveLength(0)
+  expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(0)
   expect(h.model.requests).toHaveLength(0)
 })
 
 it('composes a real preset read tool against the selected workspace rather than the host default cwd', async () => {
   const h = await setup()
   const selected = join(h.workspace.path, 'selected-resource')
-  await mkdir(selected)
-  await writeFile(join(selected, 'acceptance.txt'), 'REAL_SELECTED_RESOURCE_122')
-  await writeFile(join(h.workspace.path, 'acceptance.txt'), 'WRONG_HOST_DEFAULT_RESOURCE')
-  const workspace = await h.ctx.workspaceRegistry.create(selected)
+  await fixtures.run(() => mkdir(selected))
+  await fixtures.run(() => writeFile(join(selected, 'acceptance.txt'), 'REAL_SELECTED_RESOURCE_122'))
+  await fixtures.run(() => writeFile(join(h.workspace.path, 'acceptance.txt'), 'WRONG_HOST_DEFAULT_RESOURCE'))
+  const workspace = await fixtures.run(() => h.ctx.workspaceRegistry.create(selected))
   const resource = { runtimeId: 'runtime', workspaceId: workspace.id }
   await h.app.execute({ type: 'project.attach-resource', commandId: 'resource', projectId: h.ref.projectId, expectedVersion: 1, resource }, operator)
   h.model.nextTool = { name: 'read', arguments: { file_path: 'acceptance.txt' } }
@@ -278,10 +263,10 @@ it('composes a real preset read tool against the selected workspace rather than 
   if (started.status !== 'completed' || !started.execution) throw new Error('No execution')
   const id = SessionId(started.execution.session.sessionId)
   const agent = h.ctx.agents.get(id)!
-  await agent.whenIdle()
+  await fixtures.run(() => agent.whenIdle())
   expect(h.ctx.agentPresets.composedPreset(agent.ctx)).toBe('contract')
   expect(h.model.requests[0]!.tools?.map(tool => tool.name)).toEqual(expect.arrayContaining(['read', 'write', 'edit']))
-  const inspection = await h.ctx.sessionController.inspect(id)
+  const inspection = await fixtures.run(() => h.ctx.sessionController.inspect(id))
   const results = inspection.events.filter(event => event.type === 'tool/result')
   expect(JSON.stringify(results)).toContain('REAL_SELECTED_RESOURCE_122')
   expect(JSON.stringify(results)).not.toContain('WRONG_HOST_DEFAULT_RESOURCE')
@@ -296,8 +281,8 @@ it('refuses legacy mapped work and a host without execution capabilities before 
     agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }
   expect(await h.app.execute(command, operator)).toMatchObject({ status: 'failed', error: { code: 'legacy-authority-retained' } })
   const readOnlyHost = { resources: h.host.resources.bind(h.host), sessions: h.host.sessions.bind(h.host) }
-  expect(await new WorkApplication(h.directory, readOnlyHost).execute(command, operator)).toMatchObject({ status: 'failed', error: { code: 'host-capability-unavailable' } })
-  expect(await h.ctx.sessionPersistence.list()).toHaveLength(0)
+  expect(await fixtures.application(h.directory, readOnlyHost).execute(command, operator)).toMatchObject({ status: 'failed', error: { code: 'host-capability-unavailable' } })
+  expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(0)
   expect(h.model.requests).toHaveLength(0)
 })
 
@@ -309,8 +294,8 @@ it('enforces read-only through the real filesystem tool without claiming OS shel
   expect(started, JSON.stringify(started)).toMatchObject({ status: 'completed', execution: { actual: { permissionPreset: 'read-only', sandbox: 'read-only', approval: 'never' } } })
   if (started.status !== 'completed' || !started.execution) throw new Error('No execution')
   const agent = h.ctx.agents.get(SessionId(started.execution.session.sessionId))!
-  await agent.whenIdle()
-  const inspection = await h.ctx.sessionController.inspect(agent.id)
+  await fixtures.run(() => agent.whenIdle())
+  const inspection = await fixtures.run(() => h.ctx.sessionController.inspect(agent.id))
   expect(inspection.events.some(event => event.type === 'tool/result' && event.data.message.isError), JSON.stringify({ requests: h.model.requests.length, events: inspection.events.filter(event => ['tool/call', 'tool/result', 'turn/end'].includes(event.type)) })).toBe(true)
   const fs = await import('node:fs/promises')
   await expect(fs.stat(join(h.workspace.path, 'forbidden.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
@@ -324,47 +309,45 @@ it('keeps paused Task fenced after cold ordinary Session activation and explicit
     agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }, operator)
   if (started.status !== 'completed' || !started.execution) throw new Error('No execution')
   const execution = started.execution
-  await h.ctx.agents.get(SessionId(execution.session.sessionId))!.whenIdle()
+  await fixtures.run(() => h.ctx.agents.get(SessionId(execution.session.sessionId))!.whenIdle())
   const fence = { ref: h.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch }
   await h.app.execute({ type: 'task.control', commandId: 'cold-pause', ...fence, action: 'pause', text: 'Keep user pause across restart' }, operator)
-  await h.ctx.fiber.dispose()
-  contexts.splice(contexts.indexOf(h.ctx), 1)
-  const cold = await mountExecution(h.workspace.path)
-  contexts.push(cold.ctx)
-  const resolved = await cold.ctx.sessionController.resolveAgent(SessionId(execution.session.sessionId))
+  await fixtures.dispose(h.ctx)
+  const cold = await fixtures.mount(h.workspace.path)
+  const resolved = await fixtures.run(() => cold.ctx.sessionController.resolveAgent(SessionId(execution.session.sessionId)))
   if ('error' in resolved) throw new Error('No restored Agent')
   resolved.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Native input while paused' }], source: { kind: 'user' } }))
-  await resolved.agent.whenIdle()
+  await fixtures.run(() => resolved.agent.whenIdle())
   expect(cold.model.requests).toHaveLength(0)
   expect(await cold.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ status: 'completed', execution: { state: 'paused' }, executionRuntime: 'idle' })
   const resumed = await cold.app.execute({ type: 'task.control', commandId: 'cold-resume', ...fence, action: 'resume', text: 'Explicitly process pending native input' }, operator)
   expect(resumed, JSON.stringify(resumed)).toMatchObject({ status: 'completed', execution: { state: 'ready' } })
-  await resolved.agent.whenIdle()
-  expect(cold.model.requests, JSON.stringify({ inbox: { nextTurn: resolved.agent.inbox.nextTurn, nextStep: resolved.agent.inbox.nextStep }, events: (await cold.ctx.sessionController.inspect(resolved.agent.id)).events.slice(-8) })).toHaveLength(1)
+  await fixtures.run(() => resolved.agent.whenIdle())
+  expect(cold.model.requests, JSON.stringify({ inbox: { nextTurn: resolved.agent.inbox.nextTurn, nextStep: resolved.agent.inbox.nextStep }, events: (await fixtures.run(() => cold.ctx.sessionController.inspect(resolved.agent.id))).events.slice(-8) })).toHaveLength(1)
 })
 
 it('explicitly reuses a compatible nonempty related Session while review association never grants coordination', async () => {
   const h = await setup()
   const id = SessionId('prior-conversation')
-  await h.ctx.sessionController.create({ sessionId: id, workspaceId: h.workspace.id, agentPreset: 'contract' })
+  await fixtures.run(() => h.ctx.sessionController.create({ sessionId: id, workspaceId: h.workspace.id, agentPreset: 'contract' }))
   const agent = h.ctx.agents.get(id)!
   agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Prior real conversation' }], source: { kind: 'user' } }))
-  await agent.whenIdle()
-  const before = await h.ctx.sessionController.inspect(id)
+  await fixtures.run(() => agent.whenIdle())
+  const before = await fixtures.run(() => h.ctx.sessionController.inspect(id))
   const command = { type: 'task.start', commandId: 'reuse-existing', ref: h.ref, expectedVersion: 2, resource: h.resource,
     session: { runtimeId: 'runtime', sessionId: id }, agentId: h.agentId,
     agentPreset: 'contract', model: { provider: 'contract', model: 'default' }, permissionPreset: 'workspace-write' }
   await h.app.execute({ type: 'task.associate-session', commandId: 'related', ref: h.ref, expectedVersion: 1, session: command.session, purpose: 'related' }, operator)
   expect(await h.app.execute({ ...command, commandId: 'mismatched-model', model: { provider: 'contract', model: 'selected' } }, operator)).toMatchObject({ status: 'failed', error: { code: 'incompatible-session' } })
-  expect(await h.ctx.sessionController.inspect(id)).toEqual(before)
+  expect(await fixtures.run(() => h.ctx.sessionController.inspect(id))).toEqual(before)
   const result = await h.app.execute(command, operator)
   expect(result, JSON.stringify(result)).toMatchObject({ status: 'completed', execution: { session: command.session, sessionMode: 'reuse', actual: { model: 'default' } } })
-  await agent.whenIdle()
-  const after = await h.ctx.sessionController.inspect(id)
+  await fixtures.run(() => agent.whenIdle())
+  const after = await fixtures.run(() => h.ctx.sessionController.inspect(id))
   expect(after.events.slice(0, before.events.length)).toEqual(before.events)
   expect(after.meta).toEqual(before.meta)
   expect(h.model.requests).toHaveLength(2)
-  const review = await h.ctx.sessionController.create({ sessionId: SessionId('review-only'), workspaceId: h.workspace.id, agentPreset: 'contract' })
+  const review = await fixtures.run(() => h.ctx.sessionController.create({ sessionId: SessionId('review-only'), workspaceId: h.workspace.id, agentPreset: 'contract' }))
   const task = await h.app.execute({ type: 'task.create', commandId: 'review-task', projectId: h.ref.projectId, title: 'Review', goal: 'Observe', specification: 'No coordination', acceptance: ['Never own'] }, operator)
   if (task.status !== 'completed' || !task.task) throw new Error('No task')
   const ref = { ...h.ref, taskId: task.task.id }
@@ -376,11 +359,11 @@ it('explicitly reuses a compatible nonempty related Session while review associa
 it('keeps an actual unmigrated legacy main Session under its existing writer authority', async () => {
   const h = await setup()
   const id = SessionId('legacy-active')
-  await h.ctx.sessionController.create({ sessionId: id, workspaceId: h.workspace.id, agentPreset: 'contract' })
-  await h.ctx.a2d2.bindMainSession({ cwd: h.workspace.path, issue: 122, mainSession: id, now: new Date() })
+  await fixtures.run(() => h.ctx.sessionController.create({ sessionId: id, workspaceId: h.workspace.id, agentPreset: 'contract' }))
+  await fixtures.run(() => h.ctx.a2d2.bindMainSession({ cwd: h.workspace.path, issue: 122, mainSession: id, now: new Date() }))
   expect(await h.app.execute({ type: 'task.start', commandId: 'legacy-session', ref: h.ref, expectedVersion: 1, resource: h.resource,
     session: { runtimeId: 'runtime', sessionId: id }, agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'default' }, permissionPreset: 'workspace-write' }, operator)).toMatchObject({ status: 'failed', error: { code: 'legacy-authority-retained' } })
-  expect((await h.ctx.a2d2.taskOfMainSession(h.workspace.path, id))?.issue.number).toBe(122)
+  expect((await fixtures.run(() => h.ctx.a2d2.taskOfMainSession(h.workspace.path, id)))?.issue.number).toBe(122)
   expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toEqual({ status: 'completed' })
   expect(h.model.requests).toHaveLength(0)
 })
@@ -403,7 +386,7 @@ it('accepts repeated start and input while real Controller creation is parked wi
     const detail = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
     if (detail.status !== 'completed' || !detail.execution) throw new Error('No accepted execution')
     const execution = detail.execution
-    pending.push(new WorkApplication(h.directory, h.host).execute(command, operator),
+    pending.push(fixtures.application(h.directory, h.host).execute(command, operator),
       h.app.execute({ type: 'task.input', commandId: 'during-create', ref: h.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch, text: 'Input accepted during creation', kind: 'input' }, operator))
     const results = await Promise.race([
       Promise.all(pending),
@@ -411,5 +394,5 @@ it('accepts repeated start and input while real Controller creation is parked wi
     ])
     expect(results).toMatchObject([{ status: 'completed', execution: { id: execution.id, state: 'creating' } }, { status: 'completed', execution: { id: execution.id, state: 'creating' } }])
   } finally { if (deadline) clearTimeout(deadline); release(); await first; await Promise.allSettled(pending) }
-  expect(await h.ctx.sessionPersistence.list()).toHaveLength(1)
+  expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(1)
 })

@@ -117,3 +117,13 @@ await app.query({ type: 'task.execution', ref }, operator)
 本轮先运行原生产 Context 回归，退出1：1失败、3未选，实际 HTTP400 admission。修复后定向退出0：1通过、3未选。串行运行四个 work 文件退出0：36/36通过、0未选，包括原19 execution用例。首次 pnpm 启动前依赖自检报告 ignored native builds；Vitest 仍实际启动并给出上述红断言，随后使用本地 Node 入口，未修改依赖、lockfile 或脚本批准策略。
 
 独立产品 lane 的真实 tgz HTTP + TaskRef 单调用预算证据归 `b93604a3702def9a54f9a36a198b39c4f216e68e`，其旧红证据保留在源提交；该 lane 不作为本片集成 artifact 的产品验证。最终产品 lane 须重新构建本分支真实 tgz，再执行 UI/start/current 导航。B2/B3 全部 AC 仍保留。
+
+### Fixture 生命周期整合
+
+选择性整合 `4f8f396` → `57f7aa6` → `ec383ab` → `1608832` 的 ExecutionFixtures 与两条回归，未覆盖旧 fixture 文件。保留当前 permissionPreset 参数、真实 fs/bash sandbox、局部模型、生产 Controller plugin 装配及原19项 execution用例。setup/remount、额外 WorkApplication 和直接宿主等待进入同一个拥有者；取消后先阻止新阶段，join 已接受 execute/query，再 dispose/rm；清理预算耗尽保留现场并具名报错。
+
+本轮红测退出1（1失败、0未选）：取消后的 `project.create` 返回 completed；绿测退出0（2通过、0未选），包含公开 disposal effect 读取到 failed/host-create-unknown 回执后才删除目录，以及不能结算时保留宿主与目录。首次迁入19项用例后组合退出0（21通过、0未选）；随后将B1新增直接宿主等待全部纳入拥有者。闭包类型检查发现一处 execution 收窄丢失（退出2），已在原存在性断言后修正引用。
+
+原始超时首因仍未知；原5000ms测试预算和断言不变。历史诊断与负向注入证据原样保留于 [diagnosis](a2d2-v3-122-diagnosis.md) 和 [evidence](evidence/a2d2-v3-122-fixture-cleanup.json)，这些是独立分支的历史结果，不冒充本轮命令。
+
+生命周期整合最终串行验证：backend/client typecheck 与 diff 检查退出0；五个 work 文件（含两条生命周期回归）38/38通过、0未选、退出0。没有并行运行build或其他I/O测试。B2五步接续、B3退休围栏和只读历史仍未实现，不能据此标记整票完成。
