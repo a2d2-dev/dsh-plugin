@@ -27,6 +27,7 @@ export interface WorkNavigation {
 export class WorkPanelController {
   private state: WorkPanelState = { object:'projects', source:emptySource(), projects: [], projectId: null, tasks: [], detail: null, detailTab: 'overview', search: '', view: 'all', loading: false, error: null }
   private listeners = new Set<() => void>()
+  private sourceOrigin: Pick<WorkPanelState,'projectId'|'tasks'|'source'|'object'|'search'|'view'> | null = null
   private revision = 0
   constructor(readonly client: WorkClient, private readonly navigation: WorkNavigation) {}
   getSnapshot = (): WorkPanelState => this.state
@@ -51,7 +52,7 @@ export class WorkPanelController {
   async selectProject(projectId: string): Promise<void> {
     const revision = ++this.revision
     const changed = projectId !== this.state.projectId
-    if (changed) ++this.sourceRevision
+    if (changed) { ++this.sourceRevision; this.sourceOrigin=null }
     this.update({ projectId, loading: true, error: null, ...(changed ? { detail: null, search: '', view: 'all', tasks: [], object:'projects' as const, source:emptySource() } : {}) })
     try {
       const result = await this.client.query({ type: 'project.detail', projectId })
@@ -60,9 +61,11 @@ export class WorkPanelController {
   }
   async openTask(ref: TaskRef): Promise<void> {
     if (this.state.projectId !== ref.projectId) {
+      const origin=this.state.object==='issues'&&this.state.source.issue?{projectId:this.state.projectId,tasks:this.state.tasks,source:this.state.source,object:this.state.object,search:this.state.search,view:this.state.view}:null
       const projectRevision = this.revision + 1
       await this.selectProject(ref.projectId)
       if (this.revision !== projectRevision || this.state.projectId !== ref.projectId) return
+      this.sourceOrigin=origin
     }
     const revision = ++this.revision
     this.update({ detail: null, loading: true, error: null, detailTab: 'overview' })
@@ -100,8 +103,9 @@ export class WorkPanelController {
   async showSources(): Promise<void> {
     const projectId=this.state.projectId
     if (!projectId) return
+    ++this.revision
     const revision=++this.sourceRevision
-    this.update({object:'issues'})
+    this.update({object:'issues',detail:null,loading:false,error:null})
     this.updateSource({loading:true,error:null})
     try {
       const result=await this.client.query({type:'source.list',projectId})
@@ -180,12 +184,12 @@ export class WorkPanelController {
         ? {type:'source.link',ref:{projectId:existing.projectId,taskId:existing.id},expectedVersion:existing.version,sourceId,nodeId:issue.nodeId}
         : {type:'source.import',projectId,sourceId,nodeId:issue.nodeId})
       if(revision!==this.sourceRevision) return
-      if(!result.ref) throw Error('工作服务未返回 canonical TaskRef')
+      if(!result.ref) throw Error('工作服务未返回已保存工作的定位信息')
       this.updateSource({loading:false,...(result.binding?{bindings:[result.binding]}:{})})
       await this.openTask(result.ref)
     } catch(error) {
       if(revision!==this.sourceRevision) return
-      this.updateSource({loading:false,error:message(error),canonical:error instanceof WorkClientError?error.result.ref??null:null})
+      this.updateSource({loading:false,error:error instanceof WorkClientError&&error.result.error.code==='external-object-owned'?'该 Issue 已关联本地工作，请打开已有工作。':message(error),canonical:error instanceof WorkClientError?error.result.ref??null:null})
     }
   }
   backToIssues():void {++this.sourceRevision;this.updateSource({issue:null,bindings:[],canonical:null,loading:false,error:null})}
@@ -205,7 +209,11 @@ export class WorkPanelController {
     }
     return result
   }
-  back(): void { ++this.revision; this.update({ detail: null, loading: false, error: null }) }
+  back(): void {
+    ++this.revision; ++this.sourceRevision
+    const origin=this.sourceOrigin;this.sourceOrigin=null
+    this.update({...(origin??{}),detail:null,loading:false,error:null})
+  }
   close(): void { this.navigation.selectPanel(null) }
   openSession(session: SessionRef): void { this.navigation.openSession(session.sessionId) }
   setSearch(search: string): void { this.update({ search }) }

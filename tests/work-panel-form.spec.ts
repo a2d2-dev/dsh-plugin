@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { WorkApplication } from '../src/work.ts'
 import type { WorkHost } from '../src/work.ts'
 import { WorkPanelController, message } from '../src/client/work-panel-controller.ts'
+import type { GitHubSourcePort } from '../src/work-sources/types.ts'
 import { browserUUID } from '../src/client/browser-uuid.ts'
 import { webcrypto } from 'node:crypto'
 import { afterEach } from 'vitest'
@@ -24,7 +25,7 @@ async function mountWorkPanel(props: Record<string, unknown>, component = 'TaskF
   const effects: (() => void)[] = [], cleanups: (() => void)[] = []
   const module = { exports: {} as Record<string, (props: Record<string, unknown>) => any> }
   const source = await readFile(new URL('../src/client/work-panel.tsx', import.meta.url), 'utf8')
-  const compiled = ts.transpileModule(`${source}\nexport { TaskForm, SessionWorkEntry, BreakdownForm, ProjectForm }`, {
+  const compiled = ts.transpileModule(`${source}\nexport { TaskForm, SessionWorkEntry, BreakdownForm, ProjectForm, IssueSourcePanel }`, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2023 },
   }).outputText
   runInNewContext(compiled, {
@@ -36,6 +37,7 @@ async function mountWorkPanel(props: Record<string, unknown>, component = 'TaskF
         state[index] = dependencies
         effects.push(() => { const cleanup = effect(); if (cleanup) cleanups.push(cleanup) })
       },
+      useSyncExternalStore: (_subscribe: unknown, getSnapshot: () => unknown) => getSnapshot(),
       useState: (initial: unknown) => {
         const index = cursor++
         if (!(index in state)) state[index] = initial
@@ -68,16 +70,17 @@ async function mountWorkPanel(props: Record<string, unknown>, component = 'TaskF
     click: (text: string) => {
       const button = nodes('button').find(node => [node.props.children].flat(Infinity).join('') === text)
       expect(button, `button ${text}`).toBeDefined()
+      expect(button.props.disabled, `button ${text} must be enabled`).not.toBe(true)
       button.props.onClick()
     },
     submit: () => render().props.onSubmit({ preventDefault() {} }),
   }
 }
 
-async function withPanel(run: (panel: WorkPanelController) => Promise<void>, host: WorkHost = { resources: async () => [], sessions: async () => [] }) {
+async function withPanel(run: (panel: WorkPanelController) => Promise<void>, host: WorkHost = { resources: async () => [], sessions: async () => [] }, source?: GitHubSourcePort) {
   const directory = await mkdtemp(join(tmpdir(), 'a2d2-work-form-'))
   const expected = resolve(directory)
-  const app = new WorkApplication(directory, host)
+  const app = new WorkApplication(directory, host, source)
   const operator = { operator: true }
   const panel = new WorkPanelController({
     command: async command => {
@@ -106,6 +109,25 @@ async function withPanel(run: (panel: WorkPanelController) => Promise<void>, hos
 const goal = '\n  保留完整目标\n'
 const specification = '\n    preserve code indentation\n'
 const acceptance = ['先验证A\n再验证B']
+
+describe('production Issue source acceptance controls', () => {
+  it('accepts an observed null body through the enabled UI action and preserves missing body and acceptance indicators', async () => {
+    const identity={login:'imneov',nodeId:'U1',name:'LiuFeng'}
+    const issue={nodeId:'I112',number:112,url:'https://github.com/a2d2-dev/dsh-plugin/issues/112',repository:{owner:'a2d2-dev',repository:'dsh-plugin'},title:'Observed empty Issue body',body:null,state:'open' as const,assignees:['imneov'],labels:[],updatedAt:'2026-10-20T00:00:00Z',observedAt:'2026-10-21T00:00:00Z'}
+    await withPanel(async panel => {
+      await panel.configureSource('a2d2-dev','dsh-plugin');await panel.openIssue(112)
+      const form=await mountWorkPanel({controller:panel},'IssueSourcePanel')
+      form.click('接入为本地工作')
+      await vi.waitFor(()=>expect(panel.getSnapshot().detail?.task?.specification).toMatchObject({text:'',acceptance:[],missing:['body','acceptance']}))
+      const detail=await mountWorkPanel({controller:panel},'WorkPanel')
+      const paragraphs=detail.nodes('p').map(node=>[node.props.children].flat(Infinity).join('')).join('\n')
+      expect(paragraphs).toContain('结构化验收标准尚待确认')
+      expect(paragraphs).toContain('规格正文尚待补充')
+      detail.unmount()
+      form.unmount()
+    },undefined,{list:async()=>({identity,items:[issue],observedAt:issue.observedAt}),detail:async()=>({identity,issue})})
+  })
+})
 
 describe('production resource selection', () => {
   it('labels owned resources as unavailable while allowing a project without a directory', async () => {

@@ -45,6 +45,47 @@ describe('GitHub source public client behavior',()=>{
     expect(commands).toEqual([{type:'source.set-enabled',projectId:'p1',sourceId:'s1',expectedVersion:1,enabled:false,commandId:expect.any(String)}])
     expect(panel.getSnapshot().source).toMatchObject({sources:[{enabled:false,version:2}],issue:{body:'Full original specification'}})
   })
+  it('does not let a late Task detail replace a newly selected Issue source',async()=>{
+    const {panel,client}=setup()
+    await panel.selectProject('p1')
+    const query=client.query.bind(client);let release!:()=>void
+    client.query=async value=>{if(value.type==='task.detail'){await new Promise<void>(resolve=>{release=resolve});return {status:'completed',task:{id:'old-task'} as import('../../src/work-types.ts').WorkTask}}return query(value)}
+    const pending=panel.openTask({projectId:'p1',taskId:'old-task'})
+    await panel.showSources();release();await pending
+    expect(panel.getSnapshot()).toMatchObject({object:'issues',detail:null,loading:false})
+  })
+  it('rejects an old source response after switching away and back to the same project',async()=>{
+    const {panel,client}=setup()
+    await panel.selectProject('p1');await panel.showSources()
+    const query=client.query.bind(client);let release!:()=>void
+    client.query=async value=>{if(value.type==='source.issue'){await new Promise<void>(resolve=>{release=resolve});return {status:'completed',source,issue}}return query(value)}
+    const pending=panel.openIssue(112)
+    await panel.selectProject('p2');await panel.selectProject('p1')
+    release();await pending
+    expect(panel.getSnapshot()).toMatchObject({projectId:'p1',detail:null,source:{sourceId:null,issue:null,listing:null}})
+  })
+  it('retains the latest filter page when an older page response arrives later',async()=>{
+    const {panel,client}=setup()
+    await panel.selectProject('p1');await panel.showSources()
+    const query=client.query.bind(client);let release!:()=>void
+    client.query=async value=>{if(value.type==='source.issues'&&value.page===2){await new Promise<void>(resolve=>{release=resolve});return {status:'completed',source,page:{identity,items:[{...issue,number:999}],observedAt:issue.observedAt}}}return query(value)}
+    const pending=panel.browseIssues({page:2},true)
+    await panel.browseIssues({page:1,assignee:'*'},true);release();await pending
+    expect(panel.getSnapshot().source).toMatchObject({page:1,assignee:'*',listing:{items:[{number:112}]}})
+  })
+  it('offers canonical ownership and returns from that other project Task to the originating source location',async()=>{
+    const {panel,client}=setup()
+    await panel.selectProject('p1');await panel.showSources();await panel.browseIssues({page:2,assignee:'*'},true);await panel.openIssue(112)
+    client.command=async()=>{throw new WorkClientError({status:'conflict',error:{code:'external-object-owned',message:'Already accepted'},ref:{projectId:'p2',taskId:'canonical'}})}
+    await panel.acceptIssue()
+    expect(panel.getSnapshot().source).toMatchObject({canonical:{projectId:'p2',taskId:'canonical'},error:'该 Issue 已关联本地工作，请打开已有工作。'})
+    const query=client.query.bind(client)
+    client.query=async value=>value.type==='task.detail'?{status:'completed',task:{id:'canonical',projectId:'p2'} as import('../../src/work-types.ts').WorkTask}:query(value)
+    await panel.openTask(panel.getSnapshot().source.canonical!)
+    expect(panel.getSnapshot()).toMatchObject({projectId:'p2',detail:{task:{id:'canonical'}}})
+    panel.back()
+    expect(panel.getSnapshot()).toMatchObject({projectId:'p1',object:'issues',detail:null,source:{sourceId:'s1',page:2,assignee:'*',issue:{number:112}}})
+  })
   it('keeps the last page visible on a transport failure and distinguishes it from an empty result',async()=>{
     const {panel,client}=setup()
     await panel.selectProject('p1');await panel.showSources()

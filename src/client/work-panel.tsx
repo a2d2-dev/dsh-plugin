@@ -81,24 +81,24 @@ function IssueSourcePanel({controller}:{controller:WorkPanelController}) {
     <details open={!sourceState.sources.length}><summary>配置仓库来源</summary><form className={styles.form} onSubmit={event=>void configure(event)}>
       <label>GitHub owner<input required value={owner} onChange={event=>setOwner(event.target.value)} placeholder="组织或用户"/></label>
       <label>GitHub repository<input required value={repository} onChange={event=>setRepository(event.target.value)} placeholder="仓库名称"/></label>
-      <p>读取服务器配置的 GitHub 凭据；浏览器无需 token 或宿主目录。</p><ErrorText error={formError}/><button disabled={saving} type="submit">{saving?'正在配置…':'保存并读取来源'}</button>
+      <p>使用此服务已连接的 GitHub 账号读取仓库。</p><ErrorText error={formError}/><button disabled={saving} type="submit">{saving?'正在配置…':'保存并读取来源'}</button>
     </form></details>
     {sourceState.sources.length>0 && <div className={styles.toolbar}><label>仓库来源 <select aria-label="仓库来源" value={sourceState.sourceId??''} onChange={event=>void controller.selectSource(event.target.value)}>{sourceState.sources.map(item=><option key={item.id} value={item.id}>{item.repository.owner}/{item.repository.repository}{item.enabled?'':' · 已停用'}</option>)}</select></label><button disabled={loading} onClick={()=>void controller.showSources()}>重新读取来源配置</button><button disabled={loading||!source} onClick={()=>void controller.setSourceEnabled(!source?.enabled)}>{source?.enabled?'停用来源':'启用来源'}</button></div>}
     {loading && <p role="status">正在读取来源…</p>}
     <ErrorText error={error??''}/>
     {source && <>
-      <p>来源状态：{source.enabled?'已启用':'已停用（保留缓存与已接受本地工作）'} · 最近确认的凭据身份：{identity?`${identity.login}${identity.name?` / ${identity.name}`:''}（${identity.nodeId}）`:'尚未取得；刷新后由实际凭据确认'}。我的 Issue 使用此身份。</p>
+      <p>来源状态：{source.enabled?'已启用':'已停用（保留缓存与已接受本地工作）'} · 最近确认的凭据身份：{identity?`${identity.login}${identity.name?` / ${identity.name}`:''}`:'尚未取得；刷新后由实际凭据确认'}。我的 Issue 使用此身份。</p>
       {source.lastError?.retryAt && <p>可重试时间：{source.lastError.retryAt}</p>}
       {canonical && <p>该 Issue 已有本地工作。<button onClick={()=>void controller.openTask(canonical)}>打开已关联工作</button></p>}
       {issue ? <>
         <div className={styles.toolbar}><button onClick={()=>controller.backToIssues()}>← 返回 Issue 列表</button><button disabled={loading||!source.enabled} onClick={()=>void controller.openIssue(issue.number,true)}>刷新 Issue 详情</button><button disabled={loading} onClick={()=>void controller.openIssue(issue.number,false)}>读取缓存详情</button></div>
         <h2>#{issue.number} {issue.title}</h2><GitHubLink url={issue.url}/>
         <IssueFacts issue={issue}/><p>{cached?'缓存 / 最后已知内容':'本次读取内容'} · 观察时间：{issue.observedAt}</p>
-        <h3>完整原文</h3><p className={styles.sourceBody}>{issue.body===null?'尚未取得正文':issue.body || '（原文正文为空）'}</p>
-        <p>浏览不会创建 Task。显式接入保存原文，结构化验收标准仍需确认。远端状态和负责人不代表本地完成或协调权。当前部署未提供任务启动能力，可关联已有真实会话。</p>
+        <h3>完整原文</h3><p className={styles.sourceBody}>{issue.body || '（原文正文为空）'}</p>
+        <p>浏览不会创建本地工作。显式接入保存原文，结构化验收标准仍需确认。远端状态和负责人不代表本地完成或协调权。当前部署未提供任务启动能力，可关联已有真实会话。</p>
         {sourceState.bindings.length>0 ? sourceState.bindings.map(binding=><p key={`${binding.ref.projectId}/${binding.ref.taskId}`}>已关联本地工作 <button onClick={()=>void controller.openTask(binding.ref)}>打开已关联工作</button></p>) : <>
-          <button disabled={loading||!source.enabled||issue.body===null} onClick={()=>void controller.acceptIssue()}>接入为本地工作</button>
-          <form className={styles.toolbar} onSubmit={event=>{event.preventDefault();const task=state.tasks.find(item=>item.id===existing);if(task)void controller.acceptIssue(task)}}><label>关联已有本地工作 <select required value={existing} onChange={event=>setExisting(event.target.value)}><option value="">选择当前项目的工作</option>{state.tasks.map(task=><option key={task.id} value={task.id}>{task.title}</option>)}</select></label><button type="submit" disabled={loading||!source.enabled||!existing||issue.body===null}>关联已有本地工作</button></form>
+          <button disabled={loading||!source.enabled} onClick={()=>void controller.acceptIssue()}>接入为本地工作</button>
+          <form className={styles.toolbar} onSubmit={event=>{event.preventDefault();const task=state.tasks.find(item=>item.id===existing);if(task)void controller.acceptIssue(task)}}><label>关联已有本地工作 <select required value={existing} onChange={event=>setExisting(event.target.value)}><option value="">选择当前项目的工作</option>{state.tasks.map(task=><option key={task.id} value={task.id}>{task.title}</option>)}</select></label><button type="submit" disabled={loading||!source.enabled||!existing}>关联已有本地工作</button></form>
         </>}
       </> : <>
         <div className={styles.toolbar}>
