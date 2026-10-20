@@ -10,7 +10,7 @@ import type { HostResource, SessionCandidate } from './work-types.ts'
 
 export class WorkHostUnavailable extends Error {}
 
-/** Reads registered resources and durable session facts; never resumes or reconfigures a Session. */
+/** Resource/candidate queries stay read-only; execution uses a separate explicit capability. */
 export class DshWorkHost implements WorkHost {
   execution: WorkExecutionHost
   constructor(private readonly ctx: Context, readonly runtimeId: string) { this.execution = new DshWorkExecutionHost(ctx, runtimeId) }

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { NativeWorkMessage } from './work-types.ts'
 const id = z.string().uuid()
 const text = z.string().min(1).max(100_000).refine(value => value.trim().length > 0, 'Text must not be blank')
 const referenceId = z.string().min(1).max(256)
@@ -26,7 +27,7 @@ export const executionSchema = z.object({
   history: z.array(z.object({ state: z.enum(['accepted', 'creating', 'ready', 'running', 'waiting', 'paused', 'failed']), commandId: referenceId }).strict()),
   actual: z.object({ runtimeId: referenceId, cwd: text, agentPreset: referenceId, provider: referenceId, model: referenceId,
     permissionPreset: referenceId, sandbox: referenceId, approval: referenceId }).strict().optional(),
-  events: z.array(z.object({ id: referenceId, text, kind: z.enum(['input', 'result']), delivery: z.enum(['accepted', 'delivered', 'consumed']), acceptance: z.literal('unassessed') }).strict()).default([]),
+  events: z.array(z.object({ id: referenceId, text, kind: z.enum(['input', 'result']), delivery: z.enum(['accepted', 'delivered', 'consumed']), acceptance: z.literal('unassessed'), nativeMessage: z.object({ id: referenceId, role: z.literal('user'), content: z.array(z.unknown()), source: z.unknown() }).passthrough().transform(value => value as NativeWorkMessage).optional() }).strict()).default([]),
   progress: text.optional(),
   control: z.object({ commandId: referenceId, action: z.enum(['wait', 'pause', 'resume']), status: z.enum(['accepted', 'applied']), reason: text.optional() }).strict().optional(),
   error: z.object({ code: referenceId, message: text }).strict().optional(),
@@ -55,6 +56,7 @@ export const querySchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('projects.list') }).strict(),
   z.object({ type: z.literal('resources.list') }).strict(),
   z.object({ type: z.literal('project.detail'), projectId: id }).strict(),
+  z.object({ type: z.literal('task.execution-options'), ref: taskRefSchema }).strict(),
   z.object({ type: z.literal('task.execution'), ref: taskRefSchema }).strict(),
   z.object({ type: z.literal('task.detail'), ref: taskRefSchema }).strict(),
   z.object({ type: z.literal('session.candidates'), projectId: id }).strict(),

@@ -1,4 +1,6 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -9,8 +11,6 @@ import type { Context } from '@deepseek-ai/cordis'
 const contexts: Context[] = []
 const roots: string[] = []
 const operator = { operator: true }
-const resource = { ref: { runtimeId: 'runtime', workspaceId: 'workspace' }, title: 'Actual resource' }
-const host = { resources: async () => [resource], sessions: async () => [] }
 afterEach(async () => {
   for (const ctx of contexts.splice(0).reverse()) await ctx.fiber.dispose()
   for (const path of roots.splice(0)) {
@@ -18,10 +18,10 @@ afterEach(async () => {
     await rm(path, { recursive: true, force: true })
   }
 })
-async function setup() {
+async function setup(permissionPreset = 'workspace-write') {
   const directory = await mkdtemp(join(tmpdir(), 'a2d2-execution-'))
   roots.push(directory)
-  const h = await mountExecution(directory)
+  const h = await mountExecution(directory, permissionPreset)
   contexts.push(h.ctx)
   const app = h.app
   const resource = { runtimeId: 'runtime', workspaceId: h.workspace.id }
@@ -32,34 +32,45 @@ async function setup() {
   return { ...h, directory: app.directory, app, resource, ref: { projectId: p.project.id, taskId: t.task.id }, agentId: p.project.defaultAgentId }
 }
 it('durably accepts one execution for competing starts and command replay without claiming it has run', async () => {
-  const { directory, app, ref, agentId, resource, host } = await setup()
+  const { directory, app, ref, agentId, resource, host, ctx, model } = await setup()
   const command = { type: 'task.start', commandId: 'start-one', ref, expectedVersion: 1, resource,
     agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }
   const results = await Promise.all([app.execute(command, operator), new WorkApplication(directory, host).execute({ ...command, commandId: 'start-two' }, operator)])
-  expect(results).toEqual([expect.objectContaining({ status: 'completed', execution: expect.objectContaining({ state: 'ready', epoch: 1, agentId, ref }) }), expect.objectContaining({ status: 'completed', execution: expect.objectContaining({ state: 'ready', epoch: 1, agentId, ref }) })])
+  expect(results).toEqual([expect.objectContaining({ status: 'completed', execution: expect.objectContaining({ state: expect.stringMatching(/^(accepted|creating|ready)$/), epoch: 1, agentId, ref }) }), expect.objectContaining({ status: 'completed', execution: expect.objectContaining({ state: expect.stringMatching(/^(accepted|creating|ready)$/), epoch: 1, agentId, ref }) })])
   const one = results[0] as any
   expect((results[1] as any).execution.id).toBe(one.execution.id)
-  expect(await new WorkApplication(directory, host).execute(command, operator)).toEqual(one)
+  const agent = ctx.agents.get(one.execution.session.sessionId)!
+  await agent.whenIdle()
+  expect(model.requests).toHaveLength(1)
+  expect(model.requests[0]!.messages).toEqual(expect.arrayContaining([expect.objectContaining({ role: 'user', content: expect.arrayContaining([expect.objectContaining({ text: expect.stringContaining('Persist execution before host effects') })]) })]))
+  const replay = await new WorkApplication(directory, host).execute(command, operator)
+  expect(replay).toMatchObject({ status: 'completed', execution: { id: one.execution.id, owner: one.execution.owner, epoch: 1 } })
+  await agent.whenIdle()
+  expect(model.requests).toHaveLength(1)
   expect(await app.query({ type: 'task.execution', ref }, operator)).toMatchObject({ status: 'completed', execution: { id: one.execution.id, state: 'ready', owner: one.execution.owner } })
 })
 
 it('runs on the selected local model, waits without empty turns, and separates consumption from acceptance', async () => {
   const h = await setup()
   const before = h.ctx.agentDefaultModel.currentSelection()
+  const defaultSaves = vi.spyOn(h.ctx.agentDefaultModel, 'saveSelection')
   const started = await h.app.execute({ type: 'task.start', commandId: 'run', ref: h.ref, expectedVersion: 1, resource: h.resource,
     agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }, operator)
   expect(started).toMatchObject({ status: 'completed', execution: { state: 'ready' } })
   if (started.status !== 'completed' || !started.execution) throw new Error('No execution')
   const execution = started.execution
   const fence = { ref: h.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch }
-  expect(await h.app.execute({ type: 'task.input', commandId: 'input', ...fence, text: 'Resolve accepted local work', kind: 'input' }, operator)).toMatchObject({ status: 'completed', execution: { events: [{ delivery: expect.stringMatching(/delivered|consumed/), acceptance: 'unassessed' }] } })
+  expect(started.execution.events).toMatchObject([{ id: `kickoff:${execution.id}`, delivery: expect.stringMatching(/delivered|consumed/), acceptance: 'unassessed' }])
   const agent = await h.ctx.sessionController.resolveAgent(execution.session.sessionId as never)
   if ('error' in agent) throw new Error('No Agent')
   await agent.agent.whenIdle()
   expect(h.model.requests).toHaveLength(1)
   expect(h.model.requests[0]).toMatchObject({ provider: 'contract', model: 'selected' })
   expect(agent.agent.session.requestHeader()?.config).toMatchObject({ provider: 'contract', model: 'selected' })
+  expect(JSON.stringify(h.model.requests[0]!.messages.find(message => message.role === 'system'))).toContain('Effective route contract/selected')
+  expect(await h.ctx.sessionController.projections({ sessionId: agent.agent.id }, new AbortController().signal)).toMatchObject({ values: { modelSelection: { lastUsed: { provider: 'contract', model: 'selected' }, next: { provider: 'contract', model: 'selected' } } } })
   expect(h.ctx.agentDefaultModel.currentSelection()).toEqual(before)
+  expect(defaultSaves).not.toHaveBeenCalled()
   const waited = await h.app.execute({ type: 'task.control', commandId: 'wait', ...fence, action: 'wait', text: 'Need a decision' }, operator)
   expect(waited, JSON.stringify(waited)).toMatchObject({ status: 'completed', execution: { state: 'waiting', control: { status: 'applied' } } })
   expect(await h.app.execute({ type: 'task.reconcile', commandId: 'observe', ...fence }, operator)).toMatchObject({ status: 'completed', execution: { state: 'waiting', events: [{ delivery: 'consumed', acceptance: 'unassessed' }] } })
@@ -78,12 +89,19 @@ it('runs on the selected local model, waits without empty turns, and separates c
   expect(await h.app.execute({ type: 'task.control', commandId: 'pause', ...fence, action: 'pause', text: 'User paused work' }, operator)).toMatchObject({ status: 'completed', execution: { state: 'paused', control: { status: 'applied' } } })
 })
 
-it.each(['header', 'selection', 'controller'] as const)('recovers fixed execution after the real %s checkpoint receipt is lost', async checkpoint => {
+it.each(['header', 'selection', 'controller', 'kickoff'] as const)('recovers fixed execution after the real %s checkpoint receipt is lost', async checkpoint => {
   let h = await setup()
   const path = h.workspace.path
   const command = { type: 'task.start', commandId: 'lost-receipt', ref: h.ref, expectedVersion: 1, resource: h.resource,
     agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }
-  if (checkpoint === 'controller') {
+  if (checkpoint === 'kickoff') {
+    const deliver = h.host.execution.deliver.bind(h.host.execution)
+    vi.spyOn(h.host.execution, 'deliver').mockImplementationOnce(async (execution, event) => {
+      await deliver(execution, event)
+      await h.ctx.agents.get(execution.session.sessionId as never)!.whenIdle()
+      throw new Error('Real kickoff was consumed; its application receipt was lost')
+    })
+  } else if (checkpoint === 'controller') {
     const create = h.ctx.sessionController.create.bind(h.ctx.sessionController)
     vi.spyOn(h.ctx.sessionController, 'create').mockImplementationOnce(async request => {
       const result = await create(request)
@@ -106,7 +124,7 @@ it.each(['header', 'selection', 'controller'] as const)('recovers fixed executio
   const id = lost.execution.id
   const session = lost.execution.session
   expect(await h.ctx.sessionPersistence.list()).toHaveLength(1)
-  expect(h.model.requests).toHaveLength(0)
+  expect(h.model.requests).toHaveLength(checkpoint === 'kickoff' ? 1 : 0)
   await h.ctx.fiber.dispose()
   contexts.splice(contexts.indexOf(h.ctx), 1)
   const restored = await mountExecution(path)
@@ -114,14 +132,15 @@ it.each(['header', 'selection', 'controller'] as const)('recovers fixed executio
   const result = await restored.app.execute(command, operator)
   expect(result, JSON.stringify(result)).toMatchObject({ status: 'completed', execution: { id, session, state: 'ready', owner: lost.execution.owner, epoch: 1 } })
   expect(await restored.ctx.sessionPersistence.list()).toHaveLength(1)
-  expect(restored.model.requests).toHaveLength(0)
   if (result.status !== 'completed' || !result.execution) throw new Error('No restored execution')
-  await restored.app.execute({ type: 'task.input', commandId: 'after-recovery', ref: h.ref, executionId: id,
-    owner: result.execution.owner, epoch: 1, text: 'Continue the same accepted work', kind: 'input' }, operator)
+  expect(result.execution.events[0]!.id).toBe(`kickoff:${id}`)
   const agent = restored.ctx.agents.get(session.sessionId as never)!
   await agent.whenIdle()
-  expect(restored.model.requests).toHaveLength(1)
-  expect(restored.model.requests[0]).toMatchObject({ model: 'selected' })
+  expect([...h.model.requests, ...restored.model.requests]).toHaveLength(1)
+  expect([...h.model.requests, ...restored.model.requests][0]).toMatchObject({ model: 'selected' })
+  await restored.app.execute(command, operator)
+  await agent.whenIdle()
+  expect([...h.model.requests, ...restored.model.requests]).toHaveLength(1)
   expect(restored.ctx.agentDefaultModel.currentSelection()).toMatchObject({ model: 'default' })
 })
 
@@ -137,5 +156,175 @@ it('allows one Task to coordinate a compatible reused Session while rejecting th
   const results = await Promise.all([h.app.execute(command, operator), new WorkApplication(h.directory, h.host).execute({ ...command, commandId: 'reuse-two', ref: { ...h.ref, taskId: second.task.id } }, operator)])
   expect(results.filter(value => value.status === 'completed')).toHaveLength(1)
   expect(results.filter(value => value.status === 'failed')).toMatchObject([{ error: { code: 'session-in-use' } }])
+  expect(await h.ctx.sessionPersistence.list()).toHaveLength(1)
+})
+
+it('offers allowed host execution choices and rejects arbitrary model or permission before saving an execution', async () => {
+  const h = await setup()
+  const choices = await h.app.query({ type: 'task.execution-options', ref: h.ref }, operator)
+  expect(choices, JSON.stringify(choices)).toMatchObject({ status: 'completed', executionOptions: {
+    agentId: h.agentId, resources: [expect.objectContaining({ ref: h.resource })],
+    agentPresets: ['contract'], permissionPresets: ['workspace-write'],
+    models: expect.arrayContaining([{ provider: 'contract', model: 'selected' }]),
+    defaults: { agentPreset: 'contract', permissionPreset: 'workspace-write', model: { provider: 'contract', model: 'default' } },
+  } })
+  const command = { type: 'task.start', commandId: 'invalid-model', ref: h.ref, expectedVersion: 1, resource: h.resource,
+    agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'invented' }, permissionPreset: 'workspace-write' }
+  expect(await h.app.execute(command, operator)).toMatchObject({ status: 'failed', error: { code: 'unavailable-model' } })
+  expect(await h.app.execute({ ...command, commandId: 'raised-permission', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'danger-full-access' }, operator)).toMatchObject({ status: 'failed', error: { code: 'disallowed-permission-preset' } })
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toEqual({ status: 'completed' })
+  expect(await h.ctx.sessionPersistence.list()).toHaveLength(0)
+  expect(h.model.requests).toHaveLength(0)
+})
+
+it('composes a real preset read tool against the selected workspace rather than the host default cwd', async () => {
+  const h = await setup()
+  const selected = join(h.workspace.path, 'selected-resource')
+  await mkdir(selected)
+  await writeFile(join(selected, 'acceptance.txt'), 'REAL_SELECTED_RESOURCE_122')
+  await writeFile(join(h.workspace.path, 'acceptance.txt'), 'WRONG_HOST_DEFAULT_RESOURCE')
+  const workspace = await h.ctx.workspaceRegistry.create(selected)
+  const resource = { runtimeId: 'runtime', workspaceId: workspace.id }
+  await h.app.execute({ type: 'project.attach-resource', commandId: 'resource', projectId: h.ref.projectId, expectedVersion: 1, resource }, operator)
+  h.model.nextTool = { name: 'read', arguments: { file_path: 'acceptance.txt' } }
+  const started = await h.app.execute({ type: 'task.start', commandId: 'read-selected', ref: h.ref, expectedVersion: 1, resource,
+    agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }, operator)
+  expect(started, JSON.stringify(started)).toMatchObject({ status: 'completed', execution: { actual: { cwd: selected, agentPreset: 'contract', provider: 'contract', model: 'selected', permissionPreset: 'workspace-write', sandbox: 'workspace-write', approval: 'ask' } } })
+  if (started.status !== 'completed' || !started.execution) throw new Error('No execution')
+  const id = SessionId(started.execution.session.sessionId)
+  const agent = h.ctx.agents.get(id)!
+  await agent.whenIdle()
+  expect(h.ctx.agentPresets.composedPreset(agent.ctx)).toBe('contract')
+  expect(h.model.requests[0]!.tools?.map(tool => tool.name)).toEqual(expect.arrayContaining(['read', 'write', 'edit']))
+  const inspection = await h.ctx.sessionController.inspect(id)
+  const results = inspection.events.filter(event => event.type === 'tool/result')
+  expect(JSON.stringify(results)).toContain('REAL_SELECTED_RESOURCE_122')
+  expect(JSON.stringify(results)).not.toContain('WRONG_HOST_DEFAULT_RESOURCE')
+  expect(h.ctx.agentDefaultModel.currentSelection()).toEqual({ provider: 'contract', model: 'default' })
+})
+
+it('refuses legacy mapped work and a host without execution capabilities before creating any Session', async () => {
+  const h = await setup()
+  await h.app.execute({ type: 'legacy.map', commandId: 'legacy-address', ref: h.ref, expectedVersion: 1,
+    address: { runtimeId: 'runtime', projectRoot: h.workspace.path, taskId: 'issue-122' } }, operator)
+  const command = { type: 'task.start', commandId: 'legacy-start', ref: h.ref, expectedVersion: 2, resource: h.resource,
+    agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }
+  expect(await h.app.execute(command, operator)).toMatchObject({ status: 'failed', error: { code: 'legacy-authority-retained' } })
+  const readOnlyHost = { resources: h.host.resources.bind(h.host), sessions: h.host.sessions.bind(h.host) }
+  expect(await new WorkApplication(h.directory, readOnlyHost).execute(command, operator)).toMatchObject({ status: 'failed', error: { code: 'host-capability-unavailable' } })
+  expect(await h.ctx.sessionPersistence.list()).toHaveLength(0)
+  expect(h.model.requests).toHaveLength(0)
+})
+
+it('enforces read-only through the real filesystem tool without claiming OS shell containment', async () => {
+  const h = await setup('read-only')
+  h.model.nextTool = { name: 'write', arguments: { file_path: 'forbidden.txt', content: 'must not be written' } }
+  const started = await h.app.execute({ type: 'task.start', commandId: 'readonly', ref: h.ref, expectedVersion: 1, resource: h.resource,
+    agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'read-only' }, operator)
+  expect(started, JSON.stringify(started)).toMatchObject({ status: 'completed', execution: { actual: { permissionPreset: 'read-only', sandbox: 'read-only', approval: 'never' } } })
+  if (started.status !== 'completed' || !started.execution) throw new Error('No execution')
+  const agent = h.ctx.agents.get(SessionId(started.execution.session.sessionId))!
+  await agent.whenIdle()
+  const inspection = await h.ctx.sessionController.inspect(agent.id)
+  expect(inspection.events.some(event => event.type === 'tool/result' && event.data.message.isError), JSON.stringify({ requests: h.model.requests.length, events: inspection.events.filter(event => ['tool/call', 'tool/result', 'turn/end'].includes(event.type)) })).toBe(true)
+  const fs = await import('node:fs/promises')
+  await expect(fs.stat(join(h.workspace.path, 'forbidden.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
+  expect(h.ctx.sandboxPolicy.resolve({ session: agent.session }).mode).toBe('read-only')
+  expect(h.ctx.approval.overrideOf(agent.session)).toBe('never')
+})
+
+it('keeps paused Task fenced after cold ordinary Session activation and explicitly resumes existing native inbox', async () => {
+  const h = await setup()
+  const started = await h.app.execute({ type: 'task.start', commandId: 'cold-control', ref: h.ref, expectedVersion: 1, resource: h.resource,
+    agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }, operator)
+  if (started.status !== 'completed' || !started.execution) throw new Error('No execution')
+  const execution = started.execution
+  await h.ctx.agents.get(SessionId(execution.session.sessionId))!.whenIdle()
+  const fence = { ref: h.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch }
+  await h.app.execute({ type: 'task.control', commandId: 'cold-pause', ...fence, action: 'pause', text: 'Keep user pause across restart' }, operator)
+  await h.ctx.fiber.dispose()
+  contexts.splice(contexts.indexOf(h.ctx), 1)
+  const cold = await mountExecution(h.workspace.path)
+  contexts.push(cold.ctx)
+  const resolved = await cold.ctx.sessionController.resolveAgent(SessionId(execution.session.sessionId))
+  if ('error' in resolved) throw new Error('No restored Agent')
+  resolved.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Native input while paused' }], source: { kind: 'user' } }))
+  await resolved.agent.whenIdle()
+  expect(cold.model.requests).toHaveLength(0)
+  expect(await cold.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ status: 'completed', execution: { state: 'paused' }, executionRuntime: 'idle' })
+  const resumed = await cold.app.execute({ type: 'task.control', commandId: 'cold-resume', ...fence, action: 'resume', text: 'Explicitly process pending native input' }, operator)
+  expect(resumed, JSON.stringify(resumed)).toMatchObject({ status: 'completed', execution: { state: 'ready' } })
+  await resolved.agent.whenIdle()
+  expect(cold.model.requests, JSON.stringify({ inbox: { nextTurn: resolved.agent.inbox.nextTurn, nextStep: resolved.agent.inbox.nextStep }, events: (await cold.ctx.sessionController.inspect(resolved.agent.id)).events.slice(-8) })).toHaveLength(1)
+})
+
+it('explicitly reuses a compatible nonempty related Session while review association never grants coordination', async () => {
+  const h = await setup()
+  const id = SessionId('prior-conversation')
+  await h.ctx.sessionController.create({ sessionId: id, workspaceId: h.workspace.id, agentPreset: 'contract' })
+  const agent = h.ctx.agents.get(id)!
+  agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Prior real conversation' }], source: { kind: 'user' } }))
+  await agent.whenIdle()
+  const before = await h.ctx.sessionController.inspect(id)
+  const command = { type: 'task.start', commandId: 'reuse-existing', ref: h.ref, expectedVersion: 2, resource: h.resource,
+    session: { runtimeId: 'runtime', sessionId: id }, agentId: h.agentId,
+    agentPreset: 'contract', model: { provider: 'contract', model: 'default' }, permissionPreset: 'workspace-write' }
+  await h.app.execute({ type: 'task.associate-session', commandId: 'related', ref: h.ref, expectedVersion: 1, session: command.session, purpose: 'related' }, operator)
+  expect(await h.app.execute({ ...command, commandId: 'mismatched-model', model: { provider: 'contract', model: 'selected' } }, operator)).toMatchObject({ status: 'failed', error: { code: 'incompatible-session' } })
+  expect(await h.ctx.sessionController.inspect(id)).toEqual(before)
+  const result = await h.app.execute(command, operator)
+  expect(result, JSON.stringify(result)).toMatchObject({ status: 'completed', execution: { session: command.session, sessionMode: 'reuse', actual: { model: 'default' } } })
+  await agent.whenIdle()
+  const after = await h.ctx.sessionController.inspect(id)
+  expect(after.events.slice(0, before.events.length)).toEqual(before.events)
+  expect(after.meta).toEqual(before.meta)
+  expect(h.model.requests).toHaveLength(2)
+  const review = await h.ctx.sessionController.create({ sessionId: SessionId('review-only'), workspaceId: h.workspace.id, agentPreset: 'contract' })
+  const task = await h.app.execute({ type: 'task.create', commandId: 'review-task', projectId: h.ref.projectId, title: 'Review', goal: 'Observe', specification: 'No coordination', acceptance: ['Never own'] }, operator)
+  if (task.status !== 'completed' || !task.task) throw new Error('No task')
+  const ref = { ...h.ref, taskId: task.task.id }
+  const session = { runtimeId: 'runtime', sessionId: review.sessionId }
+  await h.app.execute({ type: 'task.associate-session', commandId: 'review', ref, expectedVersion: 1, session, purpose: 'review' }, operator)
+  expect(await h.app.execute({ ...command, commandId: 'review-start', ref, session }, operator)).toMatchObject({ status: 'failed', error: { code: 'association-only-session' } })
+})
+
+it('keeps an actual unmigrated legacy main Session under its existing writer authority', async () => {
+  const h = await setup()
+  const id = SessionId('legacy-active')
+  await h.ctx.sessionController.create({ sessionId: id, workspaceId: h.workspace.id, agentPreset: 'contract' })
+  await h.ctx.a2d2.bindMainSession({ cwd: h.workspace.path, issue: 122, mainSession: id, now: new Date() })
+  expect(await h.app.execute({ type: 'task.start', commandId: 'legacy-session', ref: h.ref, expectedVersion: 1, resource: h.resource,
+    session: { runtimeId: 'runtime', sessionId: id }, agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'default' }, permissionPreset: 'workspace-write' }, operator)).toMatchObject({ status: 'failed', error: { code: 'legacy-authority-retained' } })
+  expect((await h.ctx.a2d2.taskOfMainSession(h.workspace.path, id))?.issue.number).toBe(122)
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toEqual({ status: 'completed' })
+  expect(h.model.requests).toHaveLength(0)
+})
+
+it('accepts repeated start and input while real Controller creation is parked without holding the snapshot writer', async () => {
+  const h = await setup()
+  let entered!: () => void
+  let release!: () => void
+  const inside = new Promise<void>(resolve => { entered = resolve })
+  const held = new Promise<void>(resolve => { release = resolve })
+  const create = h.ctx.sessionController.create.bind(h.ctx.sessionController)
+  vi.spyOn(h.ctx.sessionController, 'create').mockImplementationOnce(async request => { entered(); await held; return create(request) })
+  const command = { type: 'task.start', commandId: 'slow-start', ref: h.ref, expectedVersion: 1, resource: h.resource,
+    agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }
+  const first = h.app.execute(command, operator)
+  await inside
+  let deadline: ReturnType<typeof setTimeout> | undefined
+  const pending: Promise<unknown>[] = []
+  try {
+    const detail = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+    if (detail.status !== 'completed' || !detail.execution) throw new Error('No accepted execution')
+    const execution = detail.execution
+    pending.push(new WorkApplication(h.directory, h.host).execute(command, operator),
+      h.app.execute({ type: 'task.input', commandId: 'during-create', ref: h.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch, text: 'Input accepted during creation', kind: 'input' }, operator))
+    const results = await Promise.race([
+      Promise.all(pending),
+      new Promise<never>((_resolve, reject) => { deadline = setTimeout(() => reject(new Error('Accepted replay or input waited for the long host effect')), 1500) }),
+    ])
+    expect(results).toMatchObject([{ status: 'completed', execution: { id: execution.id, state: 'creating' } }, { status: 'completed', execution: { id: execution.id, state: 'creating' } }])
+  } finally { if (deadline) clearTimeout(deadline); release(); await first; await Promise.allSettled(pending) }
   expect(await h.ctx.sessionPersistence.list()).toHaveLength(1)
 })

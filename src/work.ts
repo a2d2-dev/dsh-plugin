@@ -12,7 +12,7 @@ export type * from './work-types.ts'
 
 /** Only trusted adapters construct authorization; browser payloads cannot supply it. */
 export interface WorkActor { readonly operator: boolean; readonly session?: import('./work-types.ts').SessionRef; readonly agentId?: string }
-/** Read-only host port: no session creation, mutation, model invocation or coordination capability. */
+/** Trusted resource observation with an explicit optional managed execution capability. */
 export interface WorkHost {
   execution?: WorkExecutionHost
   resources(): Promise<readonly HostResource[]>
@@ -35,6 +35,25 @@ export class WorkApplication {
   constructor(readonly directory: string, readonly host: WorkHost) {
     if (!isAbsolute(directory)) throw new Error('Work record directory must be absolute')
     this.file = join(directory, 'work-v3.json')
+    this.host.execution?.connect(async (sessionId, messages = []) => {
+      const mayAdvance = (execution: import('./work-types.ts').WorkExecution | undefined) => !execution || (!['accepted', 'creating', 'failed', 'waiting', 'paused'].includes(execution.state)
+        && !(execution.control?.status === 'accepted' && execution.control.action !== 'resume'))
+      const state = await this.load()
+      const execution = state.executions.find(item => item.session.sessionId === sessionId)
+      if (mayAdvance(execution) || messages.length === 0) return mayAdvance(execution)
+      return withFileLock(this.file, async () => {
+        const current = await this.load()
+        const owner = current.executions.find(item => item.session.sessionId === sessionId)
+        if (mayAdvance(owner)) return true
+        for (const message of messages) {
+          if (owner!.events.some(item => item.id === message.id)) continue
+          const text = message.content.flatMap(block => typeof block === 'object' && block !== null && 'type' in block && block.type === 'text' && 'text' in block && typeof block.text === 'string' ? [block.text] : []).join('\n')
+          owner!.events.push({ id: message.id, text: text.trim() ? text : 'Native Session input', kind: 'input', delivery: 'accepted', acceptance: 'unassessed', nativeMessage: structuredClone(message) })
+        }
+        await writeFileAtomic(this.file, `${JSON.stringify(current)}\n`, { mode: 0o600, dirMode: 0o700 })
+        return false
+      })
+    })
   }
   private async load(): Promise<WorkSnapshot> {
     try { return snapshotSchema.parse(JSON.parse(await readFile(this.file, 'utf8'))) }
@@ -48,10 +67,11 @@ export class WorkApplication {
     const parsed = commandSchema.safeParse(input)
     if (!parsed.success) return failed('invalid-command', 'Invalid work command')
     const command = parsed.data
+    let admissionChoices: import('./work-types.ts').HostExecutionChoices | undefined
     if (!actor.operator && !('executionId' in command)) return failed('forbidden', 'Session actors can only control their current execution')
     if (command.type === 'task.start') {
       if (!this.host.execution) return failed('host-capability-unavailable', 'This host has no managed execution capability')
-      try { await this.host.execution.check({ ...command, sessionMode: command.session ? 'reuse' : 'create', session: command.session ?? { runtimeId: command.resource.runtimeId, sessionId: `session-${randomUUID()}` } }) }
+      try { admissionChoices = await this.host.execution.check({ ...command, sessionMode: command.session ? 'reuse' : 'create', session: command.session ?? { runtimeId: command.resource.runtimeId, sessionId: `session-${randomUUID()}` } }) }
       catch (error) { return failed(error instanceof WorkExecutionError ? error.code : 'host-admission-failed', error instanceof WorkExecutionError ? error.message : 'Host execution admission failed') }
     }
     await mkdir(this.directory, { recursive: true, mode: 0o700 })
@@ -66,7 +86,7 @@ export class WorkApplication {
       const fingerprint = JSON.stringify(command)
       const previous = state.commands.find(item => item.commandId === command.commandId)
       if (previous) return previous.fingerprint === fingerprint ? previous.result : { status: 'conflict', error: { code: 'command-id-reused', message: 'Command ID already has different content' } }
-      const result = await this.apply(state, command)
+      const result = await this.apply(state, command, admissionChoices)
       if (result.status !== 'completed') return result
       // Receipt owns a detached snapshot: subsequent commands must not alter retry results.
       state.commands.push({ commandId: command.commandId, fingerprint, result: structuredClone(result) })
@@ -81,7 +101,8 @@ export class WorkApplication {
     return receipt
   }
   private async ensureExecution(id: string, commandId: string): Promise<WorkResult> {
-    return withFileLock(join(this.directory, `${id}.execution`), async () => {
+    const lease = join(this.directory, `${id}.execution`)
+    return withFileLock<WorkResult>(lease, async () => {
       const save = async (change: (execution: import('./work-types.ts').WorkExecution) => void) => withFileLock(this.file, async () => {
         const state = await this.load()
         const execution = state.executions.find(item => item.id === id)!
@@ -111,6 +132,7 @@ export class WorkApplication {
             item.control!.status = 'applied'
             item.history.push({ state: item.state, commandId })
           })
+          if (control.action === 'resume' && execution.control?.commandId === control.commandId) await this.host.execution!.wake(execution)
         }
         for (const event of execution.events) {
           if (event.delivery === 'consumed') continue
@@ -124,6 +146,11 @@ export class WorkApplication {
           message: error instanceof WorkExecutionError ? error.message : 'Host outcome is unknown; retry recovers the reserved Session and message identities' }; item.history.push({ state: 'failed', commandId }) })
       }
       return { status: 'completed', execution }
+    }, { waitMs: 0 }).catch(async error => {
+      // The published atomic-write API exposes contention as this named Error, not an errno.
+      if (!(error instanceof Error) || error.message !== `atomic-write: timed out waiting for the writer lock at ${lease}.lock`) throw error
+      const execution = (await this.load()).executions.find(item => item.id === id)!
+      return { status: 'completed' as const, execution }
     })
   }
   private async candidates(project: Project): Promise<SessionCandidate[]> {
@@ -160,7 +187,7 @@ export class WorkApplication {
     task.version++
     task.activity.push({ commandId: command.commandId, type: command.type, version: task.version })
   }
-  private async apply(state: WorkSnapshot, command: WorkCommand): Promise<WorkResult> {
+  private async apply(state: WorkSnapshot, command: WorkCommand, admissionChoices?: import('./work-types.ts').HostExecutionChoices): Promise<WorkResult> {
     if (command.type === 'project.create') {
       if (command.resource && state.projects.some(item => item.resources.some(ref => sameResource(ref, command.resource!)))) {
         return { status: 'conflict', error: { code: 'resource-in-use', message: 'Resource already belongs to another project' } }
@@ -210,15 +237,21 @@ export class WorkApplication {
       if (state.legacyMappings.some(item => item.ref.taskId === task.id)) return failed('legacy-authority-retained', 'Legacy mapped work requires an explicit safe migration before v3 execution')
       const agent = state.agents.find(item => item.id === command.agentId && item.projectId === project.id)
       if (!agent || !agent.policy.capabilities.includes('coordination')) return failed('ineligible-agent', 'Project Agent has no coordination capability')
+      const choices = admissionChoices!
+      if (!choices.agentPresets.includes(command.agentPreset)) return failed('disallowed-agent-preset', 'Only inherited preset choices are authorized for a new execution')
+      if (!choices.permissionPresets.includes(command.permissionPreset)) return failed('disallowed-permission-preset', 'Only inherited permission choices are authorized for a new execution')
+      if (agent.policy.modelCandidates.length && !agent.policy.modelCandidates.includes(`${command.model.provider}/${command.model.model}`)) return failed('disallowed-model', 'Model is not authorized by the Project Agent policy')
       if (!project.resources.some(item => sameResource(item, command.resource))) return failed('incompatible-resource', 'Execution resource does not belong to this project')
       const session = command.session ?? { runtimeId: command.resource.runtimeId, sessionId: `session-${randomUUID()}` }
       if (session.runtimeId !== command.resource.runtimeId) return failed('incompatible-session', 'Session and execution resource must share a runtime')
       if (state.executions.some(item => sameSession(item.session, session))) return failed('session-in-use', 'Session already coordinates another execution')
       if (state.tasks.some(item => item.sessions.some(binding => sameSession(binding.session, session)
         && (binding.purpose === 'review' || item.projectId !== task.projectId || item.id !== task.id)))) return failed('association-only-session', 'Review or another Task association cannot grant coordination')
-      const execution = { id: randomUUID(), ref: command.ref, agentId: agent.id, owner: randomUUID(), epoch: 1,
+      const executionId = randomUUID()
+      const kickoff = `${agent.policy.instructions}\n\nTask ${task.id}: ${task.title}\nGoal: ${task.goal}\n\nSpecification:\n${task.specification.text}\n\nAcceptance criteria:\n${task.specification.acceptance.map(item => `- ${item}`).join('\n')}`
+      const execution = { id: executionId, ref: command.ref, agentId: agent.id, owner: randomUUID(), epoch: 1,
         resource: command.resource, session, sessionMode: command.session ? 'reuse' as const : 'create' as const, agentPreset: command.agentPreset, model: command.model, permissionPreset: command.permissionPreset,
-        policy: structuredClone(agent.policy), events: [], state: 'accepted' as const, history: [{ state: 'accepted' as const, commandId: command.commandId }] }
+        policy: structuredClone(agent.policy), events: [{ id: `kickoff:${executionId}`, text: kickoff, kind: 'input' as const, delivery: 'accepted' as const, acceptance: 'unassessed' as const }], state: 'accepted' as const, history: [{ state: 'accepted' as const, commandId: command.commandId }] }
       state.executions.push(execution)
       task.agentId = agent.id
       this.changed(task, command)
@@ -295,9 +328,25 @@ export class WorkApplication {
     if (!parsed.success) return failed('invalid-query', 'Invalid work query')
     const query = parsed.data
     const state = await this.load()
+    if (query.type === 'task.execution-options') {
+      const task = taskAt(state, query.ref)
+      if (!task) return failed('unknown-task', 'Task does not belong to this project')
+      const project = state.projects.find(item => item.id === query.ref.projectId)!
+      const agent = state.agents.find(item => item.id === task.agentId && item.projectId === project.id)!
+      if (!this.host.execution) return failed('host-capability-unavailable', 'This host has no managed execution capability')
+      try {
+        const choices = await this.host.execution.choices()
+        const models = choices.models.filter(item => !agent.policy.modelCandidates.length || agent.policy.modelCandidates.includes(`${item.provider}/${item.model}`))
+        const defaultModel = models.find(item => item.provider === choices.defaults.model.provider && item.model === choices.defaults.model.model) ?? models[0]
+        if (!defaultModel) return failed('unavailable-model', 'Project Agent has no available allowed model')
+        return { status: 'completed', executionOptions: { ...choices, agentId: agent.id, models,
+          defaults: { ...choices.defaults, model: defaultModel }, resources: (await this.host.resources()).filter(item => project.resources.some(ref => sameResource(ref, item.ref))) } }
+      } catch (error) { return failed(error instanceof WorkExecutionError ? error.code : 'host-admission-failed', error instanceof WorkExecutionError ? error.message : 'Host execution catalogs could not be read') }
+    }
     if (query.type === 'task.execution') {
       if (!taskAt(state, query.ref)) return failed('unknown-task', 'Task does not belong to this project')
-      return { status: 'completed', execution: state.executions.find(item => item.ref.taskId === query.ref.taskId) }
+      const execution = state.executions.find(item => item.ref.taskId === query.ref.taskId)
+      return { status: 'completed', ...(execution ? { execution, executionRuntime: this.host.execution?.status(execution) ?? 'inactive' as const } : {}) }
     }
     if (query.type === 'legacy.resolve') {
       const mapping = state.legacyMappings.find(item => legacyKey(item.address) === legacyKey(query.address))
@@ -305,11 +354,17 @@ export class WorkApplication {
     }
     if (query.type === 'projects.list') return { status: 'completed', projects: state.projects }
     if (query.type === 'resources.list') return { status: 'completed', resources: [...await this.host.resources()] }
-    if (query.type === 'session.work') return { status: 'completed', work: state.tasks.flatMap(task =>
-      task.sessions.filter(binding => sameSession(binding.session, query.session)).map(binding => ({
+    if (query.type === 'session.work') return { status: 'completed', work: [
+      ...state.tasks.flatMap(task => task.sessions.filter(binding => sameSession(binding.session, query.session)
+        && !state.executions.some(item => item.ref.taskId === task.id && sameSession(item.session, query.session))).map(binding => ({
         ref: { projectId: task.projectId, taskId: task.id }, title: task.title,
         projectName: state.projects.find(project => project.id === task.projectId)!.name, purpose: binding.purpose,
-      }))) }
+      }))),
+      ...state.executions.filter(item => sameSession(item.session, query.session)).map(item => ({
+        ref: item.ref, title: taskAt(state, item.ref)!.title, projectName: state.projects.find(project => project.id === item.ref.projectId)!.name,
+        purpose: 'control' as const, executionId: item.id, epoch: item.epoch,
+      })),
+    ] }
     if (query.type === 'session.candidates') {
       const project = state.projects.find(item => item.id === query.projectId)
       return project ? { status: 'completed', candidates: await this.candidates(project) } : failed('unknown-project', 'Project does not exist')
@@ -321,7 +376,9 @@ export class WorkApplication {
     if (query.type === 'project.detail') return { status: 'completed', project,
       agents: state.agents.filter(item => item.projectId === projectId), tasks: state.tasks.filter(item => item.projectId === projectId) }
     const task = taskAt(state, query.ref)
+    const execution = state.executions.find(item => item.ref.taskId === query.ref.taskId)
     return task ? { status: 'completed', task,
+      ...(execution ? { execution, executionRuntime: this.host.execution?.status(execution) ?? 'inactive' as const } : {}),
       ...(task.parent ? { parent: taskAt(state, task.parent) } : {}),
       children: task.children.map(ref => taskAt(state, ref)!).filter(Boolean),
     } : failed('unknown-task', 'Task does not belong to this project')

@@ -22,8 +22,14 @@ export interface WorkTask {
   activity: WorkActivity[]
 }
 export interface LegacyAddress { runtimeId: string; projectRoot: string; taskId: string }
+export interface HostExecutionChoices {
+  agentPresets: string[]; models: { provider: string; model: string }[]; permissionPresets: string[]
+  defaults: { agentPreset: string; model: { provider: string; model: string }; permissionPreset: string }
+}
+export interface WorkExecutionOptions extends HostExecutionChoices { agentId: string; resources: HostResource[] }
 export interface ExecutionRef { ref: TaskRef; executionId: string }
-export interface WorkEvent { id: string; text: string; kind: 'input' | 'result'; delivery: 'accepted' | 'delivered' | 'consumed'; acceptance: 'unassessed' }
+export interface NativeWorkMessage { id: string; role: 'user'; content: readonly unknown[]; source: unknown }
+export interface WorkEvent { id: string; text: string; kind: 'input' | 'result'; delivery: 'accepted' | 'delivered' | 'consumed'; acceptance: 'unassessed'; nativeMessage?: NativeWorkMessage }
 export interface WorkExecution {
   id: string; ref: TaskRef; agentId: string; owner: string; epoch: number
   resource: ResourceRef; session: SessionRef; sessionMode: 'create' | 'reuse'; agentPreset: string
@@ -57,16 +63,19 @@ export type WorkQuery =
   | { type: 'projects.list' }
   | { type: 'resources.list' }
   | { type: 'project.detail'; projectId: string }
+  | { type: 'task.execution-options'; ref: TaskRef }
   | { type: 'task.execution'; ref: TaskRef }
   | { type: 'task.detail'; ref: TaskRef }
   | { type: 'session.candidates'; projectId: string }
   | { type: 'session.work'; session: SessionRef }
   | { type: 'legacy.resolve'; address: LegacyAddress }
-export interface AssociatedWork { ref: TaskRef; title: string; projectName: string; purpose: 'related' | 'review' }
+export interface AssociatedWork { ref: TaskRef; title: string; projectName: string; purpose: 'related' | 'review' | 'control'; executionId?: string; epoch?: number }
 /** Completed fields correspond to command/query; task.detail includes related children and parent. */
 export interface WorkCompleted {
   status: 'completed'
   execution?: WorkExecution
+  executionOptions?: WorkExecutionOptions
+  executionRuntime?: 'running' | 'idle' | 'inactive'
   project?: Project
   task?: WorkTask
   projects?: Project[]
