@@ -1,0 +1,55 @@
+{
+  "observed": {
+    "alerts": [],
+    "getRandomValuesType": "function",
+    "isSecureContext": false,
+    "options": [
+      {
+        "disabled": false,
+        "label": "独立本地项目",
+        "selected": true,
+        "value": ""
+      },
+      {
+        "disabled": true,
+        "label": "workspace · 已归属：演示项目 · 本地工作（不可选）",
+        "selected": false,
+        "value": "0"
+      }
+    ],
+    "origin": "http://10.126.126.12:18782",
+    "randomUUIDType": "undefined"
+  },
+  "browsers": [
+    {
+      "pid": 2636656,
+      "argv": [
+        "/root/.agent-browser/browsers/chrome-150.0.7871.46/chrome",
+        "--remote-debugging-port=0",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-background-networking",
+        "--disable-backgrounding-occluded-windows",
+        "--disable-component-update",
+        "--disable-default-apps",
+        "--disable-hang-monitor",
+        "--disable-popup-blocking",
+        "--disable-prompt-on-repost",
+        "--disable-sync",
+        "--disable-features=Translate",
+        "--enable-features=NetworkService,NetworkServiceInProcess",
+        "--metrics-recording-only",
+        "--password-store=basic",
+        "--use-mock-keychain",
+        "--headless=new",
+        "--enable-unsafe-swiftshader",
+        "--user-data-dir=/data/_dsh-dev/previews/a2d2-v3-121/browser-http132",
+        "--window-size=1280,720",
+        "--no-sandbox",
+        "--disable-dev-shm-usage"
+      ]
+    }
+  ],
+  "secureContextOrCryptoOverridesApplied": false,
+  "apiMocksApplied": false
+}

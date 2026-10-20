@@ -1,0 +1,81 @@
+- generic [ref=e1] clickable [onclick]
+  - generic
+    - button "New session" [ref=e3]
+    - button "Collapse sidebar" [ref=e4]
+    - button "New session" [ref=e5]
+      - StaticText "New Session"
+    - navigation "Global panels" [ref=e6]
+      - button "Plugins" [ref=e12]
+        - StaticText "Plugins"
+      - button "A²D² 控制面板" [ref=e13]
+        - StaticText "A²D² 控制面板"
+    - StaticText "Workspaces"
+    - generic [ref=e7] clickable [onclick]
+      - button "Search sessions" [expanded=false, ref=e14]
+      - textbox "Search session names" [ref=e15]
+    - button "View options" [ref=e8]
+    - button "Add workspace" [ref=e9]
+    - generic
+      - tree "Sessions"
+        - generic
+          - treeitem "workspace" [level=1, expanded=true, ref=e34]
+            - StaticText "workspace"
+          - treeitem "Untitled 13h" [level=1, ref=e35]
+            - StaticText "Untitled"
+            - StaticText "13h"
+    - button "Settings" [expanded=false, ref=e16]
+      - StaticText "Settings"
+    - main "A²D² 控制面板" [ref=e2]
+      - sectionheader
+        - heading "A²D² 控制面板" [level=1, ref=e17]
+        - paragraph
+          - StaticText "项目、工作与关联会话"
+        - button "关闭面板" [ref=e18]
+      - LabelText
+        - StaticText "当前项目 "
+        - combobox "当前项目" [expanded=false, ref=e19]: 演示项目 · 本地工作
+          - MenuListPopup
+            - option "演示项目 · 本地工作" [selected, ref=e36]
+            - option "验收_HTTP132_20261020_独立项目" [ref=e37]
+      - button "接入 / 创建项目" [ref=e10]
+      - button "接入已有资源" [ref=e11]
+      - tablist "工作对象"
+        - tab "Issue" [selected, ref=e20]
+        - tab "PR" [ref=e21]
+        - tab "项目" [ref=e22]
+      - generic
+        - heading "GitHub Issue 来源" [level=2, ref=e23]
+        - paragraph
+          - StaticText "为当前本地项目配置 GitHub 仓库来源。此处读取仓库 Issue；GitHub Project 完整视图尚未提供。"
+        - group
+          - DisclosureTriangle "配置仓库来源" [expanded=false]
+            - StaticText "配置仓库来源"
+        - LabelText
+          - StaticText "仓库来源 "
+          - combobox "仓库来源" [expanded=false, ref=e32]: a2d2-dev/dsh-plugin
+            - MenuListPopup
+              - option "a2d2-dev/dsh-plugin" [selected, ref=e38]
+        - button "重新读取来源配置" [ref=e24]
+        - button "停用来源" [ref=e25]
+        - paragraph
+          - StaticText "来源状态：已启用 · 最近确认的凭据身份：imneov / LiuFeng。我的 Issue 使用此身份。"
+        - button "← 返回 Issue 列表" [ref=e26]
+        - button "刷新 Issue 详情" [ref=e27]
+        - button "读取缓存详情" [ref=e28]
+        - heading "#112 一期：插件托管任务长程运行、主会话接续与事件归属" [level=2, ref=e29]
+          - StaticText "#112 一期：插件托管任务长程运行、主会话接续与事件归属"
+        - link "在 GitHub 查看来源" [ref=e30]
+        - paragraph
+          - StaticText "远端状态：open · 负责人：imneov · 标签：a2d2:main"
+          - LineBreak "\n"
+          - StaticText "远端更新时间：2026-10-15T15:47:29Z · 观察时间：2026-10-20T15:37:48.002Z"
+        - paragraph
+          - StaticText "缓存 / 最后已知内容 · 观察时间：2026-10-20T15:37:48.002Z"
+        - heading "完整原文" [level=3, ref=e31]
+        - paragraph
+          - StaticText "# 一期：插件管理任务长程运行\n\n日期：2026-10-15。LF 已确认一期解决长程运行，二期可视化，三期价格优化；已授权实施及独立开发环境部署。现有 DSH 实例定义为生产。LF 后续明确允许数据分开：开发使用独立 DSH_HOME、profile、sessions、storages、附件与项目执行资料，不能与生产共写运行存储。\n\n## 目标与边界\n\nA²D² 在宿主后台管理已明确启用的任务运行。主会话身份、接续和事件投递由插件维护，模型处理任务内容并提供交接内容。浏览器关闭或开发实例更新后，执行状态仍可追踪和恢复。任务的目标、需求与验收仍以 tracker 为准，插件只持久化执行状态。保持已有普通会话与手动交接行为；不自动接管已有生产任务。\n\n本期包括：受控启停、主会话执行权、自动接续、上下文阈值交接、工作空间继承、任务事件收件箱、交接中断恢复、真实 DSH 开发部署。排除：新仪表盘/会话树、成本路由、价格优化、自动合并 PR、关闭 GitHub issue、清理或停用现有生产监督脚本。\n\n## 执行语义\n\n- 为已绑定 issue 的任务显式启用后台运行，记录项目、任务、workspace、当前会话、运行状态、交接步骤与后继 ID；提供启动/暂停/恢复/状态/请求交接能力。普通 `bind_main_session` 仍保留兼容，但不等于已启动无限自动运行。\n- 每个任务只有一个有效执行者。交接必须等待源会话的安全空闲边界，持久化预定后继 ID，再创建或恢复该后继。已有任务记录与运行记录必须一致；过期源会话不能继续作为主控执行。不得杀死无关会话或重启生产。\n- 后台统一驱动 prepare → 等待有效交接文档 → 同工作空间创建/恢复后继 → 设置会话本地 Agent 模型 → take/接任 → 投递待处理事件。调用宿主公开 API，禁止写宿主私有 registry 或直接修改服务持有的存储文件。\n- 运行中的任务在一轮结束后检查完成、等待人、等待子任务/外部事件以及可继续状态。完成和明确等待不能被盲目续跑。自动重试有限、故障原因持久化可查询；没有进展不能假装成功。\n- 事件以任务为接收者；持久化后投递给当前有效主会话。PR 事件与子任务完成需接入该路径，交接期间保留事件。DSH 原生子代理完成路径必须明确覆盖或在未结算子代理存在时禁止换代，避免把结果送给过期主会话。\n- 每次外部副作用记录恢复点；进程在创建、接任、投递间退出后重试不得重复创建后继或并行接管。不能保证绝对一次的外部边界必须以稳定事件 ID、日志回读/去重与可观察状态处理，不宣称不存在丢失/重复窗口。\n\n## 实施位置\n\n1. 新增 `src/task-runtime/` 的执行状态存储、调度及宿主适配器，并以独立插件入口挂载；在 `package.json`、`tsdown.config.ts`、`cordis.patch.yml` 注册入口，默认不接管任务。\n2. 在 `src/index.ts` 的主会话绑定、交接、子任务创建/完成边界接入运行器，保持现有 API 兼容；统一新根会话的 workspace 附加。\n3. 将 `src/github-watch.ts` 与 `src/github-watch/` 的任务 watch 路由改为解析当前主会话；普通未绑定任务的 watch 保持原会话语义。\n4. 新增行为测试，覆盖真实文件存储与事件顺序；新增宿主组合测试，不能仅证明 mock adapter 返回预期对象。README 与 `CONTEXT.md` 说明运行状态、恢复方式和限制，ADR 记录此次 LF 授权的后台运行决定。\n\n## 验收\n\n- Given 显式启用的任务，When 浏览器关闭且会话一轮结束，Then 后台依据状态接续，等待/完成不会空转。\n- Given 上下文达到配置阈值，When 主会话空闲且无未结算子代理，Then 后台完成交接，workspace 正确，只有后继保有主控执行权。\n- Given 交接进行中，When PR 或子任务结果到达，Then 事件被持久化并由接任会话收到，旧会话不被继续唤醒。\n- Given 已创建后继或已接任但流程未结束，When 插件重载/进程重启，Then 恢复同一次操作，无第二个后继、无重复接管。\n- Given 并发启用/接续或重试事件，When 操作竞争，Then 单一所有者与去重规则生效，失败可见。\n- Given 生产仍有运行任务，When 部署/更新开发环境，Then 生产不重启、不接管生产任务；开发配置、存储、调度及验收项目执行资料与生产隔离。\n\n验证至少包含连续两次交接、一次失败恢复、一次宿主重启恢复和交接中事件到达。真实页面验证使用 agent-browser，证据落 `docs/artifacts/task-runtime-2026-10-15/` 并发布 LogSeq。源码测试通过不能替代页面与宿主验收。任务分支提交推送、创建 PR，不合并。\n"
+        - paragraph
+          - StaticText "浏览不会创建本地工作。显式接入保存原文，结构化验收标准仍需确认。远端状态和负责人不代表本地完成或协调权。当前部署未提供任务启动能力，可关联已有真实会话。"
+        - paragraph
+          - StaticText "已关联本地工作 "
+          - button "打开已关联工作" [ref=e33]

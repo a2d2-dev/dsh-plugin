@@ -1,0 +1,198 @@
+{
+  "observedAt": "2026-10-20T15:41:36.702Z",
+  "firstClick": {
+    "time": "2026-10-20T15:34:09.321Z",
+    "args": [
+      "click",
+      "@e28"
+    ],
+    "output": "✓ Done\n"
+  },
+  "scroll": {
+    "time": "2026-10-20T15:35:25.950Z",
+    "args": [
+      "scrollintoview",
+      "button[type=submit]"
+    ],
+    "output": "✓ Done\n"
+  },
+  "retry": {
+    "time": "2026-10-20T15:35:26.191Z",
+    "args": [
+      "find",
+      "role",
+      "button",
+      "click",
+      "--name",
+      "保存并读取来源"
+    ],
+    "output": "✓ Done\n"
+  },
+  "originalDom": {
+    "forms": [
+      {
+        "buttons": [
+          {
+            "disabled": false,
+            "rect": {
+              "bottom": 602.75,
+              "height": 36.796875,
+              "left": 333,
+              "right": 448,
+              "top": 565.953125,
+              "width": 115,
+              "x": 333,
+              "y": 565.953125
+            },
+            "text": "保存并读取来源",
+            "type": "submit"
+          }
+        ],
+        "inputs": [
+          {
+            "name": "",
+            "type": "text",
+            "valid": true,
+            "value": "a2d2-dev"
+          },
+          {
+            "name": "",
+            "type": "text",
+            "valid": true,
+            "value": "dsh-plugin"
+          }
+        ],
+        "valid": true
+      }
+    ]
+  },
+  "timeline": {
+    "resourceEntries": 49,
+    "timeOrigin": 1792510345503.7,
+    "viewport": {
+      "height": 577,
+      "width": 1280
+    },
+    "workRequests": [
+      {
+        "duration": 69.69999998807907,
+        "responseStatus": 200,
+        "startedAt": "2026-10-20T15:32:26.650Z"
+      },
+      {
+        "duration": 73.5,
+        "responseStatus": 200,
+        "startedAt": "2026-10-20T15:32:26.735Z"
+      },
+      {
+        "duration": 5.5,
+        "responseStatus": 200,
+        "startedAt": "2026-10-20T15:33:07.013Z"
+      },
+      {
+        "duration": 45.19999998807907,
+        "responseStatus": 200,
+        "startedAt": "2026-10-20T15:33:07.030Z"
+      },
+      {
+        "duration": 7.899999976158142,
+        "responseStatus": 200,
+        "startedAt": "2026-10-20T15:33:30.082Z"
+      },
+      {
+        "duration": 7.599999994039536,
+        "responseStatus": 200,
+        "startedAt": "2026-10-20T15:33:55.617Z"
+      },
+      {
+        "duration": 13.900000005960464,
+        "responseStatus": 200,
+        "startedAt": "2026-10-20T15:35:26.188Z"
+      },
+      {
+        "duration": 1515.899999976158,
+        "responseStatus": 200,
+        "startedAt": "2026-10-20T15:35:26.204Z"
+      },
+      {
+        "duration": 3131.699999988079,
+        "responseStatus": 200,
+        "startedAt": "2026-10-20T15:35:50.520Z"
+      },
+      {
+        "duration": 2418.800000011921,
+        "responseStatus": 200,
+        "startedAt": "2026-10-20T15:35:52.629Z"
+      },
+      {
+        "duration": 2192.5,
+        "responseStatus": 200,
+        "startedAt": "2026-10-20T15:36:19.133Z"
+      },
+      {
+        "duration": 1607.2000000178814,
+        "responseStatus": 200,
+        "startedAt": "2026-10-20T15:36:37.590Z"
+      },
+      {
+        "duration": 2341.800000011921,
+        "responseStatus": 200,
+        "startedAt": "2026-10-20T15:36:48.265Z"
+      },
+      {
+        "duration": 1667.100000023842,
+        "responseStatus": 200,
+        "startedAt": "2026-10-20T15:37:46.348Z"
+      },
+      {
+        "duration": 12.799999982118608,
+        "responseStatus": 200,
+        "startedAt": "2026-10-20T15:38:02.149Z"
+      },
+      {
+        "duration": 50.79999998211861,
+        "responseStatus": 200,
+        "startedAt": "2026-10-20T15:38:02.165Z"
+      },
+      {
+        "duration": 7.400000005960464,
+        "responseStatus": 200,
+        "startedAt": "2026-10-20T15:38:37.577Z"
+      },
+      {
+        "duration": 16.799999982118607,
+        "responseStatus": 200,
+        "startedAt": "2026-10-20T15:38:58.417Z"
+      },
+      {
+        "duration": 51.69999998807907,
+        "responseStatus": 200,
+        "startedAt": "2026-10-20T15:38:58.436Z"
+      },
+      {
+        "duration": 52.60000002384186,
+        "responseStatus": 200,
+        "startedAt": "2026-10-20T15:38:58.491Z"
+      },
+      {
+        "duration": 9.299999982118608,
+        "responseStatus": 200,
+        "startedAt": "2026-10-20T15:39:16.961Z"
+      },
+      {
+        "duration": 14.900000005960464,
+        "responseStatus": 200,
+        "startedAt": "2026-10-20T15:39:43.962Z"
+      },
+      {
+        "duration": 49.60000002384186,
+        "responseStatus": 200,
+        "startedAt": "2026-10-20T15:39:43.990Z"
+      }
+    ]
+  },
+  "workRequestsBetweenFirstClickAndRetryScroll": [],
+  "requestTraceSource": "native Resource Timing; no fetch/XHR overrides, page has not reloaded",
+  "conclusion": "First offscreen tool click did not trigger a work request; source.configure and source.issues only began at the scrolled retry. No evidence of successful configure followed by failed UI transition.",
+  "screenshot": "02a-configure-no-transition.png"
+}

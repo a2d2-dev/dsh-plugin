@@ -8,6 +8,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { WorkApplication } from '../src/work.ts'
 import type { WorkHost } from '../src/work.ts'
 import { WorkPanelController, message } from '../src/client/work-panel-controller.ts'
+import type { GitHubSourcePort } from '../src/work-sources/types.ts'
+import { browserUUID } from '../src/client/browser-uuid.ts'
+import { webcrypto } from 'node:crypto'
+import { afterEach } from 'vitest'
+afterEach(() => vi.unstubAllGlobals())
 import type { WorkTask } from '../src/work-types.ts'
 
 // Execute the production TSX and its actual JSX onChange/onSubmit callbacks in memory.
@@ -20,11 +25,11 @@ async function mountWorkPanel(props: Record<string, unknown>, component = 'TaskF
   const effects: (() => void)[] = [], cleanups: (() => void)[] = []
   const module = { exports: {} as Record<string, (props: Record<string, unknown>) => any> }
   const source = await readFile(new URL('../src/client/work-panel.tsx', import.meta.url), 'utf8')
-  const compiled = ts.transpileModule(`${source}\nexport { TaskForm, SessionWorkEntry }`, {
+  const compiled = ts.transpileModule(`${source}\nexport { TaskForm, SessionWorkEntry, BreakdownForm, ProjectForm, IssueSourcePanel }`, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2023 },
   }).outputText
   runInNewContext(compiled, {
-    module, exports: module.exports, AbortController,
+    module, exports: module.exports, AbortController, crypto: globalThis.crypto,
     require: (id: string) => id === 'react' ? {
       useEffect: (effect: () => void | (() => void), dependencies: unknown[]) => {
         const index = cursor++, previous = state[index] as unknown[] | undefined
@@ -32,12 +37,13 @@ async function mountWorkPanel(props: Record<string, unknown>, component = 'TaskF
         state[index] = dependencies
         effects.push(() => { const cleanup = effect(); if (cleanup) cleanups.push(cleanup) })
       },
+      useSyncExternalStore: (_subscribe: unknown, getSnapshot: () => unknown) => getSnapshot(),
       useState: (initial: unknown) => {
         const index = cursor++
         if (!(index in state)) state[index] = initial
         return [state[index], (value: unknown) => { state[index] = typeof value === 'function' ? value(state[index]) : value }]
       },
-    } : id.endsWith('.css') ? { default: {} } : id === './work-panel-controller.ts' ? { message } : require(id),
+    } : id.endsWith('.css') ? { default: {} } : id === './work-panel-controller.ts' ? { message } : id === './browser-uuid.ts' ? { browserUUID } : require(id),
   })
   const render = () => {
     cursor = 0
@@ -64,16 +70,17 @@ async function mountWorkPanel(props: Record<string, unknown>, component = 'TaskF
     click: (text: string) => {
       const button = nodes('button').find(node => [node.props.children].flat(Infinity).join('') === text)
       expect(button, `button ${text}`).toBeDefined()
+      expect(button.props.disabled, `button ${text} must be enabled`).not.toBe(true)
       button.props.onClick()
     },
     submit: () => render().props.onSubmit({ preventDefault() {} }),
   }
 }
 
-async function withPanel(run: (panel: WorkPanelController) => Promise<void>, host: WorkHost = { resources: async () => [], sessions: async () => [] }) {
+async function withPanel(run: (panel: WorkPanelController) => Promise<void>, host: WorkHost = { resources: async () => [], sessions: async () => [] }, source?: GitHubSourcePort) {
   const directory = await mkdtemp(join(tmpdir(), 'a2d2-work-form-'))
   const expected = resolve(directory)
-  const app = new WorkApplication(directory, host)
+  const app = new WorkApplication(directory, host, source)
   const operator = { operator: true }
   const panel = new WorkPanelController({
     command: async command => {
@@ -102,6 +109,96 @@ async function withPanel(run: (panel: WorkPanelController) => Promise<void>, hos
 const goal = '\n  保留完整目标\n'
 const specification = '\n    preserve code indentation\n'
 const acceptance = ['先验证A\n再验证B']
+
+describe('production Issue source acceptance controls', () => {
+  it('keeps an accepted import saved without changing navigation after the production panel unmounts', async () => {
+    const identity={login:'source-reader',nodeId:'U1',name:null}
+    const issue={nodeId:'I124',number:124,url:'https://github.com/a2d2-dev/dsh-plugin/issues/124',repository:{owner:'a2d2-dev',repository:'dsh-plugin'},title:'Unmounted import',body:'Accepted body',state:'open' as const,assignees:[],labels:[],updatedAt:'2026-10-20T00:00:00Z',observedAt:'2026-10-21T00:00:00Z'}
+    await withPanel(async panel => {
+      await panel.configureSource('a2d2-dev','dsh-plugin');await panel.openIssue(124)
+      const mounted=await mountWorkPanel({controller:panel},'WorkPanel')
+      let release!:()=>void, saved!:()=>void
+      const response=new Promise<void>(done=>{release=done}), committed=new Promise<void>(done=>{saved=done})
+      const command=panel.client.command.bind(panel.client)
+      panel.client.command=async value=>{const result=await command(value);saved();await response;return result}
+      const pending=panel.acceptIssue()
+      try {
+        await committed
+        mounted.unmount()
+      } finally { release() }
+      await pending
+      expect(panel.getSnapshot()).toMatchObject({object:'issues',detail:null,source:{loading:false,issue:{number:124}}})
+      expect((await panel.client.query({type:'project.detail',projectId:panel.getSnapshot().projectId!})).tasks).toMatchObject([{title:'Unmounted import'}])
+    },undefined,{list:async()=>({identity,items:[issue],observedAt:issue.observedAt}),detail:async()=>({identity,issue})})
+  })
+  it('accepts an observed null body through the enabled UI action and preserves missing body and acceptance indicators', async () => {
+    const identity={login:'imneov',nodeId:'U1',name:'LiuFeng'}
+    const issue={nodeId:'I112',number:112,url:'https://github.com/a2d2-dev/dsh-plugin/issues/112',repository:{owner:'a2d2-dev',repository:'dsh-plugin'},title:'Observed empty Issue body',body:null,state:'open' as const,assignees:['imneov'],labels:[],updatedAt:'2026-10-20T00:00:00Z',observedAt:'2026-10-21T00:00:00Z'}
+    await withPanel(async panel => {
+      await panel.configureSource('a2d2-dev','dsh-plugin');await panel.openIssue(112)
+      const form=await mountWorkPanel({controller:panel},'IssueSourcePanel')
+      form.click('接入为本地工作')
+      await vi.waitFor(()=>expect(panel.getSnapshot().detail?.task?.specification).toMatchObject({text:'',acceptance:[],missing:['body','acceptance']}))
+      const detail=await mountWorkPanel({controller:panel},'WorkPanel')
+      const paragraphs=detail.nodes('p').map(node=>[node.props.children].flat(Infinity).join('')).join('\n')
+      expect(paragraphs).toContain('结构化验收标准尚待确认')
+      expect(paragraphs).toContain('规格正文尚待补充')
+      detail.unmount()
+      form.unmount()
+    },undefined,{list:async()=>({identity,items:[issue],observedAt:issue.observedAt}),detail:async()=>({identity,issue})})
+  })
+})
+
+describe('production resource selection', () => {
+  it('labels owned resources as unavailable while allowing a project without a directory', async () => {
+    const resource = { ref: { runtimeId: 'host-owner', workspaceId: 'occupied' }, title: 'workspace' }
+    await withPanel(async panel => {
+      const owner = panel.getSnapshot().projects[0]!
+      await panel.submit({ type: 'project.attach-resource', projectId: owner.id, expectedVersion: owner.version, resource: resource.ref })
+      for (const attach of [false, true]) {
+        const form = await mountWorkPanel({ controller: panel, attach, onSaved: vi.fn() }, 'ProjectForm')
+        await vi.waitFor(() => expect(form.nodes('option')).toHaveLength(2))
+        const option = form.nodes('option')[1]
+        expect(option.props.disabled).toBe(true)
+        expect([option.props.children].flat(Infinity).join('')).toContain('已归属：表单往返（不可选）')
+        form.unmount()
+      }
+      const saved = vi.fn()
+      const form = await mountWorkPanel({ controller: panel, attach: false, onSaved: saved }, 'ProjectForm')
+      await vi.waitFor(() => expect(form.nodes('option')).toHaveLength(2))
+      form.change(form.inputs()[0], '无目录的本地项目')
+      form.submit()
+      await vi.waitFor(() => expect(saved).toHaveBeenCalledOnce())
+      const result = await panel.client.query({ type: 'projects.list' })
+      expect(result.projects?.find(project => project.name === '无目录的本地项目')?.resources).toEqual([])
+      form.unmount()
+    }, { resources: async () => [resource], sessions: async () => [] })
+  })
+})
+
+describe('production HTTP breakdown form', () => {
+  it('adds and saves distinct UUID v4 blocks when Crypto only provides getRandomValues', async () => {
+    vi.stubGlobal('crypto', { getRandomValues: webcrypto.getRandomValues.bind(webcrypto) })
+    await withPanel(async panel => {
+      const task = (await panel.submit({ type: 'task.create', projectId: panel.getSnapshot().projectId!, title: 'HTTP 拆解', goal, specification, acceptance })).task!
+      const saved = vi.fn()
+      const form = await mountWorkPanel({ controller: panel, task, onSaved: saved }, 'BreakdownForm')
+      form.click('添加工作块')
+      form.change(form.inputs()[0], 'HTTP 工作块一')
+      form.change(form.textareas()[0], '使用真实随机源')
+      form.click('添加工作块')
+      form.change(form.inputs()[1], 'HTTP 工作块二')
+      form.change(form.textareas()[1], '独立稳定身份')
+      form.submit()
+      await vi.waitFor(() => expect(saved).toHaveBeenCalledOnce())
+      await panel.openTask({ projectId: task.projectId, taskId: task.id })
+      const blocks = panel.getSnapshot().detail!.task!.breakdown
+      expect(blocks.map(block => block.title)).toEqual(['HTTP 工作块一', 'HTTP 工作块二'])
+      expect(new Set(blocks.map(block => block.id)).size).toBe(2)
+      for (const block of blocks) expect(block.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    })
+  })
+})
 
 describe('production session work entry', () => {
   it('returns linked blank/nonblank session references to the correct task and renders nothing for an unassociated session', async () => {

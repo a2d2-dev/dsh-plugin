@@ -3,6 +3,8 @@ import { mkdir, readFile } from 'node:fs/promises'
 import { isAbsolute, join, normalize } from 'node:path'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { commandSchema, querySchema, snapshotSchema } from './work-schema.ts'
+import { applySourceCommand, refreshSource, sourceResult } from './work-sources/application.ts'
+import type { GitHubSourcePort } from './work-sources/types.ts'
 import type { WorkSnapshot } from './work-schema.ts'
 import type { HostResource, Project, ResourceRef, SessionCandidate, TaskRef, WorkCommand, WorkResult, WorkTask } from './work-types.ts'
 export type * from './work-types.ts'
@@ -28,16 +30,26 @@ function taskAt(state: WorkSnapshot, ref: TaskRef): WorkTask | undefined {
 /** Public local work commands and queries. One v3 snapshot is the only writer authority. */
 export class WorkApplication {
   private readonly file: string
-  constructor(readonly directory: string, readonly host: WorkHost) {
+  constructor(readonly directory: string, readonly host: WorkHost, readonly source?: GitHubSourcePort) {
     if (!isAbsolute(directory)) throw new Error('Work record directory must be absolute')
     this.file = join(directory, 'work-v3.json')
   }
   private async load(): Promise<WorkSnapshot> {
     try { return snapshotSchema.parse(JSON.parse(await readFile(this.file, 'utf8'))) }
     catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { schemaVersion: 3, projects: [], agents: [], tasks: [], commands: [], legacyMappings: [] }
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { schemaVersion: 3, projects: [], agents: [], tasks: [], commands: [], legacyMappings: [], sources: [], externalBindings: [], externalIndex: {} }
       throw error
     }
+  }
+  private async sourceTransaction<T>(apply: (state: WorkSnapshot) => Promise<T>): Promise<T> {
+    await mkdir(this.directory, { recursive: true, mode: 0o700 })
+    return withFileLock(this.file, async () => {
+      const state = await this.load()
+      const result = await apply(state)
+      snapshotSchema.parse(state)
+      await writeFileAtomic(this.file, `${JSON.stringify(state)}\n`, { mode: 0o600, dirMode: 0o700 })
+      return result
+    })
   }
   async execute(input: unknown, actor: WorkActor): Promise<WorkResult> {
     if (!actor.operator) return failed('forbidden', 'Host operator authorization is required')
@@ -56,6 +68,7 @@ export class WorkApplication {
       if (result.status !== 'completed') return result
       // Receipt owns a detached snapshot: subsequent commands must not alter retry results.
       state.commands.push({ commandId: command.commandId, fingerprint, result: structuredClone(result) })
+      snapshotSchema.parse(state)
       await writeFileAtomic(this.file, `${JSON.stringify(state)}\n`, { mode: 0o600, dirMode: 0o700 })
       return result
     })
@@ -91,6 +104,7 @@ export class WorkApplication {
     task.activity.push({ commandId: command.commandId, type: command.type, version: task.version })
   }
   private async apply(state: WorkSnapshot, command: WorkCommand): Promise<WorkResult> {
+    if (command.type === 'source.configure' || command.type === 'source.set-enabled' || command.type === 'source.import' || command.type === 'source.link') return applySourceCommand(state, command)
     if (command.type === 'project.create') {
       if (command.resource && state.projects.some(item => item.resources.some(ref => sameResource(ref, command.resource!)))) {
         return { status: 'conflict', error: { code: 'resource-in-use', message: 'Resource already belongs to another project' } }
@@ -186,13 +200,21 @@ export class WorkApplication {
     const parsed = querySchema.safeParse(input)
     if (!parsed.success) return failed('invalid-query', 'Invalid work query')
     const query = parsed.data
+    if (query.type === 'work.capabilities') return { status: 'completed', capabilities: { githubRead: Boolean(this.source), githubWrite: false, taskStart: false, projectViews: false } }
+    if ((query.type === 'source.issues' || query.type === 'source.issue') && query.refresh) return refreshSource(apply => this.sourceTransaction(apply), query, this.source)
     const state = await this.load()
+    if (query.type === 'source.list') return state.projects.some(item => item.id === query.projectId)
+      ? { status: 'completed', sources: state.sources.filter(item => item.projectId === query.projectId) } : failed('unknown-project', 'Project does not exist')
+    if (query.type === 'source.issues' || query.type === 'source.issue') return sourceResult(state, query)
     if (query.type === 'legacy.resolve') {
       const mapping = state.legacyMappings.find(item => legacyKey(item.address) === legacyKey(query.address))
       return mapping ? { status: 'completed', ref: mapping.ref } : failed('unknown-legacy-address', 'Legacy address has no accepted TaskRef mapping')
     }
     if (query.type === 'projects.list') return { status: 'completed', projects: state.projects }
-    if (query.type === 'resources.list') return { status: 'completed', resources: [...await this.host.resources()] }
+    if (query.type === 'resources.list') return { status: 'completed', resources: (await this.host.resources()).map(resource => {
+      const owner = state.projects.find(project => project.resources.some(ref => sameResource(ref, resource.ref)))
+      return { ref: resource.ref, title: resource.title, ...(owner ? { owner: { projectId: owner.id, projectName: owner.name } } : {}) }
+    }) }
     if (query.type === 'session.work') return { status: 'completed', work: state.tasks.flatMap(task =>
       task.sessions.filter(binding => sameSession(binding.session, query.session)).map(binding => ({
         ref: { projectId: task.projectId, taskId: task.id }, title: task.title,
@@ -209,7 +231,7 @@ export class WorkApplication {
     if (query.type === 'project.detail') return { status: 'completed', project,
       agents: state.agents.filter(item => item.projectId === projectId), tasks: state.tasks.filter(item => item.projectId === projectId) }
     const task = taskAt(state, query.ref)
-    return task ? { status: 'completed', task,
+    return task ? { status: 'completed', task, bindings: state.externalBindings.filter(item => item.ref.taskId === task.id && item.ref.projectId === task.projectId),
       ...(task.parent ? { parent: taskAt(state, task.parent) } : {}),
       children: task.children.map(ref => taskAt(state, ref)!).filter(Boolean),
     } : failed('unknown-task', 'Task does not belong to this project')

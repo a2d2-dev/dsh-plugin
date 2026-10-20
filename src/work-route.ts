@@ -19,6 +19,16 @@ function respond(response: ServerResponse, status: number, body: WorkResult): vo
 function fail(response: ServerResponse, status: number, code: string, message: string): void {
   respond(response, status, { status: 'failed', error: { code, message } })
 }
+function resultStatus(result: WorkResult): number {
+  if (result.status === 'completed') return 200
+  if (result.status === 'conflict') return 409
+  const code = result.error.code
+  if (['github-unauthorized', 'github-forbidden', 'github-not-found', 'github-credentials-unavailable'].includes(code)) return 424
+  if (code === 'github-rate-limited') return 429
+  if (['github-offline', 'github-unavailable', 'github-capability-unavailable'].includes(code)) return 503
+  if (code === 'github-invalid-response') return 502
+  return 400
+}
 class Oversize extends Error {}
 async function readJson(request: IncomingMessage): Promise<unknown> {
   const declared = request.headers['content-length']
@@ -66,7 +76,7 @@ export function createWorkHandler(app: WorkApplication, requestRejection: Reques
       const result = parsed.data.kind === 'command'
         ? await app.execute(parsed.data.value, { operator: true })
         : await app.query(parsed.data.value, { operator: true })
-      respond(response, result.status === 'completed' ? 200 : result.status === 'conflict' ? 409 : 400, result)
+      respond(response, resultStatus(result), result)
     } catch (error) {
       if (error instanceof WorkHostUnavailable) fail(response, 503, 'host-capability-unavailable', error.message)
       else fail(response, 503, 'work-record-unavailable', 'Local work records could not be accessed safely')

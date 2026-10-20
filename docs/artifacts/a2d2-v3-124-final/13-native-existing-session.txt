@@ -1,0 +1,48 @@
+- generic [ref=e1] clickable [onclick]
+  - generic
+    - button "New session" [ref=e2]
+    - button "Collapse sidebar" [ref=e3]
+    - button "New session" [ref=e4]
+      - StaticText "New Session"
+    - navigation "Global panels" [ref=e5]
+      - button "Plugins" [ref=e9]
+        - StaticText "Plugins"
+      - button "A²D² 控制面板" [ref=e10]
+        - StaticText "A²D² 控制面板"
+    - StaticText "Workspaces"
+    - generic [ref=e6] clickable [onclick]
+      - button "Search sessions" [expanded=false, ref=e11]
+      - textbox "Search session names" [ref=e12]
+    - button "View options" [ref=e7]
+    - button "Add workspace" [ref=e8]
+    - generic
+      - tree "Sessions"
+        - generic
+          - treeitem "workspace" [level=1, expanded=true, ref=e22]
+            - StaticText "workspace"
+          - treeitem "Untitled 13h" [level=1, selected, ref=e23]
+            - StaticText "Untitled"
+            - StaticText "13h"
+    - button "Settings" [expanded=false, ref=e13]
+      - StaticText "Settings"
+    - generic
+      - banner
+        - button "Open right sidebar" [ref=e14]
+      - StaticText "Into the Unknown"
+      - StaticText "Preview"
+      - button "Choose workspace" [expanded=false, ref=e15]
+        - StaticText "workspace"
+      - button "Standard mode" [expanded=false, ref=e16]
+        - StaticText "Standard mode"
+      - button "演示项目 · 本地工作 / 演示：从目标到验收 · 工作与进展" [ref=e17]
+        - StaticText "演示项目 · 本地工作 / 演示：从目标到验收 · 工作与进展"
+      - button "演示项目 · 本地工作 / 一期：插件托管任务长程运行、主会话接续与事件归属 · 工作与进展" [ref=e18]
+        - StaticText "演示项目 · 本地工作 / 一期：插件托管任务长程运行、主会话接续与事件归属 · 工作与进展"
+      - generic
+        - textbox "Describe what you want to build, / commands, @ files or sessions" [ref=e24]
+        - button "Add files or run commands" [expanded=false, ref=e19]
+        - button "Access mode, current: Workspace Write" [ref=e20]
+          - StaticText "Workspace Write"
+        - button "Select model, current No model (acceptance guard)" [expanded=false, ref=e25]
+          - StaticText "No model (acceptance guard)"
+        - button "Send message" [disabled, ref=e21]

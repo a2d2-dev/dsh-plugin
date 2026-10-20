@@ -1,0 +1,47 @@
+{
+  "mode": "Observed automation assertion failures; no product workaround applied",
+  "attempts": [
+    {
+      "operation": "Unauthenticated curl --fail after restart",
+      "exitCode": 22,
+      "observedHttpStatus": 401,
+      "rootCause": "Healthy authentication boundary returns the login page with HTTP 401.",
+      "evidence": "http-health.json",
+      "resolution": "Validated the real login markup and used the original authenticated browser profile. Authentication configuration unchanged."
+    },
+    {
+      "operation": "First source configure click followed by wait for imneov",
+      "exitCode": 1,
+      "observedError": "Wait timed out after 30000ms",
+      "rootCause": "Tool clicked an offscreen button center below the 577px viewport; native Resource Timing proves no work request before the scrolled retry.",
+      "evidence": "first-configure-click-diagnosis.json",
+      "resolution": "Scrolled the real button into view and clicked through the ordinary UI. No hidden API write."
+    },
+    {
+      "operation": "Wait for Chat after navigating the existing empty Session",
+      "exitCode": 1,
+      "observedError": "Wait timed out after 30000ms",
+      "rootCause": "Native empty Session displays Describe what you want to build and native associated-work buttons, rather than a Chat label.",
+      "evidence": "13-native-existing-session.txt",
+      "resolution": "Inspected the native page and returned through its actual associated-work button. No prompt sent."
+    },
+    {
+      "operation": "Initial final verifier asserted current run session-born count zero",
+      "exitCode": 1,
+      "observedError": "1 !== 0",
+      "rootCause": "The guard records session/created when the existing persisted Session is reopened; event ID equals the original baseline ID.",
+      "evidence": "final-verdict.json",
+      "resolution": "Read the real metrics and checked event IDs against baseline identity plus addedSessionFiles, rather than equating a lifecycle event with a new identity. Guard and user data unchanged."
+    }
+  ],
+  "finalVerifierExitCode": 0,
+  "realProductErrorTest": {
+    "request": "UI open Issue 999999 in a2d2-dev/dsh-plugin",
+    "githubBusinessMethod": "GET",
+    "workHttpStatus": 424,
+    "code": "github-not-found",
+    "githubStatusInVisibleError": 404,
+    "cached112StillListed": true,
+    "normal112AndEnabledSourceRestored": true
+  }
+}

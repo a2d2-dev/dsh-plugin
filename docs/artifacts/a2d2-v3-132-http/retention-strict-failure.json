@@ -1,0 +1,24 @@
+{
+  "strictSessionWholeFileHashEquality": false,
+  "before": [
+    {
+      "file": "--data-_dsh-dev-previews-a2d2-v3-121-workspace--/session-f9282a68-4c3f-4251-adcb-bcd6f24d7515/session.lock",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "--data-_dsh-dev-previews-a2d2-v3-121-workspace--/session-f9282a68-4c3f-4251-adcb-bcd6f24d7515/session.v4.jsonl.zstd",
+      "sha256": "0aafc7c806deac5c4c17c2722888dcdbf884cf8acd0af9b8d90391a08caba0a8"
+    }
+  ],
+  "after": [
+    {
+      "file": "--data-_dsh-dev-previews-a2d2-v3-121-workspace--/session-f9282a68-4c3f-4251-adcb-bcd6f24d7515/session.lock",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "--data-_dsh-dev-previews-a2d2-v3-121-workspace--/session-f9282a68-4c3f-4251-adcb-bcd6f24d7515/session.v4.jsonl.zstd",
+      "sha256": "7cfd5a79aa74170a2fcb456e13d2fc21b5f88446f7b329da76406812ab6c8e27"
+    }
+  ],
+  "diagnosis": "Original compressed bytes unchanged; native host appended session/end-seed when opening the existing session. No data restored or deleted."
+}

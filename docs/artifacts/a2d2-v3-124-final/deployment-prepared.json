@@ -1,0 +1,34 @@
+{
+  "sourceCommit": "876758c8566e50c0db0df53e27ada46b8041c223",
+  "sourceTgz": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/a2d2-v3-04-source-ui/.local/artifacts/876758c8566e50c0db0df53e27ada46b8041c223/dsh-a2d2-0.0.1.tgz",
+  "versionedTgz": "/data/_dsh-dev/previews/a2d2-v3-121/artifacts/source124-876758c8566e50c0db0df53e27ada46b8041c223/dsh-a2d2-0.0.1.tgz",
+  "packageSha256": "b7939639179faf84563a9d486ef768600e642e0722db22a1fb84fe9444c9bf5b",
+  "clientSha256": "93baf01e6222cefc5710403f0c29e59ae9258d31fd3ca930b1c1e3a1a7476f61",
+  "rollbackPackageSha256": "3ba6225b0da7eb20f05724b4c686ba058d6f52d8e41bd98964ae566a10e22767",
+  "backups": [
+    {
+      "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/profiles/web/package.json",
+      "backup": "/data/_dsh-dev/previews/a2d2-v3-121/evidence/source124-876758c8566e50c0db0df53e27ada46b8041c223/rollback/package.json",
+      "bytes": 334,
+      "sha256": "38ed97e7096851d3e7143421fb8c16282061f75b11d988d3de08a941f5703b02"
+    },
+    {
+      "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/profiles/web/pnpm-lock.yaml",
+      "backup": "/data/_dsh-dev/previews/a2d2-v3-121/evidence/source124-876758c8566e50c0db0df53e27ada46b8041c223/rollback/pnpm-lock.yaml",
+      "bytes": 1721,
+      "sha256": "de460bd2dd260d8266e212bc3a174d6b34db90a609bb200f790262c5d2b01f0e"
+    },
+    {
+      "path": "/data/_dsh-dev/previews/a2d2-v3-121/launch.mjs",
+      "backup": "/data/_dsh-dev/previews/a2d2-v3-121/evidence/source124-876758c8566e50c0db0df53e27ada46b8041c223/rollback/launch.mjs",
+      "bytes": 2889,
+      "sha256": "cdf23f9809168ac1eef3e1016bee0b162f933471fd024c0542bd5612d1dd0a97"
+    },
+    {
+      "path": "/data/_dsh-dev/previews/a2d2-v3-121/preview.patch.yml",
+      "backup": "/data/_dsh-dev/previews/a2d2-v3-121/evidence/source124-876758c8566e50c0db0df53e27ada46b8041c223/rollback/preview.patch.yml",
+      "bytes": 1499,
+      "sha256": "8ed745373175dfb812591f4c78a707e79cbed54507b4158e9c3c776ab847aa4f"
+    }
+  ]
+}

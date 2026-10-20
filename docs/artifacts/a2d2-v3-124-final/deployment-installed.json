@@ -1,0 +1,10 @@
+{
+  "sourceCommit": "876758c8566e50c0db0df53e27ada46b8041c223",
+  "versionedTgz": "/data/_dsh-dev/previews/a2d2-v3-121/artifacts/source124-876758c8566e50c0db0df53e27ada46b8041c223/dsh-a2d2-0.0.1.tgz",
+  "packageSha256": "b7939639179faf84563a9d486ef768600e642e0722db22a1fb84fe9444c9bf5b",
+  "clientSha256": "93baf01e6222cefc5710403f0c29e59ae9258d31fd3ca930b1c1e3a1a7476f61",
+  "installExitCode": 0,
+  "launcherChange": "package SHA and GH_CONFIG_DIR only",
+  "unchangedXdgStateHome": "/data/_dsh-dev/previews/a2d2-v3-121/state",
+  "next": "restart only dsh-a2d2-v3-preview"
+}

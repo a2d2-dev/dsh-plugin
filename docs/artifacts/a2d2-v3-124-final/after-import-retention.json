@@ -1,0 +1,276 @@
+{
+  "observedAt": "2026-10-20T15:38:27.832Z",
+  "root": "/data/_dsh-dev/previews/a2d2-v3-121",
+  "snapshot": {
+    "bytes": 140669,
+    "sha256": "984746d4ff4e7e05c9c98a53bec97e4b9a93f86d68cecc1a56347aa52eef01c6",
+    "topLevelKeys": [
+      "schemaVersion",
+      "projects",
+      "agents",
+      "tasks",
+      "sources",
+      "externalBindings",
+      "externalIndex",
+      "commands",
+      "legacyMappings"
+    ]
+  },
+  "records": {
+    "projects": [
+      {
+        "id": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+        "sha256": "552b30fb95ad6c20ff11b2b1926b471113b6b623fad9525cdf5e933e4b5867d0"
+      },
+      {
+        "id": "1b3fd2f7-a492-4c1d-a965-7e7f8cc5cc58",
+        "sha256": "e1e98d174624c9127705b1f05132ec0b33055d2eaba841b3625194899e090618"
+      }
+    ],
+    "agents": [
+      {
+        "id": "a4b8b515-554a-4fe7-99c1-f0581a3da464",
+        "sha256": "56f1d0eb6727423ea53d369a27181b03ae728f1ccc08404026225107793a56d7"
+      },
+      {
+        "id": "57954e6d-886c-435e-807a-ff61ee88987d",
+        "sha256": "084bfb9464cf37df7d0cff8dd8e0ec39c4f7d54f48345bf04335624a1fbb3aa1"
+      }
+    ],
+    "tasks": [
+      {
+        "id": "76e75fb5-a0ee-45cb-94e0-8dc9cb849411",
+        "sha256": "e2975e85b29fc5365978a2ceac84a47a24b6a34c636421b53d2d63e09464cb90"
+      },
+      {
+        "id": "0880f27a-5367-4679-b562-27c080cff7ab",
+        "sha256": "92db7bf90a25d62044b4641f9669f088a06afcec92c0db5bdaaea0f019913a9c"
+      },
+      {
+        "id": "3e00a048-42b1-48dd-ae22-d6655c06779d",
+        "sha256": "ca92021ad026e7b4942917d2c1c0e03ff21486d85c7f743a91e15ca91edf1a0d"
+      },
+      {
+        "id": "4c936541-0d4f-4bde-b810-bbfe946044da",
+        "sha256": "497eec53988d67f98eb35709333686b639e70b344835c87890ba54bea8378676"
+      }
+    ],
+    "sources": [
+      {
+        "id": "9cea4378-0219-4f99-a237-80f51bd36291",
+        "sha256": "2aabedff7b2ebc49b6ef530a30438e29782c2da86ffb8bf655da42e66f6e14dd"
+      }
+    ],
+    "externalBindings": [
+      {
+        "id": "05f798ad836834f772432182fe0db8cdfc3f8ffa502e092155d15a0b15a39115",
+        "sha256": "05f798ad836834f772432182fe0db8cdfc3f8ffa502e092155d15a0b15a39115"
+      }
+    ],
+    "commands": [
+      {
+        "id": "preview-demo-project",
+        "sha256": "d199d9c3c25b72064c284ae7fa44837baa33a379e8a887813cbe9128c58750a1"
+      },
+      {
+        "id": "preview-demo-parent",
+        "sha256": "4e77a8687ca2e492267bbfc837b185dda28fd7ccf6258aa8a01c39b1be891fdc"
+      },
+      {
+        "id": "preview-demo-child",
+        "sha256": "f85e5a280d72e8cb6b713ab96e3651feb93a663c92ba38a17c2934eabafd7906"
+      },
+      {
+        "id": "preview-demo-breakdown",
+        "sha256": "7d1927cf04570841869c1778cae4b463a695fae32572659257fe1083ab054362"
+      },
+      {
+        "id": "preview-demo-session",
+        "sha256": "d8acf599b626b0655af7f3d41c3ff3c45ffa9945399809d31464f9737293e6f2"
+      },
+      {
+        "id": "2f24c154-2fa5-4e39-ae49-43867e8abaa0",
+        "sha256": "7a966a88f7516d931a9ecd68ccccc219c5b8eab1aa0258ff6b1c35762ca214e4"
+      },
+      {
+        "id": "589266da-f852-442b-b3b9-74ef00bcd473",
+        "sha256": "6408388f3fa88eba921b0217d8c7f305b1bb68dc96c78d31494a530f2f8eb12c"
+      },
+      {
+        "id": "99fd0517-4a31-4e8e-9927-c12c8bf5fc4d",
+        "sha256": "9f03bb3b2864d60a64216a810e3b23e1e6303bb6233124c10d50c82973a40d79"
+      },
+      {
+        "id": "3c67aef6-3073-44cf-bafc-4177f3d7f793",
+        "sha256": "bd79215f410dde330af01901b17f26893ddf2c10d398f3864106bd6cb437267d"
+      },
+      {
+        "id": "8d8e4d69-4bef-467f-84b4-584ffef4047c",
+        "sha256": "80635a946c50781bae4b9a00564275b63e5ea80a366e0f078972beb57f6e4a39"
+      },
+      {
+        "id": "4d805639-c502-41e9-a9bf-74786ec1238b",
+        "sha256": "c72de6373a2260501433a2ae848aa5a5b313fb850871c7caab9d3fd994656a5d"
+      }
+    ],
+    "legacyMappings": []
+  },
+  "sessions": [
+    {
+      "file": "--data-_dsh-dev-previews-a2d2-v3-121-workspace--/session-f9282a68-4c3f-4251-adcb-bcd6f24d7515/session.lock",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "--data-_dsh-dev-previews-a2d2-v3-121-workspace--/session-f9282a68-4c3f-4251-adcb-bcd6f24d7515/session.v4.jsonl.zstd",
+      "bytes": 417,
+      "sha256": "7cfd5a79aa74170a2fcb456e13d2fc21b5f88446f7b329da76406812ab6c8e27"
+    }
+  ],
+  "modelCalls": {
+    "gateway": 0,
+    "adapter": 0
+  },
+  "configuration": [
+    {
+      "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/profiles/web/package.json",
+      "bytes": 369,
+      "sha256": "84039025dc62f36f1b9a8fa0c12f460e1a255924dad8165c067ea5861e9a6c77"
+    },
+    {
+      "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/profiles/web/pnpm-lock.yaml",
+      "bytes": 1896,
+      "sha256": "232730521e3e3cddb84d4d3129f794b7cc1ab4a51eb58610364d7cc8b7d3cefc"
+    },
+    {
+      "path": "/data/_dsh-dev/previews/a2d2-v3-121/launch.mjs",
+      "bytes": 2922,
+      "sha256": "17722f5a01097d005c0468325a13894077ba1c0dfb03224bb7ef5a4ac08ffa57"
+    },
+    {
+      "path": "/data/_dsh-dev/previews/a2d2-v3-121/preview.patch.yml",
+      "bytes": 1499,
+      "sha256": "8ed745373175dfb812591f4c78a707e79cbed54507b4158e9c3c776ab847aa4f"
+    },
+    {
+      "path": "/data/_dsh-dev/previews/a2d2-v3-121/guard/guard.mjs",
+      "bytes": 6546,
+      "sha256": "442573774fd2c16eb858af534230cbfb8f7029ff8d483085926b14531454e62d"
+    },
+    {
+      "path": "/data/_dsh-dev/previews/a2d2-v3-121/artifacts/source124-876758c8566e50c0db0df53e27ada46b8041c223/dsh-a2d2-0.0.1.tgz",
+      "bytes": 337571,
+      "sha256": "b7939639179faf84563a9d486ef768600e642e0722db22a1fb84fe9444c9bf5b"
+    },
+    {
+      "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/profiles/web/node_modules/dsh-a2d2/lib/client.js",
+      "bytes": 205869,
+      "sha256": "93baf01e6222cefc5710403f0c29e59ae9258d31fd3ca930b1c1e3a1a7476f61"
+    }
+  ],
+  "run": {
+    "program": "dsh-a2d2-v3-preview",
+    "runId": "8ff9ecbb-d772-42fc-9480-64f2ef7d6dd1",
+    "launcherPid": 149203,
+    "pid": 149210,
+    "baseURL": "http://10.126.126.12:18782",
+    "publicListen": "10.126.126.12:18782",
+    "internalOrigin": "http://127.0.0.1:33537",
+    "transport": "transparent TCP forwarding to real official DSH Web",
+    "startedAt": "2026-10-20T15:30:55.944Z",
+    "packageSha256": "b7939639179faf84563a9d486ef768600e642e0722db22a1fb84fe9444c9bf5b"
+  },
+  "recordChanges": [],
+  "sessionComparison": [
+    {
+      "file": "--data-_dsh-dev-previews-a2d2-v3-121-workspace--/session-f9282a68-4c3f-4251-adcb-bcd6f24d7515/session.lock",
+      "beforeBytes": 0,
+      "currentBytes": 0,
+      "beforeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "currentSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "wholeFileIdentical": true,
+      "originalBytesPreserved": true,
+      "appendedBytes": 0
+    },
+    {
+      "file": "--data-_dsh-dev-previews-a2d2-v3-121-workspace--/session-f9282a68-4c3f-4251-adcb-bcd6f24d7515/session.v4.jsonl.zstd",
+      "beforeBytes": 417,
+      "currentBytes": 417,
+      "beforeSha256": "7cfd5a79aa74170a2fcb456e13d2fc21b5f88446f7b329da76406812ab6c8e27",
+      "currentSha256": "7cfd5a79aa74170a2fcb456e13d2fc21b5f88446f7b329da76406812ab6c8e27",
+      "wholeFileIdentical": true,
+      "originalBytesPreserved": true,
+      "appendedBytes": 0
+    }
+  ],
+  "addedSessionFiles": [],
+  "configurationChanges": [
+    {
+      "prior": {
+        "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/profiles/web/package.json",
+        "bytes": 334,
+        "sha256": "38ed97e7096851d3e7143421fb8c16282061f75b11d988d3de08a941f5703b02"
+      },
+      "current": {
+        "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/profiles/web/package.json",
+        "bytes": 369,
+        "sha256": "84039025dc62f36f1b9a8fa0c12f460e1a255924dad8165c067ea5861e9a6c77"
+      }
+    },
+    {
+      "prior": {
+        "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/profiles/web/pnpm-lock.yaml",
+        "bytes": 1721,
+        "sha256": "de460bd2dd260d8266e212bc3a174d6b34db90a609bb200f790262c5d2b01f0e"
+      },
+      "current": {
+        "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/profiles/web/pnpm-lock.yaml",
+        "bytes": 1896,
+        "sha256": "232730521e3e3cddb84d4d3129f794b7cc1ab4a51eb58610364d7cc8b7d3cefc"
+      }
+    },
+    {
+      "prior": {
+        "path": "/data/_dsh-dev/previews/a2d2-v3-121/launch.mjs",
+        "bytes": 2889,
+        "sha256": "cdf23f9809168ac1eef3e1016bee0b162f933471fd024c0542bd5612d1dd0a97"
+      },
+      "current": {
+        "path": "/data/_dsh-dev/previews/a2d2-v3-121/launch.mjs",
+        "bytes": 2922,
+        "sha256": "17722f5a01097d005c0468325a13894077ba1c0dfb03224bb7ef5a4ac08ffa57"
+      }
+    },
+    {
+      "prior": null,
+      "current": {
+        "path": "/data/_dsh-dev/previews/a2d2-v3-121/artifacts/source124-876758c8566e50c0db0df53e27ada46b8041c223/dsh-a2d2-0.0.1.tgz",
+        "bytes": 337571,
+        "sha256": "b7939639179faf84563a9d486ef768600e642e0722db22a1fb84fe9444c9bf5b"
+      }
+    },
+    {
+      "prior": {
+        "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/profiles/web/node_modules/dsh-a2d2/lib/client.js",
+        "bytes": 176436,
+        "sha256": "f8d77443584a553a7bab124866f3f0e9775d5bca3a347be4f3e9e2e1fca2b7e5"
+      },
+      "current": {
+        "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/profiles/web/node_modules/dsh-a2d2/lib/client.js",
+        "bytes": 205869,
+        "sha256": "93baf01e6222cefc5710403f0c29e59ae9258d31fd3ca930b1c1e3a1a7476f61"
+      }
+    }
+  ],
+  "fixedGuardAndPatchPreserved": true,
+  "addedSnapshotKeys": [
+    "sources",
+    "externalBindings",
+    "externalIndex"
+  ],
+  "oldRecordHashesPreserved": true,
+  "originalSessionBytesPreserved": true,
+  "sessionWholeFilesIdentical": true,
+  "sessionAppendDiagnosisRequired": false,
+  "checkPassed": true
+}

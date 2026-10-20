@@ -46,6 +46,11 @@
 .form input, .form textarea, .form select { min-width: 0; width: 100%; box-sizing: border-box; }
 .form fieldset { border: 1px solid var(--work-line); border-radius: 6px; display: grid; gap: 12px; min-width: 0; }
 .form > button { justify-self: start; }
+.panel h1, .panel h2, .panel h3 { overflow-wrap: anywhere; }
+.sourceBody { white-space: pre-wrap; overflow-wrap: anywhere; color: inherit !important; }
+.panel summary { cursor: pointer; }
+.panel details { margin: 14px 0; }
+.panel a { color: var(--dsw-alias-label-link, #565b96); }
 .failure { color: var(--dsw-alias-state-error-primary, #b14c49) !important; }
 .sessionEntry { display: flex; gap: 6px; min-width: 0; }
 .sessionEntry button { font: inherit; font-size: 11px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 5px 9px; border-radius: 5px; border: 1px solid var(--dsw-alias-border-l3, #dce0e7); color: inherit; background: transparent; cursor: pointer; }

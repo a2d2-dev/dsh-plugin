@@ -1,10 +1,13 @@
-import type { WorkCommand, WorkCompleted, WorkQuery, WorkRequest, WorkResult } from '../work-types.ts'
+import type { WorkCommand, WorkCompleted, WorkFailure, WorkQuery, WorkRequest, WorkResult } from '../work-types.ts'
 import { WORK_ROUTE_PATH } from '../work-types.ts'
 
 /** Same-origin operator-authenticated work boundary. There is no local product fallback. */
 export interface WorkClient {
   query(value: WorkQuery, signal?: AbortSignal): Promise<WorkCompleted>
   command(value: WorkCommand): Promise<WorkCompleted>
+}
+export class WorkClientError extends Error {
+  constructor(readonly result: WorkFailure) { super(`${result.error.code}: ${result.error.message}`) }
 }
 export function createWorkClient(fetcher: typeof fetch = globalThis.fetch.bind(globalThis)): WorkClient {
   async function request(payload: WorkRequest, signal?: AbortSignal): Promise<WorkCompleted> {
@@ -17,7 +20,7 @@ export function createWorkClient(fetcher: typeof fetch = globalThis.fetch.bind(g
     try { result = await response.json() as WorkResult }
     catch { throw new Error(`工作服务返回无效响应（HTTP ${response.status}）`) }
     if (result?.status === 'failed' || result?.status === 'conflict') {
-      throw new Error(`${result.error.code}: ${result.error.message}`)
+      throw new WorkClientError(result)
     }
     if (!response.ok || result?.status !== 'completed') throw new Error(`工作服务不可用（HTTP ${response.status}）`)
     if (payload.kind === 'query') {
@@ -28,6 +31,9 @@ export function createWorkClient(fetcher: typeof fetch = globalThis.fetch.bind(g
         : query === 'task.detail' ? result.task !== undefined
         : query === 'session.candidates' ? Array.isArray(result.candidates)
         : query === 'session.work' ? Array.isArray(result.work)
+        : query === 'source.list' ? Array.isArray(result.sources)
+        : query === 'source.issues' ? result.source !== undefined && result.page !== undefined && Array.isArray(result.page.items) && result.page.identity !== undefined
+        : query === 'source.issue' ? result.source !== undefined && result.issue !== undefined
         : true
       if (!valid) throw new Error('工作服务返回的数据不符合查询合同')
     }

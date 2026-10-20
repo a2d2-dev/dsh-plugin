@@ -1,0 +1,66 @@
+{
+  "observedAt": "2026-10-20T14:39:55.008Z",
+  "mode": "preparation only; unauthenticated read-only login page",
+  "supervisor": {
+    "exitCode": 0,
+    "status": "dsh-a2d2-v3-preview              RUNNING   pid 2636008, uptime 6:50:37"
+  },
+  "credentials": {
+    "probe": "GET /user",
+    "exitCode": 0,
+    "identity": {
+      "login": "imneov",
+      "nodeId": "MDQ6VXNlcjMxNjEyMDMz"
+    },
+    "environment": {
+      "PATH": "/root/.nvm/versions/node/v22.23.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+      "DSH_HOME": "/data/_dsh-dev/previews/a2d2-v3-121/home",
+      "XDG_CONFIG_HOME": "/data/_dsh-dev/previews/a2d2-v3-121/config",
+      "XDG_STATE_HOME": "/data/_dsh-dev/previews/a2d2-v3-121/state",
+      "DSH_TELEMETRY_DISABLED": "1",
+      "DSH_WEB_PASSWORD_FILE": "/data/_dsh-dev/web-password",
+      "GH_CONFIG_DIR": "/root/.config/gh"
+    },
+    "launcherChangeApplied": false,
+    "requiredAddition": "GH_CONFIG_DIR only"
+  },
+  "capabilities": {
+    "getRandomValuesType": "function",
+    "isSecureContext": false,
+    "origin": "http://10.126.126.12:18782",
+    "randomUUIDType": "undefined",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36"
+  },
+  "browserPids": [
+    {
+      "pid": 4140842,
+      "flags": [
+        "--remote-debugging-port=0",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-background-networking",
+        "--disable-backgrounding-occluded-windows",
+        "--disable-component-update",
+        "--disable-default-apps",
+        "--disable-hang-monitor",
+        "--disable-popup-blocking",
+        "--disable-prompt-on-repost",
+        "--disable-sync",
+        "--disable-features=Translate",
+        "--enable-features=NetworkService,NetworkServiceInProcess",
+        "--metrics-recording-only",
+        "--password-store=basic",
+        "--use-mock-keychain",
+        "--headless=new",
+        "--enable-unsafe-swiftshader",
+        "--user-data-dir=/tmp/a2d2-124-prep-browser",
+        "--window-size=1280,720",
+        "--no-sandbox",
+        "--disable-dev-shm-usage"
+      ]
+    }
+  ],
+  "apiMocksApplied": false,
+  "cryptoOverridesApplied": false,
+  "authenticatedProductAcceptance": "not performed; awaiting CEO candidate and deployment green light"
+}

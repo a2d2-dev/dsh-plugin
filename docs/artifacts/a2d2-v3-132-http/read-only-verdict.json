@@ -1,0 +1,65 @@
+{
+  "origin": "http://10.126.126.12:18782",
+  "verificationInterface": "Read-only public Work API after actual agent-browser UI writes",
+  "project": {
+    "id": "1b3fd2f7-a492-4c1d-a965-7e7f8cc5cc58",
+    "name": "验收_HTTP132_20261020_独立项目",
+    "resources": []
+  },
+  "task": {
+    "id": "3e00a048-42b1-48dd-ae22-d6655c06779d",
+    "projectId": "1b3fd2f7-a492-4c1d-a965-7e7f8cc5cc58",
+    "title": "验收_HTTP132_20261020_工作",
+    "version": 3,
+    "specificationVersion": 2,
+    "historyVersions": [
+      1
+    ],
+    "breakdown": [
+      {
+        "id": "d14c97ce-4a8c-47ec-8680-0bcd14e942d3",
+        "title": "验收_HTTP132_工作块",
+        "description": "普通HTTP下由CSPRNG生成稳定UUID并保存，刷新后可读。"
+      }
+    ],
+    "activity": [
+      {
+        "commandId": "589266da-f852-442b-b3b9-74ef00bcd473",
+        "type": "task.create",
+        "version": 1
+      },
+      {
+        "commandId": "99fd0517-4a31-4e8e-9927-c12c8bf5fc4d",
+        "type": "task.update-spec",
+        "version": 2
+      },
+      {
+        "commandId": "3c67aef6-3073-44cf-bafc-4177f3d7f793",
+        "type": "task.replace-breakdown",
+        "version": 3
+      }
+    ]
+  },
+  "resources": [
+    {
+      "ref": {
+        "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+        "workspaceId": "56cdbb60-67bc-4f87-bca8-9dcaf46f2976"
+      },
+      "title": "workspace",
+      "owner": {
+        "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+        "projectName": "演示项目 · 本地工作"
+      }
+    }
+  ],
+  "unsavedAbcdAbsent": true,
+  "preexistingProjectIds": [
+    "ec480d94-c5e8-44a0-80a0-897945df1a67"
+  ],
+  "preexistingTaskIds": [
+    "76e75fb5-a0ee-45cb-94e0-8dc9cb849411",
+    "0880f27a-5367-4679-b562-27c080cff7ab"
+  ],
+  "apiWritesPerformedByThisScript": 0
+}
