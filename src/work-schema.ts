@@ -18,6 +18,16 @@ export const taskSchema = z.object({
   sessions: z.array(z.object({ session: sessionRefSchema, purpose: z.enum(['related', 'review']) }).strict()),
   activity: z.array(z.object({ commandId: referenceId, type: referenceId, version: z.number().int().positive() }).strict()),
 }).strict()
+export const modelSchema = z.object({ provider: referenceId, model: referenceId }).strict()
+export const executionSchema = z.object({
+  id, ref: taskRefSchema, agentId: id, owner: id, epoch: z.number().int().positive(), resource: resourceRefSchema,
+  session: sessionRefSchema, agentPreset: referenceId, model: modelSchema, permissionPreset: referenceId, policy: policySchema,
+  state: z.enum(['accepted', 'creating', 'ready', 'running', 'waiting', 'paused', 'failed']),
+  history: z.array(z.object({ state: z.enum(['accepted', 'creating', 'ready', 'running', 'waiting', 'paused', 'failed']), commandId: referenceId }).strict()),
+  actual: z.object({ runtimeId: referenceId, cwd: text, agentPreset: referenceId, provider: referenceId, model: referenceId,
+    permissionPreset: referenceId, sandbox: referenceId, approval: referenceId }).strict().optional(),
+  error: z.object({ code: referenceId, message: text }).strict().optional(),
+}).strict()
 const command = { commandId: referenceId }
 const content = { title: text, goal: text, specification: text, acceptance: z.array(text).min(1).max(1000) }
 const change = { ...command, ref: taskRefSchema, expectedVersion: z.number().int().positive() }
@@ -31,19 +41,23 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ ...change, type: z.literal('task.link-child'), child: taskRefSchema, childExpectedVersion: z.number().int().positive() }).strict(),
   z.object({ ...change, type: z.literal('task.associate-session'), session: sessionRefSchema, purpose: z.enum(['related', 'review']) }).strict(),
   z.object({ ...change, type: z.literal('legacy.map'), address: legacyAddressSchema }).strict(),
+  z.object({ ...change, type: z.literal('task.start'), agentId: id, resource: resourceRefSchema, session: sessionRefSchema.optional(),
+    agentPreset: referenceId, model: modelSchema, permissionPreset: referenceId }).strict(),
 ])
 export const querySchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('projects.list') }).strict(),
   z.object({ type: z.literal('resources.list') }).strict(),
   z.object({ type: z.literal('project.detail'), projectId: id }).strict(),
+  z.object({ type: z.literal('task.execution'), ref: taskRefSchema }).strict(),
   z.object({ type: z.literal('task.detail'), ref: taskRefSchema }).strict(),
   z.object({ type: z.literal('session.candidates'), projectId: id }).strict(),
   z.object({ type: z.literal('session.work'), session: sessionRefSchema }).strict(),
   z.object({ type: z.literal('legacy.resolve'), address: legacyAddressSchema }).strict(),
 ])
-const receiptSchema = z.object({ status: z.literal('completed'), project: projectSchema.optional(), task: taskSchema.optional(), ref: taskRefSchema.optional() }).strict()
+const receiptSchema = z.object({ status: z.literal('completed'), execution: executionSchema.optional(), project: projectSchema.optional(), task: taskSchema.optional(), ref: taskRefSchema.optional() }).strict()
 export const snapshotSchema = z.object({
   schemaVersion: z.literal(3), projects: z.array(projectSchema), agents: z.array(agentSchema), tasks: z.array(taskSchema),
+  executions: z.array(executionSchema).default([]),
   commands: z.array(z.object({ commandId: referenceId, fingerprint: z.string(), result: receiptSchema }).strict()),
   legacyMappings: z.array(z.object({ address: legacyAddressSchema, ref: taskRefSchema }).strict()),
 }).strict()

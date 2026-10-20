@@ -35,7 +35,7 @@ export class WorkApplication {
   private async load(): Promise<WorkSnapshot> {
     try { return snapshotSchema.parse(JSON.parse(await readFile(this.file, 'utf8'))) }
     catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { schemaVersion: 3, projects: [], agents: [], tasks: [], commands: [], legacyMappings: [] }
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { schemaVersion: 3, projects: [], agents: [], tasks: [], commands: [], legacyMappings: [], executions: [] }
       throw error
     }
   }
@@ -116,6 +116,33 @@ export class WorkApplication {
     if (!('ref' in command)) return failed('unsupported-command', 'Command is not implemented')
     const task = taskAt(state, command.ref)
     if (!task) return failed('unknown-task', 'Task does not belong to this project')
+    if (command.type === 'task.start') {
+      const previous = state.executions.find(item => item.ref.taskId === task.id)
+      if (previous) {
+        if (previous.agentId !== command.agentId || !sameResource(previous.resource, command.resource)
+          || (command.session && !sameSession(previous.session, command.session)) || previous.agentPreset !== command.agentPreset
+          || previous.permissionPreset !== command.permissionPreset || JSON.stringify(previous.model) !== JSON.stringify(command.model)) {
+          return failed('execution-conflict', 'Task already has a different execution; use its existing execution identity')
+        }
+        return { status: 'completed', execution: previous }
+      }
+      if (task.version !== command.expectedVersion) return conflict(task.version)
+      if (state.legacyMappings.some(item => item.ref.taskId === task.id)) return failed('legacy-authority-retained', 'Legacy mapped work requires an explicit safe migration before v3 execution')
+      const agent = state.agents.find(item => item.id === command.agentId && item.projectId === project.id)
+      if (!agent || !agent.policy.capabilities.includes('coordination')) return failed('ineligible-agent', 'Project Agent has no coordination capability')
+      if (!project.resources.some(item => sameResource(item, command.resource))) return failed('incompatible-resource', 'Execution resource does not belong to this project')
+      const session = command.session ?? { runtimeId: command.resource.runtimeId, sessionId: `session-${randomUUID()}` }
+      if (session.runtimeId !== command.resource.runtimeId) return failed('incompatible-session', 'Session and execution resource must share a runtime')
+      if (state.executions.some(item => sameSession(item.session, session))) return failed('session-in-use', 'Session already coordinates another execution')
+      if (state.tasks.some(item => item.sessions.some(binding => sameSession(binding.session, session)))) return failed('association-only-session', 'Observed or review Sessions cannot be promoted by starting work')
+      const execution = { id: randomUUID(), ref: command.ref, agentId: agent.id, owner: randomUUID(), epoch: 1,
+        resource: command.resource, session, agentPreset: command.agentPreset, model: command.model, permissionPreset: command.permissionPreset,
+        policy: structuredClone(agent.policy), state: 'accepted' as const, history: [{ state: 'accepted' as const, commandId: command.commandId }] }
+      state.executions.push(execution)
+      task.agentId = agent.id
+      this.changed(task, command)
+      return { status: 'completed', execution }
+    }
     if (task.version !== command.expectedVersion) return conflict(task.version)
     if (command.type === 'legacy.map') {
       if (!isAbsolute(command.address.projectRoot) || normalize(command.address.projectRoot) !== command.address.projectRoot) {
@@ -187,6 +214,10 @@ export class WorkApplication {
     if (!parsed.success) return failed('invalid-query', 'Invalid work query')
     const query = parsed.data
     const state = await this.load()
+    if (query.type === 'task.execution') {
+      if (!taskAt(state, query.ref)) return failed('unknown-task', 'Task does not belong to this project')
+      return { status: 'completed', execution: state.executions.find(item => item.ref.taskId === query.ref.taskId) }
+    }
     if (query.type === 'legacy.resolve') {
       const mapping = state.legacyMappings.find(item => legacyKey(item.address) === legacyKey(query.address))
       return mapping ? { status: 'completed', ref: mapping.ref } : failed('unknown-legacy-address', 'Legacy address has no accepted TaskRef mapping')
