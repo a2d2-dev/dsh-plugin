@@ -60,6 +60,7 @@ export class WorkPanelController {
     } catch (error) { if (revision === this.revision) this.update({ loading: false, error: message(error) }) }
   }
   async openTask(ref: TaskRef): Promise<void> {
+    this.invalidateSourceNavigation()
     if (this.state.projectId !== ref.projectId) {
       const origin=this.state.object==='issues'&&this.state.source.issue?{projectId:this.state.projectId,tasks:this.state.tasks,source:this.state.source,object:this.state.object,search:this.state.search,view:this.state.view}:null
       const projectRevision = this.revision + 1
@@ -99,7 +100,9 @@ export class WorkPanelController {
   }
   private sourceRevision = 0
   private updateSource(value: Partial<SourcePanelState>): void { this.update({source:{...this.state.source,...value}}) }
-  setObject(object: WorkPanelState['object']): void { this.update({object}) }
+  /** Navigation invalidates source UI effects, never an already authorized command. */
+  private invalidateSourceNavigation(): void { ++this.sourceRevision; this.updateSource({loading:false}) }
+  setObject(object: WorkPanelState['object']): void { ++this.revision; this.invalidateSourceNavigation(); this.update({object,loading:false}) }
   async showSources(): Promise<void> {
     const projectId=this.state.projectId
     if (!projectId) return
