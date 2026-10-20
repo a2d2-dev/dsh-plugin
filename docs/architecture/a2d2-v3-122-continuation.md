@@ -162,3 +162,21 @@ const result = await app.query({ type: 'task.execution', ref }, operator)
 本小片只交付源作者材料，不接受手动接续、不预约 operation/successor、不更新 current/retired/epoch，也没有声明五步恢复完成。下一片必须从旧 runner 抽取共享 prepare/write/create/take/deliver，固定材料版本到同一操作，并在 prepare 重新读取最新 Task 目标/规格、决定/证据/未完项、解析引用；消费投递时沿用既有 redaction 边界。不能把本 DTO 当成已经校验的完整接续包或由 fixture 填 store 替代真实源工具。
 
 材料入口整合最终五个 work 文件40/40通过、0未选、退出0，包含原19项execution及新增2项材料回归。未并行运行build或其他I/O测试。
+
+## 本片最终验证与 fresh 交接
+
+已推送实现检查点依次为 `d434f77`（生产 Context）、`8610700`（fixture 生命周期）和 `265987b`（源材料入口）。本片始终在锁定 handoff 工作树和分支实施；没有修改宿主、18780/18781、UI、依赖、共享 git 配置或 PR131。最终 PR 仍须为 `spec/dsh-control-panel-v3` 上的整票 draft，review base 保持 `1f562b107ad9adc046b1f0bb01929185b5c7d234`，不以落后 main 重写已有实现。
+
+| 本片最终命令（串行） | 退出与证据 |
+| --- | --- |
+| `node node_modules/typescript/bin/tsc --noEmit` 及 `node node_modules/typescript/bin/tsc -p tsconfig.client.json` | 0；backend/client 均通过 |
+| `node node_modules/vitest/vitest.mjs run tests/work.spec.ts tests/work-execution.spec.ts tests/work-execution-lifecycle.spec.ts tests/work-host.spec.ts tests/work-process.spec.ts` | 0；40通过、0失败、0未选 |
+| `node node_modules/vitest/vitest.mjs run tests/task-runtime.spec.ts` | 0；33通过、0失败、0未选；slow-successor 原预算内3870ms |
+| `pnpm --config.verifyDepsBeforeRun=false verify:pack-exports` | 0；include src 的独立backend/client声明构建、真实tgz安装及13个Node导出import通过 |
+| `git diff --check` | 0；材料小片提交前曾因文档EOF多一空行退出2，修正后通过 |
+
+legacy 本轮全绿是一次串行样本；B1 原5000ms超时和独立分支历史失败保留，不据这次通过定位原始超时首因。pnpm 的单命令 verifyDepsBeforeRun 选项只跳过重复依赖自检，未改变仓库或共享配置、依赖版本、native批准策略或测试预算。打包构建产生已有 external/noExternal deprecation warning，退出仍为0。
+
+下一 fresh 会话应先验证当前分支/新HEAD并读取本文。剩余必须实现：共享旧 runner 的五步恢复，固定operation/source/successor/profile及完整UserMessage；真实维护内受围栏take与双向占用/epoch原子更新；每检查点丢回执与take已提交/运行记录未保存的恢复；投递与消费分账；实际源preset/model/permissions/cwd继承及具名冲突；等待人类、未结算原生子执行和未消费通知（独立子Task本身不阻断）；base-owned退休冷/暖/native/queued/tool围栏及卸载fail-closed；只读历史的Task/Session/runtime/resource关联验证、真实cursor/裁剪DTO；新旧原生Session返回同一Task并区分control/history/review。
+
+材料入口可供后续B2调用与查询，不能供UI宣称接续已完成或历史已安全只读。UI仍须等B2/B3正式DTO；最终产品lane须基于集成分支新tgz重新执行真实HTTP和浏览器导航，不能复用独立宿主lane的旧artifact作为本分支证据。本片不标记#122完成。
