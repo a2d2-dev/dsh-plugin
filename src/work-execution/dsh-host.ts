@@ -23,6 +23,15 @@ const installed = new WeakMap<Agent, { executionId: string; dispose: () => void 
 export class DshWorkExecutionHost implements WorkExecutionHost {
   readonly runtime: RuntimeHost
   constructor(private readonly ctx: Context, readonly runtimeId: string) { this.runtime = new RuntimeHost(ctx) }
+  /** The production plugin also serves local browsing without execution services. */
+  private service<K extends keyof Context>(name: K, ...methods: string[]): NonNullable<Context[K]> {
+    const service = (this.ctx.get as (key: string) => unknown).call(this.ctx, name as string)
+    if (!service) throw new WorkExecutionError('host-capability-unavailable', `DSH ${String(name)} is required for managed execution`)
+    for (const method of methods) {
+      if (typeof (service as Record<string, unknown>)[method] !== 'function') throw new WorkExecutionError('host-capability-unavailable', `DSH ${String(name)}.${method} is required for managed execution`)
+    }
+    return service as NonNullable<Context[K]>
+  }
   private authorize?: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<boolean>
   private connected = false
   connect(authorize: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<boolean>): void {
@@ -43,9 +52,9 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     if (!this.ctx.get('sessionController') || !this.ctx.get('agentPresets') || !this.ctx.get('permissionPresets')) throw new WorkExecutionError('host-capability-unavailable', 'Host execution catalogs are unavailable')
     const manifest = createRequire(import.meta.url)('@deepseek-ai/dsh-api-session-controller/package.json') as { version: string }
     if (manifest.version !== '0.2.0-rc.2') throw new WorkExecutionError('unsupported-host-controller', 'This adapter is certified for the fixed-identity SessionController 0.2.0-rc.2 contract; other create semantics require a separately verified adapter')
-    const catalog = await this.ctx.sessionController.modelCatalog()
-    const agentPreset = this.ctx.agentPresets.defaultId
-    const permissionPreset = this.ctx.permissionPresets.defaultPreset
+    const catalog = await this.service('sessionController', 'modelCatalog').modelCatalog()
+    const agentPreset = this.service('agentPresets').defaultId
+    const permissionPreset = this.service('permissionPresets').defaultPreset
     return { agentPresets: [agentPreset], permissionPresets: [permissionPreset],
       models: catalog.groups.flatMap(group => group.models.map(model => ({ provider: group.id, model: model.id }))),
       defaults: { agentPreset, permissionPreset, model: { provider: catalog.default.provider, model: catalog.default.model } } }
@@ -54,9 +63,10 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     for (const name of ['sessionController', 'sessionPersistence', 'sessionQuery', 'agents', 'sessions', 'agentPresets', 'permissionPresets', 'sandboxPolicy', 'approval', 'llm', 'workspaceRegistry', 'agentDefaultModel']) {
       if (!(this.ctx.get as (key: string) => unknown).call(this.ctx, name)) throw new WorkExecutionError('host-capability-unavailable', `DSH ${name} is required for managed execution`)
     }
+    this.service('sessionController', 'create', 'inspect', 'modelCatalog', 'resolveAgent')
     if (this.ctx.get('fs')?.sandboxMode === undefined || this.ctx.get('shell')?.sandboxMode === undefined) throw new WorkExecutionError('host-permission-unenforced', 'Managed execution requires real sandbox-aware filesystem and shell providers')
     if (request.resource.runtimeId !== this.runtimeId) throw new WorkExecutionError('incompatible-resource', 'Execution belongs to another runtime')
-    const workspace = this.ctx.workspaceRegistry.list().find(item => item.id === request.resource.workspaceId)
+    const workspace = this.service('workspaceRegistry').list().find(item => item.id === request.resource.workspaceId)
     if (!workspace || await workspace.status() !== 'ok') throw new WorkExecutionError('unavailable-resource', 'Execution workspace is unavailable')
     if (request.sessionMode === 'reuse') {
       const legacy = this.ctx.get('a2d2')
@@ -65,24 +75,24 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     }
     const choices = await this.choices()
     if (!choices.models.some(item => item.provider === request.model.provider && item.model === request.model.model)) throw new WorkExecutionError('unavailable-model', 'Model is not in the real host catalog')
-    const preset = await this.ctx.agentPresets.resolve(request.agentPreset)
+    const preset = await this.service('agentPresets').resolve(request.agentPreset)
     if (preset.broken) throw new WorkExecutionError('unavailable-agent-preset', 'Requested Agent preset has an activation failure')
-    if (!this.ctx.permissionPresets.names.includes(request.permissionPreset)) throw new WorkExecutionError('invalid-permission-preset', 'Permission preset is unavailable')
-    await this.ctx.llm.resolveCallConfig(request.model)
-    const stat = await this.ctx.sessionPersistence.stat(SessionId(request.session.sessionId))
+    if (!this.service('permissionPresets').names.includes(request.permissionPreset)) throw new WorkExecutionError('invalid-permission-preset', 'Permission preset is unavailable')
+    await this.service('llm').resolveCallConfig(request.model)
+    const stat = await this.service('sessionPersistence').stat(SessionId(request.session.sessionId))
     if (!stat && request.sessionMode === 'reuse') throw new WorkExecutionError('incompatible-session', 'Requested Session does not exist')
     if (stat) {
       if (request.sessionMode === 'reuse' && !workspace.sessionIds.includes(SessionId(request.session.sessionId))) throw new WorkExecutionError('incompatible-session', 'Session is not a member of the selected workspace')
-      const inspection = await this.ctx.sessionController.inspect(SessionId(request.session.sessionId))
+      const inspection = await this.service('sessionController').inspect(SessionId(request.session.sessionId))
       if (inspection.meta.cwd !== workspace.path || inspection.meta.agentPreset !== request.agentPreset) throw new WorkExecutionError('incompatible-session', 'Existing Session resource or preset differs')
       const header = inspection.events.findLast(item => item.type === 'request/header')
       if (header?.type === 'request/header' && (header.data.header.config.provider !== request.model.provider || header.data.header.config.model !== request.model.model)) throw new WorkExecutionError('incompatible-session', 'Existing Session model differs; silent reconfiguration refused')
       if (request.sessionMode === 'reuse') {
         const pending = inspection.events.findLast(item => item.type === 'model/selection')
         const selected = pending?.type === 'model/selection' && (!header || pending.seq > header.seq) ? pending.data
-          : header?.type === 'request/header' ? header.data.header.config : this.ctx.agentDefaultModel.currentSelection()
+          : header?.type === 'request/header' ? header.data.header.config : this.service('agentDefaultModel').currentSelection()
         if (selected.provider !== request.model.provider || selected.model !== request.model.model) throw new WorkExecutionError('incompatible-session', 'Existing Session local selection differs')
-        using observation = await this.ctx.sessionQuery.observeSession(SessionId(request.session.sessionId))
+        using observation = await this.service('sessionQuery').observeSession(SessionId(request.session.sessionId))
         const permission = (observation.projections?.values as { permissions?: { currentValue: string } } | undefined)?.permissions
         if (permission?.currentValue !== request.permissionPreset) throw new WorkExecutionError('incompatible-session', 'Existing Session effective permission differs')
       }
@@ -111,21 +121,21 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
   async ensure(execution: WorkExecution, allowed: () => Promise<boolean>): Promise<NonNullable<WorkExecution['actual']>> {
     await this.check(execution)
     const id = SessionId(execution.session.sessionId)
-    if (!await this.ctx.sessionPersistence.stat(id) && !this.ctx.agents.get(id)) {
-      const workspace = this.ctx.workspaceRegistry.list().find(item => item.id === execution.resource.workspaceId)!
-      const detached = this.ctx.sessions.prepare(id, { meta: { cwd: workspace.path, agentPreset: execution.agentPreset } })
-      const handle = await this.ctx.sessionPersistence.create(detached.header)
+    if (!await this.service('sessionPersistence').stat(id) && !this.service('agents').get(id)) {
+      const workspace = this.service('workspaceRegistry').list().find(item => item.id === execution.resource.workspaceId)!
+      const detached = this.service('sessions').prepare(id, { meta: { cwd: workspace.path, agentPreset: execution.agentPreset } })
+      const handle = await this.service('sessionPersistence').create(detached.header)
       try { await handle.append([{ type: 'model/selection', seq: SessionSeq(0), time: Date.now(), data: execution.model }]) }
       finally { await handle.close() }
-    } else if (execution.sessionMode === 'create' && !this.ctx.agents.get(id)) {
-      const inspection = await this.ctx.sessionController.inspect(id)
+    } else if (execution.sessionMode === 'create' && !this.service('agents').get(id)) {
+      const inspection = await this.service('sessionController').inspect(id)
       if (inspection.events.length === 0) {
-        const handle = await this.ctx.sessionPersistence.open(id, 'write')
+        const handle = await this.service('sessionPersistence').open(id, 'write')
         try { await handle.append([{ type: 'model/selection', seq: SessionSeq(0), time: Date.now(), data: execution.model }]); await handle.flush() }
         finally { await handle.close() }
       }
     }
-    const created = await this.ctx.sessionController.create({ sessionId: id, workspaceId: execution.resource.workspaceId as never, agentPreset: execution.agentPreset })
+    const created = await this.service('sessionController').create({ sessionId: id, workspaceId: execution.resource.workspaceId as never, agentPreset: execution.agentPreset })
     if (created.sessionId !== id) throw new WorkExecutionError('host-session-identity-changed', 'Host did not preserve the reserved Session identity')
     const agent = await this.runtime.agent(id)
     await agent.runMaintenance(async () => {
@@ -133,7 +143,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       const started = events.some(item => item.type === 'turn/start')
       const profile = await rootSessionProfile(this.ctx, id)
       if (started && profile.permission?.preset !== execution.permissionPreset) throw new WorkExecutionError('incompatible-session', 'Existing Session permission differs; silent reconfiguration refused')
-      if (!started && profile.permission?.preset !== execution.permissionPreset) this.ctx.permissionPresets.set(agent.session, execution.permissionPreset)
+      if (!started && profile.permission?.preset !== execution.permissionPreset) this.service('permissionPresets').set(agent.session, execution.permissionPreset)
       const prior = installed.get(agent)
       if (prior && prior.executionId !== execution.id) throw new WorkExecutionError('session-in-use', 'Agent already belongs to another execution')
       if (!prior) {
@@ -145,8 +155,8 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       await this.runtime.flush(agent)
     })
     const profile = await rootSessionProfile(this.ctx, id)
-    const filesystem = this.ctx.agentPresets.serviceFor(agent, 'fs') ?? this.ctx.get('fs')
-    const shell = this.ctx.agentPresets.serviceFor(agent, 'shell') ?? this.ctx.get('shell')
+    const filesystem = this.service('agentPresets').serviceFor(agent, 'fs') ?? this.ctx.get('fs')
+    const shell = this.service('agentPresets').serviceFor(agent, 'shell') ?? this.ctx.get('shell')
     if (filesystem?.sandboxMode === undefined || shell?.sandboxMode === undefined) throw new WorkExecutionError('host-permission-unenforced', 'Selected preset did not compose sandbox-aware filesystem and shell providers')
     if (!profile.permission || profile.permission.preset !== execution.permissionPreset || profile.agentPreset !== execution.agentPreset || agent.session.header.cwd === undefined) throw new WorkExecutionError('host-context-mismatch', 'Host did not compose the requested execution context')
     return { runtimeId: this.runtimeId, cwd: agent.session.header.cwd, agentPreset: profile.agentPreset,

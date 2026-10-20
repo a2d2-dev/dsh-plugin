@@ -31,4 +31,26 @@
 
 未改产品源码的 src-only build + pack 退出0；b14 tgz SHA256 `71f71859b202c64f9fd061994088fa6303f2eab9139c0f4713424e31696538e4`，保存在 `/tmp/a2d2-122-admission-diagnostic/b14/`。新 root `/tmp/a2d2-v3-121/122-admission-b14-20261020` 的真实公开HTTP再次退出1，400/无execution；公开 check 原异常仍为 `cannot get property "workspaceRegistry" without inject`，真实包位置 `work-plugin.js:92`。这是当前 b14 的证据，不由旧072外推。
 
-临时重放脚本原先将 product 标签固定为旧SHA；b14留证导出时只校正该描述标签并附实际tgz SHA，不改原始请求/响应。原root文件保留。后续记录修复及真实 tgz 验证。
+临时重放脚本原先将 product 标签固定为旧SHA；b14留证导出时只校正该描述标签并附实际tgz SHA，不改原始请求/响应。原root文件保留。后续记录真实 tgz 验证。
+
+### 修复边界
+
+`DshWorkExecutionHost` 的执行服务统一经公开 `ctx.get` 获取，缺服务准确拒绝；Controller 的 create/inspect/modelCatalog/resolveAgent 在预约前检查。保留已知不兼容版本拒绝与创建后固定ID核对。`work-plugin` 仍只 inject Web/connection，本地浏览不等待 Agent/model。DshWorkHost 与 rootSessionProfile 已使用动态 get，无需改。共享 RuntimeHost 的 flush 原有直接 sessions 访问同样会受生产 Context 限制；经主会话明确授权，仅将该处改成动态 get，不改旧恢复/调度算法。legacy-only ensureSuccessor 的 a2d2 访问仍由旧运行器已声明依赖提供，不在本 task.start 调用路径。
+
+真实合同 fixture 原先 `new SessionController(rootContext)`，绕过 Controller 静态 inject。产品动态服务修复后，这会在 Controller 内部抛 `agentDefaultModel without inject`；改成 `await ctx.plugin(SessionController, ...)` 才与生产装配一致。它是 fixture 问题，未以改宿主或业务 fallback 掩盖。临时源码 spy 已移除。
+
+缺 controller.create 的第二条红反馈：公开 start 原先 HTTP200 并保存 failed execution，未能在预约前拒绝；加入方法能力检查后，同一生产插件测试对 create/modelCatalog 缺失均 HTTP400 `host-capability-unavailable`，无 execution、Session 或模型请求，恢复能力后同 Task 真正 ready 并消费一次 kickoff、重试不增调用。
+
+| 检查 | 退出及真实结果 |
+| --- | --- |
+| frozen install --ignore-scripts | 0；未更改lock/依赖或批准native脚本 |
+| 生产Context首条红测 | 1；1失败、2未选；HTTP400 admission |
+| 服务修复后、fixture纠正前 | 1；Controller内部agentDefaultModel inject错误；已明确纠正fixture |
+| fixture纠正后定向 | 0；1通过、2未选 |
+| 缺create能力红测 | 1；原先错误接受并保存execution |
+| work-host全文件 + typecheck | 0；3/3、0skip；backend/client类型均通过 |
+| verify:pack-exports + pack | 0；src-only声明、bundle、13个packed导出均通过 |
+| 5文件扩展组合（并行build时） | 1；59通过、5失败、0skip；work-execution read/read-only与legacy cold create/take超时5秒，另legacy handoff清理ENOTEMPTY；保留，未提高预算或改断言 |
+| 原预算定向复核 | 0；work-execution 2通过/13未选，legacy runtime 4通过/29未选；不能据此断言原超时首因 |
+
+红证据checkpoint `fc6b376` 已推送。首次commit因环境未设git identity退出128；后续用与base一致的命令级 identity提交，未改全局git配置。

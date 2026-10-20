@@ -133,6 +133,20 @@ it('starts through the production plugin Context with real execution services an
   const ref = { projectId: project.id, taskId: task.id }
   const command = { kind: 'command', value: { type: 'task.start', commandId: 'start', ref, expectedVersion: 1,
     agentId: project.defaultAgentId, resource, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'read-only' } } as const
+  const controller = ctx.get('sessionController')!
+  for (const method of ['create', 'modelCatalog'] as const) {
+    const descriptor = Object.getOwnPropertyDescriptor(controller, method)
+    Object.defineProperty(controller, method, { value: undefined, configurable: true })
+    try {
+      expect(await call(server, command)).toMatchObject({ status: 400, body: { status: 'failed', error: { code: 'host-capability-unavailable' } } })
+      expect((await call(server, { kind: 'query', value: { type: 'task.execution', ref } })).body).not.toHaveProperty('execution')
+      expect(await ctx.sessionPersistence.list()).toHaveLength(0)
+      expect(model.requests).toHaveLength(0)
+    } finally {
+      if (descriptor) Object.defineProperty(controller, method, descriptor)
+      else Reflect.deleteProperty(controller, method)
+    }
+  }
   const started = await call(server, command)
   expect(started, JSON.stringify(started)).toMatchObject({ status: 200, body: { status: 'completed', execution: { state: 'ready', actual: { cwd: path, permissionPreset: 'read-only', provider: 'contract', model: 'selected' } } } })
   const execution = completed(started.body).execution!
