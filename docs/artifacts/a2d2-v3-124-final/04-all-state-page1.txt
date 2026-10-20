@@ -1,0 +1,172 @@
+- generic [ref=e1] clickable [onclick]
+  - generic
+    - button "New session" [ref=e3]
+    - button "Collapse sidebar" [ref=e4]
+    - button "New session" [ref=e5]
+      - StaticText "New Session"
+    - navigation "Global panels" [ref=e6]
+      - button "Plugins" [ref=e12]
+        - StaticText "Plugins"
+      - button "A²D² 控制面板" [ref=e13]
+        - StaticText "A²D² 控制面板"
+    - StaticText "Workspaces"
+    - generic [ref=e7] clickable [onclick]
+      - button "Search sessions" [expanded=false, ref=e14]
+      - textbox "Search session names" [ref=e15]
+    - button "View options" [ref=e8]
+    - button "Add workspace" [ref=e9]
+    - generic
+      - tree "Sessions"
+        - generic
+          - treeitem "workspace" [level=1, expanded=true, ref=e34]
+            - StaticText "workspace"
+          - treeitem "Untitled 13h" [level=1, ref=e35]
+            - StaticText "Untitled"
+            - StaticText "13h"
+    - button "Settings" [expanded=false, ref=e16]
+      - StaticText "Settings"
+    - main "A²D² 控制面板" [ref=e2]
+      - sectionheader
+        - heading "A²D² 控制面板" [level=1, ref=e17]
+        - paragraph
+          - StaticText "项目、工作与关联会话"
+        - button "关闭面板" [ref=e18]
+      - LabelText
+        - StaticText "当前项目 "
+        - combobox "当前项目" [expanded=false, ref=e19]: 演示项目 · 本地工作
+          - MenuListPopup
+            - option "演示项目 · 本地工作" [selected, ref=e36]
+            - option "验收_HTTP132_20261020_独立项目" [ref=e37]
+      - button "接入 / 创建项目" [ref=e10]
+      - button "接入已有资源" [ref=e11]
+      - tablist "工作对象"
+        - tab "Issue" [selected, ref=e20]
+        - tab "PR" [ref=e21]
+        - tab "项目" [ref=e22]
+      - generic
+        - heading "GitHub Issue 来源" [level=2, ref=e23]
+        - paragraph
+          - StaticText "为当前本地项目配置 GitHub 仓库来源。此处读取仓库 Issue；GitHub Project 完整视图尚未提供。"
+        - group
+          - DisclosureTriangle "配置仓库来源" [expanded=false]
+            - StaticText "配置仓库来源"
+        - LabelText
+          - StaticText "仓库来源 "
+          - combobox "仓库来源" [expanded=false, ref=e30]: a2d2-dev/dsh-plugin
+            - MenuListPopup
+              - option "a2d2-dev/dsh-plugin" [selected, ref=e83]
+        - button "重新读取来源配置" [ref=e24]
+        - button "停用来源" [ref=e25]
+        - paragraph
+          - StaticText "来源状态：已启用 · 最近确认的凭据身份：imneov / LiuFeng。我的 Issue 使用此身份。"
+        - LabelText
+          - StaticText "负责人 "
+          - combobox "Issue 负责人" [expanded=false, ref=e31]: 全部 Issue
+            - MenuListPopup
+              - option "我的 Issue" [disabled, ref=e84]
+              - option "全部 Issue" [disabled, ref=e85]
+        - LabelText
+          - StaticText "远端状态 "
+          - combobox "Issue 远端状态" [expanded=false, ref=e32]: 全部状态
+            - MenuListPopup
+              - option "Open" [disabled, ref=e86]
+              - option "Closed" [disabled, ref=e87]
+              - option "全部状态" [disabled, ref=e88]
+        - button "刷新 Issue 列表" [ref=e26]
+        - button "读取缓存列表" [ref=e27]
+        - form
+          - LabelText
+            - StaticText "按 Issue 编号打开完整详情 "
+            - spinbutton "按 Issue 编号打开完整详情 " [required, ref=e38]
+          - button "打开 Issue" [ref=e33]
+        - paragraph
+          - StaticText "本次读取列表 · 第 1 页 · 观察时间：2026-10-20T15:35:54.991Z"
+        - table "GitHub Issue 列表"
+          - rowgroup
+            - row
+              - columnheader "Issue" [ref=e89]
+              - columnheader "远端状态" [ref=e90]
+              - columnheader "负责人" [ref=e91]
+              - columnheader "标签" [ref=e92]
+          - row
+            - cell "#124 [A²D² v3/04] GitHub Issue 来源、唯一接入与本地内容保留" [ref=e39]
+              - button "#124 [A²D² v3/04] GitHub Issue 来源、唯一接入与本地内容保留" [ref=e93]
+                - StaticText "#124 [A²D² v3/04] GitHub Issue 来源、唯一接入与本地内容保留"
+            - cell "open" [ref=e40]
+            - cell "imneov" [ref=e41]
+            - cell "a2d2:sub" [ref=e42]
+          - row
+            - cell "#120 A²D² v3：DSH 内工作控制面板、会话连续性与持续接活" [ref=e43]
+              - button "#120 A²D² v3：DSH 内工作控制面板、会话连续性与持续接活" [ref=e94]
+                - StaticText "#120 A²D² v3：DSH 内工作控制面板、会话连续性与持续接活"
+            - cell "open" [ref=e44]
+            - cell "无" [ref=e45]
+            - cell "a2d2:main" [ref=e46]
+          - row
+            - cell "#132 [A²D² v3] 修复HTTP预览创建失败和资源占用提示" [ref=e47]
+              - button "#132 [A²D² v3] 修复HTTP预览创建失败和资源占用提示" [ref=e95]
+                - StaticText "#132 [A²D² v3] 修复HTTP预览创建失败和资源占用提示"
+            - cell "closed" [ref=e48]
+            - cell "imneov" [ref=e49]
+            - cell "ready-for-agent" [ref=e50]
+          - row
+            - cell "#122 [A²D² v3/02] 单项工作启动、当前协调会话与执行资格" [ref=e51]
+              - button "#122 [A²D² v3/02] 单项工作启动、当前协调会话与执行资格" [ref=e96]
+                - StaticText "#122 [A²D² v3/02] 单项工作启动、当前协调会话与执行资格"
+            - cell "open" [ref=e52]
+            - cell "imneov" [ref=e53]
+            - cell "a2d2:sub" [ref=e54]
+          - row
+            - cell "#121 [A²D² v3/01] DSH 单入口、本地项目与工作详情" [ref=e55]
+              - button "#121 [A²D² v3/01] DSH 单入口、本地项目与工作详情" [ref=e97]
+                - StaticText "#121 [A²D² v3/01] DSH 单入口、本地项目与工作详情"
+            - cell "closed" [ref=e56]
+            - cell "imneov" [ref=e57]
+            - cell "ready-for-agent" [ref=e58]
+          - row
+            - cell "#129 [A²D² v3/09] PR 目录、工作关联与真实评审会话" [ref=e59]
+              - button "#129 [A²D² v3/09] PR 目录、工作关联与真实评审会话" [ref=e98]
+                - StaticText "#129 [A²D² v3/09] PR 目录、工作关联与真实评审会话"
+            - cell "open" [ref=e60]
+            - cell "无" [ref=e61]
+            - cell "ready-for-agent" [ref=e62]
+          - row
+            - cell "#128 [A²D² v3/08] 持久化持续接活、串行领取与暂停恢复" [ref=e63]
+              - button "#128 [A²D² v3/08] 持久化持续接活、串行领取与暂停恢复" [ref=e99]
+                - StaticText "#128 [A²D² v3/08] 持久化持续接活、串行领取与暂停恢复"
+            - cell "open" [ref=e64]
+            - cell "无" [ref=e65]
+            - cell "ready-for-agent" [ref=e66]
+          - row
+            - cell "#127 [A²D² v3/07] 本地验收完成、父通知与可恢复外部关闭" [ref=e67]
+              - button "#127 [A²D² v3/07] 本地验收完成、父通知与可恢复外部关闭" [ref=e100]
+                - StaticText "#127 [A²D² v3/07] 本地验收完成、父通知与可恢复外部关闭"
+            - cell "open" [ref=e68]
+            - cell "无" [ref=e69]
+            - cell "ready-for-agent" [ref=e70]
+          - row
+            - cell "#126 [A²D² v3/06] 可配置上下文接续与历史会话观察" [ref=e71]
+              - button "#126 [A²D² v3/06] 可配置上下文接续与历史会话观察" [ref=e101]
+                - StaticText "#126 [A²D² v3/06] 可配置上下文接续与历史会话观察"
+            - cell "open" [ref=e72]
+            - cell "无" [ref=e73]
+            - cell "ready-for-agent" [ref=e74]
+          - row
+            - cell "#125 [A²D² v3/05] 当前项目的真实视图与对应内容" [ref=e75]
+              - button "#125 [A²D² v3/05] 当前项目的真实视图与对应内容" [ref=e102]
+                - StaticText "#125 [A²D² v3/05] 当前项目的真实视图与对应内容"
+            - cell "open" [ref=e76]
+            - cell "无" [ref=e77]
+            - cell "ready-for-agent" [ref=e78]
+          - row
+            - cell "#123 [A²D² v3/03] 旧工作记录安全迁移与恢复接管" [ref=e79]
+              - button "#123 [A²D² v3/03] 旧工作记录安全迁移与恢复接管" [ref=e103]
+                - StaticText "#123 [A²D² v3/03] 旧工作记录安全迁移与恢复接管"
+            - cell "open" [ref=e80]
+            - cell "无" [ref=e81]
+            - cell "ready-for-agent" [ref=e82]
+        - button "上一页" [disabled, ref=e28]
+        - StaticText "第 "
+        - StaticText "1"
+        - StaticText " 页"
+        - button "下一页" [ref=e29]

@@ -1,0 +1,86 @@
+- generic [ref=e1] clickable [onclick]
+  - generic
+    - button "New session" [ref=e3]
+    - button "Collapse sidebar" [ref=e4]
+    - button "New session" [ref=e5]
+      - StaticText "New Session"
+    - navigation "Global panels" [ref=e6]
+      - button "Plugins" [ref=e12]
+        - StaticText "Plugins"
+      - button "A²D² 控制面板" [ref=e13]
+        - StaticText "A²D² 控制面板"
+    - StaticText "Workspaces"
+    - generic [ref=e7] clickable [onclick]
+      - button "Search sessions" [expanded=false, ref=e14]
+      - textbox "Search session names" [ref=e15]
+    - button "View options" [ref=e8]
+    - button "Add workspace" [ref=e9]
+    - generic
+      - tree "Sessions"
+        - generic
+          - treeitem "workspace" [level=1, expanded=true, ref=e35]
+            - StaticText "workspace"
+          - treeitem "Untitled 13h" [level=1, ref=e36]
+            - StaticText "Untitled"
+            - StaticText "13h"
+    - button "Settings" [expanded=false, ref=e16]
+      - StaticText "Settings"
+    - main "A²D² 控制面板" [ref=e2]
+      - sectionheader
+        - heading "A²D² 控制面板" [level=1, ref=e17]
+        - paragraph
+          - StaticText "项目、工作与关联会话"
+        - button "关闭面板" [ref=e18]
+      - LabelText
+        - StaticText "当前项目 "
+        - combobox "当前项目" [expanded=false, ref=e19]: 演示项目 · 本地工作
+          - MenuListPopup
+            - option "演示项目 · 本地工作" [selected, ref=e37]
+            - option "验收_HTTP132_20261020_独立项目" [ref=e38]
+      - button "接入 / 创建项目" [ref=e10]
+      - button "接入已有资源" [ref=e11]
+      - sectionheader
+        - button "← 返回项目内容" [ref=e20]
+        - heading "演示：从目标到验收" [level=1, ref=e21]
+        - paragraph
+          - StaticText "演示项目 · 本地工作 · 本地工作"
+        - button "刷新详情" [ref=e22]
+        - button "更新规格" [ref=e23]
+      - tablist "工作详情标签"
+        - tab "概览" [selected, ref=e24]
+        - tab "会话" [ref=e25]
+        - tab "相关工作" [ref=e26]
+        - tab "活动" [ref=e27]
+      - tabpanel "概览"
+        - generic
+          - heading "状态概览" [level=2, ref=e28]
+          - StaticText "本地工作已保存"
+          - StaticText "1"
+          - StaticText " 个关联会话"
+          - StaticText "规格第 "
+          - StaticText "1"
+          - StaticText " 版"
+        - generic
+          - heading "目标与规格" [level=2, ref=e29]
+          - heading "目标" [level=3, ref=e30]
+          - paragraph
+            - StaticText "演示：在本地项目中记录完整工作目标、规格与验收，并随时返回原生会话。"
+          - heading "规格" [level=3, ref=e31]
+          - paragraph
+            - StaticText "1. 在概览中查看目标、规格与逐条验收。\n2. 在会话标签打开已关联的真实会话，再通过输入区上方的工作入口返回。\n3. 在相关工作中查看拆解与子工作，在活动中查看真实保存记录。"
+          - heading "验收标准" [level=3, ref=e32]
+          - list
+            - listitem [level=1]
+              - ListMarker "• "
+              - StaticText "可以创建、修改并重载本地工作，无需 GitHub 或 Issue。"
+            - listitem [level=1]
+              - ListMarker "• "
+              - StaticText "真实会话关联后目录、模型和权限保持不变。"
+            - listitem [level=1]
+              - ListMarker "• "
+              - StaticText "原生工作入口返回正确详情，关闭面板回到原会话。"
+        - generic
+          - heading "处理会话" [level=2, ref=e33]
+          - paragraph
+            - StaticText "尚未开始处理。可先关联已有会话查看相关工作。"
+          - button "查看关联会话" [ref=e34]

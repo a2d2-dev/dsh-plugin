@@ -1,0 +1,66 @@
+- generic [ref=e1] clickable [onclick]
+  - generic
+    - button "New session" [ref=e3]
+    - button "Collapse sidebar" [ref=e4]
+    - button "New session" [ref=e5]
+      - StaticText "New Session"
+    - navigation "Global panels" [ref=e6]
+      - button "Plugins" [ref=e12]
+        - StaticText "Plugins"
+      - button "A²D² 控制面板" [ref=e13]
+        - StaticText "A²D² 控制面板"
+    - StaticText "Workspaces"
+    - generic [ref=e7] clickable [onclick]
+      - button "Search sessions" [expanded=false, ref=e14]
+      - textbox "Search session names" [ref=e15]
+    - button "View options" [ref=e8]
+    - button "Add workspace" [ref=e9]
+    - generic
+      - tree "Sessions"
+        - generic
+          - treeitem "workspace" [level=1, expanded=true, ref=e32]
+            - StaticText "workspace"
+          - treeitem "Untitled 13h" [level=1, ref=e33]
+            - StaticText "Untitled"
+            - StaticText "13h"
+    - button "Settings" [expanded=false, ref=e16]
+      - StaticText "Settings"
+    - main "A²D² 控制面板" [ref=e2]
+      - sectionheader
+        - heading "A²D² 控制面板" [level=1, ref=e17]
+        - paragraph
+          - StaticText "项目、工作与关联会话"
+        - button "关闭面板" [ref=e18]
+      - status
+        - StaticText "会话已关联"
+      - LabelText
+        - StaticText "当前项目 "
+        - combobox "当前项目" [expanded=false, ref=e19]: 演示项目 · 本地工作
+          - MenuListPopup
+            - option "演示项目 · 本地工作" [selected, ref=e34]
+            - option "验收_HTTP132_20261020_独立项目" [ref=e35]
+      - button "接入 / 创建项目" [ref=e10]
+      - button "接入已有资源" [ref=e11]
+      - sectionheader
+        - button "← 返回项目内容" [ref=e20]
+        - heading "一期：插件托管任务长程运行、主会话接续与事件归属" [level=1, ref=e21]
+        - paragraph
+          - StaticText "演示项目 · 本地工作 · 本地工作"
+        - button "刷新详情" [ref=e22]
+        - button "更新规格" [ref=e23]
+      - tablist "工作详情标签"
+        - tab "概览" [ref=e24]
+        - tab "会话" [ref=e25]
+        - tab "相关工作" [selected, ref=e26]
+        - tab "活动" [ref=e27]
+      - tabpanel "相关工作"
+        - generic
+          - heading "工作拆解" [level=2, ref=e28]
+          - button "更新拆解" [ref=e29]
+          - paragraph
+            - StaticText "尚无工作拆解。"
+        - generic
+          - heading "相关工作" [level=2, ref=e30]
+          - button "创建子工作" [ref=e31]
+          - paragraph
+            - StaticText "尚无子工作。子工作可独立保存目标、规格和验收。"

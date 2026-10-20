@@ -1,0 +1,66 @@
+{
+  "observedAt": "2026-10-20T15:58:04.078Z",
+  "supervisor": {
+    "command": "supervisorctl status dsh-a2d2-v3-preview",
+    "exitCode": 0,
+    "stdout": "dsh-a2d2-v3-preview              RUNNING   pid 149203, uptime 0:27:10\n",
+    "stderr": ""
+  },
+  "run": {
+    "program": "dsh-a2d2-v3-preview",
+    "runId": "8ff9ecbb-d772-42fc-9480-64f2ef7d6dd1",
+    "launcherPid": 149203,
+    "pid": 149210,
+    "baseURL": "http://10.126.126.12:18782",
+    "publicListen": "10.126.126.12:18782",
+    "internalOrigin": "http://127.0.0.1:33537",
+    "transport": "transparent TCP forwarding to real official DSH Web",
+    "startedAt": "2026-10-20T15:30:55.944Z",
+    "packageSha256": "b7939639179faf84563a9d486ef768600e642e0722db22a1fb84fe9444c9bf5b"
+  },
+  "browser": {
+    "session": "a2d2-http132",
+    "lastCloseAction": {
+      "time": "2026-10-20T15:48:25.366Z",
+      "args": [
+        "close"
+      ],
+      "output": "✓ Browser closed\n"
+    },
+    "remainingOwnedProfileMainPids": []
+  },
+  "rawMetrics": {
+    "source": "/data/_dsh-dev/previews/a2d2-v3-121/evidence/metrics.jsonl",
+    "frozenCopy": "metrics.jsonl",
+    "bytes": 2276,
+    "lines": 17,
+    "sha256": "ac9863223d1fb6959b6c6f81ea8dfa02ccc7f31089a9e5e1682754ccb4ac6731",
+    "modelCountsRecomputedFromRaw": {
+      "gateway": 0,
+      "adapter": 0
+    },
+    "sessionCreatedEvents": [
+      {
+        "processId": "20d114a8-5e6f-43dc-aafa-0df79ed4e9c2",
+        "pid": 1297259,
+        "time": "2026-10-20T02:13:06.302Z",
+        "kind": "session-born",
+        "sessionId": "session-f9282a68-4c3f-4251-adcb-bcd6f24d7515"
+      },
+      {
+        "processId": "a9d96c0a-cae9-4d08-a99c-ebba59078772",
+        "pid": 2636015,
+        "time": "2026-10-20T07:49:20.906Z",
+        "kind": "session-born",
+        "sessionId": "session-f9282a68-4c3f-4251-adcb-bcd6f24d7515"
+      },
+      {
+        "processId": "2b46d3c1-3208-4a90-b1c0-496605406f05",
+        "pid": 149210,
+        "time": "2026-10-20T15:32:26.818Z",
+        "kind": "session-born",
+        "sessionId": "session-f9282a68-4c3f-4251-adcb-bcd6f24d7515"
+      }
+    ]
+  }
+}

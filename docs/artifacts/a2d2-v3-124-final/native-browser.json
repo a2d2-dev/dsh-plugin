@@ -1,0 +1,45 @@
+{
+  "observedAt": "2026-10-20T15:33:06.738Z",
+  "capabilities": {
+    "getRandomValuesType": "function",
+    "isSecureContext": false,
+    "origin": "http://10.126.126.12:18782",
+    "randomUUIDType": "undefined",
+    "url": "http://10.126.126.12:18782/",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36"
+  },
+  "browsers": [
+    {
+      "pid": 154747,
+      "flags": [
+        "--remote-debugging-port=0",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-background-networking",
+        "--disable-backgrounding-occluded-windows",
+        "--disable-component-update",
+        "--disable-default-apps",
+        "--disable-hang-monitor",
+        "--disable-popup-blocking",
+        "--disable-prompt-on-repost",
+        "--disable-sync",
+        "--disable-features=Translate",
+        "--enable-features=NetworkService,NetworkServiceInProcess",
+        "--metrics-recording-only",
+        "--password-store=basic",
+        "--use-mock-keychain",
+        "--headless=new",
+        "--enable-unsafe-swiftshader",
+        "--user-data-dir=/data/_dsh-dev/previews/a2d2-v3-121/browser-http132",
+        "--window-size=1280,720",
+        "--no-sandbox",
+        "--disable-dev-shm-usage"
+      ]
+    }
+  ],
+  "originalProfileReused": true,
+  "localStorageOrSelectionModified": false,
+  "passwordReadDuringAcceptance": false,
+  "cryptoOverrides": false,
+  "apiMocks": false
+}

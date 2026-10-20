@@ -1,0 +1,78 @@
+- generic [ref=e1] clickable [onclick]
+  - generic
+    - button "New session" [ref=e3]
+    - button "Collapse sidebar" [ref=e4]
+    - button "New session" [ref=e5]
+      - StaticText "New Session"
+    - navigation "Global panels" [ref=e6]
+      - button "Plugins" [ref=e12]
+        - StaticText "Plugins"
+      - button "A²D² 控制面板" [ref=e13]
+        - StaticText "A²D² 控制面板"
+    - StaticText "Workspaces"
+    - generic [ref=e7] clickable [onclick]
+      - button "Search sessions" [expanded=false, ref=e14]
+      - textbox "Search session names" [ref=e15]
+    - button "View options" [ref=e8]
+    - button "Add workspace" [ref=e9]
+    - generic
+      - tree "Sessions"
+        - generic
+          - treeitem "workspace" [level=1, expanded=true, ref=e30]
+            - StaticText "workspace"
+          - treeitem "Untitled 13h" [level=1, ref=e31]
+            - StaticText "Untitled"
+            - StaticText "13h"
+    - button "Settings" [expanded=false, ref=e16]
+      - StaticText "Settings"
+    - main "A²D² 控制面板" [ref=e2]
+      - sectionheader
+        - heading "A²D² 控制面板" [level=1, ref=e17]
+        - paragraph
+          - StaticText "项目、工作与关联会话"
+        - button "关闭面板" [ref=e18]
+      - LabelText
+        - StaticText "当前项目 "
+        - combobox "当前项目" [expanded=false, ref=e19]: 演示项目 · 本地工作
+          - MenuListPopup
+            - option "演示项目 · 本地工作" [selected, ref=e32]
+            - option "验收_HTTP132_20261020_独立项目" [ref=e33]
+      - button "接入 / 创建项目" [ref=e10]
+      - button "接入已有资源" [ref=e11]
+      - sectionheader
+        - button "← 返回项目内容" [ref=e20]
+        - heading "一期：插件托管任务长程运行、主会话接续与事件归属" [level=1, ref=e21]
+        - paragraph
+          - StaticText "演示项目 · 本地工作 · 本地工作"
+        - button "刷新详情" [ref=e22]
+        - button "更新规格" [ref=e23]
+      - tablist "工作详情标签"
+        - tab "概览" [ref=e24]
+        - tab "会话" [selected, ref=e25]
+        - tab "相关工作" [ref=e26]
+        - tab "活动" [ref=e27]
+      - tabpanel "会话"
+        - generic
+          - heading "关联会话" [level=2, ref=e28]
+          - paragraph
+            - StaticText "这些关联用于观察工作；未授予当前协调权。"
+          - paragraph
+            - StaticText "尚无关联会话。"
+        - generic
+          - heading "关联已有会话" [level=2, ref=e29]
+          - form
+            - LabelText
+              - StaticText "兼容的已有会话"
+              - combobox "兼容的已有会话" [expanded=false, ref=e35]: 选择已有会话
+                - MenuListPopup
+                  - option "选择已有会话" [selected, ref=e37]
+                  - option "session-f9282a68-4c3f-4251-adcb-bcd6f24d7515" [ref=e38]
+            - LabelText
+              - StaticText "关联用途"
+              - combobox "关联用途" [expanded=false, ref=e36]: 关联工作
+                - MenuListPopup
+                  - option "关联工作" [selected, ref=e39]
+                  - option "评审" [ref=e40]
+            - paragraph
+              - StaticText "由后端校验项目资源权限。关联不改变目录、模型或权限，不启动会话。"
+            - button "关联会话" [ref=e34]

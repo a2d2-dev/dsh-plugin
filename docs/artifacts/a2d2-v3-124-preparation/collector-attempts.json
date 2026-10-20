@@ -1,0 +1,26 @@
+{
+  "mode": "preparation evidence collector failures; no product actions",
+  "attempts": [
+    {
+      "command": "node docs/artifacts/a2d2-v3-124-preparation/preflight.mjs",
+      "exitCode": 1,
+      "failedAssertion": "Exactly one owned browser must be identified",
+      "actualMatches": 0,
+      "rootCause": "Default agent-browser Chromium profile directory has a random name and does not contain the session name.",
+      "correction": "Use the owned explicit /tmp/a2d2-124-prep-browser profile."
+    },
+    {
+      "command": "node docs/artifacts/a2d2-v3-124-preparation/preflight.mjs",
+      "exitCode": 1,
+      "failedAssertion": "Exactly one owned browser must be identified",
+      "actualMatches": 13,
+      "rootCause": "Substring matching also selected process command arguments containing the collector source or shell text.",
+      "correction": "Match the exact standalone Chromium --user-data-dir argument and exclude child --type processes."
+    }
+  ],
+  "finalCollectorExitCode": 0,
+  "finalOwnedBrowserPid": 4140842,
+  "productWritesPerformed": false,
+  "serviceRestartsPerformed": false,
+  "note": "This JSON transcribes observed tool exit codes/assertions; it does not claim the failed runs produced screenshots or authenticated acceptance."
+}
