@@ -126,6 +126,7 @@ it('registers the production model tool when ToolRuntime arrives without adding 
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await vi.waitFor(() => expect(ctx.tools.get('work_control')).toBeDefined())
+  expect(ctx.tools.get('work_continuation_material')).toBeDefined()
   expect(await ctx.tools.execute({ callId: ToolCallId('unbound-production-call'), name: 'work_control', arguments: { action: 'status' }, signal: new AbortController().signal }))
     .toMatchObject({ isError: true })
   expect(await call(server, { kind: 'query', value: { type: 'projects.list' } })).toMatchObject({ status: 200, body: { status: 'completed', projects: [] } })

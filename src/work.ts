@@ -72,6 +72,16 @@ export class WorkApplication {
       executionId: execution.id, owner: execution.owner, epoch: expectedEpoch ?? execution.epoch, action, text },
     { operator: false, session, agentId: execution.agentId })
   }
+  /** Public trusted adapter: source identity and Task references are resolved on the server. */
+  async sessionContinuationMaterial(session: import('./work-types.ts').SessionRef, callId: string,
+    content: import('./work-types.ts').ContinuationContent, expectedEpoch?: number): Promise<WorkResult> {
+    const execution = (await this.load()).executions.find(item => sameSession(item.session, session))
+    if (!execution) return failed('forbidden', 'Calling Session is not a current Task coordinator')
+    const commandId = `material:${createHash('sha256').update(JSON.stringify([session.runtimeId, session.sessionId, callId])).digest('hex')}`
+    return this.execute({ type: 'task.continuation-material', commandId, ref: execution.ref,
+      executionId: execution.id, owner: execution.owner, epoch: expectedEpoch ?? execution.epoch, content },
+    { operator: false, session, agentId: execution.agentId })
+  }
   async execute(input: unknown, actor: WorkActor): Promise<WorkResult> {
     if (!actor.operator && !actor.session) return failed('forbidden', 'Host operator or trusted Session authorization is required')
     const parsed = commandSchema.safeParse(input)
@@ -103,6 +113,7 @@ export class WorkApplication {
       await writeFileAtomic(this.file, `${JSON.stringify(state)}\n`, { mode: 0o600, dirMode: 0o700 })
       return result
     })
+    if (command.type === 'task.continuation-material') return receipt
     if (command.type === 'task.control' && (!actor.operator || command.action === 'progress')) return receipt
     if ((command.type === 'task.start' || 'executionId' in command) && receipt.status === 'completed' && receipt.execution) {
       if (command.type === 'task.input' && ['accepted', 'creating'].includes(receipt.execution.state)) return receipt
@@ -234,6 +245,9 @@ export class WorkApplication {
     if ('executionId' in command) {
       const execution = state.executions.find(item => item.id === command.executionId && item.ref.taskId === task.id)
       if (!execution || execution.owner !== command.owner || execution.epoch !== command.epoch) return failed('stale-execution-authority', 'Execution identity, owner or epoch is stale')
+      if (command.type === 'task.continuation-material') execution.continuationMaterial = { ...command.content,
+        commandId: command.commandId, ref: execution.ref, executionId: execution.id, source: execution.session, epoch: execution.epoch,
+        taskVersion: task.version, specificationVersion: task.specification.version }
       if (command.type === 'task.input') execution.events.push({ id: randomUUID(), text: command.text, kind: command.kind, delivery: 'accepted', acceptance: 'unassessed' })
       if (command.type === 'task.control') {
         if (command.action === 'progress') execution.progress = command.text

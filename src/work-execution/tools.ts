@@ -23,6 +23,26 @@ export function installWorkControlRecovery(ctx: Context, app: WorkApplication): 
 
 export function installWorkTools(ctx: Context, app: WorkApplication, runtimeId: string): void {
   ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'work_continuation_material',
+    description: 'Save your current managed Task continuation material: the original discussion, concrete accepted decisions, evidence, unfinished work and next step. Task and source Session references are resolved by the server. This saves material only; it does not transfer coordination or start a successor.',
+    parameters: {
+      body: { type: 'string', required: true, description: 'Original source material. Preserve the reasoning and necessary local references.' },
+      decisions: { type: 'string', required: true, description: 'Concrete accepted decisions, or an explicit statement that none exist yet.' },
+      evidence: { type: 'string', required: true, description: 'Observed evidence and locally resolvable references; state any evidence gaps.' },
+      unfinished: { type: 'string', required: true, description: 'Unfinished acceptance work and blockers.' },
+      next: { type: 'string', required: true, description: 'The concrete next step for the successor.' },
+      expected_epoch: { type: 'integer', description: 'Optional current epoch precondition; this never grants ownership.' },
+    },
+    output: { schema: { type: 'object', additionalProperties: false, properties: { result: { type: 'string', required: true } } },
+      render: (_args, value) => [{ type: 'text', text: value.result }] },
+    async execute(args, exec) {
+      if (!exec.agent || exec.agent.session.id !== exec.agent.id) throw new Error('work_continuation_material requires a real calling Agent Session')
+      const { expected_epoch, ...content } = args
+      return { result: JSON.stringify(await app.sessionContinuationMaterial({ runtimeId, sessionId: exec.agent.id }, exec.callId, content, expected_epoch)) }
+    },
+    presentCall: args => ({ card: 'generic', title: 'Save continuation material', kind: 'other', rawInput: args }),
+  })), 'managed work continuation material tool')
+  ctx.effect(() => ctx.tools.register(defineTool({
     name: 'work_control',
     description: 'Read status or report progress, ask/wait, pause or explicitly resume your current managed Task. Waiting and pausing are durably accepted now and applied after this turn. They preserve queued input until an explicit resume. Task identity and execution authority come from your calling Session.',
     parameters: {

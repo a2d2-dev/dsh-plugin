@@ -4,7 +4,7 @@
 
 本分支从固定 `b14ed4175a7ca9e807f0ba1f483803d96ba5acbe` 开始，最终 PR/review 集成 base 为 `1f562b107ad9adc046b1f0bb01929185b5c7d234`，目标 `spec/dsh-control-panel-v3`。第一阶段的 WorkApplication 已提供真实 HTTP 工作命令，但没有注册到 ToolRuntime 的生产模型工具；Session actor 的 task.control 同步进入 ensure/settle，不能供正在运行的模型工具安全自 wait/pause。
 
-当前文档记录 B1。B2 的 TaskRef 五步手动接续与 B3 的退休围栏/历史投影仍待实现；#122 整票 AC 没有缩减，也没有据 B1 声称完成。
+当前文档记录 B1、生产 Context/fixture 整合和 B2 源材料入口。B2 的 TaskRef 五步手动接续与 B3 的退休围栏/历史投影仍待实现；#122 整票 AC 没有缩减，也没有据这些检查点声称完成。
 
 ## 目标
 
@@ -127,3 +127,38 @@ await app.query({ type: 'task.execution', ref }, operator)
 原始超时首因仍未知；原5000ms测试预算和断言不变。历史诊断与负向注入证据原样保留于 [diagnosis](a2d2-v3-122-diagnosis.md) 和 [evidence](evidence/a2d2-v3-122-fixture-cleanup.json)，这些是独立分支的历史结果，不冒充本轮命令。
 
 生命周期整合最终串行验证：backend/client typecheck 与 diff 检查退出0；五个 work 文件（含两条生命周期回归）38/38通过、0未选、退出0。没有并行运行build或其他I/O测试。B2五步接续、B3退休围栏和只读历史仍未实现，不能据此标记整票完成。
+
+## B2 第一小片：源模型保存接续材料
+
+### 目标与架构
+
+生产 `work_continuation_material` 与 `work_control` 一起由可选 ToolRuntime 注册，不增加配置要求。它接收 body、decisions、evidence、unfinished、next 五项原始文本；每项保留换行和空白，不在保存时应用投递 redaction。没有新的运行器、维护调用或模型请求，旧 runner/actor/权限合同保持原样。
+
+可信 `WorkApplication.sessionContinuationMaterial` 根据真实调用 Session 解析 TaskRef、ExecutionId、负责 ProjectAgent、owner 与 epoch；模型不能指定这些身份。稳定 commandId 为 runtime/Session/callId 元组哈希，带独立 material 前缀。公开 `execute` 的同一提交锁内再次核验 caller/current Session/ProjectAgent 和 execution fence，之后才查 ledger 或写材料。optional expected_epoch 只作为前置条件；复制 owner/TaskRef 或重放过期调用不能授权。无 Agent 的真实工具调用拒绝。
+
+### 接入与查询接口
+
+```ts
+// 真实模型工具参数；身份由 ToolRunContext 在服务器解析。
+await work_continuation_material({ body, decisions, evidence, unfinished, next, expected_epoch })
+
+// 受信任应用入口；content 为上面五个文本字段。
+await app.execute({ type: 'task.continuation-material', commandId, ref,
+  executionId, owner, epoch, content }, actor)
+const result = await app.query({ type: 'task.execution', ref }, operator)
+// result.execution.continuationMaterial: ContinuationMaterial
+// { ...content, commandId, ref, executionId, source: SessionRef, epoch,
+//   taskVersion, specificationVersion }
+```
+
+`completed` 表示原始材料和回执已持久保存，不表示内容已验收、已投递或已接任。TaskRef 与 source SessionRef 是服务器写入的本地可解析关系；正文中作者提到的任意文件或证据链接尚未由该入口验证。`taskVersion/specificationVersion` 记录写材料时的真实版本（task.start 本身推进 Task.version）；不冻结未来 prepare 所需的最新目标。相同 callId/内容重放原回执，不因为规格随后改变重写旧材料；改内容重用 ID 返回 command-id-reused。新 commandId 可更新当前材料，原接受版本仍留在原 ledger 回执。
+
+### 失败、冷恢复与证据
+
+红测通过真实模型发出缺失的工具，公开 execution 查询没有 continuationMaterial，退出1（1失败、19未选）。实现后相同场景退出0（1通过、19未选）：真实 tool/result 非 error，原文和服务器引用已保存；冷 Context 重建后查询同材料，Agent 不激活、模型0请求。第二回归通过真实 ToolRuntime 验证 stale epoch、外 Session、无 Agent、同 ID/异内容拒绝，以及规格更新后原回执不变、查询/材料写入不增加模型请求。生产插件注册回归同时确认两个工具可用；定向3通过、22未选、退出0。backend/client 类型与 diff 检查退出0。
+
+### 后续整合条件
+
+本小片只交付源作者材料，不接受手动接续、不预约 operation/successor、不更新 current/retired/epoch，也没有声明五步恢复完成。下一片必须从旧 runner 抽取共享 prepare/write/create/take/deliver，固定材料版本到同一操作，并在 prepare 重新读取最新 Task 目标/规格、决定/证据/未完项、解析引用；消费投递时沿用既有 redaction 边界。不能把本 DTO 当成已经校验的完整接续包或由 fixture 填 store 替代真实源工具。
+
+材料入口整合最终五个 work 文件40/40通过、0未选、退出0，包含原19项execution及新增2项材料回归。未并行运行build或其他I/O测试。

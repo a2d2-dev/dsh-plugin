@@ -30,6 +30,12 @@ export interface WorkExecutionOptions extends HostExecutionChoices { agentId: st
 export interface ExecutionRef { ref: TaskRef; executionId: string }
 export interface NativeWorkMessage { id: string; role: 'user'; content: readonly unknown[]; source: unknown }
 export interface WorkEvent { id: string; text: string; kind: 'input' | 'result'; delivery: 'accepted' | 'delivered' | 'consumed'; acceptance: 'unassessed'; nativeMessage?: NativeWorkMessage }
+/** Source-authored material; full original text is retained before any delivery redaction. */
+export interface ContinuationContent { body: string; decisions: string; evidence: string; unfinished: string; next: string }
+export interface ContinuationMaterial extends ContinuationContent {
+  commandId: string; ref: TaskRef; executionId: string; source: SessionRef; epoch: number
+  taskVersion: number; specificationVersion: number
+}
 export interface WorkExecution {
   id: string; ref: TaskRef; agentId: string; owner: string; epoch: number
   resource: ResourceRef; session: SessionRef; sessionMode: 'create' | 'reuse'; agentPreset: string
@@ -38,6 +44,7 @@ export interface WorkExecution {
   history: { state: WorkExecution['state']; commandId: string }[]
   actual?: { runtimeId: string; cwd: string; agentPreset: string; provider: string; model: string; permissionPreset: string; sandbox: string; approval: string }
   events: WorkEvent[]
+  continuationMaterial?: ContinuationMaterial
   progress?: string
   control?: { commandId: string; action: 'wait' | 'pause' | 'resume'; status: 'accepted' | 'applied'; reason?: string }
   error?: { code: string; message: string }
@@ -55,6 +62,7 @@ export type WorkCommand =
   | (TaskChange & { type: 'task.link-child'; child: TaskRef; childExpectedVersion: number })
   | (TaskChange & { type: 'task.associate-session'; session: SessionRef; purpose: 'related' | 'review' })
   | (TaskChange & { type: 'legacy.map'; address: LegacyAddress })
+  | (Command & ExecutionRef & { type: 'task.continuation-material'; owner: string; epoch: number; content: ContinuationContent })
   | (Command & ExecutionRef & { type: 'task.control'; owner: string; epoch: number; action: 'progress' | 'wait' | 'pause' | 'resume'; text: string })
   | (Command & ExecutionRef & { type: 'task.input'; owner: string; epoch: number; text: string; kind: 'input' | 'result' })
   | (Command & ExecutionRef & { type: 'task.reconcile'; owner: string; epoch: number })

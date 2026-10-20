@@ -20,6 +20,7 @@ export const taskSchema = z.object({
   activity: z.array(z.object({ commandId: referenceId, type: referenceId, version: z.number().int().positive() }).strict()),
 }).strict()
 export const modelSchema = z.object({ provider: referenceId, model: referenceId }).strict()
+export const continuationContentSchema = z.object({ body: text, decisions: text, evidence: text, unfinished: text, next: text }).strict()
 export const executionSchema = z.object({
   id, ref: taskRefSchema, agentId: id, owner: id, epoch: z.number().int().positive(), resource: resourceRefSchema,
   session: sessionRefSchema, sessionMode: z.enum(['create', 'reuse']).default('create'), agentPreset: referenceId, model: modelSchema, permissionPreset: referenceId, policy: policySchema,
@@ -28,6 +29,8 @@ export const executionSchema = z.object({
   actual: z.object({ runtimeId: referenceId, cwd: text, agentPreset: referenceId, provider: referenceId, model: referenceId,
     permissionPreset: referenceId, sandbox: referenceId, approval: referenceId }).strict().optional(),
   events: z.array(z.object({ id: referenceId, text, kind: z.enum(['input', 'result']), delivery: z.enum(['accepted', 'delivered', 'consumed']), acceptance: z.literal('unassessed'), nativeMessage: z.object({ id: referenceId, role: z.literal('user'), content: z.array(z.unknown()), source: z.unknown() }).passthrough().transform(value => value as NativeWorkMessage).optional() }).strict()).default([]),
+  continuationMaterial: continuationContentSchema.extend({ commandId: referenceId, ref: taskRefSchema, executionId: id,
+    source: sessionRefSchema, epoch: z.number().int().positive(), taskVersion: z.number().int().positive(), specificationVersion: z.number().int().positive() }).strict().optional(),
   progress: text.optional(),
   control: z.object({ commandId: referenceId, action: z.enum(['wait', 'pause', 'resume']), status: z.enum(['accepted', 'applied']), reason: text.optional() }).strict().optional(),
   error: z.object({ code: referenceId, message: text }).strict().optional(),
@@ -37,6 +40,7 @@ const content = { title: text, goal: text, specification: text, acceptance: z.ar
 const change = { ...command, ref: taskRefSchema, expectedVersion: z.number().int().positive() }
 const fence = { ...command, ref: taskRefSchema, executionId: id, owner: id, epoch: z.number().int().positive() }
 export const commandSchema = z.discriminatedUnion('type', [
+  z.object({ ...fence, type: z.literal('task.continuation-material'), content: continuationContentSchema }).strict(),
   z.object({ ...fence, type: z.literal('task.control'), action: z.enum(['progress', 'wait', 'pause', 'resume']), text }).strict(),
   z.object({ ...fence, type: z.literal('task.input'), text, kind: z.enum(['input', 'result']) }).strict(),
   z.object({ ...fence, type: z.literal('task.reconcile') }).strict(),

@@ -396,3 +396,67 @@ it('accepts repeated start and input while real Controller creation is parked wi
   } finally { if (deadline) clearTimeout(deadline); release(); await first; await Promise.allSettled(pending) }
   expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(1)
 })
+
+
+it('persists original continuation material written by the real source model with server-owned Task references across cold reload', async () => {
+  const h = await setup()
+  installWorkTools(h.ctx, h.app, 'runtime')
+  const content = { body: 'Original source discussion\nPreserve spacing and concrete reasoning.',
+    decisions: 'Use the local Task specification as authority.', evidence: 'The Session log records the source material tool call; take/deliver evidence is still missing.',
+    unfinished: 'Implement take and delivery recovery.', next: 'Check the latest Task before preparing the successor.' }
+  h.model.nextTool = { name: 'work_continuation_material', arguments: content }
+  const started = await h.app.execute({ type: 'task.start', commandId: 'write-material', ref: h.ref, expectedVersion: 1, resource: h.resource,
+    agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }, operator)
+  if (started.status !== 'completed' || !started.execution) throw new Error(JSON.stringify(started))
+  const execution = started.execution
+  const agent = h.ctx.agents.get(SessionId(execution.session.sessionId))!
+  await fixtures.run(() => agent.whenIdle())
+  const observed = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(observed).toMatchObject({ status: 'completed', execution: { continuationMaterial: {
+    ...content, ref: h.ref, source: execution.session, executionId: execution.id, epoch: 1, taskVersion: 2, specificationVersion: 1,
+  } } })
+  const inspection = await fixtures.run(() => h.ctx.sessionController.inspect(agent.id))
+  expect(inspection.events.filter(item => item.type === 'tool/result')).toEqual([expect.objectContaining({ data: expect.objectContaining({ message: expect.objectContaining({ isError: false }) }) })])
+  expect(JSON.stringify(inspection.events.filter(item => item.type === 'tool/result'))).toContain('continuationMaterial')
+  expect(h.model.requests).toHaveLength(2)
+  await fixtures.dispose(h.ctx)
+  const restored = await fixtures.mount(h.workspace.path)
+  if (observed.status !== 'completed' || !observed.execution) throw new Error('No material record')
+  expect(await restored.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: observed.execution, executionRuntime: 'inactive' })
+  expect(restored.model.requests).toHaveLength(0)
+  expect(restored.ctx.agents.get(SessionId(execution.session.sessionId))).toBeUndefined()
+})
+
+
+it('fences continuation material by the real caller and epoch and replays the original receipt without maintenance or another model request', async () => {
+  const h = await setup()
+  installWorkTools(h.ctx, h.app, 'runtime')
+  const started = await h.app.execute({ type: 'task.start', commandId: 'material-authority', ref: h.ref, expectedVersion: 1, resource: h.resource,
+    agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }, operator)
+  if (started.status !== 'completed' || !started.execution) throw new Error(JSON.stringify(started))
+  const execution = started.execution
+  const agent = h.ctx.agents.get(SessionId(execution.session.sessionId))!
+  await fixtures.run(() => agent.whenIdle())
+  const content = { body: '  Original text\nwith exact whitespace.  ', decisions: 'Keep the same Task.', evidence: 'The accepted Task is local.', unfinished: 'Five-step recovery remains.', next: 'Prepare from latest specification.' }
+  const invoke = (id: string, args: Record<string, unknown>, caller?: typeof agent) => fixtures.run(() => h.ctx.tools.execute({
+    callId: ToolCallId(id), name: 'work_continuation_material', arguments: args, agent: caller, signal: new AbortController().signal,
+  }))
+  const accepted = await invoke('accepted-material', content, agent)
+  expect(accepted).toMatchObject({ isError: false })
+  expect(JSON.stringify(accepted)).toContain('continuationMaterial')
+  const saved = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (saved.status !== 'completed' || !saved.execution?.continuationMaterial) throw new Error('No saved material')
+  expect(saved.execution.continuationMaterial).toMatchObject({ ...content, source: execution.session, epoch: 1, taskVersion: 2, specificationVersion: 1 })
+  const stale = await invoke('stale-material', { ...content, body: 'Must not overwrite', expected_epoch: 2 }, agent)
+  expect(JSON.stringify(stale)).toContain('stale-execution-authority')
+  const foreign = await fixtures.run(() => h.ctx.sessionController.create({ workspaceId: h.workspace.id, agentPreset: 'contract' }))
+  const other = h.ctx.agents.get(foreign.sessionId)!
+  expect(JSON.stringify(await invoke('foreign-material', { ...content, owner: execution.owner, ref: h.ref }, other))).toContain('forbidden')
+  expect(await invoke('absent-material', content)).toMatchObject({ isError: true })
+  await h.app.execute({ type: 'task.update-spec', commandId: 'new-material-spec', ref: h.ref, expectedVersion: 2,
+    goal: 'Latest local objective', specification: 'Read this current specification at prepare time.', acceptance: ['Current Task snapshot'] }, operator)
+  expect(await invoke('accepted-material', content, agent)).toEqual(accepted)
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { continuationMaterial: saved.execution.continuationMaterial } })
+  expect(await invoke('accepted-material', { ...content, body: 'Changed command payload' }, agent)).toMatchObject({ content: [expect.objectContaining({ text: expect.stringContaining('command-id-reused') })] })
+  expect(h.model.requests).toHaveLength(1)
+})
