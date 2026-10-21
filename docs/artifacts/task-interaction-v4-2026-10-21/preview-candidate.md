@@ -18,6 +18,14 @@
 
 候选保持 `prepareOnly: true`、`parentReviewedStaticCut: false`。默认 dry-run 应只剩真实临采事实及父审查/执行指令门，不能因为外实例父或 QA 活跃而拒绝。父会话复核候选后下达最终 planSHA 的具体执行指令，当前不执行。
 
+## 第二阶段真实 profile 证据
+
+新 profile 已在 `/data/_dsh-builds/v4-141-artifacts-38d4d91/new-preview/profile` 完成隔离安装，命令 exit0；安装日志确认 `pnpm v11.7.0`，没有改全局版本。新旧 preview 的真实 Loader.import 均255项成功，无 activation/模型调用。源 live profile 的前后 SHA 同为 `08ab4ab06c8118177c51b465024c2b343bc2fca4f89d41b50fadd1a71c4ab6dc`。
+
+新 profile tree SHA `e50afe92b5cc9cc312f3f29e18f71e0b0fc7f88d269d3dffd57e8deeb7d545fa`，import proof SHA `2d5c584639088d1e03b33a2f2ffdb4ea164ba825a6430b035d143bccde427790`。实装 tgz/client 与上述固定 SHA 一致。新旧 host smoke 已从旧私有证据复制到持久 `release-e247236`，原文件未改。
+
+最新聚焦工具输出见 [preview-tool-tests.tap](preview-tool-tests.tap)：14/14、exit0；全部 `.mjs` 语法、Python AST（不写 bytecode）和 `git diff --check` 均 exit0。尚未生成 live 交接、停后 cut 或执行完成回执。
+
 ## 第一阶段验证
 
 `node --test scripts/v4-acceptance/one-shot.test.mjs`：preview 目标门回归先 exit1（明确误报 CEO upgrade-wait），修复后 exit0；真实文件 receipt 与临执行 cut 回归也先红后绿。

@@ -1,0 +1,94 @@
+TAP version 13
+# Subtest: phase1升级只允许明确的新runtime创生，已有身份不能借创生规则漂移
+ok 1 - phase1升级只允许明确的新runtime创生，已有身份不能借创生规则漂移
+  ---
+  duration_ms: 1.871492
+  type: 'test'
+  ...
+# Subtest: 候选环境只保留稳定引用和安全覆盖，凭据值不能进入plan或artifact
+ok 2 - 候选环境只保留稳定引用和安全覆盖，凭据值不能进入plan或artifact
+  ---
+  duration_ms: 20.49801
+  type: 'test'
+  ...
+# Subtest: 宿主smoke之后动态入口内容变化必须在stop前拒绝
+ok 3 - 宿主smoke之后动态入口内容变化必须在stop前拒绝
+  ---
+  duration_ms: 17.406988
+  type: 'test'
+  ...
+# Subtest: 缺少可执行回滚宿主或宿主补丁证明时，切换前拒绝
+ok 4 - 缺少可执行回滚宿主或宿主补丁证明时，切换前拒绝
+  ---
+  duration_ms: 1.688167
+  type: 'test'
+  ...
+# Subtest: 旧Node不热读被替换脚本；单次launcher TERM后未来spawn只hold，hold退出也有真实状态
+ok 5 - 旧Node不热读被替换脚本；单次launcher TERM后未来spawn只hold，hold退出也有真实状态
+  ---
+  duration_ms: 440.048367
+  type: 'test'
+  ...
+# Subtest: 正式运维交接允许CEO升级等待与旧job原始收取回执，不冒充产品消费
+ok 6 - 正式运维交接允许CEO升级等待与旧job原始收取回执，不冒充产品消费
+  ---
+  duration_ms: 3.807203
+  type: 'test'
+  ...
+# Subtest: 18782只要求本实例交接，18781父与QA继续工作不阻止preview
+ok 7 - 18782只要求本实例交接，18781父与QA继续工作不阻止preview
+  ---
+  duration_ms: 1.079243
+  type: 'test'
+  ...
+# Subtest: preview运维回执由真实文件校验，外实例父与children回执不读取
+ok 8 - preview运维回执由真实文件校验，外实例父与children回执不读取
+  ---
+  duration_ms: 32.414074
+  type: 'test'
+  ...
+# Subtest: preview临执行cut拒绝任意运行Session、PID复用和Session遗漏
+ok 9 - preview临执行cut拒绝任意运行Session、PID复用和Session遗漏
+  ---
+  duration_ms: 6.625961
+  type: 'test'
+  ...
+# Subtest: CEO未结算、flush失败、待收job或PID过期时不准停止服务
+ok 10 - CEO未结算、flush失败、待收job或PID过期时不准停止服务
+  ---
+  duration_ms: 1.24026
+  type: 'test'
+  ...
+# Subtest: 离线profile切换拒绝原配置漂移，成功切换保留旧profile与外部Session数据
+ok 11 - 离线profile切换拒绝原配置漂移，成功切换保留旧profile与外部Session数据
+  ---
+  duration_ms: 77.923895
+  type: 'test'
+  ...
+# Subtest: 保留旧身份和配置，允许追加历史及明确批准的新对象
+ok 12 - 保留旧身份和配置，允许追加历史及明确批准的新对象
+  ---
+  duration_ms: 42.755033
+  type: 'test'
+  ...
+# Subtest: 停后必须保留已接受事件前缀，拒绝缺行和撕裂journal
+ok 13 - 停后必须保留已接受事件前缀，拒绝缺行和撕裂journal
+  ---
+  duration_ms: 27.650784
+  type: 'test'
+  ...
+# Subtest: STOPPED/exit0不能冒充flush；强退拒绝切新，只保留可运行回滚路径
+ok 14 - STOPPED/exit0不能冒充flush；强退拒绝切新，只保留可运行回滚路径
+  ---
+  duration_ms: 0.640495
+  type: 'test'
+  ...
+1..14
+# tests 14
+# suites 0
+# pass 14
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 597.953703
