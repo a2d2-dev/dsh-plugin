@@ -10,13 +10,13 @@ export function SourceTabs({controller,onAdd}:{controller:WorkPanelController;on
   const state=useSyncExternalStore(controller.subscribe,controller.getSnapshot,controller.getSnapshot)
   return <nav className={styles.tabs} aria-label="来源标签"><strong>A²D² 控制面板</strong>{Object.entries(state.projectSources).flatMap(([projectId,sources])=>sources.map(source=><button key={source.id} aria-pressed={state.projectId===projectId&&state.source.sourceId===source.id} onClick={()=>void controller.selectConnectedSource(projectId,source.id)}>{sourceName(source)} <small>{source.repository?'仓库':'Project'}</small></button>))}<button aria-label="添加来源" onClick={onAdd}>＋</button></nav>
 }
-export function SourceDirectory({controller,issues}:{controller:WorkPanelController;issues:ReactNode}) {
+export function SourceDirectory({controller,issues,delegation}:{controller:WorkPanelController;issues:ReactNode;delegation?:ReactNode}) {
   const state=useSyncExternalStore(controller.subscribe,controller.getSnapshot,controller.getSnapshot), sourceState=state.source
   const source=sourceState.sources.find(source=>source.id===sourceState.sourceId)
   if(!source)return null
   const tabs:[SourceTab,string][]=[['overview','概览'],...(source.githubProject?[['project','项目'] as [SourceTab,string]]:[]),['issues','Issue'],['prs','PR']]
   return <>
-    <div className={styles.sourceSummary}><strong>{sourceName(source)}</strong><span>{source.repository?`仓库 · ${source.repository.owner}/${source.repository.repository}`:`Project · ${source.githubProject?.owner} / #${source.githubProject?.number} · ${source.githubProject?.type==='org'?'组织':'个人'}`}</span><span>读取账号：{source.identity?.login??'尚未确认'}</span></div>
+    <div className={styles.sourceToolbar}><div className={styles.sourceSummary}><strong>{sourceName(source)}</strong><span>{source.repository?`仓库 · ${source.repository.owner}/${source.repository.repository}`:`Project · ${source.githubProject?.owner} / #${source.githubProject?.number} · ${source.githubProject?.type==='org'?'组织':'个人'}`}</span><span>读取账号：{source.identity?.login??'尚未确认'}</span></div>{delegation}</div>
     <nav className={styles.tabs} aria-label="来源目录">{tabs.map(([tab,label])=><button key={tab} aria-pressed={sourceState.tab===tab} onClick={()=>void controller.selectSourceTab(tab)}>{label}</button>)}</nav>
     {sourceState.tab==='issues'?issues:<>
       <div className={styles.toolbar}><button disabled={sourceState.loading||!source.enabled} onClick={()=>void controller.browseDirectory(true)}>刷新来源</button><button disabled={sourceState.loading} onClick={()=>void controller.browseDirectory(false)}>读取目录缓存</button><span>{sourceState.cached?'缓存 / 最后已知观察':'本次读取'}{sourceState.catalog?` · ${sourceState.catalog.observedAt}`:' · 尚无目录缓存'}</span></div>

@@ -108,3 +108,14 @@
 .requirementBranch { list-style: none; border-inline-start: 2px solid var(--work-line); padding-inline-start: 14px; margin: 10px 0; }
 .requirementBranch > .toolbar { margin: 6px 0; }
 .requirementBranch p { margin: 4px 0; }
+
+.navigation { display: flex; align-items: center; gap: 12px; }
+.navigation nav { flex: 1; min-width: 0; }
+.sourceToolbar { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.sourceToolbar .sourceSummary { padding: 0; font-size: 12px; }
+.delegation { margin: 0 !important; flex-shrink: 0; }
+.delegation[open] { flex: 1; min-width: 300px; max-width: 760px; }
+.panel { padding-top: 12px; }
+.panel section { margin: 12px 0; padding: 14px; }
+.panel nav[aria-label="来源标签"] { margin: 0 0 10px; }
+@media (max-width: 700px) { .sourceToolbar { flex-wrap: wrap; } .delegation[open] { min-width: 0; max-width: 100%; } }

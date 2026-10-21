@@ -96,6 +96,14 @@ observe(id, caller): {
 
 用户或执行者通过原生 job_output 读取真实终态输出，宿主 pending → collected。graph 仅下次观察该状态，消费仍 unknown、验收仍 unassessed。图没有“标记消费”按钮。旧宿主无 observe 时显示能力缺失；最终切匹配 #142 产物后验证这一解除路径。
 
+## #141 源码整合检查点
+
+候选分支已接通 `task.detail` / `task.execution` 的 `executionGraph`。当前及独立子 Task 的执行都按完整 TaskRef 读取；查询只调用公开 observation，不收取 job、不驱动模型。原生子 Issue 另存 `nativeIssues`，保留 canonical Task 入口、独立 owner/epoch/session；未导入项呈现 `unread`，负责人未观察时明确未知。显式读取要求可以建立对应仓库来源，但不会导入 Task。原生关系不加入父会话维护围栏。
+
+Issue 详情使用 ExecutionSessions、ExecutionContinuation 与 CompletionStatus；自动接续编辑器只在详情顶部出现。原生 header / blank dock / continuation view 保留 B 注册。持续委托通过稳定 client/source props 接来源工具栏，资源保存不会启用计划。普通 HTTP 的命令身份统一使用既有 browserUUID；完成补同步通过既有 submit transport 保留未知回执的 commandId。
+
+公开组合验证：`corepack pnpm@10.26.2 exec vitest run tests/work-continuous.spec.ts -t 'keeps native Issue children|returns the authoritative execution graph'` 两项通过，均先记录相关红测；工作台渲染合同及 HTTP 委托控制器合同先红后绿。此处是源码／组件合同证据，既有实例交互和匹配 #142 宿主仍未验证，不表示已部署。
+
 ## 验证
 
 

@@ -3,6 +3,7 @@ import type { ExecutionGraph, ExecutionJob, ObservedSession } from '../work-exec
 import styles from './execution-components.module.css'
 
 export interface ExecutionNavigation {
+  onReadIssue?: (issue: import('../work-sources/types.ts').GitHubIssueReference) => void
   onOpenTask?: (ref: TaskRef) => void
   onEnterTask?: (ref: TaskRef) => void
   onOpenSession?: (session: SessionRef) => void
@@ -53,6 +54,12 @@ export function ExecutionSessions({ graph, ...navigation }: { graph: ExecutionGr
         {child.observation && <p>子执行结算：{child.observation.settlement === 'settled' ? '已结算' : child.observation.settlement === 'pending' ? '等待结果' : '未知'}</p>}
       </article>)}
     </section>
+    {!!graph.nativeIssues?.length && <section aria-label="原生子 Issue 观察"><h3>原生子 Issue</h3>{graph.nativeIssues.map(child => <article className={styles.card} key={child.issue.nodeId}>
+      <strong>{child.issue.repository.owner}/{child.issue.repository.repository} #{child.issue.number} · {child.issue.title}</strong>
+      <p>{child.status === 'started' ? '已有独立执行' : child.status === 'not-started' ? '尚未开始' : '尚未读取完整要求'} · Issue 负责人：{child.assignees ? child.assignees.join('、') || '未指派' : '未知'}</p>
+      {child.owner && <p>协调负责人：{child.owner} · 代次 {child.epoch}</p>}
+      <div className={styles.row}>{child.ref && navigation.onOpenTask ? <button type="button" onClick={() => navigation.onOpenTask!(child.ref!)}>查看独立工作</button> : navigation.onReadIssue && <button type="button" onClick={() => navigation.onReadIssue!(child.issue)}>读取子 Issue 要求</button>}{child.ref && child.currentSession && navigation.onEnterTask && <button type="button" onClick={() => navigation.onEnterTask!(child.ref!)}>进入独立处理入口</button>}<a href={child.issue.url} target="_blank" rel="noreferrer">GitHub 原文</a></div>
+    </article>)}</section>}
     {graph.events.length > 0 && <section aria-label="输入与结果事实"><h3>输入与结果</h3><ul>{graph.events.map(event => <li key={event.id}>{event.kind === 'result' ? '结果' : '输入'} · {event.delivery === 'consumed' ? '已消费' : event.delivery === 'delivered' ? '已投递' : '已接受'} · 未验收<p>{event.text}</p></li>)}</ul></section>}
     {history.length > 0 && <details><summary>历史会话与尝试 · {history.length}</summary>{history.map(row => <SessionFacts key={sessionId(row.session)} row={row} navigation={navigation}/>)}</details>}
     {graph.history.length > 0 && <details><summary>执行尝试记录 · 只读</summary><ol>{graph.history.map((attempt, index) => <li key={`${attempt.commandId}/${index}`}>{attempt.state} · {attempt.commandId}</li>)}</ol></details>}

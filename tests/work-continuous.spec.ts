@@ -92,6 +92,35 @@ async function reportDone(app: WorkApplication, execution: WorkExecution) {
   completed(await app.execute({ type: 'task.report', commandId: `done:${execution.id}`, ...fence(execution), report: { specificationVersion: updated.task!.specification.version, stage: 'done', summary: 'Accepted completion', next: '', blockers: [], criteria: [{ index: 0, passed: true, evidence: ['check passed'] }] } }, operator))
 }
 
+it('returns the authoritative execution graph through detail and execution without advancing work', async () => {
+  const h = await setup(); completed(await h.app.execute(h.configure, operator))
+  const execution = await h.execution()
+  const calls = { ensures: h.host.ensures.length, sends: h.host.sends.length, wakes: h.host.wakes.length }
+  for (const type of ['task.detail', 'task.execution'] as const) {
+    expect(completed(await h.app.query({ type, ref: execution.ref }, operator))).toMatchObject({
+      executionGraph: { ref: execution.ref, executionId: execution.id, owner: { id: execution.owner, epoch: execution.epoch, agentId: execution.agentId }, currentSession: execution.session, settlement: 'pending', childTasks: [] },
+    })
+  }
+  expect({ ensures: h.host.ensures.length, sends: h.host.sends.length, wakes: h.host.wakes.length }).toEqual(calls)
+})
+
+it('keeps native Issue children separate and resolves each canonical child execution authority', async () => {
+  const h = await setup(false)
+  completed(await h.app.execute(h.configure, operator))
+  h.remote.issues[0]!.subIssues = { items: [issue(2), issue(99)].map(({nodeId,url,number,title,repository,state}) => ({nodeId,url,number,title,repository,state})), totalCount: 2, hasNextPage: false }
+  await h.refresh()
+  const parent = completed(await h.app.execute({ type: 'source.import', commandId: 'native-parent', ...h.scope, nodeId: 'ISSUE_1' }, operator))
+  const child = completed(await h.app.execute({ type: 'source.import', commandId: 'native-child', ...h.scope, nodeId: 'ISSUE_2' }, operator))
+  const execution = completed(await h.app.execute({ type: 'task.start', commandId: 'native-child-start', ref: child.ref!, expectedVersion: child.task!.version, agentId: child.task!.agentId, resource, model, agentPreset: 'agent', permissionPreset: 'safe' }, operator)).execution!
+  const detail = completed(await h.app.query({ type: 'task.detail', ref: parent.ref! }, operator))
+  expect(detail.executionGraph).toMatchObject({
+    childTasks: [expect.objectContaining({ ref: child.ref, owner: execution.owner, epoch: execution.epoch, currentSession: execution.session })],
+    nativeIssues: [expect.objectContaining({ ref: child.ref, owner: execution.owner, currentSession: execution.session, status: 'started' }), expect.objectContaining({ issue: { nodeId: 'ISSUE_99' }, status: 'unread' })],
+  })
+  expect(detail.executionGraph!.sessions).toEqual([])
+  expect(completed(await h.app.query({ type: 'project.detail', projectId: h.scope.projectId }, operator)).tasks).toHaveLength(2)
+})
+
 it('browses without execution and atomically reuses source connection, exact settings, duplicate discovery and command retries', async () => {
   const h = await setup()
   expect(h.host.sessionsCreated.size).toBe(0)

@@ -6,7 +6,7 @@ import type { Project, SessionRef, TaskRef, WorkCommand, WorkCompleted, WorkExec
 type WithoutCommandId<T> = T extends unknown ? Omit<T, 'commandId'> : never
 export type WorkIntent = WithoutCommandId<WorkCommand>
 
-export type DetailTab = 'overview' | 'sessions' | 'related' | 'activity'
+export type DetailTab = 'overview' | 'sessions' | 'continuation' | 'related' | 'activity'
 export type LocalView = 'all' | 'unassociated' | 'associated'
 export type SourceTab = 'overview' | 'project' | 'issues' | 'prs'
 export interface SourcePanelState extends IssuePageRequest {
@@ -358,6 +358,35 @@ export class WorkPanelController {
       if (!current()) return
       const detail = await this.client.query({ type: 'task.detail', ref: execution.ref })
       if (current()) this.update({ detail, startup: { ...emptyStartup(), error: this.executionFailure(detail.execution ? detail : result) } })
+    } catch (error) { if (current()) this.update({ startup: { ...emptyStartup(), error: message(error) } }) }
+  }
+  /** Explicitly read a native Issue through its own repository source; never import a Task. */
+  async openNativeIssue(issue: import('../work-sources/types.ts').GitHubIssueReference): Promise<void> {
+    const previous = this.state
+    const origin = previous.detail?.task ? { projectId: previous.projectId, tasks: previous.tasks, progressItems: previous.progressItems, source: previous.source, object: previous.object, search: previous.search, view: previous.view, detail: previous.detail, detailTab: previous.detailTab, issueFilter: previous.issueFilter } : undefined
+    const source = Object.entries(previous.projectSources).flatMap(([projectId, sources]) => sources.map(source => ({projectId, source}))).find(({source}) => source.enabled && source.repository?.owner.toLowerCase() === issue.repository.owner.toLowerCase() && source.repository.repository.toLowerCase() === issue.repository.repository.toLowerCase())
+    try {
+      if (source) await this.selectConnectedSource(source.projectId, source.source.id)
+      else await this.configureSource(issue.repository.owner, issue.repository.repository)
+      await this.openIssue(issue.number, true, issue.nodeId)
+      if (origin) this.detailTrail.push(origin)
+    } catch (error) { this.update({ error: message(error) }) }
+  }
+  async enterTask(ref: TaskRef): Promise<void> {
+    try { await this.openCurrentTask(ref) }
+    catch (error) { this.update({ error: message(error) }) }
+  }
+  async syncCompletion(command: WorkCommand): Promise<void> {
+    if (command.type !== 'task.completion-sync' || this.state.startup.busy) return
+    const revision = this.revision, sourceRevision = this.sourceRevision
+    const current = () => revision === this.revision && sourceRevision === this.sourceRevision
+    this.update({ startup: { ...emptyStartup(), busy: true } })
+    try {
+      const { commandId: _commandId, ...intent } = command
+      await this.submit(intent)
+      if (!current()) return
+      const detail = await this.client.query({ type: 'task.detail', ref: command.ref })
+      if (current()) this.update({ detail, startup: emptyStartup() })
     } catch (error) { if (current()) this.update({ startup: { ...emptyStartup(), error: message(error) } }) }
   }
   async saveContinuation(policy: import('../work-types.ts').ContinuationPolicy, forExecution: boolean): Promise<void> {

@@ -57,7 +57,8 @@ export interface ExecutionGraph {
   executionId?: string
   owner?: { id: string; epoch: number; agentId: string }
   currentSession?: SessionRef
-  childTasks: { ref: TaskRef; title: string; agentId: string; executionId?: string; owner?: string; currentSession?: SessionRef; issue?: ChildTaskExecution['issue']; observation?: ExecutionObservation }[]
+  childTasks: { ref: TaskRef; title: string; agentId: string; executionId?: string; owner?: string; epoch?: number; currentSession?: SessionRef; issue?: ChildTaskExecution['issue']; observation?: ExecutionObservation }[]
+  nativeIssues?: { issue: import('../work-sources/types.ts').GitHubIssueReference; ref?: TaskRef; executionId?: string; owner?: string; epoch?: number; currentSession?: SessionRef; assignees?: string[]; status: 'started' | 'not-started' | 'unread' }[]
   sessions: ObservedSession[]
   events: WorkExecution['events']
   history: WorkExecution['history']
@@ -98,7 +99,7 @@ export function buildExecutionGraph(input: { task: WorkTask; execution?: WorkExe
     childTasks: (input.children ?? []).filter(child => task.children.some(ref => sameTask(ref, { projectId: child.task.projectId, taskId: child.task.id }))).map(child => {
       const ref = { projectId: child.task.projectId, taskId: child.task.id }
       const run = child.execution && sameTask(child.execution.ref, ref) ? child.execution : undefined
-      return { ref, title: child.task.title, agentId: child.task.agentId, ...(run ? { executionId: run.id, owner: run.owner, currentSession: run.session } : {}), ...(child.issue ? { issue: child.issue } : {}), ...(child.observation ? { observation: child.observation } : {}) }
+      return { ref, title: child.task.title, agentId: child.task.agentId, ...(run ? { executionId: run.id, owner: run.owner, epoch: run.epoch, currentSession: run.session } : {}), ...(child.issue ? { issue: child.issue } : {}), ...(child.observation ? { observation: child.observation } : {}) }
     }),
     sessions: [...bound.values()], events: execution?.events ?? [], history: execution?.history ?? [],
     blockers: observation?.blockers.filter(row => admitted.has(sessionKey(row.session))) ?? [],

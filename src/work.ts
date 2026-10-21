@@ -1,3 +1,4 @@
+import { buildExecutionGraph, type ExecutionObservation } from './work-execution/observation.ts'
 import { refreshCatalog } from './work-sources/catalog-application.ts'
 import { PlanningError, planningBasis, validatePlan, samePlannedExecution } from './work-planning.ts'
 import type { WorkPlanner } from './work-planning.ts'
@@ -101,6 +102,34 @@ export class WorkApplication {
         return false
       })
     })
+  }
+  /** Reads authoritative execution facts without collecting jobs or starting any executor. */
+  private async executionGraph(state: WorkSnapshot, task: WorkTask) {
+    const executionAt = (ref: TaskRef) => state.executions.find(item => sameTask(item.ref, ref))
+    const observe = async (execution?: import('./work-types.ts').WorkExecution): Promise<ExecutionObservation | undefined> => {
+      if (!execution || !this.host.execution?.observation) return undefined
+      try { return await this.host.execution.observation(execution) }
+      catch (error) { return { settlement: 'unknown', sessions: [], blockers: [], limitations: [error instanceof Error ? error.message : '执行观察失败'] } }
+    }
+    const execution = executionAt({ projectId: task.projectId, taskId: task.id })
+    const children = await Promise.all(task.children.flatMap(ref => {
+      const child = taskAt(state, ref)
+      if (!child) return []
+      return [(async () => {
+        const run = executionAt(ref), issue = state.externalBindings.find(binding => sameTask(binding.ref, ref))?.lastObserved
+        return { task: child, execution: run, observation: await observe(run), ...(issue ? { issue: { number: issue.number, url: issue.url, assignees: issue.assignees } } : {}) }
+      })()]
+    }))
+    const graph = buildExecutionGraph({ task, execution, observation: await observe(execution), children })
+    const issue = state.externalBindings.find(binding => sameTask(binding.ref, graph.ref))?.lastObserved
+    graph.nativeIssues = (issue?.subIssues?.items ?? []).map(issue => {
+      const binding = state.externalBindings.find(binding => binding.nodeId === issue.nodeId)
+      const run = binding && executionAt(binding.ref)
+      const observed = binding?.lastObserved
+      return { issue, ...(binding ? { ref: binding.ref } : {}), ...(run ? { executionId: run.id, owner: run.owner, epoch: run.epoch, currentSession: run.session } : {}), ...(observed ? { assignees: observed.assignees } : {}), status: run ? 'started' as const : binding ? 'not-started' as const : 'unread' as const }
+    })
+    if (issue?.subIssues?.hasNextPage) graph.limitations.push('原生子 Issue 列表尚未完整读取。')
+    return graph
   }
   private async load(): Promise<WorkSnapshot> {
     try { return snapshotSchema.parse(JSON.parse(await readFile(this.file, 'utf8'))) }
@@ -1180,8 +1209,8 @@ export class WorkApplication {
     }
     if (query.type === 'task.execution') {
       if (!taskAt(state, query.ref)) return failed('unknown-task', 'Task does not belong to this project')
-      const execution = state.executions.find(item => item.ref.taskId === query.ref.taskId)
-      return { status: 'completed', ...(execution ? { execution, executionRuntime: this.host.execution?.status(execution) ?? 'inactive' as const } : {}) }
+      const execution = state.executions.find(item => sameTask(item.ref, query.ref))
+      return { status: 'completed', executionGraph: await this.executionGraph(state, taskAt(state, query.ref)!), ...(execution ? { execution, executionRuntime: this.host.execution?.status(execution) ?? 'inactive' as const } : {}) }
     }
     if (query.type === 'legacy.resolve') {
       const mapping = state.legacyMappings.find(item => legacyKey(item.address) === legacyKey(query.address))
@@ -1217,8 +1246,8 @@ export class WorkApplication {
     if (query.type === 'project.detail') return { status: 'completed', project, progressItems: projectProgress(state, projectId, this.host.execution),
       agents: state.agents.filter(item => item.projectId === projectId), tasks: state.tasks.filter(item => item.projectId === projectId) }
     const task = taskAt(state, query.ref)
-    const execution = state.executions.find(item => item.ref.taskId === query.ref.taskId)
-    return task ? { status: 'completed', task, progress: taskProgressView(state, query.ref, this.host.execution), bindings: state.externalBindings.filter(item => item.ref.taskId === task.id && item.ref.projectId === task.projectId),
+    const execution = state.executions.find(item => sameTask(item.ref, query.ref))
+    return task ? { status: 'completed', task, executionGraph: await this.executionGraph(state, task), progress: taskProgressView(state, query.ref, this.host.execution), bindings: state.externalBindings.filter(item => item.ref.taskId === task.id && item.ref.projectId === task.projectId),
       ...(execution ? { execution, executionRuntime: this.host.execution?.status(execution) ?? 'inactive' as const } : {}),
       ...(task.parent ? { parent: taskAt(state, task.parent) } : {}),
       children: task.children.map(ref => taskAt(state, ref)!).filter(Boolean),

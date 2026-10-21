@@ -1,3 +1,4 @@
+import { browserUUID } from './browser-uuid.ts'
 import type { WorkCommand, WorkExecution, WorkTask } from '../work-types.ts'
 
 const remoteLabels = { pending: '关闭待同步', error: '关闭失败', unknown: '关闭结果未知', closed: '远端已关闭', conflict: '关闭冲突' } as const
@@ -23,7 +24,7 @@ export function CompletionStatus({ task, execution, remoteState, onSync, busy = 
     {external?.error && <span role="status">{external.error}</span>}
     {error && <span role="alert">{error}</span>}
     {completion && execution && onSync && <button type="button" disabled={busy} onClick={() => {
-      void onSync(completionSyncCommand(task, execution, `completion-sync:${globalThis.crypto.randomUUID()}`))
+      void onSync(completionSyncCommand(task, execution, `completion-sync:${browserUUID()}`))
     }}>{busy ? '正在补同步…' : external ? '补同步' : '补收口'}</button>}
   </section>
 }

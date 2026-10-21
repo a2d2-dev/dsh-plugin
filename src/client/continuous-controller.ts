@@ -1,3 +1,4 @@
+import { browserUUID } from './browser-uuid.ts'
 import { WorkClientError } from './work-api.ts'
 import type { WorkClient } from './work-api.ts'
 import type { ContinuousWorkRule, WorkCommand } from '../work-types.ts'
@@ -44,7 +45,7 @@ export class ContinuousDelegationController {
     this.change({ draft })
   }
   private command(type: 'continuous.preview' | 'continuous.instruct' | 'continuous.set-enabled' | 'continuous.block', fields: Record<string, unknown> = {}): WorkCommand {
-    return { type, commandId: `continuous-ui:${globalThis.crypto.randomUUID()}`, ...this.scope, expectedVersion: this.state.rule?.version ?? 0, ...fields } as WorkCommand
+    return { type, commandId: `continuous-ui:${browserUUID()}`, ...this.scope, expectedVersion: this.state.rule?.version ?? 0, ...fields } as WorkCommand
   }
   private async run(command: WorkCommand, afterReceipt?: () => void): Promise<void> {
     if (this.state.busy || this.state.pending) return

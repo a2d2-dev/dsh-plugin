@@ -11,6 +11,9 @@
 
 declare module '*.module.css' {
   const classes: {
+    readonly navigation: string
+    readonly sourceToolbar: string
+    readonly delegation: string
     readonly eyebrow: string
     readonly issueHeader: string
     readonly badge: string

@@ -163,6 +163,7 @@ export interface WorkCompleted extends SourceResultFields {
   sourceIssues?: GitHubIssueReference[]
   transcript?: { session: SessionRef; events: unknown[]; nextCursor?: number }
   execution?: WorkExecution
+  executionGraph?: import('./work-execution/observation.ts').ExecutionGraph
   executionOptions?: WorkExecutionOptions
   executionRuntime?: 'running' | 'idle' | 'inactive'
   project?: Project

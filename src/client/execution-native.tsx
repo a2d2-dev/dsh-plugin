@@ -1,3 +1,4 @@
+import { browserUUID } from './browser-uuid.ts'
 import { useEffect, useRef, useState } from 'react'
 import type { AssociatedWork, ContinuationPolicy, WorkCompleted } from '../work-types.ts'
 import type { ExecutionGraph } from '../work-execution/observation.ts'
@@ -70,7 +71,7 @@ function NativeTaskContinuation({ controller, sessionId, work }: { controller: W
       const execution = latest.execution
       if (!execution?.actual || execution.session.sessionId !== sessionId || latest.task?.id !== work.ref.taskId || latest.task.projectId !== work.ref.projectId
         || execution.ref.taskId !== work.ref.taskId || execution.ref.projectId !== work.ref.projectId) throw Error('此会话已不是当前协调，请从关联任务进入有效会话。')
-      await controller.client.command({ type: 'task.continue', commandId: crypto.randomUUID(), ref: work.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch })
+      await controller.client.command({ type: 'task.continue', commandId: browserUUID(), ref: work.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch })
       if (!scope.signal.aborted) setRevision(value => value + 1)
     } catch (error) { if (!scope.signal.aborted) setError(error instanceof Error ? error.message : String(error)) }
     finally { if (!scope.signal.aborted) setBusy(false) }
