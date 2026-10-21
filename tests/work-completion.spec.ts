@@ -136,3 +136,9 @@ it('reads legacy accepted reports as terminal without inventing an operation or 
  expect(ok(await recovered.query({type:'task.detail',ref:execution.ref},operator)).task!.completion).toBeUndefined()
  expect(h.calls.ensure).toBe(1);expect(h.calls.wake).toBe(0)
 })
+
+it('never replays an older failed retry command after a newer explicit retry',async()=>{
+ const h=await externalSetup('error');await h.done(h.execution,true)
+ await h.sync('retry-one');await h.sync('retry-two');expect(h.writes()).toBe(2)
+ await h.sync('retry-one');expect(h.writes()).toBe(2)
+})

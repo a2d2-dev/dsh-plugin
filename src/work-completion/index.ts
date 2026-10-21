@@ -9,7 +9,7 @@ export const closeTargetSchema = z.object({
 }).strict()
 export type CloseTarget = z.infer<typeof closeTargetSchema>
 export type CloseReceipt = { status: 'closed' } | { status: 'error' | 'unknown' | 'conflict'; message: string }
-const externalSchema = closeTargetSchema.extend({ status: z.enum(['pending', 'error', 'unknown', 'closed', 'conflict']), attempts: z.number().int().nonnegative(), retryAt: z.string().datetime().optional(), lastRetryCommandId: z.string().optional(), error: z.string().optional(), observedState: z.enum(['open', 'closed']).optional() }).strict()
+const externalSchema = closeTargetSchema.extend({ status: z.enum(['pending', 'error', 'unknown', 'closed', 'conflict']), attempts: z.number().int().nonnegative(), retryAt: z.string().datetime().optional(), lastRetryCommandId: z.string().optional(), retryCommandIds: z.array(z.string()).optional(), error: z.string().optional(), observedState: z.enum(['open', 'closed']).optional() }).strict()
 const ref = z.object({ projectId: z.string().uuid(), taskId: z.string().uuid() }).strict()
 export const childCompletionSchema = z.object({ operationId: z.string().uuid(), child: ref, specificationVersion: z.number().int().positive(), summary: z.string(), completedAt: z.string().datetime() }).strict()
 export const completionSchema = z.object({

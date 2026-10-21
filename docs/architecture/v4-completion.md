@@ -56,7 +56,7 @@ pnpm exec vitest run tests/work-progress.spec.ts
 
 `work_report.report.closeExternal: true` 仅在 done 且已存在唯一 accepted canonical binding 时保存关闭意图。默认纯本地完成，远端 Open 不改变本地验收。关闭目标从 accepted binding 的 nodeId、repository、number、assignees、updatedAt 固定下来；命令不接受外部 URL 或凭据。宿主 GitHubSource 读取自己的凭据，使用固定 GraphQL closeIssue mutation，clientMutationId 为稳定 operationId。它不承诺 GitHub 提供 compare-and-swap 或按 clientMutationId 去重；预观察与远端 mutation 之间仍有平台并发窗口，显式补同步再次观察冲突。
 
-每个外部操作有文件 lease，跨应用实例串行；网络不持有 work-v3.json writer lock。调用 mutation **之前**先持久化 unknown。重启或重试先 detail：已 Closed 则记 closed；Open 且负责人、版本仍匹配才允许再次 close；已确认 Closed 后看到 Open 标记 remote-reopened；负责人变化标记 remote-assignees-changed。unknown 重写设有持久退避（30 秒至 5 分钟），其间仍可观察已关闭回执；conflict/error 不自动重写，使用新命令身份明确补同步；同一失败 retry command 重放不重复 write。远端观察、unknown、error、closed 与本地完成及 closeout 独立保存。没有外部关闭意图时绝不关闭 Issue。
+每个外部操作有文件 lease，跨应用实例串行；网络不持有 work-v3.json writer lock。调用 mutation **之前**先持久化 unknown。重启或重试先 detail：已 Closed 则记 closed；Open 且负责人、版本仍匹配才允许再次 close；已确认 Closed 后看到 Open 标记 remote-reopened；负责人变化标记 remote-assignees-changed。unknown 重写设有持久退避（30 秒至 5 分钟），其间仍可观察已关闭回执；conflict/error 不自动重写，使用新命令身份明确补同步；保存已处理 retry command 集合，包含跨新重试之后的旧命令重放，均不重复 write。远端观察、unknown、error、closed 与本地完成及 closeout 独立保存。没有外部关闭意图时绝不关闭 Issue。
 
 `WorkApplication.reconcileCompletions()` 由既有 reconcileControls 生命周期调用，恢复 pending/unknown 外部操作和待收口操作；它不调用 ensure、deliver 或 wake。写入口 `task.completion-sync` 复用现有 operator 或真实当前 Session/agent 授权，并校验 executionId/owner/epoch。旧 task.reconcile 在已完成 Task 上路由到完成恢复，不再创建或驱动模型。
 

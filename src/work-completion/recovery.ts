@@ -22,9 +22,10 @@ export async function synchronizeClose(transaction: Transaction, ref: TaskRef, s
     if (current?.operationId === operation.operationId) Object.assign(current.external!, change)
   })
   if (!initial.authorized) { await save({ status: 'conflict', error: 'completion-authority-changed' }); return }
-  const retry = !!retryCommandId && external.lastRetryCommandId !== retryCommandId
+  const seenRetries = new Set([...(external.retryCommandIds ?? []), ...(external.lastRetryCommandId ? [external.lastRetryCommandId] : [])])
+  const retry = !!retryCommandId && !seenRetries.has(retryCommandId)
   if (!retry && ['error', 'conflict', 'closed'].includes(external.status)) return
-  if (retry) await save({ lastRetryCommandId: retryCommandId })
+  if (retry) await save({ lastRetryCommandId: retryCommandId, retryCommandIds: [...seenRetries, retryCommandId!] })
   if (!source) { await save({ status: 'error', error: 'github-source-unavailable' }); return }
   try {
     // In particular, unknown means the write might have committed. Always observe first.
