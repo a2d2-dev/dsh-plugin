@@ -1,8 +1,8 @@
 # 18782 preview-first 固定候选收尾
 
-本记录替代旧准备文档中“新旧宿主、rollback profile、产品包仍缺失”的过时结论。当前仅准备，未执行任何 live 切换。
+本记录保留准备历史。#150随后写入真实SHA绑定指令并授权唯一18782切换；实际尝试失败，当前独立a450 rollback已在原URL运行，新版本未应用。详见[实际运行中文记录](preview-deployment-154.md)、[脱敏机器实录](preview-deployment-154.json)与[追加只读CDP诊断](preview-cdp-diagnosis-154.json)。原final plan已使用一次，原lock和全部失败证据保留；不得据以下历史prepare状态或deployed计划指纹误称成功，亦不得复用本run重试。
 
-## #154 最新最终待执行候选
+## #154 最终plan准备快照（执行前历史）
 
 O-F1/O-F2已按唯一review #151的CEO裁决闭合；见[整改记录](ops-remediation-154.md)、[27/27真实工具TAP](ops-tool-tests-154.tap)和[离线CDP证据](offline-cdp-proof-154.json)。工具clean freeze为 `5a2ecf35abd4ea64e543e0ef7e64a690a6ed4368`。26个工具（原24加shutdown-log/browser-response）逐文件均与该commit一致，集合SHA256 `55b0cd03fd5a7b9d0e3184c00d70c064ec63be226568d24c12c72c432fd5019c`，编码为canonical JSON排序对象keys，数组按文件名顺序，仅含name/sha256。
 

@@ -1,0 +1,265 @@
+{
+  "source": "read-only-same-origin-CDP-diagnosis",
+  "origin": "http://10.126.126.12:18782",
+  "scope": "diagnostic only; not verification or deployment retry; no routes/signals/model/input",
+  "synchronous": {
+    "frame": {
+      "id": "EF9BEF770D73FDA2E412FFB7D4811C00",
+      "loaderId": "DE5463186BDD8F736610184F8A3BFEDB",
+      "url": "http://10.126.126.12:18782/"
+    },
+    "originalCaptureWouldReject": false,
+    "currentRows": [
+      {
+        "requestId": "3166670.7",
+        "loaderId": "DE5463186BDD8F736610184F8A3BFEDB",
+        "frameId": "EF9BEF770D73FDA2E412FFB7D4811C00",
+        "url": "http://10.126.126.12:18782/plugins/??@deepseek-ai/dsh-client-modules/client.js&rev=759e85ccb252",
+        "resourceType": "Script",
+        "failed": false,
+        "bodyError": null,
+        "bodyBytes": 40330,
+        "bodySha256": "2172778c0dd4869d7cb6335cdba9f31f26f1cf678c6707c916fbefa851ba2525",
+        "encodedDataLength": 13367,
+        "servedFromCache": false,
+        "fromDiskCache": false
+      },
+      {
+        "requestId": "3166670.6",
+        "loaderId": "DE5463186BDD8F736610184F8A3BFEDB",
+        "frameId": "EF9BEF770D73FDA2E412FFB7D4811C00",
+        "url": "http://10.126.126.12:18782/plugins/??@deepseek-ai/dsh-client-ui-deliverables/client.js,@deepseek-ai/dsh-api-remotes/client.js,@deepseek-ai/dsh-typert-registry/client.js,@deepseek-ai/dsh-api-session-controller/client.js,@deepseek-ai/dsh-api-workspace-controller/client.js,@deepseek-ai/dsh-client-connection/client.js,dsh-a2d2/client.js,@deepseek-ai/dsh-client-ui-directory-picker-browse/client.js&rev=3f1584212872",
+        "resourceType": "Script",
+        "failed": false,
+        "bodyError": null,
+        "bodyBytes": 1217190,
+        "bodySha256": "d618e6c74f8482e2c693f14a13c732096826349c124078239a0c981bc9cef92a",
+        "encodedDataLength": 272583,
+        "servedFromCache": false,
+        "fromDiskCache": false
+      },
+      {
+        "requestId": "3166670.8",
+        "loaderId": "DE5463186BDD8F736610184F8A3BFEDB",
+        "frameId": "EF9BEF770D73FDA2E412FFB7D4811C00",
+        "url": "http://10.126.126.12:18782/assets/index-5SrrfWpU.js",
+        "resourceType": "Script",
+        "failed": false,
+        "bodyError": null,
+        "bodyBytes": 633282,
+        "bodySha256": "af3ff948cf3f132edbddebea93e2f9f02233b390a94bd4c9842182300be811bb",
+        "encodedDataLength": 237858,
+        "servedFromCache": false,
+        "fromDiskCache": false
+      },
+      {
+        "requestId": "3166670.9",
+        "loaderId": "DE5463186BDD8F736610184F8A3BFEDB",
+        "frameId": "EF9BEF770D73FDA2E412FFB7D4811C00",
+        "url": "http://10.126.126.12:18782/assets/vendor-CCJJTK99.js",
+        "resourceType": "Script",
+        "failed": false,
+        "bodyError": null,
+        "bodyBytes": 740575,
+        "bodySha256": "38f95ea3ff85b49dc4d8f237db208bbaedd2cb8c31611215c246dde41786ff21",
+        "encodedDataLength": 209971,
+        "servedFromCache": false,
+        "fromDiskCache": false
+      },
+      {
+        "requestId": "3166670.5",
+        "loaderId": "DE5463186BDD8F736610184F8A3BFEDB",
+        "frameId": "EF9BEF770D73FDA2E412FFB7D4811C00",
+        "url": "http://10.126.126.12:18782/plugins/??@deepseek-ai/dsh-client-ui-open-in-app/client.js,@deepseek-ai/dsh-api-gateway/client.js,@deepseek-ai/dsh-api-job-controller/client.js,@deepseek-ai/dsh-api-terminal-controller/client.js,@deepseek-ai/dsh-api-workspace-files/client.js,@deepseek-ai/dsh-client-ui-settings-account/client.js,@deepseek-ai/dsh-client-hmr/client.js,@deepseek-ai/dsh-cordis-client-runner/client.js,@deepseek-ai/dsh-client-ui-theme/client.js,@deepseek-ai/dsh-client-locale/client.js,@deepseek-ai/dsh-client-shortcuts/client.js,@deepseek-ai/dsh-client-ui-shortcuts/client.js,@deepseek-ai/dsh-client-ui-layout/client.js,@deepseek-ai/dsh-client-ui-renderer/client.js,@deepseek-ai/dsh-client-ui-session/client.js,@deepseek-ai/dsh-client-resources/client.js,@deepseek-ai/dsh-client-ui-sidebar/client.js,@deepseek-ai/dsh-client-ui-sidebar-right/client.js,@deepseek-ai/dsh-client-ui-sidebar-documentpreview/client.js,@deepseek-ai/dsh-client-ui-sidebar-terminal/client.js,@deepseek-ai/dsh-client-ui-sidebar-files/client.js,@deepseek-ai/dsh-client-ui-settings/client.js,@deepseek-ai/dsh-client-ui-settings-general/client.js,@deepseek-ai/dsh-client-ui-settings-models/client.js,@deepseek-ai/dsh-client-ui-plugin-manager/client.js,@deepseek-ai/dsh-client-ui-settings-plugin-inventory/client.js,@deepseek-ai/dsh-client-ui-conversation/client.js,@deepseek-ai/dsh-client-ui-approval/client.js,@deepseek-ai/dsh-client-ui-chat/client.js,@deepseek-ai/dsh-client-ui-brand-official/client.js,@deepseek-ai/dsh-client-ui-attachment/client.js,@deepseek-ai/dsh-client-ui-tool/client.js,@deepseek-ai/dsh-client-ui-cordis/client.js,@deepseek-ai/dsh-client-ui-workspace/client.js,@deepseek-ai/dsh-client-ui-workflow-run/client.js,@deepseek-ai/dsh-client-ui-input-trigger/client.js,@deepseek-ai/dsh-client-ui-commands/client.js,@deepseek-ai/dsh-client-ui-skill/client.js,@deepseek-ai/dsh-client-ui-subagent/client.js,@deepseek-ai/dsh-client-ui-reference/client.js,@deepseek-ai/dsh-client-ui-jobs/client.js,@deepseek-ai/dsh-client-ui-goal/client.js,@deepseek-ai/dsh-client-ui-message-feedback/client.js,@deepseek-ai/dsh-client-ui-model-selection/client.js,@deepseek-ai/dsh-client-ui-permission-presets/client.js,@deepseek-ai/dsh-client-ui-agent-preset/client.js,@deepseek-ai/dsh-client-ui-settings-session-log/client.js,@deepseek-ai/dsh-client-ui-settings-plugins/client.js,@deepseek-ai/dsh-client-ui-settings-shell/client.js,@deepseek-ai/dsh-client-ui-settings-agent-loop/client.js,@deepseek-ai/dsh-client-ui-settings-subagent/client.js,@deepseek-ai/dsh-client-ui-settings-web-search/client.js,@deepseek-ai/dsh-client-ui-plan/client.js,@deepseek-ai/dsh-client-ui-user-questions/client.js,@deepseek-ai/dsh-client-ui-trajectory/client.js,@deepseek-ai/dsh-session-log-export/client.js,@deepseek-ai/dsh-client-file-upload/client.js&rev=77cbf4969566",
+        "resourceType": "Script",
+        "failed": false,
+        "bodyError": null,
+        "bodyBytes": 10429302,
+        "bodySha256": "31570bb0d560a0982020e964880f866884be16a677710b0470472e5323ab033c",
+        "encodedDataLength": 5314936,
+        "servedFromCache": false,
+        "fromDiskCache": false
+      }
+    ],
+    "allScripts": 5,
+    "allFailures": 0,
+    "bufferLimits": {
+      "maxTotalBufferSize": 16777216,
+      "maxResourceBufferSize": 16777216
+    }
+  },
+  "asynchronous": {
+    "frame": {
+      "id": "EF9BEF770D73FDA2E412FFB7D4811C00",
+      "loaderId": "FAF76B5A8F720D9293BD594F55ED4316",
+      "url": "http://10.126.126.12:18782/"
+    },
+    "originalCaptureWouldReject": false,
+    "currentRows": [
+      {
+        "requestId": "3166670.110",
+        "loaderId": "FAF76B5A8F720D9293BD594F55ED4316",
+        "frameId": "EF9BEF770D73FDA2E412FFB7D4811C00",
+        "url": "http://10.126.126.12:18782/plugins/??@deepseek-ai/dsh-client-modules/client.js&rev=759e85ccb252",
+        "resourceType": "Script",
+        "failed": false,
+        "bodyError": null,
+        "bodyBytes": 40330,
+        "bodySha256": "2172778c0dd4869d7cb6335cdba9f31f26f1cf678c6707c916fbefa851ba2525",
+        "encodedDataLength": 13367,
+        "servedFromCache": false,
+        "fromDiskCache": false
+      },
+      {
+        "requestId": "3166670.109",
+        "loaderId": "FAF76B5A8F720D9293BD594F55ED4316",
+        "frameId": "EF9BEF770D73FDA2E412FFB7D4811C00",
+        "url": "http://10.126.126.12:18782/plugins/??@deepseek-ai/dsh-client-ui-deliverables/client.js,@deepseek-ai/dsh-api-remotes/client.js,@deepseek-ai/dsh-typert-registry/client.js,@deepseek-ai/dsh-api-session-controller/client.js,@deepseek-ai/dsh-api-workspace-controller/client.js,@deepseek-ai/dsh-client-connection/client.js,dsh-a2d2/client.js,@deepseek-ai/dsh-client-ui-directory-picker-browse/client.js&rev=3f1584212872",
+        "resourceType": "Script",
+        "failed": false,
+        "bodyError": null,
+        "bodyBytes": 1217190,
+        "bodySha256": "d618e6c74f8482e2c693f14a13c732096826349c124078239a0c981bc9cef92a",
+        "encodedDataLength": 272583,
+        "servedFromCache": false,
+        "fromDiskCache": false
+      },
+      {
+        "requestId": "3166670.111",
+        "loaderId": "FAF76B5A8F720D9293BD594F55ED4316",
+        "frameId": "EF9BEF770D73FDA2E412FFB7D4811C00",
+        "url": "http://10.126.126.12:18782/assets/index-5SrrfWpU.js",
+        "resourceType": "Script",
+        "failed": false,
+        "bodyError": null,
+        "bodyBytes": 633282,
+        "bodySha256": "af3ff948cf3f132edbddebea93e2f9f02233b390a94bd4c9842182300be811bb",
+        "encodedDataLength": 237858,
+        "servedFromCache": false,
+        "fromDiskCache": false
+      },
+      {
+        "requestId": "3166670.112",
+        "loaderId": "FAF76B5A8F720D9293BD594F55ED4316",
+        "frameId": "EF9BEF770D73FDA2E412FFB7D4811C00",
+        "url": "http://10.126.126.12:18782/assets/vendor-CCJJTK99.js",
+        "resourceType": "Script",
+        "failed": false,
+        "bodyError": null,
+        "bodyBytes": 740575,
+        "bodySha256": "38f95ea3ff85b49dc4d8f237db208bbaedd2cb8c31611215c246dde41786ff21",
+        "encodedDataLength": 209971,
+        "servedFromCache": false,
+        "fromDiskCache": false
+      },
+      {
+        "requestId": "3166670.108",
+        "loaderId": "FAF76B5A8F720D9293BD594F55ED4316",
+        "frameId": "EF9BEF770D73FDA2E412FFB7D4811C00",
+        "url": "http://10.126.126.12:18782/plugins/??@deepseek-ai/dsh-client-ui-open-in-app/client.js,@deepseek-ai/dsh-api-gateway/client.js,@deepseek-ai/dsh-api-job-controller/client.js,@deepseek-ai/dsh-api-terminal-controller/client.js,@deepseek-ai/dsh-api-workspace-files/client.js,@deepseek-ai/dsh-client-ui-settings-account/client.js,@deepseek-ai/dsh-client-hmr/client.js,@deepseek-ai/dsh-cordis-client-runner/client.js,@deepseek-ai/dsh-client-ui-theme/client.js,@deepseek-ai/dsh-client-locale/client.js,@deepseek-ai/dsh-client-shortcuts/client.js,@deepseek-ai/dsh-client-ui-shortcuts/client.js,@deepseek-ai/dsh-client-ui-layout/client.js,@deepseek-ai/dsh-client-ui-renderer/client.js,@deepseek-ai/dsh-client-ui-session/client.js,@deepseek-ai/dsh-client-resources/client.js,@deepseek-ai/dsh-client-ui-sidebar/client.js,@deepseek-ai/dsh-client-ui-sidebar-right/client.js,@deepseek-ai/dsh-client-ui-sidebar-documentpreview/client.js,@deepseek-ai/dsh-client-ui-sidebar-terminal/client.js,@deepseek-ai/dsh-client-ui-sidebar-files/client.js,@deepseek-ai/dsh-client-ui-settings/client.js,@deepseek-ai/dsh-client-ui-settings-general/client.js,@deepseek-ai/dsh-client-ui-settings-models/client.js,@deepseek-ai/dsh-client-ui-plugin-manager/client.js,@deepseek-ai/dsh-client-ui-settings-plugin-inventory/client.js,@deepseek-ai/dsh-client-ui-conversation/client.js,@deepseek-ai/dsh-client-ui-approval/client.js,@deepseek-ai/dsh-client-ui-chat/client.js,@deepseek-ai/dsh-client-ui-brand-official/client.js,@deepseek-ai/dsh-client-ui-attachment/client.js,@deepseek-ai/dsh-client-ui-tool/client.js,@deepseek-ai/dsh-client-ui-cordis/client.js,@deepseek-ai/dsh-client-ui-workspace/client.js,@deepseek-ai/dsh-client-ui-workflow-run/client.js,@deepseek-ai/dsh-client-ui-input-trigger/client.js,@deepseek-ai/dsh-client-ui-commands/client.js,@deepseek-ai/dsh-client-ui-skill/client.js,@deepseek-ai/dsh-client-ui-subagent/client.js,@deepseek-ai/dsh-client-ui-reference/client.js,@deepseek-ai/dsh-client-ui-jobs/client.js,@deepseek-ai/dsh-client-ui-goal/client.js,@deepseek-ai/dsh-client-ui-message-feedback/client.js,@deepseek-ai/dsh-client-ui-model-selection/client.js,@deepseek-ai/dsh-client-ui-permission-presets/client.js,@deepseek-ai/dsh-client-ui-agent-preset/client.js,@deepseek-ai/dsh-client-ui-settings-session-log/client.js,@deepseek-ai/dsh-client-ui-settings-plugins/client.js,@deepseek-ai/dsh-client-ui-settings-shell/client.js,@deepseek-ai/dsh-client-ui-settings-agent-loop/client.js,@deepseek-ai/dsh-client-ui-settings-subagent/client.js,@deepseek-ai/dsh-client-ui-settings-web-search/client.js,@deepseek-ai/dsh-client-ui-plan/client.js,@deepseek-ai/dsh-client-ui-user-questions/client.js,@deepseek-ai/dsh-client-ui-trajectory/client.js,@deepseek-ai/dsh-session-log-export/client.js,@deepseek-ai/dsh-client-file-upload/client.js&rev=77cbf4969566",
+        "resourceType": "Script",
+        "failed": false,
+        "bodyError": null,
+        "bodyBytes": 10429302,
+        "bodySha256": "31570bb0d560a0982020e964880f866884be16a677710b0470472e5323ab033c",
+        "encodedDataLength": 5314936,
+        "servedFromCache": false,
+        "fromDiskCache": false
+      }
+    ],
+    "allScripts": 10,
+    "allFailures": 0,
+    "bufferLimits": {
+      "maxTotalBufferSize": 16777216,
+      "maxResourceBufferSize": 16777216
+    }
+  },
+  "noticeDialogs": [
+    {
+      "ariaLabel": "Preview Notice",
+      "ariaLabelledby": null,
+      "buttons": [
+        {
+          "disabled": false,
+          "text": "Continue"
+        }
+      ],
+      "headings": [
+        {
+          "role": null,
+          "tag": "H2",
+          "text": "Preview Notice"
+        }
+      ],
+      "originalSelectorWouldInclude": true,
+      "role": "dialog",
+      "tag": "DIV",
+      "titleById": null
+    }
+  ],
+  "originalFailedRunModified": false,
+  "diagnosticRoot": "/tmp/a2d2-v4-154-cdp-diagnosis-01",
+  "actualOriginalFailureReproduced": false,
+  "originalFailureRequestId": "not recorded in failed run",
+  "originalFailureCode": "not recorded in failed run",
+  "postDiagnosis": {
+    "sessions": [
+      {
+        "id": "session-f44e2d0d-a4e1-4fb5-945a-a759a9480d9f",
+        "acceptedEvents": 27,
+        "currentEvents": 27,
+        "running": false,
+        "pendingInputs": 0,
+        "prefixRetained": true,
+        "configRetained": true
+      },
+      {
+        "id": "session-01facda2-1f2a-4f75-a503-34860ab4f1c4",
+        "acceptedEvents": 42,
+        "currentEvents": 42,
+        "running": false,
+        "pendingInputs": 0,
+        "prefixRetained": true,
+        "configRetained": true
+      },
+      {
+        "id": "session-f9282a68-4c3f-4251-adcb-bcd6f24d7515",
+        "acceptedEvents": 4,
+        "currentEvents": 4,
+        "running": false,
+        "pendingInputs": 0,
+        "prefixRetained": true,
+        "configRetained": true
+      }
+    ],
+    "jsonMaterialsUnchanged": true,
+    "supervisorPid": 3134479,
+    "liveCutPath": "/tmp/a2d2-v4-154-cdp-diagnosis-01/after-diagnosis-live-cut/live-cut.json"
+  },
+  "privateDiagnosticFiles": {
+    "browser-response-diagnostic.mjs": {
+      "path": "/tmp/a2d2-v4-154-cdp-diagnosis-01/browser-response-diagnostic.mjs",
+      "sha256": "f07491767b119eb9d1c5dca9e74c45d09f869ff015ada0563b5058a0eaf9eff5"
+    },
+    "diagnose.mjs": {
+      "path": "/tmp/a2d2-v4-154-cdp-diagnosis-01/diagnose.mjs",
+      "sha256": "d57f57906f78e3fe419bffd0c7a8b19cdcb4a986d5b626c5e922c12b4feb939a"
+    },
+    "synchronous-capture-metadata.private.json": {
+      "path": "/tmp/a2d2-v4-154-cdp-diagnosis-01/synchronous-capture-metadata.private.json",
+      "sha256": "1ce42f122a05d450c3818df7de661dad529117f4b907158eb6046ded0f35a746"
+    },
+    "asynchronous-capture-metadata.private.json": {
+      "path": "/tmp/a2d2-v4-154-cdp-diagnosis-01/asynchronous-capture-metadata.private.json",
+      "sha256": "1a5d5f97592dfc22f22f1581349dfe46fcebdd68760f3feb2844545960dceda8"
+    },
+    "notice-aria.private.json": {
+      "path": "/tmp/a2d2-v4-154-cdp-diagnosis-01/notice-aria.private.json",
+      "sha256": "7d0f711ce525fe8df575bb0b33ffe4881dc25a6bbadb8d0a979e0981066a17d4"
+    },
+    "diagnosis-summary.json": {
+      "path": "/tmp/a2d2-v4-154-cdp-diagnosis-01/diagnosis-summary.json",
+      "sha256": "f23de9e9a83129f655d057b6e1964b92d14f69114b9dd4ee1c10e1fbb820d5fd"
+    }
+  }
+}

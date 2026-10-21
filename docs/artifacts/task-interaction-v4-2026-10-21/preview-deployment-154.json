@@ -1,0 +1,302 @@
+{
+  "source": "actual-authorized-preview-one-shot-attempt",
+  "status": "failed-needs-external-recovery",
+  "diagnosticEvidence": "preview-cdp-diagnosis-154.json",
+  "originalFailureReproducedInAuthorizedDiagnosis": false,
+  "planSha256": "4d75ba31e211873b1f9e47f4a9ee70ec8958c9e2befe931e30cd1fdfde6951e7",
+  "instructionSha256": "8cb135bd740f5f96d67e3d83e4564cd231fba120236cd60e86f8ec508d1c391c",
+  "program": "dsh-a2d2-v3-preview",
+  "origin": "http://10.126.126.12:18782",
+  "unitName": "a2d2-v4-141-preview-154-5a2ecf3-02.service",
+  "unit": {
+    "commandStatus": 0,
+    "properties": {
+      "Type": "oneshot",
+      "TimeoutStartUSec": "20min",
+      "MainPID": "0",
+      "Result": "exit-code",
+      "ExecMainPID": "3133165",
+      "ExecMainCode": "1",
+      "ExecMainStatus": "1",
+      "ControlGroup": "",
+      "UMask": "0077",
+      "KillMode": "control-group",
+      "LoadState": "loaded",
+      "ActiveState": "failed",
+      "SubState": "failed"
+    }
+  },
+  "preflight": {
+    "dryRun": {
+      "mode": "dry-run",
+      "ready": true,
+      "reasons": [],
+      "steps": [
+        "verify complete new and rollback hosts",
+        "hold external admission and settle CEO/children/jobs; flush",
+        "stop only dsh-a2d2-v3-preview",
+        "apply pinned profile + isolated-host launcher switch",
+        "start only dsh-a2d2-v3-preview",
+        "same-origin refresh, client fingerprint and retention check",
+        "write durable completion; on failure preserve data and restore executable runtime"
+      ]
+    },
+    "handoverObservedAt": "2026-10-21T23:04:16.834Z",
+    "recheckObservedAt": "2026-10-21T23:05:39.806Z",
+    "sessions": [
+      {
+        "id": "session-f44e2d0d-a4e1-4fb5-945a-a759a9480d9f",
+        "running": false,
+        "pendingInputs": 0,
+        "asOfSeq": 26,
+        "agentAvailable": false
+      },
+      {
+        "id": "session-01facda2-1f2a-4f75-a503-34860ab4f1c4",
+        "running": false,
+        "pendingInputs": 0,
+        "asOfSeq": 41,
+        "agentAvailable": false
+      },
+      {
+        "id": "session-f9282a68-4c3f-4251-adcb-bcd6f24d7515",
+        "running": false,
+        "pendingInputs": 0,
+        "asOfSeq": 3,
+        "agentAvailable": true
+      }
+    ],
+    "jobs": 0,
+    "completeRegistryWholeSetQueries": 3,
+    "pid": 3863422,
+    "startTicks": "31295054",
+    "admissionLock": "not claimed",
+    "flush": "not claimed",
+    "productConsumption": "unknown"
+  },
+  "attempt": {
+    "newApplyPerformed": false,
+    "initialFailure": "forced/error exit: refuse new switch; preserve evidence for runnable rollback",
+    "stopElapsedMs": 6681,
+    "elapsedScope": "signal to proven holder convergence; actual old CLI exit timestamp unavailable",
+    "exitCode": 0,
+    "signal": null,
+    "forcedFlag": false,
+    "gracefulOutcome": "not inferred",
+    "cliLog": {
+      "source": "reviewed-launcher-cli-private-log-window",
+      "classification": "no-known-error",
+      "attributable": true,
+      "reason": "stable-file-and-prefix",
+      "file": {
+        "dev": "64769",
+        "ino": "61631467"
+      },
+      "offset": 7184,
+      "bytes": 0,
+      "windowSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "prefixSha256": "a024bcfd3b9b01231e8544b2b2648b64233574281e258b33147ad05976c53cb7",
+      "rawPath": "/tmp/a2d2-v4-154-5a2ecf3-02/old-cli-shutdown.private.log",
+      "ownerPid": 3863422,
+      "ownerFd": 20,
+      "boundAt": "2026-10-21T23:06:11.626Z",
+      "gracefulOutcome": "not inferred",
+      "signaledAt": "2026-10-21T23:06:11.662Z"
+    },
+    "staticCut": {
+      "ok": true,
+      "writableDescriptors": 0,
+      "sessions": [
+        {
+          "ok": true,
+          "id": "session-01facda2-1f2a-4f75-a503-34860ab4f1c4",
+          "events": 42,
+          "acceptedThrough": 41,
+          "sha256": "a32021226bd2626ca090c8917f40e8ce036dc891e4afb367f2e949ffc9b91b85"
+        },
+        {
+          "ok": true,
+          "id": "session-f44e2d0d-a4e1-4fb5-945a-a759a9480d9f",
+          "events": 27,
+          "acceptedThrough": 26,
+          "sha256": "7ddedf187a29b4bc269610887920d6255aea55af652fbb5b1d0d6a22482f2b4d"
+        },
+        {
+          "ok": true,
+          "id": "session-f9282a68-4c3f-4251-adcb-bcd6f24d7515",
+          "events": 4,
+          "acceptedThrough": 3,
+          "sha256": "42f3592990afadbf9559541cf45d03137a58c745699c1f1bb0bf5c1f3e6eacfb"
+        }
+      ],
+      "nativeReaders": [
+        {
+          "side": "new",
+          "hostRoot": "/data/src/github.com/deepseek-ai/deepseek-harness-dev.worktrees/v4-141-release-8282d612",
+          "path": "/tmp/a2d2-v4-154-5a2ecf3-02/native-readers/new/native-snapshot-proof.json",
+          "sha256": "c0b177f2f7b2c1ecbe9eccd954abf53817b6d17a90bf236735aaf3859d77677f",
+          "passed": true
+        },
+        {
+          "side": "rollback",
+          "hostRoot": "/data/src/github.com/deepseek-ai/deepseek-harness-dev.worktrees/v4-141-rollback-a45068d2",
+          "path": "/tmp/a2d2-v4-154-5a2ecf3-02/native-readers/rollback/native-snapshot-proof.json",
+          "sha256": "00ac9637ec2f29d197acb2d1b6f69f0e6228de42d693c715073fd28aacc9f5c1",
+          "passed": true
+        }
+      ]
+    },
+    "rollbackApplied": true,
+    "rollbackVerification": {
+      "status": 1,
+      "error": "actual loaded Script response capture incomplete",
+      "browserBound": false
+    },
+    "completionDeployedFieldMeaning": "planned release fingerprints only; not actual live deployment evidence"
+  },
+  "actualRuntime": {
+    "program": "dsh-a2d2-v3-preview",
+    "pid": 3134486,
+    "launcherPid": 3134479,
+    "origin": "http://10.126.126.12:18782",
+    "baseURL": "http://10.126.126.12:18782",
+    "cli": "/data/src/github.com/deepseek-ai/deepseek-harness-dev.worktrees/v4-141-rollback-a45068d2/apps/cli/lib/bin.js",
+    "internalOrigin": "http://127.0.0.1:36777",
+    "hostCommit": "a45068d2ec03326c800c68c9bdcd47508e3ccb9c",
+    "packageSha256": "7ae2ed521df692723f8f4ff382b3710482e5824b648c272d7f9b267244b3e208",
+    "deploymentRunId": "preview-154-5a2ecf3-02",
+    "startedAt": "2026-10-21T23:06:30.023Z"
+  },
+  "actualInstalledClient": {
+    "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/profiles/web/node_modules/dsh-a2d2/lib/client.js",
+    "sha256": "7af60c97e19076cb251235995bcca86fa59bcdfc1dccb22b8e8e3899d2127b70",
+    "matchesRollback": true,
+    "matchesNew": false
+  },
+  "retention": [
+    {
+      "id": "session-f44e2d0d-a4e1-4fb5-945a-a759a9480d9f",
+      "acceptedEvents": 27,
+      "currentEvents": 27,
+      "cwdRetained": true,
+      "configRetained": true,
+      "prefixRetained": true
+    },
+    {
+      "id": "session-01facda2-1f2a-4f75-a503-34860ab4f1c4",
+      "acceptedEvents": 42,
+      "currentEvents": 42,
+      "cwdRetained": true,
+      "configRetained": true,
+      "prefixRetained": true
+    },
+    {
+      "id": "session-f9282a68-4c3f-4251-adcb-bcd6f24d7515",
+      "acceptedEvents": 4,
+      "currentEvents": 4,
+      "cwdRetained": true,
+      "configRetained": true,
+      "prefixRetained": true
+    }
+  ],
+  "jsonRetention": [
+    {
+      "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/storages/workspace.json",
+      "materialSha256": "ee8cdb002169e8d394b11433938df796aaf6d48a0569a3407a5e474815a1a40b",
+      "retained": true
+    },
+    {
+      "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/a2d2/work-v3/runtime-v1.json",
+      "materialSha256": "9d754788874282c0f3b7d9b52b6b24569bfe13329b3e43301d724e0340e7b7a0",
+      "retained": true
+    },
+    {
+      "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/a2d2/work-v3/work-v3.json",
+      "materialSha256": "bb3bba619f0ea13e0470355faec234ccae2be482dd597707ae4e4c4e4f0695bb",
+      "retained": true
+    }
+  ],
+  "screenshots": {
+    "desktop": {
+      "path": "docs/artifacts/task-interaction-v4-2026-10-21/preview-154-rollback-desktop.png",
+      "sha256": "8aa5463acb73378b3b5efe951b038099cdf4c41cb05a5e37b29251e3335356e1",
+      "dimensions": "1440x1000",
+      "scope": "actual rollback original-origin reachability; Preview Notice still covers page; not interaction acceptance"
+    },
+    "narrow": {
+      "path": "docs/artifacts/task-interaction-v4-2026-10-21/preview-154-rollback-narrow.png",
+      "sha256": "094a6221829313cb0c3e7f3dc0b83a7b76aebdac3d371a0f05363337af0553a5",
+      "dimensions": "390x844",
+      "scope": "actual rollback original-origin reachability; Preview Notice still covers page; not interaction acceptance"
+    }
+  },
+  "evidence": {
+    "parent-execution-instruction.json": {
+      "path": "/tmp/a2d2-v4-154-5a2ecf3-02/parent-execution-instruction.json",
+      "sha256": "8cb135bd740f5f96d67e3d83e4564cd231fba120236cd60e86f8ec508d1c391c"
+    },
+    "operational-handover.json": {
+      "path": "/tmp/a2d2-v4-154-5a2ecf3-02/operational-handover.json",
+      "sha256": "57eff3f2ac37f82cc4569497864bfaa0a030f43ec36385eac8ba559643a617d3"
+    },
+    "operational-handover-pre-execute-recheck.json": {
+      "path": "/tmp/a2d2-v4-154-5a2ecf3-02/operational-handover-pre-execute-recheck.json",
+      "sha256": "4b74d490d20ebdeacfee77a5780e9a6651efe9337763f4abd76e77e95abb5612"
+    },
+    "target-observation-command.private.json": {
+      "path": "/tmp/a2d2-v4-154-5a2ecf3-02/target-observation-command.private.json",
+      "sha256": "77385617b0fcd5c67643d7063334c2e340af5b92554e30df3630f4f555648a0c"
+    },
+    "registry-observation-command.private.json": {
+      "path": "/tmp/a2d2-v4-154-5a2ecf3-02/registry-observation-command.private.json",
+      "sha256": "59f120031b1c1bfdd31b416f95e934fd80f5a7887657a8ef016133ce3e0a8702"
+    },
+    "dry-run-ready.json": {
+      "path": "/tmp/a2d2-v4-154-5a2ecf3-02/dry-run-ready.json",
+      "sha256": "c1a7ded9eda6506d889a9dad811edae21ce35d4ee1e2e5d5c6fcec4038245cc1"
+    },
+    "single-signal-hold.json": {
+      "path": "/tmp/a2d2-v4-154-5a2ecf3-02/single-signal-hold.json",
+      "sha256": "d33a46d2257d035931c135d117c3f7ca372c34f47ebaa4bb2e3c7f2b5f6b26be"
+    },
+    "old-cli-log-binding.json": {
+      "path": "/tmp/a2d2-v4-154-5a2ecf3-02/old-cli-log-binding.json",
+      "sha256": "69dcbbca95c258273d8abe8f7c726543ddd3c3ba7f05d5a3c55e28845bf4c903"
+    },
+    "old-cli-shutdown.private.log": {
+      "path": "/tmp/a2d2-v4-154-5a2ecf3-02/old-cli-shutdown.private.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "stopped-cut.json": {
+      "path": "/tmp/a2d2-v4-154-5a2ecf3-02/stopped-cut.json",
+      "sha256": "97889c9f6ce2b34ac75ad2550e98279837790c942ad3e831dc4fde8170cca7eb"
+    },
+    "one-shot.jsonl": {
+      "path": "/tmp/a2d2-v4-154-5a2ecf3-02/one-shot.jsonl",
+      "sha256": "6161b00ff1cc70566799cd82cc5e17d548f17595e2ca092b4d47d2d88016d990"
+    },
+    "completion.json": {
+      "path": "/tmp/a2d2-v4-154-5a2ecf3-02/completion.json",
+      "sha256": "98012d58aa42c232ab330e55ffa171109782c4f14bd4b167f1b473f824d85838"
+    },
+    "rollbackVerify.private.log": {
+      "path": "/tmp/a2d2-v4-154-5a2ecf3-02/rollbackVerify.private.log",
+      "sha256": "2d333a90ffbb80604c36e8a077d890e180bbe4fd02c2a308cc2f8dfe3dea7304"
+    },
+    "post-failure-readonly-verification.json": {
+      "path": "/tmp/a2d2-v4-154-5a2ecf3-02/post-failure-readonly-verification.json",
+      "sha256": "3b6f6123d874d83f449a763c9ef6bec254b1fe9be5fa43e2fcbad717c33c7611"
+    }
+  },
+  "unverified": [
+    "actual loaded rollback HTTP Script body binding",
+    "full rollback interaction acceptance under Preview Notice",
+    "v4 new runtime deployment",
+    "real-model business acceptance"
+  ],
+  "noRetry": true,
+  "oneShotLockPreserved": true,
+  "frozenToolsAndPlanModified": false,
+  "realModelCallsIssued": 0,
+  "githubBusinessObjectsExecuted": 0
+}
