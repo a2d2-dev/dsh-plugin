@@ -12,7 +12,7 @@ export function continuousOwner(state: WorkSnapshot, ref: TaskRef) {
 export function continuousCompleted(state: WorkSnapshot, execution: WorkExecution): boolean {
   const owner = continuousOwner(state, execution.ref)
   if (!owner) return false
-  const task = state.tasks.find(task => task.id === execution.ref.taskId)
+  const task = state.tasks.find(task => task.id === execution.ref.taskId && task.projectId === execution.ref.projectId)
   return owner.item.state === 'completed' || (task?.progress?.stage === 'done' && task.progress.specificationVersion === task.specification.version)
 }
 /** The native pre-step and per-session maintenance guard use the same durable slot. */
@@ -24,11 +24,12 @@ export function sourceScopeError(rule: ContinuousWorkRule, source: WorkSource | 
   if (!source?.enabled) return { code: 'source-disabled', message: 'Source is disabled; existing executions are retained' }
   if (source.lastError) return { code: source.lastError.code, message: source.lastError.message }
   if (rule.scope.assignee === '@me' && (!rule.scope.identity || source.identity?.nodeId !== rule.scope.identity.nodeId || source.identity.login.toLowerCase() !== rule.scope.identity.login.toLowerCase())) return { code: 'github-identity-changed', message: 'GitHub account differs from the account explicitly authorized for this rule; reconfigure the scope' }
+  if (source.repository) return source.repositorySnapshot?.sourceVersion === source.version ? undefined : { code: 'source-snapshot-unavailable', message: 'Continuous processing requires a complete version-matched repository candidate scan' }
   if (!source.githubProject || !source.projectSnapshot) return { code: 'source-snapshot-unavailable', message: 'Continuous processing requires a completed GitHub Project observation' }
 }
 /** Only the published complete Project membership is eligible; archived/draft/PR items never enter. */
 export function discoverContinuous(rule: ContinuousWorkRule, source: WorkSource): void {
-  const members = new Set(source.projectSnapshot?.items.filter(item => item.kind === 'issue' && !item.archived).map(item => item.issueNodeId))
+  const members = new Set(source.repository ? source.repositorySnapshot?.nodeIds : source.projectSnapshot?.items.filter(item => item.kind === 'issue' && !item.archived).map(item => item.issueNodeId))
   const eligible = new Set<string>()
   for (const { issue } of source.observations) {
     if (!members.has(issue.nodeId) || issue.state !== 'open' || !rule.scope.labels.every(label => issue.labels.includes(label))

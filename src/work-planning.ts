@@ -32,7 +32,7 @@ export function planningBasis(state: WorkSnapshot, rule: ContinuousWorkRule): Pl
   const error = sourceScopeError(rule, source)
   if (error) throw new PlanningError(error.code, error.message)
   if (!rule.planning) throw new PlanningError('planning-instruction-required', 'Save a continuous instruction before requesting a plan')
-  const members = new Set(source!.projectSnapshot!.items.filter(item => item.kind === 'issue' && !item.archived).map(item => item.issueNodeId))
+  const members = new Set(source!.repository ? source!.repositorySnapshot!.nodeIds : source!.projectSnapshot!.items.filter(item => item.kind === 'issue' && !item.archived).map(item => item.issueNodeId))
   const candidates = source!.observations.filter(({ issue }) => members.has(issue.nodeId)).map(({ issue }) => {
     const binding = state.externalBindings.find(binding => binding.nodeId === issue.nodeId)
     const task = binding && state.tasks.find(task => task.id === binding.ref.taskId && task.projectId === binding.ref.projectId)

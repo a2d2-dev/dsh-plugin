@@ -80,6 +80,18 @@ npx --yes pnpm@10.26.2 typecheck
 
 D 的 `completion.closeout === 'settled'` 与 B 的可靠 host observation 是最终组合验收前置，外部同步 pending/error 不阻塞槽位；此分支先沿 base 的本地 done report 和 host.settle 合同开发。最终 #141 需真实既有实例模型及浏览器证据。
 
+## #141 Repo 与来源组合
+
+整合后 Project 和 Repo 共用同一规划／调度合同。Repo 的 `continuous.configure` 先保存资源并保持 `enabled:false`；保存委托后，`continuous.preview` 经受信 `GitHubSourcePort.list` 读取凭据可见的完整开放 Issue 范围，固定 `assignee:'*'`，再在服务端应用规则负责人与标签约束。列表浏览页、Project view 和搜索不成为委托范围，也不修改原规则。
+
+`work-sources/repository-candidates` 在快照写锁外分页，最多十页、每页一百条且最多一千个可见 Issue。仅末页确认、账号稳定、仓库身份一致、分页连续且来源 version／请求代次仍匹配时，才原子发布 `repositorySnapshot`。权限失败、账号变化、分页异常、上限及来源停用均返回具名错误，部分扫描不会变成可领取范围；权限不可见对象不声称已覆盖。预览依据保存来源版本、完整 nodeIds 和时间，原生 dependency 字段仍为 `unavailable-in-source-port`，不能把未知说成已满足。
+
+显式 `continuous.set-enabled {enabled:true}` 再完整扫描并验证计划步骤、Block、canonical 协调上下文和原有原子接纳条件。模型的 canonical 引用不授予 claim；既有执行继续使用原资源、模型、权限、owner／epoch／Session，其他规则已拥有时等待。完成规则槽只由 `task.completion.closeout.status === 'settled'` 释放。
+
+已启用 Repo 使用既有来源 reconcile 生命周期维护候选范围，不调用 planner、不重启当前执行。它与显式预览共享 planning lease，避免后台扫描覆盖正在生成的固定依据；已有速率限制的 retryAt 被尊重。新发现项仍须出现在明确启用的模型计划中，刷新不会扩大已批准计划。
+
+公开验证场景：在仓库根运行 `corepack pnpm@10.26.2 exec vitest run tests/work-continuous.spec.ts -t 'Repo'`。Repo 来源经过保存授权、保存委托、两页完整候选、模型预览零 Session／零发送、显式启用启动一项；随后背景刷新移除范围项且不再次调用模型。另覆盖分页不推进、账号变化、越仓库内容、十页上限、权限拒绝及扫描期间停用。七项合同通过；测试使用受信端口／planner 合同注入，没有真实模型或 GitHub 业务写入。
+
 ## 本分支验证记录
 
 - 初始公开预览测试由 `invalid-command` 红转绿；启用测试由提前启动红转绿；已有执行由 skipped/缺少 active 红转绿。

@@ -27,6 +27,7 @@ export const sourceSchema = z.object({ id: z.string().uuid(), projectId: z.strin
   catalog: catalogSchema.optional(),
   title: z.string().optional(), nodeId: nodeId.optional(), entryUrls: z.array(z.string().max(2048)).optional(),
   identity: identity.optional(), lastError: z.object({ code: z.string(), message: z.string(), retryAt: z.string().optional() }).strict().optional(),
+  repositorySnapshot: z.object({ sourceVersion: z.number().int().positive(), identity, nodeIds: z.array(nodeId).max(1000), observedAt: z.iso.datetime() }).strict().optional(),
   projectSnapshot: z.object({ identity, project: projectMetadata, items: z.array(projectItem), observedAt: z.iso.datetime() }).strict().optional(), discovery: discovery.optional(),
 }).strict().refine(value => Boolean(value.repository) !== Boolean(value.githubProject), 'A source must name exactly one repository or GitHub Project')
 export const bindingSchema = z.object({ provider: z.literal('github'), nodeId: z.string(), urls: z.array(z.string()), ref: z.object({ projectId: z.string().uuid(), taskId: z.string().uuid() }).strict(), sourceIds: z.array(z.string().uuid()), accepted: issueSchema, lastObserved: issueSchema }).strict()

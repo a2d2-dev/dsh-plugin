@@ -68,6 +68,7 @@ export interface WorkSource {
   catalogError?: SourceFailure
   catalog?: SourceCatalog
   title?: string; nodeId?: string; entryUrls?: string[]
+  repositorySnapshot?: { sourceVersion: number; identity: GitHubIdentity; nodeIds: string[]; observedAt: string }
   identity?: GitHubIdentity; lastError?: SourceFailure; projectSnapshot?: ProjectSnapshot; discovery?: SourceDiscovery
 }
 export interface ExternalBinding {

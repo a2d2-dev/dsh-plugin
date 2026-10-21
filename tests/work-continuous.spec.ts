@@ -1,3 +1,4 @@
+import { SourceError } from '../src/work-sources/errors.ts'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
@@ -66,17 +67,23 @@ class Host implements WorkHost {
 function issue(number: number, assignees = ['alice'], labels = ['ready']): GitHubIssue {
   return { nodeId: `ISSUE_${number}`, number, title: `Issue ${number}`, url: `https://github.com/acme/repo/issues/${number}`, body: 'Implement the agreed work.', repository: { owner: 'acme', repository: 'repo' }, assignees, labels, state: 'open', updatedAt: '2026-01-01T00:00:00.000Z', observedAt: '2026-01-01T00:00:00.000Z' }
 }
-async function setup(enable = true, planner?: import('../src/work-planning.ts').WorkPlanner) {
+async function setup(enable = true, planner?: import('../src/work-planning.ts').WorkPlanner, repository = false) {
   const directory = await mkdtemp(join(tmpdir(), 'continuous-work-')); roots.push(directory)
   const host = new Host()
   const remote = { identity: { login: 'alice', nodeId: 'ALICE', name: null }, issues: [issue(1), issue(2), issue(3, ['bob']), issue(4, ['alice'], ['other'])] }
   const source: GitHubSourcePort = {
-    list: async () => { throw new Error('Project only') }, detail: async () => { throw new Error('Project only') },
+    identify: async url => ({ kind: 'repository', nodeId: 'REPO', title: 'acme/repo', url, entryUrl: url, identity: remote.identity, repository: { owner: 'acme', repository: 'repo' } }),
+    list: async (_repository, request) => {
+      if (!repository) throw new Error('Project only')
+      const issues = remote.issues.filter(issue => (request.state === 'all' || issue.state === request.state) && (request.assignee === '*' || issue.assignees.includes(remote.identity.login)))
+      const start = (request.page - 1) * 2
+      return { identity: remote.identity, items: issues.slice(start, start + 2), ...(start + 2 < issues.length ? { nextPage: request.page + 1 } : {}), observedAt: '2026-01-01T00:00:00.000Z' }
+    }, detail: async () => { throw new Error('Project only') },
     project: async () => ({ identity: remote.identity, project: { nodeId: 'PROJECT', title: 'Roadmap', url: 'https://github.com/orgs/acme/projects/1', closed: false },
       items: remote.issues.map(issue => ({ id: `ITEM_${issue.nodeId}`, kind: 'issue', archived: false, issueNodeId: issue.nodeId, fields: [], fieldsPartial: false })), issues: remote.issues, observedAt: '2026-01-01T00:00:00.000Z' }),
   }
   const app = new WorkApplication(directory, host, source, planner)
-  const connection = completed(await app.execute({ type: 'source.connect', commandId: 'connect', githubProject: { owner: 'acme', type: 'org', number: 1 } }, operator))
+  const connection = completed(await app.execute(repository ? { type: 'source.connect', commandId: 'connect', url: 'https://github.com/acme/repo' } : { type: 'source.connect', commandId: 'connect', githubProject: { owner: 'acme', type: 'org', number: 1 } }, operator))
   const scope = { projectId: connection.project!.id, sourceId: connection.source!.id }
   const refresh = () => app.query({ type: 'source.issues', ...scope, page: 1, perPage: 100, assignee: '@me', state: 'open', refresh: true }, operator)
   completed(await refresh())
@@ -485,4 +492,63 @@ it.each(['missing', 'unknown'] as const)('retains an accepted slot when formal s
   expect((await h.status()).active).toEqual(first.ref)
   expect(h.host.sessionsCreated.size).toBe(1)
   expect(completed(await h.app.query({ type: 'task.detail', ref: first.ref }, operator)).task!.completion!.closeout).toMatchObject({ status: 'pending', error: expect.stringContaining(mode === 'missing' ? 'capability-unavailable' : 'unknown') })
+})
+
+it('previews complete Repo candidates without execution and dispatches only after explicit plan enable', async () => {
+  const generate = vi.fn(async () => ({ steps: [{ nodeId: 'ISSUE_2', why: '先处理第二项', nextAction: '核验要求后实施', mode: 'new' }] }))
+  const h = await setup(false, { generate }, true)
+  const pages = vi.spyOn(h.source, 'list')
+  completed(await h.app.execute(h.configure, operator))
+  completed(await h.app.execute({ type: 'continuous.instruct', commandId: 'repo-instruct', ...h.scope, expectedVersion: 1, text: '优先第二项，并保留其他候选' }, operator))
+  completed(await h.app.execute({ type: 'continuous.preview', commandId: 'repo-preview', ...h.scope, expectedVersion: 2 }, operator))
+  expect(generate).toHaveBeenCalledTimes(1)
+  const basis = (generate.mock.calls[0] as unknown as [import('../src/work-planning.ts').PlanningBasis])[0]
+  expect(basis.candidates.map(item => item.issue.nodeId)).toEqual(['ISSUE_1', 'ISSUE_2', 'ISSUE_3', 'ISSUE_4'])
+  expect(basis.relationshipAvailability.nativeDependencies).toBe('unavailable-in-source-port')
+  expect(pages.mock.calls.map(([, request]) => [request.page, request.assignee, request.state])).toEqual([[1, '*', 'open'], [2, '*', 'open']])
+  expect(h.host.sessionsCreated.size).toBe(0); expect(h.host.sends).toHaveLength(0)
+  expect((await h.status()).items.every(item => !item.ref)).toBe(true)
+  completed(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'repo-enable', ...h.scope, expectedVersion: 3, enabled: true }, operator))
+  expect((await h.status()).items.find(item => item.state === 'active')?.nodeId).toBe('ISSUE_2')
+  expect(h.host.sessionsCreated.size).toBe(1)
+  h.remote.issues = [issue(1)]
+  await h.app.reconcileSources()
+  const observed = completed(await h.app.query({ type: 'source.list', projectId: h.scope.projectId }, operator)).sources![0]!
+  expect(observed.repositorySnapshot?.nodeIds).toEqual(['ISSUE_1'])
+  expect(generate).toHaveBeenCalledTimes(1)
+  expect(h.host.sessionsCreated.size).toBe(1)
+})
+
+it.each(['pagination', 'identity', 'foreign', 'limit', 'permission'] as const)('rejects incomplete Repo candidate scopes (%s) before model generation or execution', async mode => {
+  const generate = vi.fn(async () => ({ steps: [] }))
+  const h = await setup(false, { generate }, true)
+  completed(await h.app.execute(h.configure, operator))
+  completed(await h.app.execute({ type: 'continuous.instruct', commandId: 'reject-instruct', ...h.scope, expectedVersion: 1, text: '先看完整候选' }, operator))
+  vi.spyOn(h.source, 'list').mockImplementation(async (_repository, request) => {
+    if (mode === 'permission') throw new SourceError('github-forbidden', 'Repository permission denied')
+    return { identity: mode === 'identity' && request.page > 1 ? { ...h.remote.identity, nodeId: 'BOB', login: 'bob' } : h.remote.identity,
+      items: [{ ...issue(1), ...(mode === 'foreign' ? { repository: { owner: 'other', repository: 'repo' } } : {}) }],
+      nextPage: mode === 'pagination' ? request.page : request.page + 1, observedAt: '2026-01-01T00:00:00.000Z' }
+  })
+  const code = { pagination: 'source-pagination-invalid', identity: 'github-identity-changed', foreign: 'github-invalid-response', limit: 'source-candidate-limit', permission: 'github-forbidden' }[mode]
+  expect(await h.app.execute({ type: 'continuous.preview', commandId: 'reject-preview', ...h.scope, expectedVersion: 2 }, operator)).toMatchObject({ status: 'failed', error: { code } })
+  const source = completed(await h.app.query({ type: 'source.list', projectId: h.scope.projectId }, operator)).sources![0]!
+  expect(source.repositorySnapshot).toBeUndefined()
+  expect(generate).not.toHaveBeenCalled(); expect(h.host.sessionsCreated.size).toBe(0)
+})
+
+it('discards a Repo scan when its source is disabled during pagination', async () => {
+  const generate = vi.fn(async () => ({ steps: [] }))
+  const h = await setup(false, { generate }, true)
+  completed(await h.app.execute(h.configure, operator))
+  completed(await h.app.execute({ type: 'continuous.instruct', commandId: 'race-instruct', ...h.scope, expectedVersion: 1, text: '预览范围' }, operator))
+  let release!: () => void, entered!: () => void
+  const started = new Promise<void>(resolve => { entered = resolve })
+  vi.spyOn(h.source, 'list').mockImplementation(async () => { entered(); await new Promise<void>(resolve => { release = resolve }); return { identity: h.remote.identity, items: [issue(1)], observedAt: '2026-01-01T00:00:00.000Z' } })
+  const pending = h.app.execute({ type: 'continuous.preview', commandId: 'race-preview', ...h.scope, expectedVersion: 2 }, operator)
+  await started
+  completed(await h.app.execute({ type: 'source.set-enabled', commandId: 'disable-scanning-source', ...h.scope, expectedVersion: h.connection.source!.version, enabled: false }, operator))
+  release()
+  expect(await pending).toMatchObject({ status: 'failed', error: { code: 'source-observation-superseded' } })
+  expect(generate).not.toHaveBeenCalled(); expect(h.host.sessionsCreated.size).toBe(0)
 })

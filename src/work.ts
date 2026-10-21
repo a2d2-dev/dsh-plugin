@@ -1,3 +1,4 @@
+import { refreshRepositoryCandidates } from './work-sources/repository-candidates.ts'
 import { buildExecutionGraph, type ExecutionObservation } from './work-execution/observation.ts'
 import { refreshCatalog } from './work-sources/catalog-application.ts'
 import { PlanningError, planningBasis, validatePlan, samePlannedExecution } from './work-planning.ts'
@@ -185,6 +186,19 @@ export class WorkApplication {
   }
   async reconcileSources(): Promise<void> {
     if (this.source) await reconcileProjectSources(apply => this.sourceTransaction(apply), this.source)
+    const snapshot = await this.load()
+    const repositories = snapshot.sources.filter(source => source.enabled && source.repository && snapshot.continuousRules?.some(rule => rule.sourceId === source.id && rule.enabled && rule.planning))
+    if (repositories.length) {
+      const lease = join(this.directory, 'continuous.planning')
+      await withFileLock(lease, async () => {
+        for (const source of repositories) {
+          if (source.lastError?.retryAt && Date.parse(source.lastError.retryAt) > Date.now()) continue
+          await refreshRepositoryCandidates(apply => this.sourceTransaction(apply), { projectId: source.projectId, sourceId: source.id }, this.source)
+        }
+      }, { waitMs: 0 }).catch(error => {
+        if (!(error instanceof Error) || error.message !== `atomic-write: timed out waiting for the writer lock at ${lease}.lock`) throw error
+      })
+    }
     await this.sourceTransaction(async state => {
       for (const source of state.sources) {
         const project = state.projects.find(project => project.id === source.projectId)
@@ -217,7 +231,7 @@ export class WorkApplication {
       previous.enabled = command.enabled; previous.version++
       return { status: 'completed', continuousRule: previous }
     }
-    if (!source.githubProject) return failed('continuous-project-required', 'Continuous processing currently requires a GitHub Project source')
+    if (source.repository && command.enabled) return failed('planning-preview-required', 'Save resources, preview the repository instruction, then explicitly enable its plan')
     if (command.assignee === '@me' && !source.identity) return failed('github-identity-unobserved', 'Refresh the GitHub Project before authorizing the current account')
     if (!choices?.models.some(model => model.provider === command.model.provider && model.model === command.model.model)) return failed('unavailable-model', 'Exact model is unavailable')
     if (!choices.agentPresets.includes(command.agentPreset) || !choices.permissionPresets.includes(command.permissionPreset)) return failed('disallowed-preset', 'Exact execution presets must be inherited host choices')
@@ -240,11 +254,16 @@ export class WorkApplication {
   private async previewContinuous(command: Extract<WorkCommand, { type: 'continuous.preview' }>): Promise<WorkResult> {
     await mkdir(this.directory, { recursive: true, mode: 0o700 })
     return withFileLock(join(this.directory, 'continuous.planning'), async () => {
-      const snapshot = await this.load()
+      let snapshot = await this.load()
       const prior = snapshot.commands.find(item => item.commandId === command.commandId)
       if (prior) return prior.fingerprint === JSON.stringify(command) ? prior.result : failed('command-id-reused', 'Command identity has different content')
-      const rule = snapshot.continuousRules?.find(rule => rule.projectId === command.projectId && rule.sourceId === command.sourceId)
+      let rule = snapshot.continuousRules?.find(rule => rule.projectId === command.projectId && rule.sourceId === command.sourceId)
       if (!rule) return failed('continuous-unconfigured', 'Configure authorized scope and resources first')
+      if (rule.version !== command.expectedVersion) return conflict(rule.version)
+      const scan = await refreshRepositoryCandidates(apply => this.sourceTransaction(apply), command, this.source)
+      if (scan.status !== 'completed') return scan
+      snapshot = await this.load()
+      rule = snapshot.continuousRules!.find(item => item.id === rule!.id)!
       if (rule.version !== command.expectedVersion) return conflict(rule.version)
       try {
         if (!this.planner) throw new PlanningError('planning-model-unavailable', 'Host LLM planning capability is unavailable')
@@ -512,6 +531,14 @@ export class WorkApplication {
     const recorded = actor.operator ? (await this.load()).commands.find(item => item.commandId === command.commandId) : undefined
     if (recorded && recorded.fingerprint !== JSON.stringify(command)) return { status: 'conflict', error: { code: 'command-id-reused', message: 'Command ID already has different content' } }
     if (command.type === 'continuous.preview') return this.previewContinuous(command)
+    if (!recorded && command.type === 'continuous.set-enabled' && command.enabled) {
+      const state = await this.load()
+      const rule = state.continuousRules?.find(rule => rule.projectId === command.projectId && rule.sourceId === command.sourceId)
+      if (rule?.planning && state.sources.find(source => source.id === command.sourceId)?.repository) {
+        const scan = await refreshRepositoryCandidates(apply => this.sourceTransaction(apply), command, this.source)
+        if (scan.status !== 'completed') return scan
+      }
+    }
     if (!recorded && command.type === 'source.connect' && command.url) {
       if (!this.source?.identify) return failed('github-capability-unavailable', 'Source identification is unavailable')
       try { sourceCandidate = await this.source.identify(command.url) } catch (error) { return failed(error instanceof SourceError ? error.code : 'github-unavailable', error instanceof Error ? error.message : 'Source could not be identified') }

@@ -54,10 +54,10 @@ export async function apply(ctx: Context, config: Config = {}): Promise<void> {
   ctx.provide('a2d2Work', app)
   ctx.inject(['tools'], toolsCtx => { installWorkTools(toolsCtx, app, runtimeId); installWorkProgressTools(toolsCtx, app, runtimeId); installWorkOrganizationTools(toolsCtx, app, runtimeId) })
   ctx.inject(['agents'], executionCtx => { installWorkControlRecovery(executionCtx, app) })
-  if (source?.project) ctx.effect(() => startProjectDiscovery({
+  if (source) ctx.effect(() => startProjectDiscovery({
     reconcile: () => app.reconcileSources(),
-    onError: error => ctx.logger.warn(`GitHub Project discovery: ${String(error)}`),
-  }), 'GitHub Project background discovery')
+    onError: error => ctx.logger.warn(`GitHub source discovery: ${String(error)}`),
+  }), 'GitHub source background discovery')
   const getService = <T>(key: string): T => (ctx.get as (key: string) => unknown).call(ctx, key) as T
   const server = getService<{ register(route: { kind: 'exact'; path: string; handler: ReturnType<typeof createWorkHandler> }): () => void }>('webServer')
   const connection = getService<{ requestRejection: RequestRejection }>('connection')
