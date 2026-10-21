@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { completionSchema, childCompletionSchema } from './work-completion/index.ts'
 import { taskOrganizationSchema } from './work-organization.ts'
 import { taskProgressSchema, taskReportSchema, workStageSchema } from './work-progress.ts'
 import { bindingSchema, repositorySchema, sourceSchema } from './work-sources/schema.ts'
@@ -20,6 +21,7 @@ const block = z.object({ id: referenceId, title: text, description: text, status
 export const taskSchema = z.object({
   id, projectId: id, title: text, goal: text, version: z.number().int().positive(), agentId: id,
   progress: taskProgressSchema.optional(),
+  completion: completionSchema.optional(), childCompletions: z.array(childCompletionSchema).optional(),
   specification: specificationSchema, specificationHistory: z.array(specificationSchema),
   breakdown: z.array(block), parent: taskRefSchema.optional(), children: z.array(taskRefSchema),
   sessions: z.array(z.object({ session: sessionRefSchema, purpose: z.enum(['related', 'review']) }).strict()),

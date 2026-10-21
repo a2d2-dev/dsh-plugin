@@ -32,6 +32,8 @@ export interface WorkActivity { commandId: string; type: string; version: number
 export interface WorkTask {
   id: string; projectId: string; title: string; goal: string; version: number; agentId: string
   progress?: TaskProgress
+  completion?: import('./work-completion/index.ts').CompletionOperation
+  childCompletions?: import('./work-completion/index.ts').ChildCompletion[]
   specification: WorkSpecification
   specificationHistory: WorkSpecification[]
   breakdown: BreakdownBlock[]

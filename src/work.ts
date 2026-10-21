@@ -1,3 +1,4 @@
+import { isTaskCompleted, queueParentResults } from './work-completion/index.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile } from 'node:fs/promises'
 import { isAbsolute, join, normalize } from 'node:path'
@@ -48,7 +49,7 @@ export class WorkApplication {
     if (!isAbsolute(directory)) throw new Error('Work record directory must be absolute')
     this.file = join(directory, 'work-v3.json')
     this.host.execution?.connect(async (sessionId, messages = []) => {
-      const mayAdvance = (execution: import('./work-types.ts').WorkExecution | undefined) => !execution || (continuousMayAdvance(state, execution) && !['accepted', 'creating', 'failed', 'waiting', 'paused'].includes(execution.state)
+      const mayAdvance = (execution: import('./work-types.ts').WorkExecution | undefined) => !execution || (!isTaskCompleted(taskAt(state, execution.ref)) && continuousMayAdvance(state, execution) && !['accepted', 'creating', 'failed', 'waiting', 'paused'].includes(execution.state)
         && !(execution.control?.status === 'accepted' && execution.control.action !== 'resume')
         && !execution.continuationBlocked
         && (!continuationInFlight(execution) || ['reserved', 'material-requested', 'taken'].includes(execution.continuation!.phase)))
@@ -604,7 +605,7 @@ export class WorkApplication {
         const actual = await this.host.execution!.ensure(execution, async () => {
           const snapshot = await this.load()
           const current = snapshot.executions.find(item => item.id === id)
-          return !!current && continuousMayAdvance(snapshot, current) && current.owner === execution.owner && current.epoch === execution.epoch
+          return !!current && !isTaskCompleted(taskAt(snapshot, current.ref)) && continuousMayAdvance(snapshot, current) && current.owner === execution.owner && current.epoch === execution.epoch
             && !['paused', 'waiting', 'failed', 'creating', 'accepted'].includes(current.state)
             && !(current.control?.status === 'accepted' && current.control.action !== 'resume')
         })
@@ -727,6 +728,7 @@ export class WorkApplication {
     if (!('ref' in command)) return failed('unsupported-command', 'Command is not implemented')
     const task = taskAt(state, command.ref)
     if (!task) return failed('unknown-task', 'Task does not belong to this project')
+    if (isTaskCompleted(task) && command.type !== 'task.reconcile' && command.type !== 'task.associate-session') return failed('task-completed', 'Accepted Task is terminal; additional work requires a new Task')
     const active = state.executions.find(item => item.ref.taskId === task.id && item.ref.projectId === task.projectId)
     if (active && continuousCompleted(state, active) && ['task.update-spec', 'task.replace-breakdown', 'task.create-child', 'task.link-child', 'task.report', 'task.organize'].includes(command.type)) return failed('continuous-completed', 'Completed continuous work is immutable; create a separately authorized Issue for additional work')
     if (active && continuationInFlight(active) && ['task.update-spec', 'task.replace-breakdown', 'task.create-child', 'task.link-child', 'task.report', 'task.organize'].includes(command.type)) return failed('continuation-in-progress', 'Task specifications, structure and acceptance reports are frozen until the reserved handoff completes')
@@ -817,6 +819,7 @@ export class WorkApplication {
         resource: command.resource, session, sessionMode: command.session ? 'reuse' as const : 'create' as const, agentPreset: command.agentPreset, model: command.model, permissionPreset: command.permissionPreset,
         policy: structuredClone(agent.policy), ...(project.continuationPolicy ? { continuationPolicy: structuredClone(project.continuationPolicy) } : {}), events: [{ id: `kickoff:${executionId}`, text: kickoff, kind: 'input' as const, delivery: 'accepted' as const, acceptance: 'unassessed' as const }], state: 'accepted' as const, history: [{ state: 'accepted' as const, commandId: command.commandId }] }
       state.executions.push(execution)
+      queueParentResults(state)
       task.agentId = agent.id
       this.changed(task, command)
       return { status: 'completed', execution }

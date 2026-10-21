@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { commitCompletion } from './work-completion/index.ts'
 import type { WorkSnapshot } from './work-schema.ts'
 import type { WorkExecutionHost } from './work-execution/host.ts'
 import type { TaskRef, WorkExecution, WorkResult, WorkTask } from './work-types.ts'
@@ -66,7 +67,10 @@ export function applyTaskReport(state: WorkSnapshot, execution: WorkExecution, r
   task.version++
   task.activity.push({commandId,type:'task.report',version:task.version})
   execution.progress = report.summary
-  if (report.stage === 'done') execution.control = {commandId,action:'wait',status:'accepted',reason:'任务已按当前规格验收完成'}
+  if (report.stage === 'done') {
+    execution.control = {commandId,action:'wait',status:'accepted',reason:'任务已按当前规格验收完成'}
+    commitCompletion(state, task, execution, commandId)
+  }
   return {status:'completed',task,execution}
 }
 
