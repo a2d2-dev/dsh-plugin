@@ -2,13 +2,13 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { z } from 'zod'
 import { repositorySchema } from './schema.ts'
-import type { GitHubIdentity, GitHubIssue, GitHubRepository, GitHubSourcePort, IssuePageRequest, SourceFailure } from './types.ts'
+import type { GitHubIdentity, GitHubIssue, GitHubRepository, GitHubSourcePort, IssuePageRequest, GitHubProjectRef, ProjectPageRequest } from './types.ts'
+import { SourceError } from './errors.ts'
+import { readGitHubProject, type ProjectGraphQL } from './project.ts'
+export { SourceError } from './errors.ts'
 export type * from './types.ts'
 const exec = promisify(execFile)
 export function validRepository(value: GitHubRepository): boolean { return repositorySchema.safeParse(value).success }
-export class SourceError extends Error implements SourceFailure {
-  constructor(readonly code: string, message: string, readonly retryAt?: string) { super(message) }
-}
 const identitySchema = z.object({ login: z.string().min(1), node_id: z.string().min(1), name: z.string().nullable().optional() })
 const issueSchema = z.object({ node_id: z.string().min(1), number: z.number().int().positive(), title: z.string().min(1), body: z.string().nullable(), html_url: z.string(), state: z.enum(['open', 'closed']), updated_at: z.iso.datetime(), assignees: z.array(z.object({ login: z.string() })), labels: z.array(z.object({ name: z.string() })) })
 /** Respect the host's explicit GH/XDG config; never search another account directory. */
@@ -20,13 +20,15 @@ async function credential(): Promise<string> {
     return token
   } catch { throw new SourceError('github-credentials-unavailable', 'GitHub.com credentials are unavailable to this server') }
 }
-interface Options { credential?: () => Promise<string>; fetch?: typeof globalThis.fetch; timeoutMs?: number }
-/** GET-only GitHub.com port, with generated paths and no redirect following. */
+interface Options { credential?: () => Promise<string>; fetch?: typeof globalThis.fetch; timeoutMs?: number; graphql?: ProjectGraphQL }
+/** Read-only GitHub.com adapter: REST GETs and fixed Project GraphQL queries. */
 export class GitHubSource implements GitHubSourcePort {
+  private readonly options: Options
   private readonly token: () => Promise<string>
   private readonly fetcher: typeof globalThis.fetch
   private readonly timeoutMs: number
-  constructor(options: Options = {}) { this.token = options.credential ?? credential; this.fetcher = options.fetch ?? globalThis.fetch; this.timeoutMs = options.timeoutMs ?? 15_000 }
+  constructor(options: Options = {}) { this.options = options; this.token = options.credential ?? credential; this.fetcher = options.fetch ?? globalThis.fetch; this.timeoutMs = options.timeoutMs ?? 15_000 }
+  project(project: GitHubProjectRef, request: ProjectPageRequest) { return readGitHubProject(project, request, this.options.graphql) }
   private async get(path: string, token: string): Promise<unknown> {
     if (!(path === '/user' || /^\/repos\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/issues(?:\/[1-9][0-9]*)?(?:\?.*)?$/.test(path))) throw new SourceError('github-invalid-scope', 'Unsupported GitHub source path')
     try {

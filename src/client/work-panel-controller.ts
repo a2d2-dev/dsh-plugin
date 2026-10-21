@@ -1,7 +1,8 @@
+import type { TaskProgressView } from '../work-progress.ts'
 import { browserUUID } from './browser-uuid.ts'
 import { WorkClientError, type WorkClient } from './work-api.ts'
 import type { ExternalBinding, GitHubIssue, IssuePage, IssuePageRequest, WorkSource } from '../work-sources/types.ts'
-import type { Project, SessionRef, TaskRef, WorkCommand, WorkCompleted, WorkTask } from '../work-types.ts'
+import type { Project, SessionRef, TaskRef, WorkCommand, WorkCompleted, WorkExecutionOptions, WorkTask } from '../work-types.ts'
 type WithoutCommandId<T> = T extends unknown ? Omit<T, 'commandId'> : never
 export type WorkIntent = WithoutCommandId<WorkCommand>
 
@@ -13,7 +14,23 @@ export interface SourcePanelState extends IssuePageRequest {
   canonical: TaskRef | null
 }
 const emptySource = (): SourcePanelState => ({sources:[],sourceId:null,listing:null,issue:null,bindings:[],page:1,perPage:20,assignee:'@me',state:'open',loading:false,error:null,cached:true,canonical:null})
+export interface StartSelection {
+  resourceIndex: number; modelIndex: number; agentPreset: string; permissionPreset: string
+}
+export interface StartupState {
+  busy: boolean; error: string | null; options: WorkExecutionOptions | null; selection: StartSelection | null
+}
+const emptyStartup = (): StartupState => ({ busy: false, error: null, options: null, selection: null })
+export interface HistoryState {
+  session: SessionRef | null; events: unknown[]; nextCursor?: number
+  loading: boolean; loaded: boolean; error: string | null
+}
+const emptyHistory = (): HistoryState => ({ session: null, events: [], loading: false, loaded: false, error: null })
 export interface WorkPanelState {
+  observationError: string | null
+  history: HistoryState
+  progressItems: TaskProgressView[]
+  startup: StartupState
   object: 'projects' | 'issues' | 'prs'; source: SourcePanelState
   projects: Project[]; projectId: string | null; tasks: WorkTask[]
   detail: WorkCompleted | null; detailTab: DetailTab; search: string; view: LocalView
@@ -25,14 +42,74 @@ export interface WorkNavigation {
 }
 /** One root-owned state survives panel unmounts and native-session round trips. */
 export class WorkPanelController {
-  private state: WorkPanelState = { object:'projects', source:emptySource(), projects: [], projectId: null, tasks: [], detail: null, detailTab: 'overview', search: '', view: 'all', loading: false, error: null }
+  private state: WorkPanelState = { observationError: null, history: emptyHistory(), progressItems: [], startup: emptyStartup(), object:'projects', source:emptySource(), projects: [], projectId: null, tasks: [], detail: null, detailTab: 'overview', search: '', view: 'all', loading: false, error: null }
   private listeners = new Set<() => void>()
-  private sourceOrigin: Pick<WorkPanelState,'projectId'|'tasks'|'source'|'object'|'search'|'view'> | null = null
+  private sourceOrigin: Pick<WorkPanelState,'projectId'|'tasks'|'progressItems'|'source'|'object'|'search'|'view'> | null = null
   private revision = 0
   constructor(readonly client: WorkClient, private readonly navigation: WorkNavigation) {}
   getSnapshot = (): WorkPanelState => this.state
   subscribe = (listener: () => void): (() => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener) } }
-  private update(value: Partial<WorkPanelState>): void { this.state = { ...this.state, ...value }; this.listeners.forEach(listener => listener()) }
+  private update(value: Partial<WorkPanelState>): void {
+    const progress = value.detail?.progress
+    if (progress) value = { ...value, progressItems: [...(value.progressItems ?? this.state.progressItems).filter(item => item.ref.projectId !== progress.ref.projectId || item.ref.taskId !== progress.ref.taskId), progress] }
+    this.state = { ...this.state, ...value }; this.listeners.forEach(listener => listener())
+  }
+  private observationRead?: AbortController
+  private activeCommands = 0
+  stopObservation(): void { this.observationRead?.abort() }
+  private observationBlocked(): boolean {
+    return this.state.loading || this.state.source.loading || this.state.startup.busy || !!this.state.startup.options || this.state.history.loading || this.activeCommands > 0
+  }
+  /** Visible-panel observation reads local projections/cache only; it never starts work or refreshes GitHub. */
+  async observeCurrent(allowed: () => boolean = () => true): Promise<void> {
+    if (this.observationRead || this.observationBlocked() || !allowed() || !this.state.projectId) return
+    const snapshot = this.state, projectId = snapshot.projectId!, task = snapshot.detail?.task
+    const revision = this.revision, sourceRevision = this.sourceRevision
+    const abort = new AbortController(); this.observationRead = abort
+    const current = () => !abort.signal.aborted && revision === this.revision && sourceRevision === this.sourceRevision && !this.observationBlocked() && allowed()
+    const query = <T extends Parameters<WorkClient['query']>[0]>(value: T) => this.client.query(value, abort.signal)
+    try {
+      const base = task ? query({ type: 'task.detail', ref: { projectId: task.projectId, taskId: task.id } }) : query({ type: 'project.detail', projectId })
+      const watchingSource = !task && snapshot.object === 'issues'
+      const sources = watchingSource ? query({ type: 'source.list', projectId }) : Promise.resolve(null)
+      const { sourceId, issue, page, perPage, assignee, state } = snapshot.source
+      const cached = !watchingSource || !sourceId ? Promise.resolve(null) : issue
+        ? query({ type: 'source.issue', projectId, sourceId, number: issue.number, nodeId: issue.nodeId, refresh: false })
+        : query({ type: 'source.issues', projectId, sourceId, page, perPage, assignee, state, refresh: false })
+      const [observed, sourceList, sourcePage] = await Promise.allSettled([base, sources, cached])
+      if (!current()) return
+      const update: Partial<WorkPanelState> = { observationError: null }
+      const failures = [observed, sourceList, sourcePage].filter(result => result.status === 'rejected')
+      if (failures.length) update.observationError = failures.map(result => message((result as PromiseRejectedResult).reason)).join('；')
+      if (observed.status === 'fulfilled') {
+        const result = observed.value
+        if (task && result.task?.id === task.id && result.task.projectId === task.projectId) {
+          update.detail = result
+          update.tasks = this.state.tasks.map(item => item.id === task.id && item.projectId === task.projectId ? result.task! : item)
+        } else if (!task) {
+          update.tasks = result.tasks ?? snapshot.tasks
+          update.progressItems = result.progressItems ?? snapshot.progressItems
+          if (result.project?.id === projectId) update.projects = this.state.projects.map(item => item.id === projectId ? result.project! : item)
+        }
+      }
+      if (watchingSource) {
+        const nextSource = { ...this.state.source }
+        if (sourceList.status === 'fulfilled' && sourceList.value?.sources) nextSource.sources = sourceList.value.sources
+        if (sourcePage.status === 'fulfilled' && sourcePage.value) {
+          const result = sourcePage.value
+          if (result.source?.id === sourceId) nextSource.sources = nextSource.sources.map(item => item.id === sourceId ? result.source! : item)
+          if (issue && result.issue?.nodeId === issue.nodeId) {
+            nextSource.issue = result.issue
+            if (result.bindings) nextSource.bindings = result.bindings
+          } else if (!issue && result.page) nextSource.listing = result.page
+          nextSource.cached = true
+        }
+        update.source = nextSource
+      }
+      this.update(update)
+    } catch (error) { if (current()) this.update({ observationError: message(error) }) }
+    finally { if (this.observationRead === abort) this.observationRead = undefined }
+  }
   async initialize(): Promise<void> {
     if (!this.state.loading && !this.state.projects.length) await this.load()
   }
@@ -58,13 +135,13 @@ export class WorkPanelController {
     this.update({ projectId, loading: true, error: null, ...(changed ? { detail: null, search: '', view: 'all', tasks: [], object:'projects' as const, source:emptySource() } : {}) })
     try {
       const result = await this.client.query({ type: 'project.detail', projectId })
-      if (revision === this.revision) this.update({ tasks: result.tasks ?? [], loading: false })
+      if (revision === this.revision) this.update({ tasks: result.tasks ?? [], progressItems: result.progressItems ?? [], ...(result.project ? { projects: this.state.projects.map(item => item.id === result.project!.id ? result.project! : item) } : {}), loading: false })
     } catch (error) { if (revision === this.revision) this.update({ loading: false, error: message(error) }) }
   }
   async openTask(ref: TaskRef): Promise<void> {
     this.invalidateSourceNavigation()
     if (this.state.projectId !== ref.projectId) {
-      const origin=this.state.object==='issues'&&this.state.source.issue?{projectId:this.state.projectId,tasks:this.state.tasks,source:this.state.source,object:this.state.object,search:this.state.search,view:this.state.view}:null
+      const origin=this.state.object==='issues'&&this.state.source.issue?{projectId:this.state.projectId,tasks:this.state.tasks,progressItems:this.state.progressItems,source:this.state.source,object:this.state.object,search:this.state.search,view:this.state.view}:null
       const projectRevision = this.revision + 1
       await this.selectProject(ref.projectId)
       if (this.revision !== projectRevision || this.state.projectId !== ref.projectId) return
@@ -94,23 +171,196 @@ export class WorkPanelController {
   async refreshTask(): Promise<void> {
     const task = this.state.detail?.task
     if (!task) return
+    this.closeHistory()
     const revision = ++this.revision
-    this.update({ loading: true, error: null })
+    this.update({ loading: true, error: null, startup: emptyStartup() })
     try {
       const detail = await this.client.query({ type: 'task.detail', ref: { projectId: task.projectId, taskId: task.id } })
       if (revision === this.revision) this.update({ detail, loading: false })
     } catch (error) { if (revision === this.revision) this.update({ loading: false, error: message(error) }) }
   }
+  /** One explicit start intent may import an Issue, but navigation changes cancel its later UI steps. */
+  async prepareStart(fromIssue = false): Promise<void> {
+    if (this.state.startup.busy) return
+    const projectId = this.state.projectId
+    const { issue, sourceId, bindings, canonical } = this.state.source
+    const selectedTask = this.state.detail?.task
+    const revision = ++this.revision, sourceRevision = this.sourceRevision
+    const current = () => revision === this.revision && sourceRevision === this.sourceRevision
+    this.update({ startup: { ...emptyStartup(), busy: true } })
+    try {
+      let ref: TaskRef | undefined
+      if (fromIssue) {
+        if (!projectId || !sourceId || !issue) throw Error('请先读取完整 Issue')
+        ref = bindings.find(binding => binding.nodeId === issue.nodeId)?.ref ?? canonical ?? undefined
+        if (!ref) {
+          try {
+            const imported = await this.submit({ type: 'source.import', projectId, sourceId, nodeId: issue.nodeId })
+            ref = imported.ref
+          } catch (error) {
+            if (!(error instanceof WorkClientError) || error.result.error.code !== 'external-object-owned' || !error.result.ref) throw error
+            ref = error.result.ref
+          }
+        }
+      } else if (selectedTask) ref = { projectId: selectedTask.projectId, taskId: selectedTask.id }
+      if (!current()) return
+      if (!ref) throw Error('工作服务未返回工作的定位信息')
+      const detail = await this.client.query({ type: 'task.detail', ref })
+      if (!current()) return
+      if (!detail.task || detail.task.id !== ref.taskId || detail.task.projectId !== ref.projectId) throw Error('工作详情与启动目标不一致')
+      if (ref.projectId !== this.state.projectId) {
+        const project = await this.client.query({ type: 'project.detail', projectId: ref.projectId })
+        if (!current()) return
+        this.sourceOrigin = { projectId: this.state.projectId, tasks: this.state.tasks, progressItems: this.state.progressItems, source: this.state.source, object: this.state.object, search: this.state.search, view: this.state.view }
+        this.update({ projectId: ref.projectId, tasks: project.tasks ?? [], progressItems: project.progressItems ?? [], object: 'projects', source: emptySource(), search: '', view: 'all' })
+      }
+      this.update({ detail, detailTab: 'overview', loading: false, error: null })
+      if (detail.execution) {
+        this.update({ startup: { ...emptyStartup(), error: this.executionFailure(detail) } })
+        const session = this.currentSession()
+        if (session) this.openSession(session)
+        return
+      }
+      const result = await this.client.query({ type: 'task.execution-options', ref })
+      if (!current()) return
+      const options = result.executionOptions
+      if (!options) throw Error('宿主未返回可用的执行配置')
+      if (!options.resources.length) throw Error('项目尚未接入可用工作目录，请先点击“接入已有资源”。')
+      if (!options.models.length || !options.agentPresets.length || !options.permissionPresets.length) throw Error('宿主暂无可用模型、Agent 预设或权限配置')
+      const selection: StartSelection = { resourceIndex: 0,
+        modelIndex: Math.max(0, options.models.findIndex(model => model.provider === options.defaults.model.provider && model.model === options.defaults.model.model)),
+        agentPreset: options.agentPresets.includes(options.defaults.agentPreset) ? options.defaults.agentPreset : options.agentPresets[0]!,
+        permissionPreset: options.permissionPresets.includes(options.defaults.permissionPreset) ? options.defaults.permissionPreset : options.permissionPresets[0]!,
+      }
+      this.update({ startup: { busy: false, error: null, options, selection } })
+      if ([options.resources, options.models, options.agentPresets, options.permissionPresets].every(values => values.length === 1)) await this.startPrepared()
+    } catch (error) { if (current()) this.update({ startup: { ...this.state.startup, busy: false, error: message(error) } }) }
+  }
+  selectStart(value: Partial<StartSelection>): void {
+    const startup = this.state.startup
+    if (!startup.busy && startup.selection) this.update({ startup: { ...startup, selection: { ...startup.selection, ...value }, error: null } })
+  }
+  cancelStart(): void { ++this.revision; this.update({ startup: emptyStartup() }) }
+  async startPrepared(): Promise<void> {
+    const { startup, detail } = this.state
+    if (startup.busy || !startup.options || !startup.selection || !detail?.task) return
+    const { options, selection } = startup, task = detail.task
+    const resource = options.resources[selection.resourceIndex]?.ref, model = options.models[selection.modelIndex]
+    if (!resource || !model || !options.agentPresets.includes(selection.agentPreset) || !options.permissionPresets.includes(selection.permissionPreset)) {
+      this.update({ startup: { ...startup, error: '请选择宿主提供的执行配置' } }); return
+    }
+    const revision = this.revision, sourceRevision = this.sourceRevision
+    const current = () => revision === this.revision && sourceRevision === this.sourceRevision
+    this.update({ startup: { ...startup, busy: true, error: null } })
+    try {
+      const ref = { projectId: task.projectId, taskId: task.id }
+      // Re-read before writing: another browser may already have started this Task.
+      const latest = await this.client.query({ type: 'task.detail', ref })
+      if (!current()) return
+      if (!latest.task) throw Error('工作详情暂不可用')
+      const result = latest.execution ? latest : await this.submit({ type: 'task.start', ref, expectedVersion: latest.task.version,
+        agentId: options.agentId, resource, model, agentPreset: selection.agentPreset, permissionPreset: selection.permissionPreset })
+      if (!current()) return
+      // A completed command can contain a failed execution; retain it even if refresh fails.
+      this.update({ detail: { ...latest, ...result }, startup: { ...emptyStartup(), busy: true } })
+      const refreshed = await this.client.query({ type: 'task.detail', ref })
+      if (!current()) return
+      const observed = { ...refreshed, execution: refreshed.execution ?? result.execution }
+      this.update({ detail: observed, tasks: this.state.tasks.map(item => item.id === refreshed.task?.id ? refreshed.task : item), startup: { ...emptyStartup(), error: this.executionFailure(observed) } })
+      const session = this.currentSession()
+      if (session) this.openSession(session)
+    } catch (error) { if (current()) this.update({ startup: { ...this.state.startup, busy: false, error: message(error) } }) }
+  }
+  private executionFailure(result: WorkCompleted): string | null {
+    const execution = result.execution
+    return execution?.state === 'failed' ? `${execution.error?.code ?? '启动失败'}: ${execution.error?.message ?? '执行未能启动，请检查配置后恢复原执行。'}` : null
+  }
+  currentSession(): SessionRef | null {
+    const { detail, loading } = this.state, execution = detail?.execution
+    return !loading && execution?.actual && execution.ref.projectId === detail?.task?.projectId
+      && execution.ref.taskId === detail.task.id && execution.actual.runtimeId === execution.session.runtimeId
+      && ['ready', 'running', 'waiting', 'paused'].includes(execution.state) ? execution.session : null
+  }
+  openCurrentSession(): void { const session = this.currentSession(); if (session) this.openSession(session) }
+  async controlExecution(action: 'pause' | 'resume' | 'reconcile' | 'continue'): Promise<void> {
+    const execution = this.state.detail?.execution
+    if (!execution || this.state.startup.busy) return
+    const revision = this.revision, sourceRevision = this.sourceRevision
+    const current = () => revision === this.revision && sourceRevision === this.sourceRevision
+    this.update({ startup: { ...emptyStartup(), busy: true } })
+    try {
+      const fence = { ref: execution.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch }
+      const result = await this.submit(action === 'reconcile' ? { type: 'task.reconcile', ...fence } : action === 'continue' ? { type: 'task.continue', ...fence } : { type: 'task.control', ...fence, action, text: action === 'pause' ? '用户暂停处理' : '用户明确恢复处理' })
+      if (!current()) return
+      const detail = await this.client.query({ type: 'task.detail', ref: execution.ref })
+      if (current()) this.update({ detail, startup: { ...emptyStartup(), error: this.executionFailure(detail.execution ? detail : result) } })
+    } catch (error) { if (current()) this.update({ startup: { ...emptyStartup(), error: message(error) } }) }
+  }
+  async saveContinuation(policy: import('../work-types.ts').ContinuationPolicy, forExecution: boolean): Promise<void> {
+    const { projectId, detail } = this.state, project = this.state.projects.find(item => item.id === projectId)
+    const execution = forExecution ? detail?.execution : undefined
+    if (!project || (forExecution && !execution)) throw Error('当前项目或执行不可用')
+    const revision = this.revision, sourceRevision = this.sourceRevision
+    const result = execution ? await this.submit({ type: 'task.configure-continuation', ref: execution.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch, policy })
+      : await this.submit({ type: 'project.configure-continuation', projectId: project.id, expectedVersion: project.version, policy })
+    if (revision !== this.revision || sourceRevision !== this.sourceRevision) return
+    if (result.project) this.update({ projects: this.state.projects.map(item => item.id === result.project!.id ? result.project! : item) })
+    if (execution) await this.refreshTask()
+  }
+  private historyRevision = 0
+  private historyRead?: AbortController
+  closeHistory(): void {
+    ++this.historyRevision; this.historyRead?.abort(); this.historyRead = undefined
+    this.update({ history: emptyHistory() })
+  }
+  async openHistory(session: SessionRef): Promise<void> {
+    this.stopObservation()
+    this.closeHistory()
+    const execution = this.state.detail?.execution
+    if (!execution?.retired?.some(item => item.session.runtimeId === session.runtimeId && item.session.sessionId === session.sessionId)) {
+      this.update({ history: { ...emptyHistory(), error: '该会话不属于当前工作的接续历史' } }); return
+    }
+    this.update({ history: { ...emptyHistory(), session } })
+    await this.readHistoryPage()
+  }
+  async moreHistory(): Promise<void> {
+    if (this.state.history.loading || this.state.history.nextCursor === undefined) return
+    await this.readHistoryPage(this.state.history.nextCursor)
+  }
+  async retryHistory(): Promise<void> {
+    const history = this.state.history
+    if (history.loading || !history.session) return
+    await this.readHistoryPage(history.loaded ? history.nextCursor : undefined)
+  }
+  private async readHistoryPage(cursor?: number): Promise<void> {
+    const { detail, history } = this.state, session = history.session, task = detail?.task
+    if (!session || !task) return
+    const ref = { projectId: task.projectId, taskId: task.id }
+    const revision = this.revision, sourceRevision = this.sourceRevision, historyRevision = ++this.historyRevision
+    this.historyRead?.abort()
+    const abort = new AbortController(); this.historyRead = abort
+    const current = () => !abort.signal.aborted && revision === this.revision && sourceRevision === this.sourceRevision && historyRevision === this.historyRevision
+    this.update({ history: { ...history, loading: true, error: null } })
+    try {
+      const result = await this.client.query({ type: 'task.history', ref, session, limit: 50, ...(cursor === undefined ? {} : { cursor }) }, abort.signal)
+      if (!current()) return
+      const transcript = result.transcript
+      if (!transcript || transcript.session.runtimeId !== session.runtimeId || transcript.session.sessionId !== session.sessionId || !Array.isArray(transcript.events)) throw Error('历史响应与所选会话不一致')
+      if (transcript.nextCursor !== undefined && (!Number.isSafeInteger(transcript.nextCursor) || transcript.nextCursor <= (cursor ?? 0))) throw Error('历史分页位置未向前推进')
+      this.update({ history: { session, events: cursor === undefined ? transcript.events : [...history.events, ...transcript.events], ...(transcript.nextCursor === undefined ? {} : { nextCursor: transcript.nextCursor }), loading: false, loaded: true, error: null } })
+    } catch (error) { if (current()) this.update({ history: { ...this.state.history, loading: false, error: message(error) } }) }
+  }
+  private advanceSourceRevision(): number { this.stopObservation(); this.closeHistory(); this.update({ startup: emptyStartup(), observationError: null }); return ++this.sourceRevision }
   private sourceRevision = 0
   private updateSource(value: Partial<SourcePanelState>): void { this.update({source:{...this.state.source,...value}}) }
   /** Navigation invalidates source UI effects, never an already authorized command. */
-  private invalidateSourceNavigation(): void { ++this.sourceRevision; this.updateSource({loading:false}) }
+  private invalidateSourceNavigation(): void { this.advanceSourceRevision(); this.updateSource({loading:false}) }
   setObject(object: WorkPanelState['object']): void { ++this.revision; this.invalidateSourceNavigation(); this.update({object,loading:false}) }
   async showSources(): Promise<void> {
     const projectId=this.state.projectId
     if (!projectId) return
     ++this.revision
-    const revision=++this.sourceRevision
+    const revision=this.advanceSourceRevision()
     this.update({object:'issues',detail:null,loading:false,error:null})
     this.updateSource({loading:true,error:null})
     try {
@@ -123,7 +373,7 @@ export class WorkPanelController {
     } catch(error) {if(revision===this.sourceRevision) this.updateSource({loading:false,error:message(error)})}
   }
   async configureSource(owner:string,repository:string):Promise<void> {
-    const projectId=this.state.projectId,revision=++this.sourceRevision
+    const projectId=this.state.projectId,revision=this.advanceSourceRevision()
     if(!projectId) throw Error('请先选择项目')
     try {
       const result=await this.submit({type:'source.configure',projectId,repository:{owner:owner.trim(),repository:repository.trim()}})
@@ -135,15 +385,28 @@ export class WorkPanelController {
       await this.browseIssues({},true)
     } catch(error) { if(revision===this.sourceRevision) throw error }
   }
+  async configureProjectSource(owner: string, type: 'org' | 'user', number: number): Promise<void> {
+    const projectId = this.state.projectId, revision = this.advanceSourceRevision()
+    if (!projectId) throw Error('请先选择项目')
+    try {
+      const result = await this.submit({ type: 'source.configure-project', projectId, githubProject: { owner: owner.trim(), type, number } })
+      if (revision !== this.sourceRevision) return
+      if (!result.source) throw Error('工作服务未返回来源')
+      const sources = [...this.state.source.sources.filter(item => item.id !== result.source!.id), result.source]
+      this.update({ object: 'issues' })
+      this.updateSource({ ...emptySource(), sources, sourceId: result.source.id })
+      await this.browseIssues({}, true)
+    } catch (error) { if (revision === this.sourceRevision) throw error }
+  }
   async selectSource(sourceId:string):Promise<void> {
-    ++this.sourceRevision
+    this.advanceSourceRevision()
     this.updateSource({...emptySource(),sources:this.state.source.sources,sourceId})
     await this.browseIssues({},false)
   }
   async browseIssues(change:Partial<IssuePageRequest>={},refresh=false):Promise<void> {
     const {projectId}=this.state, previous=this.state.source
     if(!projectId || !previous.sourceId) return
-    const revision=++this.sourceRevision
+    const revision=this.advanceSourceRevision()
     const changed=Object.entries(change).some(([key,value])=>previous[key as keyof IssuePageRequest]!==value)
     this.updateSource({...change,loading:true,error:null,issue:null,bindings:[],canonical:null,...(changed?{listing:null}:{})})
     const {sourceId,page,perPage,assignee,state}=this.state.source
@@ -152,13 +415,13 @@ export class WorkPanelController {
       if(revision===this.sourceRevision) this.receiveSource(result,refresh,false)
     }catch(error){if(revision===this.sourceRevision) this.sourceFailed(error,false)}
   }
-  async openIssue(number:number,refresh=true):Promise<void> {
+  async openIssue(number:number,refresh=true,nodeId?:string):Promise<void> {
     const {projectId}=this.state,{sourceId}=this.state.source
     if(!projectId || !sourceId) return
-    const revision=++this.sourceRevision
-    this.updateSource({...(this.state.source.issue?.number===number?{}:{issue:null,bindings:[]}),canonical:null,loading:true,error:null})
+    const revision=this.advanceSourceRevision()
+    this.updateSource({...(this.state.source.issue?.number===number&&(!nodeId||this.state.source.issue.nodeId===nodeId)?{}:{issue:null,bindings:[]}),canonical:null,loading:true,error:null})
     try {
-      const result=await this.client.query({type:'source.issue',projectId,sourceId,number,refresh})
+      const result=await this.client.query({type:'source.issue',projectId,sourceId,number,refresh,...(nodeId?{nodeId}:{})})
       if(revision===this.sourceRevision) this.receiveSource(result,refresh,true)
     }catch(error){if(revision===this.sourceRevision) this.sourceFailed(error,true)}
   }
@@ -173,7 +436,7 @@ export class WorkPanelController {
   async setSourceEnabled(enabled:boolean):Promise<void> {
     const {projectId}=this.state,source=this.state.source.sources.find(item=>item.id===this.state.source.sourceId)
     if(!projectId || !source) return
-    const revision=++this.sourceRevision
+    const revision=this.advanceSourceRevision()
     this.updateSource({loading:true,error:null})
     try {
       const result=await this.submit({type:'source.set-enabled',projectId,sourceId:source.id,expectedVersion:source.version,enabled})
@@ -185,7 +448,7 @@ export class WorkPanelController {
   async acceptIssue(existing?:WorkTask):Promise<void> {
     const {projectId}=this.state,{sourceId,issue}=this.state.source
     if(!projectId || !sourceId || !issue) throw Error('请先读取完整 Issue')
-    const revision=++this.sourceRevision
+    const revision=this.advanceSourceRevision()
     this.updateSource({loading:true,error:null,canonical:null})
     try {
       const result=await this.submit(existing
@@ -200,22 +463,25 @@ export class WorkPanelController {
       this.updateSource({loading:false,error:error instanceof WorkClientError&&error.result.error.code==='external-object-owned'?'该 Issue 已关联本地工作，请打开已有工作。':message(error),canonical:error instanceof WorkClientError?error.result.ref??null:null})
     }
   }
-  backToIssues():void {++this.sourceRevision;this.updateSource({issue:null,bindings:[],canonical:null,loading:false,error:null})}
+  backToIssues():void {this.advanceSourceRevision();this.updateSource({issue:null,bindings:[],canonical:null,loading:false,error:null})}
   private pendingCommands = new Map<string, string>()
   async submit(command: WorkIntent): Promise<WorkCompleted> {
-    const key = JSON.stringify(command)
-    const commandId = this.pendingCommands.get(key) ?? browserUUID()
-    this.pendingCommands.set(key, commandId)
-    const result = await this.client.command({ ...command, commandId })
-    this.pendingCommands.delete(key)
-    if (result.task) {
-      const task = result.task
-      const tasks = this.state.tasks.some(item => item.id === task.id)
-        ? this.state.tasks.map(item => item.id === task.id ? task : item)
-        : task.projectId === this.state.projectId ? [...this.state.tasks, task] : this.state.tasks
-      this.update({ tasks })
-    }
-    return result
+    this.stopObservation(); ++this.activeCommands
+    try {
+      const key = JSON.stringify(command)
+      const commandId = this.pendingCommands.get(key) ?? browserUUID()
+      this.pendingCommands.set(key, commandId)
+      const result = await this.client.command({ ...command, commandId })
+      this.pendingCommands.delete(key)
+      if (result.task) {
+        const task = result.task
+        const tasks = this.state.tasks.some(item => item.id === task.id)
+          ? this.state.tasks.map(item => item.id === task.id ? task : item)
+          : task.projectId === this.state.projectId ? [...this.state.tasks, task] : this.state.tasks
+        this.update({ tasks })
+      }
+      return result
+    } finally { --this.activeCommands }
   }
   back(): void {
     ++this.revision; this.invalidateSourceNavigation()
@@ -228,6 +494,30 @@ export class WorkPanelController {
   setSearch(search: string): void { this.update({ search }) }
   setView(view: LocalView): void { this.update({ view }) }
   setDetailTab(detailTab: DetailTab): void { this.update({ detailTab }) }
+  progressForIssue(issue: GitHubIssue): TaskProgressView | undefined {
+    const key = (value: string): string | undefined => {
+      try {
+        const url = new URL(value)
+        return url.protocol === 'https:' && url.hostname === 'github.com' && !url.port && !url.username && !url.password
+          && /^\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/issues\/[1-9]\d*\/?$/.test(url.pathname)
+          ? url.pathname.toLowerCase().replace(/\/$/, '') : undefined
+      } catch { return undefined }
+    }
+    const canonical = key(issue.url)
+    return canonical ? this.state.progressItems.find(item => item.ref.projectId === this.state.projectId && item.source && key(item.source.url) === canonical) : undefined
+  }
+  visibleTaskRows(): { task: WorkTask; depth: number }[] {
+    const tasks = this.visibleTasks(), ids = new Set(tasks.map(task => task.id)), visited = new Set<string>()
+    const rows: { task: WorkTask; depth: number }[] = []
+    const visit = (task: WorkTask, depth: number) => {
+      if (visited.has(task.id)) return
+      visited.add(task.id); rows.push({ task, depth })
+      for (const child of tasks.filter(item => item.parent?.taskId === task.id && item.parent.projectId === task.projectId)) visit(child, depth + 1)
+    }
+    for (const task of tasks.filter(item => !item.parent || !ids.has(item.parent.taskId))) visit(task, 0)
+    for (const task of tasks) visit(task, 0)
+    return rows
+  }
   visibleTasks(): WorkTask[] {
     const { tasks, search, view } = this.state
     const query = search.trim().toLocaleLowerCase()

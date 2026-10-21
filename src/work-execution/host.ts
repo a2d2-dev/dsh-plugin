@@ -8,9 +8,16 @@ export interface WorkExecutionHost {
   choices(): Promise<import('../work-types.ts').HostExecutionChoices>
   check(request: Pick<WorkExecution, 'resource' | 'session' | 'sessionMode' | 'agentPreset' | 'model' | 'permissionPreset'>): Promise<import('../work-types.ts').HostExecutionChoices>
   ensure(execution: WorkExecution, allowed: () => Promise<boolean>): Promise<NonNullable<WorkExecution['actual']>>
-  deliver(execution: WorkExecution, event: import('../work-types.ts').WorkEvent): Promise<'delivered' | 'consumed'>
+  deliver(execution: WorkExecution, event: import('../work-types.ts').WorkEvent, inMaintenance?: boolean): Promise<'delivered' | 'consumed'>
   observe(execution: WorkExecution, event: import('../work-types.ts').WorkEvent): Promise<'accepted' | 'delivered' | 'consumed'>
   settle(execution: WorkExecution): Promise<void>
+  failure?(execution: WorkExecution): Promise<{ id: string; message: string; userCancelled: boolean } | undefined>
+  profile?(execution: WorkExecution): Promise<NonNullable<WorkExecution['actual']>>
+  measure?(execution: WorkExecution): Promise<import('../work-types.ts').ContinuationObservation>
+  maintain?<T>(execution: WorkExecution, body: () => Promise<T>): Promise<T>
+  sealInput?(execution: WorkExecution, operationId: string): Promise<{ seq: number; messages: readonly import('../work-types.ts').NativeWorkMessage[] }>
+  pending?(execution: WorkExecution): readonly import('../work-types.ts').NativeWorkMessage[]
+  history?(execution: WorkExecution, session: import('../work-types.ts').SessionRef, cursor?: number, limit?: number): Promise<{ events: unknown[]; nextCursor?: number }>
 }
 export class WorkExecutionError extends Error {
   constructor(readonly code: string, message: string) { super(message) }

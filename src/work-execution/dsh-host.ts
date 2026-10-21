@@ -10,13 +10,17 @@ import type {} from '@deepseek-ai/dsh-fs-local'
 import type {} from '@deepseek-ai/dsh-bash-local'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
-import { MessageId } from '@deepseek-ai/dsh-llm'
+import { MessageId, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import type { WorkEvent, WorkExecution } from '../work-types.ts'
 import { RuntimeHost } from '../task-runtime/host.ts'
 import { rootSessionProfile } from '../root-session.ts'
 import { WorkExecutionError } from './host.ts'
 import type { WorkExecutionHost } from './host.ts'
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap { 'a2d2-work-input-seal': { kind: 'a2d2-work-input-seal'; operationId: string } }
+}
 
 const installed = new WeakMap<Agent, { executionId: string; dispose: () => void }>()
 /** Public DSH create, preset, local model, maintenance and persisted delivery APIs. */
@@ -43,6 +47,120 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       const decision = await next()
       return exec.agent && !await this.authorize!(exec.agent.id) ? { kind: 'deny', reason: 'Task execution has not authorized this Session to execute tools' } : decision
     }, { prepend: true })
+  }
+  async failure(execution: WorkExecution): Promise<{ id: string; message: string; userCancelled: boolean } | undefined> {
+    if (!execution.actual) return undefined
+    const events = await this.runtime.events(SessionId(execution.session.sessionId))
+    const last = events.findLast(event => event.type === 'turn/end')
+    const kind = last?.data.reason?.kind
+    // Controlled admission blocks are already described by control/handoff state.
+    if (!['error', 'aborted', 'interrupted', 'max-tokens'].includes(kind)) return undefined
+    return { id: `${execution.session.sessionId}:${last!.seq}`, message: `Last model turn ended ${kind}: ${last!.data.reason?.error?.message ?? ''}`.slice(0, 100_000), userCancelled: kind === 'aborted' && last!.data.reason?.reason?.kind === 'user' }
+  }
+  async profile(execution: WorkExecution): Promise<NonNullable<WorkExecution['actual']>> {
+    const id = SessionId(execution.session.sessionId)
+    const agent = await this.runtime.agent(id)
+    const profile = await rootSessionProfile(this.ctx, id)
+    await this.runtime.flush(agent)
+    const events = await this.runtime.events(id)
+    const selection = events.findLast(event => event.type === 'model/selection')
+    const header = events.findLast(event => event.type === 'request/header')
+    const route = selection && (!header || selection.seq > header.seq) ? selection.data : header?.data.header?.config
+    const workspace = this.service('workspaceRegistry').list().find(item => item.id === execution.resource.workspaceId)
+    if (!workspace?.sessionIds.includes(id) || agent.session.header.cwd !== workspace.path || !profile.agentPreset || !profile.permission?.sandbox || !profile.permission.approval || !route?.provider || !route.model) {
+      throw new WorkExecutionError('continuation-profile-unknown', 'Actual source workspace, model, preset and effective permissions must be known')
+    }
+    if (!this.service('permissionPresets').names.includes(profile.permission.preset)) throw new WorkExecutionError('continuation-permission-unknown', 'Custom source permission cannot be safely recreated by this host adapter')
+    return { runtimeId: this.runtimeId, cwd: workspace.path, agentPreset: profile.agentPreset,
+      provider: route.provider, model: route.model, ...(route.reasoningEffort ? { reasoningEffort: route.reasoningEffort } : {}), permissionPreset: profile.permission.preset, sandbox: profile.permission.sandbox, approval: profile.permission.approval }
+  }
+  async measure(execution: WorkExecution): Promise<import('../work-types.ts').ContinuationObservation> {
+    const profile = await this.profile(execution)
+    const agent = await this.runtime.agent(SessionId(execution.session.sessionId))
+    const meter = (this.ctx.get as (name: string) => unknown).call(this.ctx, 'tokenMeter') as {
+      measure(session: typeof agent.session): { totalTokens: number; logRevision: number; baseline: { kind: 'usage' | 'estimated' | 'none' } }
+    } | undefined
+    if (!meter?.measure) throw new WorkExecutionError('continuation-meter-unavailable', 'Public tokenMeter.measure is unavailable; automatic continuation is blocked')
+    const info = await this.service('llm', 'resolveModelInfo').resolveModelInfo(profile.provider, profile.model)
+    const header = agent.session.requestHeader()?.config
+    if (header && (header.provider !== profile.provider || header.model !== profile.model || header.reasoningEffort !== profile.reasoningEffort)) throw new WorkExecutionError('continuation-route-changed', 'Source model selection differs from its measured request route; reconfigure after the route is established')
+    const capacity = info.context?.contextWindow
+    const outputReserve = Math.max(header?.maxTokens ?? 0, info.defaultMaxTokens ?? 0)
+    if (!Number.isSafeInteger(capacity) || !capacity || !Number.isSafeInteger(outputReserve) || !outputReserve || outputReserve >= capacity) throw new WorkExecutionError('continuation-metadata-unknown', 'Exact model context capacity and output reserve must both be known')
+    const measured = meter.measure(agent.session)
+    if (measured.logRevision !== agent.session.seq || !Number.isFinite(measured.totalTokens) || measured.totalTokens < 0 || !['usage', 'estimated', 'none'].includes(measured.baseline.kind)) throw new WorkExecutionError('continuation-meter-stale', 'Token measurement is invalid or does not cover the current source log')
+    return { totalTokens: measured.totalTokens, logRevision: measured.logRevision, baseline: measured.baseline.kind,
+      capacity, outputReserve, routeKey: JSON.stringify([profile.provider, profile.model, profile.reasoningEffort ?? null, capacity, outputReserve]), observedAt: new Date().toISOString() }
+  }
+  async maintain<T>(execution: WorkExecution, body: () => Promise<T>): Promise<T> {
+    const id = SessionId(execution.session.sessionId)
+    const agent = await this.runtime.agent(id)
+    await agent.whenIdle()
+    return agent.runMaintenance(async () => {
+      await this.runtime.flush(agent)
+      if (await this.runtime.askedHuman(id)) throw new WorkExecutionError('continuation-waiting-human', 'Continuation is waiting for unresolved human questions')
+      if (await this.runtime.unsettledChildren(id)) throw new WorkExecutionError('continuation-waiting-children', 'Continuation is waiting for native children and consumed result notifications')
+      return body()
+    })
+  }
+  /** Called in source maintenance after take. The log marker is the intake boundary, including a take/save crash gap. */
+  async sealInput(execution: WorkExecution, operationId: string): Promise<{ seq: number; messages: readonly import('../work-types.ts').NativeWorkMessage[] }> {
+    const id = SessionId(execution.session.sessionId)
+    const agent = await this.runtime.agent(id)
+    let events = await this.runtime.events(id)
+    const markerId = MessageId(`intake-seal:${operationId}`)
+    const findMarker = () => events.find(event => event.type === 'agent/inbox/spliced' && event.data.inserted?.some((message: UserMessage) => message.id === markerId))
+    let marker = findMarker()
+    if (!marker) {
+      // Session.append cannot mark external event types ignorable. Use the
+      // published durable inbox splice vocabulary and remove this inert notice
+      // synchronously under maintenance, before it can enter a model request.
+      agent.followup({ id: markerId, role: 'user', content: [], source: { kind: 'a2d2-work-input-seal', operationId } })
+      if (!agent.inbox.remove(markerId)) throw new WorkExecutionError('continuation-seal-failed', 'The source intake marker escaped maintenance')
+      await this.runtime.flush(agent)
+      events = await this.runtime.events(id)
+      marker = findMarker()
+      if (!marker) throw new WorkExecutionError('continuation-seal-missing', 'Durable intake marker could not be read back')
+    } else await this.runtime.flush(agent)
+    const lanes: Record<string, import('../work-types.ts').NativeWorkMessage[]> = { 'next-turn': [], 'next-step': [] }
+    const unconsumed = new Map<string, import('../work-types.ts').NativeWorkMessage>()
+    const consumed = new Set<string>()
+    for (const event of events) {
+      if (event.seq >= marker.seq) break
+      if (event.type === 'agent/inbox/spliced') {
+        const data = event.data as { target: string; start: number; removedCount?: number; inserted: import('../work-types.ts').NativeWorkMessage[]; outcome?: string }
+        const lane = lanes[data.target]
+        if (!lane) throw new WorkExecutionError('continuation-inbox-invalid', 'Source inbox log uses an unknown target')
+        const removed = lane.splice(data.start, data.removedCount ?? 0, ...data.inserted)
+        if (data.outcome === 'canceled') for (const message of removed) unconsumed.delete(message.id)
+        // A claimed message remains recoverable until user/message admission;
+        // rejected cold pre-steps must not erase its original full payload.
+        for (const message of data.inserted) unconsumed.set(message.id, message)
+      } else if (event.type === 'user/message') consumed.add(event.data.id as string)
+    }
+    for (const id of consumed) unconsumed.delete(id)
+    return { seq: marker.seq, messages: structuredClone([...unconsumed.values()]) }
+  }
+  pending(execution: WorkExecution): readonly import('../work-types.ts').NativeWorkMessage[] {
+    const agent = this.service('agents').get(SessionId(execution.session.sessionId))
+    return agent ? structuredClone([...agent.inbox.nextTurn, ...agent.inbox.nextStep]) : []
+  }
+  async history(execution: WorkExecution, session: import('../work-types.ts').SessionRef, cursor = 0, limit = 100): Promise<{ events: unknown[]; nextCursor?: number }> {
+    if (session.runtimeId !== this.runtimeId || execution.resource.runtimeId !== this.runtimeId) throw new WorkExecutionError('incompatible-session', 'History belongs to another runtime')
+    const id = SessionId(session.sessionId)
+    const workspace = this.service('workspaceRegistry').list().find(item => item.id === execution.resource.workspaceId)
+    if (!workspace?.sessionIds.includes(id)) throw new WorkExecutionError('incompatible-session', 'History does not belong to the execution workspace')
+    using observation = await this.service('sessionQuery').observeSession(id)
+    let bytes = 0
+    const events: unknown[] = []
+    for (const event of observation.events.slice(cursor, cursor + limit)) {
+      const encoded = JSON.stringify(event)
+      if (events.length && bytes + encoded.length > 200_000) break
+      events.push(encoded.length > 200_000 ? { type: event.type, seq: event.seq, truncated: true, preview: encoded.slice(0, 200_000) } : structuredClone(event))
+      bytes += encoded.length
+    }
+    const nextCursor = cursor + events.length
+    return { events, ...(nextCursor < observation.events.length ? { nextCursor } : {}) }
   }
   async wake(execution: WorkExecution): Promise<void> { await this.runtime.wakePending(await this.runtime.agent(SessionId(execution.session.sessionId))) }
   status(execution: WorkExecution): 'running' | 'idle' | 'inactive' {
@@ -78,7 +196,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     const preset = await this.service('agentPresets').resolve(request.agentPreset)
     if (preset.broken) throw new WorkExecutionError('unavailable-agent-preset', 'Requested Agent preset has an activation failure')
     if (!this.service('permissionPresets').names.includes(request.permissionPreset)) throw new WorkExecutionError('invalid-permission-preset', 'Permission preset is unavailable')
-    await this.service('llm').resolveCallConfig(request.model)
+    const requested = await this.service('llm').resolveCallConfig({ ...request.model, reasoningEffort: request.model.reasoningEffort ? ReasoningEffortId(request.model.reasoningEffort) : undefined })
     const stat = await this.service('sessionPersistence').stat(SessionId(request.session.sessionId))
     if (!stat && request.sessionMode === 'reuse') throw new WorkExecutionError('incompatible-session', 'Requested Session does not exist')
     if (stat) {
@@ -86,7 +204,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       const inspection = await this.service('sessionController').inspect(SessionId(request.session.sessionId))
       if (inspection.meta.cwd !== workspace.path || inspection.meta.agentPreset !== request.agentPreset) throw new WorkExecutionError('incompatible-session', 'Existing Session resource or preset differs')
       const header = inspection.events.findLast(item => item.type === 'request/header')
-      if (header?.type === 'request/header' && (header.data.header.config.provider !== request.model.provider || header.data.header.config.model !== request.model.model)) throw new WorkExecutionError('incompatible-session', 'Existing Session model differs; silent reconfiguration refused')
+      if (header?.type === 'request/header' && (header.data.header.config.provider !== request.model.provider || header.data.header.config.model !== request.model.model || header.data.header.config.reasoningEffort !== requested.reasoningEffort)) throw new WorkExecutionError('incompatible-session', 'Existing Session model differs; silent reconfiguration refused')
       if (request.sessionMode === 'reuse') {
         const pending = inspection.events.findLast(item => item.type === 'model/selection')
         const selected = pending?.type === 'model/selection' && (!header || pending.seq > header.seq) ? pending.data
@@ -113,10 +231,10 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     await agent.whenIdle()
     await agent.runMaintenance(async () => { await this.runtime.flush(agent) })
   }
-  async deliver(execution: WorkExecution, event: WorkEvent): Promise<'delivered' | 'consumed'> {
+  async deliver(execution: WorkExecution, event: WorkEvent, inMaintenance = false): Promise<'delivered' | 'consumed'> {
     const id = SessionId(execution.session.sessionId)
     const delivery = this.delivery(event)
-    await this.runtime.deliver(id, delivery)
+    await this.runtime.deliver(id, delivery, inMaintenance)
     return await this.runtime.deliveryState(id, delivery) === 'consumed' ? 'consumed' : 'delivered'
   }
   async ensure(execution: WorkExecution, allowed: () => Promise<boolean>): Promise<NonNullable<WorkExecution['actual']>> {

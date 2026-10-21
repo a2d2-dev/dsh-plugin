@@ -1,3 +1,4 @@
+import type { TaskProgress, TaskProgressView, TaskReport, WorkStage } from './work-progress.ts'
 import type { ExternalBinding, GitHubIssue, IssuePage, WorkSource } from './work-sources/types.ts'
 /** Browser-safe contract for the local work application. No host/runtime imports. */
 export interface TaskRef { projectId: string; taskId: string }
@@ -8,13 +9,29 @@ export interface HostResource { ref: ResourceRef; title: string; readonly owner?
 export interface SessionCandidate { ref: SessionRef; resource: ResourceRef; title: string }
 export interface AgentPolicy { version: number; modelCandidates: string[]; instructions: string; capabilities: string[] }
 export interface ProjectAgent { id: string; projectId: string; role: 'coordinator'; policy: AgentPolicy }
-export interface Project { id: string; name: string; version: number; defaultAgentId: string; resources: ResourceRef[] }
+export interface ContinuationPolicy { version: number; enabled: boolean; targetTokens: number; reserveTokens: number }
+export interface ContinuationObservation { totalTokens: number; logRevision: number; baseline: 'usage' | 'estimated' | 'none'; capacity: number; outputReserve: number; routeKey: string; observedAt: string }
+export interface ContinuationOperation {
+  operationId: string; commandId: string; automatic: boolean
+  phase: 'reserved' | 'material-requested' | 'material-saved' | 'successor-created' | 'taken' | 'delivered'
+  source: SessionRef; successor: SessionRef; sourceEpoch: number
+  materialRequestId: string; kickoffId: string
+  profile?: NonNullable<WorkExecution['actual']>
+  material?: ContinuationMaterial
+  goal: string; specification: WorkSpecification; title: string
+  history: { ref: TaskRef; session: SessionRef }
+  inputSeal?: number
+  requestDelivery?: WorkEvent['delivery']; kickoffDelivery?: WorkEvent['delivery']
+  error?: { code: string; message: string }
+}
+export interface Project { id: string; name: string; version: number; defaultAgentId: string; resources: ResourceRef[]; continuationPolicy?: ContinuationPolicy }
 export interface WorkSpecification { version: number; text: string; acceptance: string[]; missing?: ('body' | 'acceptance')[] }
-export interface BreakdownBlock { id: string; title: string; description: string }
+export interface BreakdownBlock { id: string; title: string; description: string; status?: WorkStage; evidence?: string[]; child?: TaskRef }
 export interface SessionAssociation { session: SessionRef; purpose: 'related' | 'review' }
 export interface WorkActivity { commandId: string; type: string; version: number }
 export interface WorkTask {
   id: string; projectId: string; title: string; goal: string; version: number; agentId: string
+  progress?: TaskProgress
   specification: WorkSpecification
   specificationHistory: WorkSpecification[]
   breakdown: BreakdownBlock[]
@@ -26,7 +43,7 @@ export interface WorkTask {
 export interface LegacyAddress { runtimeId: string; projectRoot: string; taskId: string }
 export interface HostExecutionChoices {
   agentPresets: string[]; models: { provider: string; model: string }[]; permissionPresets: string[]
-  defaults: { agentPreset: string; model: { provider: string; model: string }; permissionPreset: string }
+  defaults: { agentPreset: string; model: { provider: string; model: string; reasoningEffort?: string }; permissionPreset: string }
 }
 export interface WorkExecutionOptions extends HostExecutionChoices { agentId: string; resources: HostResource[] }
 export interface ExecutionRef { ref: TaskRef; executionId: string }
@@ -41,11 +58,18 @@ export interface ContinuationMaterial extends ContinuationContent {
 export interface WorkExecution {
   id: string; ref: TaskRef; agentId: string; owner: string; epoch: number
   resource: ResourceRef; session: SessionRef; sessionMode: 'create' | 'reuse'; agentPreset: string
-  model: { provider: string; model: string }; permissionPreset: string; policy: AgentPolicy
+  model: { provider: string; model: string; reasoningEffort?: string }; permissionPreset: string; policy: AgentPolicy
   state: 'accepted' | 'creating' | 'ready' | 'running' | 'waiting' | 'paused' | 'failed'
   history: { state: WorkExecution['state']; commandId: string }[]
-  actual?: { runtimeId: string; cwd: string; agentPreset: string; provider: string; model: string; permissionPreset: string; sandbox: string; approval: string }
+  actual?: { runtimeId: string; cwd: string; agentPreset: string; provider: string; model: string; reasoningEffort?: string; permissionPreset: string; sandbox: string; approval: string }
   events: WorkEvent[]
+  runtimeFailure?: { id: string; message: string; userCancelled: boolean; acknowledged?: boolean }
+  continuationPolicy?: ContinuationPolicy
+  continuationObservation?: ContinuationObservation
+  continuationBlocked?: { code: string; message: string }
+  continuation?: ContinuationOperation
+  continuationHistory?: ContinuationOperation[]
+  retired?: { session: SessionRef; epoch: number; operationId: string }[]
   continuationMaterial?: ContinuationMaterial
   progress?: string
   control?: { commandId: string; action: 'wait' | 'pause' | 'resume'; status: 'accepted' | 'applied'; reason?: string }
@@ -55,10 +79,12 @@ interface Command { commandId: string }
 interface TaskContent { title: string; goal: string; specification: string; acceptance: string[] }
 interface TaskChange extends Command { ref: TaskRef; expectedVersion: number }
 export type WorkCommand =
+  | (Command & { type: 'source.configure-project'; projectId: string; githubProject: { owner: string; type: 'org' | 'user'; number: number } })
   | (Command & { type: 'source.configure'; projectId: string; repository: { owner: string; repository: string } })
   | (Command & { type: 'source.set-enabled'; projectId: string; sourceId: string; expectedVersion: number; enabled: boolean })
   | (Command & { type: 'source.import'; projectId: string; sourceId: string; nodeId?: string; url?: string })
   | (TaskChange & { type: 'source.link'; sourceId: string; nodeId?: string; url?: string })
+  | (Command & { type: 'project.configure-continuation'; projectId: string; expectedVersion: number; policy: ContinuationPolicy })
   | (Command & { type: 'project.create'; name: string; resource?: ResourceRef })
   | (Command & { type: 'project.attach-resource'; projectId: string; expectedVersion: number; resource: ResourceRef })
   | (Command & TaskContent & { type: 'task.create'; projectId: string })
@@ -68,35 +94,43 @@ export type WorkCommand =
   | (TaskChange & { type: 'task.link-child'; child: TaskRef; childExpectedVersion: number })
   | (TaskChange & { type: 'task.associate-session'; session: SessionRef; purpose: 'related' | 'review' })
   | (TaskChange & { type: 'legacy.map'; address: LegacyAddress })
+  | (Command & ExecutionRef & { type: 'task.configure-continuation'; owner: string; epoch: number; policy: ContinuationPolicy })
+  | (Command & ExecutionRef & { type: 'task.continue'; owner: string; epoch: number })
+  | (Command & ExecutionRef & { type: 'task.organize'; owner: string; epoch: number; organization: import('./work-organization.ts').TaskOrganization })
+  | (Command & ExecutionRef & { type: 'task.report'; owner: string; epoch: number; report: TaskReport })
   | (Command & ExecutionRef & { type: 'task.continuation-material'; owner: string; epoch: number; content: ContinuationContent })
   | (Command & ExecutionRef & { type: 'task.control'; owner: string; epoch: number; action: 'progress' | 'wait' | 'pause' | 'resume'; text: string })
   | (Command & ExecutionRef & { type: 'task.input'; owner: string; epoch: number; text: string; kind: 'input' | 'result' })
   | (Command & ExecutionRef & { type: 'task.reconcile'; owner: string; epoch: number })
-  | (TaskChange & { type: 'task.start'; agentId: string; resource: ResourceRef; session?: SessionRef; agentPreset: string; model: { provider: string; model: string }; permissionPreset: string })
+  | (TaskChange & { type: 'task.start'; agentId: string; resource: ResourceRef; session?: SessionRef; agentPreset: string; model: { provider: string; model: string; reasoningEffort?: string }; permissionPreset: string })
 export type WorkQuery =
   | { type: 'source.list'; projectId: string }
   | { type: 'source.issues'; projectId: string; sourceId: string; page: number; perPage: number; assignee: '@me' | '*'; state: 'open' | 'closed' | 'all'; refresh?: boolean }
-  | { type: 'source.issue'; projectId: string; sourceId: string; number: number; refresh?: boolean }
+  | { type: 'source.issue'; projectId: string; sourceId: string; number: number; nodeId?: string; refresh?: boolean }
   | { type: 'work.capabilities' }
   | { type: 'projects.list' }
   | { type: 'resources.list' }
   | { type: 'project.detail'; projectId: string }
   | { type: 'task.execution-options'; ref: TaskRef }
   | { type: 'task.execution'; ref: TaskRef }
+  | { type: 'task.history'; ref: TaskRef; session: SessionRef; cursor?: number; limit?: number }
   | { type: 'task.detail'; ref: TaskRef }
   | { type: 'session.candidates'; projectId: string }
   | { type: 'session.work'; session: SessionRef }
   | { type: 'legacy.resolve'; address: LegacyAddress }
-export interface AssociatedWork { ref: TaskRef; title: string; projectName: string; purpose: 'related' | 'review' | 'control'; executionId?: string; epoch?: number }
+export interface AssociatedWork { ref: TaskRef; title: string; projectName: string; purpose: 'related' | 'review' | 'control' | 'history'; executionId?: string; epoch?: number }
 /** Completed fields correspond to command/query; task.detail includes related children and parent. */
 export interface SourceResultFields {
   ref?: TaskRef
   source?: WorkSource; sources?: WorkSource[]; page?: IssuePage; issue?: GitHubIssue
   binding?: ExternalBinding; bindings?: ExternalBinding[]
-  capabilities?: { githubRead: boolean; githubWrite: false; taskStart: false; projectViews: false }
+  capabilities?: { githubRead: boolean; githubWrite: false; taskStart: boolean; projectViews: boolean }
 }
 export interface WorkCompleted extends SourceResultFields {
   status: 'completed'
+  progress?: TaskProgressView
+  progressItems?: TaskProgressView[]
+  transcript?: { session: SessionRef; events: unknown[]; nextCursor?: number }
   execution?: WorkExecution
   executionOptions?: WorkExecutionOptions
   executionRuntime?: 'running' | 'idle' | 'inactive'

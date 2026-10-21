@@ -15,6 +15,7 @@
 .panel h2 { font-size: 14px; margin: 0 0 12px; }
 .panel h3 { font-size: 12px; margin: 18px 0 6px; }
 .panel p { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--work-muted); }
+.panel pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; border: 1px solid var(--work-line); border-radius: 6px; font: 12px/1.6 ui-monospace, monospace; }
 .panel button, .panel input, .panel select, .panel textarea {
   font: inherit;
   color: inherit;
@@ -38,6 +39,11 @@
 .panel table { width: 100%; border-collapse: collapse; text-align: left; }
 .panel th, .panel td { padding: 12px 10px; border-bottom: 1px solid var(--work-line); vertical-align: top; }
 .panel th { font-size: 11px; font-weight: 500; color: var(--work-muted); }
+.panel td p { margin: 4px 0; }
+.panel td > a { display: block; }
+.panel td:first-child { min-width: 150px; }
+.panel details > .form { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--work-line); }
+.panel label > span { overflow-wrap: anywhere; }
 .link { padding: 0 !important; border: 0 !important; color: var(--dsw-alias-label-link, #565b96) !important; text-align: left; }
 .formSection { border-color: #bec4de !important; }
 .form { display: grid; gap: 14px; max-width: 840px; }
