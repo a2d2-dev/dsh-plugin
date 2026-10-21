@@ -20,16 +20,23 @@ export function validateSettlement(plan, proof, pid, now = Date.now()) {
 export function validateOperationalHandover(plan,proof,pid,now=Date.now()) {
   for(const key of ['runId','program','origin'])if(proof[key]!==plan[key])throw Error(`operational handover ${key} mismatch`)
   if(proof.source!=='parent-operational-handover'||proof.pid!==pid||!Number.isFinite(Date.parse(proof.observedAt))||now-Date.parse(proof.observedAt)>300000||Date.parse(proof.observedAt)>now+1000)throw Error('fresh PID-bound parent handover required')
-  if(proof.coordinator?.sessionId!==plan.coordinatorSessionId||proof.coordinator?.state!=='upgrade-wait'||!proof.coordinator?.handoverReceipt)throw Error('CEO handover and explicit upgrade-wait required')
-  if(!Array.isArray(plan.childIds)||!Array.isArray(proof.children)||JSON.stringify([...plan.childIds].sort())!==JSON.stringify(proof.children.map(row=>row.id).sort())||proof.children.some(row=>row.settled!==true||!row.resultReceipt))throw Error('children not settled/collected')
+  if(plan.program==='dsh-a2d2-v3-preview'){
+    if(!/^\d+$/.test(proof.startTicks??'')||!proof.targetReceipt||!Array.isArray(proof.sessions)||!proof.sessions.length||new Set(proof.sessions.map(row=>row.id)).size!==proof.sessions.length||proof.sessions.some(row=>!row.id||row.running!==false||row.pendingInputs!==0))throw Error('preview target Session/input/startTicks observation required')
+    const registry=proof.registryObservation
+    if(registry?.program!==plan.program||registry?.origin!==plan.origin||!Array.isArray(registry?.sessionIds)||JSON.stringify([...registry.sessionIds].sort())!==JSON.stringify(proof.sessions.map(row=>row.id).sort()))throw Error('preview exact-target registry scope required')
+    if(proof.jobs?.some(job=>!registry.sessionIds.includes(job.ownerSessionId)))throw Error('job owner outside preview target')
+  }else{
+    if(proof.coordinator?.sessionId!==plan.coordinatorSessionId||proof.coordinator?.state!=='upgrade-wait'||!proof.coordinator?.handoverReceipt)throw Error('CEO handover and explicit upgrade-wait required')
+    if(!Array.isArray(plan.childIds)||!Array.isArray(proof.children)||JSON.stringify([...plan.childIds].sort())!==JSON.stringify(proof.children.map(row=>row.id).sort())||proof.children.some(row=>row.settled!==true||!row.resultReceipt))throw Error('children not settled/collected')
+  }
   if(proof.registryObservation?.noRunning!==true||!proof.registryObservation.receipt||!Array.isArray(proof.jobs))throw Error('actual no-running registry observation required')
   if(proof.jobs.some(job=>!job.ownerSessionId||!['completed','failed','killed'].includes(job.status)||!['owner-job-output-command','foreground-command-result'].includes(job.collectionEvidence)||!job.receipt||job.productConsumption!=='unknown'))throw Error('running job, missing owner command receipt, or fabricated product consumption')
 }
-function proofReceipts(proof,operational) {
-  return [...operational?[proof.coordinator.handoverReceipt,proof.registryObservation.receipt]:[],...proof.children.map(row=>row.resultReceipt),...proof.jobs.map(row=>row.receipt)]
-}
-async function checkReceipts(receipts) {
-  for(const receipt of receipts)if(!receipt.path||!/^[a-f0-9]{64}$/.test(receipt.sha256??'')||sha(await readFile(receipt.path))!==receipt.sha256)throw Error('real command/handover receipt missing or changed')
+export async function checkHandoverReceipts(plan,proof,operational) {
+  const receipts=operational&&plan.program==='dsh-a2d2-v3-preview'
+    ? [proof.targetReceipt,proof.registryObservation.receipt,...proof.jobs.map(row=>row.receipt)]
+    : [...operational?[proof.coordinator.handoverReceipt,proof.registryObservation.receipt]:[],...proof.children.map(row=>row.resultReceipt),...proof.jobs.map(row=>row.receipt)]
+  for(const receipt of receipts)if(!receipt?.path||!/^[a-f0-9]{64}$/.test(receipt.sha256??'')||sha(await readFile(receipt.path))!==receipt.sha256)throw Error('real command/handover receipt missing or changed')
 }
 function supervisorInfo(program,python='python3') { return JSON.parse(command(python,[new URL('./supervisor-info.py',import.meta.url).pathname,program])) }
 function command(program, args, timeout = 120000) {
@@ -60,7 +67,7 @@ async function inspect(plan) {
       const proof=JSON.parse(await readFile(plan.settlement)),pid=supervisorInfo(plan.program,plan.pythonBinary).pid
       if(operational)validateOperationalHandover(plan,proof,pid)
       else validateSettlement(plan,proof,pid)
-      await checkReceipts(proofReceipts(proof,operational))
+      await checkHandoverReceipts(plan,proof,operational)
     } catch(error) { reasons.push(`invalid real handover: ${error.message}`) }
   }
   for(const side of ['new','rollback']) {
@@ -156,12 +163,11 @@ async function main() {
     if(before.statename!=='RUNNING'||!pid)throw Error('target is not the observed running process')
     const proof=JSON.parse(await readFile(plan.settlement))
     if(operational)validateOperationalHandover(plan,proof,pid);else validateSettlement(plan,proof,pid)
-    await checkReceipts(proofReceipts(proof,operational))
+    await checkHandoverReceipts(plan,proof,operational)
     if(operational){
-      const {liveCut}=await import('./live-cut.mjs')
+      const {liveCut,validateTargetCut}=await import('./live-cut.mjs')
       const cut=await liveCut(plan.program,join(root,'pre-stop-cut'))
-      if(cut.supervisorPid!==pid)throw Error('target PID changed during accepted cut')
-      if(cut.sessions.some(session=>session.running===true&&session.id!==plan.coordinatorSessionId))throw Error('non-coordinator Session still running; no cleanup performed')
+      validateTargetCut(plan,proof,cut)
     }
     await record('preflight-passed',{pid,planSha256:sha(bytes),stopMode:plan.stopMode})
     if(operational)validateOperationalHandover(plan,proof,pid);else validateSettlement(plan,proof,pid)

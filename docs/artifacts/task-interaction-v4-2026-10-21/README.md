@@ -1,5 +1,7 @@
 # #141 准备工具（未部署）
 
+当前 preview-first 收尾以[18782固定候选记录](preview-candidate.md)为准：新旧独立宿主、产品包、rollback profiles/imports 已齐；以下初版基线与历史准备过程保留，不再把共享 dev 缺 CLI 误列为独立 rollback 缺项。
+
 固定起点 `bfc0826453d971f58b9fe6715b80e3a96a4b9465`，分支 `test/v4-acceptance`，目标 `feat/task-interaction-v4-delivery`。本目录只准备；没有安装、重启、真实模型调用、Task/队列启动或 GitHub 测试对象创建。最终 #141 仍受 #136 实现片与 host142 约束。
 
 ## 已冻结与证据边界

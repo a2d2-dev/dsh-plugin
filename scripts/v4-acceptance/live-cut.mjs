@@ -27,6 +27,14 @@ export async function connectReadOnly(origin) {
     return value.result.value
   }
 }
+export function validateTargetCut(plan,proof,cut){
+  if(cut.source!=='public-session-cut'||cut.program!==plan.program||cut.origin!==plan.origin||cut.supervisorPid!==proof.pid)throw Error('target PID/origin changed during accepted cut')
+  if(plan.program==='dsh-a2d2-v3-preview'){
+    if(cut.processes?.find(row=>row.pid===proof.pid)?.startTicks!==proof.startTicks)throw Error('preview target process generation changed')
+    if(!Array.isArray(cut.sessions)||JSON.stringify(cut.sessions.map(row=>row.id).sort())!==JSON.stringify(proof.sessions.map(row=>row.id).sort()))throw Error('preview target Session membership changed')
+    if(cut.sessions.some(row=>row.running!==false))throw Error('preview target Session still running or unknown; no cleanup performed')
+  }else if(cut.sessions.some(row=>row.running===true&&row.id!==plan.coordinatorSessionId))throw Error('non-coordinator Session still running; no cleanup performed')
+}
 export async function liveCut(program, root) {
   const target=targets[program]
   if (!target || !root.startsWith('/tmp/a2d2-v4-')) throw Error('exact target and private root required')
