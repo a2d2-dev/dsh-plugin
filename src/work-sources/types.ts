@@ -56,7 +56,7 @@ export interface GitHubSourcePort {
   /** Host-only write capability. Targets come exclusively from accepted local bindings. */
   close?(target: import('../work-completion/index.ts').CloseTarget, operationId: string): Promise<import('../work-completion/index.ts').CloseReceipt>
   list(repository: GitHubRepository, request: IssuePageRequest): Promise<IssuePage>
-  detail(repository: GitHubRepository, number: number): Promise<IssueDetail>
+  detail(repository: GitHubRepository, number: number, options?: { nativeChildren: true }): Promise<IssueDetail>
   project?(project: GitHubProjectRef, request: ProjectPageRequest): Promise<GitHubProjectPage>
 }
 export interface SourceFailure { code: string; message: string; retryAt?: string }
@@ -74,4 +74,6 @@ export interface WorkSource {
 export interface ExternalBinding {
   provider: 'github'; nodeId: string; urls: string[]; ref: { projectId: string; taskId: string }
   sourceIds: string[]; accepted: GitHubIssue; lastObserved: GitHubIssue
+  acceptedChildren?: NonNullable<GitHubIssue['subIssues']> & { observedAt: string }
+  relatedObservations?: GitHubIssue[]
 }

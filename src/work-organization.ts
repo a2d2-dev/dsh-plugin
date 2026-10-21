@@ -4,6 +4,7 @@ import type { WorkExecution, WorkResult, WorkTask } from './work-types.ts'
 const text=z.string().trim().min(1).max(100_000)
 const specification={goal:text,specification:text,acceptance:z.array(text).min(1).max(1000)}
 export const taskOrganizationSchema=z.discriminatedUnion('kind',[
+  z.object({kind:z.literal('source-children'),expectedVersion:z.number().int().positive(),observedAt:z.string().datetime()}).strict(),
   z.object({kind:z.literal('specification'),expectedVersion:z.number().int().positive(),...specification}).strict(),
   z.object({kind:z.literal('child'),expectedVersion:z.number().int().positive(),title:text,...specification}).strict(),
 ])
@@ -14,7 +15,16 @@ export function applyTaskOrganization(state:WorkSnapshot,execution:WorkExecution
   if(task.version!==intent.expectedVersion)return {status:'conflict',error:{code:'version-conflict',message:'工作已更新，请重新读取当前任务后再整理',currentVersion:task.version}}
   if(execution.continuation && execution.continuation.phase!=='delivered')return {status:'failed',error:{code:'continuation-in-progress',message:'交接期间保留规格与任务结构，接任后再更新'}}
   let result:WorkTask=task
-  if(intent.kind==='specification') {
+  if(intent.kind==='source-children') {
+    const bindings=state.externalBindings.filter(item=>item.ref.projectId===task.projectId&&item.ref.taskId===task.id)
+    if(bindings.length!==1)return {status:'failed',error:{code:'native-child-binding-required',message:'必要原生范围需要唯一已接受来源'}}
+    const binding=bindings[0]!, observed=binding.lastObserved, children=observed.subIssues
+    if(observed.observedAt!==intent.observedAt)return {status:'failed',error:{code:'source-observation-superseded',message:'请按当前读取的来源观察重新采纳'}}
+    if(!children||children.hasNextPage||children.totalCount!==new Set(children.items.map(item=>item.nodeId)).size)return {status:'failed',error:{code:'native-child-scope-incomplete',message:'必要原生子项范围尚未完整读取'}}
+    const previous=binding.acceptedChildren??binding.accepted.subIssues
+    if(previous?.items.some(item=>!children.items.some(child=>child.nodeId===item.nodeId)))return {status:'failed',error:{code:'native-child-scope-shrunk',message:'新观察不能移除已接受的必要子项'}}
+    binding.acceptedChildren={...structuredClone(children),observedAt:observed.observedAt}
+  } else if(intent.kind==='specification') {
     task.specificationHistory.push(structuredClone(task.specification))
     task.specification={version:task.specification.version+1,text:intent.specification,acceptance:intent.acceptance}
     task.goal=intent.goal
@@ -26,6 +36,6 @@ export function applyTaskOrganization(state:WorkSnapshot,execution:WorkExecution
     task.children.push({projectId:result.projectId,taskId:result.id})
   }
   task.version++
-  task.activity.push({commandId,type:intent.kind==='child'?'task.organize-child':'task.organize-specification',version:task.version})
+  task.activity.push({commandId,type:`task.organize-${intent.kind}`,version:task.version})
   return {status:'completed',task:result,execution}
 }

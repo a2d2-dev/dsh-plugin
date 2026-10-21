@@ -50,7 +50,7 @@ it('commits child acceptance and exactly one parent result before any delivery, 
  expect((await h.detail(parent)).task!.completion).toBeDefined()
 })
 const identity={login:'developer',nodeId:'U_developer',name:null}
-const issue={nodeId:'I_contract',url:'https://github.com/example/repo/issues/139',number:139,title:'contract',body:'verify',repository:{owner:'example',repository:'repo'},assignees:['developer'],labels:[],state:'open' as 'open'|'closed',updatedAt:'2026-10-21T00:00:00Z',observedAt:'2026-10-21T00:01:00Z'}
+const issue={subIssues:{items:[],totalCount:0,hasNextPage:false},nodeId:'I_contract',url:'https://github.com/example/repo/issues/139',number:139,title:'contract',body:'verify',repository:{owner:'example',repository:'repo'},assignees:['developer'],labels:[],state:'open' as 'open'|'closed',updatedAt:'2026-10-21T00:00:00Z',observedAt:'2026-10-21T00:01:00Z'}
 async function externalSetup(mode:'lost'|'error'='lost'){
  let remote=structuredClone(issue),writes=0
  const source:GitHubSourcePort={list:async()=>({identity,items:[remote],observedAt:remote.observedAt}),detail:async()=>({identity,issue:structuredClone(remote)}),close:async()=>{writes++;if(mode==='error')return {status:'error',message:'permission denied'};remote.state='closed';return {status:'unknown',message:'receipt lost'}}}

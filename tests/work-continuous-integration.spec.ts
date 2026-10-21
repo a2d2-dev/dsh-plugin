@@ -13,6 +13,7 @@ function completed(result: WorkResult) {
 }
 const identity = { login: 'developer', nodeId: 'U_developer', name: null }
 const issues: GitHubIssue[] = [1, 2, 3].map(number => ({
+  subIssues: { items: [], totalCount: 0, hasNextPage: false },
   nodeId: `I_queue_${number}`, number, title: `镜像管理 ${number}`, body: '验收：必须保留 stable 标签。',
   repository: { owner: 'example', repository: 'images' }, url: `https://github.com/example/images/issues/${number}`,
   state: 'open', labels: ['bug'], assignees: [number === 3 ? 'someone-else' : identity.login],

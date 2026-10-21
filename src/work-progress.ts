@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { commitCompletion } from './work-completion/index.ts'
+import { commitCompletion, isTaskCompleted } from './work-completion/index.ts'
 import type { WorkSnapshot } from './work-schema.ts'
 import type { WorkExecutionHost } from './work-execution/host.ts'
 import type { TaskRef, WorkExecution, WorkResult, WorkTask } from './work-types.ts'
@@ -15,6 +15,7 @@ const requirement = z.object({ id: text, title: text, description: text,
 }).strict()
 export const taskReportSchema = z.object({
   closeExternal: z.boolean().optional(),
+  externalChildren: z.array(z.object({ nodeId: z.string().min(1).max(256), updatedAt: z.string().datetime(), basis: text, evidence: evidence.min(1) }).strict()).max(1000).optional(),
   specificationVersion: z.number().int().positive(), stage: workStageSchema, summary: text,
   next: z.string().max(20_000), blockers: z.array(text).max(100),
   criteria: z.array(criterionResult).max(1000), breakdown: z.array(requirement).max(1000).optional(),
@@ -58,6 +59,24 @@ export function applyTaskReport(state: WorkSnapshot, execution: WorkExecution, r
     if (report.closeExternal && state.externalBindings.filter(item => sameRef(item.ref, execution.ref)).length !== 1) return fail('completion-binding-required', '外部关闭需要唯一已接受的 canonical binding')
     if (report.blockers.length || !task.specification.acceptance.length || task.specification.missing?.length
       || report.criteria.length !== task.specification.acceptance.length || report.criteria.some(item=>!item.passed)) return fail('acceptance-incomplete', '完成前必须通过当前规格的全部验收项并解决阻塞')
+    for (const binding of state.externalBindings.filter(item => sameRef(item.ref, execution.ref))) {
+      const children = binding.acceptedChildren ?? binding.accepted.subIssues
+      if (!children || children.hasNextPage || children.totalCount !== new Set(children.items.map(item => item.nodeId)).size) return fail('native-child-scope-incomplete', '必要原生子 Issue 范围未知或读取未完整，不能据此断言没有子工作')
+      const external = report.externalChildren ?? []
+      if (new Set(external.map(item => item.nodeId)).size !== external.length || external.some(item => !children.items.some(child => child.nodeId === item.nodeId))) return fail('native-child-evidence-out-of-scope', '外部验收记录只能引用已接受的必要原生子项且不能重复')
+      for (const required of children.items) {
+        const canonical = state.externalBindings.find(item => item.nodeId === required.nodeId)
+        const child = canonical && state.tasks.find(item => sameRef(refOf(item), canonical.ref))
+        if (canonical) {
+          if (!isTaskCompleted(child)) return fail('native-child-acceptance-required', `必要原生子 Issue 的 canonical Task 尚未验收：${required.nodeId} ${required.url}`)
+          continue
+        }
+        const accepted = external.find(item => item.nodeId === required.nodeId)
+        if (!accepted) return fail('native-child-acceptance-required', `必要原生子 Issue 尚未验收：${required.nodeId} ${required.url}`)
+        const observed = binding.relatedObservations?.find(item => item.nodeId === required.nodeId)
+        if (!observed || observed.updatedAt !== accepted.updatedAt) return fail('native-child-evidence-unobserved', `请先读取必要子项的当前资料，再按该版本记录验收依据与证据：${required.nodeId}`)
+      }
+    }
     if (blocks.some(item=>item.status !== 'done')) return fail('unfinished-breakdown', '仍有需求块未完成')
     for (const childRef of task.children) {
       const child = state.tasks.find(item=>sameRef(refOf(item),childRef))

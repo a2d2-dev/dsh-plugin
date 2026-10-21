@@ -6,8 +6,9 @@ export const repositorySchema = z.object({ owner, repository: z.string().regex(/
 export const githubProjectSchema = z.object({ owner, type: z.enum(['org', 'user']), number: z.number().int().positive() }).strict()
 const identity = z.object({ login: z.string().min(1), nodeId, name: z.string().nullable() }).strict()
 const issueReference = z.object({ nodeId, url: z.string().regex(/^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+\/issues\/[1-9][0-9]*$/), number: z.number().int().positive(), title: z.string().min(1).max(100_000), repository: repositorySchema, state: z.enum(['open', 'closed']) }).strict()
+export const nativeChildrenSchema = z.object({ items: z.array(issueReference), totalCount: z.number().int().nonnegative(), hasNextPage: z.boolean() }).strict()
 export const issueSchema = issueReference.extend({ body: z.string().max(1_000_000).nullable(), assignees: z.array(z.string()), labels: z.array(z.string()), updatedAt: z.iso.datetime(), observedAt: z.iso.datetime(),
-  parent: issueReference.nullable().optional(), subIssues: z.object({ items: z.array(issueReference), totalCount: z.number().int().nonnegative(), hasNextPage: z.boolean() }).strict().optional(),
+  parent: issueReference.nullable().optional(), subIssues: nativeChildrenSchema.optional(),
 }).strict()
 const projectMetadata = z.object({ nodeId, title: z.string(), url: z.string().regex(/^https:\/\/github\.com\/(?:orgs|users)\/[a-zA-Z0-9-]+\/projects\/[1-9][0-9]*$/), closed: z.boolean() }).strict()
 const projectItem = z.object({ id: nodeId, kind: z.enum(['issue', 'pull-request', 'draft', 'restricted']), archived: z.boolean(), issueNodeId: nodeId.optional(), title: z.string().optional(), url: z.string().regex(/^https:\/\/github\.com\//).optional(),
@@ -30,4 +31,4 @@ export const sourceSchema = z.object({ id: z.string().uuid(), projectId: z.strin
   repositorySnapshot: z.object({ sourceVersion: z.number().int().positive(), identity, nodeIds: z.array(nodeId).max(1000), observedAt: z.iso.datetime() }).strict().optional(),
   projectSnapshot: z.object({ identity, project: projectMetadata, items: z.array(projectItem), observedAt: z.iso.datetime() }).strict().optional(), discovery: discovery.optional(),
 }).strict().refine(value => Boolean(value.repository) !== Boolean(value.githubProject), 'A source must name exactly one repository or GitHub Project')
-export const bindingSchema = z.object({ provider: z.literal('github'), nodeId: z.string(), urls: z.array(z.string()), ref: z.object({ projectId: z.string().uuid(), taskId: z.string().uuid() }).strict(), sourceIds: z.array(z.string().uuid()), accepted: issueSchema, lastObserved: issueSchema }).strict()
+export const bindingSchema = z.object({ provider: z.literal('github'), nodeId: z.string(), urls: z.array(z.string()), ref: z.object({ projectId: z.string().uuid(), taskId: z.string().uuid() }).strict(), sourceIds: z.array(z.string().uuid()), accepted: issueSchema, lastObserved: issueSchema, acceptedChildren: nativeChildrenSchema.extend({ observedAt: z.iso.datetime() }).optional(), relatedObservations: z.array(issueSchema).max(1000).optional() }).strict()

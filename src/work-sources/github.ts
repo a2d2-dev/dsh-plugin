@@ -46,7 +46,7 @@ export class GitHubSource implements GitHubSourcePort {
   }
   project(project: GitHubProjectRef, request: ProjectPageRequest) { return readGitHubProject(project, request, this.options.graphql) }
   private async get(path: string, token: string): Promise<unknown> {
-    if (!(path === '/user' || /^\/repos\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\/issues(?:\/[1-9][0-9]*)?(?:\?.*)?)?$/.test(path))) throw new SourceError('github-invalid-scope', 'Unsupported GitHub source path')
+    if (!(path === '/user' || /^\/repos\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\/issues(?:\/[1-9][0-9]*(?:\/sub_issues)?)?(?:\?.*)?)?$/.test(path))) throw new SourceError('github-invalid-scope', 'Unsupported GitHub source path')
     try {
       const response = await this.fetcher(`https://api.github.com${path}`, { method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(this.timeoutMs), headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28', 'user-agent': 'dsh-a2d2-issue-source' } })
       if (!response.ok) {
@@ -131,13 +131,32 @@ export class GitHubSource implements GitHubSourcePort {
     const items = raw.filter(item => !(item && typeof item === 'object' && 'pull_request' in item)).map(item => this.issue(item))
     return { identity, items, ...(raw.length === request.perPage ? { nextPage: request.page + 1 } : {}), observedAt: new Date().toISOString() }
   }
-  async detail(repository: GitHubRepository, number: number) {
+  async detail(repository: GitHubRepository, number: number, options?: { nativeChildren: true }) {
     if (!validRepository(repository) || !Number.isSafeInteger(number) || number < 1) throw new SourceError('github-invalid-scope', 'Invalid source Issue reference')
     const token = await this.token(), identity = await this.identity(token)
     const raw = await this.get(`/repos/${repository.owner}/${repository.repository}/issues/${number}`, token)
     if (raw && typeof raw === 'object' && 'pull_request' in raw) throw new SourceError('github-not-issue', 'This object is a Pull Request, not an Issue')
     const issue = this.issue(raw)
     if (issue.number !== number) throw new SourceError('github-invalid-response', 'GitHub returned a different Issue')
+    if (options?.nativeChildren) {
+      const items: NonNullable<GitHubIssue['subIssues']>['items'] = []
+      const seen = new Set<string>()
+      const summary = z.object({ sub_issues_summary: z.object({ total: z.number().int().nonnegative() }) }).safeParse(raw)
+      let complete = false
+      for (let page = 1; page <= 10; page++) {
+        const rows = await this.get(`/repos/${repository.owner}/${repository.repository}/issues/${number}/sub_issues?per_page=100&page=${page}`, token)
+        if (!Array.isArray(rows) || rows.length > 100) throw new SourceError('github-invalid-response', 'Invalid native child Issue page')
+        for (const row of rows) {
+          const child = this.issue(row)
+          if (seen.has(child.nodeId) || child.nodeId === issue.nodeId) throw new SourceError('github-native-children-incomplete', 'Native child pagination repeated an identity')
+          seen.add(child.nodeId)
+          items.push({ nodeId: child.nodeId, url: child.url, number: child.number, title: child.title, repository: child.repository, state: child.state })
+        }
+        if (rows.length < 100) { complete = true; break }
+      }
+      const totalCount = summary.success ? summary.data.sub_issues_summary.total : items.length
+      issue.subIssues = { items, totalCount, hasNextPage: !complete || totalCount !== items.length }
+    }
     return { identity, issue }
   }
 }

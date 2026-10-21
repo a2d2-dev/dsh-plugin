@@ -17,6 +17,19 @@
 
 真实 job_output 组合待与 Host `8282d612` 一致的 session/jobs/jobs-local/tool-jobs 编译制品 fixture 环境；当前 stock rc2 缺公开 jobs.observe，不能以 fixture 翻状态代替。后续证据会追加本记录。
 
+## P-F2：必要原生子范围与独立验收
+
+根因是完成只遍历本项目已链接的 `task.children`，未导入、跨项目 canonical 和部分读取均可被当成无子项。完成现在同时检查唯一来源身份下已接受的原生必要范围（默认 binding.accepted，明确采纳后为 acceptedChildren）。缺元数据、hasNextPage、条目去重后的数量不符均返回 `native-child-scope-incomplete`。跨项目 canonical 的真实 Task 未验收时返回 `native-child-acceptance-required`；外部 closed／PR merged 不替代验收。
+
+未导入子项不强制造 Task／会话。负责者使用 `work_related_issue` 从当前 Task 已知 related refs 读取规范化资料；该 helper 验证当前 Session／epoch、返回 node／repo／number 和账号，目标来自受信记录，不能传任意 URL／目录，响应不含凭据。随后报告 externalChildren 的 nodeId、精确 updatedAt、当前验收依据与可核验证据。已有 canonical 永远优先，不能借此绕过未完成 Task。
+
+Repo 的原 detail 不读取原生关系；仅受信 helper 请求 nativeChildren 时，生产适配器读原生 `/sub_issues` 端点，最多十页一千项，重复身份、数量不符或上限保留明确不完整。读取仅缓存观察。unknown 范围须由 owner 用 `work_organize` 的 source-children、当前版本和精确 observedAt 显式采纳；不能移除此前已接受必要项。后续刷新不悄悄扩张业务范围。纯本地无源 Task 不增加来源要求，旧完成历史不新造验收。
+
+- 未导入子项公开回归在原路径错误 completed 时红、exit 1；外部证据路径先红（旧 schema 不支持），实现后绿。
+- 生产适配器完整原生分页回归先红（subIssues undefined、exit 1），实现后 101 子项、两页完整读取绿，未泄露凭据。
+- `TMPDIR=/dev/shm/v4-pf-141 corepack pnpm@10.26.2 exec vitest run tests/work-native-acceptance.spec.ts tests/work-completion.spec.ts tests/work-continuous-integration.spec.ts tests/work-progress.spec.ts`：4 文件 29/29、exit 0。新增矩阵 11 项涵盖未导入、跨项目真实 owner、不完整三种情况、外部证据、无子、纯本地、显式采纳、刷新不扩张、禁止删必要项及只读 helper 权限。
+- 旧正向外部完成 fixture 未描述原生完整性，首次组合如实 7 fail、21 pass、exit 1；只给这些正向来源添加明确的已完整读取空集合，保留全部原断言。unknown／partial 的反向路径由新增测试独立锁定，未放宽预算或跳过失败。
+
 ## 范围记账
 
 WorkApplication 的 possible Divergent Change 留作后续深模块整理线索，本票不拆大 class／运行器。已撤回的维护锁环不修。旧 #123／#129、Host、运行目录、18781／18782、真实模型与 GitHub 业务写均未纳入本次源码整改。

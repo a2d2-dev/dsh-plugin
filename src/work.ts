@@ -3,6 +3,7 @@ import { buildExecutionGraph, type ExecutionObservation } from './work-execution
 import { refreshCatalog } from './work-sources/catalog-application.ts'
 import { PlanningError, planningBasis, validatePlan, samePlannedExecution } from './work-planning.ts'
 import type { WorkPlanner } from './work-planning.ts'
+import { issueSchema } from './work-sources/schema.ts'
 import { SourceError } from './work-sources/errors.ts'
 import type { SourceCandidate } from './work-sources/types.ts'
 import { synchronizeClose } from './work-completion/recovery.ts'
@@ -162,7 +163,7 @@ export class WorkApplication {
     const state = await this.load()
     const execution = state.executions.find(item => sameSession(item.session, session))
     if (!execution) return failed('forbidden', 'Calling Session is not a current Task coordinator')
-    if (action === 'status') return { status: 'completed', task: taskAt(state, execution.ref), sourceIssues: sourceIssuesAt(state, execution.ref), execution, executionRuntime: this.host.execution?.status(execution) ?? 'inactive' }
+    if (action === 'status') return { status: 'completed', task: taskAt(state, execution.ref), bindings: state.externalBindings.filter(item => sameTask(item.ref, execution.ref)), sourceIssues: sourceIssuesAt(state, execution.ref), execution, executionRuntime: this.host.execution?.status(execution) ?? 'inactive' }
     const commandId = `tool:${createHash('sha256').update(JSON.stringify([session.runtimeId, session.sessionId, callId])).digest('hex')}`
     return this.execute({ type: 'task.control', commandId, ref: execution.ref,
       executionId: execution.id, owner: execution.owner, epoch: expectedEpoch ?? execution.epoch, action, text },
@@ -183,6 +184,38 @@ export class WorkApplication {
     if (!execution) return failed('forbidden', 'Calling Session is not a current Task coordinator')
     const commandId = `report:${createHash('sha256').update(JSON.stringify([session.runtimeId, session.sessionId, callId])).digest('hex')}`
     return this.execute({ type: 'task.report', commandId, ref: execution.ref, executionId: execution.id, owner: execution.owner, epoch: expectedEpoch ?? execution.epoch, report }, { operator: false, session, agentId: execution.agentId, reporter })
+  }
+  /** Only accepted Task-related source identities may use the host credential route. */
+  async sessionReadRelatedIssue(session: import('./work-types.ts').SessionRef, nodeId?: string, expectedEpoch?: number): Promise<WorkResult> {
+    const state = await this.load()
+    const execution = state.executions.find(item => sameSession(item.session, session))
+    if (!execution || (expectedEpoch !== undefined && execution.epoch !== expectedEpoch)) return failed('forbidden', 'Calling Session is not the current coordinator at this epoch')
+    const bindings = state.externalBindings.filter(item => sameTask(item.ref, execution.ref))
+    if (bindings.length !== 1) return failed('native-child-binding-required', 'A unique accepted source is required')
+    const binding = bindings[0]!
+    const known = [binding.accepted, ...((binding.acceptedChildren ?? binding.accepted.subIssues)?.items ?? [])]
+    const ref = known.find(item => item.nodeId === (nodeId ?? binding.nodeId))
+    if (!ref) return failed('source-reference-unrelated', 'Only this Task source and its accepted native children may be read')
+    if (!this.source) return failed('github-capability-unavailable', 'Trusted source reading is unavailable')
+    try {
+      const response = await this.source.detail(ref.repository, ref.number, ref.nodeId === binding.nodeId ? { nativeChildren: true } : undefined)
+      const issue = issueSchema.parse(response.issue)
+      const account = binding.sourceIds.flatMap(id => { const source = state.sources.find(item => item.id === id); return source?.identity ?? source?.projectSnapshot?.identity ?? source?.pages[0]?.identity ?? [] })[0]
+      if (issue.nodeId !== ref.nodeId || issue.number !== ref.number || issue.repository.owner.toLowerCase() !== ref.repository.owner.toLowerCase() || issue.repository.repository.toLowerCase() !== ref.repository.repository.toLowerCase() || (account && response.identity.nodeId !== account.nodeId)) return failed('source-identity-changed', 'Related source identity or authenticated account changed')
+      return this.sourceTransaction(async current => {
+        const owner = current.executions.find(item => item.id === execution.id)
+        if (!owner || owner.owner !== execution.owner || owner.epoch !== execution.epoch || !sameSession(owner.session, session)) return failed('forbidden', 'Coordinator changed while reading source material')
+        const currentBinding = current.externalBindings.find(item => item.nodeId === binding.nodeId)!
+        const related = currentBinding.relatedObservations ??= []
+        const previous = related.find(item => item.nodeId === issue.nodeId)
+        if (previous && previous.updatedAt > issue.updatedAt) return failed('source-observation-superseded', 'An older source result cannot replace newer observed material')
+        if (previous) related.splice(related.indexOf(previous), 1)
+        related.push(issue)
+        if (issue.nodeId === binding.nodeId) currentBinding.lastObserved = issue
+        const canonical = current.externalBindings.find(item => item.nodeId === issue.nodeId)
+        return { status: 'completed', issue, ...(canonical ? { ref: canonical.ref, task: taskAt(current, canonical.ref) } : {}) }
+      })
+    } catch (error) { return failed(error instanceof SourceError ? error.code : 'source-read-failed', error instanceof SourceError ? error.message : 'Related source material could not be read or validated') }
   }
   async sessionOrganize(session: import('./work-types.ts').SessionRef, callId: string, organization: import('./work-organization.ts').TaskOrganization, expectedEpoch?: number): Promise<WorkResult> {
     const execution = (await this.load()).executions.find(item => sameSession(item.session, session))

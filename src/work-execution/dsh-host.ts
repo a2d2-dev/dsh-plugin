@@ -128,7 +128,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
         const row = await this.runtime.executionFacts(SessionId(root.session.sessionId), this.runtimeId, root.role, root.parent)
         sessions.push(row)
         const active = [...this.activeTools.values()].filter(call => call.agent?.id === row.session.sessionId)
-        const ownReport = row.role === 'current' && trustedReport && active.length === 1 && active[0].token === trustedReport.token
+        const ownReport = row.role === 'current' && trustedReport && active.length === 1 && active[0]?.token === trustedReport.token
         const outstanding = (row.tools ?? []).filter(call => !(ownReport && call.callId === trustedReport?.callId && call.name === 'work_report'))
         if (outstanding.length || active.some(call => call.token !== (ownReport && trustedReport.token))) blockers.push({ code: 'tool-result-pending', session: row.session })
         if ((row.status === 'running' && !ownReport) || row.status === 'unknown') blockers.push({ code: row.status === 'unknown' ? 'executor-state-unknown' : 'executor-unsettled', session: row.session })

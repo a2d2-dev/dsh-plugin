@@ -4,6 +4,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import Subagents from '@deepseek-ai/dsh-subagent'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { installWorkProgressTools } from '../src/work-progress-tools.ts'
+import { RuntimeHost } from '../src/task-runtime/host.ts'
 import { ExecutionFixtures } from './work-execution-fixture.ts'
 import type { WorkResult } from '../src/work-types.ts'
 const operator = { operator: true }
@@ -62,8 +63,8 @@ it('keeps native continuable result intake authorized until the settled notice r
     release()
     await fixtures.run(() => h.ctx.agents.get(child.childId)!.whenIdle())
     await fixtures.run(() => parent.whenIdle())
-    await expect.poll(async () => (await h.host.execution.observation(execution)).sessions.find(row => row.role === 'current')!.children).toContainEqual(expect.objectContaining({ session: { runtimeId: 'runtime', sessionId: child.childId }, result: 'consumed' }))
-    expect((await h.host.execution.runtime.events(parent.id)).some(event => event.type === 'user/message' && event.data.source?.kind === 'subagent-settled' && event.data.source.senderSessionId === child.childId)).toBe(true)
+    await expect.poll(async () => (await h.host.execution.observation!(execution)).sessions.find(row => row.role === 'current')!.children).toContainEqual(expect.objectContaining({ session: { runtimeId: 'runtime', sessionId: child.childId }, result: 'consumed' }))
+    expect((await new RuntimeHost(h.ctx).events(parent.id)).some(event => event.type === 'user/message' && event.data.source?.kind === 'subagent-settled' && event.data.source.senderSessionId === child.childId)).toBe(true)
     expect(ok(await h.app.query({ type: 'task.detail', ref }, operator)).task!.completion).toBeUndefined()
     h.model.nextTool = { name: 'work_report', arguments: { report } }
     parent.followup(createUserMessage({ content: [{ type: 'text', text: 'Review the newly collected native result and confirm acceptance.' }], source: { kind: 'user' } }))
