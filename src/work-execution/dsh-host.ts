@@ -97,12 +97,19 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
   async observation(execution: WorkExecution, associations?: readonly import('../work-types.ts').SessionAssociation[]): Promise<import('./observation.ts').ExecutionObservation> {
     const { sessionKey } = await import('./observation.ts')
     const roots = new Map<string, { session: import('../work-types.ts').SessionRef; role: import('./observation.ts').ObservedSession['role']; parent?: import('../work-types.ts').SessionRef }>()
-    for (const binding of associations ?? await this.observationScope?.(execution) ?? []) roots.set(sessionKey(binding.session), { session: binding.session, role: binding.purpose })
+    const blockers: import('./observation.ts').ExecutionBlocker[] = []
+    const limitations = new Set<string>()
+    let bindings: readonly import('../work-types.ts').SessionAssociation[] = associations ?? []
+    if (associations === undefined) {
+      try {
+        if (!this.observationScope) throw new Error('Authority scope resolver is unavailable')
+        bindings = await this.observationScope(execution)
+      } catch { blockers.push({ code: 'execution-scope-unavailable', session: execution.session }); limitations.add('无法从权威 Task 记录证明完整关联范围，结算状态未知。') }
+    }
+    for (const binding of bindings) roots.set(sessionKey(binding.session), { session: binding.session, role: binding.purpose })
     for (const old of execution.retired ?? []) roots.set(sessionKey(old.session), { session: old.session, role: 'retired' })
     roots.set(sessionKey(execution.session), { session: execution.session, role: 'current' })
     const sessions: import('./observation.ts').ObservedSession[] = []
-    const blockers: import('./observation.ts').ExecutionBlocker[] = []
-    const limitations = new Set<string>()
     const seen = new Set<string>()
     for (const root of roots.values()) {
       const key = sessionKey(root.session)
@@ -133,6 +140,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     return { settlement: unknown ? 'unknown' : blockers.length ? 'pending' : 'settled', sessions, blockers, limitations: [...limitations] }
   }
   async maintain<T>(execution: WorkExecution, body: () => Promise<T>): Promise<T> {
+    if (!this.observationScope) throw new WorkExecutionError('execution-scope-unavailable', 'Safe maintenance requires the authority-owned Task observation scope resolver')
     const id = SessionId(execution.session.sessionId)
     const agent = await this.runtime.agent(id)
     await agent.whenIdle()
@@ -141,16 +149,21 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       const scope = await this.observation(execution)
       const related = scope.sessions.map(row => this.ctx.get('agents')?.get(SessionId(row.session.sessionId)))
         .filter((candidate): candidate is Agent => !!candidate && candidate.id !== id)
+      const held = new Set<string>([id])
       const lock = async (index: number): Promise<T> => {
         const candidate = related[index]
         if (candidate) {
           if (candidate.status !== 'idle') throw new WorkExecutionError('continuation-waiting-executions', 'A related executor is still running')
-          return candidate.runMaintenance(() => lock(index + 1))
+          held.add(candidate.id)
+          return candidate.runMaintenance(async () => { await this.runtime.flush(candidate); return lock(index + 1) })
         }
         // The graph was read once to identify locks. Read again while every live
         // executor is fenced: no related tool can start a job between check/take.
         const observation = await this.observation(execution)
         if (observation.settlement !== 'settled') throw new WorkExecutionError('continuation-waiting-executions', `Continuation is waiting for related execution facts: ${observation.blockers.map(blocker => `${blocker.code}:${blocker.session.sessionId}${blocker.jobId ? `:${blocker.jobId}` : ''}`).join(', ')}`)
+        const added = observation.sessions.map(row => this.ctx.get('agents')?.get(SessionId(row.session.sessionId)))
+          .filter((candidate): candidate is Agent => !!candidate && !held.has(candidate.id))
+        if (added.length) { related.push(...added); return lock(index) }
         return body()
       }
       return lock(0)

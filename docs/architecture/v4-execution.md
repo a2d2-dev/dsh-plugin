@@ -77,16 +77,20 @@ observe(id, caller): {
 
 ### SourceA 公共接线
 
-1. WorkApplication 构造时调用 `host.execution?.connectObservation?.(async execution => 对应Task.sessions)`；该 resolver 必须核对完整 TaskRef，只返回明确关联，不能纳入独立子 Task。
+1. WorkApplication 构造已接 `host.execution?.connectObservation?`，从真实工作存储校验完整 TaskRef、ExecutionId、owner、epoch、currentSession 后返回对应 Task.sessions；缺 resolver 或校验失败为 unknown，不能拿空数组证明范围完整。独立子 Task 不加入此范围。唯一受控例外是已有原语 take 已提交而 intake seal 未保存的恢复：同一 operation 的精确 retired source/epoch 可被维护以完成 seal，同时真正 current successor 进入相关维护围栏，不恢复旧段协调权。
 2. WorkCompleted 新增 `executionGraph?: ExecutionGraph`，task.execution/task.detail 查询调用 host.observation(execution) 后 `buildExecutionGraph({task,execution,observation,children})`。
 3. children 通过父 Task.children 完整 ref 查询对应 Task/Execution，保留独立 owner；Issue 负责人来自已有真实 source 投影。
-4. UI 以 graph/controller props 接入新独立组件，SourceA 独占共享 work types/schema/query、work-panel/controller/styles 的编辑。
+4. UI 以 graph/controller props 接入新独立组件，SourceA 独占共享 work types/schema/query、work-panel/controller/styles 的编辑：
+   - `ExecutionSessions({graph,onOpenTask?,onEnterTask?,onOpenSession?,onReadHistory?})`：分别接 openTask、openCurrentTask、openSession、现有只读 history 方法。
+   - `ExecutionContinuation({graph?,execution?,policy?,busy?,onContinue?})`：只显示参数与接续动作，不重复提供策略编辑入口。Issue 顶部唯一设置按钮由 SourceA 复用已有编辑器；Tab 使用此组件。
+   - 原生 `ExecutionSessionWorkEntry` 由 index 注册 header actions 与 blank dock；`ExecutionConversationContinuation` 注册 `conversation.view/a2d2-continuation`，不修改 WorkPanel 当前选择、宿主标题或草稿。点击接续前重新读取 Task 完整 ref、实际 execution/session 和 owner/epoch，后端再次校验。
+   - 无真实 graph 时明确“相关执行结算未知”，不制造空图安全状态。
 
 数据走向：权威工作存储 → 明确观察范围 → 宿主公开只读事实 → graph → Issue／原生聊天。查询不执行 collect、不启动或接管会话。
 
 ### 准备接续与失败重试
 
-操作沿用 `task.continue`。固定 operation 与 successor 先保留，准备不修改当前入口。`maintain` 等当前 idle，取得 source maintenance；观察相关执行者，再对其 live idle Agent 取得 maintenance，最后重读公开事实。pending/unknown 拒绝 body，释放维护窗口，让原生工具继续结算。settled 才进入已有 take；失败重试复用原 operation/successor，不另建入口。
+操作沿用 `task.continue`。固定 operation 与 successor 先保留，准备不修改当前入口。`maintain` 等当前 idle，取得 source maintenance 并 flush；观察相关执行者，再对其 live idle Agent 取得 maintenance 并逐一 flush，最后重读公开事实。如果获取锁时出现新的相关 live 执行者，先补锁与 flush 再重读。body 已在这一持久屏障内，禁止再次调用 settle/whenIdle/runMaintenance 造成嵌套等待。pending/unknown 拒绝 body，释放维护窗口，让原生工具继续结算。settled 才进入已有 take；失败重试复用原 operation/successor，不另建入口。
 
 ### 作业返回与收取
 

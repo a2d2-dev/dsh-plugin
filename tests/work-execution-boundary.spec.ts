@@ -1,11 +1,35 @@
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import LocalJobs from '@deepseek-ai/dsh-jobs-local'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { ExecutionFixtures } from './work-execution-fixture.ts'
 import { DshWorkExecutionHost } from '../src/work-execution/dsh-host.ts'
 import type { WorkExecution } from '../src/work-types.ts'
 
 const executionDefaults = { agentId: 'agent', owner: 'owner', epoch: 2, sessionMode: 'create' as const, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write', policy: { version: 1, modelCandidates: [], instructions: '', capabilities: [] }, state: 'ready' as const, history: [], events: [] }
+
+it('flushes and holds associated executors before entering a settled maintenance body', async () => {
+  const h = await fixtures.mount(await fixtures.root())
+  const create = () => fixtures.run(() => h.ctx.sessionController.create({ workspaceId: h.workspace.id, agentPreset: 'contract' }))
+  const current = await create(), review = await create()
+  const related = h.ctx.agents.get(review.sessionId)!
+  const message = createUserMessage({ content: [{ type: 'text', text: 'Durable related executor decision' }], source: { kind: 'user' } })
+  related.session.append('user/message', message, { surfaceOp: 'append' })
+  const host = new DshWorkExecutionHost(h.ctx, 'runtime')
+  const execution: WorkExecution = { ...executionDefaults, id: 'execution', ref: { projectId: 'project', taskId: 'task' }, session: { runtimeId: 'runtime', sessionId: current.sessionId }, resource: { runtimeId: 'runtime', workspaceId: h.workspace.id } }
+  expect((await host.observation(execution)).settlement).toBe('unknown')
+  await expect(host.maintain(execution, async () => 'unsafe')).rejects.toMatchObject({ code: 'execution-scope-unavailable' })
+  let scopeReads = 0
+  host.connectObservation(async () => ++scopeReads === 1 ? [] : [{ session: { runtimeId: 'runtime', sessionId: review.sessionId }, purpose: 'review' }])
+  await fixtures.run(() => host.maintain(execution, async () => {
+    expect(() => related.runMaintenance(async () => {})).toThrow('active work')
+    await using handle = await h.ctx.sessionPersistence.open(review.sessionId, 'read')
+    const persisted = await handle.read()
+    expect(persisted.events).toContainEqual(expect.objectContaining({ type: 'user/message', data: expect.objectContaining({ id: message.id }) }))
+  }))
+  expect(h.model.requests).toHaveLength(0)
+})
+
 let fixtures: ExecutionFixtures
 beforeEach(({ signal }) => { fixtures = new ExecutionFixtures(signal) })
 afterEach(() => fixtures.close())

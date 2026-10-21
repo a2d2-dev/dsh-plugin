@@ -16,6 +16,9 @@ export interface WorkExecutionHost {
   failure?(execution: WorkExecution): Promise<{ id: string; message: string; userCancelled: boolean } | undefined>
   profile?(execution: WorkExecution): Promise<NonNullable<WorkExecution['actual']>>
   measure?(execution: WorkExecution): Promise<import('../work-types.ts').ContinuationObservation>
+  /** Holds source and related live executors in maintenance, flushes their logs
+   * (including job journals), then rechecks settlement before body. Body must
+   * not call settle/whenIdle/runMaintenance on these already-held executors. */
   maintain?<T>(execution: WorkExecution, body: () => Promise<T>): Promise<T>
   sealInput?(execution: WorkExecution, operationId: string): Promise<{ seq: number; messages: readonly import('../work-types.ts').NativeWorkMessage[] }>
   pending?(execution: WorkExecution): readonly import('../work-types.ts').NativeWorkMessage[]
