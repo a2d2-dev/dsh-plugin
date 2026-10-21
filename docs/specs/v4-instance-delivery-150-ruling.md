@@ -34,8 +34,8 @@
 
 ## 整改闭合状态
 
-O-F1：待实际红绿、提交和主会话核对。
+O-F1：执行者已提交并推送 493ab08258a62035ac279b3f870edbdee12c29d0。主会话亲读源码/tests/记录后确认正式转换与组合绑定方向成立；当前仍是加载URL后二次fetch，不能证明页面实际执行响应。已在同一项整改内要求捕获实际加载响应并覆盖“加载旧体、重新fetch新体”的反例；尚未闭合，不再派review。
 
-O-F2：待实际红绿、提交和主会话核对。
+O-F2：源码与聚焦回归已闭合至 0343129dbac11623f7aa5ac24d1794b64ccbaad3。主会话亲读日志绑定/窗口、preview-stop、assessStop与断言，并独立运行 `node --test scripts/v4-acceptance/shutdown-log.test.mjs scripts/v4-acceptance/stopped-cut.test.mjs`：8/8、fail=0、skipped=0、exit0。真实error+exit0被拒新；日志身份/前缀/完整行/预算漂移不能声称无错误；raw只存私有文件；仍先做静态完整性才允许coherent rollback，不推断graceful。最终新plan/frozen tools集成尚待核对。
 
 两live实例均尚未因本任务切换，真实模型与页面验收尚未完成。

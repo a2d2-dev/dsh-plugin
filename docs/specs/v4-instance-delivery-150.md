@@ -58,7 +58,7 @@
 
 ## Further Notes
 
-执行票和实时状态以 GitHub 为准：[#151 运维风险审查](https://github.com/a2d2-dev/dsh-plugin/issues/151)、[#152 预览真实验收](https://github.com/a2d2-dev/dsh-plugin/issues/152)。准备不等于实际部署；预览业务验收与 GUI 服务外恢复是后续真实切换的前置。主会话为 session-74fb5e20-1456-461b-b5c1-ef5f3b41e018。
+执行票和实时状态以 GitHub 为准：[#151 运维风险审查](https://github.com/a2d2-dev/dsh-plugin/issues/151)、[#154 原预览风险整改与切换](https://github.com/a2d2-dev/dsh-plugin/issues/154)、[#152 预览真实验收](https://github.com/a2d2-dev/dsh-plugin/issues/152)、[#155 原GUI服务外更新与验收](https://github.com/a2d2-dev/dsh-plugin/issues/155)。#155 已建立原生 blocked-by #152；QA准备可先行，实际QA须先完成#154切换。准备不等于实际部署；预览业务验收与 GUI 服务外恢复是后续真实切换的前置。主会话为 session-74fb5e20-1456-461b-b5c1-ef5f3b41e018。
 
 初始冻结工具为 test/v4-acceptance @6b2522189cc64ebdea608789949b3237aa4b1d29，代码点 e247236、计划工具点 39fe47e；初始计划 SHA256 659f9d7d6fd17104ae1c4978312250442d75b882172df696237ad8a64f31b64c。任何整改或授权变化均需要新的最终 SHA，不能沿用初始 SHA 宣称已授权执行。
 
