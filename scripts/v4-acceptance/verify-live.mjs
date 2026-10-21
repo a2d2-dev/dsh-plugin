@@ -111,7 +111,7 @@ export async function verifyLive(plan,side){
   let desktop,narrow,resources,capture
   try{
     browser(['open','about:blank'])
-    capture=await captureScriptResponses(browser(['get','cdp-url']).trim())
+    capture=await captureScriptResponses(browser(['get','cdp-url']).trim(),{metadataPath:join(plan.evidenceRoot,`${side}-script-capture-metadata.jsonl`)})
     browser(['open',plan.origin+'/'])
     const password=(await readFile('/data/_dsh-dev/web-password','utf8')).trim()
     evaluate(`fetch('/?token='+encodeURIComponent(${JSON.stringify(password)}),{credentials:'include'}).then(r=>({status:r.status}))`)
@@ -141,7 +141,8 @@ export async function verifyLive(plan,side){
     })
     const modules=evaluate(`Promise.all(${JSON.stringify(urls)}.map(async url=>{const response=await fetch(url,{cache:'reload',credentials:'same-origin'});return {url,status:response.status,contentType:response.headers.get('content-type'),body:await response.text()}}))`)
     resources=verifyBrowserClients({origin:plan.origin,loadedPayloads,modules,client:await readFile(join(target.profile,'node_modules/dsh-a2d2/lib/client.js')),clientSha256:selected.clientSha256})
-  }finally{capture?.close();browser(['close'])}
+  }catch(error){await capture?.saveMetadata('verification-failed',error);throw error}
+  finally{await capture?.close();browser(['close'])}
   const result={source:'automatic-acceptance',status:'verified',side,origin:plan.origin,pid:run.pid,cli:run.cli,installedClientSha256,retainedSessions:before.sessions.length,genesis,desktop:{path:desktop,sha256:hash(await readFile(desktop))},narrow:{path:narrow,sha256:hash(await readFile(narrow))},resources,scope:'same URL browser refresh + native process/client fingerprint + public Session accepted-prefix/config selection; effective live permissions and real-model E2E remain separate'}
   await writeFile(join(plan.evidenceRoot,`${side}-verification.json`),JSON.stringify(result,null,2)+'\n',{flag:'wx',mode:0o600})
   return result
