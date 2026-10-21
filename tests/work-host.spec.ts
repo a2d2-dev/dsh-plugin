@@ -10,7 +10,11 @@ import Storage from '@deepseek-ai/dsh-storage'
 import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import WorkspaceRegistry from '@deepseek-ai/dsh-workspace'
-import { afterEach, expect, it } from 'vitest'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import ToolRuntime from '@deepseek-ai/dsh-tools'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { afterEach, expect, it, vi } from 'vitest'
+import { mountExecution } from './work-execution-fixture.ts'
 import * as plugin from '../src/work-plugin.ts'
 import { WORK_ROUTE_PATH } from '../src/work-types.ts'
 import type { WorkCompleted, WorkRequest, WorkResult } from '../src/work-types.ts'
@@ -146,6 +150,65 @@ it('rejects browser host/path/credential input and separates upstream 401 from D
   expect(sourceCalls).toBe(1)
   expect(await call(server, { kind: 'query', value: { type: 'project.detail', projectId: project.id } })).toMatchObject({ status: 200, body: { tasks: [] } })
 })
+
+it('registers the production model tool when ToolRuntime arrives without adding configuration or requiring an Agent for queries', async () => {
+  const { ctx, server } = await mount(await root())
+  expect(ctx.get('tools')).toBeUndefined()
+  await ctx.plugin(SystemPrompt)
+  await ctx.plugin(ToolRuntime)
+  await vi.waitFor(() => expect(ctx.tools.get('work_control')).toBeDefined())
+  expect(ctx.tools.get('work_continuation_material')).toBeDefined()
+  expect(await ctx.tools.execute({ callId: ToolCallId('unbound-production-call'), name: 'work_control', arguments: { action: 'status' }, signal: new AbortController().signal }))
+    .toMatchObject({ isError: true })
+  expect(await call(server, { kind: 'query', value: { type: 'projects.list' } })).toMatchObject({ status: 200, body: { status: 'completed', projects: [] } })
+  expect(ctx.get('agents')).toBeUndefined()
+  expect(ctx.get('llm')).toBeUndefined()
+})
+
+it('starts through the production plugin Context with real execution services and one deterministic kickoff', async () => {
+  const path = await root()
+  const { ctx, model } = await mountExecution(path, 'read-only')
+  contexts.push(ctx)
+  await ctx.plugin(WebServer)
+  await ctx.plugin(Connection)
+  await ctx.plugin(plugin, { directory: join(path, 'production-work') })
+  const server = ctx.get('webServer') as unknown as WebServer
+  const resources = completed((await call(server, { kind: 'query', value: { type: 'resources.list' } })).body).resources!
+  const resource = resources[0]!.ref
+  const project = completed((await call(server, { kind: 'command', value: { type: 'project.create', commandId: 'project', name: 'Production execution', resource } })).body).project!
+  const task = completed((await call(server, { kind: 'command', value: { type: 'task.create', commandId: 'task', projectId: project.id,
+    title: 'Start with real services', goal: 'Admit from the production Context', specification: 'Resolve services through the mounted plugin', acceptance: ['One deterministic kickoff'] } })).body).task!
+  const ref = { projectId: project.id, taskId: task.id }
+  const command = { kind: 'command', value: { type: 'task.start', commandId: 'start', ref, expectedVersion: 1,
+    agentId: project.defaultAgentId, resource, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'read-only' } } as const
+  const controller = ctx.get('sessionController')!
+  for (const method of ['create', 'modelCatalog'] as const) {
+    const descriptor = Object.getOwnPropertyDescriptor(controller, method)
+    Object.defineProperty(controller, method, { value: undefined, configurable: true })
+    try {
+      expect(await call(server, command)).toMatchObject({ status: 400, body: { status: 'failed', error: { code: 'host-capability-unavailable' } } })
+      expect((await call(server, { kind: 'query', value: { type: 'task.execution', ref } })).body).not.toHaveProperty('execution')
+      expect(await ctx.sessionPersistence.list()).toHaveLength(0)
+      expect(model.requests).toHaveLength(0)
+    } finally {
+      if (descriptor) Object.defineProperty(controller, method, descriptor)
+      else Reflect.deleteProperty(controller, method)
+    }
+  }
+  const started = await call(server, command)
+  expect(started, JSON.stringify(started)).toMatchObject({ status: 200, body: { status: 'completed', execution: { state: 'ready', actual: { cwd: path, permissionPreset: 'read-only', provider: 'contract', model: 'selected' } } } })
+  const execution = completed(started.body).execution!
+  const agent = ctx.agents.get(SessionId(execution.session.sessionId))!
+  await agent.whenIdle()
+  expect(model.requests).toHaveLength(1)
+  expect(model.requests[0]).toMatchObject({ provider: 'contract', model: 'selected' })
+  expect(ctx.agentDefaultModel.currentSelection()).toEqual({ provider: 'contract', model: 'default' })
+  expect((await call(server, command)).body).toMatchObject({ execution: { id: execution.id, session: execution.session } })
+  await agent.whenIdle()
+  expect(model.requests).toHaveLength(1)
+  expect(await ctx.sessionPersistence.list()).toHaveLength(1)
+})
+
 it('uses host operator authentication for reads, writes and retry receipts before reading request bodies', async () => {
   const { server } = await mount(await root())
   const command = { kind: 'command', value: { type: 'project.create', commandId: 'authenticated-create', name: 'Private work' } }

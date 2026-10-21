@@ -12,6 +12,7 @@ import { createWorkHandler } from './work-route.ts'
 import { WORK_ROUTE_PATH } from './work-types.ts'
 import { GitHubSource } from './work-sources/github.ts'
 import type { GitHubSourcePort } from './work-sources/types.ts'
+import { installWorkTools, installWorkControlRecovery } from './work-execution/tools.ts'
 import type { RequestRejection } from './route-auth.ts'
 
 export const name = 'a2d2-work'
@@ -42,6 +43,8 @@ export async function apply(ctx: Context, config: Config = {}): Promise<void> {
   const source = config.github === false ? undefined : ctx.get('a2d2GitHubSource') ?? new GitHubSource()
   const app = new WorkApplication(directory, new DshWorkHost(ctx, runtimeId), source)
   ctx.provide('a2d2Work', app)
+  ctx.inject(['tools'], toolsCtx => { installWorkTools(toolsCtx, app, runtimeId) })
+  ctx.inject(['agents'], executionCtx => { installWorkControlRecovery(executionCtx, app) })
   const getService = <T>(key: string): T => (ctx.get as (key: string) => unknown).call(ctx, key) as T
   const server = getService<{ register(route: { kind: 'exact'; path: string; handler: ReturnType<typeof createWorkHandler> }): () => void }>('webServer')
   const connection = getService<{ requestRejection: RequestRejection }>('connection')

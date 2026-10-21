@@ -24,6 +24,33 @@ export interface WorkTask {
   activity: WorkActivity[]
 }
 export interface LegacyAddress { runtimeId: string; projectRoot: string; taskId: string }
+export interface HostExecutionChoices {
+  agentPresets: string[]; models: { provider: string; model: string }[]; permissionPresets: string[]
+  defaults: { agentPreset: string; model: { provider: string; model: string }; permissionPreset: string }
+}
+export interface WorkExecutionOptions extends HostExecutionChoices { agentId: string; resources: HostResource[] }
+export interface ExecutionRef { ref: TaskRef; executionId: string }
+export interface NativeWorkMessage { id: string; role: 'user'; content: readonly unknown[]; source: unknown }
+export interface WorkEvent { id: string; text: string; kind: 'input' | 'result'; delivery: 'accepted' | 'delivered' | 'consumed'; acceptance: 'unassessed'; nativeMessage?: NativeWorkMessage }
+/** Source-authored material; full original text is retained before any delivery redaction. */
+export interface ContinuationContent { body: string; decisions: string; evidence: string; unfinished: string; next: string }
+export interface ContinuationMaterial extends ContinuationContent {
+  commandId: string; ref: TaskRef; executionId: string; source: SessionRef; epoch: number
+  taskVersion: number; specificationVersion: number
+}
+export interface WorkExecution {
+  id: string; ref: TaskRef; agentId: string; owner: string; epoch: number
+  resource: ResourceRef; session: SessionRef; sessionMode: 'create' | 'reuse'; agentPreset: string
+  model: { provider: string; model: string }; permissionPreset: string; policy: AgentPolicy
+  state: 'accepted' | 'creating' | 'ready' | 'running' | 'waiting' | 'paused' | 'failed'
+  history: { state: WorkExecution['state']; commandId: string }[]
+  actual?: { runtimeId: string; cwd: string; agentPreset: string; provider: string; model: string; permissionPreset: string; sandbox: string; approval: string }
+  events: WorkEvent[]
+  continuationMaterial?: ContinuationMaterial
+  progress?: string
+  control?: { commandId: string; action: 'wait' | 'pause' | 'resume'; status: 'accepted' | 'applied'; reason?: string }
+  error?: { code: string; message: string }
+}
 interface Command { commandId: string }
 interface TaskContent { title: string; goal: string; specification: string; acceptance: string[] }
 interface TaskChange extends Command { ref: TaskRef; expectedVersion: number }
@@ -41,6 +68,11 @@ export type WorkCommand =
   | (TaskChange & { type: 'task.link-child'; child: TaskRef; childExpectedVersion: number })
   | (TaskChange & { type: 'task.associate-session'; session: SessionRef; purpose: 'related' | 'review' })
   | (TaskChange & { type: 'legacy.map'; address: LegacyAddress })
+  | (Command & ExecutionRef & { type: 'task.continuation-material'; owner: string; epoch: number; content: ContinuationContent })
+  | (Command & ExecutionRef & { type: 'task.control'; owner: string; epoch: number; action: 'progress' | 'wait' | 'pause' | 'resume'; text: string })
+  | (Command & ExecutionRef & { type: 'task.input'; owner: string; epoch: number; text: string; kind: 'input' | 'result' })
+  | (Command & ExecutionRef & { type: 'task.reconcile'; owner: string; epoch: number })
+  | (TaskChange & { type: 'task.start'; agentId: string; resource: ResourceRef; session?: SessionRef; agentPreset: string; model: { provider: string; model: string }; permissionPreset: string })
 export type WorkQuery =
   | { type: 'source.list'; projectId: string }
   | { type: 'source.issues'; projectId: string; sourceId: string; page: number; perPage: number; assignee: '@me' | '*'; state: 'open' | 'closed' | 'all'; refresh?: boolean }
@@ -49,11 +81,13 @@ export type WorkQuery =
   | { type: 'projects.list' }
   | { type: 'resources.list' }
   | { type: 'project.detail'; projectId: string }
+  | { type: 'task.execution-options'; ref: TaskRef }
+  | { type: 'task.execution'; ref: TaskRef }
   | { type: 'task.detail'; ref: TaskRef }
   | { type: 'session.candidates'; projectId: string }
   | { type: 'session.work'; session: SessionRef }
   | { type: 'legacy.resolve'; address: LegacyAddress }
-export interface AssociatedWork { ref: TaskRef; title: string; projectName: string; purpose: 'related' | 'review' }
+export interface AssociatedWork { ref: TaskRef; title: string; projectName: string; purpose: 'related' | 'review' | 'control'; executionId?: string; epoch?: number }
 /** Completed fields correspond to command/query; task.detail includes related children and parent. */
 export interface SourceResultFields {
   ref?: TaskRef
@@ -63,6 +97,9 @@ export interface SourceResultFields {
 }
 export interface WorkCompleted extends SourceResultFields {
   status: 'completed'
+  execution?: WorkExecution
+  executionOptions?: WorkExecutionOptions
+  executionRuntime?: 'running' | 'idle' | 'inactive'
   project?: Project
   task?: WorkTask
   projects?: Project[]
