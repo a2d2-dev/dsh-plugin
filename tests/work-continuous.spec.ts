@@ -65,7 +65,7 @@ class Host implements WorkHost {
   idle(execution: WorkExecution) { this.settlements.set(execution.id, 'settled'); this.statuses.set(execution.session.sessionId, 'idle'); for (const event of execution.events) if (this.deliveries.has(event.id)) this.deliveries.set(event.id, 'consumed') }
 }
 function issue(number: number, assignees = ['alice'], labels = ['ready']): GitHubIssue {
-  return { nodeId: `ISSUE_${number}`, number, title: `Issue ${number}`, url: `https://github.com/acme/repo/issues/${number}`, body: 'Implement the agreed work.', repository: { owner: 'acme', repository: 'repo' }, assignees, labels, state: 'open', updatedAt: '2026-01-01T00:00:00.000Z', observedAt: '2026-01-01T00:00:00.000Z' }
+  return { subIssues: { items: [], totalCount: 0, hasNextPage: false }, nodeId: `ISSUE_${number}`, number, title: `Issue ${number}`, url: `https://github.com/acme/repo/issues/${number}`, body: 'Implement the agreed work.', repository: { owner: 'acme', repository: 'repo' }, assignees, labels, state: 'open', updatedAt: '2026-01-01T00:00:00.000Z', observedAt: '2026-01-01T00:00:00.000Z' }
 }
 async function setup(enable = true, planner?: import('../src/work-planning.ts').WorkPlanner, repository = false) {
   const directory = await mkdtemp(join(tmpdir(), 'continuous-work-')); roots.push(directory)
@@ -95,8 +95,8 @@ async function setup(enable = true, planner?: import('../src/work-planning.ts').
 const fence = (execution: WorkExecution) => ({ ref: execution.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch })
 async function reportDone(app: WorkApplication, execution: WorkExecution) {
   const detail = completed(await app.query({ type: 'task.detail', ref: execution.ref }, operator))
-  const updated = completed(await app.execute({ type: 'task.update-spec', commandId: `spec:${execution.id}`, ref: execution.ref, expectedVersion: detail.task!.version, goal: 'Accepted goal', specification: 'Accepted scope', acceptance: ['Pass check'] }, operator))
-  completed(await app.execute({ type: 'task.report', commandId: `done:${execution.id}`, ...fence(execution), report: { specificationVersion: updated.task!.specification.version, stage: 'done', summary: 'Accepted completion', next: '', blockers: [], criteria: [{ index: 0, passed: true, evidence: ['check passed'] }] } }, operator))
+  const updated = detail.task!.specification.acceptance.length ? detail : completed(await app.execute({ type: 'task.update-spec', commandId: `spec:${execution.id}`, ref: execution.ref, expectedVersion: detail.task!.version, goal: 'Accepted goal', specification: 'Accepted scope', acceptance: ['Pass check'] }, operator))
+  return app.execute({ type: 'task.report', commandId: `done:${execution.id}`, ...fence(execution), report: { specificationVersion: updated.task!.specification.version, stage: 'done', summary: 'Accepted completion', next: '', blockers: [], criteria: [{ index: 0, passed: true, evidence: ['check passed'] }] } }, operator)
 }
 
 it('returns the authoritative execution graph through detail and execution without advancing work', async () => {
@@ -156,11 +156,12 @@ it('pauses only new intake, retains active work, completes only at actual host i
   const first = await h.execution()
   completed(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'pause-intake', ...h.scope, expectedVersion: 1, enabled: false }, operator))
   expect((await h.status()).active).toEqual(first.ref)
-  await reportDone(h.app, first)
+  expect(await reportDone(h.app, first)).toMatchObject({ status: 'failed', error: { code: 'completion-results-unsettled' } })
   await h.app.reconcileControls()
   expect((await h.status()).active).toEqual(first.ref)
-  expect(await h.host.authorize(first.session.sessionId)).toBe(false)
-  h.host.idle(first); await h.app.reconcileControls()
+  expect(await h.host.authorize(first.session.sessionId)).toBe(true)
+  expect(completed(await h.app.query({ type: 'task.detail', ref: first.ref }, operator)).task!.completion).toBeUndefined()
+  h.host.idle(first); completed(await reportDone(h.app, first)); await h.app.reconcileControls()
   expect((await h.status()).active).toBeUndefined(); expect((await h.status()).items[0]!.state).toBe('completed')
   expect(h.host.sessionsCreated.size).toBe(1)
   expect(await h.app.execute({ type: 'task.input', commandId: 'late-input', ...fence(first), text: 'Restart', kind: 'input' }, operator)).toMatchObject({ status: 'failed', error: { code: 'continuous-completed' } })
@@ -300,7 +301,7 @@ it('rechecks Project membership and labels atomically after asynchronous host ad
 
 it('holds a completed slot while host settling fails and never admits the next issue early', async () => {
   const h = await setup(); completed(await h.app.execute(h.configure, operator)); const first = await h.execution()
-  await reportDone(h.app, first); h.host.idle(first)
+  h.host.idle(first); completed(await reportDone(h.app, first))
   const original = h.host.execution.maintain
   vi.spyOn(h.host.execution, 'maintain').mockImplementation(async () => { throw new Error('Host maintenance unavailable') })
   await h.app.reconcileControls()
@@ -338,7 +339,7 @@ it('recovers a lost delivery receipt without sending a second kickoff or creatin
 
 it('freezes completed managed acceptance against later specification or report mutations', async () => {
   const h = await setup(); completed(await h.app.execute(h.configure, operator)); const first = await h.execution()
-  await reportDone(h.app, first)
+  h.host.idle(first); completed(await reportDone(h.app, first))
   const task = completed(await h.app.query({ type: 'task.detail', ref: first.ref }, operator)).task!
   expect(await h.app.execute({ type: 'task.update-spec', commandId: 'after-done-spec', ref: first.ref, expectedVersion: task.version, goal: 'Changed goal', specification: 'Changed spec', acceptance: ['More work'] }, operator)).toMatchObject({ status: 'failed', error: { code: 'continuous-completed' } })
   expect(await h.app.execute({ type: 'task.report', commandId: 'after-done-report', ...fence(first), report: { specificationVersion: task.specification.version, stage: 'in-progress', summary: 'Restart', next: 'More work', blockers: [], criteria: [] } }, operator)).toMatchObject({ status: 'failed', error: { code: 'continuous-completed' } })
@@ -388,7 +389,7 @@ it('enables only a reviewed plan and dispatches its order while Block fences fut
   const first = await h.execution()
   expect((await h.status()).items.find(item => item.state === 'active')?.nodeId).toBe('ISSUE_2')
   completed(await h.app.execute({ type: 'continuous.block', commandId: 'block-next', ...h.scope, expectedVersion: 4, nodeId: 'ISSUE_1', blocked: true }, operator))
-  await reportDone(h.app, first); h.host.idle(first); await h.app.reconcileControls()
+  h.host.idle(first); completed(await reportDone(h.app, first)); await h.app.reconcileControls()
   expect(h.host.sessionsCreated.size).toBe(1)
   expect((await h.status()).items.find(item => item.nodeId === 'ISSUE_1')?.reason).toContain('Block')
 })
@@ -471,7 +472,7 @@ it('adopts cross-project source work using the explicitly previewed original exe
 
 it('bounds failed safe settlement, keeps the slot fenced, and allows explicit recovery without model restart', async () => {
   const h = await setup(); completed(await h.app.execute(h.configure, operator)); const first = await h.execution()
-  await reportDone(h.app, first); h.host.idle(first)
+  h.host.idle(first); completed(await reportDone(h.app, first))
   const maintain = h.host.execution.maintain
   const spy = vi.spyOn(h.host.execution, 'maintain').mockRejectedValue(new Error('Maintenance unavailable'))
   let now = Date.now(); vi.spyOn(Date, 'now').mockImplementation(() => now)
@@ -490,7 +491,7 @@ it('bounds failed safe settlement, keeps the slot fenced, and allows explicit re
 
 it.each(['missing', 'unknown'] as const)('retains an accepted slot when formal settlement is %s even at runtime idle', async mode => {
   const h = await setup(); completed(await h.app.execute(h.configure, operator)); const first = await h.execution()
-  await reportDone(h.app, first); h.host.idle(first)
+  h.host.idle(first); completed(await reportDone(h.app, first))
   if (mode === 'missing') delete h.host.execution.observation
   else h.host.settlements.set(first.id, 'unknown')
   await h.app.reconcileControls()

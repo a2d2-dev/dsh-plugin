@@ -59,11 +59,13 @@ export function applyTaskReport(state: WorkSnapshot, execution: WorkExecution, r
     if (report.closeExternal && state.externalBindings.filter(item => sameRef(item.ref, execution.ref)).length !== 1) return fail('completion-binding-required', '外部关闭需要唯一已接受的 canonical binding')
     if (report.blockers.length || !task.specification.acceptance.length || task.specification.missing?.length
       || report.criteria.length !== task.specification.acceptance.length || report.criteria.some(item=>!item.passed)) return fail('acceptance-incomplete', '完成前必须通过当前规格的全部验收项并解决阻塞')
-    for (const binding of state.externalBindings.filter(item => sameRef(item.ref, execution.ref))) {
+    const nativeBindings = state.externalBindings.filter(item => sameRef(item.ref, execution.ref))
+    const external = report.externalChildren ?? []
+    const requiredNodes = new Set(nativeBindings.flatMap(binding => (binding.acceptedChildren ?? binding.accepted.subIssues)?.items.map(item => item.nodeId) ?? []))
+    if (new Set(external.map(item => item.nodeId)).size !== external.length || external.some(item => !requiredNodes.has(item.nodeId))) return fail('native-child-evidence-out-of-scope', '外部验收记录只能引用已接受的必要原生子项且不能重复')
+    for (const binding of nativeBindings) {
       const children = binding.acceptedChildren ?? binding.accepted.subIssues
       if (!children || children.hasNextPage || children.totalCount !== new Set(children.items.map(item => item.nodeId)).size) return fail('native-child-scope-incomplete', '必要原生子 Issue 范围未知或读取未完整，不能据此断言没有子工作')
-      const external = report.externalChildren ?? []
-      if (new Set(external.map(item => item.nodeId)).size !== external.length || external.some(item => !children.items.some(child => child.nodeId === item.nodeId))) return fail('native-child-evidence-out-of-scope', '外部验收记录只能引用已接受的必要原生子项且不能重复')
       for (const required of children.items) {
         const canonical = state.externalBindings.find(item => item.nodeId === required.nodeId)
         const child = canonical && state.tasks.find(item => sameRef(refOf(item), canonical.ref))

@@ -39,8 +39,8 @@ async function setup(change: (parent: GitHubIssue, child: GitHubIssue) => void =
   const execution = await start(ok(await app.query({ type: 'task.detail', ref }, operator)).task!)
   return { app, ref, execution, project, configured, parent, child, start, reads, writes: () => writes, detail: async () => ok(await app.query({ type: 'task.detail', ref }, operator)) }
 }
-it('refuses parent acceptance when a known necessary native child has never been imported', async () => {
-  const h = await setup()
+it.each(['open', 'closed'] as const)('refuses parent acceptance when a necessary %s native child has never been imported', async state => {
+  const h = await setup((parent, child) => { child.state = state; parent.subIssues!.items[0]!.state = state })
   expect(await h.app.sessionReport(h.execution.session, 'early', report)).toMatchObject({ status: 'failed', error: { code: 'native-child-acceptance-required' } })
   await h.app.reconcileCompletions()
   expect((await h.detail()).task!.completion).toBeUndefined()
@@ -143,4 +143,21 @@ it('reads the real adapter native child endpoint completely before presenting a 
   expect(result.issue.subIssues!.items).toHaveLength(101)
   expect(requests).toHaveLength(4)
   expect(JSON.stringify(result)).not.toContain('host-only-credential')
+})
+
+it('refuses invented external child evidence on a pure local Task', async () => {
+  const h = await setup(parent => { parent.subIssues = { items: [], totalCount: 0, hasNextPage: false } })
+  const task = ok(await h.app.execute({ type: 'task.create', commandId: 'local-evidence', projectId: h.project.id, title: 'local', goal: 'local', specification: 'local', acceptance: ['verified'] }, operator)).task!
+  const execution = await h.start(task)
+  expect(await h.app.sessionReport(execution.session, 'unrelated-external', { ...report, closeExternal: false, externalChildren: [{ nodeId: 'I_invented', updatedAt: h.child.updatedAt, basis: 'unrelated', evidence: [h.child.url] }] })).toMatchObject({ status: 'failed', error: { code: 'native-child-evidence-out-of-scope' } })
+  expect(ok(await h.app.query({ type: 'task.detail', ref: execution.ref }, operator)).task!.completion).toBeUndefined()
+})
+it('requires current externally observed material after the necessary child changes', async () => {
+  const h = await setup()
+  ok(await h.app.sessionReadRelatedIssue(h.execution.session, h.child.nodeId))
+  const externalChildren = [{ nodeId: h.child.nodeId, updatedAt: h.child.updatedAt, basis: 'reviewed original child requirements', evidence: [h.child.url] }]
+  h.child.updatedAt = '2026-10-22T00:00:00Z'
+  ok(await h.app.sessionReadRelatedIssue(h.execution.session, h.child.nodeId))
+  expect(await h.app.sessionReport(h.execution.session, 'stale-external-result', { ...report, externalChildren })).toMatchObject({ status: 'failed', error: { code: 'native-child-evidence-unobserved' } })
+  expect((await h.detail()).task!.completion).toBeUndefined()
 })

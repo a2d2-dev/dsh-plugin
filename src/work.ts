@@ -1069,8 +1069,10 @@ export class WorkApplication {
         if (command.report.stage === 'done') {
           // Read only: work_report may itself be executing on this Agent. Never
           // enter maintenance/whenIdle before accepting its business conclusion.
-          const facts = await this.host.execution?.observation?.(execution, task.sessions, reporter)
-          if (facts?.settlement !== 'settled') return failed('completion-results-unsettled', `完成前须收取并核验必要执行结果：${facts?.blockers.map(item => `${item.code}:${item.session.sessionId}${item.jobId ? `:${item.jobId}` : ''}`).join(', ') || 'execution-observation-unavailable'}`)
+          let facts: ExecutionObservation | undefined
+          try { facts = await this.host.execution?.observation?.(execution, task.sessions, reporter) }
+          catch { return failed('completion-results-unsettled', '完成前须收取并核验必要执行结果：execution-observation-unavailable') }
+          if (facts?.settlement !== 'settled') return failed('completion-results-unsettled', `完成前须收取并核验必要执行结果：${facts?.blockers.map(item => `${item.code}:${item.session.sessionId}${item.jobId ? `:${item.jobId}` : ''}`).join(', ') || facts?.settlement || 'execution-observation-unavailable'}`)
         }
         const result = applyTaskReport(state, execution, command.report, command.commandId)
         if (result.status === 'completed' && managed && command.report.stage === 'done') managed.item.state = 'completed'

@@ -160,3 +160,13 @@ it('never replays an older failed retry command after a newer explicit retry',as
  await h.sync('retry-one');await h.sync('retry-two');expect(h.writes()).toBe(2)
  await h.sync('retry-one');expect(h.writes()).toBe(2)
 })
+
+it.each(['missing', 'throws'] as const)('names %s result observation before acceptance without creating a terminal fact',async mode=>{
+ const h=await externalSetup()
+ if(mode==='missing')delete h.host.execution!.observation
+ else h.host.execution!.observation=async()=>{throw Error('Host observation is unavailable')}
+ expect(await h.app.sessionReport(h.execution.session,'unavailable-observation',{specificationVersion:1,stage:'done',summary:'verified',next:'',blockers:[],criteria:[{index:0,passed:true,evidence:['verified']}],closeExternal:true})).toMatchObject({status:'failed',error:{code:'completion-results-unsettled',message:expect.stringContaining('execution-observation-unavailable')}})
+ expect((await h.detail(h.task)).task!.completion).toBeUndefined()
+ expect(await h.guard(h.execution.session.sessionId)).toBe(true)
+ expect(h.writes()).toBe(0)
+})

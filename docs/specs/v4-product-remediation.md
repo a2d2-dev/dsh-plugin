@@ -15,7 +15,17 @@
 - `TMPDIR=/dev/shm/v4-pf-141 corepack pnpm@10.26.2 exec vitest run tests/work-completion.spec.ts tests/work-completion-native.spec.ts tests/work-progress.spec.ts`：阶段检查 17 项绿、exit 0；随后新增 native intake 测试单独 2/2、exit 0。
 - 首次 typecheck 有一处严格空值类型错误，已修复，最终 typecheck 待整体收取。
 
-真实 job_output 组合待与 Host `8282d612` 一致的 session/jobs/jobs-local/tool-jobs 编译制品 fixture 环境；当前 stock rc2 缺公开 jobs.observe，不能以 fixture 翻状态代替。后续证据会追加本记录。
+真实 job_output 组合使用 QA 交付的 Host `8282d61299a04f60555f9ce473af174bbe161b02` 四个一致制品（session／jobs／jobs-local／tool-jobs），manifest 和四个归档 SHA256 已逐一核对；未写 Host checkout 或运行目录。独立 `.local/matched-host-8282-env` 复制当前 src/tests 并保留原 lock 的其他依赖解析，四包 pnpm overrides 一起安装，固定 pnpm 10.26.2、ignore-scripts。真实 owner Session 的 appendIgnorable 和 registry.observe 均断言存在，测试输出四个实际解析路径全部为该 fixture 内 file+packages+ 制品，未做混合 singleton 方法替换。
+
+组合的 baseline（仅在私有源码快照移除完成前检查，finally 恢复）明确红、exit 1：子和 job 在途时出现不可逆 completion／external intent。当前实现的真实连续模型工具链为：过早 work_report → native continuable 通知真实入父 user/message → 终态 job 尚 pending 时再次拒绝 → 原生 job_output 正式 collected 与 jobs/collected journal → 另一必要工具仍在途时拒绝 → 工具结束后恢复不自动采纳 → 新一次模型 work_report → 唯一父结果、一次受控 SourcePort 关闭、安全 closeout settled → 第二项真实独立 Session 执行 work_control wait。固定 Task／Execution／owner／epoch／原 Session 不变，没有新建第一项身份。外部 port 和模型输出是确定性边界，未调用真实 LLM／GitHub 写。
+
+`TMPDIR=/dev/shm/v4-pf-141 corepack pnpm@10.26.2 exec vitest run --config vitest.matched-host.config.ts --maxWorkers=1`（在私有 env）：1/1、1490ms、exit 0。一次中间失败的末条断言期望第二项仍 active，而模型已无后续动作并被原调度器正常 blocked；改为第二项实际 work_control wait，显式验证其独立处理与等待，不关闭 idle 防空转保护。
+
+可复现入口为 `A2D2_MATCHED_HOST_DIR=<approved-artifact-root> TMPDIR=/dev/shm/v4-pf-141 node scripts/verify-v4-completion-host.mjs`。脚本固定验证 Host revision 与四个已批准 hash，保留所有绝对 file 依赖、缓存和制品在本工作树忽略目录，保存每个源码／测试的 SHA256 provenance，执行完整安装与该正向 lane。普通 stock rc2 缺 observe 的反向合同仍保留，未 skip／翻状态冒充此真实证明。
+
+补充边界：宿主观察抛错先红，现具名返回 completion-results-unsettled 而不泄露异常细节或创建终态。四文件三项整改组合曾 30/30、exit 0；之后 F2 增补 closed 子不得自动验收、纯本地拒绝无关 externalChildren、外部子资料变化拒绝旧 updatedAt，当前 F2 独立14/14、exit0。
+
+一次扩大组合为7文件84项，77 pass／7 fail、exit1，全部来自旧 continuous 测试在 pending 时先报告 done 的旧期望。按新合同调整为先具名拒绝、保留 owner，再 idle 并显式重新确认，正向来源补充已完整空子范围；维护失败、未知／缺观察、Block、重复身份原断言均保留，未改预算。该文件随后33/33、exit0；其余6文件51项当次已绿，未为状态更新重复跑。
 
 ## P-F2：必要原生子范围与独立验收
 
