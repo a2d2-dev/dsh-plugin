@@ -7,9 +7,10 @@ import { taskReportSchema } from './work-progress.ts'
 export function installWorkProgressTools(ctx: Context, app: WorkApplication, runtimeId: string): void {
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'work_report',
-    description: 'Record the current managed task work status, requirements, blockers, next step and criterion evidence. Use work_control status to read the current Task specification and version. Report concrete facts when progress changes so the Project view stays current. done requires all current acceptance criteria and child tasks completed with evidence; it does not close any GitHub Issue.',
+    description: 'Record the current managed task work status, requirements, blockers, next step and criterion evidence. Use work_control status to read the current Task specification and version. Report concrete facts when progress changes so the Project view stays current. done commits terminal local acceptance with evidence and required children complete. closeExternal optionally queues recoverable closure of the accepted canonical GitHub binding; synchronization never reruns the Task.',
     parameters: {
       report: { type: 'object', additionalProperties: false, required: true, description: 'Progress report against the current specification.', properties: {
+        closeExternal: {type:'boolean',description:'Optionally persist a GitHub close intent with accepted local completion.'},
         specificationVersion: {type:'integer',required:true},
         stage: {type:'string',required:true,enum:['planned','in-progress','review','blocked','done']},
         summary: {type:'string',required:true}, next:{type:'string',required:true},

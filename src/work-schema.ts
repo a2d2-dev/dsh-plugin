@@ -94,6 +94,7 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ ...fence, type: z.literal('task.continuation-material'), content: continuationContentSchema }).strict(),
   z.object({ ...fence, type: z.literal('task.control'), action: z.enum(['progress', 'wait', 'pause', 'resume']), text }).strict(),
   z.object({ ...fence, type: z.literal('task.input'), text, kind: z.enum(['input', 'result']) }).strict(),
+  z.object({ ...fence, type: z.literal('task.completion-sync') }).strict(),
   z.object({ ...fence, type: z.literal('task.reconcile') }).strict(),
   z.object({ ...command, type: z.literal('project.configure-continuation'), projectId: id, expectedVersion: z.number().int().positive(), policy: continuationPolicySchema }).strict(),
   z.object({ ...command, type: z.literal('project.create'), name: text, resource: resourceRefSchema.optional() }).strict(),

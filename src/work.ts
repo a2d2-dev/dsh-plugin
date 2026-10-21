@@ -1,3 +1,4 @@
+import { synchronizeClose } from './work-completion/recovery.ts'
 import { isTaskCompleted, queueParentResults } from './work-completion/index.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile } from 'node:fs/promises'
@@ -22,7 +23,7 @@ export type * from './work-types.ts'
 export interface WorkActor { readonly operator: boolean; readonly session?: import('./work-types.ts').SessionRef; readonly agentId?: string }
 /** Trusted resource observation with an explicit optional managed execution capability. */
 export interface WorkHost {
-  execution?: WorkExecutionHost
+  execution?: WorkExecutionHost & { connectObservation?(scope: (execution: import('./work-types.ts').WorkExecution) => Promise<readonly import('./work-types.ts').SessionAssociation[]>): void; observation?(execution: import('./work-types.ts').WorkExecution, associations?: readonly import('./work-types.ts').SessionAssociation[]): Promise<{ settlement: 'settled' | 'pending' | 'unknown' }> }
   resources(): Promise<readonly HostResource[]>
   sessions(resource: HostResource): Promise<readonly SessionCandidate[]>
 }
@@ -48,6 +49,12 @@ export class WorkApplication {
   constructor(readonly directory: string, readonly host: WorkHost, readonly source?: GitHubSourcePort) {
     if (!isAbsolute(directory)) throw new Error('Work record directory must be absolute')
     this.file = join(directory, 'work-v3.json')
+    this.host.execution?.connectObservation?.(async execution => {
+      const state = await this.load()
+      const current = state.executions.find(item => item.id === execution.id && sameTask(item.ref, execution.ref))
+      if (!current || current.owner !== execution.owner || current.epoch !== execution.epoch || !sameSession(current.session, execution.session)) throw new WorkExecutionError('stale-execution-authority', 'Observation scope requires the current execution owner and epoch')
+      return structuredClone(taskAt(state, current.ref)!.sessions)
+    })
     this.host.execution?.connect(async (sessionId, messages = []) => {
       const mayAdvance = (execution: import('./work-types.ts').WorkExecution | undefined) => !execution || (!isTaskCompleted(taskAt(state, execution.ref)) && continuousMayAdvance(state, execution) && !['accepted', 'creating', 'failed', 'waiting', 'paused'].includes(execution.state)
         && !(execution.control?.status === 'accepted' && execution.control.action !== 'resume')
@@ -255,7 +262,9 @@ export class WorkApplication {
                 return current
               })
               if (!boundary) continue
-              if (boundary.actual) await host.settle(boundary)
+              if (release === 'completed') {
+                if (taskAt(await this.load(), boundary.ref)?.completion?.closeout.status !== 'settled') continue
+              } else if (boundary.actual) await host.settle(boundary)
               await this.sourceTransaction(async state => {
                 const current = state.executions.find(item => item.id === boundary.id)!
                 const owner = continuousOwner(state, current.ref)!
@@ -398,6 +407,12 @@ export class WorkApplication {
       await this.reconcileContinuous()
       return this.query({ type: 'continuous.status', projectId: command.projectId, sourceId: command.sourceId }, actor)
     }
+    if (receipt.status === 'completed' && (command.type === 'task.completion-sync' || command.type === 'task.reconcile') && receipt.execution && isTaskCompleted(taskAt(await this.load(), receipt.execution.ref))) {
+      await this.reconcileCompletions(command.type === 'task.completion-sync')
+      if (command.type === 'task.completion-sync') await this.synchronizeCompletion(command.ref, command.commandId)
+      const state = await this.load()
+      return { status: 'completed', task: taskAt(state, receipt.execution.ref), execution: state.executions.find(item => item.id === receipt.execution!.id) }
+    }
     if (command.type === 'task.continuation-material' || command.type === 'task.organize' || command.type === 'task.report' || command.type === 'task.configure-continuation') return receipt
     if (command.type === 'task.continue' && !actor.operator) return receipt
     if (command.type === 'task.control' && (!actor.operator || command.action === 'progress')) return receipt
@@ -407,13 +422,68 @@ export class WorkApplication {
     }
     return receipt
   }
+  private async synchronizeCompletion(ref: TaskRef, retryCommandId?: string): Promise<void> {
+    const task = taskAt(await this.load(), ref)
+    if (!task?.completion?.external) return
+    const lease = join(this.directory, `${task.completion.operationId}.completion`)
+    await withFileLock(lease, () => synchronizeClose(apply => this.sourceTransaction(apply), ref, this.source, retryCommandId), { waitMs: 0 }).catch(error => {
+      if (!(error instanceof Error) || error.message !== `atomic-write: timed out waiting for the writer lock at ${lease}.lock`) throw error
+    })
+  }
+  /** Completion recovery never creates an execution or wakes a model. */
+  async reconcileCompletions(skipExternal = false): Promise<void> {
+    const snapshot = await this.load()
+    for (const task of snapshot.tasks) {
+      if (!skipExternal && task.completion?.external) await this.synchronizeCompletion({ projectId: task.projectId, taskId: task.id })
+      if (!task.completion || task.completion.closeout.status === 'settled' || task.completion.closeout.status === 'error'
+        || (task.completion.closeout.retryAt && Date.parse(task.completion.closeout.retryAt) > Date.now())) continue
+      const execution = snapshot.executions.find(item => item.id === task.completion!.executionId)
+      const host = this.host.execution
+      const save = (status: 'pending' | 'settled' | 'error', error?: string) => this.sourceTransaction(async state => {
+        const current = taskAt(state, { projectId: task.projectId, taskId: task.id })!
+        current.completion!.closeout = { ...current.completion!.closeout, status, error }
+        if (status === 'settled') {
+          const execution = state.executions.find(item => item.id === current.completion!.executionId)!
+          execution.state = 'waiting'
+          if (execution.control?.action === 'wait') execution.control.status = 'applied'
+        }
+      })
+      if (!execution || execution.owner !== task.completion.owner || execution.epoch !== task.completion.epoch) { await save('error', 'completion-authority-changed'); continue }
+      if (!host?.observation || !host.maintain) { await save('pending', 'host-settlement-capability-unavailable'); continue }
+      try {
+        const observed = await host.observation(execution, task.sessions)
+        if (observed.settlement !== 'settled') { await save('pending', `host-settlement-${observed.settlement}`); continue }
+        await host.maintain(execution, async () => {
+          const current = await this.load()
+          if (taskAt(current, execution.ref)?.completion?.closeout.status === 'settled') return
+          const latest = current.executions.find(item => item.id === execution.id)
+          if (!latest || latest.owner !== task.completion!.owner || latest.epoch !== task.completion!.epoch) throw new Error('completion-authority-changed')
+          const fresh = await host.observation!(latest, taskAt(current, execution.ref)!.sessions)
+          if (fresh.settlement !== 'settled') { await save('pending', `host-settlement-${fresh.settlement}`); return }
+          await host.settle(latest)
+          await save('settled')
+        })
+      } catch (error) {
+        await save('pending', error instanceof Error ? error.message : 'host-settlement-unknown')
+        await this.sourceTransaction(async state => {
+          const operation = taskAt(state, execution.ref)!.completion!
+          operation.closeout.attempts = (operation.closeout.attempts ?? 0) + 1
+          operation.closeout.retryAt = new Date(Date.now() + 30_000).toISOString()
+          if (operation.closeout.attempts >= MAX_CONTINUOUS_ATTEMPTS) operation.closeout.status = 'error'
+          const managed = continuousOwner(state, execution.ref)
+          if (managed) { continuousRetry(managed.item, operation.closeout.error!); if (managed.item.attempts >= MAX_CONTINUOUS_ATTEMPTS) managed.item.recoveryBlocked = true }
+        })
+      }
+    }
+  }
   /** Host lifecycle recovery includes starts, handoffs and controls. */
   async reconcileControls(): Promise<void> {
+    await this.reconcileCompletions()
     if (!this.host.execution) return
     await this.reconcileContinuous()
     const snapshot = await this.load()
     for (const initial of snapshot.executions) {
-      if (continuousOwner(snapshot, initial.ref)) continue
+      if (isTaskCompleted(taskAt(snapshot, initial.ref)) || continuousOwner(snapshot, initial.ref)) continue
       if (this.host.execution.status(initial) === 'running') continue
       await this.observeRuntimeFailure(initial.id)
       await this.observeContinuation(initial.id)
@@ -439,7 +509,7 @@ export class WorkApplication {
   private async observeContinuation(id: string): Promise<void> {
     const state = await this.load()
     const execution = state.executions.find(item => item.id === id)!
-    if (!continuousMayAdvance(state, execution)) return
+    if (isTaskCompleted(taskAt(state, execution.ref)) || !continuousMayAdvance(state, execution)) return
     const policy = execution.continuationPolicy
     if (!policy?.enabled || (execution.runtimeFailure && !execution.runtimeFailure.acknowledged) || execution.continuationBlocked || continuationInFlight(execution) || !['ready', 'running'].includes(execution.state)
       || (execution.control?.status === 'accepted' && execution.control.action !== 'resume')) return
@@ -454,7 +524,7 @@ export class WorkApplication {
     } catch (cause) { error = { code: cause instanceof WorkExecutionError ? cause.code : 'continuation-observation-failed', message: cause instanceof Error ? cause.message : 'Continuation observation failed' } }
     await this.sourceTransaction(async state => {
       const current = state.executions.find(item => item.id === id)!
-      if (current.epoch !== execution.epoch || current.continuationPolicy?.version !== policy.version || continuationInFlight(current)) return
+      if (isTaskCompleted(taskAt(state, current.ref)) || current.epoch !== execution.epoch || current.continuationPolicy?.version !== policy.version || continuationInFlight(current)) return
       if (observation) current.continuationObservation = observation
       if (error) current.continuationBlocked = error
       else if (observation!.totalTokens >= policy.targetTokens) reserveContinuation(current, taskAt(state, current.ref)!, `auto:${current.id}:${current.epoch}:${policy.version}`, true)
@@ -593,6 +663,7 @@ export class WorkApplication {
       })
       const state = await this.load()
       let execution = state.executions.find(item => item.id === id)!
+      if (isTaskCompleted(taskAt(state, execution.ref))) return { status: 'completed', execution }
       const owner = continuousOwner(state, execution.ref)
       const stopping = owner && sameTask(owner.rule.active, execution.ref) && execution.control?.status === 'accepted' && execution.control.action !== 'resume'
       if (owner && !continuousMayAdvance(state, execution) && !stopping) return { status: 'completed', execution }
@@ -695,6 +766,7 @@ export class WorkApplication {
       return configured.status === 'completed' ? { ...configured, project: created.project } : configured
     }
     if (command.type === 'continuous.configure' || command.type === 'continuous.set-enabled') return this.configureContinuous(state, command, admissionChoices)
+    if (command.type === 'source.link' && isTaskCompleted(taskAt(state, command.ref))) return failed('task-completed', 'Accepted Task external binding is immutable')
     if (command.type === 'source.configure-project' || command.type === 'source.configure' || command.type === 'source.set-enabled' || command.type === 'source.import' || command.type === 'source.link') return applySourceCommand(state, command)
     if (command.type === 'project.create') {
       if (command.resource && state.projects.some(item => item.resources.some(ref => sameResource(ref, command.resource!)))) {
@@ -728,13 +800,19 @@ export class WorkApplication {
     if (!('ref' in command)) return failed('unsupported-command', 'Command is not implemented')
     const task = taskAt(state, command.ref)
     if (!task) return failed('unknown-task', 'Task does not belong to this project')
-    if (isTaskCompleted(task) && command.type !== 'task.reconcile' && command.type !== 'task.associate-session') return failed('task-completed', 'Accepted Task is terminal; additional work requires a new Task')
+    if (isTaskCompleted(task) && command.type !== 'task.reconcile' && command.type !== 'task.completion-sync' && command.type !== 'task.associate-session') return failed(continuousOwner(state, command.ref) ? 'continuous-completed' : 'task-completed', 'Accepted Task is terminal; additional work requires a new Task')
     const active = state.executions.find(item => item.ref.taskId === task.id && item.ref.projectId === task.projectId)
     if (active && continuousCompleted(state, active) && ['task.update-spec', 'task.replace-breakdown', 'task.create-child', 'task.link-child', 'task.report', 'task.organize'].includes(command.type)) return failed('continuous-completed', 'Completed continuous work is immutable; create a separately authorized Issue for additional work')
     if (active && continuationInFlight(active) && ['task.update-spec', 'task.replace-breakdown', 'task.create-child', 'task.link-child', 'task.report', 'task.organize'].includes(command.type)) return failed('continuation-in-progress', 'Task specifications, structure and acceptance reports are frozen until the reserved handoff completes')
     if ('executionId' in command) {
       const execution = state.executions.find(item => item.id === command.executionId && item.ref.taskId === task.id)
       if (!execution || execution.owner !== command.owner || execution.epoch !== command.epoch) return failed('stale-execution-authority', 'Execution identity, owner or epoch is stale')
+      if ((command.type === 'task.reconcile' || command.type === 'task.completion-sync') && task.completion && task.completion.closeout.status !== 'settled') {
+        task.completion.closeout.status = 'pending'; task.completion.closeout.attempts = 0; delete task.completion.closeout.retryAt
+        const managed = continuousOwner(state, execution.ref)
+        if (managed) { managed.item.attempts = 0; delete managed.item.retryAt; delete managed.item.recoveryBlocked }
+      }
+      if (command.type === 'task.completion-sync') return task.completion ? { status: 'completed', task, execution } : failed('completion-required', 'Only an accepted Task can synchronize completion')
       if (command.type === 'task.organize') return applyTaskOrganization(state, execution, command.organization, command.commandId, randomUUID)
       const managed = continuousOwner(state, execution.ref)
       if (managed && command.type === 'task.reconcile') { managed.item.attempts = 0; delete managed.item.retryAt; delete managed.item.recoveryBlocked }
@@ -872,6 +950,7 @@ export class WorkApplication {
         if (ancestor.id === child.id) return failed('task-cycle', 'Parent relationship would form a cycle')
         ancestor = ancestor.parent ? taskAt(state, ancestor.parent) : undefined
       }
+      if (isTaskCompleted(child) && !task.children.some(ref => ref.taskId === child.id)) return failed('task-completed', 'An accepted child cannot be reparented')
       if (child.parent && child.parent.taskId !== task.id) return failed('child-already-linked', 'Child already has another parent')
       if (task.children.some(ref => ref.taskId === child.id)) return { status: 'completed', task }
       child.parent = command.ref

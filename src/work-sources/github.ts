@@ -21,7 +21,7 @@ async function credential(): Promise<string> {
   } catch { throw new SourceError('github-credentials-unavailable', 'GitHub.com credentials are unavailable to this server') }
 }
 interface Options { credential?: () => Promise<string>; fetch?: typeof globalThis.fetch; timeoutMs?: number; graphql?: ProjectGraphQL }
-/** Read-only GitHub.com adapter: REST GETs and fixed Project GraphQL queries. */
+/** Host GitHub.com adapter: reads plus a fixed canonical Issue close mutation. */
 export class GitHubSource implements GitHubSourcePort {
   private readonly options: Options
   private readonly token: () => Promise<string>
@@ -62,6 +62,34 @@ export class GitHubSource implements GitHubSourcePort {
     const match = /^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/issues\/([1-9][0-9]*)\/?$/i.exec(value.html_url)
     if (!match || Number(match[3]) !== value.number) throw new SourceError('github-invalid-response', 'GitHub returned an out-of-scope Issue URL')
     return { nodeId: value.node_id, url: `https://github.com/${match[1]!.toLowerCase()}/${match[2]!.toLowerCase()}/issues/${value.number}`, number: value.number, repository: { owner: match[1]!, repository: match[2]! }, title: value.title, body: value.body, state: value.state, assignees: value.assignees.map(item => item.login), labels: value.labels.map(item => item.name), updatedAt: value.updated_at, observedAt: new Date().toISOString() }
+  }
+  /** Fixed Issue mutation; no external URL, credential, or repository path is accepted from a browser. */
+  async close(input: import('../work-completion/index.ts').CloseTarget, operationId: string): Promise<import('../work-completion/index.ts').CloseReceipt> {
+    const { closeTargetSchema } = await import('../work-completion/index.ts')
+    const parsed = closeTargetSchema.safeParse(input)
+    if (!parsed.success || !operationId.trim()) return { status: 'error', message: 'invalid-close-target' }
+    const target = parsed.data
+    let token: string
+    try {
+      token = await this.token()
+      const { issue } = await this.detail(target.repository, target.number)
+      if (issue.nodeId !== target.nodeId || issue.repository.owner.toLowerCase() !== target.repository.owner.toLowerCase() || issue.repository.repository.toLowerCase() !== target.repository.repository.toLowerCase()) return { status: 'conflict', message: 'canonical-binding-changed' }
+      const names = (values: string[]) => JSON.stringify(values.map(value => value.toLowerCase()).sort())
+      if (names(issue.assignees) !== names(target.expectedAssignees)) return { status: 'conflict', message: 'remote-assignees-changed' }
+      if (issue.state === 'closed') return { status: 'closed' }
+      if (issue.updatedAt !== target.expectedUpdatedAt) return { status: 'conflict', message: 'remote-version-changed' }
+    } catch { return { status: 'error', message: 'github-close-preflight-unavailable' } }
+    try {
+      const response = await this.fetcher('https://api.github.com/graphql', { method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(this.timeoutMs),
+        headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'content-type': 'application/json', 'x-github-api-version': '2022-11-28', 'user-agent': 'dsh-a2d2-completion' },
+        body: JSON.stringify({ query: 'mutation CompleteTask($input: CloseIssueInput!) { closeIssue(input: $input) { issue { id closed } clientMutationId } }', variables: { input: { issueId: target.nodeId, clientMutationId: operationId } } }),
+      })
+      if ([401, 403, 404, 422].includes(response.status)) return { status: 'error', message: `github-close-rejected-${response.status}` }
+      if (!response.ok) return { status: 'unknown', message: `github-close-response-${response.status}` }
+      const result = z.object({ data: z.object({ closeIssue: z.object({ issue: z.object({ id: z.string(), closed: z.boolean() }), clientMutationId: z.string() }) }) }).safeParse(await response.json())
+      if (result.success && result.data.data.closeIssue.issue.id === target.nodeId && result.data.data.closeIssue.issue.closed && result.data.data.closeIssue.clientMutationId === operationId) return { status: 'closed' }
+      return { status: 'unknown', message: 'github-close-receipt-unconfirmed' }
+    } catch { return { status: 'unknown', message: 'github-close-receipt-lost' } }
   }
   async list(repository: GitHubRepository, request: IssuePageRequest) {
     if (!validRepository(repository) || !Number.isSafeInteger(request.page) || request.page < 1 || request.page > 100_000 || !Number.isSafeInteger(request.perPage) || request.perPage < 1 || request.perPage > 100 || !['@me', '*'].includes(request.assignee) || !['open', 'closed', 'all'].includes(request.state)) throw new SourceError('github-invalid-scope', 'Invalid source query scope')

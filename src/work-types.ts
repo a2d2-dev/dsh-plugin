@@ -118,6 +118,7 @@ export type WorkCommand =
   | (Command & ExecutionRef & { type: 'task.continuation-material'; owner: string; epoch: number; content: ContinuationContent })
   | (Command & ExecutionRef & { type: 'task.control'; owner: string; epoch: number; action: 'progress' | 'wait' | 'pause' | 'resume'; text: string })
   | (Command & ExecutionRef & { type: 'task.input'; owner: string; epoch: number; text: string; kind: 'input' | 'result' })
+  | (Command & ExecutionRef & { type: 'task.completion-sync'; owner: string; epoch: number })
   | (Command & ExecutionRef & { type: 'task.reconcile'; owner: string; epoch: number })
   | (TaskChange & { type: 'task.start'; agentId: string; resource: ResourceRef; session?: SessionRef; agentPreset: string; model: { provider: string; model: string; reasoningEffort?: string }; permissionPreset: string })
 export type WorkQuery =

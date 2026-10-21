@@ -37,6 +37,8 @@ export interface IssuePageRequest { page: number; perPage: number; assignee: '@m
 export interface IssuePage { identity: GitHubIdentity; items: GitHubIssue[]; nextPage?: number; observedAt: string }
 export interface IssueDetail { identity: GitHubIdentity; issue: GitHubIssue }
 export interface GitHubSourcePort {
+  /** Host-only write capability. Targets come exclusively from accepted local bindings. */
+  close?(target: import('../work-completion/index.ts').CloseTarget, operationId: string): Promise<import('../work-completion/index.ts').CloseReceipt>
   list(repository: GitHubRepository, request: IssuePageRequest): Promise<IssuePage>
   detail(repository: GitHubRepository, number: number): Promise<IssueDetail>
   project?(project: GitHubProjectRef, request: ProjectPageRequest): Promise<GitHubProjectPage>

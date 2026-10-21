@@ -4,7 +4,6 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { WorkApplication } from '../src/work.ts'
 import type { WorkHost } from '../src/work.ts'
-import type { WorkExecutionHost } from '../src/work-execution/host.ts'
 import type { ContinuousWorkRule, NativeWorkMessage, WorkCompleted, WorkExecution, WorkResult } from '../src/work-types.ts'
 import type { GitHubIssue, GitHubSourcePort } from '../src/work-sources/types.ts'
 
@@ -24,6 +23,7 @@ class Host implements WorkHost {
   allowed = new Map<string, () => Promise<boolean>>()
   sessionsCreated = new Set<string>()
   statuses = new Map<string, 'running' | 'idle'>()
+  settlements = new Map<string, 'settled' | 'pending' | 'unknown'>()
   deliveries = new Map<string, 'delivered' | 'consumed'>()
   ensures: string[] = []
   sends: string[] = []
@@ -34,7 +34,10 @@ class Host implements WorkHost {
   failAdmission = false
   resources = async () => [{ ref: resource, title: 'Workspace' }]
   sessions = async () => []
-  execution: WorkExecutionHost = {
+  execution: NonNullable<WorkHost['execution']> = {
+    // An explicit deterministic host receipt, independent of runtime idle.
+    observation: async execution => ({ settlement: this.settlements.get(execution.id) ?? 'unknown', sessions: [], blockers: [], limitations: [] }),
+    maintain: async (execution, body) => { if (this.settlements.get(execution.id) !== 'settled') throw new Error('Related work is not settled'); return body() },
     connect: authorize => { this.authorize = authorize },
     choices: async () => choices,
     check: async () => { if (this.failAdmission) throw new Error('Catalog unavailable'); return choices },
@@ -45,6 +48,7 @@ class Host implements WorkHost {
       this.sessionsCreated.add(execution.session.sessionId)
       this.allowed.set(execution.session.sessionId, allowed)
       this.statuses.set(execution.session.sessionId, 'idle')
+      if (!this.settlements.has(execution.id)) this.settlements.set(execution.id, 'pending')
       if (this.failAfterCreation-- > 0) throw new Error('Created but receipt lost')
       return { runtimeId: 'host', cwd: '/workspace', agentPreset: 'agent', ...model, permissionPreset: 'safe', sandbox: 'workspace-write', approval: 'never' }
     },
@@ -57,7 +61,7 @@ class Host implements WorkHost {
       return this.deliveries.get(event.id)!
     },
   }
-  idle(execution: WorkExecution) { this.statuses.set(execution.session.sessionId, 'idle'); for (const event of execution.events) if (this.deliveries.has(event.id)) this.deliveries.set(event.id, 'consumed') }
+  idle(execution: WorkExecution) { this.settlements.set(execution.id, 'settled'); this.statuses.set(execution.session.sessionId, 'idle'); for (const event of execution.events) if (this.deliveries.has(event.id)) this.deliveries.set(event.id, 'consumed') }
 }
 function issue(number: number, assignees = ['alice'], labels = ['ready']): GitHubIssue {
   return { nodeId: `ISSUE_${number}`, number, title: `Issue ${number}`, url: `https://github.com/acme/repo/issues/${number}`, body: 'Implement the agreed work.', repository: { owner: 'acme', repository: 'repo' }, assignees, labels, state: 'open', updatedAt: '2026-01-01T00:00:00.000Z', observedAt: '2026-01-01T00:00:00.000Z' }
@@ -316,4 +320,15 @@ it('bounds failed safe settlement, keeps the slot fenced, and allows explicit re
   await h.app.reconcileControls()
   expect((await h.status()).items[0]!.state).toBe('completed')
   expect(h.host.sessionsCreated.size).toBe(2)
+})
+
+it.each(['missing', 'unknown'] as const)('retains an accepted slot when formal settlement is %s even at runtime idle', async mode => {
+  const h = await setup(); completed(await h.app.execute(h.configure, operator)); const first = await h.execution()
+  await reportDone(h.app, first); h.host.idle(first)
+  if (mode === 'missing') delete h.host.execution.observation
+  else h.host.settlements.set(first.id, 'unknown')
+  await h.app.reconcileControls()
+  expect((await h.status()).active).toEqual(first.ref)
+  expect(h.host.sessionsCreated.size).toBe(1)
+  expect(completed(await h.app.query({ type: 'task.detail', ref: first.ref }, operator)).task!.completion!.closeout).toMatchObject({ status: 'pending', error: expect.stringContaining(mode === 'missing' ? 'capability-unavailable' : 'unknown') })
 })

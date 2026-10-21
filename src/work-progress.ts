@@ -14,6 +14,7 @@ const requirement = z.object({ id: text, title: text, description: text,
   child: z.object({ projectId: z.string().uuid(), taskId: z.string().uuid() }).strict().optional(),
 }).strict()
 export const taskReportSchema = z.object({
+  closeExternal: z.boolean().optional(),
   specificationVersion: z.number().int().positive(), stage: workStageSchema, summary: text,
   next: z.string().max(20_000), blockers: z.array(text).max(100),
   criteria: z.array(criterionResult).max(1000), breakdown: z.array(requirement).max(1000).optional(),
@@ -23,6 +24,7 @@ export const taskProgressSchema = taskReportSchema.omit({ breakdown: true }).ext
 export type TaskProgress = z.infer<typeof taskProgressSchema>
 export type IssueProcessingState = 'not-started' | 'processing' | 'waiting' | 'paused' | 'blocked' | 'completed'
 export interface TaskProgressView {
+  completion?: WorkTask['completion']
   processingState?: IssueProcessingState
   processingReason?: string
   ref: TaskRef; title: string; parent?: TaskRef; children: TaskRef[]
@@ -53,6 +55,7 @@ export function applyTaskReport(state: WorkSnapshot, execution: WorkExecution, r
     }
   }
   if (report.stage === 'done') {
+    if (report.closeExternal && state.externalBindings.filter(item => sameRef(item.ref, execution.ref)).length !== 1) return fail('completion-binding-required', '外部关闭需要唯一已接受的 canonical binding')
     if (report.blockers.length || !task.specification.acceptance.length || task.specification.missing?.length
       || report.criteria.length !== task.specification.acceptance.length || report.criteria.some(item=>!item.passed)) return fail('acceptance-incomplete', '完成前必须通过当前规格的全部验收项并解决阻塞')
     if (blocks.some(item=>item.status !== 'done')) return fail('unfinished-breakdown', '仍有需求块未完成')
@@ -69,7 +72,7 @@ export function applyTaskReport(state: WorkSnapshot, execution: WorkExecution, r
   execution.progress = report.summary
   if (report.stage === 'done') {
     execution.control = {commandId,action:'wait',status:'accepted',reason:'任务已按当前规格验收完成'}
-    commitCompletion(state, task, execution, commandId)
+    commitCompletion(state, task, execution, commandId, report.closeExternal)
   }
   return {status:'completed',task,execution}
 }
@@ -124,6 +127,7 @@ export function taskProgressView(state: WorkSnapshot, ref: TaskRef, host?: Pick<
     processingState = execution ? 'processing' : 'not-started'
   }
   return {
+    ...(task.completion ? { completion: task.completion } : {}),
     processingState, ...(processingReason ? { processingReason } : {}),
     ref, title: task.title, ...(task.parent?{parent:task.parent}:{}), children:task.children,
     stage, summary:progress?.summary ?? execution?.progress ?? (execution?'已开始处理，尚未报告工作进展':'尚未开始处理'),
