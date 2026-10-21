@@ -460,7 +460,8 @@ export class WorkApplication {
           if (!latest || latest.owner !== task.completion!.owner || latest.epoch !== task.completion!.epoch) throw new Error('completion-authority-changed')
           const fresh = await host.observation!(latest, taskAt(current, execution.ref)!.sessions)
           if (fresh.settlement !== 'settled') { await save('pending', `host-settlement-${fresh.settlement}`); return }
-          await host.settle(latest)
+          // maintain owns the settled-and-flushed host barrier. Re-entering
+          // settle here would wait for the maintenance lock we already hold.
           await save('settled')
         })
       } catch (error) {

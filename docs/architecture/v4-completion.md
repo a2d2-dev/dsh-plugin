@@ -60,7 +60,7 @@ pnpm exec vitest run tests/work-progress.spec.ts
 
 `WorkApplication.reconcileCompletions()` 由既有 reconcileControls 生命周期调用，恢复 pending/unknown 外部操作和待收口操作；它不调用 ensure、deliver 或 wake。写入口 `task.completion-sync` 复用现有 operator 或真实当前 Session/agent 授权，并校验 executionId/owner/epoch。旧 task.reconcile 在已完成 Task 上路由到完成恢复，不再创建或驱动模型。
 
-收口复用 #138 的正式 host 接缝：`observation(execution).settlement === 'settled'` 后进入 `maintain(execution, body)`，维护边界内重新读取 owner/epoch 与 settlement，再 settle 和持久化 closeout.settled。缺 observation/maintain、pending、unknown 均保留具名 pending。宿主收口异常最多自动尝试三次，保留退避与 error，显式补收口才恢复；continuous 原有 recoveryBlocked 同步保留。完成的 continuous dispatch slot 也须等待此 settled，不能仅因 idle 释放。构造时 connectObservation 注册读取已持久关联会话的受信 scope，校验实际 execution/ref/owner/epoch/current Session；本分支声明与 B 结构兼容的最小 observation 输入；#138 合入真实 host 后才具备端到端收口能力，不能把当前旧 host 当成该证明。
+收口复用 #138 的正式 host 接缝：`observation(execution).settlement === 'settled'` 后进入 `maintain(execution, body)`，维护边界内重新读取 owner/epoch 与 settlement，再原子提交 closeout.settled。maintain 本身是相关执行者安全结算且日志 flush 的权威屏障；body 不嵌套调用 settle（后者会再次申请维护锁）。旧 settle 仅用于非维护中的 wait/pause 控制。缺 observation/maintain、pending、unknown 均保留具名 pending。宿主收口异常最多自动尝试三次，保留退避与 error，显式补收口才恢复；continuous 原有 recoveryBlocked 同步保留。完成的 continuous dispatch slot 也须等待此 settled，不能仅因 idle 释放。构造时 connectObservation 注册读取已持久关联会话的受信 scope，校验实际 execution/ref/owner/epoch/current Session；本分支声明与 B 结构兼容的最小 observation 输入；#138 合入真实 host 后才具备端到端收口能力，不能把当前旧 host 当成该证明。
 
 ### 补同步命令
 
