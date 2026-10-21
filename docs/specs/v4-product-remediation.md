@@ -52,6 +52,12 @@ Repo 的原 detail 不读取原生关系；仅受信 helper 请求 nativeChildre
 - `TMPDIR=/dev/shm/v4-pf-141 corepack pnpm@10.26.2 exec vitest run tests/work-source-freeze.spec.ts tests/project-discovery.spec.ts tests/client/v4-integrated-render.spec.ts`：3 文件 24/24、exit 0。涵盖已完父导子、已完子导父、父／子交接和接任后恢复、显式 local link 的 child guard、正常可变关系、幂等及原17项发现／层级合同。
 - agent-browser 使用专用 session `v4-pf-141`，打开本工作树 file 组件夹具，1280×1100 与 390×844 截图已读；完整窄屏截图显示来源原生子入口和具名冻结差异，viewport=390／document=375／warning=true。证据位于 `.local/v4-integrated/remediation-freeze-desktop.png`、`remediation-freeze-mobile-full.png`，页面明确“合成测试数据／非运行实例／未部署”。未开服务器，未将组件截图算实际实例验收。
 
+## 最终构建边界
+
+第一次完整 build 的 client 声明阶段发现结构保护导入了带 `node:crypto` 的 continuation 运行模块，exit 2；typecheck exit 0 不能掩盖该红。将既有 `continuationInFlight` 纯状态谓词移至 browser-safe state 模块并从原运行模块 re-export，结构 guard 共用同一规则；未增加 Node 类型或放宽客户端编译配置。
+
+该修正后 `corepack pnpm@10.26.2 build` exit 0；`typecheck` 独立 exit 0；定点 `tests/work-source-freeze.spec.ts tests/work-continuation.spec.ts` 2文件23/23、exit0，覆盖原17项真实接续、双代次决定保留、冷恢复旧段工具围栏及新结构冻结矩阵。构建仅替换已核对的本工作树 lib，没有复制到 profile／运行目录。
+
 ## 范围记账
 
 WorkApplication 的 possible Divergent Change 留作后续深模块整理线索，本票不拆大 class／运行器。已撤回的维护锁环不修。旧 #123／#129、Host、运行目录、18781／18782、真实模型与 GitHub 业务写均未纳入本次源码整改。

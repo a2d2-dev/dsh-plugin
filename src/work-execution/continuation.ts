@@ -1,3 +1,5 @@
+import { continuationInFlight } from './state.ts'
+export { continuationInFlight } from './state.ts'
 import { randomUUID } from 'node:crypto'
 import { redactText } from '../handoff.ts'
 import type { ContinuationOperation, WorkExecution, WorkTask } from '../work-types.ts'
@@ -6,7 +8,7 @@ export const MANAGED_WORK_INSTRUCTIONS = 'You are the current coordinator of an 
 
 /** Reserve every identity in the authority transaction, before any host effect. */
 export function reserveContinuation(execution: WorkExecution, task: WorkTask, commandId: string, automatic: boolean): void {
-  if (execution.continuation && execution.continuation.phase !== 'delivered') return
+  if (continuationInFlight(execution)) return
   if (execution.continuation) (execution.continuationHistory ??= []).push(execution.continuation)
   const operationId = randomUUID()
   execution.continuation = { operationId, commandId, automatic, phase: 'reserved', source: { ...execution.session },
@@ -24,4 +26,3 @@ export function successorMessage(operation: ContinuationOperation, policyInstruc
   const m = operation.material
   return redactText(`${policyInstructions}\n\n${MANAGED_WORK_INSTRUCTIONS}\n\nContinue the same Task from its saved source material. Completion still requires accepted evidence.\n\nTask: ${operation.title}\nGoal: ${operation.goal}\nSpecification: ${operation.specification.text}\nAcceptance:\n${operation.specification.acceptance.join('\n')}\n\nOriginal material:\n${m.body}\n\nDecisions:\n${m.decisions}\n\nEvidence:\n${m.evidence}\n\nUnfinished:\n${m.unfinished}\n\nNext:\n${m.next}\n\nLocal read-only history: task.history ${JSON.stringify(operation.history)}\nSource epoch: ${operation.sourceEpoch}`).text
 }
-export function continuationInFlight(execution: WorkExecution): boolean { return !!execution.continuation && execution.continuation.phase !== 'delivered' }

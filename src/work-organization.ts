@@ -1,4 +1,4 @@
-import { continuationInFlight } from './work-execution/continuation.ts'
+import { continuationInFlight } from './work-execution/state.ts'
 import { isTaskCompleted } from './work-completion/index.ts'
 import { z } from 'zod'
 import type { WorkSnapshot } from './work-schema.ts'
