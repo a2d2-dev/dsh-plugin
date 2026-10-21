@@ -23,6 +23,7 @@ export function projectQuery(type: GitHubProjectRef['type']): string {
           ... on ProjectV2ItemFieldIterationValue { title field { ... on ProjectV2FieldCommon { id name } } }
           ... on ProjectV2ItemFieldTextValue { text field { ... on ProjectV2FieldCommon { id name } } }
           ... on ProjectV2ItemFieldNumberValue { number field { ... on ProjectV2FieldCommon { id name } } }
+          ... on ProjectV2ItemFieldMilestoneValue { milestone { title } field { ... on ProjectV2FieldCommon { id name } } }
           ... on ProjectV2ItemFieldDateValue { date field { ... on ProjectV2FieldCommon { id name } } }
         } }
         content { __typename
@@ -32,7 +33,7 @@ export function projectQuery(type: GitHubProjectRef['type']): string {
             parent { ${referenceFields} }
             subIssues(first:50) { totalCount pageInfo { hasNextPage } nodes { ${referenceFields} } }
           }
-          ... on PullRequest { title url }
+          ... on PullRequest { title url state isDraft repository { name owner { login } } assignees(first:100) { nodes { login } } labels(first:100) { nodes { name } } }
           ... on DraftIssue { title }
         }
       } }
@@ -80,8 +81,8 @@ const issue = refSchema.extend({ __typename: z.literal('Issue'), body: z.string(
   assignees: z.object({ nodes: z.array(z.object({ login: z.string() })) }), labels: z.object({ nodes: z.array(z.object({ name: z.string() })) }),
   parent: refSchema.nullable(), subIssues: z.object({ totalCount: z.number().int().nonnegative(), pageInfo: z.object({ hasNextPage: z.boolean() }), nodes: z.array(refSchema) }),
 })
-const content = z.discriminatedUnion('__typename', [issue, z.object({ __typename: z.literal('PullRequest'), title: z.string(), url: z.string() }), z.object({ __typename: z.literal('DraftIssue'), title: z.string() })])
-const rawField = z.object({ __typename: z.string(), field: z.object({ id: z.string(), name: z.string() }).optional(), name: z.string().nullable().optional(), title: z.string().nullable().optional(), text: z.string().nullable().optional(), number: z.number().nullable().optional(), date: z.string().nullable().optional() })
+const content = z.discriminatedUnion('__typename', [issue, z.object({ __typename: z.literal('PullRequest'), title: z.string(), url: z.string(), state: z.enum(['OPEN','CLOSED','MERGED']).optional(), isDraft: z.boolean().optional(), repository: z.object({ name: z.string(), owner: z.object({ login: z.string() }) }).optional(), assignees: z.object({ nodes: z.array(z.object({ login: z.string() })) }).optional(), labels: z.object({ nodes: z.array(z.object({ name: z.string() })) }).optional() }), z.object({ __typename: z.literal('DraftIssue'), title: z.string() })])
+const rawField = z.object({ __typename: z.string(), milestone: z.object({ title: z.string() }).nullable().optional(), field: z.object({ id: z.string(), name: z.string() }).optional(), name: z.string().nullable().optional(), title: z.string().nullable().optional(), text: z.string().nullable().optional(), number: z.number().nullable().optional(), date: z.string().nullable().optional() })
 const rawProject = z.object({ id: z.string().min(1), title: z.string(), url: z.string(), closed: z.boolean(), items: z.object({
   pageInfo: z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable() }),
   nodes: z.array(z.object({ id: z.string().min(1), type: z.string(), isArchived: z.boolean(), content: content.nullable(), fieldValues: z.object({ pageInfo: z.object({ hasNextPage: z.boolean() }), nodes: z.array(rawField) }) })),
@@ -97,7 +98,7 @@ function field(value: z.infer<typeof rawField>): GitHubProjectField[] {
   if (!value.field) return []
   const mapping = {
     ProjectV2ItemFieldSingleSelectValue: ['single-select', value.name], ProjectV2ItemFieldIterationValue: ['iteration', value.title],
-    ProjectV2ItemFieldTextValue: ['text', value.text], ProjectV2ItemFieldNumberValue: ['number', value.number], ProjectV2ItemFieldDateValue: ['date', value.date],
+    ProjectV2ItemFieldTextValue: ['text', value.text], ProjectV2ItemFieldNumberValue: ['number', value.number], ProjectV2ItemFieldDateValue: ['date', value.date], ProjectV2ItemFieldMilestoneValue: ['text', value.milestone?.title],
   } as const
   const match = mapping[value.__typename as keyof typeof mapping]
   return match && match[1] !== null && match[1] !== undefined ? [{ id: value.field.id, name: value.field.name, type: match[0], value: String(match[1]) }] : []
@@ -132,7 +133,7 @@ export async function readGitHubProject(project: GitHubProjectRef, request: Proj
         subIssues: { items: content.subIssues.nodes.map(reference), totalCount: content.subIssues.totalCount, hasNextPage: content.subIssues.pageInfo.hasNextPage } })
       return { ...shared, kind: 'issue' as const, issueNodeId: content.id, title: content.title, url: content.url }
     }
-    return content.__typename === 'PullRequest' ? { ...shared, kind: 'pull-request' as const, title: content.title, url: content.url } : { ...shared, kind: 'draft' as const, title: content.title }
+    return content.__typename === 'PullRequest' ? { ...shared, kind: 'pull-request' as const, title: content.title, url: content.url, ...(content.repository && content.state && content.assignees && content.labels ? { facts: { ...(content.isDraft===undefined?{}:{draft:content.isDraft}), repository: { owner: content.repository.owner.login, repository: content.repository.name }, state: content.state.toLowerCase(), assignees: content.assignees.nodes.map(item=>item.login), labels: content.labels.nodes.map(item=>item.name) } } : {}) } : { ...shared, kind: 'draft' as const, title: content.title }
   })
   const result = projectPageSchema.safeParse({ identity: { nodeId: data.viewer.id, login: data.viewer.login, name: data.viewer.name }, project: { nodeId: value.id, title: value.title, url: value.url, closed: value.closed }, items, issues, observedAt, ...(value.items.pageInfo.hasNextPage ? { nextCursor: value.items.pageInfo.endCursor! } : {}) })
   if (!result.success) throw new SourceError('github-invalid-response', 'GitHub returned invalid Project observations')

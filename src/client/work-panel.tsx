@@ -1,7 +1,9 @@
+import { SourceConnect } from './source-connect.tsx'
+import { SourceDirectory, SourceTabs } from './source-directory.tsx'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import type { DetailTab, WorkPanelController } from './work-panel-controller.ts'
-import type { AssociatedWork, HostResource, WorkExecution, WorkTask, WorkExecutionOptions, ContinuousWorkRule } from '../work-types.ts'
+import type { AssociatedWork, WorkExecution, WorkTask, WorkExecutionOptions, ContinuousWorkRule } from '../work-types.ts'
 import type { GitHubIssue } from '../work-sources/types.ts'
 import { message } from './work-panel-controller.ts'
 import styles from './work-panel.module.css'
@@ -28,18 +30,15 @@ export function WorkPanel({ controller }: { controller: WorkPanelController }) {
   const binding=detail?.bindings?.[0]
   const issue=task ? (binding?.lastObserved ?? (state.source.bindings.some(item=>item.ref.taskId===task.id&&item.ref.projectId===task.projectId)?state.source.issue:null)) : state.source.issue
   const hasDetail=Boolean(task||issue)
-  const sourceTitle=source?.projectSnapshot?.project.title??project?.name
+  const sourceTitle=source?.title??source?.projectSnapshot?.project.title??(source?.repository?`${source.repository.owner}/${source.repository.repository}`:project?.name)
   return <main ref={setSurface} className={styles.panel} aria-label="A²D² 控制面板">
     <header className={styles.header}><div><p className={styles.eyebrow}>A²D² · GitHub</p><h1>{hasDetail?'Issue 工作台':sourceTitle??'连接 GitHub Project'}</h1></div><button onClick={()=>controller.close()}>关闭面板</button></header>
     {state.error&&<p className={styles.failure} role="alert">{state.error} <button onClick={()=>void (task?controller.refreshTask():controller.load())}>重新读取</button></p>}
     {state.observationError&&<p role="status">状态更新暂不可用，保留上次内容：{state.observationError}</p>}
     {state.startup.error&&<ErrorText error={state.startup.error}/>}
     {state.startup.busy&&<p role="status">正在准备执行，请稍候…</p>}
-    <div className={styles.toolbar}>
-      {projects.length>0&&<label>GitHub Project <select aria-label="GitHub Project" value={state.projectId??''} onChange={event=>{setConnecting(false);void controller.selectProject(event.target.value)}}>{!projects.some(item=>item.id===state.projectId)&&<option value="">选择 Project</option>}{projects.map(item=><option key={item.id} value={item.id}>{state.projectSources[item.id]?.find(source=>source.githubProject)?.projectSnapshot?.project.title??item.name}</option>)}</select></label>}
-      {projects.length>0&&<button onClick={()=>setConnecting(!connecting)}>{connecting?'取消连接':'连接 GitHub Project'}</button>}
-    </div>
-    {(connecting||(!projects.length&&!hasDetail&&!state.loading))&&<Section title="选择 GitHub Project"><p>连接你的 Project，浏览分配给你的 Issues，并在需要时开启持续处理。</p><GitHubProjectForm controller={controller} onSaved={()=>setConnecting(false)}/></Section>}
+    <SourceTabs controller={controller} onAdd={()=>setConnecting(!connecting)}/>
+    {(connecting||(!projects.length&&!hasDetail&&!state.loading))&&<SourceConnect controller={controller} onSaved={()=>setConnecting(false)}/>}
     {state.loading&&<p role="status">正在读取 Issue 与进展…</p>}
     {hasDetail?<>
       <header className={styles.issueHeader}><button className={styles.link} onClick={()=>controller.back()}>← {controller.canReturnToRequirement()?'返回上级要求':'返回 Issue 列表'}</button><p className={styles.eyebrow}>{issue?`${issue.repository.owner}/${issue.repository.repository} · #${issue.number}`:sourceTitle}</p><h1>{issue?`#${issue.number} ${issue.title}`:task?.title}</h1><div className={styles.toolbar}>{issue&&<GitHubLink url={issue.url}/>}<span className={styles.badge}>{processingLabel(detail?.progress)}</span><button disabled={state.loading||state.source.loading} onClick={()=>void (task?controller.refreshTask():issue&&controller.openIssue(issue.number,Boolean(source?.enabled),issue.nodeId))}>刷新详情</button></div></header>
@@ -57,9 +56,8 @@ export function WorkPanel({ controller }: { controller: WorkPanelController }) {
       </div>
       <ErrorText error={state.source.error??''}/>
     </>:state.projectId&&<>
-      {source?.githubProject&&<div className={styles.sourceSummary}><strong>{sourceTitle}</strong><span>{source.githubProject.owner} / Project #{source.githubProject.number} · {source.githubProject.type==='org'?'组织':'个人'}</span><span>最近确认账号：{source.identity?.login??'尚未确认'}{source.identity?.name?` / ${source.identity.name}`:''}</span></div>}
-      {source&&<ContinuousProcessing key={`${state.projectId}/${source.id}`} controller={controller}/>}
-      <IssueSourcePanel controller={controller}/>
+      {source?.githubProject&&(state.source.tab==='issues'||state.source.tab==='project')&&<ContinuousProcessing key={`${state.projectId}/${source.id}`} controller={controller}/>}
+      <SourceDirectory controller={controller} issues={<IssueSourcePanel key={source?.id} controller={controller}/>}/>
       {project&&<Section title="自动接续"><ContinuationSettings key={`${project.id}/${project.continuationPolicy?.version??0}`} controller={controller} policy={project.continuationPolicy}/></Section>}
     </>}
   </main>
@@ -94,28 +92,15 @@ function Requirements({controller}:{controller:WorkPanelController}) {
     <ul>{task?.children.filter(ref=>!task.breakdown.some(block=>block.child?.taskId===ref.taskId&&block.child.projectId===ref.projectId)).map(ref=>{const child=resolve(ref);return child?<RequirementBranch key={`${ref.projectId}/${ref.taskId}`} controller={controller} task={child}/>:<li key={`${ref.projectId}/${ref.taskId}`}><button className={styles.link} onClick={()=>void controller.openTask(ref)}>查看子需求详情</button></li>})}</ul>
   </Section>
 }
-function GitHubProjectForm({controller,onSaved}:{controller:WorkPanelController;onSaved:()=>void}) {
-  const [owner,setOwner]=useState(''),[type,setType]=useState<'org'|'user'>('org'),[number,setNumber]=useState(''),[resources,setResources]=useState<HostResource[]>([]),[resource,setResource]=useState('')
-  const [error,setError]=useState(''),[busy,setBusy]=useState(false)
-  useEffect(()=>{const abort=new AbortController();void controller.client.query({type:'resources.list'},abort.signal).then(result=>{if(!abort.signal.aborted)setResources(result.resources??[])},error=>{if(!abort.signal.aborted)setError(message(error))});return()=>abort.abort()},[controller])
-  async function connect(event:FormEvent) {
-    event.preventDefault();if(busy)return
-    setBusy(true);setError('')
-    try{await controller.connectProject({owner,type,number:Number(number)},resources.find((_,index)=>String(index)===resource)?.ref);onSaved()}catch(error){setError(message(error))}finally{setBusy(false)}
-  }
-  return <form className={styles.form} onSubmit={event=>void connect(event)}>
-    <div className={styles.formRow}><label>GitHub owner<input required disabled={busy} value={owner} onChange={event=>setOwner(event.target.value)} placeholder="组织或用户名"/></label><label>账号类型<select disabled={busy} value={type} onChange={event=>setType(event.target.value as 'org'|'user')}><option value="org">组织</option><option value="user">个人</option></select></label><label>Project 编号<input required disabled={busy} type="number" min="1" step="1" value={number} onChange={event=>setNumber(event.target.value)}/></label></div>
-    <label>执行目录（可选）<select disabled={busy} value={resource} onChange={event=>setResource(event.target.value)}><option value="">开始处理时选择</option>{resources.map((item,index)=><option key={`${item.ref.runtimeId}/${item.ref.workspaceId}`} value={index} disabled={Boolean(item.owner&&!controller.getSnapshot().projectSources[item.owner.projectId]?.some(source=>source.githubProject?.owner.toLowerCase()===owner.trim().toLowerCase()&&source.githubProject?.type===type&&source.githubProject?.number===Number(number)))}>{item.title}{item.owner?` · ${item.owner.projectName}`:''}</option>)}</select></label>
-    <p>使用此 DSH 服务已连接的 GitHub 账号。连接后可先浏览 Issues。</p><ErrorText error={error}/><button className={styles.primary} disabled={busy} type="submit">{busy?'正在连接…':'连接并查看 Issues'}</button>
-  </form>
-}
 function IssueSourcePanel({controller}:{controller:WorkPanelController}) {
   const state=useSyncExternalStore(controller.subscribe,controller.getSnapshot,controller.getSnapshot), sourceState=state.source
   const {listing,loading,error,cached}=sourceState, source=sourceState.sources.find(item=>item.id===sourceState.sourceId)
-  const rows=controller.visibleIssues(),sources=sourceState.sources.filter(item=>item.githubProject)
+  const {search:queryDraft,labels:labelDraft}=controller.issueQueryDraft()
+  const rows=controller.visibleIssues(),sources=sourceState.sources
   return <Section title="Issues">
-    {sources.length>1&&<label>Project 来源<select value={sourceState.sourceId??''} onChange={event=>void controller.selectSource(event.target.value)}>{sources.map(item=><option key={item.id} value={item.id}>{item.projectSnapshot?.project.title??`${item.githubProject?.owner} / Project #${item.githubProject?.number}`}</option>)}</select></label>}
+    {sources.length>1&&<label>来源<select value={sourceState.sourceId??''} onChange={event=>void controller.selectSource(event.target.value)}>{sources.map(item=><option key={item.id} value={item.id}>{item.title??item.projectSnapshot?.project.title??(item.repository?`${item.repository.owner}/${item.repository.repository}`:`${item.githubProject?.owner} / Project #${item.githubProject?.number}`)}</option>)}</select></label>}
     {source&&<>
+      <form className={styles.toolbar} onSubmit={event=>{event.preventDefault();void controller.browseIssues({search:queryDraft,labels:labelDraft.split(',').map(label=>label.trim()).filter(Boolean),page:1},true)}}><label>搜索当前来源<input aria-label="搜索来源 Issues" value={queryDraft} onChange={event=>controller.setIssueQueryDraft({search:event.target.value})} placeholder="标题、正文或 #编号"/></label><label>必须包含的标签<input aria-label="Issue 标签" value={labelDraft} onChange={event=>controller.setIssueQueryDraft({labels:event.target.value})} placeholder="逗号分隔"/></label><button type="submit" disabled={loading||!source.enabled}>应用搜索与标签</button></form>
       <div className={styles.toolbar}><label>负责人 <select aria-label="Issue 负责人" value={sourceState.assignee} onChange={event=>void controller.browseIssues({assignee:event.target.value as '@me'|'*',page:1},true)} disabled={loading||!source.enabled}><option value="@me">分配给我</option><option value="*">全部负责人</option></select></label><label>GitHub 状态 <select aria-label="Issue 远端状态" value={sourceState.state} onChange={event=>void controller.browseIssues({state:event.target.value as 'open'|'closed'|'all',page:1},true)} disabled={loading||!source.enabled}><option value="open">Open</option><option value="closed">Closed</option><option value="all">全部</option></select></label><input aria-label="搜索当前页 Issues" placeholder="搜索当前页标题、编号、要求或标签" value={state.search} onChange={event=>controller.setSearch(event.target.value)}/><button disabled={loading||!source.enabled} onClick={()=>void controller.browseIssues({},true)}>刷新 Issues</button></div>
       <nav className={styles.tabs} aria-label="Issue 处理状态">{issueFilters.map(([id,label])=><button key={id} aria-pressed={state.issueFilter===id} onClick={()=>controller.setIssueFilter(id)}>{label}</button>)}</nav>
       <p>{cached?'缓存 / 最后已知列表':'本次读取列表'} · 第 {sourceState.page} 页 · 搜索与处理状态筛选仅作用于当前已载入页{listing?`（${rows.length} / ${listing.items.length} 项） · 观察时间：${listing.observedAt}`:''}</p>
@@ -124,7 +109,7 @@ function IssueSourcePanel({controller}:{controller:WorkPanelController}) {
       {!listing&&!loading&&<p>此筛选页尚无可读缓存，请刷新 Issues。读取失败不表示列表为空。</p>}
       <details><summary>来源状态与缓存</summary><p>最近确认账号：{source.identity?.login??'尚未确认'} · {source.discovery?.lastSuccessAt?`最近同步：${source.discovery.lastSuccessAt}`:'尚无同步时间'}</p>{source.lastError?.retryAt&&<p>可重试时间：{source.lastError.retryAt}</p>}<div className={styles.toolbar}><button disabled={loading} onClick={()=>void controller.browseIssues({},false)}>读取缓存列表</button><button disabled={loading} onClick={()=>void controller.setSourceEnabled(!source.enabled)}>{source.enabled?'停用来源':'启用来源'}</button></div></details>
     </>}
-    {loading&&<p role="status">正在读取 Issues…</p>}<ErrorText error={error??''}/>{!source&&!loading&&!error&&<p>选择 GitHub Project 以读取 Issues。</p>}
+    {loading&&<p role="status">正在读取 Issues…</p>}<ErrorText error={error??''}/>{!source&&!loading&&!error&&<p>选择 Project 或仓库来源以读取 Issues。</p>}
   </Section>
 }
 function ContinuousProcessing({controller}:{controller:WorkPanelController}) {

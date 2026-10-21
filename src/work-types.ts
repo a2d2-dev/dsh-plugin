@@ -1,5 +1,5 @@
 import type { TaskProgress, TaskProgressView, TaskReport, WorkStage } from './work-progress.ts'
-import type { ExternalBinding, GitHubIssue, GitHubIssueReference, IssuePage, WorkSource, SourceCandidate } from './work-sources/types.ts'
+import type { ExternalBinding, GitHubIssue, GitHubIssueReference, IssuePage, WorkSource, SourceCandidate, SourceCatalog } from './work-sources/types.ts'
 /** Browser-safe contract for the local work application. No host/runtime imports. */
 export interface TaskRef { projectId: string; taskId: string }
 export interface ResourceRef { runtimeId: string; workspaceId: string }
@@ -119,11 +119,12 @@ export type WorkCommand =
   | (Command & ExecutionRef & { type: 'task.reconcile'; owner: string; epoch: number })
   | (TaskChange & { type: 'task.start'; agentId: string; resource: ResourceRef; session?: SessionRef; agentPreset: string; model: { provider: string; model: string; reasoningEffort?: string }; permissionPreset: string })
 export type WorkQuery =
+  | { type: 'source.catalog'; projectId: string; sourceId: string; refresh?: boolean }
   | { type: 'source.identify'; url: string }
   | { type: 'source.execution-options'; projectId: string; sourceId: string }
   | { type: 'continuous.status'; projectId: string; sourceId: string }
   | { type: 'source.list'; projectId: string }
-  | { type: 'source.issues'; projectId: string; sourceId: string; page: number; perPage: number; assignee: '@me' | '*'; state: 'open' | 'closed' | 'all'; refresh?: boolean }
+  | { type: 'source.issues'; projectId: string; sourceId: string; page: number; perPage: number; assignee: '@me' | '*'; state: 'open' | 'closed' | 'all'; labels?: string[]; search?: string; refresh?: boolean }
   | { type: 'source.issue'; projectId: string; sourceId: string; number: number; nodeId?: string; refresh?: boolean }
   | { type: 'work.capabilities' }
   | { type: 'projects.list' }
@@ -140,6 +141,7 @@ export interface AssociatedWork { ref: TaskRef; title: string; projectName: stri
 /** Completed fields correspond to command/query; task.detail includes related children and parent. */
 export interface SourceResultFields {
   ref?: TaskRef
+  catalog?: SourceCatalog
   candidate?: SourceCandidate
   source?: WorkSource; sources?: WorkSource[]; page?: IssuePage; issue?: GitHubIssue
   binding?: ExternalBinding; bindings?: ExternalBinding[]

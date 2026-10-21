@@ -1,3 +1,4 @@
+import { readSourceCatalog } from './catalog.ts'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { z } from 'zod'
@@ -29,6 +30,7 @@ export class GitHubSource implements GitHubSourcePort {
   private readonly fetcher: typeof globalThis.fetch
   private readonly timeoutMs: number
   constructor(options: Options = {}) { this.options = options; this.token = options.credential ?? credential; this.fetcher = options.fetch ?? globalThis.fetch; this.timeoutMs = options.timeoutMs ?? 15_000 }
+  catalog(source: { repository?: GitHubRepository; githubProject?: GitHubProjectRef }) { return readSourceCatalog(source) }
   async identify(url: string) {
     const scope = parseSourceURL(url)
     if (scope.kind === 'project') {
@@ -82,6 +84,20 @@ export class GitHubSource implements GitHubSourcePort {
     const token = await this.token(), identity = await this.identity(token)
     const parameters = new URLSearchParams({ state: request.state, page: String(request.page), per_page: String(request.perPage), sort: 'updated', direction: 'desc' })
     if (request.assignee === '@me') parameters.set('assignee', identity.login)
+    if (request.labels?.length) parameters.set('labels', request.labels.join(','))
+    if (request.search?.trim()) {
+      const matches: GitHubIssue[] = [], search = request.search.trim().toLowerCase()
+      parameters.set('per_page', '100')
+      for (let page = 1; page <= 200; page++) {
+        parameters.set('page', String(page))
+        const raw = await this.get(`/repos/${repository.owner}/${repository.repository}/issues?${parameters}`, token)
+        if (!Array.isArray(raw)) throw new SourceError('github-invalid-response', 'GitHub returned an invalid Issue page')
+        matches.push(...raw.filter(item => !(item && typeof item === 'object' && 'pull_request' in item)).map(item => this.issue(item)).filter(issue => `${issue.title} ${issue.body ?? ''} #${issue.number}`.toLowerCase().includes(search)))
+        const end = request.page * request.perPage
+        if (matches.length > end || raw.length < 100) return { identity, items: matches.slice(end - request.perPage, end), ...(matches.length > end ? { nextPage: request.page + 1 } : {}), observedAt: new Date().toISOString() }
+        if (page === 200) throw new SourceError('github-search-incomplete', '搜索超过本次 20000 条扫描上限，请收窄状态、负责人或标签；未将部分观察冒充完整结果')
+      }
+    }
     const raw = await this.get(`/repos/${repository.owner}/${repository.repository}/issues?${parameters}`, token)
     if (!Array.isArray(raw)) throw new SourceError('github-invalid-response', 'GitHub returned an invalid Issue page')
     const items = raw.filter(item => !(item && typeof item === 'object' && 'pull_request' in item)).map(item => this.issue(item))

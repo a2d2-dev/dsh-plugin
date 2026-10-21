@@ -133,7 +133,7 @@ export function applySourceCommand(state: WorkSnapshot, command: SourceCommand):
   if (hierarchyError) return hierarchyError
   return { status: 'completed', task, binding, ref: binding.ref }
 }
-function pageKey(query: SourceRead) { return query.type === 'source.issue' ? `issue:${query.nodeId ?? query.number}` : JSON.stringify([query.page, query.perPage, query.assignee, query.state]) }
+function pageKey(query: SourceRead) { return query.type === 'source.issue' ? `issue:${query.nodeId ?? query.number}` : JSON.stringify([query.page, query.perPage, query.assignee, query.state, ...(query.labels?.length || query.search?.trim() ? [query.labels ?? [], query.search?.trim() ?? ''] : [])]) }
 export function sourceResult(state: WorkSnapshot, query: SourceRead): WorkResult {
   const source = sourceAt(state, query.projectId, query.sourceId)
   if (!source) return fail('unknown-source', 'Source does not belong to this project')
@@ -150,7 +150,9 @@ export function sourceResult(state: WorkSnapshot, query: SourceRead): WorkResult
     const ids = [...new Set(snapshot.items.filter(item => item.kind === 'issue' && !item.archived).map(item => item.issueNodeId))]
     const issues = ids.map(id => id ? byNode.get(id) : undefined).filter((issue): issue is GitHubIssue => !!issue)
       .filter(issue => (query.state === 'all' || query.state === issue.state)
-      && (query.assignee === '*' || issue.assignees.some(login => login.toLowerCase() === snapshot.identity.login.toLowerCase())))
+      && (query.assignee === '*' || issue.assignees.some(login => login.toLowerCase() === snapshot.identity.login.toLowerCase()))
+      && (query.labels ?? []).every(label => issue.labels.some(value => value.toLowerCase() === label.toLowerCase()))
+      && (!query.search?.trim() || `${issue.title} ${issue.body ?? ''} #${issue.number}`.toLowerCase().includes(query.search.trim().toLowerCase())))
     const start = (query.page - 1) * query.perPage
     return { status: 'completed', source, page: { identity: snapshot.identity, observedAt: snapshot.observedAt, items: issues.slice(start, start + query.perPage), ...(start + query.perPage < issues.length ? { nextPage: query.page + 1 } : {}) } }
   }
