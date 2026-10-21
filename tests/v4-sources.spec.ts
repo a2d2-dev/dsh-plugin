@@ -47,9 +47,10 @@ it.each(['org','user'] as const)('preserves %s Project view and slice entry URLs
 it('identifies a Repo before confirmation and deduplicates canonical identity without starting work', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'v4-source-'))
   const reads: string[] = []
+  let repositoryName = 'dsh-plugin'
   const adapter = new GitHubSource({ credential: async () => 'test', fetch: async input => {
     reads.push(String(input))
-    return Response.json(String(input).endsWith('/user') ? { login: 'viewer', node_id: 'U1', name: null } : { node_id: 'R1', name: 'dsh-plugin', full_name: 'a2d2-dev/dsh-plugin', html_url: 'https://github.com/a2d2-dev/dsh-plugin', owner: { login: 'a2d2-dev' } })
+    return Response.json(String(input).endsWith('/user') ? { login: 'viewer', node_id: 'U1', name: null } : { node_id: 'R1', name: repositoryName, full_name: `a2d2-dev/${repositoryName}`, html_url: `https://github.com/a2d2-dev/${repositoryName}`, owner: { login: 'a2d2-dev' } })
   } })
   const app = new WorkApplication(directory, { resources: async () => [], sessions: async () => [] }, adapter)
   const actor = { operator: true }
@@ -61,6 +62,8 @@ it('identifies a Repo before confirmation and deduplicates canonical identity wi
     if (first.status !== 'completed') throw Error(first.error.message)
     expect(await app.execute({ type: 'source.connect', commandId: 'repo-again', url: 'https://github.com/a2d2-dev/dsh-plugin' }, actor)).toMatchObject({ status: 'completed', source: { id: first.source!.id }, project: { id: first.project!.id } })
     expect(await app.query({ type: 'source.identify', url: 'https://github.com.evil.test/a/b' }, actor)).toMatchObject({ status: 'failed' })
+    repositoryName = 'renamed-plugin'
+    expect(await app.execute({ type: 'source.connect', commandId: 'renamed', url: 'https://github.com/a2d2-dev/renamed-plugin' }, actor)).toMatchObject({ status: 'completed', source: { id: first.source!.id, version: 2, repository: { owner: 'a2d2-dev', repository: 'renamed-plugin' } } })
     expect(reads.every(url => url.startsWith('https://api.github.com/'))).toBe(true)
   } finally {
     if (!directory.startsWith(join(tmpdir(), 'v4-source-'))) throw Error('Unsafe cleanup')

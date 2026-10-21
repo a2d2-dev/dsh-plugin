@@ -692,6 +692,11 @@ export class WorkApplication {
       const existing = state.sources.find(source => candidate?.nodeId && source.nodeId === candidate.nodeId || (target ? source.githubProject?.type === target.type && source.githubProject.number === target.number && source.githubProject.owner.toLowerCase() === target.owner.toLowerCase() : source.repository?.owner.toLowerCase() === repository!.owner.toLowerCase() && source.repository.repository.toLowerCase() === repository!.repository.toLowerCase()))
       const remember = (source: import('./work-sources/types.ts').WorkSource) => {
         if (!candidate) return
+        const scopeChanged = candidate.repository ? source.repository?.owner.toLowerCase() !== candidate.repository.owner.toLowerCase() || source.repository.repository.toLowerCase() !== candidate.repository.repository.toLowerCase() : candidate.githubProject ? source.githubProject?.owner.toLowerCase() !== candidate.githubProject.owner.toLowerCase() || source.githubProject.type !== candidate.githubProject.type || source.githubProject.number !== candidate.githubProject.number : false
+        if (scopeChanged) {
+          source.repository = candidate.repository; source.githubProject = candidate.githubProject; source.version++
+          if (source.discovery) { delete source.discovery.checkpoint; delete source.discovery.inFlight; source.discovery.state = 'idle'; source.discovery.nextAttemptAt = new Date().toISOString() }
+        }
         source.title = candidate.title; source.nodeId = candidate.nodeId; source.identity = candidate.identity
         source.entryUrls = [...new Set([...(source.entryUrls ?? []), candidate.entryUrl])]
       }

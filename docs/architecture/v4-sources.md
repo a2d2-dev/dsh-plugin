@@ -17,7 +17,7 @@
 
 ### 概要设计
 
-`source.identify` 解析可信 URL 并通过宿主凭据读取真实 GitHub 身份，不写本地工作。`source.connect` 接受 URL，重新识别后在事务中按真实 nodeId／规范范围复用来源。既有手动 Project 合同继续兼容。来源保存可选 title、nodeId、entryUrls；原始 view／slice 入口不作为新的来源身份。
+`source.identify` 解析可信 URL 并通过宿主凭据读取真实 GitHub 身份，不写本地工作。`source.connect` 接受 URL，重新识别后在事务中按真实 nodeId／规范范围复用来源。既有手动 Project 合同继续兼容。来源在确认的新链接返回同一 nodeId 而规范范围变更时更新 scope、递增 version，并使旧读取失效；来源与 canonical Task 不重建。来源保存可选 title、nodeId、entryUrls；原始 view／slice 入口不作为新的来源身份。
 
 ### 架构设计
 

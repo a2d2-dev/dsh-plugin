@@ -30,7 +30,7 @@ export function WorkPanel({ controller }: { controller: WorkPanelController }) {
   const binding=detail?.bindings?.[0]
   const issue=task ? (binding?.lastObserved ?? (state.source.bindings.some(item=>item.ref.taskId===task.id&&item.ref.projectId===task.projectId)?state.source.issue:null)) : state.source.issue
   const hasDetail=Boolean(task||issue)
-  const sourceTitle=source?.projectSnapshot?.project.title??project?.name
+  const sourceTitle=source?.title??source?.projectSnapshot?.project.title??(source?.repository?`${source.repository.owner}/${source.repository.repository}`:project?.name)
   return <main ref={setSurface} className={styles.panel} aria-label="A²D² 控制面板">
     <header className={styles.header}><div><p className={styles.eyebrow}>A²D² · GitHub</p><h1>{hasDetail?'Issue 工作台':sourceTitle??'连接 GitHub Project'}</h1></div><button onClick={()=>controller.close()}>关闭面板</button></header>
     {state.error&&<p className={styles.failure} role="alert">{state.error} <button onClick={()=>void (task?controller.refreshTask():controller.load())}>重新读取</button></p>}
