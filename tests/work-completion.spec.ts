@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from 'vitest'
-import { mkdtemp, realpath, rm } from 'node:fs/promises'
+import { mkdtemp, realpath, readFile, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, dirname, basename } from 'node:path'
 import { WorkApplication, type WorkHost } from '../src/work.ts'
@@ -101,4 +101,38 @@ it('keeps closeout pending for unknown job settlement and settles only inside th
  expect(h.calls.settle).toBe(0)
  expect(h.calls.ensure).toBe(1)
  expect(h.calls.wake).toBe(0)
+})
+
+it('serializes concurrent sync attempts while the unknown write receipt and local fact stay queryable',async()=>{
+ const h=await externalSetup('error');await h.done(h.execution,true)
+ let release!:()=>void,entered!:()=>void
+ const gate=new Promise<void>(resolve=>{release=resolve}),started=new Promise<void>(resolve=>{entered=resolve})
+ const close=h.app.source!.close!
+ h.app.source!.close=async(target,id)=>{entered();await gate;return close(target,id)}
+ const first=h.sync('concurrent-first')
+ try {
+  await started
+  expect((await h.detail(h.task)).task!.completion!.external!.status).toBe('unknown')
+  const other=await h.sync('concurrent-second')
+  expect(other.status).toBe('completed')
+  expect(h.writes()).toBe(0)
+ } finally {release();await first}
+ expect(h.writes()).toBe(1)
+ expect(h.calls.ensure).toBe(1);expect(h.calls.wake).toBe(0)
+})
+it('reads legacy accepted reports as terminal without inventing an operation or restarting execution',async()=>{
+ const h=await setup(),task=await h.create('legacy'),execution=await h.start(task)
+ await h.done(execution)
+ // Arrange the previously persisted v3 format; assertions use public commands/queries.
+ const file=join(h.app.directory,'work-v3.json'),record=JSON.parse(await readFile(file,'utf8'))
+ for(const row of record.tasks)delete row.completion
+ for(const receipt of record.commands)if(receipt.result.task)delete receipt.result.task.completion
+ await writeFile(file,JSON.stringify(record))
+ const recovered=new WorkApplication(h.app.directory,h.host)
+ const detail=ok(await recovered.query({type:'task.detail',ref:execution.ref},operator))
+ expect(detail.progress!.stage).toBe('done');expect(detail.task!.completion).toBeUndefined()
+ expect(await recovered.sessionControl(execution.session,'legacy-resume','resume','more')).toMatchObject({status:'failed',error:{code:'task-completed'}})
+ await recovered.reconcileCompletions()
+ expect(ok(await recovered.query({type:'task.detail',ref:execution.ref},operator)).task!.completion).toBeUndefined()
+ expect(h.calls.ensure).toBe(1);expect(h.calls.wake).toBe(0)
 })

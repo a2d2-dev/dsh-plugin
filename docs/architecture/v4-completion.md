@@ -104,4 +104,4 @@ await app.execute({
 - 独立组件的 6 条静态渲染／命令合同及宿主与客户端 typecheck 通过。
 - 此中间票不改面板接线、不启动服务、不重启 18781/18782。真实既有实例桌面/窄屏 agent-browser 截图与正式 host job 结算的浏览器验证交 #141；本分支未验证，不以静态渲染冒充浏览器验收。
 
-当前组合前置：旧 DshWorkHost 尚未提供 #138 的 observation，真实 continuous integration 第一条在已验收后无法释放槽并超时；这是保守 pending 的真实红证据，待合入 B 正式能力后重跑。确定性 continuous 合同已改为显式宿主结算回执，并新增 missing/unknown 即使 idle 也不放槽的负向合同。
+组合验证：D 修复提交 2d08735 与 B 固定阶段提交 e6ca554 在本锁定工作树临时无提交合并后，真实 work-continuous-integration 两项均通过（完成放槽 3687ms、接续 2603ms；未调整 timeout）。随后 merge --abort 保持 D 分支独立。此前真实超时暴露 maintain→settle 嵌套维护风险，已以权威 maintain 屏障修复；独立基线旧 host 缺 observation 时仍保守 pending。确定性 continuous 合同使用显式宿主结算回执，含 missing/unknown 即使 idle 也不放槽的负向合同。B 后续补相关执行者 flush 与最终 #141 仍需组合验证。
