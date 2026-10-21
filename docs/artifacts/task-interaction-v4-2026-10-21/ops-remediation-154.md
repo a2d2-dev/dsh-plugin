@@ -12,7 +12,13 @@
 
 红命令：`node --test scripts/v4-acceptance/verify-live.test.mjs`，旧校验入口实际报 `Missing expected exception`，1/1 fail、exit1。最小修复后同命令 1/1 pass，再补边界后 4/4 pass、exit0：new/rollback、Host trailer 变换、多模块顺序、旧 combo + 新 singleton、错 module、缺 module、跨 origin、HTTP失败和非JS。`node --check scripts/v4-acceptance/verify-live.mjs` 与 `git diff --check` exit0。
 
-当前只做离线回归；18782 实际浏览器响应/UI 未验证，没有运行 agent-browser、模型或服务控制。网络取证沿用同URL刷新后浏览器 reload fetch；不是浏览器缓存原始响应体的 capture receipt。
+O-F1第一片 `493ab08` 已提交并推送，CEO复核要求再补实际加载响应，不能以刷新后二次fetch代替。最终路径使用独立run/side agent-browser session，在about:blank取得官方CDP endpoint；任何DSH页面加载前启用Network，clearBrowserCache、setCacheDisabled、setBypassServiceWorker均须实际ack。最终同URL document刷新后，仅收其frameId/loaderId的Script responseReceived→loadingFinished→getResponseBody，保存requestId与实际body至0600私有文件。二次Fetch只用于singleton重组，不进入loadedPayloads。来源、Script类型、document/request身份、禁缓存证明缺失，或cache/SW/prefetch来源均拒绝。
+
+追加反例 `loaded旧响应不能被同URL refetch新响应掩盖` 先Missing expected exception、exit1；改用loadedPayloads后绿色。聚焦 `node --test scripts/v4-acceptance/browser-response.test.mjs scripts/v4-acceptance/verify-live.test.mjs` 最终7/7、exit0：真实离线Chrome/CDP Script旧体，后续Fetch新体不能替换；下一document换loaderId；新/rollback、多combo、cache/SW/Fetch/identity/HTTP错误均硬断言。真实离线proof另存 offline-cdp-proof-154.json，旧body SHA `003e38129f489134ab43807753b0f30e5e27f230845cf3875bd92cfa1a295b09`，新body SHA `d9ecfcf0870cdaea886760524d90af0120f5cc1e40b94144eb0e08bc14cef755`。
+
+离线测试最初因Chrome给data:发requestServedFromCache=true而失败（exit1），独立诊断确认fromDiskCache/fromServiceWorker/fromPrefetchCache均false，随后对data:事实改为明确true断言；正式HTTP校验仍硬拒servedFromCache=true，没有放宽正式条件或预算。该fixture仅证明实际body/requestId/document与Fetch隔离，不满足HTTP live验收条件。已加载agent-browser skill并执行core/help，未访问18781/18782/第三方，未创建HTTP server、route/mock、live信号或模型。18782实际UI/HTTP cache控制与响应仍待授权后验证。
+
+新plan全部私有证据限定在唯一持久run/evidence。prepare-plan与one-shot仅增加此精确路径许可（冻结toolset的同run sibling evidence），保留canonical/0700检查及历史tmp支持，不泛化其它目录。
 
 ## O-F2
 
@@ -26,4 +32,6 @@
 
 ## 权限记录
 
-初始工具 schema 将 sandbox_permissions 标成必填；执行者误在若干普通工具调用中填写 danger-full-access，未申请更宽访问、未触发权限提示。后续使用包装调用省略该字段。此为执行流程偏差，保留记录，不把它当成部署授权。
+初始工具 schema 将 sandbox_permissions 标成必填；执行者误在多次普通工具调用中填写 danger-full-access，未申请更宽访问、未触发权限提示。未按要求省略该字段是执行流程偏差，保留记录，不把它当成部署授权。
+
+工具全集 `node --test scripts/v4-acceptance/*.test.mjs`：27/27、fail0/skipped0、exit0，原始TAP保存ops-tool-tests-154.tap。全部.mjs语法、3个Python AST和git diff --check均exit0。所有离线browser test均finally close，session list未出现本任务专属session；未关闭任何他人session。

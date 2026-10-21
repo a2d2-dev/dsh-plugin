@@ -1,0 +1,24 @@
+{
+  "scope": "offline about:blank/data only; not live acceptance",
+  "oldLoaded": {
+    "requestId": "3072650.2",
+    "loaderId": "2381C90193BDA183C6DC3D354427BA81",
+    "frameId": "7AC7A96C47DD2CB661BE8B1ACF23BB12",
+    "bodySha256": "003e38129f489134ab43807753b0f30e5e27f230845cf3875bd92cfa1a295b09",
+    "status": 200,
+    "resourceType": "Script",
+    "cacheDisabled": true,
+    "serviceWorkerBypassed": true
+  },
+  "freshLoaded": {
+    "requestId": "3072669.2",
+    "loaderId": "7D274C5E76FB3B40FFEC52F9D6810746",
+    "frameId": "7AC7A96C47DD2CB661BE8B1ACF23BB12",
+    "bodySha256": "d9ecfcf0870cdaea886760524d90af0120f5cc1e40b94144eb0e08bc14cef755",
+    "status": 200,
+    "resourceType": "Script",
+    "cacheDisabled": true,
+    "serviceWorkerBypassed": true
+  },
+  "refetchFreshDidNotReplaceLoadedBody": true
+}

@@ -6,12 +6,13 @@ import { liveCut } from './live-cut.mjs'
 import { canonical } from './retention.mjs'
 import { permitsSystemGenesis } from './data-genesis.mjs'
 import { targets } from './profile-actions.mjs'
+import { captureScriptResponses } from './browser-response.mjs'
 
 import { setTimeout as delay } from 'node:timers/promises'
 
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex')
-function runBrowser(binary,args,input){
-  const result=spawnSync(binary,['--session','a2d2-v4-qa',...args],{input,encoding:'utf8',timeout:60000,maxBuffer:16*1024*1024})
+function runBrowser(binary,session,args,input){
+  const result=spawnSync(binary,['--session',session,...args],{input,encoding:'utf8',timeout:60000,maxBuffer:16*1024*1024})
   if(result.status!==0)throw Error('dedicated browser verification failed; inspect private action log')
   return result.stdout
 }
@@ -37,7 +38,7 @@ function response(row,origin){
   if(!row.body.endsWith(parsed.trailer))throw Error('browser module source-map trailer mismatch')
   return {...parsed,source:row.body.slice(0,-parsed.trailer.length)}
 }
-export function verifyBrowserClients({origin,payloads,modules,client,clientSha256}){
+export function verifyBrowserClients({origin,loadedPayloads:payloads,modules,client,clientSha256}){
   if(hash(client)!==clientSha256)throw Error('selected client fingerprint mismatch')
   let prepared=client.toString().replace(sourceUrlTrailer,'').replace(sourceMapTrailer,'')
   if(!prepared.endsWith('\n'))prepared+='\n'
@@ -50,7 +51,9 @@ export function verifyBrowserClients({origin,payloads,modules,client,clientSha25
     singletons.set(parsed.ids[0],parsed.source)
   }
   if(!singletons.has('dsh-a2d2'))throw Error('selected client module missing')
+  if(new Set(payloads.map(row=>row.requestId)).size!==payloads.length||new Set(payloads.map(row=>row.loaderId)).size!==1||new Set(payloads.map(row=>row.frameId)).size!==1)throw Error('loaded Script document/request identity ambiguous')
   return payloads.map(row=>{
+    if(row.source!=='cdp-network-script-response'||row.resourceType!=='Script'||!row.requestId||!row.loaderId||!row.frameId||row.cacheDisabled!==true||row.serviceWorkerBypassed!==true||row.servedFromCache!==false||row.fromDiskCache!==false||row.fromServiceWorker!==false||row.fromPrefetchCache!==false)throw Error('actual loaded Script response with disabled cache required')
     const parsed=response(row,origin)
     if(!parsed.ids.includes('dsh-a2d2'))throw Error('selected client module missing from loaded combo')
     const source=parsed.ids.map(id=>{if(!singletons.has(id))throw Error('browser combo module missing');return singletons.get(id)}).join('')
@@ -63,7 +66,8 @@ export async function verifyLive(plan,side){
   const target=targets[plan.program],selected=plan.profiles[side]
   if(!target||plan.origin!==target.origin)throw Error('wrong live origin')
   if(!plan.browser?.path||hash(await readFile(plan.browser.path))!==plan.browser.sha256)throw Error('pinned agent-browser executable missing/changed')
-  const browser=(args,input)=>runBrowser(plan.browser.path,args,input)
+  if(!/^[a-z0-9-]+$/.test(plan.runId))throw Error('stable browser runId required')
+  const browser=(args,input)=>runBrowser(plan.browser.path,`a2d2-v4-${plan.runId}-${side}`,args,input)
   const evaluate=script=>{
     const value=JSON.parse(browser(['--json','eval','--stdin'],script))
     if(value.success!==true||!Object.hasOwn(value.data??{},'result'))throw Error('invalid browser evaluation envelope')
@@ -104,8 +108,10 @@ export async function verifyLive(plan,side){
     }
     if(!current||current.exists!==old.exists||(old.exists&&current.materialSha256!==old.materialSha256))throw Error('runtime/domain/workspace identity or material drift')
   }
-  let desktop,narrow,resources
+  let desktop,narrow,resources,capture
   try{
+    browser(['open','about:blank'])
+    capture=await captureScriptResponses(browser(['get','cdp-url']).trim())
     browser(['open',plan.origin+'/'])
     const password=(await readFile('/data/_dsh-dev/web-password','utf8')).trim()
     evaluate(`fetch('/?token='+encodeURIComponent(${JSON.stringify(password)}),{credentials:'include'}).then(r=>({status:r.status}))`)
@@ -121,9 +127,9 @@ export async function verifyLive(plan,side){
     desktop=join(plan.evidenceRoot,`${side}-desktop.png`);browser(['screenshot',desktop])
     browser(['set','viewport','390','844'])
     narrow=join(plan.evidenceRoot,`${side}-narrow.png`);browser(['screenshot',narrow])
-    const observed=evaluate("performance.getEntriesByType('resource').map(r=>r.name).filter(name=>name.includes('/plugins/')&&name.includes('dsh-a2d2'))")
-    if(!Array.isArray(observed)||!observed.length||observed.some(url=>new URL(url).origin!==plan.origin))throw Error('browser plugin resource missing or outside original origin')
-    const payloads=evaluate(`Promise.all(${JSON.stringify(observed)}.map(async url=>{const response=await fetch(url,{cache:'reload',credentials:'same-origin'});return {url,status:response.status,contentType:response.headers.get('content-type'),body:await response.text()}}))`)
+    const loadedPayloads=(await capture.snapshot(plan.origin)).filter(row=>row.url.includes('/plugins/')&&row.url.includes('dsh-a2d2'))
+    await writeFile(join(plan.evidenceRoot,`${side}-loaded-script-responses.private.json`),JSON.stringify(loadedPayloads,null,2)+'\n',{flag:'wx',mode:0o600})
+    const observed=loadedPayloads.map(row=>row.url)
     const ids=[...new Set(observed.flatMap(url=>combo(url,plan.origin).ids))]
     const entries=evaluate('window.__DSH_BOOT__.entries.map(({id,url})=>({id,url}))')
     const urls=ids.map(id=>{
@@ -134,8 +140,8 @@ export async function verifyLive(plan,side){
       return url
     })
     const modules=evaluate(`Promise.all(${JSON.stringify(urls)}.map(async url=>{const response=await fetch(url,{cache:'reload',credentials:'same-origin'});return {url,status:response.status,contentType:response.headers.get('content-type'),body:await response.text()}}))`)
-    resources=verifyBrowserClients({origin:plan.origin,payloads,modules,client:await readFile(join(target.profile,'node_modules/dsh-a2d2/lib/client.js')),clientSha256:selected.clientSha256})
-  }finally{browser(['close'])}
+    resources=verifyBrowserClients({origin:plan.origin,loadedPayloads,modules,client:await readFile(join(target.profile,'node_modules/dsh-a2d2/lib/client.js')),clientSha256:selected.clientSha256})
+  }finally{capture?.close();browser(['close'])}
   const result={source:'automatic-acceptance',status:'verified',side,origin:plan.origin,pid:run.pid,cli:run.cli,installedClientSha256,retainedSessions:before.sessions.length,genesis,desktop:{path:desktop,sha256:hash(await readFile(desktop))},narrow:{path:narrow,sha256:hash(await readFile(narrow))},resources,scope:'same URL browser refresh + native process/client fingerprint + public Session accepted-prefix/config selection; effective live permissions and real-model E2E remain separate'}
   await writeFile(join(plan.evidenceRoot,`${side}-verification.json`),JSON.stringify(result,null,2)+'\n',{flag:'wx',mode:0o600})
   return result

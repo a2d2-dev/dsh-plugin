@@ -1,0 +1,174 @@
+TAP version 13
+# Subtest: 真实data Script捕获保留loaded旧体；后续Fetch新体不能替换，下一document单独归因
+ok 1 - 真实data Script捕获保留loaded旧体；后续Fetch新体不能替换，下一document单独归因
+  ---
+  duration_ms: 1990.972924
+  type: 'test'
+  ...
+# [{"requestId":"3075497.2","servedFromCache":true,"fromDiskCache":false,"fromServiceWorker":false,"fromPrefetchCache":false},{"requestId":"3075536.2","servedFromCache":true,"fromDiskCache":false,"fromServiceWorker":false,"fromPrefetchCache":false}]
+# {"path":"/dev/shm/a2d2-v4-154-browser-OhqxhL/offline-cdp-proof.json","scope":"offline about:blank/data only; not live acceptance","oldLoaded":{"requestId":"3075497.2","loaderId":"7527F0C5BB0BE6D5EC3336B0C739B189","frameId":"910D25F5D5D5EF5FB5FB5BE0EDE284F7","bodySha256":"003e38129f489134ab43807753b0f30e5e27f230845cf3875bd92cfa1a295b09","status":200,"resourceType":"Script","cacheDisabled":true,"serviceWorkerBypassed":true},"freshLoaded":{"requestId":"3075536.2","loaderId":"FF61E10AA2A3D460E8C7FCDA975784A1","frameId":"910D25F5D5D5EF5FB5FB5BE0EDE284F7","bodySha256":"d9ecfcf0870cdaea886760524d90af0120f5cc1e40b94144eb0e08bc14cef755","status":200,"resourceType":"Script","cacheDisabled":true,"serviceWorkerBypassed":true},"refetchFreshDidNotReplaceLoadedBody":true}
+# Subtest: phase1升级只允许明确的新runtime创生，已有身份不能借创生规则漂移
+ok 2 - phase1升级只允许明确的新runtime创生，已有身份不能借创生规则漂移
+  ---
+  duration_ms: 2.962075
+  type: 'test'
+  ...
+# Subtest: 候选环境只保留稳定引用和安全覆盖，凭据值不能进入plan或artifact
+ok 3 - 候选环境只保留稳定引用和安全覆盖，凭据值不能进入plan或artifact
+  ---
+  duration_ms: 10.139303
+  type: 'test'
+  ...
+# Subtest: 宿主smoke之后动态入口内容变化必须在stop前拒绝
+ok 4 - 宿主smoke之后动态入口内容变化必须在stop前拒绝
+  ---
+  duration_ms: 12.334716
+  type: 'test'
+  ...
+# Subtest: 缺少可执行回滚宿主或宿主补丁证明时，切换前拒绝
+ok 5 - 缺少可执行回滚宿主或宿主补丁证明时，切换前拒绝
+  ---
+  duration_ms: 1.923042
+  type: 'test'
+  ...
+# Subtest: 旧Node不热读被替换脚本；单次launcher TERM后未来spawn只hold，hold退出也有真实状态
+ok 6 - 旧Node不热读被替换脚本；单次launcher TERM后未来spawn只hold，hold退出也有真实状态
+  ---
+  duration_ms: 455.319327
+  type: 'test'
+  ...
+# Subtest: 正式运维交接允许CEO升级等待与旧job原始收取回执，不冒充产品消费
+ok 7 - 正式运维交接允许CEO升级等待与旧job原始收取回执，不冒充产品消费
+  ---
+  duration_ms: 4.518627
+  type: 'test'
+  ...
+# Subtest: 18782只要求本实例交接，18781父与QA继续工作不阻止preview
+ok 8 - 18782只要求本实例交接，18781父与QA继续工作不阻止preview
+  ---
+  duration_ms: 1.440999
+  type: 'test'
+  ...
+# Subtest: preview运维回执由真实文件校验，外实例父与children回执不读取
+ok 9 - preview运维回执由真实文件校验，外实例父与children回执不读取
+  ---
+  duration_ms: 21.541636
+  type: 'test'
+  ...
+# Subtest: preview临执行cut拒绝任意运行Session、PID复用和Session遗漏
+ok 10 - preview临执行cut拒绝任意运行Session、PID复用和Session遗漏
+  ---
+  duration_ms: 5.987859
+  type: 'test'
+  ...
+# Subtest: CEO未结算、flush失败、待收job或PID过期时不准停止服务
+ok 11 - CEO未结算、flush失败、待收job或PID过期时不准停止服务
+  ---
+  duration_ms: 2.312819
+  type: 'test'
+  ...
+# Subtest: 离线profile切换拒绝原配置漂移，成功切换保留旧profile与外部Session数据
+ok 12 - 离线profile切换拒绝原配置漂移，成功切换保留旧profile与外部Session数据
+  ---
+  duration_ms: 52.791507
+  type: 'test'
+  ...
+# Subtest: 保留旧身份和配置，允许追加历史及明确批准的新对象
+ok 13 - 保留旧身份和配置，允许追加历史及明确批准的新对象
+  ---
+  duration_ms: 20.00751
+  type: 'test'
+  ...
+# Subtest: 真实CLI写明确error但exit0；私有窗口保留且静态完整也只可回滚
+ok 14 - 真实CLI写明确error但exit0；私有窗口保留且静态完整也只可回滚
+  ---
+  duration_ms: 110.54635
+  type: 'test'
+  ...
+# Subtest: 只分类本次窗口；正常/空日志不依赖不存在的正式marker
+ok 15 - 只分类本次窗口；正常/空日志不依赖不存在的正式marker
+  ---
+  duration_ms: 22.67294
+  type: 'test'
+  ...
+# Subtest: 替换、截断、截断后长回原大小及半行都不能声称无错误
+ok 16 - 替换、截断、截断后长回原大小及半行都不能声称无错误
+  ---
+  duration_ms: 47.120702
+  type: 'test'
+  ...
+# Subtest: 归因未知、缺证、已知强退与窗口超预算均拒新
+ok 17 - 归因未知、缺证、已知强退与窗口超预算均拒新
+  ---
+  duration_ms: 36.838485
+  type: 'test'
+  ...
+# Subtest: 信号前日志边界不完整或无launcher append fd时拒绝绑定
+ok 18 - 信号前日志边界不完整或无launcher append fd时拒绝绑定
+  ---
+  duration_ms: 20.39056
+  type: 'test'
+  ...
+# Subtest: 停后必须保留已接受事件前缀，拒绝缺行和撕裂journal
+ok 19 - 停后必须保留已接受事件前缀，拒绝缺行和撕裂journal
+  ---
+  duration_ms: 19.270402
+  type: 'test'
+  ...
+# Subtest: CLI私有日志明确disposer error时即使exit0且静态完整也拒新
+ok 20 - CLI私有日志明确disposer error时即使exit0且静态完整也拒新
+  ---
+  duration_ms: 1.019554
+  type: 'test'
+  ...
+# Subtest: STOPPED/exit0不能冒充flush；强退拒绝切新，只保留可运行回滚路径
+ok 21 - STOPPED/exit0不能冒充flush；强退拒绝切新，只保留可运行回滚路径
+  ---
+  duration_ms: 0.656845
+  type: 'test'
+  ...
+# Subtest: loaded旧响应不能被同URL refetch新响应掩盖
+ok 22 - loaded旧响应不能被同URL refetch新响应掩盖
+  ---
+  duration_ms: 5.213626
+  type: 'test'
+  ...
+# Subtest: browser收到旧JS即使磁盘client正确也必须拒绝
+ok 23 - browser收到旧JS即使磁盘client正确也必须拒绝
+  ---
+  duration_ms: 1.664026
+  type: 'test'
+  ...
+# Subtest: 正式Host变换接受new/rollback且raw响应SHA不同
+ok 24 - 正式Host变换接受new/rollback且raw响应SHA不同
+  ---
+  duration_ms: 1.989255
+  type: 'test'
+  ...
+# Subtest: 多模块combo按URI顺序绑定；新singleton不能掩盖旧combo
+ok 25 - 多模块combo按URI顺序绑定；新singleton不能掩盖旧combo
+  ---
+  duration_ms: 4.265472
+  type: 'test'
+  ...
+# Subtest: 实际Script身份与禁缓存证明缺失或来自cache/SW/Fetch必须拒绝
+ok 26 - 实际Script身份与禁缓存证明缺失或来自cache/SW/Fetch必须拒绝
+  ---
+  duration_ms: 2.472031
+  type: 'test'
+  ...
+# Subtest: 错误module、缺失module、跨origin及非成功JS响应拒绝
+ok 27 - 错误module、缺失module、跨origin及非成功JS响应拒绝
+  ---
+  duration_ms: 0.909472
+  type: 'test'
+  ...
+1..27
+# tests 27
+# suites 0
+# pass 27
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2202.086268

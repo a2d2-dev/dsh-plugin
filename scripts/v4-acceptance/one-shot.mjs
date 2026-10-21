@@ -1,8 +1,8 @@
 import { readFile, open, realpath, lstat, mkdir } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
-import { join, isAbsolute } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { join, isAbsolute, dirname } from 'node:path'
+import { pathToFileURL, fileURLToPath } from 'node:url'
 import { verifyRelease } from './fingerprint.mjs'
 
 const origins = { 'dsh-dev-web-server': 'http://127.0.0.1:18781', 'dsh-a2d2-v3-preview': 'http://10.126.126.12:18782' }
@@ -127,7 +127,8 @@ async function main() {
   const authorization = JSON.parse(await readFile(plan.executionInstruction))
   if (authorization.planSha256 !== sha(bytes) || authorization.source !== 'parent-session-deployment-instruction' || !authorization.requestRef || authorization.parentSessionId!==plan.coordinatorSessionId) throw Error('parent execution instruction for this reviewed plan required; original human deployment scope persists')
   const root = plan.evidenceRoot
-  if (!isAbsolute(root ?? '') || !root.startsWith('/tmp/a2d2-v4-') || await realpath(root) !== root || (await lstat(root)).mode & 0o077) throw Error('existing canonical private evidenceRoot required')
+  const persistentEvidence=join(dirname(dirname(fileURLToPath(import.meta.url))),'evidence')
+  if (!isAbsolute(root ?? '') || !(root.startsWith('/tmp/a2d2-v4-')||(root===persistentEvidence&&root.startsWith('/data/_dsh-builds/v4-141-artifacts-38d4d91/'))) || await realpath(root) !== root || (await lstat(root)).mode & 0o077) throw Error('existing canonical private evidenceRoot in tmp or this frozen artifact run required')
   const lock = await open(join(root, 'one-shot.lock'), 'wx', 0o600); await lock.close()
   const journal = await open(join(root, 'one-shot.jsonl'), 'ax', 0o600)
   const record = async (stage, detail = {}) => { await journal.write(JSON.stringify({ runId: plan.runId, at: new Date().toISOString(), stage, ...detail })+'\n'); await journal.sync() }
