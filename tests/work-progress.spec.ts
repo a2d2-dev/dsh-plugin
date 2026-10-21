@@ -90,6 +90,19 @@ it('invalidates old criterion results after a specification change and rejects s
   expect(JSON.stringify(await h.report('old-report',initial))).toContain('stale-specification')
   expect(completed(await h.app.query({type:'task.detail',ref:h.ref},operator))).toMatchObject({progress:{criteria:{passed:0,total:1,assessed:0,current:false},blockers:['规格已更新，旧验收结果需要重新核验']}})
 })
+it('persists one completion fact and fences resume for ordinary tasks across application recovery',async()=>{
+  const h=await setup()
+  const report:TaskReport={specificationVersion:1,stage:'done',summary:'已验收',next:'',blockers:[],criteria:[{index:0,passed:true,evidence:['push passed']},{index:1,passed:true,evidence:['cleanup passed']}]}
+  completed(await h.app.sessionReport(h.execution.session,'complete-once',report))
+  const recovered=new WorkApplication(h.app.directory,h.app.host)
+  const first=completed(await recovered.query({type:'task.detail',ref:h.ref},operator))
+  expect(first.task).toMatchObject({completion:{operationId:expect.any(String),specificationVersion:1,executionId:h.execution.id,closeout:{status:'pending'}}})
+  completed(await recovered.sessionReport(h.execution.session,'complete-once',report))
+  expect(completed(await recovered.query({type:'task.detail',ref:h.ref},operator)).task!.completion).toEqual(first.task!.completion)
+  expect(await recovered.sessionControl(h.execution.session,'resume-after-complete','resume','continue')).toMatchObject({status:'failed',error:{code:'task-completed'}})
+  expect(await recovered.sessionReport(h.execution.session,'rewrite-complete',{...report,stage:'in-progress'})).toMatchObject({status:'failed',error:{code:'task-completed'}})
+})
+
 it('keeps business completion separate from an idle session and stops completed work using an accepted wait intent',async()=>{
   const h=await setup()
   expect(completed(await h.app.query({type:'task.detail',ref:h.ref},operator))).toMatchObject({progress:{stage:'in-progress',execution:{runtime:'idle'}}})

@@ -53,6 +53,8 @@ export type SourceCandidate = { kind: 'project' | 'repository'; nodeId: string; 
 export interface GitHubSourcePort {
   catalog?(source: { repository?: GitHubRepository; githubProject?: GitHubProjectRef }): Promise<SourceCatalog>
   identify?(url: string): Promise<SourceCandidate>
+  /** Host-only write capability. Targets come exclusively from accepted local bindings. */
+  close?(target: import('../work-completion/index.ts').CloseTarget, operationId: string): Promise<import('../work-completion/index.ts').CloseReceipt>
   list(repository: GitHubRepository, request: IssuePageRequest): Promise<IssuePage>
   detail(repository: GitHubRepository, number: number): Promise<IssueDetail>
   project?(project: GitHubProjectRef, request: ProjectPageRequest): Promise<GitHubProjectPage>
