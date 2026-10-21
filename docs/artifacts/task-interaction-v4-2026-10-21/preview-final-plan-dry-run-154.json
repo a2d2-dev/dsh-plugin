@@ -1,0 +1,16 @@
+{
+  "mode": "dry-run",
+  "ready": false,
+  "reasons": [
+    "invalid real handover: ENOENT: no such file or directory, open '/tmp/a2d2-v4-154-5a2ecf3-02/operational-handover.json'"
+  ],
+  "steps": [
+    "verify complete new and rollback hosts",
+    "hold external admission and settle CEO/children/jobs; flush",
+    "stop only dsh-a2d2-v3-preview",
+    "apply pinned profile + isolated-host launcher switch",
+    "start only dsh-a2d2-v3-preview",
+    "same-origin refresh, client fingerprint and retention check",
+    "write durable completion; on failure preserve data and restore executable runtime"
+  ]
+}

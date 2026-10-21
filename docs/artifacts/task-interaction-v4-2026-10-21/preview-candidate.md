@@ -2,6 +2,22 @@
 
 本记录替代旧准备文档中“新旧宿主、rollback profile、产品包仍缺失”的过时结论。当前仅准备，未执行任何 live 切换。
 
+## #154 最新最终待执行候选
+
+O-F1/O-F2已按唯一review #151的CEO裁决闭合；见[整改记录](ops-remediation-154.md)、[27/27真实工具TAP](ops-tool-tests-154.tap)和[离线CDP证据](offline-cdp-proof-154.json)。工具clean freeze为 `5a2ecf35abd4ea64e543e0ef7e64a690a6ed4368`。26个工具（原24加shutdown-log/browser-response）逐文件均与该commit一致，集合SHA256 `55b0cd03fd5a7b9d0e3184c00d70c064ec63be226568d24c12c72c432fd5019c`，编码为canonical JSON排序对象keys，数组按文件名顺序，仅含name/sha256。
+
+- 最终plan：`/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-final-154-5a2ecf3-02/final-plan.private.json`
+- 最终plan SHA256：`4d75ba31e211873b1f9e47f4a9ee70ec8958c9e2befe931e30cd1fdfde6951e7`
+- 原始prepared plan同目录另存，SHA256 `9a306d22b4ae5c5da11339f545b5a6440dc7e32cd86c68a520d85b5a0ca13d20`，prepareOnly=true/static review=false，原字节未改。
+- coordinator唯一为当前#150主会话 `session-74fb5e20-1456-461b-b5c1-ef5f3b41e018`，requestRef `https://github.com/a2d2-dev/dsh-plugin/issues/150`。旧父136是历史，不代其授权。
+
+CEO在本次主子会话消息中明确授权最终准备开关 `prepareOnly=false`、`parentReviewedStaticCut=true`；此授权仅用于生成最终plan。plan保留 `staticPreparationInstruction.executionAuthorized=false`；绑定最终SHA的 `executionInstruction` 指向 `/tmp/a2d2-v4-154-5a2ecf3-02/parent-execution-instruction.json`，文件实际不存在。不得把两个准备开关当成发信号或execute授权。
+
+实际默认dry-run（不带execute）exit1、ready=false，[完整输出](preview-final-plan-dry-run-154.json)只剩 `invalid real handover: ENOENT ... /tmp/a2d2-v4-154-5a2ecf3-02/operational-handover.json`。执行指令在execute路径另查；dry-run不检查它不代表已授权。目标PID/startTicks只在准备时采只读metadata，执行阶段必须重新绑定；target Sessions/input/jobs/cut未伪造。18781父/QA不被该目标门阻塞。
+
+[new/rollback完整指纹和26工具SHA](preview-final-plan-summary-154.json)包含四actions（同一真实dispatcher，四个kind）、runtime、launcher、指定conf、env policy和imports。两套真实Loader.import各256；没有重建固定产品或Host。旧659f候选和已撤回6d80候选私有原字节均已重算保持；最终raw evidence恢复既有私有tmp合同，避免live-cut路径不一致。未发信号、stop/start/restart、修改live profile或模型验收；真实18782 HTTP/UI/SW/cache控制仍未验证。
+
+
 ## 目标实例门
 
 `one-shot.mjs` 的 operational handover 按实际 target 区分。18782 只核对自身 PID/startTicks、全部目标 Session、零运行工作/待输入、精确目标 jobs registry 与运维 owner 命令回执；18781 的父会话及 QA 可以继续运行。preview 的 receipt 校验不读取外实例 coordinator/children 字段。临执行 accepted cut 必须与目标交接的 PID/startTicks、Session 集合一致，preview 内任何 Session running/unknown 都拒绝。18781 的 coordinator upgrade-wait/children gate 保留，且无匹配 preview 完成回执仍拒绝。
@@ -16,9 +32,9 @@
 
 临执行才取得目标 Session/jobs/input owner 回执与 accepted prefix/material cut，确认旧进程消失、无写 fd、实际退出日志和耗时、完整 zstd 帧以及 new/rollback native 双读。不预填这些事实，不用 exit0 代替 flush。>=5秒、信号、非0或已知强退拒绝切新；完整性可证明才可 coherent rollback，保留失败期间新增数据。
 
-候选保持 `prepareOnly: true`、`parentReviewedStaticCut: false`。默认 dry-run 应只剩真实临采事实及父审查/执行指令门，不能因为外实例父或 QA 活跃而拒绝。父会话复核候选后下达最终 planSHA 的具体执行指令，当前不执行。
+prepare-plan默认保持 `prepareOnly: true`、`parentReviewedStaticCut: false`；原prepared plan不可覆盖。当前最终plan的两个静态开关按上文CEO具名消息另行授权派生，绑定最终SHA的执行指令仍须另发。以下旧候选与当时dry-run保留历史，不作为当前最终授权。
 
-## 最终具体候选（未执行）
+## 历史具体候选（未执行，已被#154替代）
 
 代码修复提交 `e247236c94f2e27873e312068ff95f01822f5fa3`；计划生成时工作树 clean，固定工具提交 `39fe47ef057cda97afe13ade333e4d0fcf777eff`。后续本记录提交只补交付摘要，不改冻结工具。
 

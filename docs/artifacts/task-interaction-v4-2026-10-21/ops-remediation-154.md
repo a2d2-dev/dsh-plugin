@@ -30,6 +30,14 @@ CEO集成核对发现live-cut仍只接受已审私有tmp证据根；撤回本轮
 
 未知日志/明确错误作为exit证据传到verifyStopped；仍先执行无写FD、完整zstd、accepted-prefix与独立new/rollback native静态双读。只有staticCut.ok成立才可coherent rollback，保留所有新增数据；不直接throw跳过静态完整性，不以exit0放行。
 
+## 最终集成候选
+
+路径集成修正提交 `5a2ecf35abd4ea64e543e0ef7e64a690a6ed4368` 为最终工具freeze，原27/27覆盖的O-F1/O-F2代码未改，两个路径validator已与0343129逐字节diff一致并语法/diffcheck通过。26工具集合SHA `55b0cd03fd5a7b9d0e3184c00d70c064ec63be226568d24c12c72c432fd5019c`。
+
+当前#150主会话随后明确授权两个静态准备开关false/true，仍未授权任何信号或execute。新唯一run `/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-final-154-5a2ecf3-02` 中保存prepared原plan（SHA `9a306d22b4ae5c5da11339f545b5a6440dc7e32cd86c68a520d85b5a0ca13d20`）与独立最终plan（SHA `4d75ba31e211873b1f9e47f4a9ee70ec8958c9e2befe931e30cd1fdfde6951e7`）。coordinator=`session-74fb5e20-1456-461b-b5c1-ef5f3b41e018`、requestRef=#150；executionInstruction实际不存在，executionAuthorized=false。未代旧父或LF授权。
+
+preparePlan实际exit0；new/rollback真实imports各256，产品/Host没有重建。最终默认dry-run实际exit1/ready=false，只剩 `/tmp/a2d2-v4-154-5a2ecf3-02/operational-handover.json` 缺失；执行指令另在execute阶段检查。handover/cut/CLI log binding/执行指令四类即时facts均不存在。详见[最终指纹摘要](preview-final-plan-summary-154.json)与[最终dry-run](preview-final-plan-dry-run-154.json)。历史659f及已撤回6d80私有plan均保持原SHA。
+
 ## 权限记录
 
 初始工具 schema 将 sandbox_permissions 标成必填；执行者误在多次普通工具调用中填写 danger-full-access，未申请更宽访问、未触发权限提示。未按要求省略该字段是执行流程偏差，保留记录，不把它当成部署授权。
