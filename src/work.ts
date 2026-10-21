@@ -50,6 +50,22 @@ export class WorkApplication {
   constructor(readonly directory: string, readonly host: WorkHost, readonly source?: GitHubSourcePort) {
     if (!isAbsolute(directory)) throw new Error('Work record directory must be absolute')
     this.file = join(directory, 'work-v3.json')
+    this.host.execution?.connectObservation?.(async requested => {
+      const state = await this.load()
+      const current = state.executions.find(item => item.id === requested.id && sameTask(item.ref, requested.ref))
+      const task = current && taskAt(state, current.ref)
+      if (!current || !task || current.owner !== requested.owner) throw new WorkExecutionError('stale-execution-authority', 'Observation scope does not belong to the current Task execution')
+      const exact = current.epoch === requested.epoch && sameSession(current.session, requested.session)
+      // Recovery after a committed take may only seal the already-retired fixed
+      // source of that same operation; it does not restore source authority.
+      const operation = current.continuation
+      const sealing = operation?.phase === 'taken' && operation.inputSeal === undefined
+        && requested.continuation?.operationId === operation.operationId && current.epoch === operation.sourceEpoch + 1
+        && sameSession(current.session, operation.successor) && requested.epoch === operation.sourceEpoch && sameSession(requested.session, operation.source)
+        && current.retired?.some(old => old.operationId === operation.operationId && old.epoch === requested.epoch && sameSession(old.session, requested.session))
+      if (!exact && !sealing) throw new WorkExecutionError('stale-execution-authority', 'Observation scope is stale for this coordinator epoch')
+      return sealing ? [...task.sessions, { session: current.session, purpose: 'related' as const }] : task.sessions
+    })
     this.host.execution?.connect(async (sessionId, messages = []) => {
       const mayAdvance = (execution: import('./work-types.ts').WorkExecution | undefined) => !execution || (continuousMayAdvance(state, execution) && !['accepted', 'creating', 'failed', 'waiting', 'paused'].includes(execution.state)
         && !(execution.control?.status === 'accepted' && execution.control.action !== 'resume')

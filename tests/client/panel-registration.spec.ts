@@ -35,6 +35,15 @@ describe('A²D² host panel contribution', () => {
     expect(slots.entries).toEqual([])
   })
 
+  it('adds a native continuation view and compact header association while retaining the blank dock', async () => {
+    const { slots, fiber } = await mount()
+    expect(slots.entries.filter(entry => entry.options.name === 'conversation.view').map(entry => entry.options.id)).toEqual(['a2d2-continuation'])
+    expect(slots.entries.filter(entry => entry.options.name === 'conversation.session.header.actions').map(entry => entry.options.id)).toEqual(['a2d2-session-work-header'])
+    expect(slots.entries.filter(entry => entry.options.name === 'conversation.input.dock' && entry.options.id === 'a2d2-session-work')).toHaveLength(1)
+    expect(slots.entries.some(entry => ['conversation.header', 'conversation.session.header', 'conversation.composer'].includes(entry.options.name))).toBe(false)
+    await fiber.dispose()
+  })
+
   it('contributes one session-scoped return entry to the input list dock shared by blank and active conversations', async () => {
     const { slots, fiber } = await mount()
     const entries = slots.entries.filter(entry => entry.options.id === 'a2d2-session-work')

@@ -92,15 +92,81 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     return { totalTokens: measured.totalTokens, logRevision: measured.logRevision, baseline: measured.baseline.kind,
       capacity, outputReserve, routeKey: JSON.stringify([profile.provider, profile.model, profile.reasoningEffort ?? null, capacity, outputReserve]), observedAt: new Date().toISOString() }
   }
+  private observationScope?: import('./observation.ts').ObservationScope
+  connectObservation(scope: import('./observation.ts').ObservationScope): void { this.observationScope = scope }
+  async observation(execution: WorkExecution, associations?: readonly import('../work-types.ts').SessionAssociation[]): Promise<import('./observation.ts').ExecutionObservation> {
+    const { sessionKey } = await import('./observation.ts')
+    const roots = new Map<string, { session: import('../work-types.ts').SessionRef; role: import('./observation.ts').ObservedSession['role']; parent?: import('../work-types.ts').SessionRef }>()
+    const blockers: import('./observation.ts').ExecutionBlocker[] = []
+    const limitations = new Set<string>()
+    let bindings: readonly import('../work-types.ts').SessionAssociation[] = associations ?? []
+    if (associations === undefined) {
+      try {
+        if (!this.observationScope) throw new Error('Authority scope resolver is unavailable')
+        bindings = await this.observationScope(execution)
+      } catch { blockers.push({ code: 'execution-scope-unavailable', session: execution.session }); limitations.add('无法从权威 Task 记录证明完整关联范围，结算状态未知。') }
+    }
+    for (const binding of bindings) roots.set(sessionKey(binding.session), { session: binding.session, role: binding.purpose })
+    for (const old of execution.retired ?? []) roots.set(sessionKey(old.session), { session: old.session, role: 'retired' })
+    roots.set(sessionKey(execution.session), { session: execution.session, role: 'current' })
+    const sessions: import('./observation.ts').ObservedSession[] = []
+    const seen = new Set<string>()
+    for (const root of roots.values()) {
+      const key = sessionKey(root.session)
+      if (seen.has(key)) continue
+      seen.add(key)
+      if (root.session.runtimeId !== this.runtimeId) {
+        blockers.push({ code: 'executor-runtime-unavailable', session: root.session }); limitations.add('关联执行者属于其他宿主，未读取其会话。'); continue
+      }
+      try {
+        const row = await this.runtime.executionFacts(SessionId(root.session.sessionId), this.runtimeId, root.role, root.parent)
+        sessions.push(row)
+        if (row.status === 'running' || row.status === 'unknown') blockers.push({ code: row.status === 'unknown' ? 'executor-state-unknown' : 'executor-unsettled', session: row.session })
+        if (row.waitingHuman) blockers.push({ code: 'executor-waiting-human', session: row.session })
+        for (const child of row.children) {
+          if (!child.returned || (child.mode === 'continuable' && child.result !== 'consumed') || child.mode === 'unknown') blockers.push({ code: 'native-result-pending', session: row.session })
+          if (!roots.has(sessionKey(child.session))) roots.set(sessionKey(child.session), { session: child.session, role: 'native-child', parent: row.session })
+        }
+        if (row.jobObservation === 'unavailable') { blockers.push({ code: 'job-observation-unavailable', session: row.session }); limitations.add('当前宿主缺少正式 jobs.observe 非消费接口，无法证明终态结果已交付。') }
+        for (const job of row.jobs) {
+          if (job.delivery !== 'delivered') blockers.push({ code: job.availability === 'lost' ? 'job-registry-unavailable' : job.delivery === 'unknown' ? 'job-result-unknown' : 'job-unsettled', session: row.session, jobId: job.id })
+          if (job.result === 'unknown') limitations.add('作业输出交付与模型消费、业务验收分别呈现；公开观察不会调用 jobs.read。')
+        }
+      } catch {
+        blockers.push({ code: 'executor-observation-unavailable', session: root.session }); limitations.add('相关执行者观察失败，接续安全状态未知。')
+      }
+    }
+    const unknown = blockers.some(blocker => /unknown|unavailable/.test(blocker.code))
+    return { settlement: unknown ? 'unknown' : blockers.length ? 'pending' : 'settled', sessions, blockers, limitations: [...limitations] }
+  }
   async maintain<T>(execution: WorkExecution, body: () => Promise<T>): Promise<T> {
+    if (!this.observationScope) throw new WorkExecutionError('execution-scope-unavailable', 'Safe maintenance requires the authority-owned Task observation scope resolver')
     const id = SessionId(execution.session.sessionId)
     const agent = await this.runtime.agent(id)
     await agent.whenIdle()
     return agent.runMaintenance(async () => {
       await this.runtime.flush(agent)
-      if (await this.runtime.askedHuman(id)) throw new WorkExecutionError('continuation-waiting-human', 'Continuation is waiting for unresolved human questions')
-      if (await this.runtime.unsettledChildren(id)) throw new WorkExecutionError('continuation-waiting-children', 'Continuation is waiting for native children and consumed result notifications')
-      return body()
+      const scope = await this.observation(execution)
+      const related = scope.sessions.map(row => this.ctx.get('agents')?.get(SessionId(row.session.sessionId)))
+        .filter((candidate): candidate is Agent => !!candidate && candidate.id !== id)
+      const held = new Set<string>([id])
+      const lock = async (index: number): Promise<T> => {
+        const candidate = related[index]
+        if (candidate) {
+          if (candidate.status !== 'idle') throw new WorkExecutionError('continuation-waiting-executions', 'A related executor is still running')
+          held.add(candidate.id)
+          return candidate.runMaintenance(async () => { await this.runtime.flush(candidate); return lock(index + 1) })
+        }
+        // The graph was read once to identify locks. Read again while every live
+        // executor is fenced: no related tool can start a job between check/take.
+        const observation = await this.observation(execution)
+        if (observation.settlement !== 'settled') throw new WorkExecutionError('continuation-waiting-executions', `Continuation is waiting for related execution facts: ${observation.blockers.map(blocker => `${blocker.code}:${blocker.session.sessionId}${blocker.jobId ? `:${blocker.jobId}` : ''}`).join(', ')}`)
+        const added = observation.sessions.map(row => this.ctx.get('agents')?.get(SessionId(row.session.sessionId)))
+          .filter((candidate): candidate is Agent => !!candidate && !held.has(candidate.id))
+        if (added.length) { related.push(...added); return lock(index) }
+        return body()
+      }
+      return lock(0)
     })
   }
   /** Called in source maintenance after take. The log marker is the intake boundary, including a take/save crash gap. */

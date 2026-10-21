@@ -9,7 +9,8 @@ import { A2d2ConfigSection, loadModelRouteCatalog } from './config-page.tsx'
 import { IconA2d2AgentsOutline16 } from './icons.tsx'
 import { HandoffOrb } from './orb.tsx'
 import type { OrbChatFacts } from './orb.tsx'
-import { WorkPanel, SessionWorkEntry } from './work-panel.tsx'
+import { WorkPanel } from './work-panel.tsx'
+import { ExecutionConversationContinuation, ExecutionSessionWorkEntry } from './execution-native.tsx'
 import { createWorkClient } from './work-api.ts'
 import { WorkPanelController } from './work-panel-controller.ts'
 import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
@@ -78,9 +79,15 @@ export function apply(ctx: A2d2ClientContext): void {
     name: 'sidebar.panellist', id: 'a2d2-panel', order: 40,
     label: () => 'A²D² 控制面板',
   }, props => createElement(IconA2d2AgentsOutline16, {size: props.size}))), 'a2d2 panel entry')
-  // The input list dock is present for both blank Hero and active conversations.
-  // Header actions are hidden for blank Sessions; the header corner is single.
+  // Blank Hero hides header actions. Preserve its list-dock seat; active
+  // conversations use one compact title-adjacent action and a native View.
   ctx.effect(() => ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
     name: 'conversation.input.dock', id: 'a2d2-session-work', order: 40,
-  }, props => createElement(SessionWorkEntry, {controller, sessionId: props.sessionId}))), 'a2d2 session work')
+  }, props => createElement(ExecutionSessionWorkEntry, { controller, sessionId: props.sessionId, blank: props.session?.blank ?? true, placement: 'dock' }))), 'a2d2 blank session work')
+  ctx.effect(() => ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
+    name: 'conversation.session.header.actions', id: 'a2d2-session-work-header', order: 40,
+  }, props => createElement(ExecutionSessionWorkEntry, { controller, sessionId: props.sessionId, blank: props.useSession(value => value.blank), placement: 'header' }))), 'a2d2 session work header')
+  ctx.effect(() => ctx.slots.inject('conversation.view', () => ctx.slots.register({
+    name: 'conversation.view', id: 'a2d2-continuation', order: 60, label: () => '接续',
+  }, props => createElement(ExecutionConversationContinuation, { controller, sessionId: props.sessionId }))), 'a2d2 native continuation view')
 }

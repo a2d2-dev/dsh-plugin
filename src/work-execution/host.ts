@@ -3,6 +3,8 @@ import type { WorkExecution } from '../work-types.ts'
 /** Trusted host boundary. check must be read-only and reject missing capabilities before reservation. */
 export interface WorkExecutionHost {
   connect(authorize: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<boolean>): void
+  connectObservation?(scope: import('./observation.ts').ObservationScope): void
+  observation?(execution: WorkExecution, associations?: readonly import('../work-types.ts').SessionAssociation[]): Promise<import('./observation.ts').ExecutionObservation>
   wake(execution: WorkExecution): Promise<void>
   status(execution: WorkExecution): 'running' | 'idle' | 'inactive'
   choices(): Promise<import('../work-types.ts').HostExecutionChoices>
@@ -14,6 +16,9 @@ export interface WorkExecutionHost {
   failure?(execution: WorkExecution): Promise<{ id: string; message: string; userCancelled: boolean } | undefined>
   profile?(execution: WorkExecution): Promise<NonNullable<WorkExecution['actual']>>
   measure?(execution: WorkExecution): Promise<import('../work-types.ts').ContinuationObservation>
+  /** Holds source and related live executors in maintenance, flushes their logs
+   * (including job journals), then rechecks settlement before body. Body must
+   * not call settle/whenIdle/runMaintenance on these already-held executors. */
   maintain?<T>(execution: WorkExecution, body: () => Promise<T>): Promise<T>
   sealInput?(execution: WorkExecution, operationId: string): Promise<{ seq: number; messages: readonly import('../work-types.ts').NativeWorkMessage[] }>
   pending?(execution: WorkExecution): readonly import('../work-types.ts').NativeWorkMessage[]
