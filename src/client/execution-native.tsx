@@ -1,4 +1,3 @@
-import { browserUUID } from './browser-uuid.ts'
 import { useEffect, useRef, useState } from 'react'
 import type { AssociatedWork, ContinuationPolicy, WorkCompleted } from '../work-types.ts'
 import type { ExecutionGraph } from '../work-execution/observation.ts'
@@ -47,7 +46,7 @@ function NativeTaskContinuation({ controller, sessionId, work }: { controller: W
   const [busy, setBusy] = useState(false)
   const [revision, setRevision] = useState(0)
   const lifetime = useRef<AbortController>()
-  useEffect(() => { const scope = new AbortController(); lifetime.current = scope; return () => scope.abort() }, [controller, sessionId, work.ref.projectId, work.ref.taskId])
+  useEffect(() => { const scope = new AbortController(); lifetime.current = scope; setBusy(false); setDetail(undefined); setPolicy(undefined); setError(null); return () => scope.abort() }, [controller, sessionId, work.ref.projectId, work.ref.taskId])
   useEffect(() => {
     const abort = new AbortController()
     setError(null)
@@ -71,13 +70,13 @@ function NativeTaskContinuation({ controller, sessionId, work }: { controller: W
       const execution = latest.execution
       if (!execution?.actual || execution.session.sessionId !== sessionId || latest.task?.id !== work.ref.taskId || latest.task.projectId !== work.ref.projectId
         || execution.ref.taskId !== work.ref.taskId || execution.ref.projectId !== work.ref.projectId) throw Error('此会话已不是当前协调，请从关联任务进入有效会话。')
-      await controller.client.command({ type: 'task.continue', commandId: browserUUID(), ref: work.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch })
+      await controller.submit({ type: 'task.continue', ref: work.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch })
       if (!scope.signal.aborted) setRevision(value => value + 1)
     } catch (error) { if (!scope.signal.aborted) setError(error instanceof Error ? error.message : String(error)) }
     finally { if (!scope.signal.aborted) setBusy(false) }
   }
   return <section><div className={styles.surface}><strong>{work.title}</strong><div className={styles.row}><button type="button" onClick={() => void controller.revealTask(work.ref)}>返回工作详情</button><button type="button" disabled={busy} onClick={() => setRevision(value => value + 1)}>刷新观察</button></div>{error && <p role="alert">{error}</p>}</div>
-    {detail ? <ExecutionContinuation graph={detail.executionGraph} execution={detail.execution} policy={policy} busy={busy} {...(work.purpose === 'control' && detail.execution?.session.sessionId === sessionId ? { onContinue: () => void continueWork() } : {})}/> : !error && <p role="status">正在读取接续事实…</p>}
+    {detail ? <ExecutionContinuation graph={detail.executionGraph} execution={detail.execution} policy={policy} busy={busy} {...(work.purpose === 'control' && !detail.task?.completion && detail.progress?.processingState !== 'completed' && detail.execution?.session.sessionId === sessionId ? { onContinue: () => void continueWork() } : {})}/> : !error && <p role="status">正在读取接续事实…</p>}
   </section>
 }
 

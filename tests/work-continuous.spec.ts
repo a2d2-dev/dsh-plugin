@@ -122,10 +122,15 @@ it('keeps native Issue children separate and resolves each canonical child execu
   const detail = completed(await h.app.query({ type: 'task.detail', ref: parent.ref! }, operator))
   expect(detail.executionGraph).toMatchObject({
     childTasks: [expect.objectContaining({ ref: child.ref, owner: execution.owner, epoch: execution.epoch, currentSession: execution.session })],
-    nativeIssues: [expect.objectContaining({ ref: child.ref, owner: execution.owner, currentSession: execution.session, status: 'started' }), expect.objectContaining({ issue: { nodeId: 'ISSUE_99' }, status: 'unread' })],
+    nativeIssues: [expect.objectContaining({ ref: child.ref, owner: execution.owner, currentSession: execution.session, status: 'started' }), expect.objectContaining({ issue: { nodeId: 'ISSUE_99', number: 99, title: 'Issue 99', url: 'https://github.com/acme/repo/issues/99', repository: { owner: 'acme', repository: 'repo' }, state: 'open' }, status: 'unread' })],
   })
   expect(detail.executionGraph!.sessions).toEqual([])
   expect(completed(await h.app.query({ type: 'project.detail', projectId: h.scope.projectId }, operator)).tasks).toHaveLength(2)
+  delete h.remote.issues[0]!.subIssues
+  await h.refresh()
+  const partial = completed(await h.app.query({ type: 'task.detail', ref: parent.ref! }, operator)).executionGraph!
+  expect(partial.nativeIssues?.map(item => item.issue.nodeId)).toEqual(['ISSUE_2', 'ISSUE_99'])
+  expect(partial.limitations).toContainEqual(expect.stringContaining('最后已知'))
 })
 
 it('browses without execution and atomically reuses source connection, exact settings, duplicate discovery and command retries', async () => {

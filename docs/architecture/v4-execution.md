@@ -98,7 +98,7 @@ observe(id, caller): {
 
 ## #141 源码整合检查点
 
-候选分支已接通 `task.detail` / `task.execution` 的 `executionGraph`。当前及独立子 Task 的执行都按完整 TaskRef 读取；查询只调用公开 observation，不收取 job、不驱动模型。原生子 Issue 另存 `nativeIssues`，保留 canonical Task 入口、独立 owner/epoch/session；未导入项呈现 `unread`，负责人未观察时明确未知。显式读取要求可以建立对应仓库来源，但不会导入 Task。原生关系不加入父会话维护围栏。
+候选分支已接通 `task.detail` / `task.execution` 的 `executionGraph`。当前及独立子 Task 的执行都按完整 TaskRef 读取；查询只调用公开 observation，不收取 job、不驱动模型。原生子 Issue 另存 `nativeIssues`，保留 canonical Task 入口、独立 owner/epoch/session；未观察完整要求时呈现 `unread`，已观察而无执行时为 `not-started`，负责人未观察时明确未知。后续来源未返回关系字段时，已接受／已观察的关系保留并标注最后已知时间，不能把缺字段解释成没有子工作。显式读取要求可以建立对应仓库来源，但不会导入 Task；canonical 子工作使用原有完整项目导航。迟到回复经过导航代次检查，不替换新选中的 Task。原生关系不加入父会话维护围栏。
 
 Issue 详情使用 ExecutionSessions、ExecutionContinuation 与 CompletionStatus；自动接续编辑器只在详情顶部出现。原生 header / blank dock / continuation view 保留 B 注册。持续委托通过稳定 client/source props 接来源工具栏，资源保存不会启用计划。普通 HTTP 的命令身份统一使用既有 browserUUID；完成补同步通过既有 submit transport 保留未知回执的 commandId。
 
@@ -106,6 +106,14 @@ Issue 详情使用 ExecutionSessions、ExecutionContinuation 与 CompletionStatu
 
 ## 验证
 
+
+### #141 组合组件浏览器记录
+
+通过 `A2D2_INTEGRATED_ARTIFACTS=1 corepack pnpm@10.26.2 exec vitest run tests/client/v4-integrated-render.spec.ts tests/client/v4-source-render.spec.ts` 生成 `.local/v4-integrated` 内的 file 页面，显式标注合成合同夹具、非运行实例、未部署。agent-browser 检查来源导航／右侧委托、执行图／原生未读子项及窄屏布局。截图为 `source-desktop.png`、`source-mobile.png`、`execution-desktop.png`、`execution-mobile.png`、`delegation-mobile.png`，仅保存在现有忽略目录，不进入发布包。
+
+实际展开委托暴露了响应式 flex 问题：390px viewport 下面板只有 37.359375px。浏览器宽度断言先红，修复展开项的整行 flex basis 后，同一断言返回 width 343、viewport 390、document 375，窄屏内容正常显示。仅检查页面总宽度不足以证明可用。当前截图证明组件布局，不能替代原生宿主草稿、真实模型、GitHub 关闭与匹配 #142 能力的交互验收。
+
+验证审计：一次 14 文件 80 项组合为 79 pass / 1 fail，无超时。失败来自新增 native Issue 测试的嵌套精确匹配遗漏完整引用字段；保留原红并补全预期引用后，两项 graph 公开合同定点通过。此前测试与 typecheck 串联，后者成功掩盖了前者失败的最终 shell 状态；后续逐命令核验。之后原生关系字段缺失、迟到导航、完成事实缺少可选进展投影、未知聚合显示零等具体红测均已修复并定点复验；没有调 timeout、删断言或 skip。
 
 ### 组件浏览器记录（中间票）
 

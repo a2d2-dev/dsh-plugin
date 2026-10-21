@@ -43,13 +43,13 @@ export function WorkPanel({ controller }: { controller: WorkPanelController }) {
     {(connecting||(!projects.length&&!hasDetail&&!state.loading))&&<SourceConnect controller={controller} onSaved={()=>setConnecting(false)}/>}
     {state.loading&&<p role="status">正在读取 Issue 与进展…</p>}
     {hasDetail?<>
-      <header className={styles.issueHeader}><button className={styles.link} onClick={()=>controller.back()}>← {controller.canReturnToRequirement()?'返回上级要求':'返回 Issue 列表'}</button><p className={styles.eyebrow}>{issue?`${issue.repository.owner}/${issue.repository.repository} · #${issue.number}`:sourceTitle}</p><h1>{issue?`#${issue.number} ${issue.title}`:task?.title}</h1><div className={styles.toolbar}>{issue&&<GitHubLink url={issue.url}/>}<span className={styles.badge}>{processingLabel(detail?.progress)}</span><button disabled={state.loading||state.source.loading} onClick={()=>void (task?controller.refreshTask():issue&&controller.openIssue(issue.number,Boolean(source?.enabled),issue.nodeId))}>刷新详情</button></div></header>
+      <header className={styles.issueHeader}><button className={styles.link} onClick={()=>controller.back()}>← {controller.canReturnToRequirement()?'返回上级要求':'返回 Issue 列表'}</button><p className={styles.eyebrow}>{issue?`${issue.repository.owner}/${issue.repository.repository} · #${issue.number}`:sourceTitle}</p><h1>{issue?`#${issue.number} ${issue.title}`:task?.title}</h1><div className={styles.toolbar}>{issue&&<GitHubLink url={issue.url}/>}<span className={styles.badge}>{task?.completion?'已完成':processingLabel(detail?.progress)}</span><button disabled={state.loading||state.source.loading} onClick={()=>void (task?controller.refreshTask():issue&&controller.openIssue(issue.number,Boolean(source?.enabled),issue.nodeId))}>刷新详情</button></div></header>
       {detail?.execution&&!task?.completion&&<details className={styles.continuation}><summary>编辑自动接续设置</summary><ContinuationSettings key={`execution/${detail.execution.id}/${detail.execution.continuationPolicy?.version??0}`} controller={controller} policy={detail.execution.continuationPolicy??project?.continuationPolicy} forExecution/></details>}
       <nav className={styles.tabs} role="tablist" aria-label="Issue 详情标签">{detailTabs.map(([id,label])=><button key={id} role="tab" aria-selected={state.detailTab===id} onClick={()=>controller.setDetailTab(id)}>{label}</button>)}</nav>
       <div role="tabpanel" aria-label={detailTabs.find(([id])=>id===state.detailTab)?.[1]}>
         {state.detailTab==='overview'&&<>
           {task&&<CompletionStatus task={task} execution={detail?.execution} remoteState={binding?.lastObserved.state} busy={state.startup.busy} error={state.startup.error??undefined} onSync={command=>controller.syncCompletion(command)}/>}
-          <div className={styles.detailGrid}><div><Section title="当前进展"><p>{detail?.progress?.summary??'尚未开始处理'}</p>{detail?.progress&&<CriteriaCount criteria={detail.progress.criteria}/>}<p>下一步：{detail?.progress?.next||(!detail?.execution?'确认要求后开始处理':'等待当前会话报告下一步')}</p>{detail?.progress?.blockers.map((blocker,index)=><p className={styles.failure} key={index}>阻塞：{blocker}</p>)}</Section><Requirements controller={controller}/></div><CurrentExecution controller={controller}/></div>
+          <div className={styles.detailGrid}><div><Section title="当前进展"><p>{detail?.progress?.summary??(task?.completion?'本地已验收，保留完成事实与收口状态。':'尚未开始处理')}</p>{detail?.progress&&<CriteriaCount criteria={detail.progress.criteria}/>}<p>下一步：{detail?.progress?.next||(task?.completion?(task.completion.closeout.status==='settled'?'已完成本地工作；外部同步独立观察':'等待执行安全收口'):!detail?.execution?'确认要求后开始处理':'等待当前会话报告下一步')}</p>{detail?.progress?.blockers.map((blocker,index)=><p className={styles.failure} key={index}>阻塞：{blocker}</p>)}</Section><Requirements controller={controller}/></div><CurrentExecution controller={controller}/></div>
           {issue&&<Section title="Issue 原始要求"><IssueFacts issue={issue}/><p>{state.source.cached?'缓存 / 最后已知内容':'本次读取内容'}</p><p className={styles.sourceBody}>{issue.body||'（原文正文为空）'}</p><NativeIssueRelations issue={issue} controller={controller}/></Section>}
           {task&&<Section title="已接受要求与验收"><p>{task.goal}</p>{task.specification.text!==issue?.body&&<details><summary>已接受规格 · 第 {task.specification.version} 版</summary><p className={styles.sourceBody}>{task.specification.text}</p></details>}{task.specification.missing?.includes('acceptance')&&<p role="status">结构化验收标准尚待确认。原始要求中的验收段落需由处理会话确认。</p>}{task.specification.missing?.includes('body')&&<p role="status">规格正文尚待补充；已观察的 Issue 正文为空。</p>}<ul>{task.specification.acceptance.map((criterion,index)=>{const result=task.progress?.specificationVersion===task.specification.version?task.progress.criteria.find(item=>item.index===index):undefined;return <li key={index}>{criterion} · {result?result.passed?'已通过':'未通过':'待核验'}{result?.evidence.map((evidence,index)=><p key={index}>证据：{evidence}</p>)}</li>})}</ul></Section>}
           {binding&&<SourceBinding binding={binding}/>}
@@ -62,7 +62,7 @@ export function WorkPanel({ controller }: { controller: WorkPanelController }) {
       <ErrorText error={state.source.error??''}/>
     </>:state.projectId&&<>
       <SourceDirectory controller={controller} delegation={source&&<ContinuousProcessing key={`${state.projectId}/${source.id}`} controller={controller}/>} issues={<IssueSourcePanel key={source?.id} controller={controller}/>}/>
-      {project&&<Section title="自动接续"><ContinuationSettings key={`${project.id}/${project.continuationPolicy?.version??0}`} controller={controller} policy={project.continuationPolicy}/></Section>}
+      {project&&<details><summary>新执行默认自动接续</summary><ContinuationSettings key={`${project.id}/${project.continuationPolicy?.version??0}`} controller={controller} policy={project.continuationPolicy}/></details>}
     </>}
   </main>
 }
@@ -188,7 +188,7 @@ function CurrentExecution({controller}:{controller:WorkPanelController}) {
   const completed = Boolean(state.detail?.task?.completion)||completedProgress(progress)
   return <Section title="处理会话">
     {execution ? <>
-      <p>{(()=>{const task=state.detail?.task;if(!task)return null;const counts=controller.sessionCounts(task);return `${counts.total} 个会话 · 当前 ${counts.current} · 历史 ${counts.historical} · 其他关联 ${counts.associated}`})()}</p><p>执行状态：{executionLabel(execution.state,progress,execution.control?.status)}{executionRuntime ? ` · 会话：${({running:'正在运行',idle:'空闲',inactive:'未激活'})[executionRuntime]}` : ''}</p>
+      <p>{(()=>{const task=state.detail?.task;if(!task)return null;const counts=controller.sessionCounts(task);return `${counts.total} 个会话 · 当前 ${counts.current} · 历史 ${counts.historical} · 其他关联 ${counts.associated}`})()}</p><p>执行状态：{state.detail?.task?.completion?({pending:'等待执行收口',settled:'执行已安全收口',error:'执行收口失败'})[state.detail.task.completion.closeout.status]:executionLabel(execution.state,progress,execution.control?.status)}{executionRuntime ? ` · 会话：${({running:'正在运行',idle:'空闲',inactive:'未激活'})[executionRuntime]}` : ''}</p>
       {execution.progress && <p>工作进展：{execution.progress}</p>}
       {execution.control && !completed && <p>{({wait:'等待',pause:'暂停',resume:'恢复'})[execution.control.action]}请求{execution.control.status==='accepted'?'已接受，等待生效':'已生效'}{execution.control.reason?`：${execution.control.reason}`:''}</p>}
       {execution.error && <ErrorText error={`${execution.error.code}: ${execution.error.message}`}/>}
@@ -197,13 +197,13 @@ function CurrentExecution({controller}:{controller:WorkPanelController}) {
         {!completed && ['ready','running'].includes(execution.state) && <button disabled={busy||execution.control?.status==='accepted'} onClick={()=>void controller.controlExecution('pause')}>暂停处理</button>}
         {!completed && progress?.processingState==='blocked' && ['ready','running'].includes(execution.state) && <button disabled={busy||execution.control?.status==='accepted'} onClick={()=>void controller.controlExecution('resume')}>继续处理</button>}
         {!completed && ['waiting','paused'].includes(execution.state) && <button disabled={busy||execution.control?.status==='accepted'} onClick={()=>void controller.controlExecution('resume')}>恢复处理</button>}
-        {execution.state==='failed' && <button disabled={busy} onClick={()=>void controller.controlExecution('reconcile')}>重试原执行</button>}
+        {!completed && execution.state==='failed' && <button disabled={busy} onClick={()=>void controller.controlExecution('reconcile')}>重试原执行</button>}
         <button disabled={busy} onClick={()=>void controller.refreshTask()}>刷新执行状态</button>
       </div>
       {!controller.currentSession() && <p>当前会话暂不可进入；刷新可查看创建或恢复结果。</p>}
       {execution.actual && <details><summary>实际执行环境</summary><p>工作目录：{execution.actual.cwd}<br/>模型：{execution.actual.provider}/{execution.actual.model}<br/>Agent 预设：{execution.actual.agentPreset}<br/>权限：{execution.actual.permissionPreset} · 沙箱：{execution.actual.sandbox} · 审批：{execution.actual.approval}</p></details>}
       {execution.events.length>0 && <details><summary>输入与结果（{execution.events.length}）</summary>{execution.events.map(event=><p key={event.id}>{({accepted:'已接受',delivered:'已投递',consumed:'已消费'})[event.delivery]} · 尚未验收<br/>{event.text}</p>)}</details>}
-    </> : <>
+    </> : completed ? <p>本地已验收；执行观察尚未取得，请刷新详情读取收口状态。</p> : <>
       <p>尚未开始处理。开始后会在所选执行目录创建会话。</p>
       {options && selection ? <form className={styles.form} onSubmit={event=>{event.preventDefault();void controller.startPrepared()}}>
         <p>请确认执行目录和模型；优先使用项目与规则默认配置。</p>
@@ -266,6 +266,7 @@ function GitHubLink({url}:{url:string}) {
 }
 function NativeIssueRelations({issue,controller}:{issue:import('../work-sources/types.ts').GitHubIssue;controller:WorkPanelController}) {
   const {parent,subIssues}=issue
+  if(parent===undefined&&subIssues===undefined)return <p role="status">原生父子关系尚未读取；不能据此断言没有子工作。</p>
   if(!parent&&!subIssues?.items.length&&!subIssues?.totalCount)return null
   const reference=(item:import('../work-sources/types.ts').GitHubIssueReference)=>{const progress=controller.progressForIssue(item);return <><span>{item.repository.owner}/{item.repository.repository} #{item.number} · {item.title} · 远端 {item.state}</span> <GitHubLink url={item.url}/>{progress?<p>{processingLabel(progress)} · {progress.summary} <button onClick={()=>void controller.openTask(progress.ref)}>查看进展</button></p>:<span> · 尚未读取完整要求 <button onClick={()=>void controller.openNativeIssue(item)}>读取独立工作要求</button></span>}</>}
   return <Section title="原生 Issue 父子关系">

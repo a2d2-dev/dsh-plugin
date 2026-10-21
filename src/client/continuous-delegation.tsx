@@ -30,7 +30,7 @@ export function ContinuousDelegation(props: ContinuousDelegationProps) {
       <div><strong>持续委托</strong><p>来源：{props.sourceTitle} · {rule?.enabled ? '已启用' : '接新工作已暂停'}</p></div>
       {rule?.enabled && <button type="button" disabled={disabled} onClick={() => void controller.enable(false)}>暂停接新</button>}
     </header>
-    {!rule && <p role="status">请先配置此来源的负责人范围与执行资源，再保存委托。</p>}
+    {!rule && <p role="status">请先确认此来源的执行目录、模型与权限，再保存委托。</p>}
     {rule && <p>授权范围：{rule.scope.assignee === '@me' ? rule.scope.identity?.login ?? '当前账号' : '所有负责人'}；标签：{rule.scope.labels.join('、') || '不限'}。暂停接新会保留当前处理与必要收尾。</p>}
     {planning && <details><summary>已保存委托与补充</summary><p>{planning.instruction}</p>{planning.supplements.map((text, index) => <p key={index}>{text}</p>)}</details>}
     <label className={styles.form}> {planning ? '补充委托或纠偏' : '希望持续推进什么工作'}
@@ -46,17 +46,19 @@ export function ContinuousDelegation(props: ContinuousDelegationProps) {
     {state.pending && !state.busy && <div><p>请求回执尚未确认。核对原请求后再继续操作。</p><button type="button" onClick={() => void controller.retry()}>核对并重试原请求</button></div>}
     {plan && <div>
       <h3>计划 v{plan.version}{planning?.enabledPlanVersion === plan.version ? ' · 已明确启用' : ' · 预览'}</h3>
+      <p>委托范围：{plan.basis.source.repository ? `仓库 ${plan.basis.source.repository.owner}/${plan.basis.source.repository.repository} 的完整可见开放 Issue` : `完整 Project ${plan.basis.source.projectSnapshot?.project.title ?? plan.basis.source.githubProject?.number}`} · 来源版本 {plan.basis.source.version} · 授权范围版本 {plan.basis.scopeVersion}。浏览视图不改变此范围。</p>
+      <p>依赖关系：来源接口未公开，状态未知。原生父子关系仅使用已观察事实；权限不可见对象不计作已覆盖。</p>
       {plan.draftVersion !== planning?.draftVersion && <p role="status">委托或 Block 已变化，需要重新预览再启用。</p>}
       <ol className={styles.queue}>{plan.steps.map(step => {
         const issue = plan.basis.candidates.find(candidate => candidate.issue.nodeId === step.nodeId)?.issue
-        const existing = plan.basis.candidates.find(candidate => candidate.issue.nodeId === step.nodeId)?.execution as { resource?: { runtimeId: string; workspaceId: string }; model?: { provider: string; model: string }; permissionPreset?: string; session?: { sessionId: string } } | undefined
+        const existing = plan.basis.candidates.find(candidate => candidate.issue.nodeId === step.nodeId)?.execution as { resource?: { runtimeId: string; workspaceId: string }; model?: { provider: string; model: string }; permissionPreset?: string; agentPreset?: string; owner?: string; epoch?: number; policy?: unknown; session?: { sessionId: string } } | undefined
         const blocked = planning?.blocks.includes(step.nodeId)
         const item = rule?.items.find(item => item.nodeId === step.nodeId)
         return <li key={step.nodeId} className={styles.card}>
           <div className={styles.toolbar}><strong>{issue ? <a href={issue.url} target="_blank" rel="noreferrer">{issue.repository.owner}/{issue.repository.repository} #{issue.number} · {issue.title}</a> : step.nodeId}</strong><button type="button" disabled={disabled} onClick={() => void controller.block(step.nodeId, !blocked)}>{blocked ? '解除 Block' : 'Block 后续接入'}</button></div>
           <p>{step.mode === 'existing' ? '复用已有执行' : step.mode === 'new' ? '新建执行' : '等待 / 观察'}{item ? ` · ${item.state}` : ''}{blocked ? ' · 已 Block' : ''}</p>
           <p>纳入原因：{step.why}</p><p>下一步：{step.nextAction}</p>
-          {existing && <details><summary>已有执行与资源</summary><p>资源：{existing.resource?.runtimeId} / {existing.resource?.workspaceId}</p><p>模型：{existing.model?.provider}/{existing.model?.model} · 权限方案：{existing.permissionPreset}</p><p>当前会话：{existing.session?.sessionId}。启用将保留原执行的资源和策略。</p></details>}
+          {existing && <details><summary>已有执行与资源</summary><p>资源：{existing.resource?.runtimeId} / {existing.resource?.workspaceId}</p><p>模型：{existing.model?.provider}/{existing.model?.model} · 权限方案：{existing.permissionPreset}</p><p>当前会话：{existing.session?.sessionId}。启用将保留原执行的资源和策略。</p><p>协调负责人：{existing.owner ?? '未知'} · 代次：{existing.epoch ?? '未知'} · Agent 预设：{existing.agentPreset ?? '未知'}</p><details><summary>原执行策略</summary><pre>{JSON.stringify(existing.policy ?? '未知', null, 2)}</pre></details></details>}
           {item?.reason && <p role="status">{item.reason}</p>}
         </li>
       })}</ol>

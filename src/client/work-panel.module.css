@@ -118,4 +118,4 @@
 .panel { padding-top: 12px; }
 .panel section { margin: 12px 0; padding: 14px; }
 .panel nav[aria-label="来源标签"] { margin: 0 0 10px; }
-@media (max-width: 700px) { .sourceToolbar { flex-wrap: wrap; } .delegation[open] { min-width: 0; max-width: 100%; } }
+@media (max-width: 700px) { .sourceToolbar { flex-wrap: wrap; } .delegation[open] { flex: 1 0 100%; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; } }

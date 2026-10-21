@@ -364,13 +364,30 @@ export class WorkPanelController {
   async openNativeIssue(issue: import('../work-sources/types.ts').GitHubIssueReference): Promise<void> {
     const previous = this.state
     const origin = previous.detail?.task ? { projectId: previous.projectId, tasks: previous.tasks, progressItems: previous.progressItems, source: previous.source, object: previous.object, search: previous.search, view: previous.view, detail: previous.detail, detailTab: previous.detailTab, issueFilter: previous.issueFilter } : undefined
-    const source = Object.entries(previous.projectSources).flatMap(([projectId, sources]) => sources.map(source => ({projectId, source}))).find(({source}) => source.enabled && source.repository?.owner.toLowerCase() === issue.repository.owner.toLowerCase() && source.repository.repository.toLowerCase() === issue.repository.repository.toLowerCase())
+    const revision = ++this.revision, sourceRevision = this.advanceSourceRevision()
+    const current = () => revision === this.revision && sourceRevision === this.sourceRevision
+    this.update({ loading: true, error: null })
     try {
-      if (source) await this.selectConnectedSource(source.projectId, source.source.id)
-      else await this.configureSource(issue.repository.owner, issue.repository.repository)
-      await this.openIssue(issue.number, true, issue.nodeId)
+      let selected = Object.values(previous.projectSources).flat().find(source => source.enabled && source.repository?.owner.toLowerCase() === issue.repository.owner.toLowerCase() && source.repository.repository.toLowerCase() === issue.repository.repository.toLowerCase())
+      if (!selected) {
+        if (!previous.projectId) throw Error('请先选择项目，再读取独立工作要求。')
+        selected = (await this.submit({ type: 'source.configure', projectId: previous.projectId, repository: issue.repository })).source
+        if (!current()) return
+        if (!selected) throw Error('未取得子 Issue 的仓库来源。')
+      }
+      const source = selected
+      const [result, project] = await Promise.all([
+        this.client.query({ type: 'source.issue', projectId: source.projectId, sourceId: source.id, number: issue.number, nodeId: issue.nodeId, refresh: true }),
+        this.client.query({ type: 'project.detail', projectId: source.projectId }),
+      ])
+      if (!current()) return
+      if (result.issue?.nodeId !== issue.nodeId) throw Error('子 Issue 身份与读取响应不一致。')
+      const sources = [...(previous.projectSources[source.projectId] ?? []).filter(item => item.id !== source.id), result.source ?? source]
       if (origin) this.detailTrail.push(origin)
-    } catch (error) { this.update({ error: message(error) }) }
+      this.update({ projectId: source.projectId, projectSources: { ...this.state.projectSources, [source.projectId]: sources }, tasks: project.tasks ?? [], progressItems: project.progressItems ?? [], detail: null, detailTab: 'overview', loading: false, object: 'issues', source: { ...emptySource(), sources, sourceId: source.id, issue: result.issue, bindings: result.bindings ?? [], cached: false } })
+      const binding = result.bindings?.find(binding => binding.nodeId === issue.nodeId)
+      if (binding) await this.openTask(binding.ref)
+    } catch (error) { if (current()) this.update({ loading: false, error: message(error) }) }
   }
   async enterTask(ref: TaskRef): Promise<void> {
     try { await this.openCurrentTask(ref) }

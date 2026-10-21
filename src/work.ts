@@ -122,14 +122,20 @@ export class WorkApplication {
       })()]
     }))
     const graph = buildExecutionGraph({ task, execution, observation: await observe(execution), children })
-    const issue = state.externalBindings.find(binding => sameTask(binding.ref, graph.ref))?.lastObserved
-    graph.nativeIssues = (issue?.subIssues?.items ?? []).map(issue => {
+    const binding = state.externalBindings.find(binding => sameTask(binding.ref, graph.ref))
+    const issue = binding?.lastObserved
+    const native = issue?.subIssues ? issue : [binding?.accepted, ...state.sources.flatMap(source => source.observations.map(row => row.issue))]
+      .filter((item): item is import('./work-sources/types.ts').GitHubIssue => !!item && item.nodeId === binding?.nodeId && !!item.subIssues)
+      .sort((a, b) => b.observedAt.localeCompare(a.observedAt))[0]
+    if (native && native !== issue) graph.limitations.push(`原生子 Issue 关系来自最后已知观察 ${native.observedAt}；当前来源未返回此字段。`)
+    else if (issue && !native) graph.limitations.push('原生子 Issue 关系尚未读取；不能据此断言没有子工作。')
+    graph.nativeIssues = (native?.subIssues?.items ?? []).map(issue => {
       const binding = state.externalBindings.find(binding => binding.nodeId === issue.nodeId)
       const run = binding && executionAt(binding.ref)
-      const observed = binding?.lastObserved
-      return { issue, ...(binding ? { ref: binding.ref } : {}), ...(run ? { executionId: run.id, owner: run.owner, epoch: run.epoch, currentSession: run.session } : {}), ...(observed ? { assignees: observed.assignees } : {}), status: run ? 'started' as const : binding ? 'not-started' as const : 'unread' as const }
+      const observed = binding?.lastObserved ?? state.sources.flatMap(source => source.observations.map(row => row.issue)).find(item => item.nodeId === issue.nodeId)
+      return { issue, ...(binding ? { ref: binding.ref } : {}), ...(run ? { executionId: run.id, owner: run.owner, epoch: run.epoch, currentSession: run.session } : {}), ...(observed ? { assignees: observed.assignees } : {}), status: run ? 'started' as const : binding || observed ? 'not-started' as const : 'unread' as const }
     })
-    if (issue?.subIssues?.hasNextPage) graph.limitations.push('原生子 Issue 列表尚未完整读取。')
+    if (native?.subIssues?.hasNextPage) graph.limitations.push('原生子 Issue 列表尚未完整读取。')
     return graph
   }
   private async load(): Promise<WorkSnapshot> {
