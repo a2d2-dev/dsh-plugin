@@ -1,3 +1,4 @@
+import { catalogSchema } from './catalog-schema.ts'
 import { z } from 'zod'
 const owner = z.string().regex(/^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$/)
 const nodeId = z.string().min(1).max(256)
@@ -10,6 +11,7 @@ export const issueSchema = issueReference.extend({ body: z.string().max(1_000_00
 }).strict()
 const projectMetadata = z.object({ nodeId, title: z.string(), url: z.string().regex(/^https:\/\/github\.com\/(?:orgs|users)\/[a-zA-Z0-9-]+\/projects\/[1-9][0-9]*$/), closed: z.boolean() }).strict()
 const projectItem = z.object({ id: nodeId, kind: z.enum(['issue', 'pull-request', 'draft', 'restricted']), archived: z.boolean(), issueNodeId: nodeId.optional(), title: z.string().optional(), url: z.string().regex(/^https:\/\/github\.com\//).optional(),
+  facts: z.object({ draft: z.boolean().optional(), assignees: z.array(z.string()), labels: z.array(z.string()), state: z.string(), repository: repositorySchema, body: z.string().nullable().optional() }).strict().optional(),
   fields: z.array(z.object({ id: nodeId, name: z.string(), type: z.enum(['single-select', 'iteration', 'text', 'number', 'date']), value: z.string() }).strict()), fieldsPartial: z.boolean(),
 }).strict()
 export const projectPageSchema = z.object({ identity, project: projectMetadata, items: z.array(projectItem), issues: z.array(issueSchema), observedAt: z.iso.datetime(), nextCursor: z.string().min(1).max(2048).optional() }).strict()
@@ -21,6 +23,8 @@ export const sourceSchema = z.object({ id: z.string().uuid(), projectId: z.strin
   enabled: z.boolean(), version: z.number().int().positive(), sequence: z.number().int().nonnegative(), requests: z.record(z.string(), z.number().int().positive()),
   observations: z.array(z.object({ issue: issueSchema, sequence: z.number().int().positive() }).strict()),
   pages: z.array(z.object({ key: z.string(), nodeIds: z.array(z.string()), nextPage: z.number().int().positive().optional(), identity, observedAt: z.iso.datetime() }).strict()),
+  catalogError: z.object({ code: z.string(), message: z.string(), retryAt: z.string().optional() }).strict().optional(),
+  catalog: catalogSchema.optional(),
   title: z.string().optional(), nodeId: nodeId.optional(), entryUrls: z.array(z.string().max(2048)).optional(),
   identity: identity.optional(), lastError: z.object({ code: z.string(), message: z.string(), retryAt: z.string().optional() }).strict().optional(),
   projectSnapshot: z.object({ identity, project: projectMetadata, items: z.array(projectItem), observedAt: z.iso.datetime() }).strict().optional(), discovery: discovery.optional(),

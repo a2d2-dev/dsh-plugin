@@ -13,6 +13,7 @@ export interface GitHubIssue {
 export interface GitHubProjectField { id: string; name: string; type: 'single-select' | 'iteration' | 'text' | 'number' | 'date'; value: string }
 export interface GitHubProjectItem {
   id: string; kind: 'issue' | 'pull-request' | 'draft' | 'restricted'; archived: boolean
+  facts?: { draft?: boolean; assignees: string[]; labels: string[]; state: string; repository: GitHubRepository; body?: string | null }
   issueNodeId?: string; title?: string; url?: string
   fields: GitHubProjectField[]; fieldsPartial: boolean
 }
@@ -33,11 +34,24 @@ export interface SourceDiscovery {
   /** Fences independent consumers and expires after a bounded adapter call window. */
   inFlight?: { id: string; expiresAt: string }
 }
-export interface IssuePageRequest { page: number; perPage: number; assignee: '@me' | '*'; state: 'open' | 'closed' | 'all' }
+export interface IssuePageRequest { page: number; perPage: number; assignee: '@me' | '*'; state: 'open' | 'closed' | 'all'; labels?: string[]; search?: string }
 export interface IssuePage { identity: GitHubIdentity; items: GitHubIssue[]; nextPage?: number; observedAt: string }
 export interface IssueDetail { identity: GitHubIdentity; issue: GitHubIssue }
+export interface GitHubPullRequest {
+  nodeId: string; number: number; title: string; url: string; repository: GitHubRepository
+  state: 'open' | 'closed' | 'merged'; draft: boolean; updatedAt: string
+  issues: { number: number; url: string; title: string }[]; issuesComplete: boolean
+  checks: string | null; review: string | null; membership: 'repository' | 'project' | 'issue-reference'
+}
+export interface SourceCatalog {
+  identity?: GitHubIdentity
+  observedAt: string; openIssueCount?: number; pullRequests: GitHubPullRequest[]; pullRequestsComplete: boolean
+  views: { id: string; number: number; name: string; filter: string; layout: string }[]
+  fields: { id: string; name: string; dataType: string }[]; viewsComplete: boolean; limitations: string[]
+}
 export type SourceCandidate = { kind: 'project' | 'repository'; nodeId: string; title: string; url: string; entryUrl: string; identity: GitHubIdentity; repository?: GitHubRepository; githubProject?: GitHubProjectRef }
 export interface GitHubSourcePort {
+  catalog?(source: { repository?: GitHubRepository; githubProject?: GitHubProjectRef }): Promise<SourceCatalog>
   identify?(url: string): Promise<SourceCandidate>
   list(repository: GitHubRepository, request: IssuePageRequest): Promise<IssuePage>
   detail(repository: GitHubRepository, number: number): Promise<IssueDetail>
@@ -49,6 +63,8 @@ export interface SourcePage { key: string; nodeIds: string[]; nextPage?: number;
 export interface WorkSource {
   id: string; projectId: string; provider: 'github'; repository?: GitHubRepository; githubProject?: GitHubProjectRef; enabled: boolean; version: number
   sequence: number; requests: Record<string, number>; observations: SourceObservation[]; pages: SourcePage[]
+  catalogError?: SourceFailure
+  catalog?: SourceCatalog
   title?: string; nodeId?: string; entryUrls?: string[]
   identity?: GitHubIdentity; lastError?: SourceFailure; projectSnapshot?: ProjectSnapshot; discovery?: SourceDiscovery
 }

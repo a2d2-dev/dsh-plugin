@@ -94,6 +94,17 @@
 .continuation .form > p { font-size: 11px; }
 @media (max-width: 1050px) { .detailGrid { grid-template-columns: 1fr; gap: 0; } }
 
+.panel nav[aria-label="来源标签"] { display: flex; align-items: center; gap: 8px; overflow-x: auto; padding: 8px 0; border-bottom: 1px solid var(--work-line); margin-bottom: 20px; }
+.panel nav[aria-label="来源标签"] > strong, .panel nav[aria-label="来源标签"] button { white-space: nowrap; flex-shrink: 0; }
+.panel nav[aria-label="来源标签"] > strong { margin-inline-end: 12px; }
+.panel nav[aria-label="来源标签"] button[aria-pressed=true] { background: var(--dsw-alias-interactive-bg-hover, #eceefa); border-color: var(--work-muted); }
+.panel nav[aria-label="来源标签"] small { color: var(--work-muted); margin-inline-start: 6px; }
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.metrics article { min-width: 0; padding: 16px; border: 1px solid var(--work-line); border-radius: 8px; margin: 0; }
+.metrics strong { display: block; font-size: 26px; margin-top: 6px; }
+.metrics p { margin-bottom: 0; font-size: 11px; }
+@media (max-width: 800px) { .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } }
+
 .requirementBranch { list-style: none; border-inline-start: 2px solid var(--work-line); padding-inline-start: 14px; margin: 10px 0; }
 .requirementBranch > .toolbar { margin: 6px 0; }
 .requirementBranch p { margin: 4px 0; }

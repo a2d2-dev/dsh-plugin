@@ -1,3 +1,4 @@
+import { refreshCatalog } from './work-sources/catalog-application.ts'
 import { SourceError } from './work-sources/errors.ts'
 import type { SourceCandidate } from './work-sources/types.ts'
 import { createHash, randomUUID } from 'node:crypto'
@@ -916,8 +917,21 @@ export class WorkApplication {
       try { const choices = await this.host.execution?.choices(); taskStart = !!choices?.models.length && !!choices.agentPresets.length && !!choices.permissionPresets.length } catch {}
       return { status: 'completed', capabilities: { githubRead: Boolean(this.source), githubWrite: false, taskStart, projectViews: !!this.source?.project } }
     }
+    if (query.type === 'source.catalog' && query.refresh) {
+      const result = await refreshCatalog(apply => this.sourceTransaction(apply), query, this.source)
+      const local = await this.query({ ...query, refresh: false }, actor)
+      return { ...result, ...(local.status === 'completed' ? { progressItems: local.progressItems } : {}) }
+    }
     if ((query.type === 'source.issues' || query.type === 'source.issue') && query.refresh) return refreshSource(apply => this.sourceTransaction(apply), query, this.source)
     const state = await this.load()
+    if (query.type === 'source.catalog') {
+      const source = state.sources.find(source => source.id === query.sourceId && source.projectId === query.projectId)
+      if (!source) return failed('unknown-source', 'Source does not belong to this project')
+      const members = new Set(source.projectSnapshot?.items.filter(item => !item.archived && item.kind === 'issue').map(item => item.issueNodeId) ?? [])
+      const bindings = state.externalBindings.filter(binding => source.repository ? binding.lastObserved.repository.owner.toLowerCase() === source.repository.owner.toLowerCase() && binding.lastObserved.repository.repository.toLowerCase() === source.repository.repository.toLowerCase() : members.has(binding.nodeId))
+      const progressItems = bindings.flatMap(binding => { const progress = taskProgressView(state, binding.ref, this.host.execution); return progress ? [progress] : [] })
+      return source.catalog ? { status: 'completed', source, catalog: source.catalog, progressItems } : { ...failed('source-catalog-unobserved', '目录尚无可读缓存，请刷新来源'), source }
+    }
     if (query.type === 'source.list') return state.projects.some(item => item.id === query.projectId)
       ? { status: 'completed', sources: state.sources.filter(item => item.projectId === query.projectId) } : failed('unknown-project', 'Project does not exist')
     if (query.type === 'source.issues' || query.type === 'source.issue') return sourceResult(state, query)
