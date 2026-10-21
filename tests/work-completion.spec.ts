@@ -62,6 +62,24 @@ async function externalSetup(mode:'lost'|'error'='lost'){
  const sync=async(commandId:string)=>h.app.execute({type:'task.completion-sync',commandId,ref:execution.ref,executionId:execution.id,owner:execution.owner,epoch:execution.epoch},operator)
  return {...h,task,execution,sync,writes:()=>writes,setRemote:(change:Partial<typeof issue>)=>{remote={...remote,...change}},setMode:(value:typeof mode)=>{mode=value}}
 }
+it.each(['pending', 'unknown'] as const)('rejects premature acceptance while necessary results are %s and preserves the current coordinator',async settlement=>{
+ const h=await externalSetup(),execution=h.execution
+ h.setSettlement(settlement)
+ const report={specificationVersion:1,stage:'done' as const,summary:'verified before collection',next:'',blockers:[],criteria:[{index:0,passed:true,evidence:['contract passed']}],closeExternal:true}
+ expect(await h.app.sessionReport(execution.session,'premature',report)).toMatchObject({status:'failed',error:{code:'completion-results-unsettled'}})
+ const state=await h.detail(h.task)
+ expect(state.task!.completion).toBeUndefined()
+ expect(state.task!.progress).toBeUndefined()
+ expect(state.execution).toMatchObject({id:execution.id,owner:execution.owner,epoch:execution.epoch,session:execution.session})
+ expect(await h.guard(execution.session.sessionId)).toBe(true)
+ await h.app.reconcileCompletions()
+ expect(h.writes()).toBe(0)
+ h.setSettlement('settled')
+ expect((await h.detail(h.task)).task!.completion).toBeUndefined()
+ ok(await h.app.sessionReport(execution.session,'verified-after-collection',report))
+ expect(await h.guard(execution.session.sessionId)).toBe(false)
+})
+
 it('observes a lost close receipt before recovery and detects remote reopening without changing local acceptance',async()=>{
  const h=await externalSetup();await h.done(h.execution,true)
  expect((await h.detail(h.task)).task!.completion!.external).toMatchObject({status:'pending',nodeId:issue.nodeId})

@@ -4,7 +4,7 @@ import type { WorkExecution } from '../work-types.ts'
 export interface WorkExecutionHost {
   connect(authorize: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<boolean>): void
   connectObservation?(scope: import('./observation.ts').ObservationScope): void
-  observation?(execution: WorkExecution, associations?: readonly import('../work-types.ts').SessionAssociation[]): Promise<import('./observation.ts').ExecutionObservation>
+  observation?(execution: WorkExecution, associations?: readonly import('../work-types.ts').SessionAssociation[], reporter?: import('@deepseek-ai/dsh-tools').ToolExecutionToken): Promise<import('./observation.ts').ExecutionObservation>
   wake(execution: WorkExecution): Promise<void>
   status(execution: WorkExecution): 'running' | 'idle' | 'inactive'
   choices(): Promise<import('../work-types.ts').HostExecutionChoices>

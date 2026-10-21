@@ -70,8 +70,13 @@ export class RuntimeHost {
     using observation = await this.query.observeSession(id)
     const events = observation.events.slice(observation.inheritedEventCount)
     const questions = observation.projections?.values.userQuestions as { active: readonly unknown[] } | undefined
+    const toolCalls = new Map<string, string>()
     const questionCalls = new Set<string>()
     for (const event of events) {
+      if (event.type === 'tool/call') toolCalls.set(event.data.callId, event.data.name)
+      if (event.type === 'tool/result') toolCalls.delete(event.data.message?.toolCallId)
+      if (event.type === 'tool/ptc-dispatch-start') toolCalls.set(event.data.subCallId, event.data.name)
+      if (event.type === 'tool/ptc-dispatch') toolCalls.delete(event.data.subCallId)
       if (event.type === 'tool/call' && ['ask_user', 'ask_user_question'].includes(event.data.name)) questionCalls.add(event.data.callId)
       if (event.type === 'tool/result') questionCalls.delete(event.data.message?.toolCallId)
     }
@@ -100,7 +105,7 @@ export class RuntimeHost {
     const registry = (this.ctx.get as (key: string) => unknown).call(this.ctx, 'jobs') as PublicJobRegistry | undefined
     const journal = events.filter(event => ['jobs/registered', 'jobs/settled', 'jobs/collected'].includes(event.type)).map(event => event.data as unknown as import('../work-execution/job-observation.ts').PublicJobObservation)
     const jobs = observeJobs(registry, id, runtimeId, journal)
-    return { session, role, ...(parent ? { parent } : {}), status, children, jobs: jobs.jobs, jobObservation: jobs.capability, waitingHuman: !!questions?.active.length || questionCalls.size > 0,
+    return { session, role, ...(parent ? { parent } : {}), status, children, tools: [...toolCalls].map(([callId, name]) => ({ callId, name })), jobs: jobs.jobs, jobObservation: jobs.capability, waitingHuman: !!questions?.active.length || questionCalls.size > 0,
       ...(ended ? { attempt: { turn: ended.data.turn, reason: ended.data.reason?.kind } } : {}) }
   }
   async pressure(id: SessionId): Promise<number | undefined> {

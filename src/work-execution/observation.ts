@@ -33,6 +33,7 @@ export interface ObservedSession {
   status: NativeExecution['status']
   children: NativeExecution[]
   jobs: ExecutionJob[]
+  tools?: { callId: string; name: string }[]
   jobObservation?: 'available' | 'unavailable' | 'disabled'
   waitingHuman?: boolean
   attempt?: NativeExecution['attempt']

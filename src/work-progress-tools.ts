@@ -24,7 +24,7 @@ export function installWorkProgressTools(ctx: Context, app: WorkApplication, run
     async execute(args,exec) {
       if(!exec.agent || exec.agent.session.id!==exec.agent.id) throw Error('work_report requires a real current Agent Session')
       const report=taskReportSchema.parse(args.report)
-      return {result:JSON.stringify(await app.sessionReport({runtimeId,sessionId:exec.agent.id},exec.callId,report,args.expected_epoch))}
+      return {result:JSON.stringify(await app.sessionReport({runtimeId,sessionId:exec.agent.id},exec.callId,report,args.expected_epoch,exec.token))}
     },
     presentCall:()=>({card:'generic',title:'更新工作进展',kind:'other'}),
   })), 'managed work progress reporting')

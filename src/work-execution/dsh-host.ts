@@ -37,13 +37,17 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     return service as NonNullable<Context[K]>
   }
   private authorize?: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<boolean>
+  private readonly activeTools = new Map<import('@deepseek-ai/dsh-tools').ToolExecutionToken, import('@deepseek-ai/dsh-tools').ToolExecution>()
   private connected = false
   connect(authorize: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<boolean>): void {
     this.authorize = authorize
     if (this.connected) return
     this.connected = true
     this.ctx.on('agent/pre-step', async ({ agent, messages }, next) => await this.authorize!(agent.id, messages) ? next() : { kind: 'reject', reason: 'Task execution has not authorized advancement' }, { prepend: true })
+    this.ctx.on('tools/result', exec => { this.activeTools.delete(exec.token) })
     this.ctx.on('tools/pre-execute', async (exec, next) => {
+      // Include admission still in flight, not only bodies already entered.
+      this.activeTools.set(exec.token, exec)
       const decision = await next()
       return exec.agent && !await this.authorize!(exec.agent.id) ? { kind: 'deny', reason: 'Task execution has not authorized this Session to execute tools' } : decision
     }, { prepend: true })
@@ -94,7 +98,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
   }
   private observationScope?: import('./observation.ts').ObservationScope
   connectObservation(scope: import('./observation.ts').ObservationScope): void { this.observationScope = scope }
-  async observation(execution: WorkExecution, associations?: readonly import('../work-types.ts').SessionAssociation[]): Promise<import('./observation.ts').ExecutionObservation> {
+  async observation(execution: WorkExecution, associations?: readonly import('../work-types.ts').SessionAssociation[], reporter?: import('@deepseek-ai/dsh-tools').ToolExecutionToken): Promise<import('./observation.ts').ExecutionObservation> {
     const { sessionKey } = await import('./observation.ts')
     const roots = new Map<string, { session: import('../work-types.ts').SessionRef; role: import('./observation.ts').ObservedSession['role']; parent?: import('../work-types.ts').SessionRef }>()
     const blockers: import('./observation.ts').ExecutionBlocker[] = []
@@ -109,6 +113,8 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     for (const binding of bindings) roots.set(sessionKey(binding.session), { session: binding.session, role: binding.purpose })
     for (const old of execution.retired ?? []) roots.set(sessionKey(old.session), { session: old.session, role: 'retired' })
     roots.set(sessionKey(execution.session), { session: execution.session, role: 'current' })
+    const reporting = reporter && this.activeTools.get(reporter)
+    const trustedReport = reporting?.name === 'work_report' && !reporting.parent && reporting.agent?.id === execution.session.sessionId ? reporting : undefined
     const sessions: import('./observation.ts').ObservedSession[] = []
     const seen = new Set<string>()
     for (const root of roots.values()) {
@@ -121,7 +127,11 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       try {
         const row = await this.runtime.executionFacts(SessionId(root.session.sessionId), this.runtimeId, root.role, root.parent)
         sessions.push(row)
-        if (row.status === 'running' || row.status === 'unknown') blockers.push({ code: row.status === 'unknown' ? 'executor-state-unknown' : 'executor-unsettled', session: row.session })
+        const active = [...this.activeTools.values()].filter(call => call.agent?.id === row.session.sessionId)
+        const ownReport = row.role === 'current' && trustedReport && active.length === 1 && active[0].token === trustedReport.token
+        const outstanding = (row.tools ?? []).filter(call => !(ownReport && call.callId === trustedReport?.callId && call.name === 'work_report'))
+        if (outstanding.length || active.some(call => call.token !== (ownReport && trustedReport.token))) blockers.push({ code: 'tool-result-pending', session: row.session })
+        if ((row.status === 'running' && !ownReport) || row.status === 'unknown') blockers.push({ code: row.status === 'unknown' ? 'executor-state-unknown' : 'executor-unsettled', session: row.session })
         if (row.waitingHuman) blockers.push({ code: 'executor-waiting-human', session: row.session })
         for (const child of row.children) {
           if (!child.returned || (child.mode === 'continuable' && child.result !== 'consumed') || child.mode === 'unknown') blockers.push({ code: 'native-result-pending', session: row.session })

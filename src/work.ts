@@ -27,10 +27,10 @@ import type { HostResource, Project, ResourceRef, SessionCandidate, TaskRef, Wor
 export type * from './work-types.ts'
 
 /** Only trusted adapters construct authorization; browser payloads cannot supply it. */
-export interface WorkActor { readonly operator: boolean; readonly session?: import('./work-types.ts').SessionRef; readonly agentId?: string }
+export interface WorkActor { readonly operator: boolean; readonly session?: import('./work-types.ts').SessionRef; readonly agentId?: string; readonly reporter?: import('@deepseek-ai/dsh-tools').ToolExecutionToken }
 /** Trusted resource observation with an explicit optional managed execution capability. */
 export interface WorkHost {
-  execution?: WorkExecutionHost & { connectObservation?(scope: (execution: import('./work-types.ts').WorkExecution) => Promise<readonly import('./work-types.ts').SessionAssociation[]>): void; observation?(execution: import('./work-types.ts').WorkExecution, associations?: readonly import('./work-types.ts').SessionAssociation[]): Promise<{ settlement: 'settled' | 'pending' | 'unknown' }> }
+  execution?: WorkExecutionHost & { connectObservation?(scope: (execution: import('./work-types.ts').WorkExecution) => Promise<readonly import('./work-types.ts').SessionAssociation[]>): void; observation?(execution: import('./work-types.ts').WorkExecution, associations?: readonly import('./work-types.ts').SessionAssociation[], reporter?: import('@deepseek-ai/dsh-tools').ToolExecutionToken): Promise<import('./work-execution/observation.ts').ExecutionObservation> }
   resources(): Promise<readonly HostResource[]>
   sessions(resource: HostResource): Promise<readonly SessionCandidate[]>
 }
@@ -178,11 +178,11 @@ export class WorkApplication {
       executionId: execution.id, owner: execution.owner, epoch: expectedEpoch ?? execution.epoch, content },
     { operator: false, session, agentId: execution.agentId })
   }
-  async sessionReport(session: import('./work-types.ts').SessionRef, callId: string, report: import('./work-progress.ts').TaskReport, expectedEpoch?: number): Promise<WorkResult> {
+  async sessionReport(session: import('./work-types.ts').SessionRef, callId: string, report: import('./work-progress.ts').TaskReport, expectedEpoch?: number, reporter?: import('@deepseek-ai/dsh-tools').ToolExecutionToken): Promise<WorkResult> {
     const execution = (await this.load()).executions.find(item => sameSession(item.session, session))
     if (!execution) return failed('forbidden', 'Calling Session is not a current Task coordinator')
     const commandId = `report:${createHash('sha256').update(JSON.stringify([session.runtimeId, session.sessionId, callId])).digest('hex')}`
-    return this.execute({ type: 'task.report', commandId, ref: execution.ref, executionId: execution.id, owner: execution.owner, epoch: expectedEpoch ?? execution.epoch, report }, { operator: false, session, agentId: execution.agentId })
+    return this.execute({ type: 'task.report', commandId, ref: execution.ref, executionId: execution.id, owner: execution.owner, epoch: expectedEpoch ?? execution.epoch, report }, { operator: false, session, agentId: execution.agentId, reporter })
   }
   async sessionOrganize(session: import('./work-types.ts').SessionRef, callId: string, organization: import('./work-organization.ts').TaskOrganization, expectedEpoch?: number): Promise<WorkResult> {
     const execution = (await this.load()).executions.find(item => sameSession(item.session, session))
@@ -570,7 +570,7 @@ export class WorkApplication {
       const fingerprint = JSON.stringify(command)
       const previous = state.commands.find(item => item.commandId === command.commandId)
       if (previous) return previous.fingerprint === fingerprint ? previous.result : { status: 'conflict', error: { code: 'command-id-reused', message: 'Command ID already has different content' } }
-      const result = await this.apply(state, command, admissionChoices, sourceCandidate)
+      const result = await this.apply(state, command, admissionChoices, sourceCandidate, actor.reporter)
       if (result.status !== 'completed') return result
       // Receipt owns a detached snapshot: subsequent commands must not alter retry results.
       state.commands.push({ commandId: command.commandId, fingerprint, result: structuredClone(result) })
@@ -924,7 +924,7 @@ export class WorkApplication {
     task.version++
     task.activity.push({ commandId: command.commandId, type: command.type, version: task.version })
   }
-  private async apply(state: WorkSnapshot, command: WorkCommand, admissionChoices?: import('./work-types.ts').HostExecutionChoices, candidate?: SourceCandidate): Promise<WorkResult> {
+  private async apply(state: WorkSnapshot, command: WorkCommand, admissionChoices?: import('./work-types.ts').HostExecutionChoices, candidate?: SourceCandidate, reporter?: import('@deepseek-ai/dsh-tools').ToolExecutionToken): Promise<WorkResult> {
     if (command.type === 'source.connect') {
       const target = candidate?.githubProject ?? command.githubProject, repository = candidate?.repository
       if (!target && !repository) return failed('github-invalid-scope', 'Source identification did not return a scope')
@@ -1030,6 +1030,12 @@ export class WorkApplication {
       if (managed && command.type === 'task.reconcile') { managed.item.attempts = 0; delete managed.item.retryAt; delete managed.item.recoveryBlocked }
       if (managed && continuousCompleted(state, execution) && (command.type === 'task.input' || command.type === 'task.continue' || (command.type === 'task.control' && command.action === 'resume'))) return failed('continuous-completed', 'Completed continuous work cannot restart')
       if (command.type === 'task.report') {
+        if (command.report.stage === 'done') {
+          // Read only: work_report may itself be executing on this Agent. Never
+          // enter maintenance/whenIdle before accepting its business conclusion.
+          const facts = await this.host.execution?.observation?.(execution, task.sessions, reporter)
+          if (facts?.settlement !== 'settled') return failed('completion-results-unsettled', `完成前须收取并核验必要执行结果：${facts?.blockers.map(item => `${item.code}:${item.session.sessionId}${item.jobId ? `:${item.jobId}` : ''}`).join(', ') || 'execution-observation-unavailable'}`)
+        }
         const result = applyTaskReport(state, execution, command.report, command.commandId)
         if (result.status === 'completed' && managed && command.report.stage === 'done') managed.item.state = 'completed'
         return result
