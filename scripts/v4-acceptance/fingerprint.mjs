@@ -12,7 +12,7 @@ export function validateRelease(manifest) {
   for (const role of roles) if (!manifest.artifacts?.some(item => item.role === role)) throw Error(`missing ${role}`)
   for (const key of ['hostRoot', 'rollbackHostRoot']) {
     if (!isAbsolute(manifest[key] ?? '')) throw Error(`missing ${key}`)
-    if (manifest[key] === shared || manifest[key].startsWith(shared + '/')) throw Error('shared dev host is forbidden')
+    if (manifest[key] === shared || manifest[key].startsWith(shared + '/') || manifest[key] === shared+'.worktrees/v4-job-observation' || manifest[key].startsWith(shared+'.worktrees/v4-job-observation/')) throw Error('shared dev/implementer host is forbidden')
   }
   if (manifest.hostRoot === manifest.rollbackHostRoot) throw Error('new and rollback host must be independent')
   const seen = new Set()
@@ -34,6 +34,13 @@ export async function verifyRelease(manifest) {
   for (const root of [manifest.hostRoot, manifest.rollbackHostRoot]) if (await realpath(root) !== root) throw Error('host roots must be canonical, not shared links')
   const git = spawnSync('git', ['-C', manifest.hostRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' })
   if (git.status !== 0 || git.stdout.trim() !== manifest.hostCommit) throw Error('host commit mismatch')
+  const rollbackCommit='a45068d2ec03326c800c68c9bdcd47508e3ccb9c'
+  const oldGit=spawnSync('git',['-C',manifest.rollbackHostRoot,'rev-parse','HEAD'],{encoding:'utf8'})
+  if(oldGit.status!==0||oldGit.stdout.trim()!==rollbackCommit)throw Error('rollback host must be fixed a45068d2')
+  for(const root of [manifest.hostRoot,manifest.rollbackHostRoot]){
+    const status=spawnSync('git',['-C',root,'status','--porcelain'],{encoding:'utf8'})
+    if(status.status!==0||status.stdout.trim())throw Error('host source changed/uncommitted after build')
+  }
   const artifacts = new Map()
   for (const artifact of manifest.artifacts) {
     const path = await realpath(artifact.path)
@@ -56,6 +63,7 @@ export async function verifyRelease(manifest) {
     const proof = JSON.parse(artifacts.get(role).bytes)
     const expectedRoot = role === 'host-smoke' ? manifest.hostRoot : manifest.rollbackHostRoot
     if (proof.passed !== true || proof.hostRoot !== expectedRoot || proof.cliSha256 !== artifacts.get(role === 'host-smoke' ? 'host-cli' : 'rollback-cli').sha256 || !Array.isArray(proof.imports) || proof.imports.length < 5 || proof.imports.some(item => item.ok !== true)) throw Error(`invalid executable/dynamic import proof: ${role}`)
+    if(role==='rollback-smoke'&&proof.hostCommit!==rollbackCommit)throw Error('rollback smoke source commit mismatch')
     await verifyImports(proof.imports, expectedRoot)
     if (role === 'host-smoke' && (proof.hostCommit !== manifest.hostCommit || proof.jobsObserve !== true || proof.appendIgnorable !== true)) throw Error('host142 capability proof missing')
   }

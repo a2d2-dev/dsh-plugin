@@ -1,0 +1,89 @@
+import { readFile, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { spawnSync } from 'node:child_process'
+import { join } from 'node:path'
+import { liveCut } from './live-cut.mjs'
+import { canonical } from './retention.mjs'
+import { permitsSystemGenesis } from './data-genesis.mjs'
+import { targets } from './profile-actions.mjs'
+
+import { setTimeout as delay } from 'node:timers/promises'
+
+const hash=bytes=>createHash('sha256').update(bytes).digest('hex')
+function runBrowser(binary,args,input){
+  const result=spawnSync(binary,['--session','a2d2-v4-qa',...args],{input,encoding:'utf8',timeout:60000,maxBuffer:16*1024*1024})
+  if(result.status!==0)throw Error('dedicated browser verification failed; inspect private action log')
+  return result.stdout
+}
+export async function verifyLive(plan,side){
+  const target=targets[plan.program],selected=plan.profiles[side]
+  if(!target||plan.origin!==target.origin)throw Error('wrong live origin')
+  if(!plan.browser?.path||hash(await readFile(plan.browser.path))!==plan.browser.sha256)throw Error('pinned agent-browser executable missing/changed')
+  const browser=(args,input)=>runBrowser(plan.browser.path,args,input)
+  const evaluate=script=>{
+    const value=JSON.parse(browser(['--json','eval','--stdin'],script))
+    if(value.success!==true||!Object.hasOwn(value.data??{},'result'))throw Error('invalid browser evaluation envelope')
+    return value.data.result
+  }
+  let run
+  const deadline=Date.now()+30000
+  while(Date.now()<deadline){
+    try{
+      const candidate=JSON.parse(await readFile(join(target.profile,'.v4-141-current-run.json')))
+      if(candidate.origin===plan.origin&&candidate.cli===join(selected.hostRoot,'apps/cli/lib/bin.js')){
+        await readFile(`/proc/${candidate.pid}/stat`);run=candidate;break
+      }
+    }catch(error){if(!['ENOENT','ESRCH'].includes(error.code))throw error}
+    await delay(200)
+  }
+  if(!run)throw Error('matching live host did not become ready at the original origin')
+  const args=(await readFile(`/proc/${run.pid}/cmdline`)).toString().split('\0')
+  if(args[1]!==run.cli||!args.includes('web'))throw Error('live process is not the verified host CLI')
+  const installedClientSha256=hash(await readFile(join(target.profile,'node_modules/dsh-a2d2/lib/client.js')))
+  if(installedClientSha256!==selected.clientSha256)throw Error('installed client does not match prepared artifact')
+  const before=JSON.parse(await readFile(plan.liveCutPath))
+  const after=await liveCut(plan.program,join(plan.evidenceRoot,`${side}-live-cut`))
+  const map=new Map(after.sessions.map(session=>[session.id,session]))
+  for(const old of before.sessions){
+    const current=map.get(old.id)
+    if(!current||current.cwd!==old.cwd||old.eventHashes.some((sha,index)=>current.eventHashes[index]!==sha))throw Error('live Session identity/accepted history lost')
+    if(old.config&&canonical(old.config)!==canonical(current.config))throw Error('live Session configuration selection drift')
+  }
+  const jsonAfter=new Map((after.jsonCut??[]).map(file=>[file.path,file]))
+  const genesis=[]
+  for(const old of before.jsonCut??[]){
+    const current=jsonAfter.get(old.path)
+    if(old.exists===false&&current?.exists===true){
+      const value=JSON.parse(await readFile(old.path,'utf8'))
+      if(!permitsSystemGenesis(old.path,false,value,plan.allowedSystemGenesis))throw Error('unapproved new persistent data')
+      genesis.push({path:old.path,...value});continue
+    }
+    if(!current||current.exists!==old.exists||(old.exists&&current.materialSha256!==old.materialSha256))throw Error('runtime/domain/workspace identity or material drift')
+  }
+  let desktop,narrow,resources
+  try{
+    browser(['open',plan.origin+'/'])
+    const password=(await readFile('/data/_dsh-dev/web-password','utf8')).trim()
+    evaluate(`fetch('/?token='+encodeURIComponent(${JSON.stringify(password)}),{credentials:'include'}).then(r=>({status:r.status}))`)
+    browser(['open',plan.origin+'/']) // full same-URL document refresh; no HMR promise
+    browser(['wait','--fn',"document.querySelector('[aria-label=\"Global panels\"]') !== null"])
+    evaluate(`(() => { const dialog=Array.from(document.querySelectorAll('[role="dialog"],dialog')).find(node=>Array.from(node.querySelectorAll('h2,[role="heading"]')).some(title=>title.textContent.trim()==='Preview Notice')); if(!dialog)return false; const buttons=Array.from(dialog.querySelectorAll('button')).filter(button=>button.textContent.trim()==='Continue'&&!button.disabled); if(buttons.length!==1)throw Error('preview dialog is ambiguous'); buttons[0].click(); return true })()` )
+    const expectsEntry=side==='new'||plan.program==='dsh-a2d2-v3-preview'
+    if(expectsEntry){
+      const result=evaluate("document.querySelector('[aria-label=\"Global panels\"]')?.textContent.includes('A²D²') === true")
+      if(result!==true)throw Error('actual global A²D² entry missing')
+    }
+    browser(['set','viewport','1440','1000'])
+    desktop=join(plan.evidenceRoot,`${side}-desktop.png`);browser(['screenshot',desktop])
+    browser(['set','viewport','390','844'])
+    narrow=join(plan.evidenceRoot,`${side}-narrow.png`);browser(['screenshot',narrow])
+    const observed=evaluate("performance.getEntriesByType('resource').map(r=>r.name).filter(name=>name.includes('/plugins/')&&name.includes('dsh-a2d2'))")
+    if(!Array.isArray(observed)||!observed.length||observed.some(url=>new URL(url).origin!==plan.origin))throw Error('browser plugin resource missing or outside original origin')
+    const payloads=evaluate(`Promise.all(${JSON.stringify(observed)}.map(async url=>{const response=await fetch(url,{cache:'reload',credentials:'same-origin'});return {url,status:response.status,contentType:response.headers.get('content-type'),body:await response.text()}}))`)
+    if(payloads.some(row=>row.status!==200||!row.contentType?.includes('javascript')))throw Error('actual plugin response failed or returned non-JavaScript content')
+    resources=payloads.map(({body,...row})=>({...row,sha256:hash(body),bytes:Buffer.byteLength(body)}))
+  }finally{browser(['close'])}
+  const result={source:'automatic-acceptance',status:'verified',side,origin:plan.origin,pid:run.pid,cli:run.cli,installedClientSha256,retainedSessions:before.sessions.length,genesis,desktop:{path:desktop,sha256:hash(await readFile(desktop))},narrow:{path:narrow,sha256:hash(await readFile(narrow))},resources,scope:'same URL browser refresh + native process/client fingerprint + public Session accepted-prefix/config selection; effective live permissions and real-model E2E remain separate'}
+  await writeFile(join(plan.evidenceRoot,`${side}-verification.json`),JSON.stringify(result,null,2)+'\n',{flag:'wx',mode:0o600})
+  return result
+}
