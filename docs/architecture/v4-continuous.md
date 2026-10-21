@@ -54,6 +54,14 @@ npx --yes pnpm@10.26.2 typecheck
 
 `continuous.block {nodeId,blocked}` 修改持久约束并推进草案版本。重新预览必须遵守 Block；模型返回 Block、越界身份或错误负责人分别返回 `planning-blocked-issue`、`planning-outside-source`、`planning-outside-scope`。模型故障返回 `planning-model-failed`；无能力返回 `planning-model-unavailable`。重启由同一 snapshot 恢复，查询不重新调用模型。
 
+### 明确启用与接纳已有执行
+
+`continuous.set-enabled {enabled:true,expectedVersion}` 将最新预览版本写入 `planning.enabledPlanVersion`。草案、范围或 Block 版本未经预览则具名拒绝。已接纳的 active/等待项不由重规划重建或抹除。新接入按已启用模型步骤排列，Block 只阻止未来接入；运行中 Block 保留原协调身份与收尾。暂停规则仅停止接新，等待项原输入通过现有 inbox 与同一槽位恢复；主动暂停仍要求原公开 resume 命令。
+
+跨来源先查 externalBindings 的 canonical TaskRef。模型计划的 existing 步骤在明确启用后才原子写入 `ContinuousWorkItem.ref`，预览不会取得 claim 或阻塞原手动执行 guard。已有 execution 的 owner、epoch、Session、原资源及策略均保持；host.check 使用已预览的原上下文，且领取时重验，既有上下文改变必须重新预览。别的规则已有 claim 时只等待/观察。未明确预览的跨资源执行不自动接管。计划下一步进入固定事件/原 kickoff，不增加平行执行器。
+
+父项在原生子项分页未完整或已知子工作未验收时保留身份并安全让槽；不从 Issue 正文猜测结构化依赖。目前受信来源接口无原生 dependency 字段，模型能看到完整原话与已有父子/本地 Task 事实，依赖缺失不能冒称已查明。
+
 ### 后续整合
 
-显式启用与既有执行接纳将在同一 serial scheduler 上接线。D 的 `completion.closeout === 'settled'` 与 B 的可靠 host observation 是最终组合验收前置，外部同步 pending/error 不阻塞槽位；此分支先沿 base 的本地 done report 和 host.settle 合同开发。最终 #141 需真实既有实例模型及浏览器证据。
+D 的 `completion.closeout === 'settled'` 与 B 的可靠 host observation 是最终组合验收前置，外部同步 pending/error 不阻塞槽位；此分支先沿 base 的本地 done report 和 host.settle 合同开发。最终 #141 需真实既有实例模型及浏览器证据。

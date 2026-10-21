@@ -40,10 +40,43 @@ export function discoverContinuous(rule: ContinuousWorkRule, source: WorkSource)
       if (!item.ref && item.state === 'skipped' && item.reason === 'Issue is outside the current authorized scope') { item.state = 'queued'; delete item.reason }
     } else rule.items.push({ nodeId: issue.nodeId, title: issue.title, number: issue.number, url: issue.url, state: 'queued', attempts: 0 })
   }
+  const plan = rule.planning?.plans.find(plan => plan.version === rule.planning!.enabledPlanVersion)
+  for (const item of rule.items) {
+    if (item.ref) continue // Block never kills accepted work or its safe closeout.
+    if (rule.planning?.blocks.includes(item.nodeId)) { item.state = 'blocked'; item.reason = 'Issue is excluded by the persistent Block list'; continue }
+    if (rule.planning) {
+      const step = plan?.steps.find(step => step.nodeId === item.nodeId)
+      if (!step) { item.state = 'skipped'; item.reason = 'Issue is not in an explicitly enabled model plan' }
+      else if (step.mode === 'wait') { item.state = 'waiting'; item.reason = step.nextAction }
+      else if (eligible.has(item.nodeId) && ['skipped', 'waiting'].includes(item.state)) { item.state = 'queued'; delete item.reason }
+    }
+  }
+  if (plan) rule.items.sort((a, b) => {
+    const rank = (nodeId: string) => { const index = plan.steps.findIndex(step => step.nodeId === nodeId); return index < 0 ? Number.MAX_SAFE_INTEGER : index }
+    return rank(a.nodeId) - rank(b.nodeId)
+  })
   for (const item of rule.items) if (!item.ref && item.state === 'queued' && !eligible.has(item.nodeId)) {
     item.state = 'skipped'; item.reason = 'Issue is outside the current authorized scope'
   }
 }
+export function continuousDependenciesReady(state: WorkSnapshot, rule: ContinuousWorkRule, nodeId: string): boolean {
+  const source = state.sources.find(source => source.id === rule.sourceId)
+  const issue = source?.observations.find(item => item.issue.nodeId === nodeId)?.issue
+  const item = rule.items.find(item => item.nodeId === nodeId)
+  const done = (ref: TaskRef) => {
+    const task = state.tasks.find(task => task.id === ref.taskId && task.projectId === ref.projectId)
+    return task?.progress?.stage === 'done' && task.progress.specificationVersion === task.specification.version
+  }
+  const binding = state.externalBindings.find(binding => binding.nodeId === nodeId)
+  const task = binding && state.tasks.find(task => task.id === binding.ref.taskId && task.projectId === binding.ref.projectId)
+  const ready = !issue?.subIssues?.hasNextPage && (issue?.subIssues?.items ?? []).every(child => {
+    const childBinding = state.externalBindings.find(binding => binding.nodeId === child.nodeId)
+    return child.state === 'closed' || !!childBinding && done(childBinding.ref)
+  }) && (task?.children ?? []).every(done)
+  if (!ready && item) item.reason = `Issue ${nodeId} is waiting for complete child/dependency acceptance`
+  return ready
+}
+
 export const MAX_CONTINUOUS_ATTEMPTS = 3
 export function continuousRetry(item: ContinuousWorkRule['items'][number], message: string): void {
   item.attempts++

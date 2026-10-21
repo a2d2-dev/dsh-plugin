@@ -1,4 +1,4 @@
-import { PlanningError, planningBasis, validatePlan } from './work-planning.ts'
+import { PlanningError, planningBasis, validatePlan, samePlannedExecution } from './work-planning.ts'
 import type { WorkPlanner } from './work-planning.ts'
 import { SourceError } from './work-sources/errors.ts'
 import type { SourceCandidate } from './work-sources/types.ts'
@@ -14,7 +14,7 @@ import { WorkExecutionError } from './work-execution/host.ts'
 import { continuationInFlight, MANAGED_WORK_INSTRUCTIONS, materialRequest, reserveContinuation, successorMessage } from './work-execution/continuation.ts'
 import { applyTaskOrganization } from './work-organization.ts'
 import { applyTaskReport, projectProgress, taskProgressView } from './work-progress.ts'
-import { continuousOwner, continuousMayAdvance, continuousCompleted, discoverContinuous, sourceScopeError, sameTask, continuousRetry, MAX_CONTINUOUS_ATTEMPTS } from './work-continuous.ts'
+import { continuousDependenciesReady, continuousOwner, continuousMayAdvance, continuousCompleted, discoverContinuous, sourceScopeError, sameTask, continuousRetry, MAX_CONTINUOUS_ATTEMPTS } from './work-continuous.ts'
 import { reconcileProjectSources } from './work-sources/discovery.ts'
 import type { WorkExecutionHost } from './work-execution/host.ts'
 export type { WorkExecutionHost } from './work-execution/host.ts'
@@ -152,6 +152,20 @@ export class WorkApplication {
     if (command.expectedVersion !== (previous?.version ?? 0)) return conflict(previous?.version ?? 0)
     if (command.type === 'continuous.set-enabled') {
       if (!previous) return failed('continuous-unconfigured', 'Configure the exact execution scope before enabling continuous work')
+      if (command.enabled && previous.planning) {
+        const plan = previous.planning.plans.at(-1)
+        if (!plan || plan.draftVersion !== previous.planning.draftVersion) return failed('planning-preview-required', 'Preview the current instruction, scope and Block before enabling')
+        try {
+          const fresh = planningBasis(state, previous)
+          const remaining = plan.steps.filter(step => !previous.items.some(item => item.nodeId === step.nodeId && item.ref))
+          validatePlan({ steps: remaining }, fresh, previous)
+          for (const step of remaining.filter(step => step.mode === 'existing')) {
+            if (!samePlannedExecution(plan.basis.candidates.find(candidate => candidate.issue.nodeId === step.nodeId)?.execution, fresh.candidates.find(candidate => candidate.issue.nodeId === step.nodeId)?.execution)) return failed('planning-coordination-changed', `Issue ${step.nodeId} coordination changed; preview again`)
+          }
+        }
+        catch (error) { return failed(error instanceof PlanningError ? error.code : 'planning-invalid', error instanceof Error ? error.message : 'Plan is no longer valid') }
+        previous.planning.enabledPlanVersion = plan.version
+      }
       previous.enabled = command.enabled; previous.version++
       return { status: 'completed', continuousRule: previous }
     }
@@ -168,6 +182,7 @@ export class WorkApplication {
       scope: { assignee: command.assignee, labels: [...new Set(command.labels)].sort(), ...(command.assignee === '@me' ? { identity: { login: source.identity!.login, nodeId: source.identity!.nodeId } } : {}) },
       resource: command.resource, model: command.model, agentPreset: command.agentPreset, permissionPreset: command.permissionPreset,
       items: previous?.items ?? [], ...(previous?.active ? { active: previous.active } : {}),
+      ...(previous?.planning ? { planning: { ...previous.planning, scopeVersion: previous.planning.scopeVersion + 1, draftVersion: previous.planning.draftVersion + 1 }, enabled: false } : {}),
     }
     for (const item of rule.items) if (!item.ref && item.state === 'blocked') { item.state = 'queued'; item.attempts = 0; delete item.reason; delete item.retryAt }
     if (previous) Object.assign(previous, rule)
@@ -225,7 +240,10 @@ export class WorkApplication {
           rule.error = sourceScopeError(rule, source)
           const recovery = rule.items.find(item => item.recoveryBlocked)
           if (!rule.error && recovery) rule.error = { code: 'continuous-recovery-blocked', message: recovery.reason ?? 'Host recovery needs an explicit retry' }
-          if (!rule.error && source) discoverContinuous(rule, source)
+          if (!rule.error && source) {
+            discoverContinuous(rule, source)
+            if (rule.planning) for (const item of rule.items) if (item.state === 'queued') continuousDependenciesReady(state, rule, item.nodeId)
+          }
         }
       })
       for (const ruleId of (await this.load()).continuousRules!.map(rule => rule.id)) {
@@ -350,12 +368,17 @@ export class WorkApplication {
           continue
         }
         if (!rule.enabled || rule.error) continue
-        const candidate = rule.items.find(item => item.state === 'queued' && item.attempts < MAX_CONTINUOUS_ATTEMPTS && (!item.retryAt || Date.parse(item.retryAt) <= Date.now()))
+        const candidate = rule.items.find(item => item.state === 'queued' && (!rule.planning || continuousDependenciesReady(state, rule, item.nodeId)) && item.attempts < MAX_CONTINUOUS_ATTEMPTS && (!item.retryAt || Date.parse(item.retryAt) <= Date.now()))
         if (!candidate) continue
         let choices: import('./work-types.ts').HostExecutionChoices
         try {
-          choices = await host.check({ resource: rule.resource, model: rule.model, agentPreset: rule.agentPreset, permissionPreset: rule.permissionPreset,
-            sessionMode: 'create', session: { runtimeId: rule.resource.runtimeId, sessionId: `continuous-check-${rule.id}` } })
+          const canonical = state.externalBindings.find(binding => binding.nodeId === candidate.nodeId)
+          const existing = canonical && state.executions.find(execution => sameTask(execution.ref, canonical.ref))
+          const step = rule.planning?.plans.find(plan => plan.version === rule.planning!.enabledPlanVersion)?.steps.find(step => step.nodeId === candidate.nodeId)
+          choices = await host.check(existing && step?.mode === 'existing'
+            ? { resource: existing.resource, model: existing.model, agentPreset: existing.agentPreset, permissionPreset: existing.permissionPreset, sessionMode: 'reuse', session: existing.session }
+            : { resource: rule.resource, model: rule.model, agentPreset: rule.agentPreset, permissionPreset: rule.permissionPreset,
+                sessionMode: 'create', session: { runtimeId: rule.resource.runtimeId, sessionId: `continuous-check-${rule.id}` } })
         } catch (error) {
           await this.sourceTransaction(async state => {
             const current = state.continuousRules!.find(rule => rule.id === ruleId)!
@@ -371,17 +394,47 @@ export class WorkApplication {
           if (freshSource && !sourceScopeError(current, freshSource)) discoverContinuous(current, freshSource)
           const item = current.items.find(item => item.nodeId === candidate.nodeId)!
           if (current.active || !current.enabled || current.version !== rule.version || item.state !== 'queued' || sourceScopeError(current, state.sources.find(source => source.id === current.sourceId))) return undefined
+          if (current.planning && !continuousDependenciesReady(state, current, item.nodeId)) return undefined
           const commandId = `continuous:${current.id}:${createHash('sha256').update(item.nodeId).digest('hex')}`
           // Reserve import, binding, execution and slot in one snapshot. No host side effects precede this commit.
           const draft = structuredClone(state)
-          const imported = applySourceCommand(draft, { type: 'source.import', commandId: `${commandId}:import`, projectId: current.projectId, sourceId: current.sourceId, nodeId: item.nodeId })
+          const canonical = draft.externalBindings.find(binding => binding.nodeId === item.nodeId)
+          const imported = canonical
+            ? { status: 'completed' as const, ref: canonical.ref, task: taskAt(draft, canonical.ref) }
+            : applySourceCommand(draft, { type: 'source.import', commandId: `${commandId}:import`, projectId: current.projectId, sourceId: current.sourceId, nodeId: item.nodeId })
           if (imported.status !== 'completed' || !imported.ref || !imported.task) { item.state = 'blocked'; item.reason = imported.status !== 'completed' ? imported.error.message : 'Issue import returned no task'; return undefined }
           const existing = draft.executions.find(execution => sameTask(execution.ref, imported.ref))
-          if (existing) { item.state = 'skipped'; item.reason = 'Issue already has an execution; its existing owner is retained'; return undefined }
+          if (existing) {
+            const other = continuousOwner(draft, existing.ref)
+            if (other && other.rule.id !== current.id) { item.state = 'waiting'; item.reason = `Canonical Task is owned by rule ${other.rule.id}; observe without advancing`; return undefined }
+            const accepted = imported.task.progress?.stage === 'done' && imported.task.progress.specificationVersion === imported.task.specification.version
+            const plan = current.planning?.plans.find(plan => plan.version === current.planning!.enabledPlanVersion)
+            const step = plan?.steps.find(step => step.nodeId === item.nodeId)
+            if (current.planning && (step?.mode !== 'existing' || !samePlannedExecution(plan?.basis.candidates.find(candidate => candidate.issue.nodeId === item.nodeId)?.execution, existing))) { item.state = 'waiting'; item.reason = 'Canonical execution coordination changed after preview; preview again'; return undefined }
+            if ((!current.planning && (!sameResource(existing.resource, current.resource) || existing.permissionPreset !== current.permissionPreset || existing.agentPreset !== current.agentPreset)) || existing.agentId !== imported.task.agentId) { item.state = 'waiting'; item.reason = 'Canonical execution uses another authorized resource or policy; observe without changing owner'; return undefined }
+            if (existing.state === 'paused' || existing.control?.action === 'pause') { item.state = 'waiting'; item.reason = 'Canonical execution requires explicit resume'; return undefined }
+            const reservedRule = draft.continuousRules!.find(rule => rule.id === ruleId)!
+            const reserved = reservedRule.items.find(candidate => candidate.nodeId === item.nodeId)!
+            reserved.ref = existing.ref; reserved.executionId = existing.id; reserved.state = accepted ? 'completed' : existing.state === 'waiting' ? 'waiting' : 'active'
+            delete reserved.reason
+            if (reserved.state === 'active' || accepted) reservedRule.active = existing.ref
+            if (reserved.state === 'active' && step && plan) existing.events.push({ id: `continuous-plan:${current.id}:${plan.version}:${item.nodeId}`, text: `Continue the already authorized canonical Issue work. Planned next action: ${step.nextAction}\nReason: ${step.why}\nPreserve existing decisions and acceptance requirements. This grants no additional permissions.`, kind: 'input', delivery: 'accepted', acceptance: 'unassessed' })
+            if (canonical && !canonical.sourceIds.includes(current.sourceId)) canonical.sourceIds.push(current.sourceId)
+            Object.assign(state, draft)
+            // Running/waiting/completed executions are observed through the same scheduler; never send another kickoff.
+            return reserved.state === 'active' && host.status(existing) !== 'running' ? existing.id : undefined
+          }
           const result = await this.apply(draft, { type: 'task.start', commandId, ref: imported.ref, expectedVersion: imported.task.version, agentId: imported.task.agentId,
             resource: current.resource, model: current.model, agentPreset: current.agentPreset, permissionPreset: current.permissionPreset }, choices)
           if (result.status !== 'completed' || !result.execution) { continuousRetry(item, result.status !== 'completed' ? result.error.message : 'Start returned no execution'); return undefined }
           const reservedRule = draft.continuousRules!.find(rule => rule.id === ruleId)!
+          const planned = reservedRule.planning?.plans.find(plan => plan.version === reservedRule.planning!.enabledPlanVersion)?.steps.find(step => step.nodeId === candidate.nodeId)
+          if (planned) {
+            const kickoff = result.execution.events.find(event => event.id === `kickoff:${result.execution!.id}`)!
+            const suffix = `\nContinuous plan next action: ${planned.nextAction}\nReason: ${planned.why}\nPreserve the full accepted Issue requirements and existing permissions.`
+            if (kickoff.text.length + suffix.length > 100_000) { item.state = 'blocked'; item.reason = 'Planned next action exceeds the bounded kickoff limit'; return undefined }
+            kickoff.text += suffix
+          }
           const reserved = reservedRule.items.find(item => item.nodeId === candidate.nodeId)!
           reserved.ref = imported.ref; reserved.executionId = result.execution.id; reserved.state = 'active'; delete reserved.reason; delete reserved.retryAt
           reservedRule.active = imported.ref
@@ -764,6 +817,10 @@ export class WorkApplication {
         if (!source.observations.some(item => item.issue.nodeId === command.nodeId) && !rule.planning.blocks.includes(command.nodeId)) return failed('planning-unknown-issue', `Issue ${command.nodeId} is not an observed stable identity`)
         rule.planning.blocks = rule.planning.blocks.filter(nodeId => nodeId !== command.nodeId)
         if (command.blocked) rule.planning.blocks.push(command.nodeId)
+        else {
+          const item = rule.items.find(item => item.nodeId === command.nodeId && !item.ref && item.reason === 'Issue is excluded by the persistent Block list')
+          if (item) { item.state = 'queued'; item.attempts = 0; delete item.reason }
+        }
         rule.planning.draftVersion++
       }
       rule.version++

@@ -5,7 +5,7 @@ import type { ContinuousWorkRule } from './work-types.ts'
 import { sourceScopeError } from './work-continuous.ts'
 
 const text = z.string().trim().min(1).max(100_000)
-export const planStepSchema = z.object({ nodeId: z.string().min(1).max(256), why: text, nextAction: text, mode: z.enum(['new', 'existing', 'wait']) }).strict()
+export const planStepSchema = z.object({ nodeId: z.string().min(1).max(256), why: text.max(10_000), nextAction: text.max(10_000), mode: z.enum(['new', 'existing', 'wait']) }).strict()
 export const planOutputSchema = z.object({ steps: z.array(planStepSchema).max(1000) }).strict()
 export const planningBasisSchema = z.object({
   instruction: text, supplements: z.array(text), scopeVersion: z.number().int().positive(), blocks: z.array(z.string()),
@@ -36,10 +36,18 @@ export function planningBasis(state: WorkSnapshot, rule: ContinuousWorkRule): Pl
     const execution = task && state.executions.find(execution => execution.ref.taskId === task.id && execution.ref.projectId === task.projectId)
     const owner = task && state.continuousRules?.find(rule => rule.items.some(item => item.ref?.taskId === task.id && item.ref.projectId === task.projectId))
     // Only canonical work facts; unrelated Session history never enters a planning request.
-    return { issue, ...(task ? { task: JSON.parse(JSON.stringify({ ref: binding!.ref, goal: task.goal, specification: task.specification, progress: task.progress, children: task.children, parent: task.parent, breakdown: task.breakdown })) } : {}),
-      ...(execution ? { execution: JSON.parse(JSON.stringify({ id: execution.id, ref: execution.ref, owner: execution.owner, epoch: execution.epoch, resource: execution.resource, session: execution.session, state: execution.state, control: execution.control, error: execution.error })) } : {}), ...(owner ? { ownerRuleId: owner.id } : {}) }
+    return { issue, ...(task ? { task: JSON.parse(JSON.stringify({ ref: binding!.ref, agentId: task.agentId, goal: task.goal, specification: task.specification, progress: task.progress, children: task.children, parent: task.parent, breakdown: task.breakdown })) } : {}),
+      ...(execution ? { execution: JSON.parse(JSON.stringify({ id: execution.id, ref: execution.ref, agentId: execution.agentId, owner: execution.owner, epoch: execution.epoch, resource: execution.resource, model: execution.model, agentPreset: execution.agentPreset, permissionPreset: execution.permissionPreset, session: execution.session, state: execution.state, control: execution.control, error: execution.error })) } : {}), ...(owner ? { ownerRuleId: owner.id } : {}) }
   })
   return planningBasisSchema.parse({ instruction: rule.planning.instruction, supplements: rule.planning.supplements, blocks: rule.planning.blocks, scopeVersion: rule.planning.scopeVersion, source, candidates })
+}
+
+export function samePlannedExecution(saved: unknown, current: unknown): boolean {
+  const pick = (value: unknown) => {
+    const execution = value as Record<string, unknown> | undefined
+    return execution && Object.fromEntries(['id', 'ref', 'agentId', 'owner', 'epoch', 'resource', 'model', 'agentPreset', 'permissionPreset', 'session'].map(key => [key, execution[key]]))
+  }
+  return JSON.stringify(pick(saved)) === JSON.stringify(pick(current))
 }
 
 export function validatePlan(output: unknown, basis: PlanningBasis, rule: ContinuousWorkRule): PlanOutput {
@@ -56,10 +64,16 @@ export function validatePlan(output: unknown, basis: PlanningBasis, rule: Contin
     if (issue.state !== 'open' || !rule.scope.labels.every(label => issue.labels.includes(label)) || (rule.scope.assignee === '@me' && !issue.assignees.some(login => login.toLowerCase() === rule.scope.identity!.login.toLowerCase()))) throw new PlanningError('planning-outside-scope', `Issue ${step.nodeId} is outside the authorized assignee/label/open scope`)
     if (candidate.ownerRuleId && candidate.ownerRuleId !== rule.id && step.mode !== 'wait') throw new PlanningError('planning-other-rule-owner', `Issue ${step.nodeId} is owned by rule ${candidate.ownerRuleId}; observe or wait`)
     if (step.mode === 'new' && candidate.execution || step.mode === 'existing' && !candidate.execution) throw new PlanningError('planning-execution-mismatch', `Issue ${step.nodeId} execution mode disagrees with its canonical Task`)
-    if (step.mode !== 'wait' && (issue.subIssues?.hasNextPage || issue.subIssues?.items.some(child => child.state === 'open' && !seen.has(child.nodeId)))) throw new PlanningError('planning-child-coverage', `Issue ${step.nodeId} requires complete child coverage before parent advancement`)
+    const childDone = (nodeId: string) => {
+      const child = basis.candidates.find(candidate => candidate.issue.nodeId === nodeId)?.task as { specification?: { version: number }; progress?: { stage: string; specificationVersion: number } } | undefined
+      return child?.progress?.stage === 'done' && child.progress.specificationVersion === child.specification?.version
+    }
+    if (step.mode !== 'wait' && (issue.subIssues?.hasNextPage || issue.subIssues?.items.some(child => child.state === 'open' && !seen.has(child.nodeId) && !childDone(child.nodeId)))) throw new PlanningError('planning-child-coverage', `Issue ${step.nodeId} requires complete child coverage before parent advancement`)
     const execution = candidate.execution as { state?: string; control?: { action?: string }; resource?: { runtimeId: string; workspaceId: string } } | undefined
     if (step.mode === 'existing' && (execution?.state === 'paused' || execution?.control?.action === 'pause')) throw new PlanningError('planning-explicit-resume-required', `Issue ${step.nodeId} was explicitly paused; resume it explicitly`)
-    if (step.mode === 'existing' && (execution?.resource?.runtimeId !== rule.resource.runtimeId || execution.resource.workspaceId !== rule.resource.workspaceId)) throw new PlanningError('planning-resource-mismatch', `Issue ${step.nodeId} existing execution uses another resource`)
+    const task = candidate.task as { agentId?: string; progress?: { stage?: string } } | undefined
+    if (step.mode === 'existing' && (candidate.execution as { agentId?: string } | undefined)?.agentId !== task?.agentId) throw new PlanningError('planning-coordination-invalid', `Issue ${step.nodeId} has no valid responsible Agent coordination`)
+    if (step.mode === 'existing' && task?.progress?.stage === 'done') throw new PlanningError('planning-completed-work', `Issue ${step.nodeId} is already locally accepted; observe or wait without restarting`)
   }
   return parsed.data
 }
