@@ -15,6 +15,50 @@ function runBrowser(binary,args,input){
   if(result.status!==0)throw Error('dedicated browser verification failed; inspect private action log')
   return result.stdout
 }
+// Fixed a450/8282 Host prepareSource + buildComboScript contract.
+const sourceMapTrailer=/(?:\r?\n)?\/\/# sourceMappingURL=[^\r\n]*(?:\r?\n)?$/
+const sourceUrlTrailer=/(?:\r?\n)?\/\/# sourceURL=([^\r\n]+)(?:\r?\n)?$/
+function combo(url,origin){
+  const parsed=new URL(url)
+  const match=parsed.search.match(/^\?\?(.+)&rev=([a-f0-9]{12})$/)
+  if(parsed.origin!==origin||parsed.pathname!=='/plugins/'||parsed.hash||!match)throw Error('unexpected browser module URI')
+  const resources=match[1].split(',')
+  const ids=resources.map(resource=>{
+    const match=resource.match(/^((?:@[a-z0-9._-]+\/)?[a-z0-9._-]+)\/client\.js$/i)
+    if(!match)throw Error('unexpected browser module URI')
+    return match[1]
+  })
+  if(new Set(ids).size!==ids.length)throw Error('duplicate browser module')
+  return {ids,trailer:`//# sourceMappingURL=??${ids.map(id=>id+'/client.js.map').join(',')}&rev=${match[2]}\n`}
+}
+function response(row,origin){
+  if(row.status!==200||!row.contentType?.includes('javascript')||typeof row.body!=='string')throw Error('actual plugin response failed or returned non-JavaScript content')
+  const parsed=combo(row.url,origin)
+  if(!row.body.endsWith(parsed.trailer))throw Error('browser module source-map trailer mismatch')
+  return {...parsed,source:row.body.slice(0,-parsed.trailer.length)}
+}
+export function verifyBrowserClients({origin,payloads,modules,client,clientSha256}){
+  if(hash(client)!==clientSha256)throw Error('selected client fingerprint mismatch')
+  let prepared=client.toString().replace(sourceUrlTrailer,'').replace(sourceMapTrailer,'')
+  if(!prepared.endsWith('\n'))prepared+='\n'
+  if(!Array.isArray(payloads)||!payloads.length||!Array.isArray(modules))throw Error('browser plugin resource missing')
+  const singletons=new Map()
+  for(const row of modules){
+    const parsed=response(row,origin)
+    if(parsed.ids.length!==1||singletons.has(parsed.ids[0]))throw Error('ambiguous browser module singleton')
+    if(parsed.ids[0]==='dsh-a2d2'&&parsed.source!==prepared+';\n')throw Error('browser response does not match selected client')
+    singletons.set(parsed.ids[0],parsed.source)
+  }
+  if(!singletons.has('dsh-a2d2'))throw Error('selected client module missing')
+  return payloads.map(row=>{
+    const parsed=response(row,origin)
+    if(!parsed.ids.includes('dsh-a2d2'))throw Error('selected client module missing from loaded combo')
+    const source=parsed.ids.map(id=>{if(!singletons.has(id))throw Error('browser combo module missing');return singletons.get(id)}).join('')
+    if(row.body!==source+parsed.trailer)throw Error('loaded browser combo differs from bound module responses')
+    const {body,...metadata}=row
+    return {...metadata,sha256:hash(body),bytes:Buffer.byteLength(body),clientSha256,preparedClientSha256:hash(prepared),binding:'host-prepared-client-and-ordered-combo'}
+  })
+}
 export async function verifyLive(plan,side){
   const target=targets[plan.program],selected=plan.profiles[side]
   if(!target||plan.origin!==target.origin)throw Error('wrong live origin')
@@ -80,8 +124,17 @@ export async function verifyLive(plan,side){
     const observed=evaluate("performance.getEntriesByType('resource').map(r=>r.name).filter(name=>name.includes('/plugins/')&&name.includes('dsh-a2d2'))")
     if(!Array.isArray(observed)||!observed.length||observed.some(url=>new URL(url).origin!==plan.origin))throw Error('browser plugin resource missing or outside original origin')
     const payloads=evaluate(`Promise.all(${JSON.stringify(observed)}.map(async url=>{const response=await fetch(url,{cache:'reload',credentials:'same-origin'});return {url,status:response.status,contentType:response.headers.get('content-type'),body:await response.text()}}))`)
-    if(payloads.some(row=>row.status!==200||!row.contentType?.includes('javascript')))throw Error('actual plugin response failed or returned non-JavaScript content')
-    resources=payloads.map(({body,...row})=>({...row,sha256:hash(body),bytes:Buffer.byteLength(body)}))
+    const ids=[...new Set(observed.flatMap(url=>combo(url,plan.origin).ids))]
+    const entries=evaluate('window.__DSH_BOOT__.entries.map(({id,url})=>({id,url}))')
+    const urls=ids.map(id=>{
+      const matches=entries.filter(row=>row.id===id)
+      if(matches.length!==1)throw Error('browser graph module missing or ambiguous')
+      const url=new URL(matches[0].url,plan.origin+'/').href
+      if(JSON.stringify(combo(url,plan.origin).ids)!==JSON.stringify([id]))throw Error('browser graph singleton module mismatch')
+      return url
+    })
+    const modules=evaluate(`Promise.all(${JSON.stringify(urls)}.map(async url=>{const response=await fetch(url,{cache:'reload',credentials:'same-origin'});return {url,status:response.status,contentType:response.headers.get('content-type'),body:await response.text()}}))`)
+    resources=verifyBrowserClients({origin:plan.origin,payloads,modules,client:await readFile(join(target.profile,'node_modules/dsh-a2d2/lib/client.js')),clientSha256:selected.clientSha256})
   }finally{browser(['close'])}
   const result={source:'automatic-acceptance',status:'verified',side,origin:plan.origin,pid:run.pid,cli:run.cli,installedClientSha256,retainedSessions:before.sessions.length,genesis,desktop:{path:desktop,sha256:hash(await readFile(desktop))},narrow:{path:narrow,sha256:hash(await readFile(narrow))},resources,scope:'same URL browser refresh + native process/client fingerprint + public Session accepted-prefix/config selection; effective live permissions and real-model E2E remain separate'}
   await writeFile(join(plan.evidenceRoot,`${side}-verification.json`),JSON.stringify(result,null,2)+'\n',{flag:'wx',mode:0o600})
