@@ -1,0 +1,18 @@
+{
+  "state": "planned-only-no-objects-created",
+  "run": "v4-152-6b252218-r01",
+  "workspacePath": "/data/_dsh-dev/acceptance-workspaces/v4-152-r01",
+  "resourceRef": null,
+  "projectId": null,
+  "defaultAgentId": null,
+  "ruleId": null,
+  "runLabel": "qa:v4-152-6b252218-r01",
+  "serialLabel": "qa:v4-152-6b252218-r01-serial",
+  "touchLabel": "qa:v4-152-6b252218-r01-touch",
+  "actualFixtureIdentities": [],
+  "actualProjectItems": [],
+  "allowedPlanNodes": [],
+  "actualExecutions": [],
+  "actualModelRequests": [],
+  "evidence": []
+}

@@ -1,0 +1,11 @@
+A2D2 V4 ACCEPTANCE #152 / #150
+run: v4-152-6b252218-r01
+fixture: A
+
+这是专用持续处理验收对象，不是开发任务。只允许在 /data/_dsh-dev/acceptance-workspaces/v4-152-r01 写A.proof.json；禁止clone、修改业务代码或接入任何其他Issue。
+
+先用work_control status取得实际Task/Execution/Session/owner/epoch，把正文保存为当前可核验规格。proof保存run、fixture、真实身份、decisions:{retainCount:3,keepTags:["stable"]}和实际checks。保存in-progress，再用work_control wait明确等待 RESUME-A-v4-152-6b252218-r01，立即结束轮次，不轮询或自行继续。
+
+只有收到上述真实继续令并正式恢复推进后，才核对数量3、stable、JSON解析及SHA256，逐项负责验收并报告done，closeExternal:true。该RESUME令同时授权按本正文既定条件收尾，不需另外猜测完成令。
+
+测试器可只改变一个纯验收touch标签制造版本差异，不改变本正文要求。如果本地已完成而远端关闭冲突，保留同一成果和完成事实，不重做、不重新start、不修改验收要求；由测试器解决专用远端状态后走completion补同步。模型自报不算路由证据，不伪造消费或真人来源。

@@ -1,0 +1,15 @@
+A2D2 V4 ACCEPTANCE #152 / #150
+run: v4-152-6b252218-r01
+fixture: P
+
+这是专用行为验收对象，不是开发任务。只允许在 /data/_dsh-dev/acceptance-workspaces/v4-152-r01 处理本run资料；禁止clone、修改业务代码或接入任何现有开发Issue。只允许写P.proof.json。
+
+先用work_control status读取真实Task/Execution/Session/owner/epoch，不编造身份或消费事实。把正文保存为当前规格的可核验验收项。已确认两项决定：镜像保留数量3，必须保留stable标签。proof保存run、fixture、真实执行身份、decisions:{retainCount:3,keepTags:["stable"]}和实际checks，并以JSON解析及SHA256独立核验。
+
+必要原生子只有本run的C和E。读取完整来源子项后明确采纳必要范围。C必须由自己的canonical Task按当前规格验收；E必须读取测试器真实交付proof/checksum和当前updatedAt，明确记录外部验收依据，Closed本身不足。不为E自动创建Task/Session。
+
+在本Task创建一个真实native只读校验child和一个自有后台checksum job，范围只限本run proof；实际child使用已授权的codex/gpt-6.1-sol/medium，并以真实请求回执核对。结果未正式收取时过早done应被拒绝且仍允许owner继续收尾；由owner正式job_output收取、读取真实结论后重新负责验收，不手造consumed通知。
+
+epoch=1时保存in-progress与两项具体决定后结束轮次，不wait/pause、不手工请求接续。收到宿主材料请求时，保存决定、证据、未完成项与下一步。epoch>1时先实际复述“数量3”“必须保留stable标签”及未完成项，再继续。
+
+等待明确完成令 FINISH-P-v4-152-6b252218-r01。必要子结果、native/job收取和本Task验收全部成立且收到该令后，才可报告done并请求关闭专用Issue。模型自报不算路由证据；不能冒充LF或其他真人。
