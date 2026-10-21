@@ -129,7 +129,9 @@
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
-    "@deepseek-ai/dsh-api-session-controller": { "optional": true }
+    "@deepseek-ai/dsh-api-session-controller": {
+      "optional": true
+    }
   },
   "dependencies": {
     "yaml": "^2.9.0"
@@ -163,6 +165,8 @@
     "@deepseek-ai/dsh-fs-local": "0.2.0-rc.2",
     "@deepseek-ai/dsh-fs-sandbox": "0.2.0-rc.2",
     "@deepseek-ai/dsh-invariants": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-jobs": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-jobs-local": "0.2.0-rc.2",
     "@deepseek-ai/dsh-llm": "0.2.0-rc.2",
     "@deepseek-ai/dsh-permission-presets": "0.2.0-rc.2",
     "@deepseek-ai/dsh-sandbox-local": "0.2.0-rc.2",
@@ -184,6 +188,7 @@
     "@deepseek-ai/dsh-system-prompt": "0.2.0-rc.2",
     "@deepseek-ai/dsh-tool-bash": "0.2.0-rc.2",
     "@deepseek-ai/dsh-tool-fs": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-tool-jobs": "0.2.0-rc.2",
     "@deepseek-ai/dsh-tools": "0.2.0-rc.2",
     "@deepseek-ai/dsh-typert-protocol": "0.2.0-rc.2",
     "@deepseek-ai/dsh-user-approval": "0.2.0-rc.2",
