@@ -6,6 +6,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import schema from '@deepseek-ai/schemastery'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { z } from 'zod'
+import { createLlmPlanner } from './work-planning/llm.ts'
 import { WorkApplication } from './work.ts'
 import { DshWorkHost } from './work-host.ts'
 import { createWorkHandler } from './work-route.ts'
@@ -44,7 +45,12 @@ export async function apply(ctx: Context, config: Config = {}): Promise<void> {
   if (!isAbsolute(directory)) throw new Error('a2d2-work directory must be absolute')
   const runtimeId = await runtimeIdentity(directory)
   const source = config.github === false ? undefined : ctx.get('a2d2GitHubSource') ?? new GitHubSource()
-  const app = new WorkApplication(directory, new DshWorkHost(ctx, runtimeId), source)
+  const planner = createLlmPlanner(options => {
+    const llm = ctx.get('llm')
+    if (!llm) throw new Error('Host LLM service is unavailable')
+    return llm.stream(options)
+  })
+  const app = new WorkApplication(directory, new DshWorkHost(ctx, runtimeId), source, planner)
   ctx.provide('a2d2Work', app)
   ctx.inject(['tools'], toolsCtx => { installWorkTools(toolsCtx, app, runtimeId); installWorkProgressTools(toolsCtx, app, runtimeId); installWorkOrganizationTools(toolsCtx, app, runtimeId) })
   ctx.inject(['agents'], executionCtx => { installWorkControlRecovery(executionCtx, app) })

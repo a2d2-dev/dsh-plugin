@@ -62,7 +62,7 @@ class Host implements WorkHost {
 function issue(number: number, assignees = ['alice'], labels = ['ready']): GitHubIssue {
   return { nodeId: `ISSUE_${number}`, number, title: `Issue ${number}`, url: `https://github.com/acme/repo/issues/${number}`, body: 'Implement the agreed work.', repository: { owner: 'acme', repository: 'repo' }, assignees, labels, state: 'open', updatedAt: '2026-01-01T00:00:00.000Z', observedAt: '2026-01-01T00:00:00.000Z' }
 }
-async function setup(enable = true) {
+async function setup(enable = true, planner?: import('../src/work-planning.ts').WorkPlanner) {
   const directory = await mkdtemp(join(tmpdir(), 'continuous-work-')); roots.push(directory)
   const host = new Host()
   const remote = { identity: { login: 'alice', nodeId: 'ALICE', name: null }, issues: [issue(1), issue(2), issue(3, ['bob']), issue(4, ['alice'], ['other'])] }
@@ -71,7 +71,7 @@ async function setup(enable = true) {
     project: async () => ({ identity: remote.identity, project: { nodeId: 'PROJECT', title: 'Roadmap', url: 'https://github.com/orgs/acme/projects/1', closed: false },
       items: remote.issues.map(issue => ({ id: `ITEM_${issue.nodeId}`, kind: 'issue', archived: false, issueNodeId: issue.nodeId, fields: [], fieldsPartial: false })), issues: remote.issues, observedAt: '2026-01-01T00:00:00.000Z' }),
   }
-  const app = new WorkApplication(directory, host, source)
+  const app = new WorkApplication(directory, host, source, planner)
   const connection = completed(await app.execute({ type: 'source.connect', commandId: 'connect', githubProject: { owner: 'acme', type: 'org', number: 1 } }, operator))
   const scope = { projectId: connection.project!.id, sourceId: connection.source!.id }
   const refresh = () => app.query({ type: 'source.issues', ...scope, page: 1, perPage: 100, assignee: '@me', state: 'open', refresh: true }, operator)
@@ -297,6 +297,55 @@ it('freezes completed managed acceptance against later specification or report m
   const task = completed(await h.app.query({ type: 'task.detail', ref: first.ref }, operator)).task!
   expect(await h.app.execute({ type: 'task.update-spec', commandId: 'after-done-spec', ref: first.ref, expectedVersion: task.version, goal: 'Changed goal', specification: 'Changed spec', acceptance: ['More work'] }, operator)).toMatchObject({ status: 'failed', error: { code: 'continuous-completed' } })
   expect(await h.app.execute({ type: 'task.report', commandId: 'after-done-report', ...fence(first), report: { specificationVersion: task.specification.version, stage: 'in-progress', summary: 'Restart', next: 'More work', blockers: [], criteria: [] } }, operator)).toMatchObject({ status: 'failed', error: { code: 'continuous-completed' } })
+})
+
+it('persists a natural language model plan without dispatching on preview or restart', async () => {
+  const generate = vi.fn(async (_basis: import('../src/work-planning.ts').PlanningBasis) => ({ steps: [{ nodeId: 'ISSUE_2', why: '先做第二项', nextAction: '核对完整要求', mode: 'new' }, { nodeId: 'ISSUE_1', why: '随后处理', nextAction: '实施并验收', mode: 'new' }] }))
+  const h = await setup(false, { generate }); completed(await h.app.execute(h.configure, operator))
+  completed(await h.app.execute({ type: 'continuous.instruct', commandId: 'instruction', ...h.scope, expectedVersion: 1, text: '先推进第二项，再处理第一项。' }, operator))
+  const preview = { type: 'continuous.preview', commandId: 'preview', ...h.scope, expectedVersion: 2 }
+  completed(await h.app.execute(preview, operator))
+  const rule = await h.status()
+  expect(rule.planning).toMatchObject({ instruction: '先推进第二项，再处理第一项。', plans: [{ version: 1, steps: [{ nodeId: 'ISSUE_2' }, { nodeId: 'ISSUE_1' }] }] })
+  expect(generate).toHaveBeenCalledTimes(1)
+  expect(generate.mock.calls[0]![0].candidates[0]!.issue.body).toBe('Implement the agreed work.')
+  expect(h.host.sends).toHaveLength(0)
+  await h.app.execute(preview, operator)
+  const restored = new WorkApplication(h.directory, h.host, h.source, { generate })
+  await restored.reconcileControls()
+  expect((await h.status(restored)).planning).toEqual(rule.planning)
+  expect(generate).toHaveBeenCalledTimes(1); expect(h.host.sessionsCreated.size).toBe(0)
+})
+
+it('rejects blocked, foreign, malformed and assignee-violating model plans with named errors', async () => {
+  let output: unknown = { steps: [] }
+  const h = await setup(false, { generate: async () => output }); completed(await h.app.execute(h.configure, operator))
+  completed(await h.app.execute({ type: 'continuous.instruct', commandId: 'instruction', ...h.scope, expectedVersion: 1, text: '处理我的工作' }, operator))
+  completed(await h.app.execute({ type: 'continuous.block', commandId: 'block', ...h.scope, expectedVersion: 2, nodeId: 'ISSUE_1', blocked: true }, operator))
+  for (const [nodeId, code] of [['ISSUE_1', 'planning-blocked-issue'], ['FOREIGN', 'planning-outside-source'], ['ISSUE_3', 'planning-outside-scope']]) {
+    output = { steps: [{ nodeId, why: 'reason', nextAction: 'work', mode: 'new' }] }
+    expect(await h.app.execute({ type: 'continuous.preview', commandId: `preview:${nodeId}`, ...h.scope, expectedVersion: 3 }, operator)).toMatchObject({ status: 'failed', error: { code } })
+  }
+  output = { steps: [{ number: 1 }] }
+  expect(await h.app.execute({ type: 'continuous.preview', commandId: 'malformed', ...h.scope, expectedVersion: 3 }, operator)).toMatchObject({ status: 'failed', error: { code: 'planning-malformed' } })
+  const restored = new WorkApplication(h.directory, h.host, h.source)
+  expect((await h.status(restored)).planning?.blocks).toEqual(['ISSUE_1'])
+  expect(h.host.sends).toHaveLength(0)
+})
+
+it('enables only a reviewed plan and dispatches its order while Block fences future intake', async () => {
+  const h = await setup(false, { generate: async () => ({ steps: [2, 1].map(number => ({ nodeId: `ISSUE_${number}`, why: '按委托优先级', nextAction: '实施', mode: 'new' })) }) })
+  completed(await h.app.execute(h.configure, operator))
+  completed(await h.app.execute({ type: 'continuous.instruct', commandId: 'instruct', ...h.scope, expectedVersion: 1, text: '先第二项' }, operator))
+  expect(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'too-early', ...h.scope, expectedVersion: 2, enabled: true }, operator)).toMatchObject({ status: 'failed', error: { code: 'planning-preview-required' } })
+  completed(await h.app.execute({ type: 'continuous.preview', commandId: 'preview', ...h.scope, expectedVersion: 2 }, operator))
+  completed(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'enable-plan', ...h.scope, expectedVersion: 3, enabled: true }, operator))
+  const first = await h.execution()
+  expect((await h.status()).items.find(item => item.state === 'active')?.nodeId).toBe('ISSUE_2')
+  completed(await h.app.execute({ type: 'continuous.block', commandId: 'block-next', ...h.scope, expectedVersion: 4, nodeId: 'ISSUE_1', blocked: true }, operator))
+  await reportDone(h.app, first); h.host.idle(first); await h.app.reconcileControls()
+  expect(h.host.sessionsCreated.size).toBe(1)
+  expect((await h.status()).items.find(item => item.nodeId === 'ISSUE_1')?.reason).toContain('Block')
 })
 
 it('bounds failed safe settlement, keeps the slot fenced, and allows explicit recovery without model restart', async () => {

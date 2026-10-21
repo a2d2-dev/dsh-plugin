@@ -1,3 +1,5 @@
+import { PlanningError, planningBasis, validatePlan } from './work-planning.ts'
+import type { WorkPlanner } from './work-planning.ts'
 import { SourceError } from './work-sources/errors.ts'
 import type { SourceCandidate } from './work-sources/types.ts'
 import { createHash, randomUUID } from 'node:crypto'
@@ -46,7 +48,7 @@ function sourceIssuesAt(state: WorkSnapshot, ref: TaskRef): import('./work-sourc
 /** Public local work commands and queries. One v3 snapshot is the only writer authority. */
 export class WorkApplication {
   private readonly file: string
-  constructor(readonly directory: string, readonly host: WorkHost, readonly source?: GitHubSourcePort) {
+  constructor(readonly directory: string, readonly host: WorkHost, readonly source?: GitHubSourcePort, readonly planner?: WorkPlanner) {
     if (!isAbsolute(directory)) throw new Error('Work record directory must be absolute')
     this.file = join(directory, 'work-v3.json')
     this.host.execution?.connect(async (sessionId, messages = []) => {
@@ -171,6 +173,44 @@ export class WorkApplication {
     if (previous) Object.assign(previous, rule)
     else (state.continuousRules ??= []).push(rule)
     return { status: 'completed', continuousRule: previous ?? rule }
+  }
+  private async previewContinuous(command: Extract<WorkCommand, { type: 'continuous.preview' }>): Promise<WorkResult> {
+    await mkdir(this.directory, { recursive: true, mode: 0o700 })
+    return withFileLock(join(this.directory, 'continuous.planning'), async () => {
+      const snapshot = await this.load()
+      const prior = snapshot.commands.find(item => item.commandId === command.commandId)
+      if (prior) return prior.fingerprint === JSON.stringify(command) ? prior.result : failed('command-id-reused', 'Command identity has different content')
+      const rule = snapshot.continuousRules?.find(rule => rule.projectId === command.projectId && rule.sourceId === command.sourceId)
+      if (!rule) return failed('continuous-unconfigured', 'Configure authorized scope and resources first')
+      if (rule.version !== command.expectedVersion) return conflict(rule.version)
+      try {
+        if (!this.planner) throw new PlanningError('planning-model-unavailable', 'Host LLM planning capability is unavailable')
+        const basis = planningBasis(snapshot, rule)
+        const output = await this.planner.generate(basis, rule.model)
+        const plan = validatePlan(output, basis, rule)
+        return this.sourceTransaction(async state => {
+          const current = state.continuousRules!.find(item => item.id === rule.id)!
+          if (current.version !== command.expectedVersion) return conflict(current.version)
+          const fresh = planningBasis(state, current)
+          if (JSON.stringify(fresh) !== JSON.stringify(basis)) return failed('planning-basis-changed', 'Source or canonical work changed while planning; preview again')
+          validatePlan(plan, fresh, current)
+          const planning = current.planning!
+          planning.plans.push({ version: (planning.plans.at(-1)?.version ?? 0) + 1, draftVersion: planning.draftVersion, basis, steps: plan.steps, createdAt: new Date().toISOString() })
+          delete planning.error
+          current.version++
+          const result: WorkResult = { status: 'completed', continuousRule: current }
+          state.commands.push({ commandId: command.commandId, fingerprint: JSON.stringify(command), result: structuredClone(result) })
+          return result
+        })
+      } catch (error) {
+        const detail = { code: error instanceof PlanningError ? error.code : 'planning-model-failed', message: error instanceof Error ? error.message : 'Model planning failed' }
+        await this.sourceTransaction(async state => {
+          const current = state.continuousRules!.find(item => item.id === rule.id)!
+          if (current.version === command.expectedVersion && current.planning) current.planning.error = detail
+        })
+        return failed(detail.code, detail.message)
+      }
+    })
   }
   /** Single-host persistent serial dispatch. This uses the ordinary task.start reservation and execution driver. */
   async reconcileContinuous(): Promise<void> {
@@ -368,6 +408,7 @@ export class WorkApplication {
     if (!actor.operator && !('executionId' in command)) return failed('forbidden', 'Session actors can only control their current execution')
     const recorded = actor.operator ? (await this.load()).commands.find(item => item.commandId === command.commandId) : undefined
     if (recorded && recorded.fingerprint !== JSON.stringify(command)) return { status: 'conflict', error: { code: 'command-id-reused', message: 'Command ID already has different content' } }
+    if (command.type === 'continuous.preview') return this.previewContinuous(command)
     if (!recorded && command.type === 'source.connect' && command.url) {
       if (!this.source?.identify) return failed('github-capability-unavailable', 'Source identification is unavailable')
       try { sourceCandidate = await this.source.identify(command.url) } catch (error) { return failed(error instanceof SourceError ? error.code : 'github-unavailable', error instanceof Error ? error.message : 'Source could not be identified') }
@@ -708,6 +749,25 @@ export class WorkApplication {
       const configured = applySourceCommand(state, target ? { type: 'source.configure-project', commandId: command.commandId, projectId: created.project.id, githubProject: target } : { type: 'source.configure', commandId: command.commandId, projectId: created.project.id, repository: repository! })
       if (configured.status === 'completed' && configured.source) remember(configured.source)
       return configured.status === 'completed' ? { ...configured, project: created.project } : configured
+    }
+    if (command.type === 'continuous.instruct' || command.type === 'continuous.block') {
+      const rule = state.continuousRules?.find(rule => rule.projectId === command.projectId && rule.sourceId === command.sourceId)
+      if (!rule) return failed('continuous-unconfigured', 'Configure authorized scope and resources first')
+      if (rule.version !== command.expectedVersion) return conflict(rule.version)
+      if (command.type === 'continuous.instruct') {
+        if (!rule.planning) rule.planning = { instruction: command.text, supplements: [], scopeVersion: 1, draftVersion: 1, blocks: [], plans: [] }
+        else { rule.planning.supplements.push(command.text); rule.planning.draftVersion++; delete rule.planning.error }
+        rule.enabled = false
+      } else {
+        if (!rule.planning) return failed('planning-instruction-required', 'Save an instruction before modifying Block')
+        const source = state.sources.find(source => source.id === rule.sourceId)!
+        if (!source.observations.some(item => item.issue.nodeId === command.nodeId) && !rule.planning.blocks.includes(command.nodeId)) return failed('planning-unknown-issue', `Issue ${command.nodeId} is not an observed stable identity`)
+        rule.planning.blocks = rule.planning.blocks.filter(nodeId => nodeId !== command.nodeId)
+        if (command.blocked) rule.planning.blocks.push(command.nodeId)
+        rule.planning.draftVersion++
+      }
+      rule.version++
+      return { status: 'completed', continuousRule: rule }
     }
     if (command.type === 'continuous.configure' || command.type === 'continuous.set-enabled') return this.configureContinuous(state, command, admissionChoices)
     if (command.type === 'source.configure-project' || command.type === 'source.configure' || command.type === 'source.set-enabled' || command.type === 'source.import' || command.type === 'source.link') return applySourceCommand(state, command)

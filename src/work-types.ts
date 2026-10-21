@@ -85,12 +85,16 @@ export interface ContinuousWorkRule {
   scope: { assignee: '@me' | '*'; labels: string[]; identity?: { login: string; nodeId: string } }
   resource: ResourceRef; model: { provider: string; model: string; reasoningEffort?: string }
   agentPreset: string; permissionPreset: string
+  planning?: import('./work-planning.ts').WorkPlanning
   items: ContinuousWorkItem[]; active?: TaskRef; error?: { code: string; message: string }
 }
 interface Command { commandId: string }
 interface TaskContent { title: string; goal: string; specification: string; acceptance: string[] }
 interface TaskChange extends Command { ref: TaskRef; expectedVersion: number }
 export type WorkCommand =
+  | (Command & { type: 'continuous.instruct'; projectId: string; sourceId: string; expectedVersion: number; text: string })
+  | (Command & { type: 'continuous.preview'; projectId: string; sourceId: string; expectedVersion: number })
+  | (Command & { type: 'continuous.block'; projectId: string; sourceId: string; expectedVersion: number; nodeId: string; blocked: boolean })
   | (Command & { type: 'source.connect'; url?: string; githubProject?: { owner: string; type: 'org' | 'user'; number: number }; resource?: ResourceRef })
   | (Command & { type: 'continuous.configure'; projectId: string; sourceId: string; expectedVersion: number; assignee: '@me' | '*'; labels: string[]; resource: ResourceRef; model: { provider: string; model: string; reasoningEffort?: string }; agentPreset: string; permissionPreset: string; enabled: boolean })
   | (Command & { type: 'continuous.set-enabled'; projectId: string; sourceId: string; expectedVersion: number; enabled: boolean })

@@ -1,3 +1,4 @@
+import { planningSchema } from './work-planning.ts'
 import { z } from 'zod'
 import { taskOrganizationSchema } from './work-organization.ts'
 import { taskProgressSchema, taskReportSchema, workStageSchema } from './work-progress.ts'
@@ -74,9 +75,13 @@ export const continuousRuleSchema = z.object({
   resource: resourceRefSchema, model: modelSchema, agentPreset: referenceId, permissionPreset: referenceId,
   items: z.array(z.object({ nodeId: referenceId, title: text, number: z.number().int().positive(), url: text, ref: taskRefSchema.optional(), executionId: id.optional(),
     state: z.enum(['queued', 'active', 'waiting', 'paused', 'blocked', 'completed', 'skipped']), reason: text.optional(), attempts: z.number().int().nonnegative(), retryAt: z.string().datetime().optional(), resumeRequested: z.boolean().optional(), followups: z.array(referenceId).optional(), recoveryBlocked: z.boolean().optional() }).strict()),
+  planning: planningSchema.optional(),
   active: taskRefSchema.optional(), error: z.object({ code: referenceId, message: text }).strict().optional(),
 }).strict()
 export const commandSchema = z.discriminatedUnion('type', [
+  z.object({ ...command, type: z.literal('continuous.instruct'), projectId: id, sourceId: id, expectedVersion: z.number().int().positive(), text }).strict(),
+  z.object({ ...command, type: z.literal('continuous.preview'), projectId: id, sourceId: id, expectedVersion: z.number().int().positive() }).strict(),
+  z.object({ ...command, type: z.literal('continuous.block'), projectId: id, sourceId: id, expectedVersion: z.number().int().positive(), nodeId: referenceId, blocked: z.boolean() }).strict(),
   z.object({ ...command, type: z.literal('source.connect'), githubProject: githubProjectRef.optional(), url: z.string().max(2048).optional(), resource: resourceRefSchema.optional() }).strict().refine(value => Boolean(value.url) !== Boolean(value.githubProject)),
   z.object({ ...command, type: z.literal('continuous.configure'), projectId: id, sourceId: id, expectedVersion: z.number().int().nonnegative(), assignee: z.enum(['@me', '*']), labels: z.array(referenceId).max(100), resource: resourceRefSchema, model: modelSchema, agentPreset: referenceId, permissionPreset: referenceId, enabled: z.boolean() }).strict(),
   z.object({ ...command, type: z.literal('continuous.set-enabled'), projectId: id, sourceId: id, expectedVersion: z.number().int().positive(), enabled: z.boolean() }).strict(),
