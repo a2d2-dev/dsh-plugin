@@ -285,6 +285,8 @@ export class WorkPanelController {
   async controlExecution(action: 'pause' | 'resume' | 'reconcile' | 'continue'): Promise<void> {
     const execution = this.state.detail?.execution
     if (!execution || this.state.startup.busy) return
+    const progress = this.state.detail?.progress
+    if (action !== 'reconcile' && progress?.stage === 'done' && progress.criteria.current) return
     const revision = this.revision, sourceRevision = this.sourceRevision
     const current = () => revision === this.revision && sourceRevision === this.sourceRevision
     this.update({ startup: { ...emptyStartup(), busy: true } })
@@ -518,10 +520,22 @@ export class WorkPanelController {
     for (const task of tasks) visit(task, 0)
     return rows
   }
+  sessionCounts(task: WorkTask): { total: number; current: number; historical: number; associated: number } {
+    const { detail, progressItems } = this.state
+    const execution = detail?.task?.id === task.id && detail.task.projectId === task.projectId ? detail.execution : undefined
+    const control = execution?.session ?? progressItems.find(item => item.ref.taskId === task.id && item.ref.projectId === task.projectId)?.execution?.session
+    const key = (session: SessionRef) => JSON.stringify([session.runtimeId, session.sessionId])
+    const seen = new Set<string>(control ? [key(control)] : [])
+    const current = seen.size
+    for (const retired of execution?.retired ?? []) seen.add(key(retired.session))
+    const historical = seen.size - current
+    for (const association of task.sessions) seen.add(key(association.session))
+    return { total: seen.size, current, historical, associated: seen.size - current - historical }
+  }
   visibleTasks(): WorkTask[] {
     const { tasks, search, view } = this.state
     const query = search.trim().toLocaleLowerCase()
-    return tasks.filter(task => (view === 'all' || (view === 'associated' ? task.sessions.length > 0 : task.sessions.length === 0))
+    return tasks.filter(task => (view === 'all' || (view === 'associated' ? this.sessionCounts(task).total > 0 : this.sessionCounts(task).total === 0))
       && (!query || `${task.title}\n${task.goal}\n${task.specification.text}`.toLocaleLowerCase().includes(query)))
   }
 }
