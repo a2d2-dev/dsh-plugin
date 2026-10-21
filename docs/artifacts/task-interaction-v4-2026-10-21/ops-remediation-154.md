@@ -18,7 +18,7 @@ O-F1第一片 `493ab08` 已提交并推送，CEO复核要求再补实际加载�
 
 离线测试最初因Chrome给data:发requestServedFromCache=true而失败（exit1），独立诊断确认fromDiskCache/fromServiceWorker/fromPrefetchCache均false，随后对data:事实改为明确true断言；正式HTTP校验仍硬拒servedFromCache=true，没有放宽正式条件或预算。该fixture仅证明实际body/requestId/document与Fetch隔离，不满足HTTP live验收条件。已加载agent-browser skill并执行core/help，未访问18781/18782/第三方，未创建HTTP server、route/mock、live信号或模型。18782实际UI/HTTP cache控制与响应仍待授权后验证。
 
-新plan全部私有证据限定在唯一持久run/evidence。prepare-plan与one-shot仅增加此精确路径许可（冻结toolset的同run sibling evidence），保留canonical/0700检查及历史tmp支持，不泛化其它目录。
+CEO集成核对发现live-cut仍只接受已审私有tmp证据根；撤回本轮无必要的持久evidence根许可，one-shot/prepare-plan两处validator恢复原合同，与0343129对应文件完全一致。工具/plan/profile仍在新的持久唯一run，raw evidence沿既有/tmp/a2d2-v4-唯一目录。首个候选preview-candidate-154-447e3ed-01（planSHA `6d8053e7cc763b22e7e8c156fbda5a72d05dd8cba3f78143c9dbb58a8e531e67`）仅保留历史原字节，已撤回，不得执行；修正提交clean后另生成全新run并复核dry-run。
 
 ## O-F2
 

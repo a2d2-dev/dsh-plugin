@@ -1,0 +1,18 @@
+{
+  "mode": "dry-run",
+  "ready": false,
+  "reasons": [
+    "invalid real handover: ENOENT: no such file or directory, open '/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/evidence/operational-handover.json'",
+    "parent source review of operational static-cut mode pending; no new LF approval required",
+    "prepareOnly; deployment not authorized"
+  ],
+  "steps": [
+    "verify complete new and rollback hosts",
+    "hold external admission and settle CEO/children/jobs; flush",
+    "stop only dsh-a2d2-v3-preview",
+    "apply pinned profile + isolated-host launcher switch",
+    "start only dsh-a2d2-v3-preview",
+    "same-origin refresh, client fingerprint and retention check",
+    "write durable completion; on failure preserve data and restore executable runtime"
+  ]
+}

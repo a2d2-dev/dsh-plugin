@@ -70,7 +70,7 @@ export async function preparePlan(input,root){
   const cwd=await realpath(`/proc/${cliPid}/cwd`)
   const conf=`/etc/supervisor/conf.d/${input.program}.conf`,originalConf=await readFile(conf,'utf8')
   const evidenceRoot=input.evidenceRoot
-  if(!evidenceRoot?.startsWith('/tmp/a2d2-v4-')&&evidenceRoot!==join(root,'evidence'))throw Error('sensitive raw evidence requires private tmp or this unique artifact run/evidence')
+  if(!evidenceRoot?.startsWith('/tmp/a2d2-v4-'))throw Error('sensitive raw evidence stays in private tmp')
   await mkdir(evidenceRoot,{mode:0o700})
   await save(join(evidenceRoot,'original-environment-metadata.private.json'),{source:'actual-proc-environment',keys:Object.keys(env),valueHashes:Object.fromEntries(Object.entries(env).map(([key,value])=>[key,sha(value)]))})
   await writeFile(join(evidenceRoot,'original-supervisor.private.conf'),originalConf,{flag:'wx',mode:0o600})

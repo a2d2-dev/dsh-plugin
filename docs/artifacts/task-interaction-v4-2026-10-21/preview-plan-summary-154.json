@@ -1,0 +1,339 @@
+{
+  "scope": "WITHDRAWN: persistent evidenceRoot incompatible with live-cut; historical preparation only; never execute",
+  "withdrawn": true,
+  "planPath": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/plan.private.json",
+  "planSha256": "6d8053e7cc763b22e7e8c156fbda5a72d05dd8cba3f78143c9dbb58a8e531e67",
+  "toolCommit": "447e3ed2ad4e7c37281ebc8dc4df8c4c2f7ff1b3",
+  "coordinatorSessionId": "session-74fb5e20-1456-461b-b5c1-ef5f3b41e018",
+  "requestRef": "https://github.com/a2d2-dev/dsh-plugin/issues/150",
+  "program": "dsh-a2d2-v3-preview",
+  "origin": "http://10.126.126.12:18782",
+  "prepareOnly": true,
+  "stopPolicy": {
+    "parentReviewedStaticCut": false,
+    "officialReceipt": null
+  },
+  "notificationEnabled": false,
+  "initialStop": {
+    "strategy": "single-pid-term-with-hold",
+    "cliLog": {
+      "path": "/data/_dsh-dev/previews/a2d2-v3-121/logs/web.private.log",
+      "binding": "pre-signal-owner-fd-inode-offset-prefix"
+    },
+    "hold": {
+      "target": "/data/_dsh-dev/previews/a2d2-v3-121/launch.mjs",
+      "candidate": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/maintenance-hold.mjs",
+      "sha256": "bf44211b1a44d843c33c27e381c56a0fb38edbf801e622f206977ec333187c97",
+      "allowedCurrentSha256": [
+        "e5101472ab8b954293f8bb6c9c3c1054bad9482f667a3826da95c9f5eb3916b0"
+      ]
+    },
+    "preparationPidsAreNotExecutionProof": true
+  },
+  "actions": {
+    "apply": {
+      "script": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/profile-actions.mjs",
+      "sha256": "28fd62b755ff0c0cd3af2e627da46c955c2f8ebbfc28e785b6d267287ea3d7a6"
+    },
+    "verify": {
+      "script": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/profile-actions.mjs",
+      "sha256": "28fd62b755ff0c0cd3af2e627da46c955c2f8ebbfc28e785b6d267287ea3d7a6"
+    },
+    "rollback": {
+      "script": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/profile-actions.mjs",
+      "sha256": "28fd62b755ff0c0cd3af2e627da46c955c2f8ebbfc28e785b6d267287ea3d7a6"
+    },
+    "rollbackVerify": {
+      "script": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/profile-actions.mjs",
+      "sha256": "28fd62b755ff0c0cd3af2e627da46c955c2f8ebbfc28e785b6d267287ea3d7a6"
+    }
+  },
+  "runtime": {
+    "new": {
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/runtime-new.private.json",
+      "sha256": "e5d9995538975eff2328c0639147ce517891fe6623d89c5bee2726bd0ddfa0a1"
+    },
+    "rollback": {
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/runtime-rollback.private.json",
+      "sha256": "192bf0a44c28241012e594eb3a722a3ae55d6a1d7f37ac9a02d8a9300864687e"
+    }
+  },
+  "files": {
+    "new": [
+      {
+        "target": "/data/_dsh-dev/previews/a2d2-v3-121/.v4-141-runtime.private.json",
+        "candidate": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/runtime-new.private.json",
+        "sha256": "e5d9995538975eff2328c0639147ce517891fe6623d89c5bee2726bd0ddfa0a1",
+        "allowedCurrentSha256": [
+          null,
+          "e5d9995538975eff2328c0639147ce517891fe6623d89c5bee2726bd0ddfa0a1",
+          "192bf0a44c28241012e594eb3a722a3ae55d6a1d7f37ac9a02d8a9300864687e"
+        ]
+      },
+      {
+        "target": "/data/_dsh-dev/previews/a2d2-v3-121/launch.mjs",
+        "candidate": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/launcher-new.mjs",
+        "sha256": "883d77d28dc01c42fb6d0d11b9c03eb1137cfca4f3271fabbff16b22a64776fc",
+        "allowedCurrentSha256": [
+          "e5101472ab8b954293f8bb6c9c3c1054bad9482f667a3826da95c9f5eb3916b0",
+          "bf44211b1a44d843c33c27e381c56a0fb38edbf801e622f206977ec333187c97",
+          "883d77d28dc01c42fb6d0d11b9c03eb1137cfca4f3271fabbff16b22a64776fc"
+        ]
+      },
+      {
+        "target": "/etc/supervisor/conf.d/dsh-a2d2-v3-preview.conf",
+        "candidate": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/supervisor-new.private.conf",
+        "sha256": "ea47e0365657680de60ecb243fdb7f6a3cfcbb9765c790bc8c0f60b79475816b",
+        "allowedCurrentSha256": [
+          "338b51779c2bfd24011618496afd51774d0b6942157a5de9bb5ecd8fc82cb98f",
+          "ea47e0365657680de60ecb243fdb7f6a3cfcbb9765c790bc8c0f60b79475816b"
+        ]
+      }
+    ],
+    "rollback": [
+      {
+        "target": "/data/_dsh-dev/previews/a2d2-v3-121/.v4-141-runtime.private.json",
+        "candidate": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/runtime-rollback.private.json",
+        "sha256": "192bf0a44c28241012e594eb3a722a3ae55d6a1d7f37ac9a02d8a9300864687e",
+        "allowedCurrentSha256": [
+          null,
+          "e5d9995538975eff2328c0639147ce517891fe6623d89c5bee2726bd0ddfa0a1",
+          "192bf0a44c28241012e594eb3a722a3ae55d6a1d7f37ac9a02d8a9300864687e"
+        ]
+      },
+      {
+        "target": "/data/_dsh-dev/previews/a2d2-v3-121/launch.mjs",
+        "candidate": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/launcher-rollback.mjs",
+        "sha256": "883d77d28dc01c42fb6d0d11b9c03eb1137cfca4f3271fabbff16b22a64776fc",
+        "allowedCurrentSha256": [
+          "e5101472ab8b954293f8bb6c9c3c1054bad9482f667a3826da95c9f5eb3916b0",
+          "bf44211b1a44d843c33c27e381c56a0fb38edbf801e622f206977ec333187c97",
+          "883d77d28dc01c42fb6d0d11b9c03eb1137cfca4f3271fabbff16b22a64776fc"
+        ]
+      },
+      {
+        "target": "/etc/supervisor/conf.d/dsh-a2d2-v3-preview.conf",
+        "candidate": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/supervisor-rollback.private.conf",
+        "sha256": "ea47e0365657680de60ecb243fdb7f6a3cfcbb9765c790bc8c0f60b79475816b",
+        "allowedCurrentSha256": [
+          "338b51779c2bfd24011618496afd51774d0b6942157a5de9bb5ecd8fc82cb98f",
+          "ea47e0365657680de60ecb243fdb7f6a3cfcbb9765c790bc8c0f60b79475816b"
+        ]
+      }
+    ]
+  },
+  "environmentPolicySha256": "1bdb98b5706bd2b33c474efd3a4b2bcffb5fe1f39be0ec1529433651200da6d7",
+  "hashEncoding": "SHA256 canonical JSON sorted object keys; array order retained",
+  "toolFileCount": 26,
+  "toolSetSha256": "3b8a779f6004d314de1eae6951299c5b0eeea54c8cd7d7be1c93c725b6fdc6f6",
+  "toolFiles": [
+    {
+      "name": "assert-evidence.mjs",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/assert-evidence.mjs",
+      "sha256": "0d4cb3cf4f99bf0a3234be52a8f915e9cf174ce5069a15e58ddf4d1025749bf5"
+    },
+    {
+      "name": "automatic-notifier.mjs",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/automatic-notifier.mjs",
+      "sha256": "a977211f8c37cd0fbc08bcdaf3711cb617f964a00968e0c5d42716ab32dafc16"
+    },
+    {
+      "name": "browser-response.mjs",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/browser-response.mjs",
+      "sha256": "a4cdb71d74ef3172aeb359afaa831df6b8be6ffbdf2466444a6bf41df10d00d6"
+    },
+    {
+      "name": "capture.mjs",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/capture.mjs",
+      "sha256": "067414aeb3e2ab8f979ed08517feccde8d7797717e77447e0be62c4a74c81637"
+    },
+    {
+      "name": "data-genesis.mjs",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/data-genesis.mjs",
+      "sha256": "3533fe6ab8425eb5da52387e6ea569037b907ffdbca63a15b7d44def84b4f937"
+    },
+    {
+      "name": "domain-snapshot.mjs",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/domain-snapshot.mjs",
+      "sha256": "b2dd3d0a99c252eb3e65daac4c0852d0015f6ca4ca40f439f412a7c37e89205c"
+    },
+    {
+      "name": "fingerprint.mjs",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/fingerprint.mjs",
+      "sha256": "c113394236256c63d6cc0a534d27a47e8aa94834296423706c32d01bd077b696"
+    },
+    {
+      "name": "host-smoke.mjs",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/host-smoke.mjs",
+      "sha256": "b698327093d9402335f67a11860d9c13b82826c528cd70fc223190a5239670dd"
+    },
+    {
+      "name": "live-cut.mjs",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/live-cut.mjs",
+      "sha256": "282203f32c2362c83486a71a0ccb8787c170acfea4b964a0036abe0c7f52fd7f"
+    },
+    {
+      "name": "maintenance-hold.mjs",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/maintenance-hold.mjs",
+      "sha256": "a38f73e6bb956e3d19b1dc236cab991d25945e2316de8258c8577f90eb01f6c3"
+    },
+    {
+      "name": "managed-launcher.mjs",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/managed-launcher.mjs",
+      "sha256": "883d77d28dc01c42fb6d0d11b9c03eb1137cfca4f3271fabbff16b22a64776fc"
+    },
+    {
+      "name": "native-snapshot.mjs",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/native-snapshot.mjs",
+      "sha256": "ff9bb6cb9b8a5754eb6ffc5a20dc368d11ec474e4ed93b7f44adfe7928510721"
+    },
+    {
+      "name": "one-shot.mjs",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/one-shot.mjs",
+      "sha256": "600441863f8fcf96c598d22f6df36a58dfc5eb4d407d3b4a60afc5ff752c8357"
+    },
+    {
+      "name": "prepare-plan.mjs",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/prepare-plan.mjs",
+      "sha256": "70a32cf2866c9c4cfd02663fad8350bee3787f00bc9dfc11b3fd2a6c9fdd4dde"
+    },
+    {
+      "name": "preview-stop.mjs",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/preview-stop.mjs",
+      "sha256": "cb841f3a404ec0e0314850c68f51f3e861c08ffc74b928ca98867cb074c962ae"
+    },
+    {
+      "name": "profile-actions.mjs",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/profile-actions.mjs",
+      "sha256": "28fd62b755ff0c0cd3af2e627da46c955c2f8ebbfc28e785b6d267287ea3d7a6"
+    },
+    {
+      "name": "profile-imports.mjs",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/profile-imports.mjs",
+      "sha256": "cfa37e82801b73540ce735b1872ae3e7e390c407d1d32a4a3644a739712c43bd"
+    },
+    {
+      "name": "publish.mjs",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/publish.mjs",
+      "sha256": "74ce3faab37c491c95be99308dcd3356fce1792258e4f27418c2f87a9501d98c"
+    },
+    {
+      "name": "retention.mjs",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/retention.mjs",
+      "sha256": "9b6ad5bd1fcc6202eb1524198612574cc850841225901386778b31240b58db63"
+    },
+    {
+      "name": "shutdown-log.mjs",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/shutdown-log.mjs",
+      "sha256": "352e377ff508af39117c4f2003435c4954463d7a7f1e6c19d485534dd12bed8c"
+    },
+    {
+      "name": "signal-one.py",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/signal-one.py",
+      "sha256": "a7fd5d297d14a0d8027243235707dea2aca57dc24968b73bb2402718e09aaef3"
+    },
+    {
+      "name": "stage-profile.mjs",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/stage-profile.mjs",
+      "sha256": "53718a50427795941b1136cb5f8bc04226554ee3daf2b47b9523bd03f8d1100a"
+    },
+    {
+      "name": "stopped-cut.mjs",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/stopped-cut.mjs",
+      "sha256": "eb1c2d2d014f8089cdc73c059cf96701c41185b4d29b5e5cc4e2e670aefc4633"
+    },
+    {
+      "name": "supervisor-env.py",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/supervisor-env.py",
+      "sha256": "c717fefd87a9ec3a68debe71cb656a1b859d271001363c68721464f80d66901f"
+    },
+    {
+      "name": "supervisor-info.py",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/supervisor-info.py",
+      "sha256": "ee14bce5ec3a92dd1b0ca58f7a4f5fa8a73c094ab6ec63dd424b4baf0e5c4c8b"
+    },
+    {
+      "name": "verify-live.mjs",
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/tools/verify-live.mjs",
+      "sha256": "373ed55330268dec974c5844de6e31b55e3d7382dc03796ab960524081bf989d"
+    }
+  ],
+  "profiles": {
+    "new": {
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/profile-new",
+      "hostRoot": "/data/src/github.com/deepseek-ai/deepseek-harness-dev.worktrees/v4-141-release-8282d612",
+      "sha256": "a171c29ae742cc4585be06d215a0d196488a4c5a8a1e4def908bf584e5414314",
+      "clientSha256": "640f11be88549f9e169eb905b3653dfc58d198655e2c916ff21144a89a2a9440",
+      "tgzSha256": "56709afccea64797a7b9275ae26ab4fecd039ea8ee5162efb1ecd0c40509e2ad",
+      "importsReceipt": {
+        "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/profile-new-imports.private.json",
+        "sha256": "cddc7ee621997976c02e3de54a3f09d1b03a8b904bdd1d14cac528bcc9ab9171"
+      },
+      "imports": 256
+    },
+    "rollback": {
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/profile-rollback",
+      "hostRoot": "/data/src/github.com/deepseek-ai/deepseek-harness-dev.worktrees/v4-141-rollback-a45068d2",
+      "sha256": "85f99354537f05b932c0d3081b9fbe5bcde367c1728e77113a885e5a49a23488",
+      "clientSha256": "7af60c97e19076cb251235995bcca86fa59bcdfc1dccb22b8e8e3899d2127b70",
+      "tgzSha256": "7ae2ed521df692723f8f4ff382b3710482e5824b648c272d7f9b267244b3e208",
+      "importsReceipt": {
+        "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/profile-rollback-imports.private.json",
+        "sha256": "99c50ac43a6ca8294b6d7bfbdf204752dd49eb721c774a0650e229a1996cfa55"
+      },
+      "imports": 256
+    }
+  },
+  "originalProfileSha256": "08ab4ab06c8118177c51b465024c2b343bc2fca4f89d41b50fadd1a71c4ab6dc",
+  "release": {
+    "pluginCommit": "fc4fa731809c2e43d1017045b02372cb134080f8",
+    "hostCommit": "8282d61299a04f60555f9ce473af174bbe161b02",
+    "rollbackHostCommit": "a45068d2ec03326c800c68c9bdcd47508e3ccb9c",
+    "tgzSha256": "56709afccea64797a7b9275ae26ab4fecd039ea8ee5162efb1ecd0c40509e2ad",
+    "clientSha256": "640f11be88549f9e169eb905b3653dfc58d198655e2c916ff21144a89a2a9440"
+  },
+  "previousPlan": {
+    "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-e247236/plan.private.json",
+    "sha256": "659f9d7d6fd17104ae1c4978312250442d75b882172df696237ad8a64f31b64c",
+    "bytesUnchanged": true
+  },
+  "executionFactsPresent": {
+    "settlement": false,
+    "liveCutPath": false,
+    "executionInstruction": false,
+    "cliLogBinding": false
+  },
+  "liveActionsPerformed": false,
+  "liveBrowserAcceptance": "not verified",
+  "realModelCalls": 0,
+  "githubBusinessWrites": 0,
+  "commandExits": {
+    "oldBrowserClientRed": 1,
+    "loadedOldRefetchNewRed": 1,
+    "cliErrorExitZeroRed": 1,
+    "focusedBrowser7of7": 0,
+    "focusedShutdown8of8": 0,
+    "allToolTests27of27": 0,
+    "allMjsPythonAstDiff": 0,
+    "preparePlan": 0,
+    "defaultDryRun": 1
+  },
+  "dryRun": {
+    "mode": "dry-run",
+    "ready": false,
+    "reasons": [
+      "invalid real handover: ENOENT: no such file or directory, open '/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-154-447e3ed-01/evidence/operational-handover.json'",
+      "parent source review of operational static-cut mode pending; no new LF approval required",
+      "prepareOnly; deployment not authorized"
+    ],
+    "steps": [
+      "verify complete new and rollback hosts",
+      "hold external admission and settle CEO/children/jobs; flush",
+      "stop only dsh-a2d2-v3-preview",
+      "apply pinned profile + isolated-host launcher switch",
+      "start only dsh-a2d2-v3-preview",
+      "same-origin refresh, client fingerprint and retention check",
+      "write durable completion; on failure preserve data and restore executable runtime"
+    ]
+  }
+}
