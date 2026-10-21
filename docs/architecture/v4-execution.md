@@ -98,7 +98,19 @@ observe(id, caller): {
 
 ## 验证
 
-工作目录固定为本 v4-execution worktree。
+
+### 组件浏览器记录（中间票）
+
+目的：核实独立执行组件的真实样式、结果语义及窄屏布局，不冒充已部署宿主。
+
+步骤：运行 `A2D2_EXECUTION_ARTIFACTS=1 pnpm exec vitest run tests/client/execution-components.spec.ts`，测试用实际组件与样式生成 `.artifacts/v4-execution/component-contract.html`；页面明确标注“合同测试夹具，非运行实例数据”。通过 agent-browser 打开本地 file 页，分别在 1280×1200 和 390×844 截图，未启动 Web 服务或重启 18781/18782。
+
+记录：桌面 `.artifacts/v4-execution/desktop.png`，窄屏 `.artifacts/v4-execution/mobile.png`。实际浏览器窄屏检查返回 `{width:390, scrollWidth:390, body:390}`。已核对图片，owner、独立子工作入口、输出已交付／消费未知／未验收和 200,000／12,000 参数均可见。截图和本地夹具未纳入提交，作为验证证据保留。
+
+本阶段真实公开宿主 header/dock artifact 与组件注册测试 8/8 通过；typecheck、build 和 pack exports 检查通过。原有 continuation 的 17 项一次串行 15 通过／2 项默认 5000ms 超时，随后仅对应两项 targeted 复验 2/2 通过；新增权威 connector 后，source-take 恢复通过，source-seal 一次超时且 cleanup retained，隔离 checkpoint 诊断一次完整通过（3413ms），未改 timeout／断言。重型边界测试的 jobs case 也出现一次默认超时／清理 hook 超时；此前多次通过。环境采样 load≈29、当秒 CPU user75%/sys10%，不能仅据此裁定根因；最终整合须在受控环境复核这些疑点，不能把编译通过当全部验收通过。
+
+仍未验证：与 #142 patched jobs 包的完整组合、job_output 真实终态交付解除围栏及 foreground remove 的收口、匹配宿主 journal 的跨重启回读、SourceA 公共图查询／Issue 唯一策略入口接线，以及 #141 在既有实例的真实子会话／job／模型接续和原生草稿交互。宿主应用壳和运行 checkout 未编辑。
+
 
 ```sh
 pnpm exec vitest run tests/work-execution-observation.spec.ts

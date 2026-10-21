@@ -1,0 +1,87 @@
+import { useEffect, useRef, useState } from 'react'
+import type { AssociatedWork, ContinuationPolicy, WorkCompleted } from '../work-types.ts'
+import type { ExecutionGraph } from '../work-execution/observation.ts'
+import type { WorkPanelController } from './work-panel-controller.ts'
+import { ExecutionContinuation } from './execution-components.tsx'
+import styles from './execution-components.module.css'
+
+type ExecutionDetail = WorkCompleted & { executionGraph?: ExecutionGraph }
+function useSessionWork(controller: WorkPanelController, sessionId: string) {
+  const [work, setWork] = useState<AssociatedWork[]>([])
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    setWork([]); setError(null)
+    return controller.watchSessionWork(sessionId, setWork, setError)
+  }, [controller, sessionId])
+  return { work, error }
+}
+
+/** One compact association popover; blank Hero keeps its own visible dock seat. */
+export function ExecutionSessionWorkEntry({ controller, sessionId, blank, placement }: { controller: WorkPanelController; sessionId: string; blank: boolean; placement: 'header' | 'dock' }) {
+  const { work, error } = useSessionWork(controller, sessionId)
+  const [navigationError, setNavigationError] = useState<string | null>(null)
+  const [opening, setOpening] = useState(false)
+  const scope = useRef<AbortController>()
+  useEffect(() => { const abort = new AbortController(); scope.current = abort; setNavigationError(null); setOpening(false); return () => abort.abort() }, [sessionId])
+  if ((placement === 'dock') !== blank || (!work.length && !error)) return null
+  const enter = async (item: AssociatedWork) => {
+    const abort = scope.current
+    if (!abort || abort.signal.aborted || opening) return
+    setOpening(true); setNavigationError(null)
+    try { await controller.openCurrentTask(item.ref, abort.signal) }
+    catch (error) { if (!abort.signal.aborted) setNavigationError(error instanceof Error ? error.message : String(error)) }
+    finally { if (!abort.signal.aborted) setOpening(false) }
+  }
+  return <details className={`${styles.entry} ${placement === 'dock' ? styles.dock : ''}`}><summary>关联任务{work.length ? ` · ${work.length}` : ''}</summary><div className={styles.popover}>
+    {error && <p role="status">关联读取失败：{error}</p>}
+    {work.map(item => <article key={`${item.ref.projectId}/${item.ref.taskId}`}><p>{item.projectName} / {item.title}</p><p>{item.purpose === 'control' ? '当前协调' : item.purpose === 'history' ? '已退休 · 只读历史' : item.purpose === 'review' ? '评审关联' : '工作关联'}</p><div className={styles.row}><button type="button" onClick={() => void controller.revealTask(item.ref)}>查看工作与执行</button>{item.purpose === 'history' && <button type="button" disabled={opening} onClick={() => void enter(item)}>进入当前处理会话</button>}</div></article>)}
+    {navigationError && <p role="alert">{navigationError}</p>}
+  </div></details>
+}
+
+function NativeTaskContinuation({ controller, sessionId, work }: { controller: WorkPanelController; sessionId: string; work: AssociatedWork }) {
+  const [detail, setDetail] = useState<ExecutionDetail>()
+  const [policy, setPolicy] = useState<ContinuationPolicy>()
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [revision, setRevision] = useState(0)
+  const lifetime = useRef<AbortController>()
+  useEffect(() => { const scope = new AbortController(); lifetime.current = scope; return () => scope.abort() }, [controller, sessionId, work.ref.projectId, work.ref.taskId])
+  useEffect(() => {
+    const abort = new AbortController()
+    setError(null)
+    void Promise.all([
+      controller.client.query({ type: 'task.detail', ref: work.ref }, abort.signal),
+      controller.client.query({ type: 'project.detail', projectId: work.ref.projectId }, abort.signal),
+    ]).then(([next, project]) => {
+      if (abort.signal.aborted) return
+      if (next.task?.id !== work.ref.taskId || next.task.projectId !== work.ref.projectId) throw Error('工作身份与会话关联不一致')
+      setDetail(next); setPolicy(next.execution?.continuationPolicy ?? project.project?.continuationPolicy)
+    }).catch(error => { if (!abort.signal.aborted) setError(error instanceof Error ? error.message : String(error)) })
+    return () => abort.abort()
+  }, [controller, sessionId, work, revision])
+  const continueWork = async () => {
+    const scope = lifetime.current
+    if (busy || !scope || scope.signal.aborted) return
+    setBusy(true); setError(null)
+    try {
+      const latest = await controller.client.query({ type: 'task.detail', ref: work.ref }, scope.signal)
+      if (scope.signal.aborted) return
+      const execution = latest.execution
+      if (!execution?.actual || execution.session.sessionId !== sessionId || latest.task?.id !== work.ref.taskId || latest.task.projectId !== work.ref.projectId
+        || execution.ref.taskId !== work.ref.taskId || execution.ref.projectId !== work.ref.projectId) throw Error('此会话已不是当前协调，请从关联任务进入有效会话。')
+      await controller.client.command({ type: 'task.continue', commandId: crypto.randomUUID(), ref: work.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch })
+      if (!scope.signal.aborted) setRevision(value => value + 1)
+    } catch (error) { if (!scope.signal.aborted) setError(error instanceof Error ? error.message : String(error)) }
+    finally { if (!scope.signal.aborted) setBusy(false) }
+  }
+  return <section><div className={styles.surface}><strong>{work.title}</strong><div className={styles.row}><button type="button" onClick={() => void controller.revealTask(work.ref)}>返回工作详情</button><button type="button" disabled={busy} onClick={() => setRevision(value => value + 1)}>刷新观察</button></div>{error && <p role="alert">{error}</p>}</div>
+    {detail ? <ExecutionContinuation graph={detail.executionGraph} execution={detail.execution} policy={policy} busy={busy} {...(work.purpose === 'control' && detail.execution?.session.sessionId === sessionId ? { onContinue: () => void continueWork() } : {})}/> : !error && <p role="status">正在读取接续事实…</p>}
+  </section>
+}
+
+/** Native conversation.view occupant: never owns the host title, composer or draft. */
+export function ExecutionConversationContinuation({ controller, sessionId }: { controller: WorkPanelController; sessionId: string }) {
+  const { work, error } = useSessionWork(controller, sessionId)
+  return <div>{error && <p role="alert">{error}</p>}{!work.length && !error && <p className={styles.surface}>此会话尚未关联 Task。关联后可查看原段、固定后继与接续参数。</p>}{work.map(item => <NativeTaskContinuation key={`${item.ref.projectId}/${item.ref.taskId}`} controller={controller} sessionId={sessionId} work={item}/>)}</div>
+}
