@@ -35,6 +35,11 @@ function taskAt(state: WorkSnapshot, ref: TaskRef): WorkTask | undefined {
   return state.tasks.find(item => item.id === ref.taskId && item.projectId === ref.projectId)
 }
 
+function sourceIssuesAt(state: WorkSnapshot, ref: TaskRef): import('./work-sources/types.ts').GitHubIssueReference[] {
+  return state.externalBindings.filter(binding => binding.ref.projectId === ref.projectId && binding.ref.taskId === ref.taskId)
+    .map(({ lastObserved: issue }) => ({ nodeId: issue.nodeId, url: issue.url, number: issue.number, title: issue.title, repository: issue.repository, state: issue.state }))
+}
+
 /** Public local work commands and queries. One v3 snapshot is the only writer authority. */
 export class WorkApplication {
   private readonly file: string
@@ -89,9 +94,10 @@ export class WorkApplication {
   }
   /** Trusted ToolRunContext adapter supplies only its real Session and call identity. */
   async sessionControl(session: import('./work-types.ts').SessionRef, callId: string, action: string, text?: string, expectedEpoch?: number): Promise<WorkResult> {
-    const execution = (await this.load()).executions.find(item => sameSession(item.session, session))
+    const state = await this.load()
+    const execution = state.executions.find(item => sameSession(item.session, session))
     if (!execution) return failed('forbidden', 'Calling Session is not a current Task coordinator')
-    if (action === 'status') return { status: 'completed', task: taskAt(await this.load(), execution.ref), execution, executionRuntime: this.host.execution?.status(execution) ?? 'inactive' }
+    if (action === 'status') return { status: 'completed', task: taskAt(state, execution.ref), sourceIssues: sourceIssuesAt(state, execution.ref), execution, executionRuntime: this.host.execution?.status(execution) ?? 'inactive' }
     const commandId = `tool:${createHash('sha256').update(JSON.stringify([session.runtimeId, session.sessionId, callId])).digest('hex')}`
     return this.execute({ type: 'task.control', commandId, ref: execution.ref,
       executionId: execution.id, owner: execution.owner, epoch: expectedEpoch ?? execution.epoch, action, text },
@@ -522,7 +528,8 @@ export class WorkApplication {
       if (state.tasks.some(item => item.sessions.some(binding => sameSession(binding.session, session)
         && (binding.purpose === 'review' || item.projectId !== task.projectId || item.id !== task.id)))) return failed('association-only-session', 'Review or another Task association cannot grant coordination')
       const executionId = randomUUID()
-      const kickoff = `${agent.policy.instructions}\n\n${MANAGED_WORK_INSTRUCTIONS}\n\nTask ${task.id}: ${task.title}\nGoal: ${task.goal}\n\nSpecification:\n${task.specification.text}\n\nAcceptance criteria:\n${task.specification.acceptance.map(item => `- ${item}`).join('\n')}`
+      const sourceContext = sourceIssuesAt(state, command.ref).map(issue => `GitHub Issue: ${issue.url}\nRepository: ${issue.repository.owner}/${issue.repository.repository}`).join('\n')
+      const kickoff = `${agent.policy.instructions}\n\n${MANAGED_WORK_INSTRUCTIONS}\n\nTask ${task.id}: ${task.title}\nGoal: ${task.goal}\n${sourceContext ? `\nSource:\n${sourceContext}\n` : ''}\nSpecification:\n${task.specification.text}\n\nAcceptance criteria:\n${task.specification.acceptance.map(item => `- ${item}`).join('\n')}`
       if (kickoff.length > 100_000) return failed('task-material-too-large', 'Task goal, specification and acceptance exceed the 100,000-character kickoff limit; organize a bounded accepted specification before starting')
       const execution = { id: executionId, ref: command.ref, agentId: agent.id, owner: randomUUID(), epoch: 1,
         resource: command.resource, session, sessionMode: command.session ? 'reuse' as const : 'create' as const, agentPreset: command.agentPreset, model: command.model, permissionPreset: command.permissionPreset,
@@ -650,12 +657,12 @@ export class WorkApplication {
     }) }
     if (query.type === 'session.work') return { status: 'completed', work: [
       ...state.tasks.flatMap(task => task.sessions.filter(binding => sameSession(binding.session, query.session)
-        && !state.executions.some(item => item.ref.taskId === task.id && sameSession(item.session, query.session))).map(binding => ({
+        && !state.executions.some(item => item.ref.taskId === task.id && (sameSession(item.session, query.session) || item.retired?.some(old => sameSession(old.session, query.session))))).map(binding => ({
         ref: { projectId: task.projectId, taskId: task.id }, title: task.title,
         projectName: state.projects.find(project => project.id === task.projectId)!.name, purpose: binding.purpose,
       }))),
       ...state.executions.filter(item => item.retired?.some(old => sameSession(old.session, query.session))).map(item => ({
-        ref: item.ref, title: taskAt(state, item.ref)!.title, projectName: state.projects.find(project => project.id === item.ref.projectId)!.name, purpose: 'history' as const, executionId: item.id, epoch: item.retired!.find(old => sameSession(old.session, query.session))!.epoch,
+        ref: item.ref, title: taskAt(state, item.ref)!.title, projectName: state.projects.find(project => project.id === item.ref.projectId)!.name, purpose: 'history' as const, executionId: item.id, epoch: item.retired!.find(old => sameSession(old.session, query.session))!.epoch, currentSession: item.session,
       })),
       ...state.executions.filter(item => sameSession(item.session, query.session)).map(item => ({
         ref: item.ref, title: taskAt(state, item.ref)!.title, projectName: state.projects.find(project => project.id === item.ref.projectId)!.name,

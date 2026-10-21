@@ -194,6 +194,9 @@ it('inherits the actual Session-local reasoning effort and Project Agent instruc
 
 it('keeps retired native input and tools fenced after cold restore while history stays read-only', async () => {
   const h = await setup()
+  const task = await h.app.query({ type: 'task.detail', ref: h.ref }, operator)
+  if (task.status !== 'completed' || !task.task) throw new Error('Missing task')
+  expect(await h.app.execute({ type: 'task.associate-session', commandId: 'related-control', ref: h.ref, expectedVersion: task.task.version, session: h.execution.session, purpose: 'related' }, operator)).toMatchObject({ status: 'completed' })
   const current = await rotate(h)
   await fixtures.dispose(h.ctx)
   const restored = await fixtures.mount(h.workspace.path)
@@ -211,7 +214,7 @@ it('keeps retired native input and tools fenced after cold restore while history
   const denied = await fixtures.run(() => restored.ctx.tools.execute({ callId: ToolCallId('retired-progress'), name: 'work_control', arguments: { action: 'progress', text: 'Late tool write' }, agent: resolved.agent, signal: new AbortController().signal }))
   expect(denied.isError).toBe(true)
   expect(restored.model.requests).toHaveLength(0)
-  expect(await restored.app.query({ type: 'session.work', session: h.execution.session }, operator)).toMatchObject({ work: [{ purpose: 'history', executionId: current.id, epoch: 1 }] })
+  expect(await restored.app.query({ type: 'session.work', session: h.execution.session }, operator)).toMatchObject({ work: [{ purpose: 'history', executionId: current.id, epoch: 1, currentSession: current.session }] })
 })
 
 it.each([100, 200_001])('automatically continues at a 200K soft target and observes successor context of %i tokens', async successorTokens => {

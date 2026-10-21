@@ -508,6 +508,47 @@ export class WorkPanelController {
     const canonical = key(issue.url)
     return canonical ? this.state.progressItems.find(item => item.ref.projectId === this.state.projectId && item.source && key(item.source.url) === canonical) : undefined
   }
+  /** Each mounted native entry owns its timer and request lifetime. Polling only observes. */
+  watchSessionWork(sessionId: string, receive: (work: import('../work-types.ts').AssociatedWork[]) => void, reportError: (error: string | null) => void): () => void {
+    const abort = new AbortController()
+    let reading = false
+    const load = async () => {
+      if (reading || abort.signal.aborted) return
+      reading = true
+      try {
+        const resources = await this.client.query({ type: 'resources.list' }, abort.signal)
+        if (abort.signal.aborted) return
+        const runtimes = [...new Set(resources.resources?.map(resource => resource.ref.runtimeId) ?? [])]
+        const results = await Promise.all(runtimes.map(runtimeId => this.client.query({ type: 'session.work', session: { runtimeId, sessionId } }, abort.signal)))
+        if (!abort.signal.aborted) { receive(results.flatMap(result => result.work ?? [])); reportError(null) }
+      } catch (error) { if (!abort.signal.aborted) reportError(message(error)) }
+      finally { reading = false }
+    }
+    void load()
+    const timer = setInterval(() => { void load() }, 5000)
+    return () => { abort.abort(); clearInterval(timer) }
+  }
+  private currentTaskRead?: AbortController
+  /** Only an explicit click enters the freshly observed, verified control Session. */
+  async openCurrentTask(ref: TaskRef, signal?: AbortSignal): Promise<void> {
+    if (signal?.aborted) return
+    this.currentTaskRead?.abort()
+    const abort = new AbortController(); this.currentTaskRead = abort
+    const cancel = () => abort.abort()
+    signal?.addEventListener('abort', cancel, { once: true })
+    const revision = this.revision, sourceRevision = this.sourceRevision
+    try {
+      const detail = await this.client.query({ type: 'task.detail', ref }, abort.signal)
+      if (abort.signal.aborted || revision !== this.revision || sourceRevision !== this.sourceRevision) return
+      const execution = detail.execution
+      if (detail.task?.id !== ref.taskId || detail.task.projectId !== ref.projectId || !execution?.actual
+        || execution.ref.taskId !== ref.taskId || execution.ref.projectId !== ref.projectId
+        || execution.actual.runtimeId !== execution.session.runtimeId
+        || !['ready', 'running', 'waiting', 'paused'].includes(execution.state)) throw Error('当前处理会话暂不可进入，请稍后重试或查看工作详情。')
+      this.openSession(execution.session)
+    } catch (error) { if (!abort.signal.aborted) throw error }
+    finally { signal?.removeEventListener('abort', cancel); if (this.currentTaskRead === abort) this.currentTaskRead = undefined }
+  }
   visibleTaskRows(): { task: WorkTask; depth: number }[] {
     const tasks = this.visibleTasks(), ids = new Set(tasks.map(task => task.id)), visited = new Set<string>()
     const rows: { task: WorkTask; depth: number }[] = []

@@ -1,5 +1,5 @@
 import type { TaskProgress, TaskProgressView, TaskReport, WorkStage } from './work-progress.ts'
-import type { ExternalBinding, GitHubIssue, IssuePage, WorkSource } from './work-sources/types.ts'
+import type { ExternalBinding, GitHubIssue, GitHubIssueReference, IssuePage, WorkSource } from './work-sources/types.ts'
 /** Browser-safe contract for the local work application. No host/runtime imports. */
 export interface TaskRef { projectId: string; taskId: string }
 export interface ResourceRef { runtimeId: string; workspaceId: string }
@@ -118,7 +118,7 @@ export type WorkQuery =
   | { type: 'session.candidates'; projectId: string }
   | { type: 'session.work'; session: SessionRef }
   | { type: 'legacy.resolve'; address: LegacyAddress }
-export interface AssociatedWork { ref: TaskRef; title: string; projectName: string; purpose: 'related' | 'review' | 'control' | 'history'; executionId?: string; epoch?: number }
+export interface AssociatedWork { ref: TaskRef; title: string; projectName: string; purpose: 'related' | 'review' | 'control' | 'history'; executionId?: string; epoch?: number; currentSession?: SessionRef }
 /** Completed fields correspond to command/query; task.detail includes related children and parent. */
 export interface SourceResultFields {
   ref?: TaskRef
@@ -130,6 +130,7 @@ export interface WorkCompleted extends SourceResultFields {
   status: 'completed'
   progress?: TaskProgressView
   progressItems?: TaskProgressView[]
+  sourceIssues?: GitHubIssueReference[]
   transcript?: { session: SessionRef; events: unknown[]; nextCursor?: number }
   execution?: WorkExecution
   executionOptions?: WorkExecutionOptions

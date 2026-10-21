@@ -322,26 +322,32 @@ function Sessions({controller,task,onSaved}:{controller:WorkPanelController;task
     <Section title="关联已有会话"><form onSubmit={event=>void associate(event)} className={styles.form}><label>兼容的已有会话<select required value={selected} onChange={event=>setSelected(event.target.value)}><option value="">{loading?'正在读取…':'选择已有会话'}</option>{candidates.map((candidate,index)=><option key={`${candidate.ref.runtimeId}/${candidate.ref.sessionId}`} value={index}>{candidate.title || '未命名会话'}</option>)}</select></label><label>关联用途<select value={purpose} onChange={event=>setPurpose(event.target.value as 'related'|'review')}><option value="related">关联工作</option><option value="review">评审</option></select></label><p>由后端校验项目资源权限。关联不改变目录、模型或权限，不启动会话。</p><ErrorText error={error}/><button type="submit" disabled={busy || loading || !candidates.length}>{busy?'正在关联…':'关联会话'}</button>{!loading&&!candidates.length&&!error&&<p>没有可关联的兼容会话。可先为项目接入已有资源。</p>}</form></Section></>
 }
 
-/** Query uses host-authorized runtime references; an unassociated session renders nothing. */
+/** Present native work links without owning navigation or execution side effects. */
+export function SessionWorkLinks({work,onReveal,onEnter,opening=false}:{work:AssociatedWork[];onReveal:(ref:AssociatedWork['ref'])=>void;onEnter:(ref:AssociatedWork['ref'])=>void;opening?:boolean}) {
+  return <>{work.map(item=><span key={`${item.ref.projectId}/${item.ref.taskId}`}><button onClick={()=>onReveal(item.ref)} title="查看工作与进展">{item.projectName} / {item.title} · 工作与进展</button>{item.purpose==='history'&&<><span> 已接续到新会话 · </span><button disabled={opening} onClick={()=>onEnter(item.ref)}>{opening?'正在核对当前会话…':'进入当前处理会话'}</button></>}</span>)}</>
+}
+/** Mounted native entries observe role changes; polling never opens a Session or touches drafts. */
 export function SessionWorkEntry({controller, sessionId}: {controller: WorkPanelController; sessionId: string}) {
   const [work, setWork] = useState<AssociatedWork[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [navigationError,setNavigationError]=useState<string|null>(null),[opening,setOpening]=useState(false)
+  const [scope,setScope]=useState<AbortController|null>(null)
   useEffect(() => {
     const abort = new AbortController()
-    setWork([])
-    setError(null)
-    async function load() {
-      try {
-        const resources = await controller.client.query({type:'resources.list'}, abort.signal)
-        const runtimes = [...new Set(resources.resources?.map(resource => resource.ref.runtimeId) ?? [])]
-        const results = await Promise.all(runtimes.map(runtimeId => controller.client.query({type:'session.work',session:{runtimeId,sessionId}}, abort.signal)))
-        if (!abort.signal.aborted) setWork(results.flatMap(result => result.work ?? []))
-      } catch (error) { if (!abort.signal.aborted) setError(message(error)) }
-    }
-    void load()
-    return () => abort.abort()
+    setScope(abort);setWork([]);setError(null);setNavigationError(null);setOpening(false)
+    const stop=controller.watchSessionWork(sessionId,setWork,setError)
+    return () => {abort.abort();stop()}
   },[controller,sessionId])
-  if (error) return <span title={error}>工作关联读取失败</span>
-  if (!work.length) return null
-  return <div className={styles.sessionEntry}>{work.map(item => <button key={`${item.ref.projectId}/${item.ref.taskId}`} onClick={() => void controller.revealTask(item.ref)} title="查看工作与进展">{item.projectName} / {item.title} · 工作与进展</button>)}</div>
+  async function enter(ref:AssociatedWork['ref']) {
+    if(!scope||scope.signal.aborted||opening)return
+    setOpening(true);setNavigationError(null)
+    try {await controller.openCurrentTask(ref,scope.signal)}catch(error){if(!scope.signal.aborted)setNavigationError(message(error))}
+    finally {if(!scope.signal.aborted)setOpening(false)}
+  }
+  if (!work.length&&!error&&!navigationError) return null
+  return <div className={styles.sessionEntry}>
+    {error&&<span title={error}>工作关联读取失败</span>}
+    {SessionWorkLinks({work,onReveal:ref=>void controller.revealTask(ref),onEnter:ref=>void enter(ref),opening})}
+    {navigationError&&<span role="alert">{navigationError}</span>}
+  </div>
 }
