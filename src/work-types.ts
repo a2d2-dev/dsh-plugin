@@ -1,3 +1,4 @@
+export type { WorkPlanning, PlanningBasis, PlanOutput, WorkPlanner } from './work-planning.ts'
 import type { TaskProgress, TaskProgressView, TaskReport, WorkStage } from './work-progress.ts'
 import type { ExternalBinding, GitHubIssue, GitHubIssueReference, IssuePage, WorkSource, SourceCandidate } from './work-sources/types.ts'
 /** Browser-safe contract for the local work application. No host/runtime imports. */

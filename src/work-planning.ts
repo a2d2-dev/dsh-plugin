@@ -9,6 +9,9 @@ export const planStepSchema = z.object({ nodeId: z.string().min(1).max(256), why
 export const planOutputSchema = z.object({ steps: z.array(planStepSchema).max(1000) }).strict()
 export const planningBasisSchema = z.object({
   instruction: text, supplements: z.array(text), scopeVersion: z.number().int().positive(), blocks: z.array(z.string()),
+  scope: z.object({ assignee: z.enum(['@me', '*']), labels: z.array(z.string()), identity: z.object({ login: z.string(), nodeId: z.string() }).optional() }).strict(),
+  executionStrategy: z.object({ resource: z.object({ runtimeId: z.string(), workspaceId: z.string() }), model: z.object({ provider: z.string(), model: z.string(), reasoningEffort: z.string().optional() }), agentPreset: z.string(), permissionPreset: z.string() }).strict(),
+  relationshipAvailability: z.object({ nativeParentChildren: z.literal('observed-when-present'), nativeDependencies: z.literal('unavailable-in-source-port') }).strict(),
   source: sourceSchema,
   candidates: z.array(z.object({ issue: issueSchema, task: z.json().optional(), execution: z.json().optional(), ownerRuleId: z.string().optional() }).strict()),
 }).strict()
@@ -39,7 +42,7 @@ export function planningBasis(state: WorkSnapshot, rule: ContinuousWorkRule): Pl
     return { issue, ...(task ? { task: JSON.parse(JSON.stringify({ ref: binding!.ref, agentId: task.agentId, goal: task.goal, specification: task.specification, progress: task.progress, children: task.children, parent: task.parent, breakdown: task.breakdown })) } : {}),
       ...(execution ? { execution: JSON.parse(JSON.stringify({ id: execution.id, ref: execution.ref, agentId: execution.agentId, owner: execution.owner, epoch: execution.epoch, resource: execution.resource, model: execution.model, agentPreset: execution.agentPreset, permissionPreset: execution.permissionPreset, session: execution.session, state: execution.state, control: execution.control, error: execution.error })) } : {}), ...(owner ? { ownerRuleId: owner.id } : {}) }
   })
-  return planningBasisSchema.parse({ instruction: rule.planning.instruction, supplements: rule.planning.supplements, blocks: rule.planning.blocks, scopeVersion: rule.planning.scopeVersion, source, candidates })
+  return planningBasisSchema.parse({ instruction: rule.planning.instruction, supplements: rule.planning.supplements, blocks: rule.planning.blocks, scopeVersion: rule.planning.scopeVersion, scope: rule.scope, executionStrategy: { resource: rule.resource, model: rule.model, agentPreset: rule.agentPreset, permissionPreset: rule.permissionPreset }, relationshipAvailability: { nativeParentChildren: 'observed-when-present', nativeDependencies: 'unavailable-in-source-port' }, source, candidates })
 }
 
 export function samePlannedExecution(saved: unknown, current: unknown): boolean {
@@ -68,7 +71,12 @@ export function validatePlan(output: unknown, basis: PlanningBasis, rule: Contin
       const child = basis.candidates.find(candidate => candidate.issue.nodeId === nodeId)?.task as { specification?: { version: number }; progress?: { stage: string; specificationVersion: number } } | undefined
       return child?.progress?.stage === 'done' && child.progress.specificationVersion === child.specification?.version
     }
-    if (step.mode !== 'wait' && (issue.subIssues?.hasNextPage || issue.subIssues?.items.some(child => child.state === 'open' && !seen.has(child.nodeId) && !childDone(child.nodeId)))) throw new PlanningError('planning-child-coverage', `Issue ${step.nodeId} requires complete child coverage before parent advancement`)
+    const nativeChildren = [...(issue.subIssues?.items ?? []), ...basis.candidates.filter(candidate => candidate.issue.parent?.nodeId === issue.nodeId).map(candidate => candidate.issue)]
+    const localChildren = ((candidate.task as { children?: { projectId: string; taskId: string }[] } | undefined)?.children ?? []).map(ref => basis.candidates.find(candidate => {
+      const task = candidate.task as { ref?: { projectId: string; taskId: string } } | undefined
+      return task?.ref?.projectId === ref.projectId && task.ref.taskId === ref.taskId
+    }))
+    if (step.mode !== 'wait' && (issue.subIssues?.hasNextPage || nativeChildren.some(child => child.state === 'open' && !seen.has(child.nodeId) && !childDone(child.nodeId)) || localChildren.some(child => !child || !seen.has(child.issue.nodeId) && !childDone(child.issue.nodeId)))) throw new PlanningError('planning-child-coverage', `Issue ${step.nodeId} requires complete child coverage before parent advancement`)
     const execution = candidate.execution as { state?: string; control?: { action?: string }; resource?: { runtimeId: string; workspaceId: string } } | undefined
     if (step.mode === 'existing' && (execution?.state === 'paused' || execution?.control?.action === 'pause')) throw new PlanningError('planning-explicit-resume-required', `Issue ${step.nodeId} was explicitly paused; resume it explicitly`)
     const task = candidate.task as { agentId?: string; progress?: { stage?: string } } | undefined

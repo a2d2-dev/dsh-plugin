@@ -401,6 +401,29 @@ it('observes a canonical Task already claimed by another source rule without tak
   expect(h.host.sessionsCreated.size).toBe(1)
 })
 
+it('adopts cross-project source work using the explicitly previewed original execution context', async () => {
+  const h = await setup(false, { generate: async () => ({ steps: [{ nodeId: 'ISSUE_1', why: '跨来源同一工作', nextAction: '继续原会话', mode: 'existing' }] }) })
+  const resource2 = { runtimeId: 'host', workspaceId: 'second-workspace' }
+  h.host.resources = async () => [{ ref: resource, title: 'Original' }, { ref: resource2, title: 'Second' }]
+  completed(await h.app.execute(h.configure, operator))
+  const imported = completed(await h.app.execute({ type: 'source.import', commandId: 'original-import', ...h.scope, nodeId: 'ISSUE_1' }, operator))
+  const original = completed(await h.app.execute({ type: 'task.start', commandId: 'original-start', ref: imported.ref, expectedVersion: imported.task!.version, agentId: imported.task!.agentId, resource, model, agentPreset: 'agent', permissionPreset: 'safe' }, operator)).execution!
+  const connected = completed(await h.app.execute({ type: 'source.connect', commandId: 'connect-second-project', githubProject: { owner: 'acme', type: 'org', number: 2 } }, operator))
+  const scope = { projectId: connected.project!.id, sourceId: connected.source!.id }
+  completed(await h.app.query({ type: 'source.issues', ...scope, page: 1, perPage: 100, assignee: '@me', state: 'open', refresh: true }, operator))
+  completed(await h.app.execute({ ...h.configure, ...scope, commandId: 'configure-second-project', resource: resource2 }, operator))
+  completed(await h.app.execute({ type: 'continuous.instruct', commandId: 'cross-instruct', ...scope, expectedVersion: 1, text: '复用已有工作及其原执行资源' }, operator))
+  completed(await h.app.execute({ type: 'continuous.preview', commandId: 'cross-preview', ...scope, expectedVersion: 2 }, operator))
+  const admission = vi.spyOn(h.host.execution, 'check')
+  completed(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'cross-enable', ...scope, expectedVersion: 3, enabled: true }, operator))
+  const rule = completed(await h.app.query({ type: 'continuous.status', ...scope }, operator)).continuousRule!
+  expect(rule.active).toEqual(original.ref)
+  expect(rule.resource).toEqual(resource2)
+  expect(admission).toHaveBeenCalledWith(expect.objectContaining({ resource: original.resource, session: original.session, sessionMode: 'reuse' }))
+  expect(await h.execution(original.ref)).toMatchObject({ id: original.id, owner: original.owner, epoch: original.epoch, resource: original.resource, session: original.session })
+  expect(h.host.sessionsCreated.size).toBe(1); expect(h.host.sends).toHaveLength(1)
+})
+
 it('bounds failed safe settlement, keeps the slot fenced, and allows explicit recovery without model restart', async () => {
   const h = await setup(); completed(await h.app.execute(h.configure, operator)); const first = await h.execution()
   await reportDone(h.app, first); h.host.idle(first)

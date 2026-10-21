@@ -62,6 +62,29 @@ npx --yes pnpm@10.26.2 typecheck
 
 父项在原生子项分页未完整或已知子工作未验收时保留身份并安全让槽；不从 Issue 正文猜测结构化依赖。目前受信来源接口无原生 dependency 字段，模型能看到完整原话与已有父子/本地 Task 事实，依赖缺失不能冒称已查明。
 
+### 独立委托组件接线清单
+
+本分支新增 `src/client/continuous-delegation.tsx`、`continuous-controller.ts` 与独立样式；按任务边界没有编辑 `work-panel.tsx` 或 `work-panel-controller.ts`。最终整合者接线：
+
+1. 来源表头保持摘要在左，在右侧的“持续处理” disclosure 内导入并渲染 `ContinuousDelegation`。
+2. 传入同一个稳定 `WorkClient`、选定来源的 `projectId/sourceId/sourceTitle`、`continuous.status` 的最新 `continuousRule`。未配置规则时沿原资源配置入口完成 `continuous.configure`，初次保持 `enabled:false`。
+3. `onRuleChanged` 使用稳定回调更新该来源缓存；既有状态刷新只更新 `rule` prop，不能重建/覆盖组件草稿。切来源的 props 改变仅切展示，不发送启用/停用命令。
+4. 组件自己发送 `continuous.instruct/preview/block/set-enabled`，不需要面板 controller 新增命令分支。禁止在 render、effect、浏览或刷新中调用 preview。
+5. 模型步骤只显示原因、下一步、新建/已有/等待，另呈现既有 execution 的原资源、模型、权限方案和会话，明确启用承认该原上下文。没有手动排序或删除计划行。
+
+草稿和未知命令回执身份按来源保存到浏览器 localStorage（不可用时保持当前输入）。慢保存只清除仍等于提交文本的草稿；后台 props 更新不会覆盖新输入。网络回执未知时只能核对/重试同一个 commandId，防止盲目再启用或重复模型预览；已知服务端拒绝允许修改后新提交。
+
+组件合同验证：`npx --yes pnpm@10.26.2 exec vitest run tests/continuous-client.spec.ts`。agent-browser 已打开既有 `http://127.0.0.1:18781` 并截图，实际页面仅登录表单；本会话未取得已登录实例，未验证新组件的真实页面交互，也未启动替代服务器。最终 #141 必须补已登录实例桌面/窄屏截图、真实模型与两项串行证据。
+
 ### 后续整合
 
 D 的 `completion.closeout === 'settled'` 与 B 的可靠 host observation 是最终组合验收前置，外部同步 pending/error 不阻塞槽位；此分支先沿 base 的本地 done report 和 host.settle 合同开发。最终 #141 需真实既有实例模型及浏览器证据。
+
+## 本分支验证记录
+
+- 初始公开预览测试由 `invalid-command` 红转绿；启用测试由提前启动红转绿；已有执行由 skipped/缺少 active 红转绿。
+- `pnpm@10.26.2` 执行相关 7 文件、91 项测试：75 passed / 16 failed。continuous 公共合同 22/22、独立 client 2/2、work 9/9、sources 29/29、progress 6/6 通过。真实 work-execution 15 项默认超时/fixture未 settle；continuous integration 首轮 1 项超时，单独复现 2 项均超时。没有放大 timeout 或跳过测试伪绿。
+- header checkpoint 单独复现保留 fixture `/data/_dsh-dev/tmp/a2d2-execution-GhtU5E`，仅存在 workspace storage 临时文件，无 Task snapshot 或 Session。更深宿主原因在本分支未验证；最终整合在受控环境复验。
+- `npx --yes pnpm@10.26.2 verify:pack-exports` exit 0，构建及 14 个 Node 公开入口均 verified。生成产物未提交。
+- 浏览器只验证到既有实例登录页，新组件桌面/窄屏交互与真实模型调用尚未验证。
+
