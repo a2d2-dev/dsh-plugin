@@ -1,3 +1,4 @@
+import { taskStructureBlocker } from '../work-organization.ts'
 import { randomUUID } from 'node:crypto'
 import type { WorkSnapshot } from '../work-schema.ts'
 import type { WorkCommand, WorkQuery, WorkResult, WorkTask } from '../work-types.ts'
@@ -46,10 +47,32 @@ function linkNativeRelatives(state: WorkSnapshot, observed: GitHubIssue, project
       seen.add(id); id = parentByChild.get(id)
     }
   }
+  const warnings: NonNullable<ExternalBinding['hierarchyWarnings']> = []
   const changed = new Set<WorkTask>()
   for (const { parent, child } of edges.values()) {
+    const linked = child.parent?.projectId === projectId && child.parent.taskId === parent.id && parent.children.some(ref => ref.projectId === projectId && ref.taskId === child.id)
+    const blocked = !linked && (taskStructureBlocker(state, parent) ?? taskStructureBlocker(state, child))
+    if (blocked) {
+      warnings.push({ code: 'source-hierarchy-frozen', reason: blocked.code, parent: { projectId, taskId: parent.id }, child: { projectId, taskId: child.id }, message: `source-hierarchy-frozen: ${parent.title} → ${child.title}；${blocked.message}。原生来源关系已保留，本次未修改两端业务关系。` })
+      continue
+    }
     if (!child.parent) { child.parent = { projectId, taskId: parent.id }; changed.add(child) }
     if (!parent.children.some(ref => ref.projectId === projectId && ref.taskId === child.id)) { parent.children.push({ projectId, taskId: child.id }); changed.add(parent) }
+  }
+  const binding = state.externalBindings.find(item => item.nodeId === observed.nodeId)!
+  if (warnings.length) binding.hierarchyWarnings = warnings
+  else delete binding.hierarchyWarnings
+  // Re-importing the opposite endpoint after takeover can accept the same edge;
+  // remove its now-resolved difference from either source record.
+  for (const record of state.externalBindings) {
+    if (!record.hierarchyWarnings) continue
+    record.hierarchyWarnings = record.hierarchyWarnings.filter(warning => {
+      const parent = state.tasks.find(task => task.id === warning.parent.taskId && task.projectId === warning.parent.projectId)
+      const child = state.tasks.find(task => task.id === warning.child.taskId && task.projectId === warning.child.projectId)
+      return !(parent?.children.some(ref => ref.projectId === warning.child.projectId && ref.taskId === warning.child.taskId)
+        && child?.parent?.projectId === warning.parent.projectId && child.parent.taskId === warning.parent.taskId)
+    })
+    if (!record.hierarchyWarnings.length) delete record.hierarchyWarnings
   }
   for (const task of changed) {
     // A newly imported or explicitly linked Task already records this command;
@@ -63,6 +86,11 @@ export function applySourceCommand(state: WorkSnapshot, command: SourceCommand):
   const projectId = 'projectId' in command ? command.projectId : command.ref.projectId
   const project = state.projects.find(item => item.id === projectId)
   if (!project) return fail('unknown-project', 'Project does not exist')
+  if (command.type === 'source.link') {
+    const task = state.tasks.find(item => item.projectId === projectId && item.id === command.ref.taskId)
+    const blocked = task && taskStructureBlocker(state, task)
+    if (blocked) return { status: 'failed', error: blocked }
+  }
   if (command.type === 'source.configure-project') {
     const target = command.githubProject
     const previous = state.sources.find(item => item.projectId === projectId && item.githubProject?.type === target.type && item.githubProject.number === target.number && item.githubProject.owner.toLowerCase() === target.owner.toLowerCase())

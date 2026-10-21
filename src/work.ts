@@ -18,7 +18,7 @@ import type { GitHubSourcePort } from './work-sources/types.ts'
 import type { WorkSnapshot } from './work-schema.ts'
 import { WorkExecutionError } from './work-execution/host.ts'
 import { continuationInFlight, MANAGED_WORK_INSTRUCTIONS, materialRequest, reserveContinuation, successorMessage } from './work-execution/continuation.ts'
-import { applyTaskOrganization } from './work-organization.ts'
+import { applyTaskOrganization, taskStructureBlocker } from './work-organization.ts'
 import { applyTaskReport, projectProgress, taskProgressView } from './work-progress.ts'
 import { continuousDependenciesReady, continuousOwner, continuousMayAdvance, continuousCompleted, discoverContinuous, sourceScopeError, sameTask, continuousRetry, MAX_CONTINUOUS_ATTEMPTS } from './work-continuous.ts'
 import { reconcileProjectSources } from './work-sources/discovery.ts'
@@ -125,6 +125,9 @@ export class WorkApplication {
     const graph = buildExecutionGraph({ task, execution, observation: await observe(execution), children })
     const binding = state.externalBindings.find(binding => sameTask(binding.ref, graph.ref))
     const issue = binding?.lastObserved
+    for (const warning of state.externalBindings.flatMap(item => item.hierarchyWarnings ?? []).filter(item => sameTask(item.parent, graph.ref) || sameTask(item.child, graph.ref))) {
+      if (!graph.limitations.includes(warning.message)) graph.limitations.push(warning.message)
+    }
     const native = issue?.subIssues ? issue : [binding?.accepted, ...state.sources.flatMap(source => source.observations.map(row => row.issue))]
       .filter((item): item is import('./work-sources/types.ts').GitHubIssue => !!item && item.nodeId === binding?.nodeId && !!item.subIssues)
       .sort((a, b) => b.observedAt.localeCompare(a.observedAt))[0]
@@ -1201,7 +1204,8 @@ export class WorkApplication {
         if (ancestor.id === child.id) return failed('task-cycle', 'Parent relationship would form a cycle')
         ancestor = ancestor.parent ? taskAt(state, ancestor.parent) : undefined
       }
-      if (isTaskCompleted(child) && !task.children.some(ref => ref.taskId === child.id)) return failed('task-completed', 'An accepted child cannot be reparented')
+      const blocked = taskStructureBlocker(state, child)
+      if (blocked && !task.children.some(ref => sameTask(ref, command.child))) return failed(blocked.code, blocked.message)
       if (child.parent && child.parent.taskId !== task.id) return failed('child-already-linked', 'Child already has another parent')
       if (task.children.some(ref => ref.taskId === child.id)) return { status: 'completed', task }
       child.parent = command.ref

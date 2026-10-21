@@ -1,3 +1,5 @@
+import { continuationInFlight } from './work-execution/continuation.ts'
+import { isTaskCompleted } from './work-completion/index.ts'
 import { z } from 'zod'
 import type { WorkSnapshot } from './work-schema.ts'
 import type { WorkExecution, WorkResult, WorkTask } from './work-types.ts'
@@ -9,11 +11,18 @@ export const taskOrganizationSchema=z.discriminatedUnion('kind',[
   z.object({kind:z.literal('child'),expectedVersion:z.number().int().positive(),title:text,...specification}).strict(),
 ])
 export type TaskOrganization=z.infer<typeof taskOrganizationSchema>
+/** Every business structure writer checks each affected existing Task. */
+export function taskStructureBlocker(state: WorkSnapshot, task: WorkTask): { code: string; message: string } | undefined {
+  if (isTaskCompleted(task)) return { code: 'task-completed', message: '已验收 Task 的业务结构保持冻结' }
+  const execution = state.executions.find(item => item.ref.projectId === task.projectId && item.ref.taskId === task.id)
+  if (execution && continuationInFlight(execution)) return { code: 'continuation-in-progress', message: '交接期间保留 Task 业务结构，接任后再更新' }
+}
 /** Current coordinator can preserve accepted specifications and split real child work atomically. */
 export function applyTaskOrganization(state:WorkSnapshot,execution:WorkExecution,intent:TaskOrganization,commandId:string,createId:()=>string):WorkResult {
   const task=state.tasks.find(item=>item.id===execution.ref.taskId&&item.projectId===execution.ref.projectId)!
   if(task.version!==intent.expectedVersion)return {status:'conflict',error:{code:'version-conflict',message:'工作已更新，请重新读取当前任务后再整理',currentVersion:task.version}}
-  if(execution.continuation && execution.continuation.phase!=='delivered')return {status:'failed',error:{code:'continuation-in-progress',message:'交接期间保留规格与任务结构，接任后再更新'}}
+  const blocked=taskStructureBlocker(state,task)
+  if(blocked)return {status:'failed',error:blocked}
   let result:WorkTask=task
   if(intent.kind==='source-children') {
     const bindings=state.externalBindings.filter(item=>item.ref.projectId===task.projectId&&item.ref.taskId===task.id)

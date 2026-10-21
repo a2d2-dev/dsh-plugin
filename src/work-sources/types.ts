@@ -76,4 +76,5 @@ export interface ExternalBinding {
   sourceIds: string[]; accepted: GitHubIssue; lastObserved: GitHubIssue
   acceptedChildren?: NonNullable<GitHubIssue['subIssues']> & { observedAt: string }
   relatedObservations?: GitHubIssue[]
+  hierarchyWarnings?: { code: 'source-hierarchy-frozen'; reason: string; parent: import('../work-types.ts').TaskRef; child: import('../work-types.ts').TaskRef; message: string }[]
 }

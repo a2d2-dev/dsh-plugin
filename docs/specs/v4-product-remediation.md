@@ -30,6 +30,18 @@ Repo 的原 detail 不读取原生关系；仅受信 helper 请求 nativeChildre
 - `TMPDIR=/dev/shm/v4-pf-141 corepack pnpm@10.26.2 exec vitest run tests/work-native-acceptance.spec.ts tests/work-completion.spec.ts tests/work-continuous-integration.spec.ts tests/work-progress.spec.ts`：4 文件 29/29、exit 0。新增矩阵 11 项涵盖未导入、跨项目真实 owner、不完整三种情况、外部证据、无子、纯本地、显式采纳、刷新不扩张、禁止删必要项及只读 helper 权限。
 - 旧正向外部完成 fixture 未描述原生完整性，首次组合如实 7 fail、21 pass、exit 1；只给这些正向来源添加明确的已完整读取空集合，保留全部原断言。unknown／partial 的反向路径由新增测试独立锁定，未放宽预算或跳过失败。
 
+## P-F3：原生关系导入遵守双端冻结
+
+根因是 source.import 在普通完成／交接 guard 前分派，来源自动链接直接改写双端业务结构。现在来源关系、显式本地链接和负责者整理复用 Task 结构保护：预检父和子，已验收或交接中均不改边。来源仍可接入 canonical Task 并保存真实观察，在 binding 持久化 `source-hierarchy-frozen`＋具体原因、两端 TaskRef 和差异说明；ExecutionGraph 的 limitations 传给既有执行面板，源原生关系与本地业务关系继续分别呈现。
+
+已完整链接关系的重复观察不重写版本。交接完成后，显式 re-import 可正常采纳双端边，并清除任一端来源记录里已经解决的差异；不重建 canonical／owner、不改历史完成。
+
+- `TMPDIR=/dev/shm/v4-pf-141 corepack pnpm@10.26.2 exec vitest run tests/work-source-freeze.spec.ts`：首条真实 DSH 公开路径红、exit 1，原完成父从 version 4／children=[] 变成 version 5／planned child。修复后父完整记录不变、子来源接入成功，两端边保持原值。
+- 首次 handoff 参数化测试误用 each 的第二参数取得测试 context，2 项 fixture TypeError、exit 1；改用公开 `it.for` context，未调整断言或预算。
+- 追加接任后从相反端重新采纳的回归先红（旧 warning 残留），小范围清理已解决边后绿。
+- `TMPDIR=/dev/shm/v4-pf-141 corepack pnpm@10.26.2 exec vitest run tests/work-source-freeze.spec.ts tests/project-discovery.spec.ts tests/client/v4-integrated-render.spec.ts`：3 文件 24/24、exit 0。涵盖已完父导子、已完子导父、父／子交接和接任后恢复、显式 local link 的 child guard、正常可变关系、幂等及原17项发现／层级合同。
+- agent-browser 使用专用 session `v4-pf-141`，打开本工作树 file 组件夹具，1280×1100 与 390×844 截图已读；完整窄屏截图显示来源原生子入口和具名冻结差异，viewport=390／document=375／warning=true。证据位于 `.local/v4-integrated/remediation-freeze-desktop.png`、`remediation-freeze-mobile-full.png`，页面明确“合成测试数据／非运行实例／未部署”。未开服务器，未将组件截图算实际实例验收。
+
 ## 范围记账
 
 WorkApplication 的 possible Divergent Change 留作后续深模块整理线索，本票不拆大 class／运行器。已撤回的维护锁环不修。旧 #123／#129、Host、运行目录、18781／18782、真实模型与 GitHub 业务写均未纳入本次源码整改。
