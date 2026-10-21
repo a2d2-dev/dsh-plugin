@@ -21,6 +21,7 @@ export const sourceSchema = z.object({ id: z.string().uuid(), projectId: z.strin
   enabled: z.boolean(), version: z.number().int().positive(), sequence: z.number().int().nonnegative(), requests: z.record(z.string(), z.number().int().positive()),
   observations: z.array(z.object({ issue: issueSchema, sequence: z.number().int().positive() }).strict()),
   pages: z.array(z.object({ key: z.string(), nodeIds: z.array(z.string()), nextPage: z.number().int().positive().optional(), identity, observedAt: z.iso.datetime() }).strict()),
+  title: z.string().optional(), nodeId: nodeId.optional(), entryUrls: z.array(z.string().max(2048)).optional(),
   identity: identity.optional(), lastError: z.object({ code: z.string(), message: z.string(), retryAt: z.string().optional() }).strict().optional(),
   projectSnapshot: z.object({ identity, project: projectMetadata, items: z.array(projectItem), observedAt: z.iso.datetime() }).strict().optional(), discovery: discovery.optional(),
 }).strict().refine(value => Boolean(value.repository) !== Boolean(value.githubProject), 'A source must name exactly one repository or GitHub Project')
