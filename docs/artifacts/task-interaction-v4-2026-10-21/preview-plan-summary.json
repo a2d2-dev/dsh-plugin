@@ -1,0 +1,167 @@
+{
+  "scope": "existing 18782 candidate only; not executed",
+  "planPath": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-e247236/plan.private.json",
+  "planSha256": "659f9d7d6fd17104ae1c4978312250442d75b882172df696237ad8a64f31b64c",
+  "toolCommit": "39fe47ef057cda97afe13ade333e4d0fcf777eff",
+  "codeChangeCommit": "e247236c94f2e27873e312068ff95f01822f5fa3",
+  "program": "dsh-a2d2-v3-preview",
+  "origin": "http://10.126.126.12:18782",
+  "prepareOnly": true,
+  "notificationEnabled": false,
+  "stopStrategy": "single-pid-term-with-hold",
+  "stopPolicy": {
+    "parentReviewedStaticCut": false,
+    "officialReceipt": null
+  },
+  "actions": {
+    "apply": {
+      "script": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-e247236/tools/profile-actions.mjs",
+      "sha256": "28fd62b755ff0c0cd3af2e627da46c955c2f8ebbfc28e785b6d267287ea3d7a6"
+    },
+    "verify": {
+      "script": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-e247236/tools/profile-actions.mjs",
+      "sha256": "28fd62b755ff0c0cd3af2e627da46c955c2f8ebbfc28e785b6d267287ea3d7a6"
+    },
+    "rollback": {
+      "script": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-e247236/tools/profile-actions.mjs",
+      "sha256": "28fd62b755ff0c0cd3af2e627da46c955c2f8ebbfc28e785b6d267287ea3d7a6"
+    },
+    "rollbackVerify": {
+      "script": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-e247236/tools/profile-actions.mjs",
+      "sha256": "28fd62b755ff0c0cd3af2e627da46c955c2f8ebbfc28e785b6d267287ea3d7a6"
+    }
+  },
+  "profiles": {
+    "new": {
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-e247236/profile-new",
+      "hostRoot": "/data/src/github.com/deepseek-ai/deepseek-harness-dev.worktrees/v4-141-release-8282d612",
+      "sha256": "a171c29ae742cc4585be06d215a0d196488a4c5a8a1e4def908bf584e5414314",
+      "importsReceipt": {
+        "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-e247236/profile-new-imports.private.json",
+        "sha256": "68115fb4bb9bc5e20babe72faaaf102fd6ccbe5a242b7eb5c5154bf02473c0cf"
+      },
+      "imports": 256
+    },
+    "rollback": {
+      "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-e247236/profile-rollback",
+      "hostRoot": "/data/src/github.com/deepseek-ai/deepseek-harness-dev.worktrees/v4-141-rollback-a45068d2",
+      "sha256": "85f99354537f05b932c0d3081b9fbe5bcde367c1728e77113a885e5a49a23488",
+      "importsReceipt": {
+        "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-e247236/profile-rollback-imports.private.json",
+        "sha256": "110671e6b93db0b99a9406be7870c5f1def3a0a3a81c6ede779d7625df6f5874"
+      },
+      "imports": 256
+    }
+  },
+  "files": {
+    "new": [
+      {
+        "target": "/data/_dsh-dev/previews/a2d2-v3-121/.v4-141-runtime.private.json",
+        "candidate": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-e247236/runtime-new.private.json",
+        "sha256": "3a8e65235543abfabb8a68b9b26de5e34dc558478e3459be7c66fe5d8f7fecc4",
+        "allowedCurrentSha256": [
+          null,
+          "3a8e65235543abfabb8a68b9b26de5e34dc558478e3459be7c66fe5d8f7fecc4",
+          "79263d1d55597ce83b485f587ba52e41dc86221a701621f7675596d34fe3949e"
+        ]
+      },
+      {
+        "target": "/data/_dsh-dev/previews/a2d2-v3-121/launch.mjs",
+        "candidate": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-e247236/launcher-new.mjs",
+        "sha256": "883d77d28dc01c42fb6d0d11b9c03eb1137cfca4f3271fabbff16b22a64776fc",
+        "allowedCurrentSha256": [
+          "e5101472ab8b954293f8bb6c9c3c1054bad9482f667a3826da95c9f5eb3916b0",
+          "7e85c51da268ca70d81b1171344939b5e89bb870878d8112aac1b2b427bd90a6",
+          "883d77d28dc01c42fb6d0d11b9c03eb1137cfca4f3271fabbff16b22a64776fc"
+        ]
+      },
+      {
+        "target": "/etc/supervisor/conf.d/dsh-a2d2-v3-preview.conf",
+        "candidate": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-e247236/supervisor-new.private.conf",
+        "sha256": "ea47e0365657680de60ecb243fdb7f6a3cfcbb9765c790bc8c0f60b79475816b",
+        "allowedCurrentSha256": [
+          "338b51779c2bfd24011618496afd51774d0b6942157a5de9bb5ecd8fc82cb98f",
+          "ea47e0365657680de60ecb243fdb7f6a3cfcbb9765c790bc8c0f60b79475816b"
+        ]
+      }
+    ],
+    "rollback": [
+      {
+        "target": "/data/_dsh-dev/previews/a2d2-v3-121/.v4-141-runtime.private.json",
+        "candidate": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-e247236/runtime-rollback.private.json",
+        "sha256": "79263d1d55597ce83b485f587ba52e41dc86221a701621f7675596d34fe3949e",
+        "allowedCurrentSha256": [
+          null,
+          "3a8e65235543abfabb8a68b9b26de5e34dc558478e3459be7c66fe5d8f7fecc4",
+          "79263d1d55597ce83b485f587ba52e41dc86221a701621f7675596d34fe3949e"
+        ]
+      },
+      {
+        "target": "/data/_dsh-dev/previews/a2d2-v3-121/launch.mjs",
+        "candidate": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-e247236/launcher-rollback.mjs",
+        "sha256": "883d77d28dc01c42fb6d0d11b9c03eb1137cfca4f3271fabbff16b22a64776fc",
+        "allowedCurrentSha256": [
+          "e5101472ab8b954293f8bb6c9c3c1054bad9482f667a3826da95c9f5eb3916b0",
+          "7e85c51da268ca70d81b1171344939b5e89bb870878d8112aac1b2b427bd90a6",
+          "883d77d28dc01c42fb6d0d11b9c03eb1137cfca4f3271fabbff16b22a64776fc"
+        ]
+      },
+      {
+        "target": "/etc/supervisor/conf.d/dsh-a2d2-v3-preview.conf",
+        "candidate": "/data/_dsh-builds/v4-141-artifacts-38d4d91/preview-candidate-e247236/supervisor-rollback.private.conf",
+        "sha256": "ea47e0365657680de60ecb243fdb7f6a3cfcbb9765c790bc8c0f60b79475816b",
+        "allowedCurrentSha256": [
+          "338b51779c2bfd24011618496afd51774d0b6942157a5de9bb5ecd8fc82cb98f",
+          "ea47e0365657680de60ecb243fdb7f6a3cfcbb9765c790bc8c0f60b79475816b"
+        ]
+      }
+    ]
+  },
+  "environmentPolicySha256": "1bdb98b5706bd2b33c474efd3a4b2bcffb5fe1f39be0ec1529433651200da6d7",
+  "environmentHashEncoding": "SHA256 of JSON sorted keys, compact separators, UTF-8",
+  "toolFileCount": 24,
+  "releaseManifest": {
+    "path": "/data/_dsh-builds/v4-141-artifacts-38d4d91/release-e247236/release-manifest.json",
+    "sha256": "1b6279c4761246f98027a2cc58e92c480514fa2741302e414049bf2011651a68"
+  },
+  "commandExits": {
+    "previewHandoverRed": 1,
+    "previewHandoverGreen": 0,
+    "receiptRed": 1,
+    "receiptGreen": 0,
+    "targetCutRed": 1,
+    "focusedToolTests14of14": 0,
+    "allMjsPythonAstDiff": 0,
+    "stageNewPreview": 0,
+    "fingerprintRelease": 0,
+    "preparePlan": 0,
+    "defaultDryRun": 1
+  },
+  "dryRun": {
+    "mode": "dry-run",
+    "ready": false,
+    "reasons": [
+      "invalid real handover: ENOENT: no such file or directory, open '/tmp/a2d2-v4-141-artifacts-38d4d91/preview-candidate-e247236/operational-handover.json'",
+      "parent source review of operational static-cut mode pending; no new LF approval required",
+      "prepareOnly; deployment not authorized"
+    ],
+    "steps": [
+      "verify complete new and rollback hosts",
+      "hold external admission and settle CEO/children/jobs; flush",
+      "stop only dsh-a2d2-v3-preview",
+      "apply pinned profile + isolated-host launcher switch",
+      "start only dsh-a2d2-v3-preview",
+      "same-origin refresh, client fingerprint and retention check",
+      "write durable completion; on failure preserve data and restore executable runtime"
+    ]
+  },
+  "executionFactsPresent": {
+    "settlement": false,
+    "liveCutPath": false,
+    "executionInstruction": false
+  },
+  "liveActionsPerformed": false,
+  "realModelCalls": 0,
+  "githubBusinessWrites": 0,
+  "ownJobsRunning": 0
+}
