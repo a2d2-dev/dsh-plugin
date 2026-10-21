@@ -77,7 +77,7 @@ export const continuousRuleSchema = z.object({
   active: taskRefSchema.optional(), error: z.object({ code: referenceId, message: text }).strict().optional(),
 }).strict()
 export const commandSchema = z.discriminatedUnion('type', [
-  z.object({ ...command, type: z.literal('source.connect'), githubProject: githubProjectRef, resource: resourceRefSchema.optional() }).strict(),
+  z.object({ ...command, type: z.literal('source.connect'), githubProject: githubProjectRef.optional(), url: z.string().max(2048).optional(), resource: resourceRefSchema.optional() }).strict().refine(value => Boolean(value.url) !== Boolean(value.githubProject)),
   z.object({ ...command, type: z.literal('continuous.configure'), projectId: id, sourceId: id, expectedVersion: z.number().int().nonnegative(), assignee: z.enum(['@me', '*']), labels: z.array(referenceId).max(100), resource: resourceRefSchema, model: modelSchema, agentPreset: referenceId, permissionPreset: referenceId, enabled: z.boolean() }).strict(),
   z.object({ ...command, type: z.literal('continuous.set-enabled'), projectId: id, sourceId: id, expectedVersion: z.number().int().positive(), enabled: z.boolean() }).strict(),
   z.object({ ...command, type: z.literal('source.configure-project'), projectId: id, githubProject: z.object({ owner: referenceId, type: z.enum(['org', 'user']), number: z.number().int().positive() }).strict() }).strict(),
@@ -107,6 +107,7 @@ export const commandSchema = z.discriminatedUnion('type', [
     agentPreset: referenceId, model: modelSchema, permissionPreset: referenceId }).strict(),
 ])
 export const querySchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('source.identify'), url: z.string().min(1).max(2048) }).strict(),
   z.object({ type: z.literal('source.execution-options'), projectId: id, sourceId: id }).strict(),
   z.object({ type: z.literal('continuous.status'), projectId: id, sourceId: id }).strict(),
   z.object({ type: z.literal('work.capabilities') }).strict(),

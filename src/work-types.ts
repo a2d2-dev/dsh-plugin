@@ -1,5 +1,5 @@
 import type { TaskProgress, TaskProgressView, TaskReport, WorkStage } from './work-progress.ts'
-import type { ExternalBinding, GitHubIssue, GitHubIssueReference, IssuePage, WorkSource } from './work-sources/types.ts'
+import type { ExternalBinding, GitHubIssue, GitHubIssueReference, IssuePage, WorkSource, SourceCandidate } from './work-sources/types.ts'
 /** Browser-safe contract for the local work application. No host/runtime imports. */
 export interface TaskRef { projectId: string; taskId: string }
 export interface ResourceRef { runtimeId: string; workspaceId: string }
@@ -91,7 +91,7 @@ interface Command { commandId: string }
 interface TaskContent { title: string; goal: string; specification: string; acceptance: string[] }
 interface TaskChange extends Command { ref: TaskRef; expectedVersion: number }
 export type WorkCommand =
-  | (Command & { type: 'source.connect'; githubProject: { owner: string; type: 'org' | 'user'; number: number }; resource?: ResourceRef })
+  | (Command & { type: 'source.connect'; url?: string; githubProject?: { owner: string; type: 'org' | 'user'; number: number }; resource?: ResourceRef })
   | (Command & { type: 'continuous.configure'; projectId: string; sourceId: string; expectedVersion: number; assignee: '@me' | '*'; labels: string[]; resource: ResourceRef; model: { provider: string; model: string; reasoningEffort?: string }; agentPreset: string; permissionPreset: string; enabled: boolean })
   | (Command & { type: 'continuous.set-enabled'; projectId: string; sourceId: string; expectedVersion: number; enabled: boolean })
   | (Command & { type: 'source.configure-project'; projectId: string; githubProject: { owner: string; type: 'org' | 'user'; number: number } })
@@ -119,6 +119,7 @@ export type WorkCommand =
   | (Command & ExecutionRef & { type: 'task.reconcile'; owner: string; epoch: number })
   | (TaskChange & { type: 'task.start'; agentId: string; resource: ResourceRef; session?: SessionRef; agentPreset: string; model: { provider: string; model: string; reasoningEffort?: string }; permissionPreset: string })
 export type WorkQuery =
+  | { type: 'source.identify'; url: string }
   | { type: 'source.execution-options'; projectId: string; sourceId: string }
   | { type: 'continuous.status'; projectId: string; sourceId: string }
   | { type: 'source.list'; projectId: string }
@@ -139,6 +140,7 @@ export interface AssociatedWork { ref: TaskRef; title: string; projectName: stri
 /** Completed fields correspond to command/query; task.detail includes related children and parent. */
 export interface SourceResultFields {
   ref?: TaskRef
+  candidate?: SourceCandidate
   source?: WorkSource; sources?: WorkSource[]; page?: IssuePage; issue?: GitHubIssue
   binding?: ExternalBinding; bindings?: ExternalBinding[]
   capabilities?: { githubRead: boolean; githubWrite: false; taskStart: boolean; projectViews: boolean }

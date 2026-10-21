@@ -36,7 +36,9 @@ export interface SourceDiscovery {
 export interface IssuePageRequest { page: number; perPage: number; assignee: '@me' | '*'; state: 'open' | 'closed' | 'all' }
 export interface IssuePage { identity: GitHubIdentity; items: GitHubIssue[]; nextPage?: number; observedAt: string }
 export interface IssueDetail { identity: GitHubIdentity; issue: GitHubIssue }
+export type SourceCandidate = { kind: 'project' | 'repository'; nodeId: string; title: string; url: string; entryUrl: string; identity: GitHubIdentity; repository?: GitHubRepository; githubProject?: GitHubProjectRef }
 export interface GitHubSourcePort {
+  identify?(url: string): Promise<SourceCandidate>
   list(repository: GitHubRepository, request: IssuePageRequest): Promise<IssuePage>
   detail(repository: GitHubRepository, number: number): Promise<IssueDetail>
   project?(project: GitHubProjectRef, request: ProjectPageRequest): Promise<GitHubProjectPage>
@@ -47,6 +49,7 @@ export interface SourcePage { key: string; nodeIds: string[]; nextPage?: number;
 export interface WorkSource {
   id: string; projectId: string; provider: 'github'; repository?: GitHubRepository; githubProject?: GitHubProjectRef; enabled: boolean; version: number
   sequence: number; requests: Record<string, number>; observations: SourceObservation[]; pages: SourcePage[]
+  title?: string; nodeId?: string; entryUrls?: string[]
   identity?: GitHubIdentity; lastError?: SourceFailure; projectSnapshot?: ProjectSnapshot; discovery?: SourceDiscovery
 }
 export interface ExternalBinding {

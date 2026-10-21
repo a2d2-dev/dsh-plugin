@@ -1,3 +1,5 @@
+import { SourceError } from './work-sources/errors.ts'
+import type { SourceCandidate } from './work-sources/types.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile } from 'node:fs/promises'
 import { isAbsolute, join, normalize } from 'node:path'
@@ -360,10 +362,16 @@ export class WorkApplication {
     const parsed = commandSchema.safeParse(input)
     if (!parsed.success) return failed('invalid-command', 'Invalid work command')
     const command = parsed.data
+    let sourceCandidate: SourceCandidate | undefined
+    if (!actor.operator && command.type === 'source.connect') return failed('forbidden', 'Host operator authorization is required')
     let admissionChoices: import('./work-types.ts').HostExecutionChoices | undefined
     if (!actor.operator && !('executionId' in command)) return failed('forbidden', 'Session actors can only control their current execution')
     const recorded = actor.operator ? (await this.load()).commands.find(item => item.commandId === command.commandId) : undefined
     if (recorded && recorded.fingerprint !== JSON.stringify(command)) return { status: 'conflict', error: { code: 'command-id-reused', message: 'Command ID already has different content' } }
+    if (!recorded && command.type === 'source.connect' && command.url) {
+      if (!this.source?.identify) return failed('github-capability-unavailable', 'Source identification is unavailable')
+      try { sourceCandidate = await this.source.identify(command.url) } catch (error) { return failed(error instanceof SourceError ? error.code : 'github-unavailable', error instanceof Error ? error.message : 'Source could not be identified') }
+    }
     if (!recorded && (command.type === 'task.start' || command.type === 'continuous.configure')) {
       if (!this.host.execution) return failed('host-capability-unavailable', 'This host has no managed execution capability')
       try { admissionChoices = await this.host.execution.check({ ...command, sessionMode: 'session' in command && command.session ? 'reuse' : 'create', session: ('session' in command ? command.session : undefined) ?? { runtimeId: command.resource.runtimeId, sessionId: `session-${randomUUID()}` } }) }
@@ -385,7 +393,7 @@ export class WorkApplication {
       const fingerprint = JSON.stringify(command)
       const previous = state.commands.find(item => item.commandId === command.commandId)
       if (previous) return previous.fingerprint === fingerprint ? previous.result : { status: 'conflict', error: { code: 'command-id-reused', message: 'Command ID already has different content' } }
-      const result = await this.apply(state, command, admissionChoices)
+      const result = await this.apply(state, command, admissionChoices, sourceCandidate)
       if (result.status !== 'completed') return result
       // Receipt owns a detached snapshot: subsequent commands must not alter retry results.
       state.commands.push({ commandId: command.commandId, fingerprint, result: structuredClone(result) })
@@ -676,11 +684,18 @@ export class WorkApplication {
     task.version++
     task.activity.push({ commandId: command.commandId, type: command.type, version: task.version })
   }
-  private async apply(state: WorkSnapshot, command: WorkCommand, admissionChoices?: import('./work-types.ts').HostExecutionChoices): Promise<WorkResult> {
+  private async apply(state: WorkSnapshot, command: WorkCommand, admissionChoices?: import('./work-types.ts').HostExecutionChoices, candidate?: SourceCandidate): Promise<WorkResult> {
     if (command.type === 'source.connect') {
-      const target = command.githubProject
-      const existing = state.sources.find(source => source.githubProject?.type === target.type && source.githubProject.number === target.number && source.githubProject.owner.toLowerCase() === target.owner.toLowerCase())
+      const target = candidate?.githubProject ?? command.githubProject, repository = candidate?.repository
+      if (!target && !repository) return failed('github-invalid-scope', 'Source identification did not return a scope')
+      const existing = state.sources.find(source => candidate?.nodeId && source.nodeId === candidate.nodeId || (target ? source.githubProject?.type === target.type && source.githubProject.number === target.number && source.githubProject.owner.toLowerCase() === target.owner.toLowerCase() : source.repository?.owner.toLowerCase() === repository!.owner.toLowerCase() && source.repository.repository.toLowerCase() === repository!.repository.toLowerCase()))
+      const remember = (source: import('./work-sources/types.ts').WorkSource) => {
+        if (!candidate) return
+        source.title = candidate.title; source.nodeId = candidate.nodeId; source.identity = candidate.identity
+        source.entryUrls = [...new Set([...(source.entryUrls ?? []), candidate.entryUrl])]
+      }
       if (existing) {
+        remember(existing)
         const project = state.projects.find(project => project.id === existing.projectId)!
         if (command.resource && !project.resources.some(ref => sameResource(ref, command.resource!))) {
           const attached = await this.apply(state, { type: 'project.attach-resource', commandId: command.commandId, projectId: project.id, expectedVersion: project.version, resource: command.resource })
@@ -688,9 +703,10 @@ export class WorkApplication {
         }
         return { status: 'completed', project, source: existing }
       }
-      const created = await this.apply(state, { type: 'project.create', commandId: command.commandId, name: `${target.owner} / Project #${target.number}`, ...(command.resource ? { resource: command.resource } : {}) })
+      const created = await this.apply(state, { type: 'project.create', commandId: command.commandId, name: candidate?.title ?? `${target!.owner} / Project #${target!.number}`, ...(command.resource ? { resource: command.resource } : {}) })
       if (created.status !== 'completed' || !created.project) return created
-      const configured = applySourceCommand(state, { type: 'source.configure-project', commandId: command.commandId, projectId: created.project.id, githubProject: target })
+      const configured = applySourceCommand(state, target ? { type: 'source.configure-project', commandId: command.commandId, projectId: created.project.id, githubProject: target } : { type: 'source.configure', commandId: command.commandId, projectId: created.project.id, repository: repository! })
+      if (configured.status === 'completed' && configured.source) remember(configured.source)
       return configured.status === 'completed' ? { ...configured, project: created.project } : configured
     }
     if (command.type === 'continuous.configure' || command.type === 'continuous.set-enabled') return this.configureContinuous(state, command, admissionChoices)
@@ -891,6 +907,10 @@ export class WorkApplication {
     const parsed = querySchema.safeParse(input)
     if (!parsed.success) return failed('invalid-query', 'Invalid work query')
     const query = parsed.data
+    if (query.type === 'source.identify') {
+      if (!this.source?.identify) return failed('github-capability-unavailable', 'Source identification is unavailable')
+      try { return { status: 'completed', candidate: await this.source.identify(query.url) } } catch (error) { return failed(error instanceof SourceError ? error.code : 'github-unavailable', error instanceof Error ? error.message : 'Source could not be identified') }
+    }
     if (query.type === 'work.capabilities') {
       let taskStart = false
       try { const choices = await this.host.execution?.choices(); taskStart = !!choices?.models.length && !!choices.agentPresets.length && !!choices.permissionPresets.length } catch {}

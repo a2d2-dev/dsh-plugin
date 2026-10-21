@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { repositorySchema } from './schema.ts'
 import type { GitHubIdentity, GitHubIssue, GitHubRepository, GitHubSourcePort, IssuePageRequest, GitHubProjectRef, ProjectPageRequest } from './types.ts'
 import { SourceError } from './errors.ts'
+import { parseSourceURL } from './url.ts'
 import { readGitHubProject, type ProjectGraphQL } from './project.ts'
 export { SourceError } from './errors.ts'
 export type * from './types.ts'
@@ -28,9 +29,22 @@ export class GitHubSource implements GitHubSourcePort {
   private readonly fetcher: typeof globalThis.fetch
   private readonly timeoutMs: number
   constructor(options: Options = {}) { this.options = options; this.token = options.credential ?? credential; this.fetcher = options.fetch ?? globalThis.fetch; this.timeoutMs = options.timeoutMs ?? 15_000 }
+  async identify(url: string) {
+    const scope = parseSourceURL(url)
+    if (scope.kind === 'project') {
+      const page = await this.project(scope.githubProject, { perPage: 1 })
+      return { ...scope, nodeId: page.project.nodeId, title: page.project.title, url: page.project.url, identity: page.identity }
+    }
+    const token = await this.token(), identity = await this.identity(token)
+    const parsed = z.object({ node_id: z.string().min(1), name: z.string(), full_name: z.string(), html_url: z.string(), owner: z.object({ login: z.string() }) }).safeParse(await this.get(`/repos/${scope.repository.owner}/${scope.repository.repository}`, token))
+    if (!parsed.success) throw new SourceError('github-invalid-response', 'GitHub 未返回完整仓库身份')
+    const value = parsed.data, repository = { owner: value.owner.login.toLowerCase(), repository: value.name.toLowerCase() }
+    if (!validRepository(repository) || value.html_url.toLowerCase() !== `https://github.com/${repository.owner}/${repository.repository}`) throw new SourceError('github-invalid-response', 'GitHub 返回的仓库身份不一致')
+    return { ...scope, repository, nodeId: value.node_id, title: value.full_name, url: value.html_url, identity }
+  }
   project(project: GitHubProjectRef, request: ProjectPageRequest) { return readGitHubProject(project, request, this.options.graphql) }
   private async get(path: string, token: string): Promise<unknown> {
-    if (!(path === '/user' || /^\/repos\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/issues(?:\/[1-9][0-9]*)?(?:\?.*)?$/.test(path))) throw new SourceError('github-invalid-scope', 'Unsupported GitHub source path')
+    if (!(path === '/user' || /^\/repos\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\/issues(?:\/[1-9][0-9]*)?(?:\?.*)?)?$/.test(path))) throw new SourceError('github-invalid-scope', 'Unsupported GitHub source path')
     try {
       const response = await this.fetcher(`https://api.github.com${path}`, { method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(this.timeoutMs), headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28', 'user-agent': 'dsh-a2d2-issue-source' } })
       if (!response.ok) {
