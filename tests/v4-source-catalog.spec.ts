@@ -30,5 +30,7 @@ it('applies actual view filters before pagination and refuses unsupported syntax
   const item: GitHubProjectItem = { id: 'item', kind: 'issue', archived: false, issueNodeId: 'I1', fields: [{ id: 'status', name: 'Status', type: 'single-select', value: 'In Progress' }], fieldsPartial: false }
   expect(filterProjectItems('is:issue is:open assignee:@me status:"In Progress" label:ready', [item], [issue], 'viewer')).toMatchObject({ supported: true, items: [item] })
   expect(filterProjectItems('status:Done or label:ready', [item], [issue], 'viewer')).toMatchObject({ supported: true, items: [item] })
+  expect(filterProjectItems('-label:done', [{ ...item, kind: 'restricted', issueNodeId: undefined, fields: [] }], [], 'viewer')).toMatchObject({ supported: true, items: [] })
+  expect(filterProjectItems('no:status', [{ ...item, fieldsPartial: true, fields: [] }], [issue], 'viewer', ['Status'])).toMatchObject({ supported: false, reason: expect.any(String) })
   expect(filterProjectItems('(status:Done OR label:ready)', [item], [issue], 'viewer')).toMatchObject({ supported: false, reason: expect.any(String) })
 })

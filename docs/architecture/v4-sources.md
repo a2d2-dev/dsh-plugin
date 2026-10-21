@@ -56,7 +56,7 @@ URL → source.identify → 真实候选 → 用户确认 → source.connect →
 
 Project 的 views 和 fields 各自按真实 connection 翻页；条目成员仍沿用原有 discovery 的可恢复扫描，完整扫描原子发布。PR 目录另外读取真实 Project 收录和每个 Issue 最近 50 条 CrossReferencedEvent，按 PR nodeId 合并、保留收录与引用区别。历史引用存在更多页、权限受限条目或读取上限时明确标为部分观察，PR 引用始终不作为验收。
 
-Project 视图在完整成员观察上先过滤再分页，使用真实字段值（含 Milestone），支持空白 AND、显式 AND、OR、引号值、逗号 OR 值、负条件、`assignee:@me`、`is:open/closed/issue/pr/draft/archived`、label、repo、no/has 与真实自定义字段等常用表达式。括号、比较、不完整引号或未知字段明确报告原因。原始 view 编号及 filterQuery 可恢复，手动切视图后按新 view 过滤；未知 slice 参数保留外链并明确拒绝假装已支持。
+Project 视图在完整成员观察上先过滤再分页；权限受限条目不参与有条件视图匹配，`no/has` 同样要求字段观察完整，不能把未知字段当作不存在。使用真实字段值（含 Milestone），支持空白 AND、显式 AND、OR、引号值、逗号 OR 值、负条件、`assignee:@me`、`is:open/closed/issue/pr/draft/archived`、label、repo、no/has 与真实自定义字段等常用表达式。括号、比较、不完整引号或未知字段明确报告原因。原始 view 编号及 filterQuery 可恢复，手动切视图后按新 view 过滤；未知 slice 参数保留外链并明确拒绝假装已支持。
 
 Issue 的 assignee、open／closed／all、全部标签及搜索与 Project 视图独立。Project 在完整成员快照中过滤；Repo 使用固定 REST 范围，标签／负责人／状态由 API 筛选，搜索按标题／正文／编号扫描来源页后分页（最多扫描 20000 条，超限明确失败，不返回假全量）。原有当前页处理状态／快捷搜索仍明确标注仅作用当前页。缓存键包含应用筛选，观察刷新沿用相同范围。
 

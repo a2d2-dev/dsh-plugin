@@ -27,7 +27,7 @@ export function filterProjectItems(expression: string, items: GitHubProjectItem[
     if (!values.length) return { supported: false, reason: `视图筛选缺少值：${original}` }
     if (!['text','is','state','label','assignee','repo','no','has'].includes(key) && !fields.has(key)) return { supported: false, reason: `暂不支持或无法读取视图字段：${key}` }
     if ((key === 'is' && values.some(value => !['open','closed','issue','pr','draft','archived'].includes(value))) || ((key === 'no' || key === 'has') && values.some(value => !['assignee','label'].includes(value) && !fields.has(value)))) return { supported: false, reason: `暂不支持视图筛选：${original}` }
-    if (fields.has(key) && items.some(item => item.fieldsPartial)) return { supported: false, reason: `字段 ${key} 的观察不完整，无法准确应用此视图` }
+    if ((fields.has(key) || (key === 'no' || key === 'has') && values.some(value => fields.has(value))) && items.some(item => item.fieldsPartial)) return { supported: false, reason: `字段 ${key} 的观察不完整，无法准确应用此视图` }
     predicates.push(item => {
       const issue = byNode.get(item.issueNodeId ?? '') ?? item.facts
       const matches = values.some(value => {
@@ -46,5 +46,5 @@ export function filterProjectItems(expression: string, items: GitHubProjectItem[
       return negative ? !matches : matches
     })
   }
-  return { supported: true, items: items.filter(item => (!item.archived || tokens.some(token=>/^is:archived$/i.test(token))) && predicates.every(predicate => predicate(item))) }
+  return { supported: true, items: items.filter(item => (!tokens.length || item.kind !== 'restricted') && (!item.archived || tokens.some(token=>/^is:archived$/i.test(token))) && predicates.every(predicate => predicate(item))) }
 }
