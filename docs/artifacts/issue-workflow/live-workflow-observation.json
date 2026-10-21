@@ -1,0 +1,132 @@
+{
+  "actual": {
+    "agentPreset": "standard",
+    "approval": "ask",
+    "cwd": "/data/_dsh-dev/previews/a2d2-v3-121/workspace",
+    "model": "gpt-6-astra",
+    "permissionPreset": "workspace-write",
+    "provider": "codex",
+    "reasoningEffort": "high",
+    "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+    "sandbox": "workspace-write"
+  },
+  "continuation": {
+    "automatic": true,
+    "inputSeal": 39,
+    "operationId": "3ca48936-02cf-4109-9fb6-7a91fadc6cfb",
+    "phase": "delivered",
+    "source": {
+      "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+      "sessionId": "session-01facda2-1f2a-4f75-a503-34860ab4f1c4"
+    },
+    "successor": {
+      "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+      "sessionId": "session-f44e2d0d-a4e1-4fb5-945a-a759a9480d9f"
+    }
+  },
+  "control": {
+    "action": "wait",
+    "commandId": "report:e3fcd853005344bbe6f7b98bdfc129fb2957193190d118a5b6cf337a14234815",
+    "reason": "任务已按当前规格验收完成",
+    "status": "applied"
+  },
+  "criteria": {
+    "assessed": 2,
+    "current": true,
+    "passed": 2,
+    "total": 2
+  },
+  "currentSession": {
+    "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+    "sessionId": "session-f44e2d0d-a4e1-4fb5-945a-a759a9480d9f"
+  },
+  "epoch": 2,
+  "executionId": "14f11283-cf3a-4a8e-9a9d-2cecb129a114",
+  "modelReportedEvidence": [
+    {
+      "evidence": [
+        "后继会话（epoch 2，session-f44e2d0d-a4e1-4fb5-945a-a759a9480d9f）已在回复中明确复述：“镜像保留数量固定为 3。”接续材料明确记录“镜像保留数量 3”。"
+      ],
+      "index": 0,
+      "passed": true
+    },
+    {
+      "evidence": [
+        "后继会话（epoch 2，session-f44e2d0d-a4e1-4fb5-945a-a759a9480d9f）已在回复中明确复述：“必须保留 stable 标签。”与接续材料中的决定一致。"
+      ],
+      "index": 1,
+      "passed": true
+    }
+  ],
+  "observedAt": "2026-10-21T04:51:10.330Z",
+  "policy": {
+    "enabled": true,
+    "reserveTokens": 16000,
+    "targetTokens": 200000,
+    "version": 3
+  },
+  "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+  "projectPolicy": {
+    "enabled": true,
+    "reserveTokens": 16000,
+    "targetTokens": 200000,
+    "version": 1
+  },
+  "retired": [
+    {
+      "epoch": 1,
+      "operationId": "3ca48936-02cf-4109-9fb6-7a91fadc6cfb",
+      "session": {
+        "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+        "sessionId": "session-01facda2-1f2a-4f75-a503-34860ab4f1c4"
+      }
+    }
+  ],
+  "sources": [
+    {
+      "enabled": true,
+      "id": "9cea4378-0219-4f99-a237-80f51bd36291",
+      "identity": {
+        "login": "imneov",
+        "name": "LiuFeng",
+        "nodeId": "MDQ6VXNlcjMxNjEyMDMz"
+      },
+      "repository": {
+        "owner": "a2d2-dev",
+        "repository": "dsh-plugin"
+      }
+    },
+    {
+      "discovery": {
+        "failures": 0,
+        "lastAttemptAt": "2026-10-21T04:50:31.102Z",
+        "lastSuccessAt": "2026-10-21T04:50:32.090Z",
+        "nextAttemptAt": "2026-10-21T04:51:32.090Z",
+        "state": "idle"
+      },
+      "enabled": true,
+      "githubProject": {
+        "number": 1,
+        "owner": "a2d2-dev",
+        "type": "org"
+      },
+      "id": "c122502c-1632-4a96-acb5-8adbac61999d",
+      "identity": {
+        "login": "imneov",
+        "name": "LiuFeng",
+        "nodeId": "MDQ6VXNlcjMxNjEyMDMz"
+      },
+      "project": {
+        "closed": false,
+        "nodeId": "PVT_kwDODqZowM4BnNzF",
+        "title": "DSH A²D²",
+        "url": "https://github.com/orgs/a2d2-dev/projects/1"
+      },
+      "projectItemCount": 1
+    }
+  ],
+  "stage": "done",
+  "summary": "已通过 work_control status 确认当前执行代次 epoch=2，自动接续 automatic=true、phase=delivered。后继会话核对接续材料后逐项复述：镜像保留数量固定为 3；必须保留 stable 标签。两项验收标准均通过。未读写 GitHub，未修改代码或文件，未创建其他任务或子会话。",
+  "taskId": "c0258593-c3df-4fdb-b62e-860202e03982",
+  "url": "http://10.126.126.12:18782"
+}

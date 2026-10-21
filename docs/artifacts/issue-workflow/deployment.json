@@ -1,0 +1,26 @@
+{
+  "commit": "1cca28497d1f20390b036fc7ad8ff4cfb22a4dee",
+  "packageSha256": "08b303f147a887e2b678fdd0fd8ba82a313c6b66fd7170bfa6848bc5e1585e47",
+  "clientSha256": "af8de0f9e0ae9d964c98cfd6dd86e852b77a797decbbde6dbe64b1898265ee35",
+  "url": "http://10.126.126.12:18782/",
+  "status": "verified",
+  "recordedAt": "2026-10-21T05:34:45.361Z",
+  "existingTasksUnchanged": 5,
+  "existingAgentsUnchanged": 2,
+  "existingReceiptsUnchanged": 15,
+  "originalSessionRetained": true,
+  "executionCount": 1,
+  "acceptanceTaskId": "c0258593-c3df-4fdb-b62e-860202e03982",
+  "currentSession": "session-f44e2d0d-a4e1-4fb5-945a-a759a9480d9f",
+  "epoch": 2,
+  "criterionPasses": 2,
+  "automatic": true,
+  "retiredSessions": 1,
+  "browserChecks": {
+    "completedShowsClosed": true,
+    "distinctSessionCount": 2,
+    "completedExecutionControlsHidden": true,
+    "retiredNativeChatOffersCurrentSession": true,
+    "enteringSuccessorKeepsExistingOneTurnTwoSteps": true
+  }
+}

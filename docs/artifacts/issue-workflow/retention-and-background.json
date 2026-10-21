@@ -1,0 +1,15 @@
+{
+  "observedAt": "2026-10-21T04:58:46.175Z",
+  "existingTasksUnchanged": 5,
+  "existingAgentsUnchanged": 2,
+  "existingReceiptsUnchanged": 15,
+  "existingProjectsRetained": 2,
+  "originalSessionRetained": true,
+  "addedTaskTitles": [
+    "验收：真实模型启动与自动交接"
+  ],
+  "executionCount": 1,
+  "browserStateSavedAt": "2026-10-21T04:52:11.334Z",
+  "sourceLastSuccessAt": "2026-10-21T04:58:07.568Z",
+  "backgroundReadAfterBrowserClosed": true
+}
