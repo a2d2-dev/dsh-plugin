@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process'
 import { join, isAbsolute } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-export const roles = ['plugin-tgz', 'plugin-client', 'host-cli', 'host-web', 'host-jobs', 'host-session', 'host-smoke', 'rollback-cli', 'rollback-smoke']
+export const roles = ['plugin-provenance', 'plugin-tgz', 'plugin-client', 'host-cli', 'host-web', 'host-jobs', 'host-session', 'host-smoke', 'rollback-cli', 'rollback-smoke']
 const shared = '/data/src/github.com/deepseek-ai/deepseek-harness-dev'
 const sha = bytes => createHash('sha256').update(bytes).digest('hex')
 export function validateRelease(manifest) {
@@ -20,6 +20,13 @@ export function validateRelease(manifest) {
     if (seen.has(artifact.role)) throw Error(`duplicate role ${artifact.role}`)
     seen.add(artifact.role)
     if (!isAbsolute(artifact.path ?? '') || !/^[0-9a-f]{64}$/.test(artifact.sha256 ?? '')) throw Error(`invalid path/sha256: ${artifact.role}`)
+  }
+}
+export async function verifyImports(imports, root) {
+  if (!Array.isArray(imports) || !imports.length) throw Error('missing dynamic import inventory')
+  for (const item of imports) {
+    const path = await realpath(item.path)
+    if (!path.startsWith(root + '/') || item.ok !== true || sha(await readFile(path)) !== item.sha256) throw Error(`dynamic import changed/escaped: ${item.name}`)
   }
 }
 export async function verifyRelease(manifest) {
@@ -38,6 +45,9 @@ export async function verifyRelease(manifest) {
   for (const [role, root] of [['host-cli', manifest.hostRoot], ['host-web', manifest.hostRoot], ['host-jobs', manifest.hostRoot], ['host-session', manifest.hostRoot], ['rollback-cli', manifest.rollbackHostRoot]]) {
     if (!(await realpath(artifacts.get(role).path)).startsWith(root + '/')) throw Error(`artifact escapes ${role} host root`)
   }
+  const provenance = JSON.parse(artifacts.get('plugin-provenance').bytes)
+  if (provenance.pluginCommit !== manifest.pluginCommit || provenance.tgzSha256 !== artifacts.get('plugin-tgz').sha256 || provenance.clientSha256 !== artifacts.get('plugin-client').sha256 || !provenance.buildEvidence) throw Error('plugin source/build provenance mismatch')
+  if (!provenance.buildEvidence.path || !/^[a-f0-9]{64}$/.test(provenance.buildEvidence.sha256 ?? '') || sha(await readFile(provenance.buildEvidence.path)) !== provenance.buildEvidence.sha256) throw Error('plugin build evidence missing/changed')
   const cli = await realpath(artifacts.get('host-cli').path)
   if (cli !== join(manifest.hostRoot, 'apps/cli/lib/bin.js')) throw Error('unexpected CLI entry')
   const packed = spawnSync('tar', ['-xOzf', artifacts.get('plugin-tgz').path, 'package/lib/client.js'], { maxBuffer: 64 * 1024 * 1024 })
@@ -46,6 +56,7 @@ export async function verifyRelease(manifest) {
     const proof = JSON.parse(artifacts.get(role).bytes)
     const expectedRoot = role === 'host-smoke' ? manifest.hostRoot : manifest.rollbackHostRoot
     if (proof.passed !== true || proof.hostRoot !== expectedRoot || proof.cliSha256 !== artifacts.get(role === 'host-smoke' ? 'host-cli' : 'rollback-cli').sha256 || !Array.isArray(proof.imports) || proof.imports.length < 5 || proof.imports.some(item => item.ok !== true)) throw Error(`invalid executable/dynamic import proof: ${role}`)
+    await verifyImports(proof.imports, expectedRoot)
     if (role === 'host-smoke' && (proof.hostCommit !== manifest.hostCommit || proof.jobsObserve !== true || proof.appendIgnorable !== true)) throw Error('host142 capability proof missing')
   }
   return { ok: true, pluginCommit: manifest.pluginCommit, hostCommit: manifest.hostCommit, verifiedRoles: [...artifacts.keys()] }

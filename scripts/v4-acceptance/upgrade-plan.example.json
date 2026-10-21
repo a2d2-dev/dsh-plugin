@@ -1,0 +1,26 @@
+{
+  "runId": "preview-pending-final-artifacts",
+  "prepareOnly": true,
+  "program": "dsh-a2d2-v3-preview",
+  "origin": "http://10.126.126.12:18782",
+  "evidenceRoot": null,
+  "authorization": null,
+  "settlement": null,
+  "liveSessionIds": [],
+  "childIds": [],
+  "previewVerifiedReceiptPath": null,
+  "previewVerifiedReceiptSha256": null,
+  "release": {
+    "pluginCommit": null,
+    "hostCommit": null,
+    "hostRoot": null,
+    "rollbackHostRoot": null,
+    "artifacts": []
+  },
+  "actions": {
+    "apply": null,
+    "verify": null,
+    "rollback": null,
+    "rollbackVerify": null
+  }
+}

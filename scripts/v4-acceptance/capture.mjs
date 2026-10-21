@@ -109,7 +109,7 @@ async function capture(name, root) {
     warnings.push('work-v3 store absent: current instance may still use legacy plugin; not a v4 pass')
   }
   await backup(join(instance.home, 'storages/workspace.json'))
-  for (const relative of ['apps/cli/lib/bin.js', 'apps/web/dist/index.html', 'packages/jobs/jobs-local/lib/index.js', 'packages/session/session/lib/index.js']) {
+  for (const relative of ['apps/cli/lib/bin.js', 'apps/web/dist/index.html', 'packages/jobs/jobs-local/lib/index.js', 'packages/core/session/lib/index.js']) {
     try { await backup(join(host, relative)) } catch (error) { if (error.code !== 'ENOENT') throw error; warnings.push(`Host artifact absent: ${relative}`) }
   }
   const service = run('supervisorctl', ['status', instance.program]).trim()

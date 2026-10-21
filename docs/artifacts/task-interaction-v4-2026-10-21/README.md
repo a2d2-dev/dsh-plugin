@@ -4,7 +4,7 @@
 
 ## 已冻结与证据边界
 
-[公开基线](baseline-public.json) 包含原 origin、服务 PID、宿主 commit、profile/plugin 链接、包与 client SHA、78 个 GUI / 3 个 preview Session 的 cwd、preset、持久配置和可用公共投影、逐记录历史数量与摘要；preview 领域记录包含 runtime、Project、Agent、Task、来源、外部映射、Execution 与命令回执。源材料和会话正文没有提交。两个实例的私有原始备份分别在 `/tmp/a2d2-v4-141-gui-baseline-2` 和 `/tmp/a2d2-v4-141-preview-baseline-3`（0700，文件0600），不应上传。比较使用私有目录中的 `baseline.json`，公开摘要只供审查。
+[公开基线](baseline-public.json) 与[领域／执行投影](baseline-domain-public.json) 包含原 origin、服务 PID、宿主 commit、profile/plugin 链接、包与 client SHA、78 个 GUI / 3 个 preview Session 的 cwd、preset、持久配置和可用公共投影、逐记录历史数量与摘要；preview 领域记录包含 runtime、Project、Agent、Task、来源、外部映射、Execution 与命令回执。源材料和会话正文没有提交。两个实例的私有原始备份分别在 `/tmp/a2d2-v4-141-gui-baseline-2` 和 `/tmp/a2d2-v4-141-preview-baseline-3`（0700，文件0600），不应上传。比较使用私有目录中的 `baseline.json`，公开摘要只供审查。
 
 这是顺序只读观察，活跃 CEO/children 会继续追加日志；部署前须结算、flush 后重冻。部分旧会话没有显式 model/permission 选择事件；18781 有公共 modelSelection/permissions 投影，18782 的列表没有配置投影。实际生效 sandbox/approval 与完整配置仍需未来 live 公共观察，不能把默认推成 actual。GUI phase1 没有 work-v3 store，其旧任务材料尚不能以 v3 域记录声称完整冻结；须在部署前补其公开导出或明确批准的旧存储范围。当前 children/jobs 是正常活跃工作，本工具不取消、不清理它们。
 
@@ -17,9 +17,18 @@
 
 浏览器使用独立 `--session a2d2-v4-qa`，技能及 CLI core 已加载，截图后关闭。浏览器上的新会话输入框是页面既有空入口，本轮没有点击新建或发送。
 
+初版采集器把Session包路径写成不存在的 `packages/session/session`，公开快照里的该warning只表示路径写错，不能证明真实Session制品缺失；后续工具已改为 `packages/core/session/lib/index.js`。CLI缺失则经独立目录列举与文件存在性检查复核，非此路径错误。
+
 ## 当前硬前置
 
 2026-10-21 本轮只读发现 dev 宿主 `apps/cli/lib/bin.js` 不存在；目录只剩 `types` 与 `tsconfig.tsbuildinfo`。公开基线记录窄范围目录 mtime、文件存在性、服务配置/launcher SHA 与 PID。只说明观察事实，不推断谁改变了它。两个进程仍运行，**当前不得重启**。原 conf 备份无法证明可执行回滚。先在独立制品区得到新、旧两套完整可运行宿主并验证 CLI 与所有动态导入，再准备切换。host142 的独立工作树只读；不能往共享 dev 的 lib/dist 构建，也不能用 npm rc2 版本号代替新 capability。
+
+## 后续方案与矩阵
+
+- [升级／回滚与服务外继续方案](upgrade-and-continuation.md)：独立宿主制品、真实维护producer/admission fence前置、systemd one-shot、指定Supervisor程序、持久完成/失败回执与未就绪动作。
+- [中文最终验收矩阵](acceptance-matrix.md)：目的／步骤／记录及L0至L4分层；真实模型lane需另外直接授权与计数，当前全部执行项未验证。
+- [实际dry-run拒绝结果](dry-run-refusal.json)：exit1，ready=false，无任何服务变更。
+- [最终工具测试输出](tool-tests.tap)：4/4通过；源码语法检查及git diff --check通过。新增one-shot门槛与动态import漂移测试均先红后绿。
 
 ## 工具入口
 
@@ -30,6 +39,9 @@ node scripts/v4-acceptance/capture.mjs preview /tmp/a2d2-v4-<unique-preview>
 node scripts/v4-acceptance/capture.mjs gui /tmp/a2d2-v4-<unique-gui>
 node scripts/v4-acceptance/retention.mjs BEFORE/baseline.json AFTER/baseline.json ALLOWED_ADDITIONS.json
 node scripts/v4-acceptance/fingerprint.mjs RELEASE_MANIFEST.json
+node scripts/v4-acceptance/publish.mjs PRIVATE_CAPTURE_ROOT docs/artifacts/task-interaction-v4-2026-10-21/UNIQUE_PUBLIC.json
+node scripts/v4-acceptance/assert-evidence.mjs LANE_EVIDENCE.json
+node scripts/v4-acceptance/one-shot.mjs scripts/v4-acceptance/upgrade-plan.example.json
 node --test scripts/v4-acceptance/*.test.mjs
 ```
 
@@ -37,7 +49,7 @@ capture 只请求已有 origin 的登录交换和只读 `session/list`，不会�
 
 retention 检查旧 record 身份/config/material 原样保留、历史前缀不变；新对象必须按 `kind:id` 明确登记。domain 状态变更默认也拒绝，避免悄悄放松保留约束；合法业务变更须单独审查，不能删旧 baseline 来让比较通过。不同 history stream 分别比较，正常日志追加不报漂移。workspace/config 的 SHA 是取证，不是自动许可替换。
 
-fingerprint 拒绝缺少 tgz/client/new-host/rollback-host/动态导入证明的 manifest，以及解析到共享 dev 的路径。最终需填写真实整合 commit 与 host142 完整 commit，不能填 base 或版本号冒称交付。清单 roles：plugin-tgz、plugin-client、host-cli、host-web、host-jobs、host-session、host-smoke、rollback-cli、rollback-smoke；每项为绝对 path + SHA256。host/rollback roots 必须规范化且独立。tgz 内 `package/lib/client.js` 必须与验收 client SHA 一致。
+fingerprint 拒绝缺少 tgz/client/new-host/rollback-host/动态导入证明的 manifest，以及解析到共享 dev 的路径。最终需填写真实整合 commit 与 host142 完整 commit，不能填 base 或版本号冒称交付。清单 roles：plugin-provenance、plugin-tgz、plugin-client、host-cli、host-web、host-jobs、host-session、host-smoke、rollback-cli、rollback-smoke；每项为绝对 path + SHA256。plugin-provenance内容必须把pluginCommit、tgzSha256、clientSha256与真实buildEvidence引用绑定；不能只在清单填任意commit。host/rollback roots 必须规范化且独立。tgz 内 `package/lib/client.js` 必须与验收 client SHA 一致。
 
 ## 本阶段验证记录
 

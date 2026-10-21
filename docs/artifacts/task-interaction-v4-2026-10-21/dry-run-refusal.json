@@ -1,0 +1,22 @@
+{
+  "mode": "dry-run",
+  "ready": false,
+  "reasons": [
+    "missing fixed pluginCommit",
+    "missing reviewed/pinned apply action",
+    "missing reviewed/pinned verify action",
+    "missing reviewed/pinned rollback action",
+    "missing reviewed/pinned rollbackVerify action",
+    "live maintenance/flush proof and exact live Session set required",
+    "prepareOnly; deployment not authorized"
+  ],
+  "steps": [
+    "verify complete new and rollback hosts",
+    "hold external admission and settle CEO/children/jobs; flush",
+    "stop only dsh-a2d2-v3-preview",
+    "apply pinned profile + isolated-host launcher switch",
+    "start only dsh-a2d2-v3-preview",
+    "same-origin refresh, client fingerprint and retention check",
+    "write durable completion; on failure preserve data and restore executable runtime"
+  ]
+}

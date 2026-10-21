@@ -1,0 +1,1400 @@
+{
+  "scope": "只读基线补充投影；运行状态为capture当时事实，不是部署后证明",
+  "instances": {
+    "gui": {
+      "capturedAt": "2026-10-21T17:35:39.060Z",
+      "origin": "http://127.0.0.1:18781",
+      "sessions": [
+        {
+          "sessionId": "session-e718bab3-8b39-469a-b55e-329193a9da2f",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-25bef557-597a-4418-96e4-7727946f1d20",
+          "origin": "subagent",
+          "running": true,
+          "agentAvailable": true,
+          "blank": false,
+          "children": [],
+          "subagentTiming": {
+            "settledMs": 0,
+            "active": {
+              "since": 1792603492427,
+              "through": 1792604122745
+            }
+          }
+        },
+        {
+          "sessionId": "session-5d324db4-1115-46c5-bcb8-eccc324fda7e",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-25bef557-597a-4418-96e4-7727946f1d20",
+          "origin": "subagent",
+          "running": true,
+          "agentAvailable": true,
+          "blank": false,
+          "children": [],
+          "subagentTiming": {
+            "settledMs": 0,
+            "active": {
+              "since": 1792602450729,
+              "through": 1792604118654
+            }
+          }
+        },
+        {
+          "sessionId": "session-a4257fe4-806a-4f64-bfaa-bad372a10826",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-25bef557-597a-4418-96e4-7727946f1d20",
+          "origin": "subagent",
+          "running": true,
+          "agentAvailable": true,
+          "blank": false,
+          "children": [],
+          "subagentTiming": {
+            "settledMs": 0,
+            "active": {
+              "since": 1792601817449,
+              "through": 1792604097528
+            }
+          }
+        },
+        {
+          "sessionId": "session-de84754b-8c5f-4704-94fc-04b371e7f853",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-25bef557-597a-4418-96e4-7727946f1d20",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-34d78ddc-66d5-4123-b894-9a02aaa1ee5d",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-25bef557-597a-4418-96e4-7727946f1d20",
+          "origin": "subagent",
+          "running": true,
+          "agentAvailable": true,
+          "blank": false,
+          "children": [],
+          "subagentTiming": {
+            "settledMs": 0,
+            "active": {
+              "since": 1792601130650,
+              "through": 1792604122526
+            }
+          }
+        },
+        {
+          "sessionId": "session-b3f5c11a-870b-4561-a324-0a867c04e3e2",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-25bef557-597a-4418-96e4-7727946f1d20",
+          "origin": "subagent",
+          "running": true,
+          "agentAvailable": true,
+          "blank": false,
+          "children": [],
+          "subagentTiming": {
+            "settledMs": 0,
+            "active": {
+              "since": 1792601096143,
+              "through": 1792604112467
+            }
+          }
+        },
+        {
+          "sessionId": "session-1350b913-2434-4f1f-9d4b-1b7341b99ac5",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-25bef557-597a-4418-96e4-7727946f1d20",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-f329f695-ddb5-4280-b038-199cc9a30388",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-25bef557-597a-4418-96e4-7727946f1d20",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-13b1a82a-7a5e-4497-af08-7e2207397754",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "running": false,
+          "agentAvailable": true,
+          "blank": true,
+          "children": [],
+          "subagentTiming": {
+            "settledMs": 0
+          }
+        },
+        {
+          "sessionId": "session-25bef557-597a-4418-96e4-7727946f1d20",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "running": true,
+          "agentAvailable": true,
+          "blank": false,
+          "children": [
+            {
+              "id": "session-f329f695-ddb5-4280-b038-199cc9a30388",
+              "createdAt": 1792600597421,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-1350b913-2434-4f1f-9d4b-1b7341b99ac5",
+              "createdAt": 1792600625675,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-b3f5c11a-870b-4561-a324-0a867c04e3e2",
+              "createdAt": 1792601096004,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-34d78ddc-66d5-4123-b894-9a02aaa1ee5d",
+              "createdAt": 1792601130472,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-de84754b-8c5f-4704-94fc-04b371e7f853",
+              "createdAt": 1792601522297,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-a4257fe4-806a-4f64-bfaa-bad372a10826",
+              "createdAt": 1792601817311,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-5d324db4-1115-46c5-bcb8-eccc324fda7e",
+              "createdAt": 1792602450031,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-e718bab3-8b39-469a-b55e-329193a9da2f",
+              "createdAt": 1792603492261,
+              "mode": "continuable"
+            }
+          ],
+          "subagentTiming": {
+            "settledMs": 0
+          }
+        },
+        {
+          "sessionId": "session-cf8c7767-3187-4ef6-b2b0-c5c5f6b4e9aa",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "running": false,
+          "agentAvailable": true,
+          "blank": false,
+          "children": [
+            {
+              "id": "2ad28d6d-a187-4757-bd81-7c3ae9d6686d",
+              "createdAt": 1792583710379,
+              "mode": "continuable"
+            },
+            {
+              "id": "18df3b64-5abd-4202-9659-b6ec74353165",
+              "createdAt": 1792584105852,
+              "mode": "continuable"
+            },
+            {
+              "id": "1e67156d-7961-4d4b-83c4-9367db44d684",
+              "createdAt": 1792586376920,
+              "mode": "continuable"
+            },
+            {
+              "id": "36f3a23d-2eaa-4737-92c4-7b6bef2a41d6",
+              "createdAt": 1792588206078,
+              "mode": "continuable"
+            }
+          ],
+          "subagentTiming": {
+            "settledMs": 0
+          }
+        },
+        {
+          "sessionId": "36f3a23d-2eaa-4737-92c4-7b6bef2a41d6",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-cf8c7767-3187-4ef6-b2b0-c5c5f6b4e9aa",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "1e67156d-7961-4d4b-83c4-9367db44d684",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-cf8c7767-3187-4ef6-b2b0-c5c5f6b4e9aa",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "18df3b64-5abd-4202-9659-b6ec74353165",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-cf8c7767-3187-4ef6-b2b0-c5c5f6b4e9aa",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "2ad28d6d-a187-4757-bd81-7c3ae9d6686d",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-cf8c7767-3187-4ef6-b2b0-c5c5f6b4e9aa",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-72ffc150-4e24-497b-b7a5-fa35c8a6255c",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "running": false,
+          "agentAvailable": true,
+          "blank": false,
+          "children": [
+            {
+              "id": "641beb30-6a8c-4d89-8912-3f08e9938873",
+              "createdAt": 1792567736284,
+              "mode": "continuable"
+            },
+            {
+              "id": "58ff3985-ac59-458e-8aeb-1c4cc06059ca",
+              "createdAt": 1792567736283,
+              "mode": "continuable"
+            }
+          ],
+          "subagentTiming": {
+            "settledMs": 0
+          }
+        },
+        {
+          "sessionId": "641beb30-6a8c-4d89-8912-3f08e9938873",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-72ffc150-4e24-497b-b7a5-fa35c8a6255c",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "58ff3985-ac59-458e-8aeb-1c4cc06059ca",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-72ffc150-4e24-497b-b7a5-fa35c8a6255c",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-da5e4b6f-a3de-49e6-ae4a-b250a300d815",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "running": false,
+          "agentAvailable": true,
+          "blank": false,
+          "children": [
+            {
+              "id": "4b422697-5be7-43b9-9fa0-057cb6afcdb5",
+              "createdAt": 1792552196759,
+              "mode": "continuable"
+            },
+            {
+              "id": "3e8f2c56-cbc2-42bf-978e-041a796df2d4",
+              "createdAt": 1792552196761,
+              "mode": "continuable"
+            },
+            {
+              "id": "2fb9ab20-8e39-44d0-ad79-cdefdb698791",
+              "createdAt": 1792552674879,
+              "mode": "continuable"
+            }
+          ],
+          "subagentTiming": {
+            "settledMs": 0
+          }
+        },
+        {
+          "sessionId": "2fb9ab20-8e39-44d0-ad79-cdefdb698791",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-da5e4b6f-a3de-49e6-ae4a-b250a300d815",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "3e8f2c56-cbc2-42bf-978e-041a796df2d4",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-da5e4b6f-a3de-49e6-ae4a-b250a300d815",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "4b422697-5be7-43b9-9fa0-057cb6afcdb5",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-da5e4b6f-a3de-49e6-ae4a-b250a300d815",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-7d166229-8aca-457c-ba59-61fd73307114",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "running": false,
+          "agentAvailable": true,
+          "blank": false,
+          "children": [
+            {
+              "id": "a507fb3c-83ec-4d8f-9ed3-f5d0771552a7",
+              "createdAt": 1792506332193,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-5a3fa3bc-45aa-481f-b101-70e44d606273",
+              "createdAt": 1792506581225,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-35bf6fbc-7def-4c11-95a5-4f34c05528be",
+              "createdAt": 1792506655882,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-50f06e91-88d3-4b40-bd2a-29a77f2b9acd",
+              "createdAt": 1792506831788,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-76f9b69f-8479-48af-9667-cdb299637598",
+              "createdAt": 1792507091736,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-18f67a63-7c39-4a4e-89ed-3bf588c7fa92",
+              "createdAt": 1792508429535,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-70b620cd-a209-437d-b944-02fffa8df180",
+              "createdAt": 1792508894027,
+              "mode": "continuable"
+            }
+          ],
+          "subagentTiming": {
+            "settledMs": 0
+          }
+        },
+        {
+          "sessionId": "session-70b620cd-a209-437d-b944-02fffa8df180",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-7d166229-8aca-457c-ba59-61fd73307114",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-18f67a63-7c39-4a4e-89ed-3bf588c7fa92",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-7d166229-8aca-457c-ba59-61fd73307114",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-76f9b69f-8479-48af-9667-cdb299637598",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-7d166229-8aca-457c-ba59-61fd73307114",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-50f06e91-88d3-4b40-bd2a-29a77f2b9acd",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-7d166229-8aca-457c-ba59-61fd73307114",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-35bf6fbc-7def-4c11-95a5-4f34c05528be",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-7d166229-8aca-457c-ba59-61fd73307114",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-5a3fa3bc-45aa-481f-b101-70e44d606273",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-7d166229-8aca-457c-ba59-61fd73307114",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "a507fb3c-83ec-4d8f-9ed3-f5d0771552a7",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-7d166229-8aca-457c-ba59-61fd73307114",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-29b4d6f9-7100-476e-a2f8-0a3b87d35d7a",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "running": false,
+          "agentAvailable": true,
+          "blank": false,
+          "children": [
+            {
+              "id": "session-0bf12b17-ffa2-4af6-abb6-b06bfdd8a30f",
+              "createdAt": 1792467120513,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-38144b65-3833-4acb-b43c-36e5daea1772",
+              "createdAt": 1792467212168,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-3ee1b56a-2b9d-42b5-b3bc-c150c6ee7490",
+              "createdAt": 1792467722892,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-c4934057-134a-43bc-8c66-effdf5e92ad3",
+              "createdAt": 1792468696833,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-ed1a615b-b7d2-4ce7-bf5b-7148aa7a0697",
+              "createdAt": 1792469154151,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-30e6e648-a269-4302-8e1e-67367eb94ece",
+              "createdAt": 1792471766921,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-abfdbcc6-11d0-400a-96ac-13e4808512b1",
+              "createdAt": 1792471767120,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-8036f73a-6976-4811-90ae-7efba16fd53b",
+              "createdAt": 1792475425822,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-7d3a4151-62c4-4288-bb75-3eb5cd3afea4",
+              "createdAt": 1792481052209,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-54a82bf0-95a2-4861-96e8-ed02c7caebc2",
+              "createdAt": 1792481052450,
+              "mode": "continuable"
+            }
+          ],
+          "subagentTiming": {
+            "settledMs": 0
+          }
+        },
+        {
+          "sessionId": "session-54a82bf0-95a2-4861-96e8-ed02c7caebc2",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-29b4d6f9-7100-476e-a2f8-0a3b87d35d7a",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-7d3a4151-62c4-4288-bb75-3eb5cd3afea4",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-29b4d6f9-7100-476e-a2f8-0a3b87d35d7a",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-8036f73a-6976-4811-90ae-7efba16fd53b",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-29b4d6f9-7100-476e-a2f8-0a3b87d35d7a",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-abfdbcc6-11d0-400a-96ac-13e4808512b1",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-29b4d6f9-7100-476e-a2f8-0a3b87d35d7a",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-30e6e648-a269-4302-8e1e-67367eb94ece",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-29b4d6f9-7100-476e-a2f8-0a3b87d35d7a",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-ed1a615b-b7d2-4ce7-bf5b-7148aa7a0697",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-29b4d6f9-7100-476e-a2f8-0a3b87d35d7a",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-c4934057-134a-43bc-8c66-effdf5e92ad3",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-29b4d6f9-7100-476e-a2f8-0a3b87d35d7a",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-3ee1b56a-2b9d-42b5-b3bc-c150c6ee7490",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-29b4d6f9-7100-476e-a2f8-0a3b87d35d7a",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-38144b65-3833-4acb-b43c-36e5daea1772",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-29b4d6f9-7100-476e-a2f8-0a3b87d35d7a",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-0bf12b17-ffa2-4af6-abb6-b06bfdd8a30f",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-29b4d6f9-7100-476e-a2f8-0a3b87d35d7a",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-51a86c30-e8e8-4ec9-803a-054aec4a9e8d",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "running": false,
+          "agentAvailable": true,
+          "blank": false,
+          "children": [
+            {
+              "id": "session-294c5ff3-3da4-4c6e-b5bc-fb3826ccfede",
+              "createdAt": 1792424796443,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-e08f248c-cef2-4b05-a8e4-7e60f6b2e9fa",
+              "createdAt": 1792424856940,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-1f5b2d85-c5a6-4c6d-8d4c-34f24370aa19",
+              "createdAt": 1792425221065,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-d5bfb702-23a5-41cb-8a20-7f864d237513",
+              "createdAt": 1792426005898,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-13680870-542e-4703-98d3-61fefe02a491",
+              "createdAt": 1792426911738,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-25926e66-1382-46e6-9aee-95485e5e336d",
+              "createdAt": 1792427489774,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-e611fd47-185c-431a-a925-422f6bda7cb1",
+              "createdAt": 1792427490017,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-96eef4ed-f042-4165-8771-0666d5981c57",
+              "createdAt": 1792428095923,
+              "mode": "continuable"
+            },
+            {
+              "id": "session-82efc9ba-0af0-43ca-bdb9-0b2ab219833e",
+              "createdAt": 1792462604309,
+              "mode": "continuable"
+            }
+          ],
+          "subagentTiming": {
+            "settledMs": 0
+          }
+        },
+        {
+          "sessionId": "session-82efc9ba-0af0-43ca-bdb9-0b2ab219833e",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-51a86c30-e8e8-4ec9-803a-054aec4a9e8d",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-96eef4ed-f042-4165-8771-0666d5981c57",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-51a86c30-e8e8-4ec9-803a-054aec4a9e8d",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-e611fd47-185c-431a-a925-422f6bda7cb1",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-51a86c30-e8e8-4ec9-803a-054aec4a9e8d",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-25926e66-1382-46e6-9aee-95485e5e336d",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-51a86c30-e8e8-4ec9-803a-054aec4a9e8d",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-13680870-542e-4703-98d3-61fefe02a491",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-51a86c30-e8e8-4ec9-803a-054aec4a9e8d",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-d5bfb702-23a5-41cb-8a20-7f864d237513",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-51a86c30-e8e8-4ec9-803a-054aec4a9e8d",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-1f5b2d85-c5a6-4c6d-8d4c-34f24370aa19",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-51a86c30-e8e8-4ec9-803a-054aec4a9e8d",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-e08f248c-cef2-4b05-a8e4-7e60f6b2e9fa",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-51a86c30-e8e8-4ec9-803a-054aec4a9e8d",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-294c5ff3-3da4-4c6e-b5bc-fb3826ccfede",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-51a86c30-e8e8-4ec9-803a-054aec4a9e8d",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-609b636b-46f2-4a35-a190-da1f857ede50",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "running": false,
+          "agentAvailable": true,
+          "blank": false,
+          "children": [
+            {
+              "id": "d08176e9-2231-4c27-a967-2cdae1ea9a94",
+              "createdAt": 1792384654647,
+              "mode": "continuable"
+            },
+            {
+              "id": "d1e3d3c9-d2e6-4803-8871-31858289cc1a",
+              "createdAt": 1792388858956,
+              "mode": "continuable"
+            },
+            {
+              "id": "9705b66c-7217-4eef-969c-b3ff66b75e3d",
+              "createdAt": 1792396459807,
+              "mode": "continuable"
+            },
+            {
+              "id": "fdd48811-d930-45d9-862e-bae607802b61",
+              "createdAt": 1792396459803,
+              "mode": "continuable"
+            }
+          ],
+          "subagentTiming": {
+            "settledMs": 0
+          }
+        },
+        {
+          "sessionId": "9705b66c-7217-4eef-969c-b3ff66b75e3d",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-609b636b-46f2-4a35-a190-da1f857ede50",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "fdd48811-d930-45d9-862e-bae607802b61",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-609b636b-46f2-4a35-a190-da1f857ede50",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "d1e3d3c9-d2e6-4803-8871-31858289cc1a",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-609b636b-46f2-4a35-a190-da1f857ede50",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "d08176e9-2231-4c27-a967-2cdae1ea9a94",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+          "parentSessionId": "session-609b636b-46f2-4a35-a190-da1f857ede50",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-32736e26-d070-4924-9477-d7207ba98a5a",
+          "cwd": "/data/src/github.com/a2d2-dev",
+          "running": false,
+          "agentAvailable": true,
+          "blank": false,
+          "children": [
+            {
+              "id": "b3613725-3bc0-4795-aa5e-648f32a096c8",
+              "createdAt": 1792343820122,
+              "mode": "continuable"
+            },
+            {
+              "id": "355fe52a-ae49-46d5-b587-55681b01c319",
+              "createdAt": 1792373851810,
+              "mode": "continuable"
+            },
+            {
+              "id": "0f23f361-3f1a-43fe-8923-f45dabc015cd",
+              "createdAt": 1792373851807,
+              "mode": "continuable"
+            },
+            {
+              "id": "4fe8fece-ebd1-4da9-8a4a-79c82d399623",
+              "createdAt": 1792378194428,
+              "mode": "continuable"
+            },
+            {
+              "id": "135703da-6656-4cbc-961f-124fe5cceb2c",
+              "createdAt": 1792380560922,
+              "mode": "continuable"
+            }
+          ],
+          "subagentTiming": {
+            "settledMs": 0
+          }
+        },
+        {
+          "sessionId": "135703da-6656-4cbc-961f-124fe5cceb2c",
+          "cwd": "/data/src/github.com/a2d2-dev",
+          "parentSessionId": "session-32736e26-d070-4924-9477-d7207ba98a5a",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "4fe8fece-ebd1-4da9-8a4a-79c82d399623",
+          "cwd": "/data/src/github.com/a2d2-dev",
+          "parentSessionId": "session-32736e26-d070-4924-9477-d7207ba98a5a",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "355fe52a-ae49-46d5-b587-55681b01c319",
+          "cwd": "/data/src/github.com/a2d2-dev",
+          "parentSessionId": "session-32736e26-d070-4924-9477-d7207ba98a5a",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "0f23f361-3f1a-43fe-8923-f45dabc015cd",
+          "cwd": "/data/src/github.com/a2d2-dev",
+          "parentSessionId": "session-32736e26-d070-4924-9477-d7207ba98a5a",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "b3613725-3bc0-4795-aa5e-648f32a096c8",
+          "cwd": "/data/src/github.com/a2d2-dev",
+          "parentSessionId": "session-32736e26-d070-4924-9477-d7207ba98a5a",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-37302b02-f8a7-4fcd-a520-589b2299969b",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/plugin-only-compat",
+          "parentSessionId": "session-a5137720-247a-49e5-a04b-3d8bcd6e39fe",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-a5137720-247a-49e5-a04b-3d8bcd6e39fe",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/plugin-only-compat",
+          "running": false,
+          "agentAvailable": true,
+          "blank": false,
+          "children": [
+            {
+              "id": "session-37302b02-f8a7-4fcd-a520-589b2299969b",
+              "createdAt": 1792340830963,
+              "mode": "continuable"
+            }
+          ],
+          "subagentTiming": {
+            "settledMs": 0
+          }
+        },
+        {
+          "sessionId": "session-f9408283-4f76-48e4-9703-7d9da47112a4",
+          "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/plugin-only-compat",
+          "running": false,
+          "agentAvailable": true,
+          "blank": false,
+          "children": [],
+          "subagentTiming": {
+            "settledMs": 0
+          }
+        },
+        {
+          "sessionId": "session-a1573b1b-f1ce-43bb-8e8e-e270e1776fa2",
+          "cwd": "/data/src/github.com/a2d2-dev",
+          "running": false,
+          "agentAvailable": true,
+          "blank": true,
+          "children": [],
+          "subagentTiming": {
+            "settledMs": 0
+          }
+        },
+        {
+          "sessionId": "session-78b23871-99e3-4213-970a-6a3e1dfc02a0",
+          "cwd": "/data/_openclaw/workspace/edge-platform",
+          "parentSessionId": "session-c22770e9-75f9-4932-b610-a01352c736db",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-1f0abe49-1616-43ec-84b1-2d06d6130663",
+          "cwd": "/data/_openclaw/workspace/edge-platform",
+          "parentSessionId": "session-c22770e9-75f9-4932-b610-a01352c736db",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-b1d2dccd-aad3-4977-8e93-4b197e5facaa",
+          "cwd": "/data/_openclaw/workspace/edge-platform",
+          "parentSessionId": "session-c22770e9-75f9-4932-b610-a01352c736db",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-0ce6d51b-cfc0-4d36-a0e1-8e570667bafb",
+          "cwd": "/data/_openclaw/workspace/edge-platform",
+          "parentSessionId": "session-c22770e9-75f9-4932-b610-a01352c736db",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-d0abceb0-e1b1-43af-9bc9-5d497e07dfc3",
+          "cwd": "/data/_openclaw/workspace/edge-platform",
+          "parentSessionId": "session-c22770e9-75f9-4932-b610-a01352c736db",
+          "origin": "subagent",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-c22770e9-75f9-4932-b610-a01352c736db",
+          "cwd": "/data/_openclaw/workspace/edge-platform",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-aac5dc70-7473-4f89-b003-0718720e5f25",
+          "cwd": "/data/_dsh-dev/projects/runtime-verification",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-b3edefe7-fbb4-4e24-9eca-eb754a0d3ed5",
+          "cwd": "/data/_dsh-dev/projects/runtime-verification",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-4eb48620-a907-4613-a731-2a3bbbeb6c8b",
+          "cwd": "/data/_dsh-dev/projects/runtime-verification",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-e98cf45f-6066-4150-8657-bca485289ebb",
+          "cwd": "/data/_dsh-dev/projects/runtime-verification",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-b5110c24-47a5-4c5f-954f-7a6123aa1454",
+          "cwd": "/data/_dsh-dev/projects/runtime-verification",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-fddb6534-3784-4b90-94c0-2ebcda5081f8",
+          "cwd": "/data/_dsh-dev/projects/runtime-verification",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        }
+      ],
+      "jobs": "未验证：没有调用消费接口或清理当前jobs；部署前必须由真实公共registry观察补齐",
+      "legacyDomain": "phase1没有work-v3；旧域材料公开导出/授权存储范围须部署前补齐，未宣称完整保留"
+    },
+    "preview": {
+      "capturedAt": "2026-10-21T17:35:22.709Z",
+      "origin": "http://10.126.126.12:18782",
+      "sessions": [
+        {
+          "sessionId": "session-f44e2d0d-a4e1-4fb5-945a-a759a9480d9f",
+          "cwd": "/data/_dsh-dev/previews/a2d2-v3-121/workspace",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-01facda2-1f2a-4f75-a503-34860ab4f1c4",
+          "cwd": "/data/_dsh-dev/previews/a2d2-v3-121/workspace",
+          "running": false,
+          "agentAvailable": false,
+          "blank": false,
+          "children": []
+        },
+        {
+          "sessionId": "session-f9282a68-4c3f-4251-adcb-bcd6f24d7515",
+          "cwd": "/data/_dsh-dev/previews/a2d2-v3-121/workspace",
+          "running": false,
+          "agentAvailable": true,
+          "blank": true,
+          "children": [],
+          "subagentTiming": {
+            "settledMs": 0
+          }
+        }
+      ],
+      "jobs": "未验证：没有调用消费接口或清理当前jobs；部署前必须由真实公共registry观察补齐",
+      "projects": [
+        {
+          "id": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+          "name": "演示项目 · 本地工作",
+          "defaultAgentId": "a4b8b515-554a-4fe7-99c1-f0581a3da464",
+          "resources": [
+            {
+              "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+              "workspaceId": "56cdbb60-67bc-4f87-bca8-9dcaf46f2976"
+            }
+          ],
+          "continuationPolicy": {
+            "version": 1,
+            "enabled": true,
+            "targetTokens": 200000,
+            "reserveTokens": 16000
+          }
+        },
+        {
+          "id": "1b3fd2f7-a492-4c1d-a965-7e7f8cc5cc58",
+          "name": "验收_HTTP132_20261020_独立项目",
+          "defaultAgentId": "57954e6d-886c-435e-807a-ff61ee88987d",
+          "resources": []
+        },
+        {
+          "id": "76002c89-59b6-48a4-8c06-eedb1b05cfa8",
+          "name": "项目管理 v3.0",
+          "defaultAgentId": "96d8bf6f-dd3f-4f15-8b6d-f2e7530f4716",
+          "resources": []
+        }
+      ],
+      "agents": [
+        {
+          "id": "a4b8b515-554a-4fe7-99c1-f0581a3da464",
+          "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+          "role": "coordinator",
+          "policySha256": "05f37ef09d4c0b0c9e2f1279c74fce167e37569fcdb2b470e58c69702ec9eff5",
+          "modelCandidates": []
+        },
+        {
+          "id": "57954e6d-886c-435e-807a-ff61ee88987d",
+          "projectId": "1b3fd2f7-a492-4c1d-a965-7e7f8cc5cc58",
+          "role": "coordinator",
+          "policySha256": "05f37ef09d4c0b0c9e2f1279c74fce167e37569fcdb2b470e58c69702ec9eff5",
+          "modelCandidates": []
+        },
+        {
+          "id": "96d8bf6f-dd3f-4f15-8b6d-f2e7530f4716",
+          "projectId": "76002c89-59b6-48a4-8c06-eedb1b05cfa8",
+          "role": "coordinator",
+          "policySha256": "05f37ef09d4c0b0c9e2f1279c74fce167e37569fcdb2b470e58c69702ec9eff5",
+          "modelCandidates": []
+        }
+      ],
+      "tasks": [
+        {
+          "id": "76e75fb5-a0ee-45cb-94e0-8dc9cb849411",
+          "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+          "agentId": "a4b8b515-554a-4fe7-99c1-f0581a3da464",
+          "children": [
+            {
+              "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+              "taskId": "0880f27a-5367-4679-b562-27c080cff7ab"
+            }
+          ],
+          "sessions": [
+            {
+              "session": {
+                "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+                "sessionId": "session-f9282a68-4c3f-4251-adcb-bcd6f24d7515"
+              },
+              "purpose": "related"
+            }
+          ],
+          "version": 4
+        },
+        {
+          "id": "0880f27a-5367-4679-b562-27c080cff7ab",
+          "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+          "agentId": "a4b8b515-554a-4fe7-99c1-f0581a3da464",
+          "parent": {
+            "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+            "taskId": "76e75fb5-a0ee-45cb-94e0-8dc9cb849411"
+          },
+          "children": [],
+          "sessions": [],
+          "version": 1
+        },
+        {
+          "id": "3e00a048-42b1-48dd-ae22-d6655c06779d",
+          "projectId": "1b3fd2f7-a492-4c1d-a965-7e7f8cc5cc58",
+          "agentId": "57954e6d-886c-435e-807a-ff61ee88987d",
+          "children": [],
+          "sessions": [],
+          "version": 3
+        },
+        {
+          "id": "4c936541-0d4f-4bde-b810-bbfe946044da",
+          "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+          "agentId": "a4b8b515-554a-4fe7-99c1-f0581a3da464",
+          "children": [],
+          "sessions": [
+            {
+              "session": {
+                "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+                "sessionId": "session-f9282a68-4c3f-4251-adcb-bcd6f24d7515"
+              },
+              "purpose": "related"
+            }
+          ],
+          "version": 2
+        },
+        {
+          "id": "58913a7c-f12d-4cc3-be97-55faa221b370",
+          "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+          "agentId": "a4b8b515-554a-4fe7-99c1-f0581a3da464",
+          "children": [],
+          "sessions": [],
+          "version": 1
+        },
+        {
+          "id": "c0258593-c3df-4fdb-b62e-860202e03982",
+          "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+          "agentId": "a4b8b515-554a-4fe7-99c1-f0581a3da464",
+          "children": [],
+          "sessions": [],
+          "version": 4
+        }
+      ],
+      "sources": [
+        {
+          "id": "9cea4378-0219-4f99-a237-80f51bd36291",
+          "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+          "repository": {
+            "owner": "a2d2-dev",
+            "repository": "dsh-plugin"
+          },
+          "enabled": true,
+          "version": 3
+        },
+        {
+          "id": "c122502c-1632-4a96-acb5-8adbac61999d",
+          "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+          "githubProject": {
+            "owner": "a2d2-dev",
+            "type": "org",
+            "number": 1
+          },
+          "enabled": true,
+          "version": 1
+        },
+        {
+          "id": "6de5b019-9765-45dd-8596-1a02dbaa7cca",
+          "projectId": "76002c89-59b6-48a4-8c06-eedb1b05cfa8",
+          "githubProject": {
+            "owner": "theriseunion",
+            "type": "org",
+            "number": 14
+          },
+          "enabled": true,
+          "version": 1
+        }
+      ],
+      "externalBindings": [
+        {
+          "ref": {
+            "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+            "taskId": "4c936541-0d4f-4bde-b810-bbfe946044da"
+          },
+          "nodeId": "I_kwDOUmfSE88AAAABXdRGDA"
+        },
+        {
+          "ref": {
+            "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+            "taskId": "58913a7c-f12d-4cc3-be97-55faa221b370"
+          },
+          "nodeId": "I_kwDOUmfSE88AAAABYUDZjg"
+        }
+      ],
+      "executions": [
+        {
+          "id": "14f11283-cf3a-4a8e-9a9d-2cecb129a114",
+          "ref": {
+            "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+            "taskId": "c0258593-c3df-4fdb-b62e-860202e03982"
+          },
+          "agentId": "a4b8b515-554a-4fe7-99c1-f0581a3da464",
+          "owner": "0c2abd1b-b063-41a7-9aad-fd78a5ca3b75",
+          "epoch": 2,
+          "resource": {
+            "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+            "workspaceId": "56cdbb60-67bc-4f87-bca8-9dcaf46f2976"
+          },
+          "session": {
+            "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+            "sessionId": "session-f44e2d0d-a4e1-4fb5-945a-a759a9480d9f"
+          },
+          "state": "waiting",
+          "actual": {
+            "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+            "cwd": "/data/_dsh-dev/previews/a2d2-v3-121/workspace",
+            "agentPreset": "standard",
+            "provider": "codex",
+            "model": "gpt-6-astra",
+            "reasoningEffort": "high",
+            "permissionPreset": "workspace-write",
+            "sandbox": "workspace-write",
+            "approval": "ask"
+          },
+          "model": {
+            "provider": "codex",
+            "model": "gpt-6-astra",
+            "reasoningEffort": "high"
+          },
+          "agentPreset": "standard",
+          "permissionPreset": "workspace-write",
+          "history": [
+            {
+              "state": "accepted",
+              "commandId": "02998210-99e8-4469-9d00-4a5b7201a5a4"
+            },
+            {
+              "state": "creating",
+              "commandId": "02998210-99e8-4469-9d00-4a5b7201a5a4"
+            },
+            {
+              "state": "ready",
+              "commandId": "02998210-99e8-4469-9d00-4a5b7201a5a4"
+            },
+            {
+              "state": "waiting",
+              "commandId": "auto:14f11283-cf3a-4a8e-9a9d-2cecb129a114:1:2"
+            }
+          ],
+          "retired": [
+            {
+              "session": {
+                "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+                "sessionId": "session-01facda2-1f2a-4f75-a503-34860ab4f1c4"
+              },
+              "epoch": 1,
+              "operationId": "3ca48936-02cf-4109-9fb6-7a91fadc6cfb"
+            }
+          ]
+        }
+      ],
+      "externalIndex": {
+        "github:node:I_kwDOUmfSE88AAAABXdRGDA": {
+          "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+          "taskId": "4c936541-0d4f-4bde-b810-bbfe946044da"
+        },
+        "github:url:https://github.com/a2d2-dev/dsh-plugin/issues/112": {
+          "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+          "taskId": "4c936541-0d4f-4bde-b810-bbfe946044da"
+        },
+        "github:node:I_kwDOUmfSE88AAAABYUDZjg": {
+          "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+          "taskId": "58913a7c-f12d-4cc3-be97-55faa221b370"
+        },
+        "github:url:https://github.com/a2d2-dev/dsh-plugin/issues/124": {
+          "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+          "taskId": "58913a7c-f12d-4cc3-be97-55faa221b370"
+        }
+      }
+    }
+  }
+}
