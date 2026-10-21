@@ -35,7 +35,7 @@ describe('source UI controller to production HTTP and disk',()=>{
       const local=(await panel.submit({type:'task.create',projectId:project.id,title:'Existing local Task',goal:'Keep local goal',specification:'Keep local specification',acceptance:['Keep confirmed criterion']})).task!
       const ref={projectId:project.id,taskId:local.id}
       const associated=(await panel.submit({type:'task.associate-session',ref,expectedVersion:local.version,session,purpose:'related'})).task!
-      await panel.initialize();await panel.configureSource(repository.owner,repository.repository)
+      await panel.initialize();await panel.selectProject(project.id,false);await panel.configureSource(repository.owner,repository.repository)
       await panel.openIssue(112)
       expect((await client.query({type:'project.detail',projectId:project.id})).tasks).toHaveLength(1)
       expect(panel.getSnapshot().source).toMatchObject({issue:{body:'Original remote body\n  preserved'},listing:{identity:{login:'imneov'}}})
@@ -50,7 +50,7 @@ describe('source UI controller to production HTTP and disk',()=>{
       await panel.openIssue(112)
       await panel.openTask(ref)
       expect(panel.getSnapshot().detail).toMatchObject({task:{id:local.id,goal:'Keep local goal',sessions:[{session}]},bindings:[{accepted:{state:'open',body:'Original remote body\n  preserved'},lastObserved:{state:'closed',body:'Remote changed body',assignees:['another-user']}}]})
-      panel.back();await panel.setSourceEnabled(false)
+      panel.back();await panel.setSourceEnabled(false);await panel.openIssue(112,false)
       expect(panel.getSnapshot().source).toMatchObject({sources:[{enabled:false}],issue:{state:'closed'}})
       // Restart the actual application without any GitHub port: local accepted work is still available.
       handler=createWorkHandler(new WorkApplication(directory,host),()=>undefined)

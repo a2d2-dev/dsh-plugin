@@ -10,26 +10,24 @@ import type { WorkHost } from '../src/work.ts'
 import { WorkPanelController, message } from '../src/client/work-panel-controller.ts'
 import type { GitHubSourcePort } from '../src/work-sources/types.ts'
 import { browserUUID } from '../src/client/browser-uuid.ts'
-import { webcrypto } from 'node:crypto'
 import { afterEach } from 'vitest'
 afterEach(() => vi.unstubAllGlobals())
-import type { WorkTask } from '../src/work-types.ts'
 
 // Execute the production TSX and its actual JSX onChange/onSubmit callbacks in memory.
 // Only React's mounting/state scheduler is substituted: commands use the real controller,
 // WorkApplication and disk. This does not claim DOM or browser coverage.
-async function mountWorkPanel(props: Record<string, unknown>, component = 'TaskForm') {
+async function mountWorkPanel(props: Record<string, unknown>, component = 'GitHubProjectForm') {
   const state: unknown[] = []
   let cursor = 0
   const require = createRequire(import.meta.url)
   const effects: (() => void)[] = [], cleanups: (() => void)[] = []
   const module = { exports: {} as Record<string, (props: Record<string, unknown>) => any> }
   const source = await readFile(new URL('../src/client/work-panel.tsx', import.meta.url), 'utf8')
-  const compiled = ts.transpileModule(`${source}\nexport { TaskForm, SessionWorkEntry, BreakdownForm, ProjectForm, IssueSourcePanel }`, {
+  const compiled = ts.transpileModule(`${source}\nexport { GitHubProjectForm, ContinuousProcessing, CurrentExecution, Requirements, IssueSourcePanel }`, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2023 },
   }).outputText
   runInNewContext(compiled, {
-    module, exports: module.exports, AbortController, crypto: globalThis.crypto,
+    module, exports: module.exports, AbortController, crypto: globalThis.crypto, setInterval, clearInterval,
     require: (id: string) => id === 'react' ? {
       useEffect: (effect: () => void | (() => void), dependencies: unknown[]) => {
         const index = cursor++, previous = state[index] as unknown[] | undefined
@@ -40,7 +38,7 @@ async function mountWorkPanel(props: Record<string, unknown>, component = 'TaskF
       useSyncExternalStore: (_subscribe: unknown, getSnapshot: () => unknown) => getSnapshot(),
       useState: (initial: unknown) => {
         const index = cursor++
-        if (!(index in state)) state[index] = initial
+        if (!(index in state)) state[index] = typeof initial === 'function' ? initial() : initial
         return [state[index], (value: unknown) => { state[index] = typeof value === 'function' ? value(state[index]) : value }]
       },
     } : id.endsWith('.css') ? { default: {} } : id === './work-panel-controller.ts' ? { message } : id === './browser-uuid.ts' ? { browserUUID } : require(id),
@@ -73,7 +71,7 @@ async function mountWorkPanel(props: Record<string, unknown>, component = 'TaskF
       expect(button.props.disabled, `button ${text} must be enabled`).not.toBe(true)
       button.props.onClick()
     },
-    submit: () => render().props.onSubmit({ preventDefault() {} }),
+    submit: () => nodes('form')[0].props.onSubmit({ preventDefault() {} }),
   }
 }
 
@@ -95,8 +93,8 @@ async function withPanel(run: (panel: WorkPanelController) => Promise<void>, hos
     },
   }, { selectPanel() {}, openSession() {} })
   try {
-    await panel.submit({ type: 'project.create', name: '表单往返' })
-    await panel.load()
+    const created=await panel.submit({ type: 'project.create', name: '表单往返' })
+    await panel.load();await panel.selectProject(created.project!.id)
     await run(panel)
   } finally {
     expect(directory).toBe(expected)
@@ -131,14 +129,18 @@ describe('production Issue source acceptance controls', () => {
       expect((await panel.client.query({type:'project.detail',projectId:panel.getSnapshot().projectId!})).tasks).toMatchObject([{title:'Unmounted import'}])
     },undefined,{list:async()=>({identity,items:[issue],observedAt:issue.observedAt}),detail:async()=>({identity,issue})})
   })
-  it('accepts an observed null body through the enabled UI action and preserves missing body and acceptance indicators', async () => {
+  it('imports an observed null body only after explicit start and preserves missing acceptance indicators', async () => {
     const identity={login:'imneov',nodeId:'U1',name:'LiuFeng'}
     const issue={nodeId:'I112',number:112,url:'https://github.com/a2d2-dev/dsh-plugin/issues/112',repository:{owner:'a2d2-dev',repository:'dsh-plugin'},title:'Observed empty Issue body',body:null,state:'open' as const,assignees:['imneov'],labels:[],updatedAt:'2026-10-20T00:00:00Z',observedAt:'2026-10-21T00:00:00Z'}
     await withPanel(async panel => {
       await panel.configureSource('a2d2-dev','dsh-plugin');await panel.openIssue(112)
-      const form=await mountWorkPanel({controller:panel},'IssueSourcePanel')
-      form.click('接入为本地工作')
+      const writes=vi.spyOn(panel.client,'command')
+      expect((await panel.client.query({type:'project.detail',projectId:panel.getSnapshot().projectId!})).tasks).toEqual([])
+      const form=await mountWorkPanel({controller:panel},'CurrentExecution')
+      expect(writes).not.toHaveBeenCalled()
+      form.click('开始处理')
       await vi.waitFor(()=>expect(panel.getSnapshot().detail?.task?.specification).toMatchObject({text:'',acceptance:[],missing:['body','acceptance']}))
+      expect(writes.mock.calls.filter(([command])=>command.type==='source.import')).toHaveLength(1)
       const detail=await mountWorkPanel({controller:panel},'WorkPanel')
       const paragraphs=detail.nodes('p').map(node=>[node.props.children].flat(Infinity).join('')).join('\n')
       expect(paragraphs).toContain('结构化验收标准尚待确认')
@@ -146,57 +148,6 @@ describe('production Issue source acceptance controls', () => {
       detail.unmount()
       form.unmount()
     },undefined,{list:async()=>({identity,items:[issue],observedAt:issue.observedAt}),detail:async()=>({identity,issue})})
-  })
-})
-
-describe('production resource selection', () => {
-  it('labels owned resources as unavailable while allowing a project without a directory', async () => {
-    const resource = { ref: { runtimeId: 'host-owner', workspaceId: 'occupied' }, title: 'workspace' }
-    await withPanel(async panel => {
-      const owner = panel.getSnapshot().projects[0]!
-      await panel.submit({ type: 'project.attach-resource', projectId: owner.id, expectedVersion: owner.version, resource: resource.ref })
-      for (const attach of [false, true]) {
-        const form = await mountWorkPanel({ controller: panel, attach, onSaved: vi.fn() }, 'ProjectForm')
-        await vi.waitFor(() => expect(form.nodes('option')).toHaveLength(2))
-        const option = form.nodes('option')[1]
-        expect(option.props.disabled).toBe(true)
-        expect([option.props.children].flat(Infinity).join('')).toContain('已归属：表单往返（不可选）')
-        form.unmount()
-      }
-      const saved = vi.fn()
-      const form = await mountWorkPanel({ controller: panel, attach: false, onSaved: saved }, 'ProjectForm')
-      await vi.waitFor(() => expect(form.nodes('option')).toHaveLength(2))
-      form.change(form.inputs()[0], '无目录的本地项目')
-      form.submit()
-      await vi.waitFor(() => expect(saved).toHaveBeenCalledOnce())
-      const result = await panel.client.query({ type: 'projects.list' })
-      expect(result.projects?.find(project => project.name === '无目录的本地项目')?.resources).toEqual([])
-      form.unmount()
-    }, { resources: async () => [resource], sessions: async () => [] })
-  })
-})
-
-describe('production HTTP breakdown form', () => {
-  it('adds and saves distinct UUID v4 blocks when Crypto only provides getRandomValues', async () => {
-    vi.stubGlobal('crypto', { getRandomValues: webcrypto.getRandomValues.bind(webcrypto) })
-    await withPanel(async panel => {
-      const task = (await panel.submit({ type: 'task.create', projectId: panel.getSnapshot().projectId!, title: 'HTTP 拆解', goal, specification, acceptance })).task!
-      const saved = vi.fn()
-      const form = await mountWorkPanel({ controller: panel, task, onSaved: saved }, 'BreakdownForm')
-      form.click('添加工作块')
-      form.change(form.inputs()[0], 'HTTP 工作块一')
-      form.change(form.textareas()[0], '使用真实随机源')
-      form.click('添加工作块')
-      form.change(form.inputs()[1], 'HTTP 工作块二')
-      form.change(form.textareas()[1], '独立稳定身份')
-      form.submit()
-      await vi.waitFor(() => expect(saved).toHaveBeenCalledOnce())
-      await panel.openTask({ projectId: task.projectId, taskId: task.id })
-      const blocks = panel.getSnapshot().detail!.task!.breakdown
-      expect(blocks.map(block => block.title)).toEqual(['HTTP 工作块一', 'HTTP 工作块二'])
-      expect(new Set(blocks.map(block => block.id)).size).toBe(2)
-      for (const block of blocks) expect(block.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
-    })
   })
 })
 
@@ -241,84 +192,85 @@ describe('production session work entry', () => {
   })
 })
 
-describe('production TaskForm material round trips', () => {
-  it('preserves an API-created multiline criterion and untouched specification when only the goal changes', async () => {
-    await withPanel(async panel => {
-      const task = (await panel.submit({ type: 'task.create', projectId: panel.getSnapshot().projectId!, title: 'API 材料', goal, specification, acceptance })).task!
-      let saved: WorkTask | undefined
-      const form = await mountWorkPanel({ controller: panel, kind: 'spec', task, onSaved: async (task: WorkTask) => { saved = task } })
-      form.change(form.textareas()[0], '\n  只修改目标\n')
-      form.submit()
-      await vi.waitFor(() => expect(saved).toBeDefined())
-      expect(saved!.goal).toBe('\n  只修改目标\n')
-      expect(saved!.specification.text).toBe(specification)
-      expect(saved!.specification.acceptance).toEqual(acceptance)
-    })
-  })
 
-  it('changes item boundaries only through explicit add/remove actions and keeps order and multiline text', async () => {
-    await withPanel(async panel => {
-      let saved: WorkTask | undefined
-      const form = await mountWorkPanel({ controller: panel, kind: 'task', onSaved: async (task: WorkTask) => { saved = task } })
-      form.change(form.inputs()[0], '条目操作')
-      form.change(form.textareas()[0], goal)
-      form.change(form.textareas()[1], specification)
-      form.change(form.textareas()[2], '  第一条\n继续第一条\n')
-      form.click('添加验收标准')
-      form.change(form.textareas()[3], '待移除')
-      form.click('添加验收标准')
-      form.change(form.textareas()[4], '\n  最后一条\n仍是最后一条\n')
-      form.click('移除验收标准 2')
-      form.submit()
-      await vi.waitFor(() => expect(saved).toBeDefined())
-      expect(saved!.specification.acceptance).toEqual(['  第一条\n继续第一条\n', '\n  最后一条\n仍是最后一条\n'])
-    })
+const identity={login:'viewer',nodeId:'U1',name:null}
+const source={id:'s1',projectId:'p1',provider:'github' as const,githubProject:{owner:'acme',type:'org' as const,number:7},enabled:true,version:1,sequence:1,requests:{},observations:[],pages:[],identity}
+const project={id:'p1',name:'Product roadmap',version:1,defaultAgentId:'a1',resources:[]}
+const resource={runtimeId:'host',workspaceId:'work'}
+const options={agentId:'a1',resources:[{ref:resource,title:'/work/repo'}],models:[{provider:'real',model:'fast'},{provider:'real',model:'quality'}],agentPresets:['standard'],permissionPresets:['review'],defaults:{model:{provider:'real',model:'quality',reasoningEffort:'high'},agentPreset:'standard',permissionPreset:'review'}}
+function fixture() {
+  let rule:import('../src/work-types.ts').ContinuousWorkRule|undefined
+  const command=vi.fn(async(value:import('../src/work-types.ts').WorkCommand):Promise<import('../src/work-types.ts').WorkCompleted>=>{
+    if(value.type==='source.connect')return {status:'completed',project,source}
+    if(value.type==='continuous.configure'){rule={id:'r1',projectId:'p1',sourceId:'s1',version:(rule?.version??0)+1,enabled:value.enabled,scope:{assignee:value.assignee,labels:value.labels,identity},resource:value.resource,model:value.model,agentPreset:value.agentPreset,permissionPreset:value.permissionPreset,items:[]};return {status:'completed',continuousRule:rule}}
+    if(value.type==='continuous.set-enabled'){rule={...rule!,version:rule!.version+1,enabled:value.enabled};return {status:'completed',continuousRule:rule}}
+    throw Error('Unexpected write '+value.type)
   })
-
-  it('refuses whitespace-only materials without submitting or silently dropping a criterion', async () => {
-    await withPanel(async panel => {
-      const submit = vi.spyOn(panel, 'submit')
-      const form = await mountWorkPanel({ controller: panel, kind: 'task', onSaved: async () => { throw Error('unexpected save') } })
-      form.change(form.inputs()[0], '判空')
-      form.change(form.textareas()[0], goal)
-      form.change(form.textareas()[1], specification)
-      form.change(form.textareas()[2], acceptance[0]!)
-      form.click('添加验收标准')
-      form.change(form.textareas()[3], ' \n\t ')
-      form.submit()
-      expect(submit).not.toHaveBeenCalled()
-      form.click('移除验收标准 2')
-      for (const index of [0, 1, 2]) {
-        const old = form.textareas()[index].props.value
-        form.change(form.textareas()[index], ' \n\t ')
-        form.submit()
-        expect(submit).not.toHaveBeenCalled()
-        form.change(form.textareas()[index], old)
-      }
-      form.click('移除验收标准 1')
-      form.submit()
-      expect(submit).not.toHaveBeenCalled()
-    })
+  const query=vi.fn(async(value:import('../src/work-types.ts').WorkQuery):Promise<import('../src/work-types.ts').WorkCompleted>=>{
+    if(value.type==='projects.list')return {status:'completed',projects:[project]}
+    if(value.type==='project.detail')return {status:'completed',project,tasks:[]}
+    if(value.type==='source.list')return {status:'completed',sources:[source]}
+    if(value.type==='resources.list')return {status:'completed',resources:[...options.resources,{ref:{runtimeId:'host',workspaceId:'owned'},title:'/other',owner:{projectId:'another',projectName:'Another project'}}]}
+    if(value.type==='source.execution-options')return {status:'completed',executionOptions:options}
+    if(value.type==='continuous.status')return {status:'completed',continuousRule:rule}
+    return {status:'completed'}
   })
-
-  it('creates through the form and reopens without changing any material bytes or item boundaries', async () => {
-    await withPanel(async panel => {
-      let saved: WorkTask | undefined
-      const onSaved = async (task: WorkTask) => { saved = task }
-      const form = await mountWorkPanel({ controller: panel, kind: 'task', onSaved })
-      form.change(form.inputs()[0], '  普通标题  ')
-      for (const [index, value] of [goal, specification, acceptance[0]!].entries()) form.change(form.textareas()[index], value)
-      form.submit()
-      await vi.waitFor(() => expect(saved).toBeDefined())
-      expect(saved).toMatchObject({ title: '普通标题', goal, specification: { text: specification, acceptance } })
-      const ref = { projectId: saved!.projectId, taskId: saved!.id }
-      await panel.openTask(ref)
-      const editor = await mountWorkPanel({ controller: panel, kind: 'spec', task: panel.getSnapshot().detail!.task, onSaved })
-      saved = undefined
-      editor.submit()
-      await vi.waitFor(() => expect(saved).toBeDefined())
-      const reloaded = await panel.client.query({ type: 'task.detail', ref })
-      expect(reloaded.task).toMatchObject({ goal, specification: { text: specification, acceptance } })
-    })
+  return {panel:new WorkPanelController({command,query},{selectPanel(){},openSession(){}}),command,query,setRule:(value:typeof rule)=>{rule=value}}
+}
+describe('GitHub Project onboarding production controls',()=>{
+  it('submits owner, account type and number in one form with an optional execution directory',async()=>{
+    const h=fixture(),saved=vi.fn(),form=await mountWorkPanel({controller:h.panel,onSaved:saved})
+    try {
+      await vi.waitFor(()=>expect(form.nodes('option')).toHaveLength(5))
+      form.change(form.inputs()[0],' acme ');form.change(form.inputs()[1],'7')
+      form.change(form.nodes('select')[0],'user');form.change(form.nodes('select')[1],'0')
+      form.submit();await vi.waitFor(()=>expect(saved).toHaveBeenCalledOnce())
+      expect(h.command).toHaveBeenCalledExactlyOnceWith({type:'source.connect',githubProject:{owner:'acme',type:'user',number:7},resource,commandId:expect.any(String)})
+      expect(h.panel.getSnapshot()).toMatchObject({projectId:'p1',object:'issues',detail:null})
+      expect(form.nodes('option').find(node=>node.props.value===1)?.props.disabled).toBe(true)
+    }finally{form.unmount()}
+  })
+  it('retries an uncertain connection with the same command ID and no extra local-create command',async()=>{
+    const h=fixture(),saved=vi.fn(),form=await mountWorkPanel({controller:h.panel,onSaved:saved})
+    h.command.mockRejectedValueOnce(Error('connection lost'))
+    try {
+      form.change(form.inputs()[0],'acme');form.change(form.inputs()[1],'7');form.submit()
+      await vi.waitFor(()=>expect(form.nodes('button')[0].props.disabled).toBe(false))
+      expect(saved).not.toHaveBeenCalled();form.submit();await vi.waitFor(()=>expect(saved).toHaveBeenCalledOnce())
+      expect(h.command).toHaveBeenCalledTimes(2);expect(h.command.mock.calls[0]![0]).toEqual(h.command.mock.calls[1]![0])
+      expect(h.command.mock.calls[0]![0]).not.toHaveProperty('resource')
+    }finally{form.unmount()}
+  })
+})
+describe('continuous processing production scope controls',()=>{
+  it('configures explicit scope and real defaults, then pauses only new work with the saved version',async()=>{
+    const h=fixture();await h.panel.load()
+    const form=await mountWorkPanel({controller:h.panel},'ContinuousProcessing')
+    try {
+      await vi.waitFor(()=>expect(form.nodes('button')[0].props.disabled).toBe(false))
+      expect(h.command).not.toHaveBeenCalled();form.click('开启持续处理')
+      await vi.waitFor(()=>expect(form.nodes('form')).toHaveLength(1))
+      expect(form.nodes('select')[2].props.value).toBe(1)
+      form.change(form.nodes('select')[0],'*');form.change(form.inputs()[0],'ready-for-agent, approved, ready-for-agent')
+      form.submit();await vi.waitFor(()=>expect(h.command).toHaveBeenCalledOnce())
+      expect(h.command.mock.calls[0]![0]).toMatchObject({type:'continuous.configure',projectId:'p1',sourceId:'s1',expectedVersion:0,assignee:'*',labels:['ready-for-agent','approved'],resource,model:options.defaults.model,agentPreset:'standard',permissionPreset:'review',enabled:true})
+      await vi.waitFor(()=>expect(form.nodes('form')).toHaveLength(0))
+      form.click('暂停接新工作');await vi.waitFor(()=>expect(h.command).toHaveBeenCalledTimes(2))
+      expect(h.command.mock.calls[1]![0]).toMatchObject({type:'continuous.set-enabled',expectedVersion:1,enabled:false})
+      expect(h.command.mock.calls.some(([value])=>value.type==='task.control')).toBe(false)
+      expect(form.nodes('p').map(node=>[node.props.children].flat(Infinity).join('')).join(' ')).toContain('当前执行继续处理')
+    }finally{form.unmount()}
+  })
+  it('renders persisted queue reasons and opens its active Issue without starting or pausing it',async()=>{
+    const h=fixture();h.setRule({id:'r1',projectId:'p1',sourceId:'s1',version:3,enabled:false,scope:{assignee:'@me',labels:['ready-for-agent'],identity},resource,model:options.defaults.model,agentPreset:'standard',permissionPreset:'review',active:{projectId:'p1',taskId:'t1'},items:[{nodeId:'I1',number:1,title:'Requirement',url:'https://github.com/acme/repo/issues/1',state:'waiting',reason:'Waiting for acceptance evidence',attempts:1,ref:{projectId:'p1',taskId:'t1'}}]})
+    await h.panel.load();const open=vi.spyOn(h.panel,'openTask').mockResolvedValue()
+    const form=await mountWorkPanel({controller:h.panel},'ContinuousProcessing')
+    try {
+      await vi.waitFor(()=>expect(form.nodes('li')).toHaveLength(1))
+      expect(form.nodes('p').map(node=>[node.props.children].flat(Infinity).join('')).join(' ')).toContain('Waiting for acceptance evidence')
+      form.click('查看当前执行 / 暂停处理')
+      expect(open).toHaveBeenCalledExactlyOnceWith({projectId:'p1',taskId:'t1'})
+      expect(h.command).not.toHaveBeenCalled()
+    }finally{form.unmount()}
   })
 })

@@ -10,7 +10,7 @@ const ref = { projectId: 'p1', taskId: 't1' }
 const resource = { runtimeId: 'host', workspaceId: 'workspace' }
 const task: WorkTask = { id: 't1', projectId: 'p1', title: '处理真实工作', goal: '启动一次', version: 1, agentId: 'a1', specification: { version: 1, text: '保留全部规格', acceptance: ['执行一次'] }, specificationHistory: [], breakdown: [], children: [], sessions: [], activity: [] }
 const issue = { nodeId: 'I1', number: 1, title: task.title, body: 'Issue 原文', url: 'https://github.com/acme/repo/issues/1', repository: { owner: 'acme', repository: 'repo' }, assignees: [], labels: [], state: 'open' as const, updatedAt: '2026-10-21', observedAt: '2026-10-21' }
-const source = { id: 's1', projectId: 'p1', provider: 'github' as const, repository: issue.repository, enabled: true, version: 1, sequence: 1, requests: {}, observations: [], pages: [] }
+const source = { id: 's1', projectId: 'p1', provider: 'github' as const, githubProject:{owner:'acme',type:'org' as const,number:9}, enabled: true, version: 1, sequence: 1, requests: {}, observations: [], pages: [] }
 const options: WorkExecutionOptions = { agentId: 'a1', resources: [{ ref: resource, title: '/workspace/project' }], models: [{ provider: 'real', model: 'default' }], agentPresets: ['standard'], permissionPresets: ['read-only'], defaults: { model: { provider: 'real', model: 'default' }, agentPreset: 'standard', permissionPreset: 'read-only' } }
 const running = (): WorkExecution => ({ id: 'e1', ref, owner: 'owner', epoch: 1, agentId: 'a1', resource, session: { runtimeId: 'host', sessionId: 'native-current' }, sessionMode: 'create', agentPreset: 'standard', model: { provider: 'real', model: 'default' }, permissionPreset: 'read-only', policy: { version: 1, instructions: '', capabilities: ['coordination'], modelCandidates: [] }, state: 'ready', history: [], events: [{ id: 'kickoff:e1', text: '完整任务材料', kind: 'input', delivery: 'consumed', acceptance: 'unassessed' }], actual: { runtimeId: 'host', cwd: '/workspace/project', agentPreset: 'standard', provider: 'real', model: 'default', permissionPreset: 'read-only', sandbox: 'read-only', approval: 'ask' } })
 function setup() {
@@ -26,7 +26,7 @@ function setup() {
     if (query.type === 'projects.list') return { status: 'completed', projects: [{ id: 'p1', name: '真实项目', version: 1, defaultAgentId: 'a1', resources: [resource] }, { id: 'p2', name: '其他项目', version: 1, defaultAgentId: 'a2', resources: [] }] }
     if (query.type === 'project.detail') return { status: 'completed', tasks: query.projectId === 'p1' ? [saved] : [] }
     if (query.type === 'task.detail') return { status: 'completed', task: saved, ...(execution ? { execution, executionRuntime: 'idle' } : {}) }
-    if (query.type === 'task.execution-options') return { status: 'completed', executionOptions: choices }
+    if ((query.type === 'task.execution-options'||query.type === 'source.execution-options')) return { status: 'completed', executionOptions: choices }
     if (query.type === 'source.list') return { status: 'completed', sources: [source] }
     if (query.type === 'source.issue') return { status: 'completed', source, issue }
     return { status: 'completed' }
@@ -66,7 +66,7 @@ describe('explicit work startup', () => {
     const h = setup(); h.setExecution(running()); await h.panel.openTask(ref); await h.panel.prepareStart()
     expect(h.command).not.toHaveBeenCalled()
     expect(h.navigation.openSession).toHaveBeenCalledExactlyOnceWith('native-current')
-    expect(vi.mocked(h.client.query).mock.calls.some(([query]) => query.type === 'task.execution-options')).toBe(false)
+    expect(vi.mocked(h.client.query).mock.calls.some(([query]) => (query.type === 'task.execution-options'||query.type === 'source.execution-options'))).toBe(false)
   })
   it('rechecks concurrent starts before confirmation and enters their Session instead of writing', async () => {
     const h = setup(); h.setOptions({ ...options, models: [...options.models, { provider: 'real', model: 'other' }] })
@@ -105,7 +105,7 @@ describe('explicit work startup', () => {
   it('suppresses stale choices after switching projects', async () => {
     const h = setup(); await h.panel.openTask(ref)
     const gate = deferred(), entered = deferred(), original = h.client.query
-    h.client.query = async query => { if (query.type === 'task.execution-options') { entered.resolve(); await gate.promise }; return original(query) }
+    h.client.query = async query => { if ((query.type === 'task.execution-options'||query.type === 'source.execution-options')) { entered.resolve(); await gate.promise }; return original(query) }
     const pending = h.panel.prepareStart(); await entered.promise; await h.panel.selectProject('p2'); gate.resolve(); await pending
     expect(h.panel.getSnapshot()).toMatchObject({ projectId: 'p2', detail: null, startup: { busy: false, options: null } })
     expect(h.command).not.toHaveBeenCalled()
@@ -120,19 +120,19 @@ describe('explicit work startup', () => {
   })
   it('explains missing resources without starting and preserves source material', async () => {
     const h = setup(); h.setOptions({ ...options, resources: [] }); await h.panel.openTask(ref); await h.panel.prepareStart()
-    expect(h.panel.getSnapshot().startup.error).toContain('接入已有资源')
+    expect(h.panel.getSnapshot().startup.error).toContain('没有可用执行目录')
     expect(h.panel.getSnapshot().detail?.task?.specification.text).toBe(task.specification.text)
     expect(h.command).not.toHaveBeenCalled()
   })
-  it('renders a Project task tree with current acceptance counts and separate remote status', async () => {
+  it('renders root Issue acceptance and children together without count-based completion', async () => {
     const h = setup(), child = { ...task, id: 'child', title: '子工作', parent: ref }
-    const progress = { ref, title: task.title, children: [{ projectId: 'p1', taskId: 'child' }], stage: 'blocked' as const, summary: '等待评审', next: '核对证据', blockers: ['缺少验收截图'], criteria: { passed: 1, total: 3, assessed: 2, current: true }, breakdown: [], source: { number: 1, url: issue.url, state: 'closed' as const, observedAt: issue.observedAt } }
+    const progress = { processingState:'blocked' as const, ref, title: task.title, children: [{ projectId: 'p1', taskId: 'child' }], stage: 'blocked' as const, summary: '等待评审', next: '核对证据', blockers: ['缺少验收截图'], criteria: { passed: 1, total: 3, assessed: 2, current: true }, breakdown: [], source: { number: 1, url: issue.url, state: 'closed' as const, observedAt: issue.observedAt } }
     const original = h.client.query
-    h.client.query = async query => query.type === 'project.detail' ? { status: 'completed', tasks: [child, { ...task, children: [progress.children[0]!] }], progressItems: [progress] } : original(query)
-    await h.panel.load()
+    h.client.query = async query => query.type === 'project.detail' ? { status: 'completed', tasks: [child, { ...task, children: [progress.children[0]!] }], progressItems: [progress] } : query.type==='task.detail'?{status:'completed',task:{...task,children:[progress.children[0]!]},progress,children:[child],bindings:[{provider:'github',nodeId:issue.nodeId,urls:[issue.url],sourceIds:['s1'],ref,accepted:{...issue,state:'closed'},lastObserved:{...issue,state:'closed'}}]}: original(query)
+    await h.panel.load();await h.panel.openTask(ref)
     expect(h.panel.visibleTaskRows().map(row => [row.task.id, row.depth])).toEqual([['t1', 0], ['child', 1]])
     const rendered = html(h.panel)
-    for (const text of ['验收通过 1 / 3 项', '已核验 2 项', '缺少验收截图', '远端 closed', '受阻', '200K', '300K']) expect(rendered).toContain(text)
+    for (const text of ['验收通过 1 / 3 项', '已核验 2 项', '缺少验收截图', '远端状态：closed', '阻塞', '子需求']) expect(rendered).toContain(text)
     expect(rendered).not.toContain('已验收完成')
     expect(rendered).not.toContain('33%')
   })
@@ -156,7 +156,7 @@ describe('explicit work startup', () => {
     expect(h.command.mock.calls[0]![0]).toMatchObject({ type: 'source.configure-project', projectId: 'p1', githubProject: projectSource.githubProject })
     await h.panel.openIssue(1, true, 'OtherRepoIssue')
     expect(h.client.query).toHaveBeenLastCalledWith({ type: 'source.issue', projectId: 'p1', sourceId: 's1', number: 1, nodeId: 'OtherRepoIssue', refresh: true })
-    expect(html(h.panel)).toContain('acme / Project #9')
+    expect(html(h.panel)).toContain('acme/other · #1')
   })
   it('distinguishes idle, persisted progress, wait application and business acceptance', async () => {
     const h = setup(); h.setExecution({ ...running(), state: 'waiting', progress: '规格已确认', control: { commandId: 'wait', action: 'wait', status: 'applied', reason: '等待决定' } }); await h.panel.openTask(ref)

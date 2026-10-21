@@ -5,7 +5,7 @@ import type { ExternalBinding, GitHubIssue, GitHubSourcePort, WorkSource } from 
 import { SourceError } from './github.ts'
 import { issueSchema } from './schema.ts'
 import { reconcileProjectSources } from './discovery.ts'
-type SourceCommand = Extract<WorkCommand, { type: `source.${string}` }>
+type SourceCommand = Exclude<Extract<WorkCommand, { type: `source.${string}` }>, { type: 'source.connect' }>
 type SourceRead = Extract<WorkQuery, { type: 'source.issue' | 'source.issues' }>
 export type SourceTransaction = <T>(apply: (state: WorkSnapshot) => Promise<T>) => Promise<T>
 const fail = (code: string, message: string): WorkResult => ({ status: 'failed', error: { code, message } })

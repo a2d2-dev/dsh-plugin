@@ -13,6 +13,7 @@ function setup() {
     if(query.type==='projects.list') return {status:'completed',projects:[{id:'p1',name:'本地项目',version:1,defaultAgentId:'a1',resources:[]},{id:'p2',name:'另一个项目',version:1,defaultAgentId:'a2',resources:[]}]}
     if(query.type==='project.detail') return {status:'completed', tasks:query.projectId==='p1'?[task]:[]}
     if(query.type==='task.detail') return {status:'completed',task}
+    if(query.type==='source.list') return {status:'completed',sources:[{id:'s1',projectId:query.projectId,provider:'github',githubProject:{owner:'acme',type:'org',number:1},enabled:true,version:1,sequence:0,requests:{},observations:[],pages:[]}]}
     return {status:'completed'}
   }}
   const navigation = {selectPanel:vi.fn(),openSession:vi.fn()}
@@ -82,7 +83,7 @@ describe('work panel public navigation',()=>{
   it('filters saved content by local association view and search together',async()=>{
     const {panel,client}=setup()
     client.query=async query=>query.type==='projects.list'?{status:'completed',projects:[{id:'p1',name:'本地项目',version:1,defaultAgentId:'a1',resources:[]}]}:{status:'completed',tasks:[task,{...task,id:'t2',title:'评审记录',sessions:[{session:{runtimeId:'host-A',sessionId:'native'},purpose:'review'}]}]}
-    await panel.load()
+    await panel.load();await panel.selectProject('p1')
     panel.setView('associated'); expect(panel.visibleTasks().map(item=>item.title)).toEqual(['评审记录'])
     panel.setSearch('保存本地工作'); expect(panel.visibleTasks()).toEqual([])
     panel.setView('unassociated'); expect(panel.visibleTasks().map(item=>item.id)).toEqual(['t1'])
@@ -93,7 +94,7 @@ describe('work panel public navigation',()=>{
     const {panel,client}=setup()
     const command=vi.mocked(client.command)
     command.mockRejectedValueOnce(new Error('connection lost')).mockResolvedValue({status:'completed'})
-    const intent={type:'project.create' as const,name:'HTTP local project'}
+    const intent={type:'source.connect' as const,githubProject:{owner:'acme',type:'org' as const,number:1}}
     await expect(panel.submit(intent)).rejects.toThrow('connection lost')
     await panel.submit(intent)
     const first=command.mock.calls[0]![0]

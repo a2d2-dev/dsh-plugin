@@ -1,84 +1,193 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { FormEvent, ReactNode } from 'react'
-import type { DetailTab, LocalView, WorkPanelController } from './work-panel-controller.ts'
-import type { AssociatedWork, BreakdownBlock, HostResource, SessionCandidate, WorkExecution, WorkTask } from '../work-types.ts'
-import { browserUUID } from './browser-uuid.ts'
+import type { DetailTab, WorkPanelController } from './work-panel-controller.ts'
+import type { AssociatedWork, HostResource, WorkExecution, WorkTask, WorkExecutionOptions, ContinuousWorkRule } from '../work-types.ts'
+import type { GitHubIssue } from '../work-sources/types.ts'
 import { message } from './work-panel-controller.ts'
 import styles from './work-panel.module.css'
 
-type FormKind = 'project' | 'attach' | 'task' | 'child' | 'spec' | 'breakdown' | null
-const detailTabs: [DetailTab,string][] = [['overview','概览'],['sessions','会话'],['related','相关工作'],['activity','活动']]
-const views: [LocalView,string][] = [['all','全部本地工作'],['unassociated','尚未关联会话'],['associated','已关联会话']]
+const detailTabs: [DetailTab,string][] = [['overview','概览'],['related','需求与子 Issue'],['sessions','会话与历史'],['activity','活动']]
+const issueFilters = [['all','全部'],['not-started','未开始'],['processing','处理中'],['waiting','等待'],['blocked','阻塞'],['completed','已完成']] as const
 
 export function WorkPanel({ controller }: { controller: WorkPanelController }) {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot)
-  const [form, setForm] = useState<FormKind>(null)
-  const object = state.object
-  const [notice,setNotice] = useState('')
-  const [surface,setSurface] = useState<HTMLElement|null>(null)
+  const [connecting,setConnecting]=useState(false),[surface,setSurface]=useState<HTMLElement|null>(null)
   useEffect(() => { void controller.initialize(); return () => controller.leavePanel() }, [controller])
   useEffect(() => {
-    if(form||!surface||typeof document==='undefined') return
+    if(connecting||!surface||typeof document==='undefined') return
     const allowed=()=>document.visibilityState==='visible'&&surface.isConnected
       && !surface.querySelector('details[open] form')
       && !(surface.contains(document.activeElement)&&document.activeElement?.closest('form'))
     const timer=setInterval(()=>{void controller.observeCurrent(allowed)},5000)
     return ()=>{clearInterval(timer);controller.stopObservation()}
-  },[controller,form,surface])
-  useEffect(() => { setForm(null); setNotice('') }, [state.projectId])
-  const project = state.projects.find(project => project.id === state.projectId)
-  const task = state.detail?.task
-  const done = async (text: string) => { setForm(null); setNotice(text); if (task) await controller.refreshTask(); else if (state.projectId) await controller.selectProject(state.projectId) }
+  },[controller,connecting,surface])
+  const project=state.projects.find(item=>item.id===state.projectId)
+  const projects=controller.connectedProjects()
+  const source=state.source.sources.find(item=>item.id===state.source.sourceId)
+  const detail=state.detail, task=detail?.task
+  const binding=detail?.bindings?.[0]
+  const issue=task ? (binding?.lastObserved ?? (state.source.bindings.some(item=>item.ref.taskId===task.id&&item.ref.projectId===task.projectId)?state.source.issue:null)) : state.source.issue
+  const hasDetail=Boolean(task||issue)
+  const sourceTitle=source?.projectSnapshot?.project.title??project?.name
   return <main ref={setSurface} className={styles.panel} aria-label="A²D² 控制面板">
-    <header className={styles.header}><div><h1>A²D² 控制面板</h1><p>项目、工作与关联会话</p></div><button onClick={() => controller.close()}>关闭面板</button></header>
-    {state.error && <p className={styles.failure} role="alert">{state.error} <button onClick={() => void controller.load()}>重新读取</button></p>}
-    {state.observationError && <p role="status">状态更新暂不可用，保留上次内容：{state.observationError}</p>}
-    {state.startup.error && <ErrorText error={state.startup.error}/>}
-    {state.startup.busy && <p role="status">正在准备执行，请稍候…</p>}
-    {notice && <p role="status">{notice}</p>}
+    <header className={styles.header}><div><p className={styles.eyebrow}>A²D² · GitHub</p><h1>{hasDetail?'Issue 工作台':sourceTitle??'连接 GitHub Project'}</h1></div><button onClick={()=>controller.close()}>关闭面板</button></header>
+    {state.error&&<p className={styles.failure} role="alert">{state.error} <button onClick={()=>void (task?controller.refreshTask():controller.load())}>重新读取</button></p>}
+    {state.observationError&&<p role="status">状态更新暂不可用，保留上次内容：{state.observationError}</p>}
+    {state.startup.error&&<ErrorText error={state.startup.error}/>}
+    {state.startup.busy&&<p role="status">正在准备执行，请稍候…</p>}
     <div className={styles.toolbar}>
-      {state.projects.length > 0 && <label>当前项目 <select aria-label="当前项目" value={state.projectId ?? ''} onChange={event => { void controller.selectProject(event.target.value) }}>
-        {state.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
-      </select></label>}
-      <button onClick={() => setForm('project')}>接入 / 创建项目</button>
-      {project && <button onClick={() => setForm('attach')}>接入已有资源</button>}
+      {projects.length>0&&<label>GitHub Project <select aria-label="GitHub Project" value={state.projectId??''} onChange={event=>{setConnecting(false);void controller.selectProject(event.target.value)}}>{!projects.some(item=>item.id===state.projectId)&&<option value="">选择 Project</option>}{projects.map(item=><option key={item.id} value={item.id}>{state.projectSources[item.id]?.find(source=>source.githubProject)?.projectSnapshot?.project.title??item.name}</option>)}</select></label>}
+      {projects.length>0&&<button onClick={()=>setConnecting(!connecting)}>{connecting?'取消连接':'连接 GitHub Project'}</button>}
     </div>
-    {state.loading && <p role="status">正在读取工作…</p>}
-    {state.projects.length === 0 && !state.loading && !state.error && <section><h2>建立第一个项目</h2><p>接入已有资源或创建本地项目，保存工作目标、规格和验收。无需 GitHub、仓库或在线会话。</p><button onClick={() => setForm('project')}>创建本地项目</button></section>}
-    {task ? <>
-      <header className={styles.header}><div><button onClick={() => {controller.back(); setForm(null)}}>← 返回项目内容</button><h1>{task.title}</h1><p>{project?.name} · 本地工作</p></div><div className={styles.toolbar}><button onClick={()=>void controller.refreshTask()}>刷新详情</button><button onClick={() => setForm('spec')}>更新规格</button></div></header>
-      <nav className={styles.tabs} role="tablist" aria-label="工作详情标签">{detailTabs.map(([id,label]) => <button key={id} role="tab" aria-selected={state.detailTab===id} onClick={() => {controller.setDetailTab(id);setForm(null)}}>{label}</button>)}</nav>
+    {(connecting||(!projects.length&&!hasDetail&&!state.loading))&&<Section title="选择 GitHub Project"><p>连接你的 Project，浏览分配给你的 Issues，并在需要时开启持续处理。</p><GitHubProjectForm controller={controller} onSaved={()=>setConnecting(false)}/></Section>}
+    {state.loading&&<p role="status">正在读取 Issue 与进展…</p>}
+    {hasDetail?<>
+      <header className={styles.issueHeader}><button className={styles.link} onClick={()=>controller.back()}>← {controller.canReturnToRequirement()?'返回上级要求':'返回 Issue 列表'}</button><p className={styles.eyebrow}>{issue?`${issue.repository.owner}/${issue.repository.repository} · #${issue.number}`:sourceTitle}</p><h1>{issue?`#${issue.number} ${issue.title}`:task?.title}</h1><div className={styles.toolbar}>{issue&&<GitHubLink url={issue.url}/>}<span className={styles.badge}>{processingLabel(detail?.progress)}</span><button disabled={state.loading||state.source.loading} onClick={()=>void (task?controller.refreshTask():issue&&controller.openIssue(issue.number,Boolean(source?.enabled),issue.nodeId))}>刷新详情</button></div></header>
+      <nav className={styles.tabs} role="tablist" aria-label="Issue 详情标签">{detailTabs.map(([id,label])=><button key={id} role="tab" aria-selected={state.detailTab===id} onClick={()=>controller.setDetailTab(id)}>{label}</button>)}</nav>
       <div role="tabpanel" aria-label={detailTabs.find(([id])=>id===state.detailTab)?.[1]}>
-        {state.detailTab==='overview' && <>
-          <Section title="状态概览"><div className={styles.metrics}><span>本地工作已保存</span><span>{(()=>{const counts=controller.sessionCounts(task);return `${counts.total} 个会话 · 当前 ${counts.current} · 历史 ${counts.historical} · 其他关联 ${counts.associated}`})()}</span><span>规格第 {task.specification.version} 版</span></div></Section>
-          <Section title="目标与规格"><h3>目标</h3><p>{task.goal}</p><h3>规格</h3><p>{task.specification.text}</p><h3>验收标准</h3>{task.specification.missing?.includes('acceptance')&&<p role="status">结构化验收标准尚待确认。原文可能包含验收段落，请明确确认；此提示不表示标准已满足。</p>}{task.specification.missing?.includes('body')&&<p role="status">已接受的来源正文为空，规格正文尚待补充。</p>}<ul>{task.specification.acceptance.map((criterion,index)=><li key={index}>{criterion}</li>)}</ul></Section>
-          {state.detail?.bindings?.map(binding=><SourceBinding key={binding.nodeId} binding={binding}/>)}
-          {state.detail?.progress && <Section title="工作进展"><p>{stageLabel(state.detail.progress.stage)} · {state.detail.progress.summary}</p><CriteriaCount criteria={state.detail.progress.criteria}/>{state.detail.progress.next&&<p>下一步：{state.detail.progress.next}</p>}{state.detail.progress.blockers.map((blocker,index)=><p key={index} className={styles.failure}>阻塞：{blocker}</p>)}</Section>}
-          <CurrentExecution controller={controller}/>
+        {state.detailTab==='overview'&&<>
+          <div className={styles.detailGrid}><div><Section title="当前进展"><p>{detail?.progress?.summary??'尚未开始处理'}</p>{detail?.progress&&<CriteriaCount criteria={detail.progress.criteria}/>}<p>下一步：{detail?.progress?.next||(!detail?.execution?'确认要求后开始处理':'等待当前会话报告下一步')}</p>{detail?.progress?.blockers.map((blocker,index)=><p className={styles.failure} key={index}>阻塞：{blocker}</p>)}</Section><Requirements controller={controller}/></div><CurrentExecution controller={controller}/></div>
+          {issue&&<Section title="Issue 原始要求"><IssueFacts issue={issue}/><p>{state.source.cached?'缓存 / 最后已知内容':'本次读取内容'}</p><p className={styles.sourceBody}>{issue.body||'（原文正文为空）'}</p><NativeIssueRelations issue={issue} controller={controller}/></Section>}
+          {task&&<Section title="已接受要求与验收"><p>{task.goal}</p>{task.specification.text!==issue?.body&&<details><summary>已接受规格 · 第 {task.specification.version} 版</summary><p className={styles.sourceBody}>{task.specification.text}</p></details>}{task.specification.missing?.includes('acceptance')&&<p role="status">结构化验收标准尚待确认。原始要求中的验收段落需由处理会话确认。</p>}{task.specification.missing?.includes('body')&&<p role="status">规格正文尚待补充；已观察的 Issue 正文为空。</p>}<ul>{task.specification.acceptance.map((criterion,index)=>{const result=task.progress?.specificationVersion===task.specification.version?task.progress.criteria.find(item=>item.index===index):undefined;return <li key={index}>{criterion} · {result?result.passed?'已通过':'未通过':'待核验'}{result?.evidence.map((evidence,index)=><p key={index}>证据：{evidence}</p>)}</li>})}</ul></Section>}
+          {binding&&<SourceBinding binding={binding}/>}
         </>}
-        {state.detailTab==='sessions' && <><CurrentExecution controller={controller}/><Sessions controller={controller} task={task} onSaved={()=>done('会话已关联')} /></>}
-        {state.detailTab==='related' && <>
-          {state.detail?.bindings?.map(binding=><NativeIssueRelations key={binding.nodeId} issue={binding.lastObserved}/>)}
-          <Section title="工作拆解"><button onClick={()=>setForm('breakdown')}>更新拆解</button>{task.breakdown.length ? task.breakdown.map(block=><article key={block.id}><h3>{block.title} · {stageLabel(block.status??'planned')}</h3><p>{block.description}</p>{block.evidence?.map((evidence,index)=><p key={index}>证据：{evidence}</p>)}</article>) : <p>尚无工作拆解。</p>}</Section>
-          <Section title="相关工作"><div className={styles.toolbar}><button onClick={()=>setForm('child')}>创建子工作</button></div>{state.detail?.parent && <p>父工作：<TaskLink controller={controller} task={state.detail.parent}/></p>}{state.detail?.children?.map(child=><p key={child.id}><TaskLink controller={controller} task={child}/></p>)}{!task.children.length && <p>尚无子工作。子工作可独立保存目标、规格和验收。</p>}</Section>
-        </>}
-        {state.detailTab==='activity' && <Section title="活动记录">{task.activity.length ? <div className={styles.tableScroll}><table><thead><tr><th>工作版本</th><th>操作</th></tr></thead><tbody>{[...task.activity].reverse().map(item=><tr key={item.commandId}><td>{item.version}</td><td>{activityLabel(item.type)}</td></tr>)}</tbody></table></div>:<p>尚无活动记录。</p>}</Section>}
+        {state.detailTab==='related'&&<><Requirements controller={controller}/>{issue&&<NativeIssueRelations issue={issue} controller={controller}/>}</>}
+        {state.detailTab==='sessions'&&<><CurrentExecution controller={controller}/>{task&&<Sessions controller={controller} task={task}/>}</>}
+        {state.detailTab==='activity'&&<Section title="活动记录">{task?.activity.length?<ol>{[...task.activity].reverse().map(item=><li key={item.commandId}>版本 {item.version} · {activityLabel(item.type)}</li>)}</ol>:<p>尚无处理活动。</p>}</Section>}
       </div>
-    </> : state.projectId && <>
-      <nav className={styles.tabs} role="tablist" aria-label="工作对象">{([['issues','Issue'],['prs','PR'],['projects','项目']] as const).map(([id,label])=><button key={id} role="tab" aria-selected={object===id} onClick={()=>{setForm(null);if(id==='issues') void controller.showSources();else controller.setObject(id)}}>{label}</button>)}</nav>
-      {object==='issues' ? <IssueSourcePanel key={state.projectId} controller={controller}/> : object==='prs' ? <Section title="PR 来源"><p>PR 来源尚未接入。</p><button onClick={()=>controller.setObject('projects')}>查看项目内容</button></Section> : <Section title={`${project?.name ?? '项目'} · 本地工作`}>
-        <nav className={styles.tabs} role="tablist" aria-label="本地项目视图">{views.map(([id,label])=><button key={id} role="tab" aria-selected={state.view===id} onClick={()=>controller.setView(id)}>{label}</button>)}</nav>
-        <div className={styles.toolbar}><input aria-label="搜索项目内容" placeholder="搜索标题、目标或规格" value={state.search} onChange={event=>controller.setSearch(event.target.value)} /><button onClick={()=>setForm('task')}>添加工作</button><button onClick={()=>void controller.selectProject(state.projectId!)}>刷新</button></div>
-        {project && <ContinuationSettings key={`project/${project.id}/${project.continuationPolicy?.version??0}`} controller={controller} policy={project.continuationPolicy}/>}
-        <p>{controller.visibleTasks().length} 项工作 · 当前项目</p>
-        <div className={styles.tableScroll}><table aria-label="当前项目内容"><thead><tr><th>工作</th><th>工作状态与进展</th><th>会话</th><th>验收</th><th>GitHub 来源</th></tr></thead><tbody>{controller.visibleTaskRows().map(({task:item,depth})=>{const progress=state.progressItems.find(value=>value.ref.projectId===item.projectId&&value.ref.taskId===item.id);return <tr key={item.id}><td style={{paddingInlineStart:12+depth*20}}>{depth>0&&<span aria-label="子工作">↳ </span>}<TaskLink controller={controller} task={item}/></td><td>{progress?<><strong>{stageLabel(progress.stage)}</strong><p>{progress.summary}</p>{progress.next&&<p>下一步：{progress.next}</p>}{progress.blockers.map((blocker,index)=><p key={index} className={styles.failure}>阻塞：{blocker}</p>)}</>:<p>{item.goal}</p>}</td><td>{progress?.execution?<><p>{executionLabel(progress.execution.state,progress)} · {({running:'正在运行',idle:'空闲',inactive:'未激活'})[progress.execution.runtime]}</p><button onClick={()=>void controller.openTask(progress.ref)}>查看当前执行</button></>:<span>{item.sessions.length} 个关联会话</span>}</td><td>{progress?<CriteriaCount criteria={progress.criteria}/>:<>规格第 {item.specification.version} 版 · 尚未报告验收</>}</td><td>{progress?.source?<><span>#{progress.source.number} · 远端 {progress.source.state}</span><GitHubLink url={progress.source.url}/></>:<span>本地工作</span>}</td></tr>})}</tbody></table></div>
-        {!state.loading && !state.error && !controller.visibleTasks().length && <p>{state.tasks.length ? '没有匹配当前视图和搜索的工作。' : '尚无本地工作，点击“添加工作”保存目标、规格和验收。'}</p>}
-      </Section>}
+      <ErrorText error={state.source.error??''}/>
+    </>:state.projectId&&<>
+      {source?.githubProject&&<div className={styles.sourceSummary}><strong>{sourceTitle}</strong><span>{source.githubProject.owner} / Project #{source.githubProject.number} · {source.githubProject.type==='org'?'组织':'个人'}</span><span>最近确认账号：{source.identity?.login??'尚未确认'}{source.identity?.name?` / ${source.identity.name}`:''}</span></div>}
+      {source&&<ContinuousProcessing key={`${state.projectId}/${source.id}`} controller={controller}/>}
+      <IssueSourcePanel controller={controller}/>
+      {project&&<Section title="自动接续"><ContinuationSettings key={`${project.id}/${project.continuationPolicy?.version??0}`} controller={controller} policy={project.continuationPolicy}/></Section>}
     </>}
-    {form && <section className={styles.formSection} aria-label="工作编辑"><div className={styles.header}><h2>{({project:'接入 / 创建项目',attach:'接入已有资源',task:'添加本地工作',child:'创建子工作',spec:'更新规格',breakdown:'更新工作拆解'})[form]}</h2><button onClick={()=>setForm(null)}>取消编辑</button></div>
-      {form==='project' || form==='attach' ? <ProjectForm key={`${form}/${state.projectId}`} controller={controller} attach={form==='attach'} onSaved={async projectId=>{setForm(null); await controller.load(); await controller.selectProject(projectId);setNotice('项目已保存')}}/> : form==='breakdown' && task ? <BreakdownForm key={task.version} controller={controller} task={task} onSaved={()=>done('拆解已保存')}/> : <TaskForm key={`${form}/${task?.id ?? ''}/${task?.version ?? ''}`} controller={controller} kind={form as 'task'|'child'|'spec'} task={task} onSaved={async saved=>{setForm(null);setNotice('工作已保存');await controller.openTask({projectId:saved.projectId,taskId:saved.id})}}/>}
-    </section>}
   </main>
+}
+function processingLabel(progress?:import('../work-progress.ts').TaskProgressView):string {
+  const state=progress?.processingState??'not-started'
+  return ({'not-started':'未开始',processing:'处理中',waiting:'等待',paused:'已暂停',blocked:'阻塞',completed:'已完成'})[state]
+}
+function RequirementBranch({controller,task,path=new Set<string>(),depth=0}:{controller:WorkPanelController;task:WorkTask;path?:Set<string>;depth?:number}) {
+  const {tasks,detail,progressItems}=controller.getSnapshot(),key=`${task.projectId}/${task.id}`
+  if(path.has(key))return <li>此需求已在上级显示。</li>
+  const nextPath=new Set(path).add(key)
+  const all=[...tasks,...(detail?.children??[]),...(detail?.task?[detail.task]:[])]
+  const children=[...new Map(all.filter(item=>task.children.some(ref=>ref.projectId===item.projectId&&ref.taskId===item.id)||(item.parent?.projectId===task.projectId&&item.parent.taskId===task.id)).map(item=>[`${item.projectId}/${item.id}`,item])).values()]
+  const progress=progressItems.find(item=>item.ref.projectId===task.projectId&&item.ref.taskId===task.id)
+  const current=task.progress?.specificationVersion===task.specification.version?task.progress:undefined
+  return <li className={styles.requirementBranch}><div className={styles.toolbar}><span>{progress?.source?`子 Issue #${progress.source.number}`:'子需求'}</span><TaskLink controller={controller} task={task}/><span className={styles.badge}>{progress?processingLabel(progress):current?stageLabel(current.stage):'尚无处理状态'}</span></div>
+    {(progress?.summary??current?.summary)&&<p>{progress?.summary??current?.summary}</p>}
+    {(progress?.next??current?.next)&&<p>下一步：{progress?.next??current?.next}</p>}
+    {(progress?.blockers??current?.blockers)?.map((blocker,index)=><p className={styles.failure} key={index}>阻塞：{blocker}</p>)}
+    {current?.criteria.flatMap(item=>item.evidence).map((evidence,index)=><p key={index}>证据：{evidence}</p>)}
+    {children.length>0&&<details open={depth===0}><summary>下级需求 · {children.length} 项</summary><ul>{children.map(child=><RequirementBranch key={`${child.projectId}/${child.id}`} controller={controller} task={child} path={nextPath} depth={depth+1}/>)}</ul></details>}
+  </li>
+}
+function Requirements({controller}:{controller:WorkPanelController}) {
+  const {detail,tasks}=controller.getSnapshot(),task=detail?.task
+  const all=[...(detail?.children??[]),...tasks]
+  const resolve=(ref:import('../work-types.ts').TaskRef)=>all.find(item=>item.id===ref.taskId&&item.projectId===ref.projectId)
+  return <Section title="需求与子 Issue">
+    {detail?.parent&&<p>上级要求：<TaskLink controller={controller} task={detail.parent}/></p>}
+    {task?.breakdown.length?task.breakdown.map(block=>{const child=block.child?resolve(block.child):undefined;return <article className={styles.requirement} key={block.id}><div className={styles.header}><h3>{block.title}</h3><span className={styles.badge}>{stageLabel(block.status??'planned')}</span></div><p>{block.description}</p>{block.evidence?.map((evidence,index)=><p key={index}>证据：{evidence}</p>)}{child&&<ul><RequirementBranch controller={controller} task={child}/></ul>}{block.child&&!child&&<button className={styles.link} onClick={()=>void controller.openTask(block.child!)}>查看关联需求详情</button>}</article>}):<p>尚未报告需求拆解。处理会话将围绕原始要求记录进展与证据。</p>}
+    <ul>{task?.children.filter(ref=>!task.breakdown.some(block=>block.child?.taskId===ref.taskId&&block.child.projectId===ref.projectId)).map(ref=>{const child=resolve(ref);return child?<RequirementBranch key={`${ref.projectId}/${ref.taskId}`} controller={controller} task={child}/>:<li key={`${ref.projectId}/${ref.taskId}`}><button className={styles.link} onClick={()=>void controller.openTask(ref)}>查看子需求详情</button></li>})}</ul>
+  </Section>
+}
+function GitHubProjectForm({controller,onSaved}:{controller:WorkPanelController;onSaved:()=>void}) {
+  const [owner,setOwner]=useState(''),[type,setType]=useState<'org'|'user'>('org'),[number,setNumber]=useState(''),[resources,setResources]=useState<HostResource[]>([]),[resource,setResource]=useState('')
+  const [error,setError]=useState(''),[busy,setBusy]=useState(false)
+  useEffect(()=>{const abort=new AbortController();void controller.client.query({type:'resources.list'},abort.signal).then(result=>{if(!abort.signal.aborted)setResources(result.resources??[])},error=>{if(!abort.signal.aborted)setError(message(error))});return()=>abort.abort()},[controller])
+  async function connect(event:FormEvent) {
+    event.preventDefault();if(busy)return
+    setBusy(true);setError('')
+    try{await controller.connectProject({owner,type,number:Number(number)},resources.find((_,index)=>String(index)===resource)?.ref);onSaved()}catch(error){setError(message(error))}finally{setBusy(false)}
+  }
+  return <form className={styles.form} onSubmit={event=>void connect(event)}>
+    <div className={styles.formRow}><label>GitHub owner<input required disabled={busy} value={owner} onChange={event=>setOwner(event.target.value)} placeholder="组织或用户名"/></label><label>账号类型<select disabled={busy} value={type} onChange={event=>setType(event.target.value as 'org'|'user')}><option value="org">组织</option><option value="user">个人</option></select></label><label>Project 编号<input required disabled={busy} type="number" min="1" step="1" value={number} onChange={event=>setNumber(event.target.value)}/></label></div>
+    <label>执行目录（可选）<select disabled={busy} value={resource} onChange={event=>setResource(event.target.value)}><option value="">开始处理时选择</option>{resources.map((item,index)=><option key={`${item.ref.runtimeId}/${item.ref.workspaceId}`} value={index} disabled={Boolean(item.owner&&!controller.getSnapshot().projectSources[item.owner.projectId]?.some(source=>source.githubProject?.owner.toLowerCase()===owner.trim().toLowerCase()&&source.githubProject?.type===type&&source.githubProject?.number===Number(number)))}>{item.title}{item.owner?` · ${item.owner.projectName}`:''}</option>)}</select></label>
+    <p>使用此 DSH 服务已连接的 GitHub 账号。连接后可先浏览 Issues。</p><ErrorText error={error}/><button className={styles.primary} disabled={busy} type="submit">{busy?'正在连接…':'连接并查看 Issues'}</button>
+  </form>
+}
+function IssueSourcePanel({controller}:{controller:WorkPanelController}) {
+  const state=useSyncExternalStore(controller.subscribe,controller.getSnapshot,controller.getSnapshot), sourceState=state.source
+  const {listing,loading,error,cached}=sourceState, source=sourceState.sources.find(item=>item.id===sourceState.sourceId)
+  const rows=controller.visibleIssues(),sources=sourceState.sources.filter(item=>item.githubProject)
+  return <Section title="Issues">
+    {sources.length>1&&<label>Project 来源<select value={sourceState.sourceId??''} onChange={event=>void controller.selectSource(event.target.value)}>{sources.map(item=><option key={item.id} value={item.id}>{item.projectSnapshot?.project.title??`${item.githubProject?.owner} / Project #${item.githubProject?.number}`}</option>)}</select></label>}
+    {source&&<>
+      <div className={styles.toolbar}><label>负责人 <select aria-label="Issue 负责人" value={sourceState.assignee} onChange={event=>void controller.browseIssues({assignee:event.target.value as '@me'|'*',page:1},true)} disabled={loading||!source.enabled}><option value="@me">分配给我</option><option value="*">全部负责人</option></select></label><label>GitHub 状态 <select aria-label="Issue 远端状态" value={sourceState.state} onChange={event=>void controller.browseIssues({state:event.target.value as 'open'|'closed'|'all',page:1},true)} disabled={loading||!source.enabled}><option value="open">Open</option><option value="closed">Closed</option><option value="all">全部</option></select></label><input aria-label="搜索当前页 Issues" placeholder="搜索当前页标题、编号、要求或标签" value={state.search} onChange={event=>controller.setSearch(event.target.value)}/><button disabled={loading||!source.enabled} onClick={()=>void controller.browseIssues({},true)}>刷新 Issues</button></div>
+      <nav className={styles.tabs} aria-label="Issue 处理状态">{issueFilters.map(([id,label])=><button key={id} aria-pressed={state.issueFilter===id} onClick={()=>controller.setIssueFilter(id)}>{label}</button>)}</nav>
+      <p>{cached?'缓存 / 最后已知列表':'本次读取列表'} · 第 {sourceState.page} 页 · 搜索与处理状态筛选仅作用于当前已载入页{listing?`（${rows.length} / ${listing.items.length} 项） · 观察时间：${listing.observedAt}`:''}</p>
+      {!source.enabled&&<p role="status">来源已停用，显示已保存的内容。</p>}
+      {listing&&<><div className={styles.tableScroll}><table aria-label="GitHub Issue 列表"><thead><tr><th>Issue / 原始要求</th><th>进展与下一步</th><th>负责人 / 标签</th></tr></thead><tbody>{rows.map(issue=>{const progress=controller.progressForIssue(issue);return <tr key={issue.nodeId}><td><button className={styles.issueLink} onClick={()=>void controller.openIssue(issue.number,source.enabled,issue.nodeId)}>#{issue.number} {issue.title}</button><p>{issue.repository.owner}/{issue.repository.repository} · GitHub {issue.state}</p></td><td><span className={styles.badge}>{processingLabel(progress)}</span>{progress&&<>{progress.execution&&<p>{executionLabel(progress.execution.state,progress)}</p>}<p>{progress.summary}</p>{progress.next&&<p>下一步：{progress.next}</p>}{progress.processingReason&&<p>{progress.processingReason}</p>}{progress.blockers.map((blocker,index)=><p className={styles.failure} key={index}>阻塞：{blocker}</p>)}</>}</td><td>{issue.assignees.join(', ')||'未指派'}<p>{issue.labels.join(' · ')}</p></td></tr>})}</tbody></table></div>{!rows.length&&<p>{listing.items.length?'当前页没有匹配筛选的 Issue。':listing.nextPage?'本页没有 Issue，仍可读取下一页。':'当前页没有匹配的 Issue。'}</p>}<div className={styles.toolbar}><button disabled={loading||sourceState.page<=1} onClick={()=>void controller.browseIssues({page:sourceState.page-1},source.enabled)}>上一页</button><span>第 {sourceState.page} 页</span><button disabled={loading||!listing.nextPage} onClick={()=>void controller.browseIssues({page:listing.nextPage!},source.enabled)}>下一页</button></div></>}
+      {!listing&&!loading&&<p>此筛选页尚无可读缓存，请刷新 Issues。读取失败不表示列表为空。</p>}
+      <details><summary>来源状态与缓存</summary><p>最近确认账号：{source.identity?.login??'尚未确认'} · {source.discovery?.lastSuccessAt?`最近同步：${source.discovery.lastSuccessAt}`:'尚无同步时间'}</p>{source.lastError?.retryAt&&<p>可重试时间：{source.lastError.retryAt}</p>}<div className={styles.toolbar}><button disabled={loading} onClick={()=>void controller.browseIssues({},false)}>读取缓存列表</button><button disabled={loading} onClick={()=>void controller.setSourceEnabled(!source.enabled)}>{source.enabled?'停用来源':'启用来源'}</button></div></details>
+    </>}
+    {loading&&<p role="status">正在读取 Issues…</p>}<ErrorText error={error??''}/>{!source&&!loading&&!error&&<p>选择 GitHub Project 以读取 Issues。</p>}
+  </Section>
+}
+function ContinuousProcessing({controller}:{controller:WorkPanelController}) {
+  const snapshot=controller.getSnapshot(),projectId=snapshot.projectId!,sourceId=snapshot.source.sourceId!
+  const [rule,setRule]=useState<ContinuousWorkRule|undefined>(undefined),[loaded,setLoaded]=useState(false),[editing,setEditing]=useState(false)
+  const [options,setOptions]=useState<WorkExecutionOptions|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[statusError,setStatusError]=useState('')
+  const [assignee,setAssignee]=useState<'@me'|'*'>('@me'),[labels,setLabels]=useState(''),[resource,setResource]=useState(0),[model,setModel]=useState(0),[agentPreset,setAgentPreset]=useState(''),[permissionPreset,setPermissionPreset]=useState('')
+  const [scope]=useState(()=>new AbortController())
+  useEffect(()=>()=>scope.abort(),[scope])
+  useEffect(()=>{
+    const abort=new AbortController();let reading=false
+    const read=async()=>{if(reading||editing||busy||abort.signal.aborted)return;reading=true;try{const result=await controller.client.query({type:'continuous.status',projectId,sourceId},abort.signal);if(!abort.signal.aborted){setRule(result.continuousRule);setLoaded(true);setStatusError('')}}catch(error){if(!abort.signal.aborted)setStatusError(message(error))}finally{reading=false}}
+    void read();const timer=setInterval(()=>{if(typeof document==='undefined'||document.visibilityState==='visible')void read()},5000)
+    return()=>{abort.abort();clearInterval(timer)}
+  },[controller,projectId,sourceId,editing,busy])
+  async function configure() {
+    if(busy)return;setBusy(true);setError('')
+    try {
+      const result=await controller.client.query({type:'source.execution-options',projectId,sourceId},scope.signal)
+      if(scope.signal.aborted)return
+      const choices=result.executionOptions
+      if(!choices||!choices.resources.length||!choices.models.length||!choices.agentPresets.length||!choices.permissionPresets.length)throw Error('宿主尚无完整的执行目录、模型或预设配置')
+      setOptions(choices);setAssignee(rule?.scope.assignee??'@me');setLabels(rule?.scope.labels.join(', ')??'')
+      setResource(Math.max(0,choices.resources.findIndex(item=>item.ref.runtimeId===rule?.resource.runtimeId&&item.ref.workspaceId===rule.resource.workspaceId)))
+      const preferred=rule?.model??choices.defaults.model
+      setModel(Math.max(0,choices.models.findIndex(item=>item.provider===preferred.provider&&item.model===preferred.model)))
+      setAgentPreset(choices.agentPresets.includes(rule?.agentPreset??choices.defaults.agentPreset)?rule?.agentPreset??choices.defaults.agentPreset:choices.agentPresets[0]!)
+      setPermissionPreset(choices.permissionPresets.includes(rule?.permissionPreset??choices.defaults.permissionPreset)?rule?.permissionPreset??choices.defaults.permissionPreset:choices.permissionPresets[0]!)
+      setEditing(true)
+    }catch(error){if(!scope.signal.aborted)setError(message(error))}finally{if(!scope.signal.aborted)setBusy(false)}
+  }
+  async function save(event:FormEvent) {
+    event.preventDefault();if(busy||!options)return;setBusy(true);setError('')
+    try {
+      const selectedResource=options.resources[resource]?.ref, selectedModel=options.models[model]
+      if(!selectedResource||!selectedModel)throw Error('请选择可用执行配置')
+      const configuredModel=rule?.model.provider===selectedModel.provider&&rule.model.model===selectedModel.model?rule.model:options.defaults.model.provider===selectedModel.provider&&options.defaults.model.model===selectedModel.model?options.defaults.model:selectedModel
+      const result=await controller.submit({type:'continuous.configure',projectId,sourceId,expectedVersion:rule?.version??0,assignee,labels:[...new Set(labels.split(',').map(label=>label.trim()).filter(Boolean))],resource:selectedResource,model:configuredModel,agentPreset,permissionPreset,enabled:true})
+      if(!scope.signal.aborted){setRule(result.continuousRule);setEditing(false)}
+    }catch(error){if(!scope.signal.aborted)setError(message(error))}finally{if(!scope.signal.aborted)setBusy(false)}
+  }
+  async function toggle() {
+    if(!rule||busy)return;setBusy(true);setError('')
+    try{const result=await controller.submit({type:'continuous.set-enabled',projectId,sourceId,expectedVersion:rule.version,enabled:!rule.enabled});if(!scope.signal.aborted)setRule(result.continuousRule)}catch(error){if(!scope.signal.aborted)setError(message(error))}finally{if(!scope.signal.aborted)setBusy(false)}
+  }
+  const queueLabels={queued:'排队',active:'处理中',waiting:'等待',paused:'已暂停',blocked:'阻塞',completed:'已完成',skipped:'已跳过'}
+  return <section className={styles.continuous} aria-label="持续处理"><div className={styles.header}><div><h2>持续处理</h2><p>{rule?.enabled?'正在接收新 Issue':rule?'已暂停接新工作':'按规则自动接收并处理 Issues'} · 同时处理 1 项；等待时可处理下一项</p></div><div className={styles.toolbar}>{rule&&<button disabled={busy} onClick={()=>void toggle()}>{rule.enabled?'暂停接新工作':'恢复接新工作'}</button>}<button className={!rule?styles.primary:undefined} disabled={busy||!loaded} onClick={()=>void configure()}>{rule?'配置范围与执行':'开启持续处理'}</button></div></div>
+    <p>范围：当前 GitHub Project · {rule?(rule.scope.assignee==='@me'?`分配给我${rule.scope.identity?`（${rule.scope.identity.login}）`:''}`:'全部负责人'):'待配置'}{rule?` · ${rule.scope.labels.length?`标签：${rule.scope.labels.join('、')}（全部匹配）`:'不限标签'}`:''}</p>
+    <p>暂停接新工作后，当前执行继续处理。暂停当前执行请进入对应 Issue，使用“暂停处理”。</p>
+    {rule?.active&&<button onClick={()=>void controller.openTask(rule.active!)}>查看当前执行 / 暂停处理</button>}
+    {rule?.error&&<ErrorText error={`${rule.error.code}: ${rule.error.message}`}/>}<ErrorText error={error}/><ErrorText error={statusError}/>
+    {editing&&options&&<form className={styles.form} onSubmit={event=>void save(event)}>
+      <div className={styles.formRow}><label>持续处理负责人<select disabled={busy} value={assignee} onChange={event=>setAssignee(event.target.value as '@me'|'*')}><option value="@me">分配给我</option><option value="*">全部负责人</option></select></label><label>必须包含的标签（逗号分隔）<input disabled={busy} value={labels} onChange={event=>setLabels(event.target.value)} placeholder="ready-for-agent"/></label></div>
+      <p>将持续读取当前 Project 的开放 Issues，按上述负责人和全部标签匹配。最多一项自动推进；浏览列表的筛选不会改变此范围。</p>
+      <div className={styles.formRow}><label>持续处理执行目录<select disabled={busy} value={resource} onChange={event=>setResource(Number(event.target.value))}>{options.resources.map((item,index)=><option key={index} value={index}>{item.title}</option>)}</select></label><label>持续处理模型<select disabled={busy} value={model} onChange={event=>setModel(Number(event.target.value))}>{options.models.map((item,index)=><option key={index} value={index}>{item.provider}/{item.model}</option>)}</select></label></div>
+      <details><summary>执行预设</summary><div className={styles.formRow}><label>Agent 预设<select disabled={busy} value={agentPreset} onChange={event=>setAgentPreset(event.target.value)}>{options.agentPresets.map(item=><option key={item}>{item}</option>)}</select></label><label>权限预设<select disabled={busy} value={permissionPreset} onChange={event=>setPermissionPreset(event.target.value)}>{options.permissionPresets.map(item=><option key={item}>{item}</option>)}</select></label></div></details>
+      <div className={styles.toolbar}><button className={styles.primary} type="submit" disabled={busy}>{busy?'正在保存…':'确认范围并启用'}</button><button type="button" disabled={busy} onClick={()=>setEditing(false)}>取消配置</button></div>
+    </form>}
+    {Boolean(rule?.items.length)&&<details open><summary>处理队列 · {rule!.items.length} 项</summary><ul className={styles.queue}>{rule!.items.map(item=><li key={item.nodeId}><span className={styles.badge}>{queueLabels[item.state]}</span><span>{item.ref?<button className={styles.link} onClick={()=>void controller.openTask(item.ref!)}>#{item.number} {item.title}</button>:<button className={styles.link} onClick={()=>void controller.openIssue(item.number,false,item.nodeId)}>#{item.number} {item.title}</button>}{item.reason&&<p>{item.reason}</p>}</span></li>)}</ul></details>}
+  </section>
+}
+function Sessions({controller,task}:{controller:WorkPanelController;task:WorkTask}) {
+  return <Section title="相关会话"><p>关联记录仅用于查看；当前处理会话与接续历史分别列出。</p>{task.sessions.length?<ul>{task.sessions.map(item=><li key={`${item.session.runtimeId}/${item.session.sessionId}`}>{item.purpose==='review'?'评审':'相关'} · {item.session.sessionId} <button onClick={()=>controller.openSession(item.session)}>打开会话</button></li>)}</ul>:<p>尚无其他关联会话。</p>}</Section>
 }
 function stageLabel(stage: import('../work-progress.ts').WorkStage): string { return ({planned:'待处理','in-progress':'处理中',review:'待验收',blocked:'受阻',done:'已验收完成'})[stage] }
 function CriteriaCount({criteria}:{criteria:import('../work-progress.ts').TaskProgressView['criteria']}) {
@@ -97,19 +206,20 @@ function CurrentExecution({controller}:{controller:WorkPanelController}) {
   const completed = completedProgress(progress)
   return <Section title="处理会话">
     {execution ? <>
-      <p>执行状态：{executionLabel(execution.state,progress,execution.control?.status)}{executionRuntime ? ` · 会话：${({running:'正在运行',idle:'空闲',inactive:'未激活'})[executionRuntime]}` : ''}</p>
+      <p>{(()=>{const task=state.detail?.task;if(!task)return null;const counts=controller.sessionCounts(task);return `${counts.total} 个会话 · 当前 ${counts.current} · 历史 ${counts.historical} · 其他关联 ${counts.associated}`})()}</p><p>执行状态：{executionLabel(execution.state,progress,execution.control?.status)}{executionRuntime ? ` · 会话：${({running:'正在运行',idle:'空闲',inactive:'未激活'})[executionRuntime]}` : ''}</p>
       {execution.progress && <p>工作进展：{execution.progress}</p>}
       {execution.control && !completed && <p>{({wait:'等待',pause:'暂停',resume:'恢复'})[execution.control.action]}请求{execution.control.status==='accepted'?'已接受，等待生效':'已生效'}{execution.control.reason?`：${execution.control.reason}`:''}</p>}
       {execution.error && <ErrorText error={`${execution.error.code}: ${execution.error.message}`}/>}
       <div className={styles.toolbar}>
         {controller.currentSession() && <button disabled={busy} onClick={()=>controller.openCurrentSession()}>进入当前会话</button>}
         {!completed && ['ready','running'].includes(execution.state) && <button disabled={busy||execution.control?.status==='accepted'} onClick={()=>void controller.controlExecution('pause')}>暂停处理</button>}
+        {!completed && progress?.processingState==='blocked' && ['ready','running'].includes(execution.state) && <button disabled={busy||execution.control?.status==='accepted'} onClick={()=>void controller.controlExecution('resume')}>继续处理</button>}
         {!completed && ['waiting','paused'].includes(execution.state) && <button disabled={busy||execution.control?.status==='accepted'} onClick={()=>void controller.controlExecution('resume')}>恢复处理</button>}
         {execution.state==='failed' && <button disabled={busy} onClick={()=>void controller.controlExecution('reconcile')}>重试原执行</button>}
         <button disabled={busy} onClick={()=>void controller.refreshTask()}>刷新执行状态</button>
       </div>
       {!controller.currentSession() && <p>当前会话暂不可进入；刷新可查看创建或恢复结果。</p>}
-      <ContinuationSettings key={`execution/${execution.id}/${execution.continuationPolicy?.version??0}`} controller={controller} policy={execution.continuationPolicy} forExecution/>
+      <details><summary>自动接续 · {execution.continuationPolicy?.enabled?`${Math.round(execution.continuationPolicy.targetTokens/1000)}K`:'未启用'} · 200K / 300K / 自定义</summary><ContinuationSettings key={`execution/${execution.id}/${execution.continuationPolicy?.version??0}`} controller={controller} policy={execution.continuationPolicy} forExecution/></details>
       {execution.continuationObservation && <p>上下文读数：{execution.continuationObservation.totalTokens.toLocaleString()} token · {({usage:'用量计量',estimated:'估算',none:'无基线'})[execution.continuationObservation.baseline]} · 模型窗口 {execution.continuationObservation.capacity.toLocaleString()} token · 观察时间 {execution.continuationObservation.observedAt}</p>}
       {execution.continuationBlocked && <ErrorText error={`接续等待：${execution.continuationBlocked.code} · ${execution.continuationBlocked.message}`}/>}
       {execution.continuation && <p>接续状态：{({reserved:'已预约', 'material-requested':'正在保存上下文', 'material-saved':'材料已保存', 'successor-created':'后继已创建', taken:'后继已接任', delivered:'接续内容已投递'})[execution.continuation.phase]}{execution.continuation.error?` · ${execution.continuation.error.message}`:''}</p>}
@@ -119,15 +229,15 @@ function CurrentExecution({controller}:{controller:WorkPanelController}) {
       {execution.actual && <details><summary>实际执行环境</summary><p>工作目录：{execution.actual.cwd}<br/>模型：{execution.actual.provider}/{execution.actual.model}<br/>Agent 预设：{execution.actual.agentPreset}<br/>权限：{execution.actual.permissionPreset} · 沙箱：{execution.actual.sandbox} · 审批：{execution.actual.approval}</p></details>}
       {execution.events.length>0 && <details><summary>输入与结果（{execution.events.length}）</summary>{execution.events.map(event=><p key={event.id}>{({accepted:'已接受',delivered:'已投递',consumed:'已消费'})[event.delivery]} · 尚未验收<br/>{event.text}</p>)}</details>}
     </> : <>
-      <p>尚未开始处理。可先关联已有会话查看相关工作。</p>
+      <p>尚未开始处理。开始后会在所选执行目录创建会话。</p>
       {options && selection ? <form className={styles.form} onSubmit={event=>{event.preventDefault();void controller.startPrepared()}}>
-        <p>已选用宿主默认配置。请确认工作目录和模型后开始处理。</p>
+        <p>请确认执行目录和模型；优先使用项目与规则默认配置。</p>
         <label>工作目录{options.resources.length>1 ? <select disabled={busy} value={selection.resourceIndex} onChange={event=>controller.selectStart({resourceIndex:Number(event.target.value)})}>{options.resources.map((resource,index)=><option key={`${resource.ref.runtimeId}/${resource.ref.workspaceId}`} value={index}>{resource.title}</option>)}</select> : <span>{options.resources[0]?.title}</span>}</label>
         <label>模型{options.models.length>1 ? <select disabled={busy} value={selection.modelIndex} onChange={event=>controller.selectStart({modelIndex:Number(event.target.value)})}>{options.models.map((model,index)=><option key={`${model.provider}/${model.model}`} value={index}>{model.provider}/{model.model}</option>)}</select> : <span>{options.models[0]?.provider}/{options.models[0]?.model}</span>}</label>
         <label>Agent 预设{options.agentPresets.length>1 ? <select disabled={busy} value={selection.agentPreset} onChange={event=>controller.selectStart({agentPreset:event.target.value})}>{options.agentPresets.map(preset=><option key={preset}>{preset}</option>)}</select> : <span>{selection.agentPreset}</span>}</label>
         <label>权限{options.permissionPresets.length>1 ? <select disabled={busy} value={selection.permissionPreset} onChange={event=>controller.selectStart({permissionPreset:event.target.value})}>{options.permissionPresets.map(preset=><option key={preset}>{preset}</option>)}</select> : <span>{selection.permissionPreset}</span>}</label>
         <div className={styles.toolbar}><button type="submit" disabled={busy}>{busy?'正在启动…':'确认开始处理'}</button><button type="button" disabled={busy} onClick={()=>controller.cancelStart()}>取消</button></div>
-      </form> : <button disabled={busy||state.loading} onClick={()=>void controller.prepareStart()}>开始处理</button>}
+      </form> : <button className={styles.primary} disabled={busy||state.loading||state.source.loading} onClick={()=>void controller.prepareStart(!state.detail?.task)}>开始处理</button>}
     </>}
   </Section>
 }
@@ -152,96 +262,39 @@ function ContinuationSettings({controller,policy,forExecution=false}:{controller
     setBusy(true);setError('');setSaved(false)
     try {await controller.saveContinuation({version:(policy?.version??0)+1,enabled,targetTokens:Number(target),reserveTokens:Number(reserve)},forExecution);setSaved(true)}catch(error){setError(message(error))}finally{setBusy(false)}
   }
-  return <details><summary>{forExecution?'当前执行的上下文接续':'项目默认上下文接续'} · {policy?.enabled?`${policy.targetTokens.toLocaleString()} token`:'自动接续未启用'}</summary>
+  return <div className={styles.continuation}><h3>{forExecution?'当前执行自动接续':'项目自动接续'}</h3><p>{policy?.enabled?`${policy.targetTokens.toLocaleString()} token 目标`:'自动接续未启用'}</p>
     <form className={styles.form} onSubmit={event=>void save(event)}>
       <label>自动接续<select disabled={busy} value={enabled?'on':'off'} onChange={event=>setEnabled(event.target.value==='on')}><option value="off">关闭</option><option value="on">启用</option></select></label>
       <div className={styles.toolbar}><button type="button" disabled={busy} onClick={()=>setTarget('200000')}>200K</button><button type="button" disabled={busy} onClick={()=>setTarget('300000')}>300K</button></div>
       <label>提前接续目标（token）<input disabled={busy} type="number" min="1" step="1" required value={target} onChange={event=>setTarget(event.target.value)}/></label>
-      <label>接续预留（token）<input disabled={busy} type="number" min="1024" step="1" required value={reserve} onChange={event=>setReserve(event.target.value)}/></label>
+      <details><summary>高级接续设置</summary><label>接续预留（token）<input disabled={busy} type="number" min="1024" step="1" required value={reserve} onChange={event=>setReserve(event.target.value)}/></label></details>
       <p>这是安全边界上的提前接续目标。宿主会按实际模型窗口和输出预留检查；长轮次可能超过目标。{forExecution?'保存后适用于当前执行。':'项目默认只用于新执行，当前执行可单独设置。'}</p>
       <ErrorText error={error}/>{saved&&<p role="status">接续策略已保存</p>}<button type="submit" disabled={busy}>{busy?'正在保存…':'保存接续策略'}</button>
     </form>
-  </details>
-}
-function IssueSourcePanel({controller}:{controller:WorkPanelController}) {
-  const state=useSyncExternalStore(controller.subscribe,controller.getSnapshot,controller.getSnapshot)
-  const sourceState=state.source
-  const {listing,issue,loading,error,cached,canonical}=sourceState
-  const source=sourceState.sources.find(item=>item.id===sourceState.sourceId)
-  const identity=source?.identity ?? listing?.identity
-  const [sourceKind,setSourceKind]=useState<'repository'|'project'>('repository'),[projectOwnerType,setProjectOwnerType]=useState<'org'|'user'>('org'),[projectNumber,setProjectNumber]=useState('')
-  const [owner,setOwner]=useState(''),[repository,setRepository]=useState(''),[number,setNumber]=useState(''),[existing,setExisting]=useState(''),[formError,setFormError]=useState(''),[saving,setSaving]=useState(false)
-  async function configure(event:FormEvent) {
-    event.preventDefault();setSaving(true);setFormError('')
-    try {if(sourceKind==='project') await controller.configureProjectSource(owner,projectOwnerType,Number(projectNumber));else await controller.configureSource(owner,repository)}catch(error){setFormError(message(error))}finally{setSaving(false)}
-  }
-  return <Section title="GitHub Issue 来源">
-    <p>从 GitHub 仓库或 Project 读取 Issue，保存到当前本地项目。远端来源与本地执行状态分别显示。</p>
-    <details open={!sourceState.sources.length}><summary>配置工作来源</summary><form className={styles.form} onSubmit={event=>void configure(event)}>
-      <label>来源类型<select value={sourceKind} onChange={event=>setSourceKind(event.target.value as 'repository'|'project')}><option value="repository">GitHub 仓库</option><option value="project">GitHub Project</option></select></label>
-      <label>GitHub owner<input required value={owner} onChange={event=>setOwner(event.target.value)} placeholder="组织或用户"/></label>
-      {sourceKind==='repository'?<label>GitHub repository<input required value={repository} onChange={event=>setRepository(event.target.value)} placeholder="仓库名称"/></label>:<><label>所属账号类型<select value={projectOwnerType} onChange={event=>setProjectOwnerType(event.target.value as 'org'|'user')}><option value="org">组织</option><option value="user">个人</option></select></label><label>Project 编号<input type="number" min="1" step="1" required value={projectNumber} onChange={event=>setProjectNumber(event.target.value)}/></label></>}
-      <p>使用此服务已连接的 GitHub 账号读取仓库。</p><ErrorText error={formError}/><button disabled={saving} type="submit">{saving?'正在配置…':'保存并读取来源'}</button>
-    </form></details>
-    {sourceState.sources.length>0 && <div className={styles.toolbar}><label>仓库来源 <select aria-label="仓库来源" value={sourceState.sourceId??''} onChange={event=>void controller.selectSource(event.target.value)}>{sourceState.sources.map(item=><option key={item.id} value={item.id}>{item.repository?`${item.repository.owner}/${item.repository.repository}`:item.githubProject?`${item.githubProject.owner} / Project #${item.githubProject.number}`:'GitHub 来源'}{item.enabled?'':' · 已停用'}</option>)}</select></label><button disabled={loading} onClick={()=>void controller.showSources()}>重新读取来源配置</button><button disabled={loading||!source} onClick={()=>void controller.setSourceEnabled(!source?.enabled)}>{source?.enabled?'停用来源':'启用来源'}</button></div>}
-    {loading && <p role="status">正在读取来源…</p>}
-    <ErrorText error={error??''}/>
-    {source && <>
-      <p>来源状态：{source.enabled?'已启用':'已停用（保留缓存与已接受本地工作）'} · 最近确认的凭据身份：{identity?`${identity.login}${identity.name?` / ${identity.name}`:''}`:'尚未取得；刷新后由实际凭据确认'}。我的 Issue 使用此身份。</p>
-      {source.projectSnapshot && <details><summary>GitHub Project · {source.projectSnapshot.project.title}</summary><p>远端 Project {source.projectSnapshot.project.closed?'已关闭':'开放'} · 观察时间：{source.projectSnapshot.observedAt}</p>{source.discovery&&<p>来源同步：{({idle:'空闲',syncing:'同步中',error:'读取失败'})[source.discovery.state]}{source.discovery.lastSuccessAt?` · 最近成功：${source.discovery.lastSuccessAt}`:''}</p>}<div className={styles.tableScroll}><table aria-label="GitHub Project 条目"><thead><tr><th>条目</th><th>远端字段</th></tr></thead><tbody>{source.projectSnapshot.items.map(item=><tr key={item.id}><td>{item.title??({issue:'Issue','pull-request':'PR',draft:'草稿',restricted:'无权读取'})[item.kind]}{item.archived?' · 已归档':''}</td><td>{item.fields.map(field=><p key={field.id}>{field.name}：{field.value}</p>)}{item.fieldsPartial&&<p>字段尚未完整读取</p>}</td></tr>)}</tbody></table></div><p>远端字段只作来源观察；本地工作进展和验收另行记录。</p></details>}
-      {source.lastError?.retryAt && <p>可重试时间：{source.lastError.retryAt}</p>}
-      {canonical && <p>该 Issue 已有本地工作。<button onClick={()=>void controller.openTask(canonical)}>打开已关联工作</button></p>}
-      {issue ? <>
-        <div className={styles.toolbar}><button onClick={()=>controller.backToIssues()}>← 返回 Issue 列表</button><button disabled={loading||!source.enabled} onClick={()=>void controller.openIssue(issue.number,true,issue.nodeId)}>刷新 Issue 详情</button><button disabled={loading} onClick={()=>void controller.openIssue(issue.number,false,issue.nodeId)}>读取缓存详情</button></div>
-        <h2>#{issue.number} {issue.title}</h2><GitHubLink url={issue.url}/>
-        <button disabled={loading||state.startup.busy||(!source.enabled&&!sourceState.bindings.length&&!canonical)} onClick={()=>void controller.prepareStart(true)}>{state.startup.busy?'正在准备执行…':'开始处理'}</button>
-        <p>开始处理会保存或复用这项工作，在所选目录创建真实会话；已有执行会回到当前处理会话。</p>
-        <IssueFacts issue={issue}/><NativeIssueRelations issue={issue}/><p>{cached?'缓存 / 最后已知内容':'本次读取内容'} · 观察时间：{issue.observedAt}</p>
-        <h3>完整原文</h3><p className={styles.sourceBody}>{issue.body || '（原文正文为空）'}</p>
-        {sourceState.bindings.length>0 ? sourceState.bindings.map(binding=><p key={`${binding.ref.projectId}/${binding.ref.taskId}`}>已关联本地工作 <button onClick={()=>void controller.openTask(binding.ref)}>打开已关联工作</button></p>) : <>
-          <button disabled={loading||!source.enabled} onClick={()=>void controller.acceptIssue()}>接入为本地工作</button>
-          <form className={styles.toolbar} onSubmit={event=>{event.preventDefault();const task=state.tasks.find(item=>item.id===existing);if(task)void controller.acceptIssue(task)}}><label>关联已有本地工作 <select required value={existing} onChange={event=>setExisting(event.target.value)}><option value="">选择当前项目的工作</option>{state.tasks.map(task=><option key={task.id} value={task.id}>{task.title}</option>)}</select></label><button type="submit" disabled={loading||!source.enabled||!existing}>关联已有本地工作</button></form>
-        </>}
-      </> : <>
-        <div className={styles.toolbar}>
-          <label>负责人 <select aria-label="Issue 负责人" value={sourceState.assignee} onChange={event=>void controller.browseIssues({assignee:event.target.value as '@me'|'*',page:1},true)} disabled={loading||!source.enabled}><option value="@me">我的 Issue</option><option value="*">全部 Issue</option></select></label>
-          <label>远端状态 <select aria-label="Issue 远端状态" value={sourceState.state} onChange={event=>void controller.browseIssues({state:event.target.value as 'open'|'closed'|'all',page:1},true)} disabled={loading||!source.enabled}><option value="open">Open</option><option value="closed">Closed</option><option value="all">全部状态</option></select></label>
-          <button disabled={loading||!source.enabled} onClick={()=>void controller.browseIssues({},true)}>刷新 Issue 列表</button><button disabled={loading} onClick={()=>void controller.browseIssues({},false)}>读取缓存列表</button>
-        </div>
-        <form className={styles.toolbar} onSubmit={event=>{event.preventDefault();void controller.openIssue(Number(number),source.enabled)}}><label>按 Issue 编号打开完整详情 <input type="number" min="1" step="1" required value={number} onChange={event=>setNumber(event.target.value)}/></label><button type="submit" disabled={loading}>打开 Issue</button></form>
-        {listing ? <>
-          <p>{cached?'缓存 / 最后已知列表':'本次读取列表'} · 第 {sourceState.page} 页 · 观察时间：{listing.observedAt}</p>
-          <div className={styles.tableScroll}><table aria-label="GitHub Issue 列表"><thead><tr><th>Issue</th><th>远端状态</th><th>工作进展</th><th>当前处理</th><th>负责人</th><th>标签</th></tr></thead><tbody>{listing.items.map(item=>{const progress=controller.progressForIssue(item);return <tr key={item.nodeId}><td><button className={styles.link} onClick={()=>void controller.openIssue(item.number,source.enabled,item.nodeId)}>{source.githubProject?`${item.repository.owner}/${item.repository.repository} `:''}#{item.number} {item.title}</button></td><td>{item.state}</td><td>{progress?<><strong>{stageLabel(progress.stage)}</strong><p>{progress.summary}</p>{progress.blockers[0]&&<p className={styles.failure}>阻塞：{progress.blockers[0]}</p>}</>:<span>未开始</span>}</td><td>{progress?<>{progress.execution&&<p>{executionLabel(progress.execution.state,progress)} · {({running:'正在运行',idle:'空闲',inactive:'未激活'})[progress.execution.runtime]}{progress.execution.reason?` · ${progress.execution.reason}`:''}</p>}<button onClick={()=>void controller.openTask(progress.ref)}>查看处理</button></>:<span>尚未接入本地工作</span>}</td><td>{item.assignees.join(', ')||'无'}</td><td>{item.labels.join(', ')||'无'}</td></tr>})}</tbody></table></div>
-          {!listing.items.length&&!error&&<p>{listing.nextPage?'本页无 Issue；仍有下一页（GitHub 原始分页可能包含 PR）。':'当前页没有匹配的 Issue。'}</p>}
-          <div className={styles.toolbar}><button disabled={loading||sourceState.page<=1} onClick={()=>void controller.browseIssues({page:sourceState.page-1},source.enabled)}>上一页</button><span>第 {sourceState.page} 页</span><button disabled={loading||!listing.nextPage} onClick={()=>void controller.browseIssues({page:listing.nextPage!},source.enabled)}>下一页</button></div>
-        </> : !loading&&<p>当前筛选页尚无可读缓存。请显式刷新；权限失败或离线不会被视为空列表。</p>}
-      </>}
-    </>}
-    {!source&&!loading&&!error&&<p>尚未配置仓库来源。已保存的本地工作仍可在项目标签查看。</p>}
-  </Section>
+  </div>
 }
 function SourceBinding({binding}:{binding:import('../work-sources/types.ts').ExternalBinding}) {
   const accepted=binding.accepted,latest=binding.lastObserved
   const fields=[['title','标题'],['body','正文'],['assignees','负责人'],['labels','标签'],['state','远端状态']] as const
   const differences=fields.filter(([key])=>JSON.stringify(accepted[key])!==JSON.stringify(latest[key])).map(([,label])=>label)
-  return <Section title={`GitHub 来源 · #${accepted.number}`}>
-    <GitHubLink url={latest.url}/><p>来源观察不代表本地完成或协调权。已接受内容与本地规格保留，远端变更不会自动覆盖。</p>
+  return <details><summary>来源更新 · #{accepted.number}</summary>
+    <GitHubLink url={latest.url}/><p>远端状态与验收分别记录。已接受要求保留，远端变更不会自动覆盖。</p>
     <p>{differences.length?`相对已接受来源发生变化：${differences.join('、')}`:'最新观察与已接受来源内容一致。'} · 最新观察时间：{latest.observedAt}</p>
     <details><summary>已接受来源</summary><h3>{accepted.title}</h3><IssueFacts issue={accepted}/><p className={styles.sourceBody}>{accepted.body||'（已接受正文为空）'}</p></details>
     <details><summary>最新观察</summary><h3>{latest.title}</h3><IssueFacts issue={latest}/><p className={styles.sourceBody}>{latest.body||'（观察正文为空）'}</p></details>
-  </Section>
+  </details>
 }
 function GitHubLink({url}:{url:string}) {
   let safe=false
   try {const parsed=new URL(url);safe=parsed.protocol==='https:'&&parsed.hostname==='github.com'&&!parsed.username&&!parsed.password&&!parsed.port&&/^\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/issues\/[1-9]\d*\/?$/.test(parsed.pathname)&&!parsed.search&&!parsed.hash}catch{}
   return safe?<a href={url} target="_blank" rel="noopener noreferrer">在 GitHub 查看来源</a>:<span>来源 URL 无法安全打开</span>
 }
-function NativeIssueRelations({issue}:{issue:import('../work-sources/types.ts').GitHubIssue}) {
+function NativeIssueRelations({issue,controller}:{issue:import('../work-sources/types.ts').GitHubIssue;controller:WorkPanelController}) {
   const {parent,subIssues}=issue
   if(!parent&&!subIssues?.items.length&&!subIssues?.totalCount)return null
-  const reference=(item:import('../work-sources/types.ts').GitHubIssueReference)=><><span>{item.repository.owner}/{item.repository.repository} #{item.number} · {item.title} · 远端 {item.state}</span> <GitHubLink url={item.url}/></>
+  const reference=(item:import('../work-sources/types.ts').GitHubIssueReference)=>{const progress=controller.progressForIssue(item);return <><span>{item.repository.owner}/{item.repository.repository} #{item.number} · {item.title} · 远端 {item.state}</span> <GitHubLink url={item.url}/>{progress&&<p>{processingLabel(progress)} · {progress.summary} <button onClick={()=>void controller.openTask(progress.ref)}>查看进展</button></p>}</>}
   return <Section title="原生 Issue 父子关系">
-    <p>以下是 GitHub 来源关系；本地任务与验收状态分别记录，查看链接不会自动接入工作。</p>
+    <p>GitHub 原始父子关系；打开来源链接仅查看原文。执行进展与验收在下方分别显示。</p>
     {parent&&<p>父 Issue：{reference(parent)}</p>}
     {subIssues&&<><p>子 Issue：已显示 {subIssues.items.length} / {subIssues.totalCount} 项</p><ul>{subIssues.items.map(item=><li key={item.nodeId}>{reference(item)}</li>)}</ul>{subIssues.hasNextPage&&<p role="status">子 Issue 尚未完整读取，还有更多条目。</p>}</>}
   </Section>
@@ -253,74 +306,6 @@ function Section({title,children}:{title:string;children:ReactNode}) {return <se
 function TaskLink({controller,task}:{controller:WorkPanelController;task:WorkTask}) {return <button className={styles.link} onClick={()=>void controller.openTask({projectId:task.projectId,taskId:task.id})}>{task.title}</button>}
 function activityLabel(type:string):string {return ({'task.create':'创建工作','task.create-child':'创建子工作','task.update-spec':'更新目标、规格与验收','task.replace-breakdown':'更新工作拆解','task.associate-session':'关联会话','task.link-child':'关联子工作','source.import':'接入 GitHub 工作','source.link':'关联 GitHub 来源','source.link-hierarchy':'原生 Issue 父子关联'})[type] ?? type}
 function ErrorText({error}:{error:string}) {return error ? <p role="alert" className={styles.failure}>{error}</p>:null}
-
-function ProjectForm({controller,attach,onSaved}:{controller:WorkPanelController;attach:boolean;onSaved:(projectId:string)=>Promise<void>}) {
-  const [resources,setResources]=useState<HostResource[]>([]),[resource,setResource]=useState(''),[name,setName]=useState('')
-  const [error,setError]=useState(''),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true)
-  useEffect(()=>{const abort=new AbortController();void controller.client.query({type:'resources.list'},abort.signal).then(result=>{setResources(result.resources??[]);setLoading(false)},error=>{if(!abort.signal.aborted){setError(message(error));setLoading(false)}});return()=>abort.abort()},[controller])
-  async function submit(event:FormEvent) {
-    event.preventDefault();setBusy(true);setError('')
-    try {
-      const selected=resources.find((_,index)=>String(index)===resource)?.ref
-      const state=controller.getSnapshot(),project=state.projects.find(item=>item.id===state.projectId)
-      if(attach && (!selected || !project)) throw Error('请选择可访问的资源')
-      const result=await controller.submit(attach ? {type:'project.attach-resource',projectId:project!.id,expectedVersion:project!.version,resource:selected!} : {type:'project.create',name:name.trim(),...(selected?{resource:selected}:{})})
-      if(!result.project) throw Error('工作服务未返回保存的项目')
-      await onSaved(result.project.id)
-    } catch(error){setError(message(error))} finally{setBusy(false)}
-  }
-  return <form onSubmit={event=>void submit(event)} className={styles.form}>
-    {!attach && <label>项目名称<input required value={name} onChange={event=>setName(event.target.value)}/></label>}
-    <label>{attach?'已有宿主资源':'已有宿主资源（可选）'}<select required={attach} value={resource} onChange={event=>setResource(event.target.value)}><option value="">{loading?'正在读取资源…':attach?'选择资源':'独立本地项目'}</option>{resources.map((item,index)=><option key={`${item.ref.runtimeId}/${item.ref.workspaceId}`} value={index} disabled={Boolean(item.owner)}>{item.title}{item.owner ? ` · 已归属：${item.owner.projectName}（不可选）` : ''}</option>)}</select></label>
-    <p>已归属项目的资源不可选。{attach ? '项目无需绑定目录，也可继续保存本地工作。' : '可选择“独立本地项目”，不绑定目录也能保存项目与工作。'}</p>
-    <p>项目默认负责策略由后端建立。选择资源不会启动或重配会话。</p><ErrorText error={error}/><button disabled={busy || loading} type="submit">{busy?'正在保存…':'保存项目'}</button>
-  </form>
-}
-function TaskForm({controller,kind,task,onSaved}:{controller:WorkPanelController;kind:'task'|'child'|'spec';task?:WorkTask;onSaved:(task:WorkTask)=>Promise<void>}) {
-  const existing=kind==='spec'?task:undefined
-  const [title,setTitle]=useState(''),[goal,setGoal]=useState(existing?.goal??''),[spec,setSpec]=useState(existing?.specification.text??''),[acceptance,setAcceptance]=useState<string[]>(existing?.specification.acceptance??[''])
-  const [error,setError]=useState(''),[busy,setBusy]=useState(false)
-  async function submit(event:FormEvent) {
-    event.preventDefault();setBusy(true);setError('')
-    try {
-      const content={goal,specification:spec,acceptance}
-      const projectId=controller.getSnapshot().projectId
-      if(!projectId) throw Error('请先选择项目')
-      if(!content.goal.trim() || !content.specification.trim() || !content.acceptance.length || content.acceptance.some(text=>!text.trim())) throw Error('请填写目标、规格和至少一条验收标准')
-      const change=task?{ref:{projectId:task.projectId,taskId:task.id},expectedVersion:task.version}:null
-      const result=await controller.submit(kind==='spec' && change ? {type:'task.update-spec',...change,...content} : kind==='child' && change ? {type:'task.create-child',...change,...content,title:title.trim()} : {type:'task.create',projectId,...content,title:title.trim()})
-      if(!result.task) throw Error('工作服务未返回保存的工作')
-      if(controller.getSnapshot().projectId !== projectId) return
-      await onSaved(result.task)
-    }catch(error){setError(message(error))}finally{setBusy(false)}
-  }
-  return <form onSubmit={event=>void submit(event)} className={styles.form}>
-    {kind!=='spec' && <label>工作标题<input required value={title} onChange={event=>setTitle(event.target.value)}/></label>}
-    <label>目标<textarea required value={goal} onChange={event=>setGoal(event.target.value)}/></label>
-    <label>规格<textarea required value={spec} onChange={event=>setSpec(event.target.value)}/></label>
-    <fieldset><legend>验收标准</legend>{acceptance.map((text,index)=><div key={index}><label>验收标准 {index+1}<textarea required value={text} onChange={event=>setAcceptance(acceptance.map((item,itemIndex)=>itemIndex===index?event.target.value:item))}/></label><button type="button" onClick={()=>setAcceptance(acceptance.filter((_,itemIndex)=>itemIndex!==index))}>移除验收标准 {index+1}</button></div>)}<button type="button" onClick={()=>setAcceptance([...acceptance,''])}>添加验收标准</button></fieldset>
-    <ErrorText error={error}/><button type="submit" disabled={busy}>{busy?'正在保存…':'保存工作'}</button>
-  </form>
-}
-function BreakdownForm({controller,task,onSaved}:{controller:WorkPanelController;task:WorkTask;onSaved:()=>Promise<void>}) {
-  const [blocks,setBlocks]=useState<BreakdownBlock[]>(task.breakdown),[error,setError]=useState(''),[busy,setBusy]=useState(false)
-  async function submit(event:FormEvent) {
-    event.preventDefault();setBusy(true);setError('')
-    try {await controller.submit({type:'task.replace-breakdown',ref:{projectId:task.projectId,taskId:task.id},expectedVersion:task.version,blocks});await onSaved()}catch(error){setError(message(error))}finally{setBusy(false)}
-  }
-  return <form onSubmit={event=>void submit(event)} className={styles.form}>{blocks.map((block,index)=><fieldset key={block.id}><legend>工作块 {index+1}</legend><label>标题<input required value={block.title} onChange={event=>setBlocks(blocks.map(item=>item.id===block.id?{...item,title:event.target.value}:item))}/></label><label>说明<textarea required value={block.description} onChange={event=>setBlocks(blocks.map(item=>item.id===block.id?{...item,description:event.target.value}:item))}/></label><button type="button" onClick={()=>setBlocks(blocks.filter(item=>item.id!==block.id))}>移除工作块 {index+1}</button></fieldset>)}<div className={styles.toolbar}><button type="button" onClick={()=>setBlocks([...blocks,{id:browserUUID(),title:'',description:''}])}>添加工作块</button><button type="submit" disabled={busy}>{busy?'正在保存…':'保存拆解'}</button></div><ErrorText error={error}/></form>
-}
-function Sessions({controller,task,onSaved}:{controller:WorkPanelController;task:WorkTask;onSaved:()=>Promise<void>}) {
-  const [candidates,setCandidates]=useState<SessionCandidate[]>([]),[selected,setSelected]=useState(''),[purpose,setPurpose]=useState<'related'|'review'>('related'),[error,setError]=useState(''),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false)
-  useEffect(()=>{const abort=new AbortController();void controller.client.query({type:'session.candidates',projectId:task.projectId},abort.signal).then(result=>{setCandidates(result.candidates??[]);setLoading(false)},error=>{if(!abort.signal.aborted){setError(message(error));setLoading(false)}});return()=>abort.abort()},[controller,task.projectId,task.version])
-  async function associate(event:FormEvent) {
-    event.preventDefault();const candidate=candidates.find((_,index)=>String(index)===selected);if(!candidate)return
-    setBusy(true);setError('')
-    try{await controller.submit({type:'task.associate-session',ref:{projectId:task.projectId,taskId:task.id},expectedVersion:task.version,session:candidate.ref,purpose});await onSaved()}catch(error){setError(message(error))}finally{setBusy(false)}
-  }
-  return <><Section title="关联会话"><p>这些关联用于观察工作；未授予当前协调权。</p>{task.sessions.length ? <div className={styles.tableScroll}><table><thead><tr><th>会话</th><th>用途</th><th>导航</th></tr></thead><tbody>{task.sessions.map(association=>{const candidate=candidates.find(item=>item.ref.runtimeId===association.session.runtimeId&&item.ref.sessionId===association.session.sessionId);return <tr key={`${association.session.runtimeId}/${association.session.sessionId}`}><td>{candidate?.title || '已关联的原生会话'}</td><td>{association.purpose==='review'?'评审':'关联工作'}</td><td><button onClick={()=>controller.openSession(association.session)}>打开会话</button></td></tr>})}</tbody></table></div>:<p>尚无关联会话。</p>}</Section>
-    <Section title="关联已有会话"><form onSubmit={event=>void associate(event)} className={styles.form}><label>兼容的已有会话<select required value={selected} onChange={event=>setSelected(event.target.value)}><option value="">{loading?'正在读取…':'选择已有会话'}</option>{candidates.map((candidate,index)=><option key={`${candidate.ref.runtimeId}/${candidate.ref.sessionId}`} value={index}>{candidate.title || '未命名会话'}</option>)}</select></label><label>关联用途<select value={purpose} onChange={event=>setPurpose(event.target.value as 'related'|'review')}><option value="related">关联工作</option><option value="review">评审</option></select></label><p>由后端校验项目资源权限。关联不改变目录、模型或权限，不启动会话。</p><ErrorText error={error}/><button type="submit" disabled={busy || loading || !candidates.length}>{busy?'正在关联…':'关联会话'}</button>{!loading&&!candidates.length&&!error&&<p>没有可关联的兼容会话。可先为项目接入已有资源。</p>}</form></Section></>
-}
 
 /** Present native work links without owning navigation or execution side effects. */
 export function SessionWorkLinks({work,onReveal,onEnter,opening=false}:{work:AssociatedWork[];onReveal:(ref:AssociatedWork['ref'])=>void;onEnter:(ref:AssociatedWork['ref'])=>void;opening?:boolean}) {

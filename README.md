@@ -4,6 +4,18 @@ English | [中文](README.zh.md)
 
 This repository holds the **A²D² DeepSeek Harness plugin**: the components that land A²D² inside [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) as one installable plugin.
 
+## GitHub Project and Issue workflow
+
+Open **A²D² Control Panel** in DSH and connect a GitHub Project. Browse assigned Issues, open their original requirements and progress, and start or revisit the current processing Session. Browsing never starts a model. The execution directory can be chosen when connecting or at the first explicit start.
+
+Enable continuous processing with an explicit assignee, required labels, directory, model and presets. Each rule advances one Issue at a time. Waiting work retains its Session and yields to other eligible Issues; incoming replies rejoin the same serial scheduler. Pausing new intake preserves active work, while an explicitly paused Issue needs an explicit resume.
+
+Configure a 200K, 300K or custom token target for automatic continuation. The successor retains the Issue's decisions, evidence and remaining work. These are early handoff targets checked against the actual model capacity, not hard limits on a long turn. The original Issue overview connects requirement blocks, nested child work, known sub-Issues, blockers and acceptance evidence.
+
+Continuous intake currently supports GitHub Project sources. Search and processing-state filters cover the loaded page; dispatch uses the complete observed Project membership and the persisted rule. GitHub state is shown separately from processing and acceptance; this flow does not automatically close remote Issues.
+
+The component reference below also documents retained legacy tools and record formats. Managed control-panel Sessions use `work_control`, `work_report` and `work_organize`; manual Issue binding is not part of the user flow.
+
 Subagent dispatch prefers the host's `startActivation` with `delivery: 'parent'`, using `startContinuable` only when the newer method is absent. The request sets the model and reasoning effort through `agentOptions`; dispatch requires no additional `selectLocalModel` API or DSH source patch. Activation errors propagate without retrying the older method. Published DSH types cover both contracts; the aliased package is a development-only type dependency. Session IDs preserve both legacy `session-…` values and UUIDs while rejecting path syntax.
 
 **A²D² — Agentic Agile Driven Development — is a development methodology** that hands the rhythm of agile development to agents: a high-quality model chairs architecture and decisions, a multi-model orchestration carries execution, and the sessions of one piece of work stay tied together as it moves. The methodology is larger than this plugin (it spans workflow skills and multi-model orchestration too); this repository is only its concrete landing on the DSH side. As that landing grows, further DSH-side components live here under the same `a2d2` namespace.
@@ -13,7 +25,7 @@ What the plugin gives DSH today:
 - **Task aggregation** — a task groups the sessions belonging to one piece of work and records the handoff edges between them, so related sessions keep a relationship a person can read, review, and commit. The data lives in project-local documents, and no session's durable format changes to carry it. A task bound to a task issue also records its main session — the one session executing it — which a session sets with the `bind_main_session` tool. A main session can open design-heavy subtasks as root main sessions with `open_subtask`, dispatch continuable subagents with `dispatch_subagent`, or declare its own task done with `complete_task`, using the stage Agent table for Agent identity and model selection.
 - **Session handoff** — `/handoff` moves work from a long, expensive session to a fresh one without losing the thread: the handing-off session writes bounded continuation content, and the successor continues from it.
 - **A floating indicator** — an at-a-glance orb by the composer that tracks context length and cost, and warns when a session approaches the smart zone so the next phase boundary can choose its outcome.
-- **A²D² panel** — a better-sidebar tab for the open session's project tasks, member handoff tree, and main-session subagent route tree.
+- **A²D² control panel** — a GitHub Project and Issue entry inside DSH, connecting original requirements, continuous processing, decomposition, acceptance progress and the current Session.
 - **GitHub watch** — `github_watch` lets a session wait on a pull request without polling: when the PR merges, closes, finishes CI, or gets a review decision, the session receives a message, even if it was idle.
 - **Notifications** — when a task issue's main session stops for LF, one A²D²-worded message reaches LF's phone through an installed `notifier` provider.
 

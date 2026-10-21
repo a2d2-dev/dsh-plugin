@@ -75,10 +75,25 @@ export interface WorkExecution {
   control?: { commandId: string; action: 'wait' | 'pause' | 'resume'; status: 'accepted' | 'applied'; reason?: string }
   error?: { code: string; message: string }
 }
+export interface ContinuousWorkItem {
+  nodeId: string; title: string; number: number; url: string; ref?: TaskRef; executionId?: string
+  state: 'queued' | 'active' | 'waiting' | 'paused' | 'blocked' | 'completed' | 'skipped'
+  reason?: string; attempts: number; retryAt?: string; resumeRequested?: boolean; followups?: string[]; recoveryBlocked?: boolean
+}
+export interface ContinuousWorkRule {
+  id: string; projectId: string; sourceId: string; version: number; enabled: boolean
+  scope: { assignee: '@me' | '*'; labels: string[]; identity?: { login: string; nodeId: string } }
+  resource: ResourceRef; model: { provider: string; model: string; reasoningEffort?: string }
+  agentPreset: string; permissionPreset: string
+  items: ContinuousWorkItem[]; active?: TaskRef; error?: { code: string; message: string }
+}
 interface Command { commandId: string }
 interface TaskContent { title: string; goal: string; specification: string; acceptance: string[] }
 interface TaskChange extends Command { ref: TaskRef; expectedVersion: number }
 export type WorkCommand =
+  | (Command & { type: 'source.connect'; githubProject: { owner: string; type: 'org' | 'user'; number: number }; resource?: ResourceRef })
+  | (Command & { type: 'continuous.configure'; projectId: string; sourceId: string; expectedVersion: number; assignee: '@me' | '*'; labels: string[]; resource: ResourceRef; model: { provider: string; model: string; reasoningEffort?: string }; agentPreset: string; permissionPreset: string; enabled: boolean })
+  | (Command & { type: 'continuous.set-enabled'; projectId: string; sourceId: string; expectedVersion: number; enabled: boolean })
   | (Command & { type: 'source.configure-project'; projectId: string; githubProject: { owner: string; type: 'org' | 'user'; number: number } })
   | (Command & { type: 'source.configure'; projectId: string; repository: { owner: string; repository: string } })
   | (Command & { type: 'source.set-enabled'; projectId: string; sourceId: string; expectedVersion: number; enabled: boolean })
@@ -104,6 +119,8 @@ export type WorkCommand =
   | (Command & ExecutionRef & { type: 'task.reconcile'; owner: string; epoch: number })
   | (TaskChange & { type: 'task.start'; agentId: string; resource: ResourceRef; session?: SessionRef; agentPreset: string; model: { provider: string; model: string; reasoningEffort?: string }; permissionPreset: string })
 export type WorkQuery =
+  | { type: 'source.execution-options'; projectId: string; sourceId: string }
+  | { type: 'continuous.status'; projectId: string; sourceId: string }
   | { type: 'source.list'; projectId: string }
   | { type: 'source.issues'; projectId: string; sourceId: string; page: number; perPage: number; assignee: '@me' | '*'; state: 'open' | 'closed' | 'all'; refresh?: boolean }
   | { type: 'source.issue'; projectId: string; sourceId: string; number: number; nodeId?: string; refresh?: boolean }
@@ -127,6 +144,7 @@ export interface SourceResultFields {
   capabilities?: { githubRead: boolean; githubWrite: false; taskStart: boolean; projectViews: boolean }
 }
 export interface WorkCompleted extends SourceResultFields {
+  continuousRule?: ContinuousWorkRule
   status: 'completed'
   progress?: TaskProgressView
   progressItems?: TaskProgressView[]

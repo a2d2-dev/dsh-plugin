@@ -47,7 +47,7 @@ async function setup(directory: string) {
   const panel = new WorkPanelController(client, { selectPanel: id => { navigationEvents.push(['panel', id]) }, openSession: id => { navigationEvents.push(['session', id]) } })
   const project = (await panel.submit({ type: 'project.create', name: 'Navigation regression' })).project!
   const taskB = (await panel.submit({ type: 'task.create', projectId: project.id, title: 'Task B', goal: 'Keep B', specification: 'Local specification B', acceptance: ['Keep local acceptance'] })).task!
-  await panel.load()
+  await panel.load(); await panel.selectProject(project.id)
   await panel.configureSource('a2d2-dev', 'dsh-plugin')
   await panel.openIssue(124)
   return {

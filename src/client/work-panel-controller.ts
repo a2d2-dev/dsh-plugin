@@ -33,6 +33,8 @@ export interface WorkPanelState {
   startup: StartupState
   object: 'projects' | 'issues' | 'prs'; source: SourcePanelState
   projects: Project[]; projectId: string | null; tasks: WorkTask[]
+  projectSources: Record<string, WorkSource[]>
+  issueFilter: 'all' | 'not-started' | 'processing' | 'waiting' | 'blocked' | 'completed'
   detail: WorkCompleted | null; detailTab: DetailTab; search: string; view: LocalView
   loading: boolean; error: string | null
 }
@@ -42,9 +44,10 @@ export interface WorkNavigation {
 }
 /** One root-owned state survives panel unmounts and native-session round trips. */
 export class WorkPanelController {
-  private state: WorkPanelState = { observationError: null, history: emptyHistory(), progressItems: [], startup: emptyStartup(), object:'projects', source:emptySource(), projects: [], projectId: null, tasks: [], detail: null, detailTab: 'overview', search: '', view: 'all', loading: false, error: null }
+  private state: WorkPanelState = { projectSources: {}, issueFilter: 'all', observationError: null, history: emptyHistory(), progressItems: [], startup: emptyStartup(), object:'issues', source:emptySource(), projects: [], projectId: null, tasks: [], detail: null, detailTab: 'overview', search: '', view: 'all', loading: false, error: null }
   private listeners = new Set<() => void>()
-  private sourceOrigin: Pick<WorkPanelState,'projectId'|'tasks'|'progressItems'|'source'|'object'|'search'|'view'> | null = null
+  private sourceOrigin: Pick<WorkPanelState,'projectId'|'tasks'|'progressItems'|'source'|'object'|'search'|'view'|'issueFilter'> | null = null
+  private detailTrail: Pick<WorkPanelState,'projectId'|'tasks'|'progressItems'|'source'|'object'|'search'|'view'|'detail'|'detailTab'|'issueFilter'>[] = []
   private revision = 0
   constructor(readonly client: WorkClient, private readonly navigation: WorkNavigation) {}
   getSnapshot = (): WorkPanelState => this.state
@@ -70,16 +73,17 @@ export class WorkPanelController {
     const query = <T extends Parameters<WorkClient['query']>[0]>(value: T) => this.client.query(value, abort.signal)
     try {
       const base = task ? query({ type: 'task.detail', ref: { projectId: task.projectId, taskId: task.id } }) : query({ type: 'project.detail', projectId })
+      const related = task ? query({ type: 'project.detail', projectId }) : Promise.resolve(null)
       const watchingSource = !task && snapshot.object === 'issues'
       const sources = watchingSource ? query({ type: 'source.list', projectId }) : Promise.resolve(null)
       const { sourceId, issue, page, perPage, assignee, state } = snapshot.source
       const cached = !watchingSource || !sourceId ? Promise.resolve(null) : issue
         ? query({ type: 'source.issue', projectId, sourceId, number: issue.number, nodeId: issue.nodeId, refresh: false })
         : query({ type: 'source.issues', projectId, sourceId, page, perPage, assignee, state, refresh: false })
-      const [observed, sourceList, sourcePage] = await Promise.allSettled([base, sources, cached])
+      const [observed, sourceList, sourcePage, relatedWork] = await Promise.allSettled([base, sources, cached, related])
       if (!current()) return
       const update: Partial<WorkPanelState> = { observationError: null }
-      const failures = [observed, sourceList, sourcePage].filter(result => result.status === 'rejected')
+      const failures = [observed, sourceList, sourcePage, relatedWork].filter(result => result.status === 'rejected')
       if (failures.length) update.observationError = failures.map(result => message((result as PromiseRejectedResult).reason)).join('；')
       if (observed.status === 'fulfilled') {
         const result = observed.value
@@ -91,6 +95,17 @@ export class WorkPanelController {
           update.progressItems = result.progressItems ?? snapshot.progressItems
           if (result.project?.id === projectId) update.projects = this.state.projects.map(item => item.id === projectId ? result.project! : item)
         }
+      }
+      if (task && relatedWork.status === 'fulfilled' && relatedWork.value) {
+        const related = relatedWork.value
+        const newer = (saved: WorkTask): WorkTask => {
+          const observed = related.tasks?.find(item => item.id === saved.id && item.projectId === saved.projectId)
+          return observed && observed.version > saved.version ? observed : saved
+        }
+        if (update.detail) update.detail = { ...update.detail, children: update.detail.children?.map(newer), ...(update.detail.parent ? { parent: newer(update.detail.parent) } : {}) }
+        update.tasks = (related.tasks ?? snapshot.tasks).map(item => item.id === task.id && item.projectId === task.projectId ? update.detail?.task ?? item : item)
+        update.progressItems = related.progressItems ?? snapshot.progressItems
+        if (related.project?.id === projectId) update.projects = this.state.projects.map(item => item.id === projectId ? related.project! : item)
       }
       if (watchingSource) {
         const nextSource = { ...this.state.source }
@@ -107,6 +122,7 @@ export class WorkPanelController {
         update.source = nextSource
       }
       this.update(update)
+      if (!task && this.state.source.issue && current()) await this.loadIssueProgress(sourceRevision)
     } catch (error) { if (current()) this.update({ observationError: message(error) }) }
     finally { if (this.observationRead === abort) this.observationRead = undefined }
   }
@@ -121,29 +137,45 @@ export class WorkPanelController {
       const result = await this.client.query({ type: 'projects.list' })
       if (revision !== this.revision) return
       const projects = result.projects ?? []
-      this.update({ projects })
-      const projectId = projects.find(project => project.id === this.state.projectId)?.id ?? projects[0]?.id ?? null
+      const discovered = await Promise.all(projects.map(async project => {
+        const result = await this.client.query({ type: 'source.list', projectId: project.id })
+        return [project.id, result.sources ?? []] as const
+      }))
+      if (revision !== this.revision) return
+      const projectSources = Object.fromEntries(discovered)
+      this.update({ projects, projectSources })
+      const connected = projects.filter(project => projectSources[project.id]?.some(source => source.githubProject))
+      const projectId = projects.find(project => project.id === this.state.projectId)?.id ?? connected[0]?.id ?? null
       if (projectId !== null) await this.selectProject(projectId)
       else this.update({ projectId: null, tasks: [], detail: null, loading: false })
     } catch (error) { if (revision === this.revision) this.update({ loading: false, error: message(error) }) }
   }
-  async selectProject(projectId: string): Promise<void> {
+  async selectProject(projectId: string, browse = true): Promise<void> {
+    if (browse) this.detailTrail=[]
     this.invalidateSourceNavigation()
     const revision = ++this.revision
     const changed = projectId !== this.state.projectId
     if (changed) this.sourceOrigin=null
-    this.update({ projectId, loading: true, error: null, ...(changed ? { detail: null, search: '', view: 'all', tasks: [], object:'projects' as const, source:emptySource() } : {}) })
+    this.update({ projectId, loading: true, error: null, ...(changed ? { detail: null, search: '', view: 'all', issueFilter: 'all', tasks: [], object:'issues' as const, source:emptySource() } : {}) })
     try {
       const result = await this.client.query({ type: 'project.detail', projectId })
-      if (revision === this.revision) this.update({ tasks: result.tasks ?? [], progressItems: result.progressItems ?? [], ...(result.project ? { projects: this.state.projects.map(item => item.id === result.project!.id ? result.project! : item) } : {}), loading: false })
+      if (revision === this.revision) {
+        this.update({ tasks: result.tasks ?? [], progressItems: result.progressItems ?? [], ...(result.project ? { projects: this.state.projects.map(item => item.id === result.project!.id ? result.project! : item) } : {}), loading: false })
+        if (browse) await this.showSources()
+      }
     } catch (error) { if (revision === this.revision) this.update({ loading: false, error: message(error) }) }
   }
-  async openTask(ref: TaskRef): Promise<void> {
+  async openTask(ref: TaskRef, remember = true): Promise<void> {
+    const previous=this.state, task=previous.detail?.task
+    if (remember && task && (task.id!==ref.taskId||task.projectId!==ref.projectId)) {
+      const {projectId,tasks,progressItems,source,object,search,view,detail,detailTab,issueFilter}=previous
+      this.detailTrail.push({projectId,tasks,progressItems,source,object,search,view,detail,detailTab,issueFilter})
+    } else if (!remember) this.detailTrail=[]
     this.invalidateSourceNavigation()
     if (this.state.projectId !== ref.projectId) {
-      const origin=this.state.object==='issues'&&this.state.source.issue?{projectId:this.state.projectId,tasks:this.state.tasks,progressItems:this.state.progressItems,source:this.state.source,object:this.state.object,search:this.state.search,view:this.state.view}:null
+      const origin=this.state.object==='issues'&&this.state.source.issue?{projectId:this.state.projectId,tasks:this.state.tasks,progressItems:this.state.progressItems,source:this.state.source,object:this.state.object,search:this.state.search,view:this.state.view,issueFilter:this.state.issueFilter}:null
       const projectRevision = this.revision + 1
-      await this.selectProject(ref.projectId)
+      await this.selectProject(ref.projectId, false)
       if (this.revision !== projectRevision || this.state.projectId !== ref.projectId) return
       this.sourceOrigin=origin
     }
@@ -151,7 +183,16 @@ export class WorkPanelController {
     this.update({ detail: null, loading: true, error: null, detailTab: 'overview' })
     try {
       const detail = await this.client.query({ type: 'task.detail', ref })
-      if (revision === this.revision) this.update({ detail, loading: false })
+      if (revision === this.revision) {
+        this.update({ detail, loading: false })
+        if (!this.state.source.sourceId && !this.state.source.issue) {
+          const sourcesResult=await this.client.query({type:'source.list',projectId:ref.projectId})
+          if (revision!==this.revision) return
+          const sources=sourcesResult.sources??[]
+          this.update({projectSources:{...this.state.projectSources,[ref.projectId]:sources}})
+          this.updateSource({sources,sourceId:sources.find(item=>detail.bindings?.some(binding=>binding.sourceIds.includes(item.id)))?.id??sources.find(item=>item.githubProject)?.id??null})
+        }
+      }
     } catch (error) { if (revision === this.revision) this.update({ loading: false, error: message(error) }) }
   }
   async revealTask(ref: TaskRef): Promise<void> {
@@ -165,7 +206,7 @@ export class WorkPanelController {
         if (revision !== this.revision) return
         this.update({ projects: result.projects ?? [] })
       }
-      if (revision === this.revision) await this.openTask(ref)
+      if (revision === this.revision) await this.openTask(ref,false)
     } catch (error) { if (revision === this.revision) this.update({ loading: false, error: message(error) }) }
   }
   async refreshTask(): Promise<void> {
@@ -211,7 +252,7 @@ export class WorkPanelController {
       if (ref.projectId !== this.state.projectId) {
         const project = await this.client.query({ type: 'project.detail', projectId: ref.projectId })
         if (!current()) return
-        this.sourceOrigin = { projectId: this.state.projectId, tasks: this.state.tasks, progressItems: this.state.progressItems, source: this.state.source, object: this.state.object, search: this.state.search, view: this.state.view }
+        this.sourceOrigin = { projectId: this.state.projectId, tasks: this.state.tasks, progressItems: this.state.progressItems, source: this.state.source, object: this.state.object, search: this.state.search, view: this.state.view, issueFilter: this.state.issueFilter }
         this.update({ projectId: ref.projectId, tasks: project.tasks ?? [], progressItems: project.progressItems ?? [], object: 'projects', source: emptySource(), search: '', view: 'all' })
       }
       this.update({ detail, detailTab: 'overview', loading: false, error: null })
@@ -221,13 +262,22 @@ export class WorkPanelController {
         if (session) this.openSession(session)
         return
       }
-      const result = await this.client.query({ type: 'task.execution-options', ref })
+      const useSource=Boolean(sourceId && ref.projectId === projectId)
+      const [result, continuous] = await Promise.all([
+        this.client.query(useSource ? {type:'source.execution-options',projectId:ref.projectId,sourceId:sourceId!} : {type:'task.execution-options',ref}),
+        useSource ? this.client.query({type:'continuous.status',projectId:ref.projectId,sourceId:sourceId!}) : Promise.resolve(null),
+      ])
       if (!current()) return
-      const options = result.executionOptions
+      const rule=continuous?.continuousRule
+      const options = result.executionOptions ? {...result.executionOptions,defaults:{...result.executionOptions.defaults,
+        ...(rule && result.executionOptions.models.some(item=>item.provider===rule.model.provider&&item.model===rule.model.model)?{model:rule.model}:{}),
+        ...(rule && result.executionOptions.agentPresets.includes(rule.agentPreset)?{agentPreset:rule.agentPreset}:{}),
+        ...(rule && result.executionOptions.permissionPresets.includes(rule.permissionPreset)?{permissionPreset:rule.permissionPreset}:{}),
+      }} : undefined
       if (!options) throw Error('宿主未返回可用的执行配置')
-      if (!options.resources.length) throw Error('项目尚未接入可用工作目录，请先点击“接入已有资源”。')
+      if (!options.resources.length) throw Error('没有可用执行目录，请检查宿主的工作目录配置。')
       if (!options.models.length || !options.agentPresets.length || !options.permissionPresets.length) throw Error('宿主暂无可用模型、Agent 预设或权限配置')
-      const selection: StartSelection = { resourceIndex: 0,
+      const selection: StartSelection = { resourceIndex: Math.max(0,options.resources.findIndex(item=>item.ref.runtimeId===rule?.resource.runtimeId&&item.ref.workspaceId===rule.resource.workspaceId)),
         modelIndex: Math.max(0, options.models.findIndex(model => model.provider === options.defaults.model.provider && model.model === options.defaults.model.model)),
         agentPreset: options.agentPresets.includes(options.defaults.agentPreset) ? options.defaults.agentPreset : options.agentPresets[0]!,
         permissionPreset: options.permissionPresets.includes(options.defaults.permissionPreset) ? options.defaults.permissionPreset : options.permissionPresets[0]!,
@@ -245,7 +295,8 @@ export class WorkPanelController {
     const { startup, detail } = this.state
     if (startup.busy || !startup.options || !startup.selection || !detail?.task) return
     const { options, selection } = startup, task = detail.task
-    const resource = options.resources[selection.resourceIndex]?.ref, model = options.models[selection.modelIndex]
+    const resource = options.resources[selection.resourceIndex]?.ref, selectedModel = options.models[selection.modelIndex]
+    const model = selectedModel && selectedModel.provider === options.defaults.model.provider && selectedModel.model === options.defaults.model.model ? options.defaults.model : selectedModel
     if (!resource || !model || !options.agentPresets.includes(selection.agentPreset) || !options.permissionPresets.includes(selection.permissionPreset)) {
       this.update({ startup: { ...startup, error: '请选择宿主提供的执行配置' } }); return
     }
@@ -258,6 +309,14 @@ export class WorkPanelController {
       const latest = await this.client.query({ type: 'task.detail', ref })
       if (!current()) return
       if (!latest.task) throw Error('工作详情暂不可用')
+      if (!latest.execution) {
+        const project = latest.project ?? this.state.projects.find(item => item.id === ref.projectId)
+        if (project && !project.resources.some(item => item.runtimeId === resource.runtimeId && item.workspaceId === resource.workspaceId)) {
+          const attached = await this.submit({type:'project.attach-resource',projectId:project.id,expectedVersion:project.version,resource})
+          if (!current()) return
+          if (attached.project) this.update({projects:this.state.projects.map(item=>item.id===attached.project!.id?attached.project!:item)})
+        }
+      }
       const result = latest.execution ? latest : await this.submit({ type: 'task.start', ref, expectedVersion: latest.task.version,
         agentId: options.agentId, resource, model, agentPreset: selection.agentPreset, permissionPreset: selection.permissionPreset })
       if (!current()) return
@@ -369,7 +428,8 @@ export class WorkPanelController {
       const result=await this.client.query({type:'source.list',projectId})
       if(revision!==this.sourceRevision) return
       const sources=result.sources ?? []
-      const sourceId=sources.find(item=>item.id===this.state.source.sourceId)?.id ?? sources[0]?.id ?? null
+      this.update({projectSources:{...this.state.projectSources,[projectId]:sources}})
+      const sourceId=sources.find(item=>item.id===this.state.source.sourceId)?.id ?? sources.find(item=>item.githubProject)?.id ?? sources[0]?.id ?? null
       this.updateSource({sources,sourceId,loading:false})
       if(sourceId) await this.browseIssues({},false)
     } catch(error) {if(revision===this.sourceRevision) this.updateSource({loading:false,error:message(error)})}
@@ -418,17 +478,70 @@ export class WorkPanelController {
     }catch(error){if(revision===this.sourceRevision) this.sourceFailed(error,false)}
   }
   async openIssue(number:number,refresh=true,nodeId?:string):Promise<void> {
+    this.detailTrail=[]
+    ++this.revision
+    this.update({detail:null,detailTab:'overview',loading:false,error:null})
     const {projectId}=this.state,{sourceId}=this.state.source
     if(!projectId || !sourceId) return
     const revision=this.advanceSourceRevision()
     this.updateSource({...(this.state.source.issue?.number===number&&(!nodeId||this.state.source.issue.nodeId===nodeId)?{}:{issue:null,bindings:[]}),canonical:null,loading:true,error:null})
     try {
       const result=await this.client.query({type:'source.issue',projectId,sourceId,number,refresh,...(nodeId?{nodeId}:{})})
-      if(revision===this.sourceRevision) this.receiveSource(result,refresh,true)
-    }catch(error){if(revision===this.sourceRevision) this.sourceFailed(error,true)}
+      if(revision===this.sourceRevision) {
+        this.receiveSource(result,refresh,true)
+        await this.loadIssueProgress(revision)
+      }
+    }catch(error){if(revision===this.sourceRevision) {
+      this.sourceFailed(error,true)
+      await this.loadIssueProgress(revision)
+    }}
+  }
+  /** Viewing an Issue only resolves an existing binding; it never imports or starts work. */
+  private async loadIssueProgress(sourceRevision: number): Promise<void> {
+    const revision=this.revision
+    const issue = this.state.source.issue
+    const ref = this.state.source.bindings.find(binding => binding.nodeId === issue?.nodeId)?.ref
+      ?? (issue ? this.progressForIssue(issue)?.ref : undefined)
+    if (!ref) return
+    try {
+      const detail = await this.client.query({type:'task.detail',ref})
+      if (revision === this.revision && sourceRevision === this.sourceRevision && detail.task?.id === ref.taskId && detail.task.projectId === ref.projectId) this.update({detail})
+    } catch (error) { if (revision === this.revision && sourceRevision === this.sourceRevision) this.update({error:message(error)}) }
+  }
+  async connectProject(githubProject: {owner:string;type:'org'|'user';number:number}, resource?: import('../work-types.ts').ResourceRef): Promise<void> {
+    const revision = ++this.revision
+    const sourceRevision = this.advanceSourceRevision()
+    try {
+      const result = await this.submit({type:'source.connect',githubProject:{...githubProject,owner:githubProject.owner.trim()},...(resource?{resource}:{})})
+      if (revision !== this.revision || sourceRevision !== this.sourceRevision) return
+      if (!result.project || !result.source) throw Error('GitHub Project 连接未返回项目与来源')
+      const project = result.project, source = result.source
+      const sources=[...(this.state.projectSources[project.id]??[]).filter(item=>item.id!==source.id),source]
+      this.update({projects:[...this.state.projects.filter(item=>item.id!==project.id),project],projectSources:{...this.state.projectSources,[project.id]:sources}})
+      const selecting=this.selectProject(project.id,false), selectedRevision=this.revision
+      await selecting
+      if (selectedRevision !== this.revision) return
+      this.update({detail:null,object:'issues'})
+      this.updateSource({...emptySource(),sources,sourceId:source.id})
+      await this.browseIssues({},true)
+    } catch(error) { if (revision===this.revision && sourceRevision===this.sourceRevision) throw error }
+  }
+  connectedProjects(): Project[] {
+    return this.state.projects.filter(project=>this.state.projectSources[project.id]?.some(source=>source.githubProject))
+  }
+  setIssueFilter(issueFilter: WorkPanelState['issueFilter']): void { this.update({issueFilter}) }
+  visibleIssues(): GitHubIssue[] {
+    const query=this.state.search.trim().toLocaleLowerCase()
+    return (this.state.source.listing?.items??[]).filter(issue=>{
+      const progress=this.progressForIssue(issue), status=progress?.processingState??'not-started'
+      const filter=this.state.issueFilter
+      return (filter==='all'||status===filter||(filter==='waiting'&&status==='paused'))
+        && (!query || `${issue.repository.owner}/${issue.repository.repository} #${issue.number} ${issue.title} ${issue.body??''} ${issue.labels.join(' ')}`.toLocaleLowerCase().includes(query))
+    })
   }
   private receiveSource(result:Pick<WorkCompleted,'source'|'page'|'issue'|'bindings'>,refresh:boolean,detail:boolean):void {
     const sources=result.source?this.state.source.sources.map(source=>source.id===result.source!.id?result.source!:source):this.state.source.sources
+    if (result.source) this.update({projectSources:{...this.state.projectSources,[result.source.projectId]:sources}})
     this.updateSource({sources,loading:false,cached:!refresh,error:result.source?.lastError?`${result.source.lastError.code}: ${result.source.lastError.message}`:null,...(detail?{...(result.issue?{issue:result.issue}:{}),...(result.bindings?{bindings:result.bindings}:{})}:result.page?{listing:result.page}:{})})
   }
   private sourceFailed(error:unknown,detail:boolean):void {
@@ -465,7 +578,7 @@ export class WorkPanelController {
       this.updateSource({loading:false,error:error instanceof WorkClientError&&error.result.error.code==='external-object-owned'?'该 Issue 已关联本地工作，请打开已有工作。':message(error),canonical:error instanceof WorkClientError?error.result.ref??null:null})
     }
   }
-  backToIssues():void {this.advanceSourceRevision();this.updateSource({issue:null,bindings:[],canonical:null,loading:false,error:null})}
+  backToIssues():void {++this.revision;this.advanceSourceRevision();this.update({detail:null,loading:false,error:null});this.updateSource({issue:null,bindings:[],canonical:null,loading:false,error:null})}
   private pendingCommands = new Map<string, string>()
   async submit(command: WorkIntent): Promise<WorkCompleted> {
     this.stopObservation(); ++this.activeCommands
@@ -485,10 +598,15 @@ export class WorkPanelController {
       return result
     } finally { --this.activeCommands }
   }
+  canReturnToRequirement(): boolean { return this.detailTrail.length>0 }
   back(): void {
     ++this.revision; this.invalidateSourceNavigation()
+    const previous=this.detailTrail.pop()
+    if (previous) { this.update({...previous,loading:false,error:null}); return }
     const origin=this.sourceOrigin;this.sourceOrigin=null
     this.update({...(origin??{}),detail:null,loading:false,error:null})
+    this.updateSource({issue:null,bindings:[],canonical:null,loading:false})
+    if (!this.state.source.listing && this.state.source.sourceId) void this.browseIssues({},false)
   }
   leavePanel(): void { ++this.revision; this.invalidateSourceNavigation(); this.update({loading:false}) }
   close(): void { this.leavePanel(); this.navigation.selectPanel(null) }
@@ -496,7 +614,7 @@ export class WorkPanelController {
   setSearch(search: string): void { this.update({ search }) }
   setView(view: LocalView): void { this.update({ view }) }
   setDetailTab(detailTab: DetailTab): void { this.update({ detailTab }) }
-  progressForIssue(issue: GitHubIssue): TaskProgressView | undefined {
+  progressForIssue(issue: Pick<GitHubIssue,'nodeId'|'url'>): TaskProgressView | undefined {
     const key = (value: string): string | undefined => {
       try {
         const url = new URL(value)
@@ -506,7 +624,7 @@ export class WorkPanelController {
       } catch { return undefined }
     }
     const canonical = key(issue.url)
-    return canonical ? this.state.progressItems.find(item => item.ref.projectId === this.state.projectId && item.source && key(item.source.url) === canonical) : undefined
+    return this.state.progressItems.find(item => item.source?.nodeId === issue.nodeId || (canonical && item.source && key(item.source.url) === canonical))
   }
   /** Each mounted native entry owns its timer and request lifetime. Polling only observes. */
   watchSessionWork(sessionId: string, receive: (work: import('../work-types.ts').AssociatedWork[]) => void, reportError: (error: string | null) => void): () => void {

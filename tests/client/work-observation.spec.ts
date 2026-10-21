@@ -11,7 +11,7 @@ const task: WorkTask = { id: 't1', projectId: 'p1', title: '持续工作', goal:
 const historySession = { runtimeId: 'host', sessionId: 'retired' }
 const execution: WorkExecution = { id: 'e1', ref, agentId: 'a1', owner: 'owner', epoch: 2, resource: { runtimeId: 'host', workspaceId: 'ws' }, session: { runtimeId: 'host', sessionId: 'current' }, sessionMode: 'create', agentPreset: 'standard', model: { provider: 'real', model: 'model' }, permissionPreset: 'read-only', policy: { version: 1, instructions: '', capabilities: [], modelCandidates: [] }, state: 'ready', history: [], events: [], retired: [{ session: historySession, epoch: 1, operationId: 'op1' }] }
 const issue = { nodeId: 'I1', number: 1, title: '来源工作', body: '正文', repository: { owner: 'acme', repository: 'repo' }, url: 'https://github.com/acme/repo/issues/1', assignees: [], labels: [], state: 'open' as const, updatedAt: '2026-10-22', observedAt: '2026-10-22' }
-const source = { id: 's1', projectId: 'p1', provider: 'github' as const, repository: issue.repository, enabled: true, version: 1, sequence: 1, requests: {}, observations: [], pages: [] }
+const source = { id: 's1', projectId: 'p1', provider: 'github' as const, githubProject:{owner:'acme',type:'org' as const,number:9}, enabled: true, version: 1, sequence: 1, requests: {}, observations: [], pages: [] }
 function setup() {
   let saved = task
   const navigation = { selectPanel: vi.fn(), openSession: vi.fn() }
@@ -104,19 +104,19 @@ describe('visible panel local observation', () => {
   it('refreshes Issue-row local progress without imports and never matches another repository by number', async () => {
     const h = setup(); await h.panel.load(); await h.panel.showSources()
     expect(html(h.panel)).toContain('未开始')
-    const progress = { ref, title: task.title, children: [], stage: 'in-progress' as const, summary: '正在实现已确认需求', next: '', blockers: ['等待评审'], criteria: { passed: 0, total: 1, assessed: 0, current: false }, breakdown: [], execution: { id: 'e1', session: execution.session, state: 'waiting' as const, runtime: 'idle' as const, reason: '请确认设计' }, source: { number: 1, url: 'https://github.com/ACME/REPO/issues/1/', state: 'closed' as const, observedAt: issue.observedAt } }
+    const progress = { processingState:'waiting' as const, ref, title: task.title, children: [], stage: 'in-progress' as const, summary: '正在实现已确认需求', next: '', blockers: ['等待评审'], criteria: { passed: 0, total: 1, assessed: 0, current: false }, breakdown: [], execution: { id: 'e1', session: execution.session, state: 'waiting' as const, runtime: 'idle' as const, reason: '请确认设计' }, source: { number: 1, url: 'https://github.com/ACME/REPO/issues/1/', state: 'closed' as const, observedAt: issue.observedAt } }
     const original = h.client.query
     h.client.query = async query => query.type === 'project.detail' ? { status: 'completed', tasks: [task], progressItems: [progress] } : query.type === 'source.issues' ? { status: 'completed', source, page: { identity: { login: 'viewer', nodeId: 'U1', name: null }, items: [{ ...issue, state: 'closed' }, { ...issue, nodeId: 'foreign', title: '另一个仓库', repository: { owner: 'acme', repository: 'other' }, url: 'https://github.com/acme/other/issues/1' }], observedAt: issue.observedAt } } : original(query)
     await h.panel.observeCurrent()
     const rendered = html(h.panel)
-    for (const text of ['工作进展', '当前处理', '正在实现已确认需求', '等待回复', '查看处理', '未开始']) expect(rendered).toContain(text)
+    for (const text of ['进展与下一步', '正在实现已确认需求', '等待回复', '等待', '未开始']) expect(rendered).toContain(text)
     expect(rendered).not.toContain('已验收完成')
     expect(h.panel.progressForIssue({ ...issue, url: 'https://github.com/acme/other/issues/1' })).toBeUndefined()
     expect(h.client.command).not.toHaveBeenCalled()
-    const completed = { ...progress, stage: 'done' as const, summary: '已按当前规格验收' }
+    const completed = { ...progress, processingState:'completed' as const, stage: 'done' as const, summary: '已按当前规格验收' }
     h.client.query = async query => query.type === 'project.detail' ? { status: 'completed', tasks: [task], progressItems: [completed] } : original(query)
     await h.panel.observeCurrent()
-    expect(html(h.panel)).toContain('已验收完成')
+    expect(html(h.panel)).toContain('已完成')
     expect(h.client.command).not.toHaveBeenCalled()
   })
   it('displays native source parent/sub-Issue links and partial results without importing them', async () => {

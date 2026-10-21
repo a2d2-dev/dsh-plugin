@@ -62,7 +62,7 @@ describe('GitHub source public client behavior',()=>{
     const pending=panel.openIssue(112)
     await panel.selectProject('p2');await panel.selectProject('p1')
     release();await pending
-    expect(panel.getSnapshot()).toMatchObject({projectId:'p1',detail:null,source:{sourceId:null,issue:null,listing:null}})
+    expect(panel.getSnapshot()).toMatchObject({projectId:'p1',detail:null,object:'issues',source:{sourceId:'s1',issue:null,listing:{items:[{number:112}]}}})
   })
   it('retains the latest filter page when an older page response arrives later',async()=>{
     const {panel,client}=setup()
@@ -84,7 +84,7 @@ describe('GitHub source public client behavior',()=>{
     await panel.openTask(panel.getSnapshot().source.canonical!)
     expect(panel.getSnapshot()).toMatchObject({projectId:'p2',detail:{task:{id:'canonical'}}})
     panel.back()
-    expect(panel.getSnapshot()).toMatchObject({projectId:'p1',object:'issues',detail:null,source:{sourceId:'s1',page:2,assignee:'*',issue:{number:112}}})
+    expect(panel.getSnapshot()).toMatchObject({projectId:'p1',object:'issues',detail:null,source:{sourceId:'s1',page:2,assignee:'*',issue:null}})
   })
   it('keeps the last page visible on a transport failure and distinguishes it from an empty result',async()=>{
     const {panel,client}=setup()
@@ -113,7 +113,7 @@ describe('GitHub source public client behavior',()=>{
     expect(commands).toEqual([{type:'source.import',projectId:'p1',sourceId:'s1',nodeId:'I112',commandId:expect.any(String)}])
     expect(panel.getSnapshot()).toMatchObject({detail:{task:{id:'canonical-uuid'}},detailTab:'overview'})
     panel.back()
-    expect(panel.getSnapshot()).toMatchObject({object:'issues',source:{page:2,assignee:'*',issue:{number:112}}})
+    expect(panel.getSnapshot()).toMatchObject({object:'issues',source:{page:2,assignee:'*',issue:null}})
   })
   it('browses a concrete project source and complete issue without accepting work, retaining source filters and page on return',async()=>{
     const {panel,requests}=setup()

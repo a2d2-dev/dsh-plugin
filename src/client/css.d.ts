@@ -11,6 +11,19 @@
 
 declare module '*.module.css' {
   const classes: {
+    readonly eyebrow: string
+    readonly issueHeader: string
+    readonly badge: string
+    readonly detailGrid: string
+    readonly sourceSummary: string
+    readonly requirementBranch: string
+    readonly requirement: string
+    readonly formRow: string
+    readonly primary: string
+    readonly issueLink: string
+    readonly continuous: string
+    readonly queue: string
+    readonly continuation: string
     readonly panel: string
     readonly toolbar: string
     readonly tabs: string

@@ -20,13 +20,16 @@ export const taskReportSchema = z.object({
 export type TaskReport = z.infer<typeof taskReportSchema>
 export const taskProgressSchema = taskReportSchema.omit({ breakdown: true }).extend({ updatedAt: z.string().datetime() }).strict()
 export type TaskProgress = z.infer<typeof taskProgressSchema>
+export type IssueProcessingState = 'not-started' | 'processing' | 'waiting' | 'paused' | 'blocked' | 'completed'
 export interface TaskProgressView {
+  processingState?: IssueProcessingState
+  processingReason?: string
   ref: TaskRef; title: string; parent?: TaskRef; children: TaskRef[]
   stage: WorkStage; summary: string; next: string; blockers: string[]; updatedAt?: string
   criteria: { passed: number; total: number; assessed: number; current: boolean }
   breakdown: WorkTask['breakdown']
   execution?: { id: string; session: WorkExecution['session']; state: WorkExecution['state']; runtime: 'running'|'idle'|'inactive'; reason?: string }
-  source?: { number: number; url: string; state: 'open'|'closed'; observedAt: string }
+  source?: { nodeId?: string; number: number; url: string; state: 'open'|'closed'; observedAt: string }
 }
 const sameRef = (a: TaskRef, b: TaskRef) => a.projectId === b.projectId && a.taskId === b.taskId
 const refOf = (task: WorkTask): TaskRef => ({projectId:task.projectId,taskId:task.id})
@@ -67,7 +70,7 @@ export function applyTaskReport(state: WorkSnapshot, execution: WorkExecution, r
   return {status:'completed',task,execution}
 }
 
-export function taskProgressView(state: WorkSnapshot, ref: TaskRef, host?: WorkExecutionHost): TaskProgressView | undefined {
+export function taskProgressView(state: WorkSnapshot, ref: TaskRef, host?: Pick<WorkExecutionHost, 'status'>): TaskProgressView | undefined {
   const task = state.tasks.find(item=>sameRef(refOf(item),ref))
   if (!task) return undefined
   const progress = task.progress
@@ -75,6 +78,7 @@ export function taskProgressView(state: WorkSnapshot, ref: TaskRef, host?: WorkE
   const execution = state.executions.find(item=>sameRef(item.ref,ref))
   const source = state.externalBindings.find(item=>sameRef(item.ref,ref))?.lastObserved
   const runtime = execution ? host?.status(execution) ?? 'inactive' : undefined
+  const queueItem = state.continuousRules?.flatMap(rule => rule.items).find(item => item.ref && sameRef(item.ref, ref))
   const stage: WorkStage = current && progress ? progress.stage : execution ? 'in-progress' : 'planned'
   const blockers = current ? [...(progress?.blockers??[])] : []
   if (execution?.error) blockers.push(execution.error.message)
@@ -82,16 +86,50 @@ export function taskProgressView(state: WorkSnapshot, ref: TaskRef, host?: WorkE
   if (execution?.continuationBlocked) blockers.push(execution.continuationBlocked.message)
   if (execution?.continuation?.error) blockers.push(execution.continuation.error.message)
   if (progress && !current) blockers.push('规格已更新，旧验收结果需要重新核验')
+  if (queueItem?.state === 'blocked' && queueItem.reason && !blockers.includes(queueItem.reason)) blockers.push(queueItem.reason)
+  // Processing answers whether this Issue needs attention; Stage remains the
+  // accepted business report. An idle model or a closed remote Issue is not done.
+  let processingState: IssueProcessingState
+  let processingReason: string | undefined
+  if (current && progress.stage === 'done') {
+    processingState = 'completed'
+  } else if (execution?.state === 'failed' || execution?.error
+    || (execution?.runtimeFailure && !execution.runtimeFailure.acknowledged)
+    || execution?.continuationBlocked || execution?.continuation?.error) {
+    processingState = 'blocked'
+    processingReason = blockers[0] ?? '执行失败，等待恢复'
+  } else if (queueItem?.resumeRequested) {
+    processingState = 'waiting'
+    processingReason = '已收到回复，排队等待继续处理'
+  } else if (queueItem?.state === 'blocked') {
+    processingState = 'blocked'
+    processingReason = queueItem.reason ?? '处理受阻，等待恢复'
+  } else if (execution?.state === 'paused' || execution?.control?.action === 'pause' || queueItem?.state === 'paused') {
+    processingState = 'paused'
+    processingReason = execution?.control?.reason ?? queueItem?.reason ?? '已暂停处理'
+  } else if (execution?.state === 'waiting' || execution?.control?.action === 'wait' || queueItem?.state === 'waiting') {
+    processingState = 'waiting'
+    processingReason = execution?.control?.reason ?? queueItem?.reason ?? '等待回复或外部结果'
+  } else if (blockers.length || (current && progress.stage === 'blocked')) {
+    processingState = 'blocked'
+    processingReason = blockers[0] ?? progress?.summary
+  } else if (current && progress.stage === 'review') {
+    processingState = 'waiting'
+    processingReason = '等待验收'
+  } else {
+    processingState = execution ? 'processing' : 'not-started'
+  }
   return {
+    processingState, ...(processingReason ? { processingReason } : {}),
     ref, title: task.title, ...(task.parent?{parent:task.parent}:{}), children:task.children,
     stage, summary:progress?.summary ?? execution?.progress ?? (execution?'已开始处理，尚未报告工作进展':'尚未开始处理'),
     next:progress?.next ?? '',blockers,...(progress?{updatedAt:progress.updatedAt}:{}),
     criteria:{passed:current ? progress.criteria.filter(item=>item.passed).length:0,total:task.specification.acceptance.length,assessed:current?progress.criteria.length:0,current},
     breakdown:task.breakdown,
     ...(execution?{execution:{id:execution.id,session:execution.session,state:execution.state,runtime:runtime!,reason:execution.control?.reason}}:{}),
-    ...(source?{source:{number:source.number,url:source.url,state:source.state,observedAt:source.observedAt}}:{}),
+    ...(source?{source:{nodeId:source.nodeId,number:source.number,url:source.url,state:source.state,observedAt:source.observedAt}}:{}),
   }
 }
-export function projectProgress(state: WorkSnapshot, projectId: string, host?: WorkExecutionHost): TaskProgressView[] {
+export function projectProgress(state: WorkSnapshot, projectId: string, host?: Pick<WorkExecutionHost, 'status'>): TaskProgressView[] {
   return state.tasks.filter(item=>item.projectId===projectId).map(task=>taskProgressView(state,refOf(task),host)!)
 }

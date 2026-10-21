@@ -442,8 +442,8 @@ describe('github_watch plugin', () => {
     })
     expect(message.content[0].text).toContain('The watch on this PR has ended')
     await vi.waitFor(() => expect(flush).toHaveBeenCalledWith(agent.session))
-    // The merge ended the only watch, so the connection is already closed.
-    expect(sockets[0]!.readyState).toBe(3)
+    // Delivery flush precedes durable watch removal and asynchronous pruning.
+    await vi.waitFor(() => expect(sockets[0]!.readyState).toBe(3))
     await ctx.fiber.dispose()
   })
 
