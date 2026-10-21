@@ -17,6 +17,8 @@ export function validateJournal(text,accepted){
 export function assessStop({exit,staticCut,parentReviewedStaticCut,officialReceipt}){
   if(!staticCut?.ok)throw Error('post-stop durability/integrity not proven')
   if(exit?.forced===true||exit?.signal||exit?.code!==0||exit?.stopElapsedMs>=5000||exit?.wrapperSignals>1)throw Error('forced/error exit: refuse new switch; preserve evidence for runnable rollback')
+  if(exit?.cliLog&&(exit.cliLog.attributable!==true||exit.cliLog.classification!=='no-known-error'))throw Error('CLI shutdown log error or attribution unknown: refuse new switch; static integrity alone permits only coherent rollback')
+  if(exit?.source==='original-launcher-child-exit'&&!exit.cliLog)throw Error('CLI shutdown log evidence missing')
   if(officialReceipt)throw Error('formal shutdown receipt producer is not available in the verified host contract; do not manufacture one')
   if(parentReviewedStaticCut!==true)throw Error('parent-reviewed operational static-cut mode required; exit0 is not a flush ack')
   return {barrier:'accepted-prefix-and-static-integrity',gracefulAcknowledged:false,scope:'operational data retention barrier; no claim of product consumed or a formal graceful receipt'}

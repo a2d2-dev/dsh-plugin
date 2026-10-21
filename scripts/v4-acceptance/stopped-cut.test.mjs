@@ -12,6 +12,10 @@ test('停后必须保留已接受事件前缀，拒绝缺行和撕裂journal',()
   assert.throws(()=>validateJournal(JSON.stringify(header)+'\n',accepted),/accepted/)
   assert.throws(()=>validateJournal(text.slice(0,-1),accepted),/torn/)
 })
+test('CLI私有日志明确disposer error时即使exit0且静态完整也拒新',()=>{
+  assert.throws(()=>assessStop({exit:{code:0,signal:null,forced:false,stopElapsedMs:100,cliLog:{classification:'error',attributable:true}},staticCut:{ok:true},parentReviewedStaticCut:true}),/CLI shutdown log/)
+})
+
 test('STOPPED/exit0不能冒充flush；强退拒绝切新，只保留可运行回滚路径',()=>{
   assert.throws(()=>assessStop({exit:{code:0},staticCut:{ok:false}}),/durability/)
   assert.throws(()=>assessStop({exit:{code:0,signal:'SIGKILL'},staticCut:{ok:true},parentReviewedStaticCut:true}),/forced/)

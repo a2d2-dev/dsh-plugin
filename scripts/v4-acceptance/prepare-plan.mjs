@@ -88,7 +88,7 @@ export async function preparePlan(input,root){
     await writeFile(join(evidenceRoot,'original-preview-launcher.private.mjs'),await readFile(entry),{flag:'wx',mode:0o600})
     const signalContractFiles=[]
     for(const path of ['/usr/lib/python3/dist-packages/supervisor/process.py','/usr/lib/python3/dist-packages/supervisor/rpcinterface.py'])signalContractFiles.push({path,sha256:await optionalHash(path)})
-    initialStop={strategy:'single-pid-term-with-hold',launcher:await identity(service.pid),cli:await identity(cliPid),hold:{target:entry,candidate,sha256:await optionalHash(candidate),allowedCurrentSha256:[sourceFiles.previewLauncher]},receipt:join(previewRoot,'.v4-141-maintenance-hold.json'),signalContractFiles}
+    initialStop={strategy:'single-pid-term-with-hold',cliLog:{path:join(previewRoot,'logs/web.private.log'),binding:'pre-signal-owner-fd-inode-offset-prefix'},launcher:await identity(service.pid),cli:await identity(cliPid),hold:{target:entry,candidate,sha256:await optionalHash(candidate),allowedCurrentSha256:[sourceFiles.previewLauncher]},receipt:join(previewRoot,'.v4-141-maintenance-hold.json'),signalContractFiles}
   }else if(!preview){
     const args=(await readFile(`/proc/${service.pid}/cmdline`)).toString().split('\0')
     if(!args.some(value=>value.endsWith('/apps/cli/lib/bin.js'))||!args.includes('web'))throw Error('GUI is not a proven direct CLI process; do not infer Python wrapper behavior')

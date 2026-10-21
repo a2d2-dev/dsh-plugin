@@ -4,6 +4,7 @@ import {spawnSync} from 'node:child_process'
 import {setTimeout as delay} from 'node:timers/promises'
 import {join} from 'node:path'
 import {replaceReviewedFile} from './profile-actions.mjs'
+import {beginShutdownLog,finishShutdownLog} from './shutdown-log.mjs'
 
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex')
 function invoke(program,args){const value=spawnSync(program,args,{encoding:'utf8',timeout:30000});if(value.status!==0)throw Error('named Supervisor control failed; no group-signal retry permitted');return value.stdout}
@@ -19,7 +20,12 @@ export async function stopPreviewWithHold(plan){
   const launcher=await processIdentity(before.pid),cli=await processIdentity(strategy.cli.pid)
   if(launcher.startTicks!==strategy.launcher.startTicks||cli.startTicks!==strategy.cli.startTicks||launcher.args[1]!==entry||launcher.group!==launcher.pid||launcher.pid===cli.pid||cli.parent!==launcher.pid)throw Error('old launcher/CLI identity mismatch')
   const log=await open(before.stdout_logfile,'r'),offset=(await log.stat()).size
+  let cliLog
   try{
+    if(strategy.cliLog?.path!=='/data/_dsh-dev/previews/a2d2-v3-121/logs/web.private.log')throw Error('exact reviewed old CLI private log required')
+    cliLog=await beginShutdownLog(strategy.cliLog.path,launcher.pid)
+    const {handle,...binding}=cliLog
+    await writeFile(join(plan.evidenceRoot,'old-cli-log-binding.json'),JSON.stringify(binding,null,2)+'\n',{flag:'wx',mode:0o600})
     // Tested Node main-module lifetime: replacing the path does not hot-read it in old Node.
     await replaceReviewedFile(strategy.hold,[entry])
     const signaledAt=Date.now()
@@ -46,12 +52,14 @@ export async function stopPreviewWithHold(plan){
     const exits=records.filter(row=>row.stopped===true&&Object.hasOwn(row,'code')&&Object.hasOwn(row,'signal'))
     const observed=exits.length===1?exits[0]:{code:null,signal:null,unknown:true}
     const elapsed=Date.now()-signaledAt
+    const cliLogEvidence=await finishShutdownLog(cliLog,plan.evidenceRoot)
+    cliLogEvidence.signaledAt=new Date(signaledAt).toISOString()
     // Old CLI is proven gone. Administrative group stop now reaches ONLY the no-child holder.
     invoke('supervisorctl',['stop',plan.program])
     const after=info(plan)
     if(!['STOPPED','EXITED','FATAL'].includes(after.statename))throw Error('maintenance holder did not administratively stop')
-    const exit={source:observed.unknown?'original-child-exit-unavailable':'original-launcher-child-exit',unknown:observed.unknown===true,code:observed.code,signal:observed.signal,forced:observed.signal!==null,stopElapsedMs:elapsed,launcherSignalSent:signalFact.sent===true,cliSignalReceipt:'not directly observed; original reviewed launcher forwards once',gracefulOutcome:'not inferred',originalLauncher:launcher.pid,originalCli:cli.pid,holderPid:held.pid,oldExitRecordSha256:hash(JSON.stringify(observed))}
+    const exit={source:observed.unknown?'original-child-exit-unavailable':'original-launcher-child-exit',unknown:observed.unknown===true,code:observed.code,signal:observed.signal,forced:observed.signal!==null||cliLogEvidence.classification==='known-forced',cliLog:cliLogEvidence,stopElapsedMs:elapsed,launcherSignalSent:signalFact.sent===true,cliSignalReceipt:'not directly observed; original reviewed launcher forwards once',gracefulOutcome:'not inferred',originalLauncher:launcher.pid,originalCli:cli.pid,holderPid:held.pid,oldExitRecordSha256:hash(JSON.stringify(observed))}
     await writeFile(join(plan.evidenceRoot,'single-signal-hold.json'),JSON.stringify({strategy:strategy.strategy,before,holder,after,exit,oldProcessesGone:true,holderCliChildren:0},null,2)+'\n',{flag:'wx',mode:0o600})
     return {info:after,exit,heldPreview:true,commandStatus:0}
-  }finally{await log.close()}
+  }finally{await cliLog?.handle.close();await log.close()}
 }

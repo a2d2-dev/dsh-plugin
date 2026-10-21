@@ -26,7 +26,7 @@
 4. 停后不启动任何DSH实例，静态解码原Session全部journal并检查完整物理帧、合法事件前缀、既有身份/config与预先冻结的已接受seq/material；验证所有进程退出与数据树稳定。此结果是实际静态durability证据，绝不把Supervisor状态当flush ack。
 5. 只有该模式的合同证明足够且无已知强退/未完成写入才可切换、start、同URL核验；失败按独立可执行旧宿主/profile回滚，保留新日志与数据。无法判断退出原因时不能谎称“已证graceful”。
 
-目前还缺运行宿主的具名shutdown-completed/forced/error终态回执。若停前公开cut＋停后静态完整性仍不足以裁决，最小缺口是记录退出原因及持久化结果的正式回执或已有公开flush witness，**不是预先扩平台新增全局admission API**。本阶段实现检查与动作，不生成虚假的回执；执行方式由父会话在源码／制品review后下达。
+目前没有正式shutdown终态回执，a450/8282合同也不提供marker。#154采用最小运维补证：信号前绑定真实旧CLI私有日志的launcher append fd、dev/inode、offset、前缀SHA；旧CLI消失后保留本次原始窗口于0600私有证据，仅公开分类/hash。明确error/fatal/已知强退拒新；替换、截断、前缀改写、窗口不完整或归因未知同样拒新。正常/空窗口不依赖marker，也不推断graceful。拒新时只有完整物理zstd、accepted prefix、无写FD与独立new/rollback native双读均通过，才可coherent rollback并保留新增数据。无需新增Host receipt或全局admission API。
 
 ## 隔离制品准备范围
 
