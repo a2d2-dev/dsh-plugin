@@ -58,6 +58,14 @@ Repo 的原 detail 不读取原生关系；仅受信 helper 请求 nativeChildre
 
 该修正后 `corepack pnpm@10.26.2 build` exit 0；`typecheck` 独立 exit 0；定点 `tests/work-source-freeze.spec.ts tests/work-continuation.spec.ts` 2文件23/23、exit0，覆盖原17项真实接续、双代次决定保留、冷恢复旧段工具围栏及新结构冻结矩阵。构建仅替换已核对的本工作树 lib，没有复制到 profile／运行目录。
 
+最终源码检查点 `012c4f7145426d49ee2c80e0b3b889f6ccf76c2a`：所有源码和测试与 matched fixture provenance 的211个 SHA256 逐一一致。可复现脚本最后实际执行1/1、1352ms、exit0；完整安装 ignore-scripts，pnpm10.26.2。
+
+`PATH=<本工作树>/.local/v4-integrated/bin:$PATH TMPDIR=/dev/shm/v4-pf-141 node scripts/verify-pack-exports.mjs` 独立 exit0，14个 Node 公开入口 verified；包装器仅 exec corepack pnpm@10.26.2。客户端 bundle 检索只有 react 与 react/jsx-runtime 两处 require，没有 Node builtin 或 randomUUID。
+
+保留 QA 包 `.local/v4-pf-141-pack/dsh-a2d2-0.0.1.tgz`，由 `corepack pnpm@10.26.2 pack --pack-destination .local/v4-pf-141-pack --json` 实际生成、exit0；SHA256 `56709afccea64797a7b9275ae26ab4fecd039ea8ee5162efb1ecd0c40509e2ad`。该包未安装到任何运行实例，未提交编译产物。最终说明提交只追加本记录，不改变上述源码／测试与包内容。
+
+未验证：实际18781／18782页面部署、真实 LLM 业务计划／接续、真实 GitHub 业务关闭及升级数据保留。它们由父CEO／QA最终统一验收。新回归明确使用tmpfs，原ext4 setup长阻塞和旧红保留；本次不声称修复该环境问题。没有第二轮review、approved自审、合并、关票、推送交付目标分支或Host／profile写入。
+
 ## 范围记账
 
 WorkApplication 的 possible Divergent Change 留作后续深模块整理线索，本票不拆大 class／运行器。已撤回的维护锁环不修。旧 #123／#129、Host、运行目录、18781／18782、真实模型与 GitHub 业务写均未纳入本次源码整改。
