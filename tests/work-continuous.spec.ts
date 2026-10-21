@@ -66,7 +66,7 @@ class Host implements WorkHost {
 function issue(number: number, assignees = ['alice'], labels = ['ready']): GitHubIssue {
   return { nodeId: `ISSUE_${number}`, number, title: `Issue ${number}`, url: `https://github.com/acme/repo/issues/${number}`, body: 'Implement the agreed work.', repository: { owner: 'acme', repository: 'repo' }, assignees, labels, state: 'open', updatedAt: '2026-01-01T00:00:00.000Z', observedAt: '2026-01-01T00:00:00.000Z' }
 }
-async function setup(enable = true) {
+async function setup(enable = true, planner?: import('../src/work-planning.ts').WorkPlanner) {
   const directory = await mkdtemp(join(tmpdir(), 'continuous-work-')); roots.push(directory)
   const host = new Host()
   const remote = { identity: { login: 'alice', nodeId: 'ALICE', name: null }, issues: [issue(1), issue(2), issue(3, ['bob']), issue(4, ['alice'], ['other'])] }
@@ -75,7 +75,7 @@ async function setup(enable = true) {
     project: async () => ({ identity: remote.identity, project: { nodeId: 'PROJECT', title: 'Roadmap', url: 'https://github.com/orgs/acme/projects/1', closed: false },
       items: remote.issues.map(issue => ({ id: `ITEM_${issue.nodeId}`, kind: 'issue', archived: false, issueNodeId: issue.nodeId, fields: [], fieldsPartial: false })), issues: remote.issues, observedAt: '2026-01-01T00:00:00.000Z' }),
   }
-  const app = new WorkApplication(directory, host, source)
+  const app = new WorkApplication(directory, host, source, planner)
   const connection = completed(await app.execute({ type: 'source.connect', commandId: 'connect', githubProject: { owner: 'acme', type: 'org', number: 1 } }, operator))
   const scope = { projectId: connection.project!.id, sourceId: connection.source!.id }
   const refresh = () => app.query({ type: 'source.issues', ...scope, page: 1, perPage: 100, assignee: '@me', state: 'open', refresh: true }, operator)
@@ -301,6 +301,131 @@ it('freezes completed managed acceptance against later specification or report m
   const task = completed(await h.app.query({ type: 'task.detail', ref: first.ref }, operator)).task!
   expect(await h.app.execute({ type: 'task.update-spec', commandId: 'after-done-spec', ref: first.ref, expectedVersion: task.version, goal: 'Changed goal', specification: 'Changed spec', acceptance: ['More work'] }, operator)).toMatchObject({ status: 'failed', error: { code: 'continuous-completed' } })
   expect(await h.app.execute({ type: 'task.report', commandId: 'after-done-report', ...fence(first), report: { specificationVersion: task.specification.version, stage: 'in-progress', summary: 'Restart', next: 'More work', blockers: [], criteria: [] } }, operator)).toMatchObject({ status: 'failed', error: { code: 'continuous-completed' } })
+})
+
+it('persists a natural language model plan without dispatching on preview or restart', async () => {
+  const generate = vi.fn(async (_basis: import('../src/work-planning.ts').PlanningBasis) => ({ steps: [{ nodeId: 'ISSUE_2', why: '先做第二项', nextAction: '核对完整要求', mode: 'new' }, { nodeId: 'ISSUE_1', why: '随后处理', nextAction: '实施并验收', mode: 'new' }] }))
+  const h = await setup(false, { generate }); completed(await h.app.execute(h.configure, operator))
+  completed(await h.app.execute({ type: 'continuous.instruct', commandId: 'instruction', ...h.scope, expectedVersion: 1, text: '先推进第二项，再处理第一项。' }, operator))
+  const preview = { type: 'continuous.preview', commandId: 'preview', ...h.scope, expectedVersion: 2 }
+  completed(await h.app.execute(preview, operator))
+  const rule = await h.status()
+  expect(rule.planning).toMatchObject({ instruction: '先推进第二项，再处理第一项。', plans: [{ version: 1, steps: [{ nodeId: 'ISSUE_2' }, { nodeId: 'ISSUE_1' }] }] })
+  expect(generate).toHaveBeenCalledTimes(1)
+  expect(generate.mock.calls[0]![0].candidates[0]!.issue.body).toBe('Implement the agreed work.')
+  expect(h.host.sends).toHaveLength(0)
+  await h.app.execute(preview, operator)
+  const restored = new WorkApplication(h.directory, h.host, h.source, { generate })
+  await restored.reconcileControls()
+  expect((await h.status(restored)).planning).toEqual(rule.planning)
+  expect(generate).toHaveBeenCalledTimes(1); expect(h.host.sessionsCreated.size).toBe(0)
+})
+
+it('rejects blocked, foreign, malformed and assignee-violating model plans with named errors', async () => {
+  let output: unknown = { steps: [] }
+  const h = await setup(false, { generate: async () => output }); completed(await h.app.execute(h.configure, operator))
+  completed(await h.app.execute({ type: 'continuous.instruct', commandId: 'instruction', ...h.scope, expectedVersion: 1, text: '处理我的工作' }, operator))
+  completed(await h.app.execute({ type: 'continuous.block', commandId: 'block', ...h.scope, expectedVersion: 2, nodeId: 'ISSUE_1', blocked: true }, operator))
+  for (const [nodeId, code] of [['ISSUE_1', 'planning-blocked-issue'], ['FOREIGN', 'planning-outside-source'], ['ISSUE_3', 'planning-outside-scope']]) {
+    output = { steps: [{ nodeId, why: 'reason', nextAction: 'work', mode: 'new' }] }
+    expect(await h.app.execute({ type: 'continuous.preview', commandId: `preview:${nodeId}`, ...h.scope, expectedVersion: 3 }, operator)).toMatchObject({ status: 'failed', error: { code } })
+  }
+  output = { steps: [{ number: 1 }] }
+  expect(await h.app.execute({ type: 'continuous.preview', commandId: 'malformed', ...h.scope, expectedVersion: 3 }, operator)).toMatchObject({ status: 'failed', error: { code: 'planning-malformed' } })
+  const restored = new WorkApplication(h.directory, h.host, h.source)
+  expect((await h.status(restored)).planning?.blocks).toEqual(['ISSUE_1'])
+  expect(h.host.sends).toHaveLength(0)
+})
+
+it('enables only a reviewed plan and dispatches its order while Block fences future intake', async () => {
+  const h = await setup(false, { generate: async () => ({ steps: [2, 1].map(number => ({ nodeId: `ISSUE_${number}`, why: '按委托优先级', nextAction: '实施', mode: 'new' })) }) })
+  completed(await h.app.execute(h.configure, operator))
+  completed(await h.app.execute({ type: 'continuous.instruct', commandId: 'instruct', ...h.scope, expectedVersion: 1, text: '先第二项' }, operator))
+  expect(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'too-early', ...h.scope, expectedVersion: 2, enabled: true }, operator)).toMatchObject({ status: 'failed', error: { code: 'planning-preview-required' } })
+  completed(await h.app.execute({ type: 'continuous.preview', commandId: 'preview', ...h.scope, expectedVersion: 2 }, operator))
+  completed(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'enable-plan', ...h.scope, expectedVersion: 3, enabled: true }, operator))
+  const first = await h.execution()
+  expect((await h.status()).items.find(item => item.state === 'active')?.nodeId).toBe('ISSUE_2')
+  completed(await h.app.execute({ type: 'continuous.block', commandId: 'block-next', ...h.scope, expectedVersion: 4, nodeId: 'ISSUE_1', blocked: true }, operator))
+  await reportDone(h.app, first); h.host.idle(first); await h.app.reconcileControls()
+  expect(h.host.sessionsCreated.size).toBe(1)
+  expect((await h.status()).items.find(item => item.nodeId === 'ISSUE_1')?.reason).toContain('Block')
+})
+
+it('adopts canonical existing execution without changing owner epoch resource or Session', async () => {
+  const h = await setup(false, { generate: async () => ({ steps: [{ nodeId: 'ISSUE_1', why: '继续现有工作', nextAction: '沿已有会话推进', mode: 'existing' }] }) })
+  completed(await h.app.execute(h.configure, operator))
+  const imported = completed(await h.app.execute({ type: 'source.import', commandId: 'manual-import', ...h.scope, nodeId: 'ISSUE_1' }, operator))
+  const started = completed(await h.app.execute({ type: 'task.start', commandId: 'manual-start', ref: imported.ref, expectedVersion: imported.task!.version, agentId: imported.task!.agentId, resource, model, agentPreset: 'agent', permissionPreset: 'safe' }, operator)).execution!
+  completed(await h.app.execute({ type: 'continuous.instruct', commandId: 'instruct', ...h.scope, expectedVersion: 1, text: '继续已有工作' }, operator))
+  const hostCalls = { ensures: h.host.ensures.length, sends: h.host.sends.length, wakes: h.host.wakes.length }
+  completed(await h.app.execute({ type: 'continuous.preview', commandId: 'preview', ...h.scope, expectedVersion: 2 }, operator))
+  expect((await h.status()).items.every(item => !item.ref)).toBe(true)
+  expect(await h.host.authorize(started.session.sessionId)).toBe(true)
+  expect({ ensures: h.host.ensures.length, sends: h.host.sends.length, wakes: h.host.wakes.length }).toEqual(hostCalls)
+  completed(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'enable', ...h.scope, expectedVersion: 3, enabled: true }, operator))
+  expect((await h.status()).active).toEqual(started.ref)
+  expect(await h.execution()).toMatchObject({ id: started.id, owner: started.owner, epoch: started.epoch, session: started.session, resource: started.resource })
+  expect(h.host.sessionsCreated.size).toBe(1); expect(h.host.sends).toHaveLength(1)
+})
+
+it('fences a model response when Block changes while generation is in flight', async () => {
+  let release!: (output: unknown) => void
+  let entered!: () => void
+  const started = new Promise<void>(resolve => { entered = resolve })
+  const h = await setup(false, { generate: async () => { entered(); return new Promise(resolve => { release = resolve }) } })
+  completed(await h.app.execute(h.configure, operator))
+  completed(await h.app.execute({ type: 'continuous.instruct', commandId: 'instruct', ...h.scope, expectedVersion: 1, text: '处理我的工作' }, operator))
+  const preview = h.app.execute({ type: 'continuous.preview', commandId: 'slow-preview', ...h.scope, expectedVersion: 2 }, operator)
+  await started
+  completed(await h.app.execute({ type: 'continuous.block', commandId: 'block-during-preview', ...h.scope, expectedVersion: 2, nodeId: 'ISSUE_1', blocked: true }, operator))
+  release({ steps: [{ nodeId: 'ISSUE_1', why: 'reason', nextAction: 'work', mode: 'new' }] })
+  expect(await preview).toMatchObject({ status: 'conflict', error: { code: 'version-conflict' } })
+  expect((await h.status()).planning?.plans).toHaveLength(0)
+  expect(h.host.sessionsCreated.size).toBe(0)
+})
+
+it('observes a canonical Task already claimed by another source rule without taking its owner', async () => {
+  let mode = 'existing'
+  const h = await setup(true, { generate: async () => ({ steps: [{ nodeId: 'ISSUE_1', why: '同一任务', nextAction: '观察已有规则', mode }] }) })
+  completed(await h.app.execute(h.configure, operator)); const original = await h.execution()
+  const second = completed(await h.app.execute({ type: 'source.configure-project', commandId: 'second-source', projectId: h.scope.projectId, githubProject: { owner: 'acme', type: 'org', number: 2 } }, operator)).source!
+  const scope = { projectId: h.scope.projectId, sourceId: second.id }
+  completed(await h.app.query({ type: 'source.issues', ...scope, page: 1, perPage: 100, assignee: '@me', state: 'open', refresh: true }, operator))
+  completed(await h.app.execute({ ...h.configure, ...scope, commandId: 'configure-second', enabled: false }, operator))
+  completed(await h.app.execute({ type: 'continuous.instruct', commandId: 'instruct-second', ...scope, expectedVersion: 1, text: '继续同一个Issue' }, operator))
+  expect(await h.app.execute({ type: 'continuous.preview', commandId: 'invalid-owner', ...scope, expectedVersion: 2 }, operator)).toMatchObject({ status: 'failed', error: { code: 'planning-other-rule-owner' } })
+  mode = 'wait'
+  completed(await h.app.execute({ type: 'continuous.preview', commandId: 'wait-plan', ...scope, expectedVersion: 2 }, operator))
+  completed(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'enable-second', ...scope, expectedVersion: 3, enabled: true }, operator))
+  const rule = completed(await h.app.query({ type: 'continuous.status', ...scope }, operator)).continuousRule!
+  expect(rule.items[0]).toMatchObject({ nodeId: 'ISSUE_1', state: 'waiting' })
+  expect(rule.items[0]!.ref).toBeUndefined(); expect(rule.active).toBeUndefined()
+  expect(await h.execution()).toMatchObject({ id: original.id, owner: original.owner, epoch: original.epoch, session: original.session })
+  expect(h.host.sessionsCreated.size).toBe(1)
+})
+
+it('adopts cross-project source work using the explicitly previewed original execution context', async () => {
+  const h = await setup(false, { generate: async () => ({ steps: [{ nodeId: 'ISSUE_1', why: '跨来源同一工作', nextAction: '继续原会话', mode: 'existing' }] }) })
+  const resource2 = { runtimeId: 'host', workspaceId: 'second-workspace' }
+  h.host.resources = async () => [{ ref: resource, title: 'Original' }, { ref: resource2, title: 'Second' }]
+  completed(await h.app.execute(h.configure, operator))
+  const imported = completed(await h.app.execute({ type: 'source.import', commandId: 'original-import', ...h.scope, nodeId: 'ISSUE_1' }, operator))
+  const original = completed(await h.app.execute({ type: 'task.start', commandId: 'original-start', ref: imported.ref, expectedVersion: imported.task!.version, agentId: imported.task!.agentId, resource, model, agentPreset: 'agent', permissionPreset: 'safe' }, operator)).execution!
+  const connected = completed(await h.app.execute({ type: 'source.connect', commandId: 'connect-second-project', githubProject: { owner: 'acme', type: 'org', number: 2 } }, operator))
+  const scope = { projectId: connected.project!.id, sourceId: connected.source!.id }
+  completed(await h.app.query({ type: 'source.issues', ...scope, page: 1, perPage: 100, assignee: '@me', state: 'open', refresh: true }, operator))
+  completed(await h.app.execute({ ...h.configure, ...scope, commandId: 'configure-second-project', resource: resource2 }, operator))
+  completed(await h.app.execute({ type: 'continuous.instruct', commandId: 'cross-instruct', ...scope, expectedVersion: 1, text: '复用已有工作及其原执行资源' }, operator))
+  completed(await h.app.execute({ type: 'continuous.preview', commandId: 'cross-preview', ...scope, expectedVersion: 2 }, operator))
+  const admission = vi.spyOn(h.host.execution, 'check')
+  completed(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'cross-enable', ...scope, expectedVersion: 3, enabled: true }, operator))
+  const rule = completed(await h.app.query({ type: 'continuous.status', ...scope }, operator)).continuousRule!
+  expect(rule.active).toEqual(original.ref)
+  expect(rule.resource).toEqual(resource2)
+  expect(admission).toHaveBeenCalledWith(expect.objectContaining({ resource: original.resource, session: original.session, sessionMode: 'reuse' }))
+  expect(await h.execution(original.ref)).toMatchObject({ id: original.id, owner: original.owner, epoch: original.epoch, resource: original.resource, session: original.session })
+  expect(h.host.sessionsCreated.size).toBe(1); expect(h.host.sends).toHaveLength(1)
 })
 
 it('bounds failed safe settlement, keeps the slot fenced, and allows explicit recovery without model restart', async () => {
