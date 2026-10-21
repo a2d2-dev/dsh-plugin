@@ -38,4 +38,14 @@ O-F1：源码与聚焦回归已闭合至 447e3ed2ad4e7c37281ebc8dc4df8c4c2f7ff1b
 
 O-F2：源码与聚焦回归已闭合至 0343129dbac11623f7aa5ac24d1794b64ccbaad3。主会话亲读日志绑定/窗口、preview-stop、assessStop与断言，并独立运行 `node --test scripts/v4-acceptance/shutdown-log.test.mjs scripts/v4-acceptance/stopped-cut.test.mjs`：8/8、fail=0、skipped=0、exit0。真实error+exit0被拒新；日志身份/前缀/完整行/预算漂移不能声称无错误；raw只存私有文件；仍先做静态完整性才允许coherent rollback，不推断graceful。最终新plan/frozen tools集成尚待核对。
 
-两live实例均尚未因本任务切换，真实模型与页面验收尚未完成。
+## 首次真实执行与当前恢复事实
+
+唯一执行计划SHA256为4d75ba31e211873b1f9e47f4a9ee70ec8958c9e2befe931e30cd1fdfde6951e7；目标仅原18782。临采三Session/input/job-list/PID后dry-run ready=true，再由服务外systemd单次执行。原始failed run及其plan/instruction/lock/日志均保留，不重跑或覆盖。
+
+实际signal到holder收敛口径6681ms触发既定5000ms拒新，新版本没有apply。code0/null和空的具名CLI日志窗口不证明graceful；原始旧CLI退出记录无timestamp，不能从当前证据减去holder时间制造通过。
+
+停后完整zstd、三Session前缀42/27/4、无写FD0及两宿主native双读均通过。runner应用独立a450 rollback并启动后，rollbackVerify报`actual loaded Script response capture incomplete`，所以unit exit1、completion状态为failed-needs-external-recovery，不能称自动回滚验收已通过。completion.deployed是计划new指纹，不能当实际部署证据。
+
+主会话已独立核对：原18782的launcher3134479/CLI3134486实际指向独立rollback a450，client匹配7af60c97…而非新client；三Session的cwd/config/全部accepted前缀及当前workspace/runtime/work材料哈希均保留。实际截图显示DSH壳、旧A²D²入口及原会话，但Preview Notice仍覆盖，不能算完整交互验收。
+
+高级执行者目前只读诊断CDP缺body/frame/loader的具体分支及Notice时序，先核环境与断言含义；不改冻结工具、测试预算或安全门，不发新停止/重启指令。原18781未操作，真实模型与业务页面验收仍未完成。下一步需要基于实际根因做最小整改与新的精确计划，不能复用已消费run。
