@@ -1,0 +1,3553 @@
+{
+  "observedAt": "2026-10-21T18:03:15.916783+00:00",
+  "instances": {
+    "gui": {
+      "capturedAt": "2026-10-21T17:35:39.060Z",
+      "origin": "http://127.0.0.1:18781",
+      "program": "dsh-dev-web-server",
+      "service": "dsh-dev-web-server               RUNNING   pid 1423918, uptime 3 days, 2:14:56",
+      "hostCommit": "a45068d2ec03326c800c68c9bdcd47508e3ccb9c",
+      "pluginRoot": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-runtime-phase1",
+      "dependency": "link:/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-runtime-phase1",
+      "fingerprints": [
+        {
+          "path": "/data/_dsh-dev/sessions/--data-_dsh-dev-projects-runtime-verification--/session-4eb48620-a907-4613-a731-2a3bbbeb6c8b/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-_dsh-dev-projects-runtime-verification--/session-4eb48620-a907-4613-a731-2a3bbbeb6c8b/session.v4.jsonl.zstd",
+          "bytes": 87296,
+          "sha256": "319fad4adfd5003bc1a02a83e0d25ad3245c823861109bccc6672c89928ee461"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-_dsh-dev-projects-runtime-verification--/session-aac5dc70-7473-4f89-b003-0718720e5f25/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-_dsh-dev-projects-runtime-verification--/session-aac5dc70-7473-4f89-b003-0718720e5f25/session.v4.jsonl.zstd",
+          "bytes": 418,
+          "sha256": "1819262e8c3dc5d6b9fd246d5f23a0ab808ecba65b3167d614a4de7ee61e7a3c"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-_dsh-dev-projects-runtime-verification--/session-b3edefe7-fbb4-4e24-9eca-eb754a0d3ed5/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-_dsh-dev-projects-runtime-verification--/session-b3edefe7-fbb4-4e24-9eca-eb754a0d3ed5/session.v4.jsonl.zstd",
+          "bytes": 71714,
+          "sha256": "182d1a5766aeb73e0955a86835493ffb86f6e73c438bbbae6e60039365ce6054"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-_dsh-dev-projects-runtime-verification--/session-b5110c24-47a5-4c5f-954f-7a6123aa1454/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-_dsh-dev-projects-runtime-verification--/session-b5110c24-47a5-4c5f-954f-7a6123aa1454/session.v4.jsonl.zstd",
+          "bytes": 105479,
+          "sha256": "a4c7e72f6bc422a9d8d7b71d444710d0927fa43be21cc6c6757d8fab9e6df08f"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-_dsh-dev-projects-runtime-verification--/session-e98cf45f-6066-4150-8657-bca485289ebb/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-_dsh-dev-projects-runtime-verification--/session-e98cf45f-6066-4150-8657-bca485289ebb/session.v4.jsonl.zstd",
+          "bytes": 334,
+          "sha256": "c8bb83d5a3ba59d00dbbb517c6e25ce7cfd521277831b730f2abf1c451453800"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-_dsh-dev-projects-runtime-verification--/session-fddb6534-3784-4b90-94c0-2ebcda5081f8/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-_dsh-dev-projects-runtime-verification--/session-fddb6534-3784-4b90-94c0-2ebcda5081f8/session.v4.jsonl.zstd",
+          "bytes": 65748,
+          "sha256": "246cf230c0f840de7236222c0589df8dd9cb9996095214406f014c6877d826f1"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-_openclaw-workspace-edge-platform--/session-0ce6d51b-cfc0-4d36-a0e1-8e570667bafb/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-_openclaw-workspace-edge-platform--/session-0ce6d51b-cfc0-4d36-a0e1-8e570667bafb/session.v4.jsonl.zstd",
+          "bytes": 136287,
+          "sha256": "bb4395a19df659ac7425db25252d3acc21d6854518180a0ac421c9d4f896de8c"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-_openclaw-workspace-edge-platform--/session-1f0abe49-1616-43ec-84b1-2d06d6130663/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-_openclaw-workspace-edge-platform--/session-1f0abe49-1616-43ec-84b1-2d06d6130663/session.v4.jsonl.zstd",
+          "bytes": 836687,
+          "sha256": "6ebb13fadc35314dc597980dce65957ae2cb86afede406a7e3e0fc662904a294"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-_openclaw-workspace-edge-platform--/session-78b23871-99e3-4213-970a-6a3e1dfc02a0/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-_openclaw-workspace-edge-platform--/session-78b23871-99e3-4213-970a-6a3e1dfc02a0/session.v4.jsonl.zstd",
+          "bytes": 44835,
+          "sha256": "3bad5700f9d47b3a499e16e840e6cc9a7ee85584ed4c28ed701c439f1620a17b"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-_openclaw-workspace-edge-platform--/session-b1d2dccd-aad3-4977-8e93-4b197e5facaa/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-_openclaw-workspace-edge-platform--/session-b1d2dccd-aad3-4977-8e93-4b197e5facaa/session.v4.jsonl.zstd",
+          "bytes": 348793,
+          "sha256": "c699db8415796540a39442a57652d850573376c07d1759852dc815fa91b17969"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-_openclaw-workspace-edge-platform--/session-c22770e9-75f9-4932-b610-a01352c736db/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-_openclaw-workspace-edge-platform--/session-c22770e9-75f9-4932-b610-a01352c736db/session.v4.jsonl.zstd",
+          "bytes": 1109693,
+          "sha256": "56342ab5e4c982793f78362f8d3fdc2bbe0448bb4577144c13d5c6c5be95f137"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-_openclaw-workspace-edge-platform--/session-d0abceb0-e1b1-43af-9bc9-5d497e07dfc3/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-_openclaw-workspace-edge-platform--/session-d0abceb0-e1b1-43af-9bc9-5d497e07dfc3/session.v4.jsonl.zstd",
+          "bytes": 1289293,
+          "sha256": "c66778f8e714984490cd72c15be914c8b807b045f0e66fdf09004431f8fcad4b"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev--/0f23f361-3f1a-43fe-8923-f45dabc015cd/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev--/0f23f361-3f1a-43fe-8923-f45dabc015cd/session.v4.jsonl.zstd",
+          "bytes": 269703,
+          "sha256": "6be5c6ce23c007078aea8465c1f78bdaa0c2f15a2de168c04defc2233ac027ad"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev--/135703da-6656-4cbc-961f-124fe5cceb2c/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev--/135703da-6656-4cbc-961f-124fe5cceb2c/session.v4.jsonl.zstd",
+          "bytes": 102893,
+          "sha256": "40ab99ac00a3de5e714e31d7f877ecdd99941da26db53ba30641e699907350ec"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev--/355fe52a-ae49-46d5-b587-55681b01c319/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev--/355fe52a-ae49-46d5-b587-55681b01c319/session.v4.jsonl.zstd",
+          "bytes": 237201,
+          "sha256": "58ed4d745b27a51ed7680666bb357d585098439b4a05825cbae956f05b9dd33f"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev--/4fe8fece-ebd1-4da9-8a4a-79c82d399623/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev--/4fe8fece-ebd1-4da9-8a4a-79c82d399623/session.v4.jsonl.zstd",
+          "bytes": 280375,
+          "sha256": "45fe52f4d7f6b33ae8699a04f292d26fd62c1548f3c7592467494e6578676c61"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev--/b3613725-3bc0-4795-aa5e-648f32a096c8/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev--/b3613725-3bc0-4795-aa5e-648f32a096c8/session.v4.jsonl.zstd",
+          "bytes": 216445,
+          "sha256": "735027688449e381d1530d58dd319f61418c71604e047c933287302aaea2d279"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev--/session-32736e26-d070-4924-9477-d7207ba98a5a/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev--/session-32736e26-d070-4924-9477-d7207ba98a5a/session.v4.jsonl.zstd",
+          "bytes": 2070985,
+          "sha256": "4cd7fc9371690e48e61176780782f47670bb3f6a2a8f7a61cf1227a2870f38db"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev--/session-a1573b1b-f1ce-43bb-8e8e-e270e1776fa2/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev--/session-a1573b1b-f1ce-43bb-8e8e-e270e1776fa2/session.v4.jsonl.zstd",
+          "bytes": 408,
+          "sha256": "df227dcdf0c5492bd8bd3928a59b27b496c0d26191971b7fea068ceed75a72ad"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-plugin-only-compat--/session-37302b02-f8a7-4fcd-a520-589b2299969b/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-plugin-only-compat--/session-37302b02-f8a7-4fcd-a520-589b2299969b/session.v4.jsonl.zstd",
+          "bytes": 19411,
+          "sha256": "ef5178eb7d9f7b869f9c3a12a2cc7b7e106ae52a7cedef2e3b156479d07425eb"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-plugin-only-compat--/session-a5137720-247a-49e5-a04b-3d8bcd6e39fe/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-plugin-only-compat--/session-a5137720-247a-49e5-a04b-3d8bcd6e39fe/session.v4.jsonl.zstd",
+          "bytes": 49575,
+          "sha256": "5a3f4f280cb8b6f3c9d15ee1e3c7afd364cfc5b9733850e50e281439cce65301"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-plugin-only-compat--/session-f9408283-4f76-48e4-9703-7d9da47112a4/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-plugin-only-compat--/session-f9408283-4f76-48e4-9703-7d9da47112a4/session.v4.jsonl.zstd",
+          "bytes": 18332,
+          "sha256": "ef75f49da075359b3571044aab51af5bd8a5a39c06ad28f86055cfe349c4404b"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/18df3b64-5abd-4202-9659-b6ec74353165/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/18df3b64-5abd-4202-9659-b6ec74353165/session.v4.jsonl.zstd",
+          "bytes": 604812,
+          "sha256": "9f023f0671de4c12c4d7b115a6d75d20b4fd65e1086dd7f92a7a60f2190b29c7"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/1e67156d-7961-4d4b-83c4-9367db44d684/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/1e67156d-7961-4d4b-83c4-9367db44d684/session.v4.jsonl.zstd",
+          "bytes": 518349,
+          "sha256": "cb3d8a47a138609fccaa633531cf9477b8243103b9440471370dddc6d22c36c3"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/2ad28d6d-a187-4757-bd81-7c3ae9d6686d/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/2ad28d6d-a187-4757-bd81-7c3ae9d6686d/session.v4.jsonl.zstd",
+          "bytes": 353277,
+          "sha256": "196c15a09271ba0ee271839d1567a2671ad6c502616cfd0a873e566cda456b97"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/2fb9ab20-8e39-44d0-ad79-cdefdb698791/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/2fb9ab20-8e39-44d0-ad79-cdefdb698791/session.v4.jsonl.zstd",
+          "bytes": 1152059,
+          "sha256": "9c056f23590dc470766731de18cb1696aa5a61e093b8a26f90f65b81632e9156"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/36f3a23d-2eaa-4737-92c4-7b6bef2a41d6/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/36f3a23d-2eaa-4737-92c4-7b6bef2a41d6/session.v4.jsonl.zstd",
+          "bytes": 65423,
+          "sha256": "84929091d1e3f56dbba64f6e19bc1058b8060f15a706dbe181cfb1230266f713"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/3e8f2c56-cbc2-42bf-978e-041a796df2d4/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/3e8f2c56-cbc2-42bf-978e-041a796df2d4/session.v4.jsonl.zstd",
+          "bytes": 984079,
+          "sha256": "1a249d749e415271bfdca1782dbe69e04810735d8f2e442c7665219e9e0eb331"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/4b422697-5be7-43b9-9fa0-057cb6afcdb5/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/4b422697-5be7-43b9-9fa0-057cb6afcdb5/session.v4.jsonl.zstd",
+          "bytes": 1179781,
+          "sha256": "b4c6a508f4f93798df9b38ca0bd7e554e7d4231f7e39f30b29dd2dff7ca449fd"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/58ff3985-ac59-458e-8aeb-1c4cc06059ca/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/58ff3985-ac59-458e-8aeb-1c4cc06059ca/session.v4.jsonl.zstd",
+          "bytes": 492777,
+          "sha256": "1ff64372e50b9b04925bc2e1c5e3ffcd6208757939fae1350909ca24d71e1c2e"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/641beb30-6a8c-4d89-8912-3f08e9938873/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/641beb30-6a8c-4d89-8912-3f08e9938873/session.v4.jsonl.zstd",
+          "bytes": 515939,
+          "sha256": "0c77ba359a42300bbe32800c25afcda2ff27c56fb85e579d77d138460bbe2097"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/9705b66c-7217-4eef-969c-b3ff66b75e3d/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/9705b66c-7217-4eef-969c-b3ff66b75e3d/session.v4.jsonl.zstd",
+          "bytes": 574388,
+          "sha256": "6c32ca1150c08c2cfef4f1c87553a0e3daa32d574f22c849079d376a78d25ac2"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/a507fb3c-83ec-4d8f-9ed3-f5d0771552a7/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/a507fb3c-83ec-4d8f-9ed3-f5d0771552a7/session.v4.jsonl.zstd",
+          "bytes": 158924,
+          "sha256": "682f86b33945936aeef393f02ed0b3acd768891e811b31ad121b7501f09eb412"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/d08176e9-2231-4c27-a967-2cdae1ea9a94/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/d08176e9-2231-4c27-a967-2cdae1ea9a94/session.v4.jsonl.zstd",
+          "bytes": 128091,
+          "sha256": "8792dfc05ea10df4c4230e12de92f1805295362e994eba8da2cb9e20a257dc43"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/d1e3d3c9-d2e6-4803-8871-31858289cc1a/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/d1e3d3c9-d2e6-4803-8871-31858289cc1a/session.v4.jsonl.zstd",
+          "bytes": 102753,
+          "sha256": "5a5ffe8d66abeb6696da734b4da992c8b9661800580cd43ae6334bbad00c80e7"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/fdd48811-d930-45d9-862e-bae607802b61/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/fdd48811-d930-45d9-862e-bae607802b61/session.v4.jsonl.zstd",
+          "bytes": 526376,
+          "sha256": "f5df6a095e9ffe8721bc3e8c7761bd818953779472da9c6b9e302eb064b03c6c"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-0bf12b17-ffa2-4af6-abb6-b06bfdd8a30f/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-0bf12b17-ffa2-4af6-abb6-b06bfdd8a30f/session.v4.jsonl.zstd",
+          "bytes": 2123253,
+          "sha256": "83311fecd6dcd830d2548fa90cd137887dcffe735ec48f4b7b1037f4f8f42058"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-1350b913-2434-4f1f-9d4b-1b7341b99ac5/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-1350b913-2434-4f1f-9d4b-1b7341b99ac5/session.v4.jsonl.zstd",
+          "bytes": 437494,
+          "sha256": "19322c2c4430d1ba939ca22e9374abed97ba7eba283c4e9cc86c05570cabdabd"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-13680870-542e-4703-98d3-61fefe02a491/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-13680870-542e-4703-98d3-61fefe02a491/session.v4.jsonl.zstd",
+          "bytes": 408406,
+          "sha256": "c1266f6f95fd252a99bcf0765dec49a011605492a71927b49e60d1f1bbe356ad"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-13b1a82a-7a5e-4497-af08-7e2207397754/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-13b1a82a-7a5e-4497-af08-7e2207397754/session.v4.jsonl.zstd",
+          "bytes": 352,
+          "sha256": "620d1a4a31ca1c852de7a3aa83db8bd9506afdd4f9e3c7417c312629a22d94d3"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-18f67a63-7c39-4a4e-89ed-3bf588c7fa92/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-18f67a63-7c39-4a4e-89ed-3bf588c7fa92/session.v4.jsonl.zstd",
+          "bytes": 269470,
+          "sha256": "ca8567e770315a43810ec643ceb4f099eadafb8d990e181f42a84927934ab09b"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-1f5b2d85-c5a6-4c6d-8d4c-34f24370aa19/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-1f5b2d85-c5a6-4c6d-8d4c-34f24370aa19/session.v4.jsonl.zstd",
+          "bytes": 903220,
+          "sha256": "e170af4a4749cdd8e67e76a08e01bd92b0b20f29dde177384f24435de0381f00"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-25926e66-1382-46e6-9aee-95485e5e336d/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-25926e66-1382-46e6-9aee-95485e5e336d/session.v4.jsonl.zstd",
+          "bytes": 432680,
+          "sha256": "26c45328d31dda208b488f399fb312d29198b1b31fa7366edcd75b52da880c21"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-25bef557-597a-4418-96e4-7727946f1d20/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-25bef557-597a-4418-96e4-7727946f1d20/session.v4.jsonl.zstd",
+          "bytes": 1695786,
+          "sha256": "a09fee16ec26c2ee1a959363b002f8fdf1a2efbe24b834fba6596d7dab1edaa3"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-294c5ff3-3da4-4c6e-b5bc-fb3826ccfede/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-294c5ff3-3da4-4c6e-b5bc-fb3826ccfede/session.v4.jsonl.zstd",
+          "bytes": 1050445,
+          "sha256": "5dbf414b0ca6693031b8cfbd6acd4c02dd6692797cfe3df380c4c5c5a22e70ae"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-29b4d6f9-7100-476e-a2f8-0a3b87d35d7a/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-29b4d6f9-7100-476e-a2f8-0a3b87d35d7a/session.v4.jsonl.zstd",
+          "bytes": 5629267,
+          "sha256": "1ffd2bc926a1fd36ca9d8fac66e5fd8152e3ffcef98f760ddb391c6f9b7eafe9"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-30e6e648-a269-4302-8e1e-67367eb94ece/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-30e6e648-a269-4302-8e1e-67367eb94ece/session.v4.jsonl.zstd",
+          "bytes": 705277,
+          "sha256": "b9b8dd742748e341818a4cacb49df3ae4fb519394d964cb60098527f10accdcb"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-34d78ddc-66d5-4123-b894-9a02aaa1ee5d/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-34d78ddc-66d5-4123-b894-9a02aaa1ee5d/session.v4.jsonl.zstd",
+          "bytes": 1070172,
+          "sha256": "5bae61ef0d343e4fc75e279d97ae80bc5615246140b7c7443d44b4faf51c458b"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-35bf6fbc-7def-4c11-95a5-4f34c05528be/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-35bf6fbc-7def-4c11-95a5-4f34c05528be/session.v4.jsonl.zstd",
+          "bytes": 824940,
+          "sha256": "3b3650c976e6e4ad8c376a82806331120637ee6567e8bf544cc42a896a88a4a7"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-38144b65-3833-4acb-b43c-36e5daea1772/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-38144b65-3833-4acb-b43c-36e5daea1772/session.v4.jsonl.zstd",
+          "bytes": 237401,
+          "sha256": "35c8e0c37ad2ad2eb6a362ace251cf45473857f220b6cd5088274ca423dbe4e1"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-3ee1b56a-2b9d-42b5-b3bc-c150c6ee7490/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-3ee1b56a-2b9d-42b5-b3bc-c150c6ee7490/session.v4.jsonl.zstd",
+          "bytes": 1034700,
+          "sha256": "dc0fff1aceb9693f15640d98de2b466d5ce1c49bbe32fe1c28e25dc654c21e84"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-50f06e91-88d3-4b40-bd2a-29a77f2b9acd/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-50f06e91-88d3-4b40-bd2a-29a77f2b9acd/session.v4.jsonl.zstd",
+          "bytes": 903536,
+          "sha256": "8ce4ffb6a6ecabb751f4c4636dc7b624726c762c1efdeb2c47a9dffc14e1b216"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-51a86c30-e8e8-4ec9-803a-054aec4a9e8d/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-51a86c30-e8e8-4ec9-803a-054aec4a9e8d/session.v4.jsonl.zstd",
+          "bytes": 5724435,
+          "sha256": "4feca3a87468bb2ca9bc31045fb6e517a2c6020b80b183eab40ec8a013874db3"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-54a82bf0-95a2-4861-96e8-ed02c7caebc2/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-54a82bf0-95a2-4861-96e8-ed02c7caebc2/session.v4.jsonl.zstd",
+          "bytes": 730044,
+          "sha256": "b6702fa0d5b07fe5fe6dc09f87d8ec255d90ac2a96fc9c3c9d281cdf3d8291c4"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-5a3fa3bc-45aa-481f-b101-70e44d606273/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-5a3fa3bc-45aa-481f-b101-70e44d606273/session.v4.jsonl.zstd",
+          "bytes": 350891,
+          "sha256": "88fc93c0c91a47d6fae45c80e0b599a0371d6237cdd70d451bd8a9d1ff22a6f8"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-5d324db4-1115-46c5-bcb8-eccc324fda7e/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-5d324db4-1115-46c5-bcb8-eccc324fda7e/session.v4.jsonl.zstd",
+          "bytes": 574012,
+          "sha256": "0498100952c300eb719b36ac7ee73e4455cfa23687fe93f9e06ba67fb858917a"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-609b636b-46f2-4a35-a190-da1f857ede50/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-609b636b-46f2-4a35-a190-da1f857ede50/session.v4.jsonl.zstd",
+          "bytes": 2582473,
+          "sha256": "c016e46b0a46e2371e81020d148f773284c3170208d2af5e65b02fb43dedb6ab"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-70b620cd-a209-437d-b944-02fffa8df180/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-70b620cd-a209-437d-b944-02fffa8df180/session.v4.jsonl.zstd",
+          "bytes": 503659,
+          "sha256": "7a2267a6d78c1b31a987a8cbf98f9317a720222e8a3b079a28c55d77af8327ea"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-72ffc150-4e24-497b-b7a5-fa35c8a6255c/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-72ffc150-4e24-497b-b7a5-fa35c8a6255c/session.v4.jsonl.zstd",
+          "bytes": 1504763,
+          "sha256": "fa7415d43fa8a2e8bbb23cea80a1c96c890b154cb4fa5006cde9dfe0fcb53895"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-76f9b69f-8479-48af-9667-cdb299637598/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-76f9b69f-8479-48af-9667-cdb299637598/session.v4.jsonl.zstd",
+          "bytes": 428366,
+          "sha256": "a8085889ed2cfddef099b9d57e3bf84feaddfc2bb5b0396254f6d672a8a1761a"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-7d166229-8aca-457c-ba59-61fd73307114/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-7d166229-8aca-457c-ba59-61fd73307114/session.v4.jsonl.zstd",
+          "bytes": 2480806,
+          "sha256": "9482b7e9b67c07de109c9f0588658b2b1cd16ad4461ac36db2217e10f8f58fd6"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-7d3a4151-62c4-4288-bb75-3eb5cd3afea4/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-7d3a4151-62c4-4288-bb75-3eb5cd3afea4/session.v4.jsonl.zstd",
+          "bytes": 730836,
+          "sha256": "5ea83b7056dec24fa8d17d68b5086305df70320cf76e0033810fa1b00070f850"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-8036f73a-6976-4811-90ae-7efba16fd53b/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-8036f73a-6976-4811-90ae-7efba16fd53b/session.v4.jsonl.zstd",
+          "bytes": 782180,
+          "sha256": "6197dfa98317c6ec91614d9826f2f0a1632774e45e769055346254b46e75cd8f"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-82efc9ba-0af0-43ca-bdb9-0b2ab219833e/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-82efc9ba-0af0-43ca-bdb9-0b2ab219833e/session.v4.jsonl.zstd",
+          "bytes": 125245,
+          "sha256": "c13e16e1941d502e6a9247ce7051314ea726947cd0bfbef8d3b3399b1a60b33f"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-96eef4ed-f042-4165-8771-0666d5981c57/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-96eef4ed-f042-4165-8771-0666d5981c57/session.v4.jsonl.zstd",
+          "bytes": 1175933,
+          "sha256": "70cf4c7030c61ef71851bb0806a39c7c1d99924090f92a5c285d3a27d42a5b0d"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-a4257fe4-806a-4f64-bfaa-bad372a10826/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-a4257fe4-806a-4f64-bfaa-bad372a10826/session.v4.jsonl.zstd",
+          "bytes": 1113401,
+          "sha256": "f89f5822b7b6b82772c3711975c17fdd7ef8b48dfe49c7eea6a1b9aa21fcd619"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-abfdbcc6-11d0-400a-96ac-13e4808512b1/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-abfdbcc6-11d0-400a-96ac-13e4808512b1/session.v4.jsonl.zstd",
+          "bytes": 1056664,
+          "sha256": "3411b0ede4525863ab9c082bac9dc856553bd7d2b0c9b53c65f4647b0f4ddb8b"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-b3f5c11a-870b-4561-a324-0a867c04e3e2/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-b3f5c11a-870b-4561-a324-0a867c04e3e2/session.v4.jsonl.zstd",
+          "bytes": 1061090,
+          "sha256": "6c8ec33ff544a10e536e6ee3cc4644ee56e020cee542faade263032482cd555a"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-c4934057-134a-43bc-8c66-effdf5e92ad3/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-c4934057-134a-43bc-8c66-effdf5e92ad3/session.v4.jsonl.zstd",
+          "bytes": 1097010,
+          "sha256": "42bf015ed8a9846bae7d3f45767429df101e516ebcfb8fea8a36f461f29aea0f"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-cf8c7767-3187-4ef6-b2b0-c5c5f6b4e9aa/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-cf8c7767-3187-4ef6-b2b0-c5c5f6b4e9aa/session.v4.jsonl.zstd",
+          "bytes": 2912410,
+          "sha256": "db0853d7895838fc2d2f6fa6eb62fd11aa99437c060160fadce49137e0a7a823"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-d5bfb702-23a5-41cb-8a20-7f864d237513/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-d5bfb702-23a5-41cb-8a20-7f864d237513/session.v4.jsonl.zstd",
+          "bytes": 2908496,
+          "sha256": "68e6f6904832354c4d58ce737a1d4d1da21b5b5c469c91040e10590416869559"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-da5e4b6f-a3de-49e6-ae4a-b250a300d815/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-da5e4b6f-a3de-49e6-ae4a-b250a300d815/session.v4.jsonl.zstd",
+          "bytes": 3126161,
+          "sha256": "cf4b5a05396341df81fd8dc44361b3d0c8f043f8e0af5230965f5b9999fdbaf2"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-de84754b-8c5f-4704-94fc-04b371e7f853/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-de84754b-8c5f-4704-94fc-04b371e7f853/session.v4.jsonl.zstd",
+          "bytes": 909513,
+          "sha256": "3bf67c5bc39b3189fce60a4cb41c95b908b00a9cc04089f079be93aa9dccacc1"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-e08f248c-cef2-4b05-a8e4-7e60f6b2e9fa/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-e08f248c-cef2-4b05-a8e4-7e60f6b2e9fa/session.v4.jsonl.zstd",
+          "bytes": 371747,
+          "sha256": "1b869098101af6957e5cc7191f6fea079f6c6483dd8edd931be97d7e98f190e3"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-e611fd47-185c-431a-a925-422f6bda7cb1/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-e611fd47-185c-431a-a925-422f6bda7cb1/session.v4.jsonl.zstd",
+          "bytes": 439373,
+          "sha256": "e556c22c2580f5a7d12d62913b4dc237ac626e98bfffd4da0509e5ebe975bfd2"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-e718bab3-8b39-469a-b55e-329193a9da2f/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-e718bab3-8b39-469a-b55e-329193a9da2f/session.v4.jsonl.zstd",
+          "bytes": 271276,
+          "sha256": "84492070be430503411ca5e888963c0ecfa32e34ec8207191637442d9f16f59e"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-ed1a615b-b7d2-4ce7-bf5b-7148aa7a0697/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-ed1a615b-b7d2-4ce7-bf5b-7148aa7a0697/session.v4.jsonl.zstd",
+          "bytes": 988429,
+          "sha256": "a7e5291ef2e969d420d41682fddcdee64a4b22092a9524869e292f37ac81eed3"
+        },
+        {
+          "path": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-f329f695-ddb5-4280-b038-199cc9a30388/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-f329f695-ddb5-4280-b038-199cc9a30388/session.v4.jsonl.zstd",
+          "bytes": 409591,
+          "sha256": "baf8a5d6872ec0a1bcbdc0187394a274113cdaecdf51e676d1d6466d1ea1e302"
+        },
+        {
+          "path": "/data/_dsh-dev/profiles/web/package.json",
+          "realpath": "/data/_dsh-dev/profiles/web/package.json",
+          "bytes": 363,
+          "sha256": "f241a3babb7716547b4769fd018c42a6771f0d44dff076e9e465b0b16797fbe6"
+        },
+        {
+          "path": "/data/_dsh-dev/profiles/web/pnpm-lock.yaml",
+          "realpath": "/data/_dsh-dev/profiles/web/pnpm-lock.yaml",
+          "bytes": 337,
+          "sha256": "b96f64e19fe8ed662e3d92888f56c8952e925241ad32a16991b6f73f95edc913"
+        },
+        {
+          "path": "/data/_dsh-dev/profiles/web/cordis.yml",
+          "realpath": "/data/_dsh-dev/profiles/web/cordis.yml",
+          "bytes": 223,
+          "sha256": "c300dcf2ebc5f02062d6591268d29d3db6fe45e0cb138f5467276fe2ba06076e"
+        },
+        {
+          "path": "/data/_dsh-dev/profiles/web/cordis.patch.yml",
+          "realpath": "/data/_dsh-dev/profiles/web/cordis.patch.yml",
+          "bytes": 17744,
+          "sha256": "c8995ce349b03883d71c132de2d5d7e70713d3e0235bb1498436d53af0af57b4"
+        },
+        {
+          "path": "/data/_dsh-dev/profiles/web/node_modules/dsh-a2d2/package.json",
+          "realpath": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-runtime-phase1/package.json",
+          "bytes": 6164,
+          "sha256": "84ca04fa9358cc71cc24484291d81d4a546e59d3d401c861299be0ebbfb3e32e"
+        },
+        {
+          "path": "/data/_dsh-dev/profiles/web/node_modules/dsh-a2d2/lib/client.js",
+          "realpath": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-runtime-phase1/lib/client.js",
+          "bytes": 183709,
+          "sha256": "c25901bc9c78904f7372016d2b7ba6a5e11af1b955902b107470cb436719dcb9"
+        },
+        {
+          "path": "/data/_dsh-dev/storages/workspace.json",
+          "realpath": "/data/_dsh-dev/storages/workspace.json",
+          "bytes": 3157,
+          "sha256": "a867edb89875b06a8377c65f27fb261e83eaa4be1ecd2e919d0d08695869ff08"
+        },
+        {
+          "path": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/apps/web/dist/index.html",
+          "realpath": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/apps/web/dist/index.html",
+          "bytes": 824,
+          "sha256": "50dfa6c7ad6387c2daad164cb78d95df3b6eed8fe3cc720bddd6cd6698bdee94"
+        },
+        {
+          "path": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/jobs/jobs-local/lib/index.js",
+          "realpath": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/jobs/jobs-local/lib/index.js",
+          "bytes": 31157,
+          "sha256": "3bed0cd38c649f39b148752e742ff1ef57696a6b9b11b15ff8cc6cd1d4f08f26"
+        }
+      ],
+      "coverage": {
+        "modelCalls": "not instrumented; no model command issued by this collector",
+        "effectiveLivePermissions": "not verified; persisted selections and public projections only",
+        "snapshot": "sequential read; repeat after settlement and Session flush before deployment"
+      },
+      "records": [
+        {
+          "kind": "session",
+          "id": "session-4eb48620-a907-4613-a731-2a3bbbeb6c8b",
+          "identity": {
+            "cwd": "/data/_dsh-dev/projects/runtime-verification",
+            "agentPreset": "standard",
+            "config": {
+              "permission/preset": {
+                "preset": "workspace-write"
+              },
+              "sandbox/mode": {
+                "mode": "workspace-write"
+              },
+              "approval/policy": {
+                "policy": "ask"
+              },
+              "model/selection": {
+                "provider": "codex",
+                "model": "gpt-6.1-sol",
+                "reasoningEffort": "xhigh"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 123,
+          "historySha256": "6c40ca141bcc3c445f3e871c801c6c21beb3da3703d9aadc88756e8092a599e2"
+        },
+        {
+          "kind": "session",
+          "id": "session-aac5dc70-7473-4f89-b003-0718720e5f25",
+          "identity": {
+            "cwd": "/data/_dsh-dev/projects/runtime-verification",
+            "agentPreset": "standard",
+            "config": {
+              "permission/preset": {
+                "preset": "workspace-write"
+              },
+              "sandbox/mode": {
+                "mode": "workspace-write"
+              },
+              "approval/policy": {
+                "policy": "ask"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 5,
+          "historySha256": "a44787d5fd0a983a9ee45c443fb0b6f1d3ab20d71a4967f752a2516a8e2cdd66"
+        },
+        {
+          "kind": "session",
+          "id": "session-b3edefe7-fbb4-4e24-9eca-eb754a0d3ed5",
+          "identity": {
+            "cwd": "/data/_dsh-dev/projects/runtime-verification",
+            "agentPreset": "standard",
+            "config": {
+              "permission/preset": {
+                "preset": "workspace-write"
+              },
+              "sandbox/mode": {
+                "mode": "workspace-write"
+              },
+              "approval/policy": {
+                "policy": "ask"
+              },
+              "model/selection": {
+                "provider": "codex",
+                "model": "gpt-6.1-sol",
+                "reasoningEffort": "xhigh"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 81,
+          "historySha256": "8502f37c2d5887202ce11508377f443b752530ae4d8a6dbc3470fd95a5e92051"
+        },
+        {
+          "kind": "session",
+          "id": "session-b5110c24-47a5-4c5f-954f-7a6123aa1454",
+          "identity": {
+            "cwd": "/data/_dsh-dev/projects/runtime-verification",
+            "agentPreset": null,
+            "config": {
+              "permission/preset": {
+                "preset": "workspace-write"
+              },
+              "sandbox/mode": {
+                "mode": "workspace-write"
+              },
+              "approval/policy": {
+                "policy": "ask"
+              },
+              "model/selection": {
+                "provider": "codex",
+                "model": "gpt-6.1-sol",
+                "reasoningEffort": "xhigh"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 144,
+          "historySha256": "499f3ffde0077b680d8283c0412a4da3b1a79347e9a729c1ffb1262800b206c7"
+        },
+        {
+          "kind": "session",
+          "id": "session-e98cf45f-6066-4150-8657-bca485289ebb",
+          "identity": {
+            "cwd": "/data/_dsh-dev/projects/runtime-verification",
+            "agentPreset": "standard",
+            "config": {
+              "permission/preset": {
+                "preset": "workspace-write"
+              },
+              "sandbox/mode": {
+                "mode": "workspace-write"
+              },
+              "approval/policy": {
+                "policy": "ask"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 4,
+          "historySha256": "8e16d2ff270801cc3ab8ad2a9986dc4eda9b35e815e2c910f30b6401271007e9"
+        },
+        {
+          "kind": "session",
+          "id": "session-fddb6534-3784-4b90-94c0-2ebcda5081f8",
+          "identity": {
+            "cwd": "/data/_dsh-dev/projects/runtime-verification",
+            "agentPreset": "standard",
+            "config": {
+              "permission/preset": {
+                "preset": "workspace-write"
+              },
+              "sandbox/mode": {
+                "mode": "workspace-write"
+              },
+              "approval/policy": {
+                "policy": "ask"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 107,
+          "historySha256": "9a98e0abaa11676be29666dde9e21824a225b195f0843a284a17167df270d807"
+        },
+        {
+          "kind": "session",
+          "id": "session-0ce6d51b-cfc0-4d36-a0e1-8e570667bafb",
+          "identity": {
+            "cwd": "/data/_openclaw/workspace/edge-platform",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 117,
+          "historySha256": "11456bee388d7458c0f1e079460be1cbf9729c47c680a7785117dbc9841d5557"
+        },
+        {
+          "kind": "session",
+          "id": "session-1f0abe49-1616-43ec-84b1-2d06d6130663",
+          "identity": {
+            "cwd": "/data/_openclaw/workspace/edge-platform",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 783,
+          "historySha256": "8298c312fc8d11db6fd96834ccf01b17caac6173ca989dae5a6c7a4cf16114d0"
+        },
+        {
+          "kind": "session",
+          "id": "session-78b23871-99e3-4213-970a-6a3e1dfc02a0",
+          "identity": {
+            "cwd": "/data/_openclaw/workspace/edge-platform",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 31,
+          "historySha256": "93a6088fb65ee1d3b192c9176318f9924dab2824dc8bf9966e06bffd139a6596"
+        },
+        {
+          "kind": "session",
+          "id": "session-b1d2dccd-aad3-4977-8e93-4b197e5facaa",
+          "identity": {
+            "cwd": "/data/_openclaw/workspace/edge-platform",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 317,
+          "historySha256": "e8e07912420d833b0be87483dec9724b09563148acb57bedd28dc13a043d0620"
+        },
+        {
+          "kind": "session",
+          "id": "session-c22770e9-75f9-4932-b610-a01352c736db",
+          "identity": {
+            "cwd": "/data/_openclaw/workspace/edge-platform",
+            "agentPreset": "standard",
+            "config": {
+              "permission/preset": {
+                "preset": "danger-full-access"
+              },
+              "sandbox/mode": {
+                "mode": "danger-full-access"
+              },
+              "approval/policy": {
+                "policy": "never"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 963,
+          "historySha256": "d942078f0397f3725101549c127b16d0740f1af5b690592a285410fede7b4f95"
+        },
+        {
+          "kind": "session",
+          "id": "session-d0abceb0-e1b1-43af-9bc9-5d497e07dfc3",
+          "identity": {
+            "cwd": "/data/_openclaw/workspace/edge-platform",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 1006,
+          "historySha256": "67ba393f6e1627e76e21ba935e179130e9eff15c5ff55dda0b448f78ab7df7ad"
+        },
+        {
+          "kind": "session",
+          "id": "0f23f361-3f1a-43fe-8923-f45dabc015cd",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 189,
+          "historySha256": "898c170866be6551c538bd06c80a09b8705a9a6745e1c8cf44ea0cd7a2c77ae2"
+        },
+        {
+          "kind": "session",
+          "id": "135703da-6656-4cbc-961f-124fe5cceb2c",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 62,
+          "historySha256": "09bddc310d484ab62cb5e0eb5ba762a6ea8beb8910ac8572429007edb3a073b8"
+        },
+        {
+          "kind": "session",
+          "id": "355fe52a-ae49-46d5-b587-55681b01c319",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 149,
+          "historySha256": "c7c431a2ec60ed6dee718466a716cd4cf4e87adac930dd4f855b48792229b561"
+        },
+        {
+          "kind": "session",
+          "id": "4fe8fece-ebd1-4da9-8a4a-79c82d399623",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 189,
+          "historySha256": "a714b8397c905050e6bbcaf975f12d1a367311688f652efca3748e6acfe91a7e"
+        },
+        {
+          "kind": "session",
+          "id": "b3613725-3bc0-4795-aa5e-648f32a096c8",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 198,
+          "historySha256": "e7673ce671d85e092f4de326ad0dfb5f62a17b9a7be8599e19c5b604ad894a60"
+        },
+        {
+          "kind": "session",
+          "id": "session-32736e26-d070-4924-9477-d7207ba98a5a",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev",
+            "agentPreset": "standard",
+            "config": {
+              "permission/preset": {
+                "preset": "danger-full-access"
+              },
+              "sandbox/mode": {
+                "mode": "danger-full-access"
+              },
+              "approval/policy": {
+                "policy": "never"
+              },
+              "model/selection": {
+                "provider": "codex",
+                "model": "gpt-6-astra",
+                "reasoningEffort": "high"
+              }
+            },
+            "publicConfiguration": {
+              "agentPreset": "standard",
+              "permissions": {
+                "currentValue": "danger-full-access"
+              },
+              "modelSelection": {
+                "lastUsed": {
+                  "provider": "codex",
+                  "model": "gpt-6-astra",
+                  "reasoningEffort": "high"
+                },
+                "next": {
+                  "provider": "codex",
+                  "model": "gpt-6-astra",
+                  "reasoningEffort": "high"
+                }
+              }
+            }
+          },
+          "historyCount": 1458,
+          "historySha256": "d776ac8197ccb78c33dc1686c23e4e91071162e0898ca76ed5bafac2433a91bd"
+        },
+        {
+          "kind": "session",
+          "id": "session-a1573b1b-f1ce-43bb-8e8e-e270e1776fa2",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev",
+            "agentPreset": "standard",
+            "config": {
+              "permission/preset": {
+                "preset": "workspace-write"
+              },
+              "sandbox/mode": {
+                "mode": "workspace-write"
+              },
+              "approval/policy": {
+                "policy": "ask"
+              }
+            },
+            "publicConfiguration": {
+              "agentPreset": "standard",
+              "permissions": {
+                "currentValue": "workspace-write"
+              },
+              "modelSelection": {
+                "lastUsed": null,
+                "next": null
+              }
+            }
+          },
+          "historyCount": 5,
+          "historySha256": "5b868e33db7107e5d83873cb94f5f4882832cb8b5e9258d534444cccc18dbf79"
+        },
+        {
+          "kind": "session",
+          "id": "session-37302b02-f8a7-4fcd-a520-589b2299969b",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/plugin-only-compat",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "workspace-write",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 24,
+          "historySha256": "705c8ce2380078883e50051709b5ec0d7dddaf0017ee970c1e508333c5aa2179"
+        },
+        {
+          "kind": "session",
+          "id": "session-a5137720-247a-49e5-a04b-3d8bcd6e39fe",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/plugin-only-compat",
+            "agentPreset": "standard",
+            "config": {
+              "permission/preset": {
+                "preset": "workspace-write"
+              },
+              "sandbox/mode": {
+                "mode": "workspace-write"
+              },
+              "approval/policy": {
+                "policy": "ask"
+              }
+            },
+            "publicConfiguration": {
+              "agentPreset": "standard",
+              "permissions": {
+                "currentValue": "workspace-write"
+              },
+              "modelSelection": {
+                "lastUsed": {
+                  "provider": "codex",
+                  "model": "gpt-6.1-sol",
+                  "reasoningEffort": "high"
+                },
+                "next": {
+                  "provider": "codex",
+                  "model": "gpt-6.1-sol",
+                  "reasoningEffort": "high"
+                }
+              }
+            }
+          },
+          "historyCount": 73,
+          "historySha256": "ea42d0fe1b664b85ff2940fd58b6662bcf069b2ec292e4a304a88f0ce9aa8f7d"
+        },
+        {
+          "kind": "session",
+          "id": "session-f9408283-4f76-48e4-9703-7d9da47112a4",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/plugin-only-compat",
+            "agentPreset": "standard",
+            "config": {
+              "permission/preset": {
+                "preset": "workspace-write"
+              },
+              "sandbox/mode": {
+                "mode": "workspace-write"
+              },
+              "approval/policy": {
+                "policy": "ask"
+              }
+            },
+            "publicConfiguration": {
+              "agentPreset": "standard",
+              "permissions": {
+                "currentValue": "workspace-write"
+              },
+              "modelSelection": {
+                "lastUsed": {
+                  "provider": "deepseek-official",
+                  "model": "deepseek-flash",
+                  "reasoningEffort": "high"
+                },
+                "next": {
+                  "provider": "deepseek-official",
+                  "model": "deepseek-flash",
+                  "reasoningEffort": "high"
+                }
+              }
+            }
+          },
+          "historyCount": 29,
+          "historySha256": "3d0714f3a477d722930f9b211a830b8a6ddde59fe3be477b33f5ba89425aeccb"
+        },
+        {
+          "kind": "session",
+          "id": "18df3b64-5abd-4202-9659-b6ec74353165",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 255,
+          "historySha256": "d26ac254811663e5a1ec48001cf939486178913443023bb6436d12fdd06112e2"
+        },
+        {
+          "kind": "session",
+          "id": "1e67156d-7961-4d4b-83c4-9367db44d684",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 376,
+          "historySha256": "ed0ef144e1425d40b71586ce5b01dc626bac25c8890546560bf7e3f5876f3a30"
+        },
+        {
+          "kind": "session",
+          "id": "2ad28d6d-a187-4757-bd81-7c3ae9d6686d",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 189,
+          "historySha256": "250ad994a68e55619767feab2564b53ce69ac34d43beb42f82e900d0bee9b654"
+        },
+        {
+          "kind": "session",
+          "id": "2fb9ab20-8e39-44d0-ad79-cdefdb698791",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 1202,
+          "historySha256": "81ca269f07f0ee0b629e3c75485fae039db0d4ef1016da8091d466f00cd8b561"
+        },
+        {
+          "kind": "session",
+          "id": "36f3a23d-2eaa-4737-92c4-7b6bef2a41d6",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 49,
+          "historySha256": "b265f7f4d565d5c870c1b7f5c8db9232b2495195b82ae006970b3b224532f5e3"
+        },
+        {
+          "kind": "session",
+          "id": "3e8f2c56-cbc2-42bf-978e-041a796df2d4",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 708,
+          "historySha256": "ee580a6c0edf573570cc500ec4317865dd95fe8ec7ed1e72e0bd833fc80af42b"
+        },
+        {
+          "kind": "session",
+          "id": "4b422697-5be7-43b9-9fa0-057cb6afcdb5",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 1173,
+          "historySha256": "b483302d3172e60edc2d27af5a17ef69e3ed45a92d6c53585d1af2a19826d808"
+        },
+        {
+          "kind": "session",
+          "id": "58ff3985-ac59-458e-8aeb-1c4cc06059ca",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 376,
+          "historySha256": "03dee4808607bd5c3604a3c775c670456338f65aeda9455cbbe123641fece582"
+        },
+        {
+          "kind": "session",
+          "id": "641beb30-6a8c-4d89-8912-3f08e9938873",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 367,
+          "historySha256": "ca1285d694db4c1c3a9b8813c2d738f790f948523f312e586f6fbaa8ba3ce77c"
+        },
+        {
+          "kind": "session",
+          "id": "9705b66c-7217-4eef-969c-b3ff66b75e3d",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 398,
+          "historySha256": "c6c7d9f11c1bb7802edb62941c255b3dd2a46feced94dbb590c6c1701fe7c7bd"
+        },
+        {
+          "kind": "session",
+          "id": "a507fb3c-83ec-4d8f-9ed3-f5d0771552a7",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 78,
+          "historySha256": "7a284919e2587d661fcda6e4ba25fd09b9bbb9f07905f231579b091ef8015363"
+        },
+        {
+          "kind": "session",
+          "id": "d08176e9-2231-4c27-a967-2cdae1ea9a94",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "workspace-write",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 71,
+          "historySha256": "3a152b897c09094d9e63037d6909ba4010c3186c555c36e6c7edef5a779f305a"
+        },
+        {
+          "kind": "session",
+          "id": "d1e3d3c9-d2e6-4803-8871-31858289cc1a",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 65,
+          "historySha256": "7601225e83012f6eebe8719cfa5633a9ac9b7cc6d20fee250d459aac9af0f186"
+        },
+        {
+          "kind": "session",
+          "id": "fdd48811-d930-45d9-862e-bae607802b61",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 360,
+          "historySha256": "dafacfb62894040d32986030b02509c12b237fa86de67c0054f4b4de669547c8"
+        },
+        {
+          "kind": "session",
+          "id": "session-0bf12b17-ffa2-4af6-abb6-b06bfdd8a30f",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 1976,
+          "historySha256": "283b4edcd50a396d4d288bdc8de1cbd447dd12dd2c4a12345500ee8277151cf5"
+        },
+        {
+          "kind": "session",
+          "id": "session-1350b913-2434-4f1f-9d4b-1b7341b99ac5",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 369,
+          "historySha256": "d484acd06597db1856be6b3483f8b91eeabac5795478efa711f32701ca060dc1"
+        },
+        {
+          "kind": "session",
+          "id": "session-13680870-542e-4703-98d3-61fefe02a491",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 265,
+          "historySha256": "ff1debbd9e261d8957228d119cf705dc56a2189eb35bda312b580c5925bbb8bb"
+        },
+        {
+          "kind": "session",
+          "id": "session-13b1a82a-7a5e-4497-af08-7e2207397754",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "permission/preset": {
+                "preset": "workspace-write"
+              },
+              "sandbox/mode": {
+                "mode": "workspace-write"
+              },
+              "approval/policy": {
+                "policy": "ask"
+              }
+            },
+            "publicConfiguration": {
+              "agentPreset": "standard",
+              "permissions": {
+                "currentValue": "workspace-write"
+              },
+              "modelSelection": {
+                "lastUsed": null,
+                "next": null
+              }
+            }
+          },
+          "historyCount": 4,
+          "historySha256": "8f8fd12e195701dba6337d217bc98d62260f4503db89101a1dd9707ad902c16f"
+        },
+        {
+          "kind": "session",
+          "id": "session-18f67a63-7c39-4a4e-89ed-3bf588c7fa92",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 158,
+          "historySha256": "e63ade9b3e49f13e8fbb567795693d92b4b6776d07cf6c2e97b62f6b5fc278a8"
+        },
+        {
+          "kind": "session",
+          "id": "session-1f5b2d85-c5a6-4c6d-8d4c-34f24370aa19",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 936,
+          "historySha256": "3da21c08b9f83a1376c5f6fb222e0208ec7d88125826221ac4a026caff9c4d32"
+        },
+        {
+          "kind": "session",
+          "id": "session-25926e66-1382-46e6-9aee-95485e5e336d",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 226,
+          "historySha256": "09c0e772c8cd505185490eae153fbd6241254348489d31847496bdda44f2b594"
+        },
+        {
+          "kind": "session",
+          "id": "session-25bef557-597a-4418-96e4-7727946f1d20",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "permission/preset": {
+                "preset": "danger-full-access"
+              },
+              "sandbox/mode": {
+                "mode": "danger-full-access"
+              },
+              "approval/policy": {
+                "policy": "never"
+              }
+            },
+            "publicConfiguration": {
+              "agentPreset": "standard",
+              "permissions": {
+                "currentValue": "danger-full-access"
+              },
+              "modelSelection": {
+                "lastUsed": {
+                  "provider": "codex",
+                  "model": "gpt-6.1-sol",
+                  "reasoningEffort": "xhigh"
+                },
+                "next": {
+                  "provider": "codex",
+                  "model": "gpt-6.1-sol",
+                  "reasoningEffort": "xhigh"
+                }
+              }
+            }
+          },
+          "historyCount": 959,
+          "historySha256": "1f9063becb7edf32e6ae1d86677eb652eb871dcce6cfe5213b503ebc2ce319a2"
+        },
+        {
+          "kind": "session",
+          "id": "session-294c5ff3-3da4-4c6e-b5bc-fb3826ccfede",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 1133,
+          "historySha256": "5b18c1d50752c47d8af76fbf1b0ecce4ed997538607ee18d579b59d3f84a190e"
+        },
+        {
+          "kind": "session",
+          "id": "session-29b4d6f9-7100-476e-a2f8-0a3b87d35d7a",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "permission/preset": {
+                "preset": "danger-full-access"
+              },
+              "sandbox/mode": {
+                "mode": "danger-full-access"
+              },
+              "approval/policy": {
+                "policy": "never"
+              }
+            },
+            "publicConfiguration": {
+              "agentPreset": "standard",
+              "permissions": {
+                "currentValue": "danger-full-access"
+              },
+              "modelSelection": {
+                "lastUsed": {
+                  "provider": "codex",
+                  "model": "gpt-6-astra",
+                  "reasoningEffort": "high"
+                },
+                "next": {
+                  "provider": "codex",
+                  "model": "gpt-6-astra",
+                  "reasoningEffort": "high"
+                }
+              }
+            }
+          },
+          "historyCount": 1640,
+          "historySha256": "7aee1293d1416e2dba30b6f7aee518515d038435c6836af8fc7cec337073a726"
+        },
+        {
+          "kind": "session",
+          "id": "session-30e6e648-a269-4302-8e1e-67367eb94ece",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 753,
+          "historySha256": "831f751f34c8b946d345e5f1afec59d2401d12fbcc9ab85ad46a03c82eeb3325"
+        },
+        {
+          "kind": "session",
+          "id": "session-34d78ddc-66d5-4123-b894-9a02aaa1ee5d",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {
+              "agentPreset": "standard",
+              "permissions": {
+                "currentValue": "danger-full-access"
+              },
+              "modelSelection": {
+                "lastUsed": {
+                  "provider": "codex",
+                  "model": "gpt-6.1-sol",
+                  "reasoningEffort": "medium"
+                },
+                "next": {
+                  "provider": "codex",
+                  "model": "gpt-6.1-sol",
+                  "reasoningEffort": "medium"
+                }
+              }
+            }
+          },
+          "historyCount": 1092,
+          "historySha256": "86122de1d193543844f4ca767537de21ffe85879a20ba3acbf4bc95edba86694"
+        },
+        {
+          "kind": "session",
+          "id": "session-35bf6fbc-7def-4c11-95a5-4f34c05528be",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 1018,
+          "historySha256": "13e20152663f8538e531b3f55b88171b411aae643695549ac559e9ebae3022be"
+        },
+        {
+          "kind": "session",
+          "id": "session-38144b65-3833-4acb-b43c-36e5daea1772",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 214,
+          "historySha256": "76e7bd34af8d3dacfa6eea18b4892e7e84229b451315e5f1989ee8c42e1feb4b"
+        },
+        {
+          "kind": "session",
+          "id": "session-3ee1b56a-2b9d-42b5-b3bc-c150c6ee7490",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 977,
+          "historySha256": "4c44d80b0025dd26775dcc0f49429d080434bd67f0298439d73fafcad353bc02"
+        },
+        {
+          "kind": "session",
+          "id": "session-50f06e91-88d3-4b40-bd2a-29a77f2b9acd",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 870,
+          "historySha256": "61ca807fb14b36c4a50dc8e9fccaa0c3e274d757bf66f27b631097e226f2fdb5"
+        },
+        {
+          "kind": "session",
+          "id": "session-51a86c30-e8e8-4ec9-803a-054aec4a9e8d",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "permission/preset": {
+                "preset": "danger-full-access"
+              },
+              "sandbox/mode": {
+                "mode": "danger-full-access"
+              },
+              "approval/policy": {
+                "policy": "never"
+              }
+            },
+            "publicConfiguration": {
+              "agentPreset": "standard",
+              "permissions": {
+                "currentValue": "danger-full-access"
+              },
+              "modelSelection": {
+                "lastUsed": {
+                  "provider": "codex",
+                  "model": "gpt-6-astra",
+                  "reasoningEffort": "high"
+                },
+                "next": {
+                  "provider": "codex",
+                  "model": "gpt-6-astra",
+                  "reasoningEffort": "high"
+                }
+              }
+            }
+          },
+          "historyCount": 2637,
+          "historySha256": "9bfb8243a7ab728afda9d9e549348c12ac26474b1f36131f1dc3815ceb4eb596"
+        },
+        {
+          "kind": "session",
+          "id": "session-54a82bf0-95a2-4861-96e8-ed02c7caebc2",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 759,
+          "historySha256": "f7f9c7726307fe8e20995ef37d0ac6f905d8b6d89307219b8f389c864efa725d"
+        },
+        {
+          "kind": "session",
+          "id": "session-5a3fa3bc-45aa-481f-b101-70e44d606273",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 191,
+          "historySha256": "577194517cc1d92cdbc871fb430dd249917cca9fd4380aa87fae811f9ce80f19"
+        },
+        {
+          "kind": "session",
+          "id": "session-5d324db4-1115-46c5-bcb8-eccc324fda7e",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {
+              "agentPreset": "standard",
+              "permissions": {
+                "currentValue": "danger-full-access"
+              },
+              "modelSelection": {
+                "lastUsed": {
+                  "provider": "codex",
+                  "model": "gpt-6.1-sol",
+                  "reasoningEffort": "medium"
+                },
+                "next": {
+                  "provider": "codex",
+                  "model": "gpt-6.1-sol",
+                  "reasoningEffort": "medium"
+                }
+              }
+            }
+          },
+          "historyCount": 615,
+          "historySha256": "191d27711849cfbab49b40cbef8ebdac113cc686afcc277f667c3c75ec2b2d9d"
+        },
+        {
+          "kind": "session",
+          "id": "session-609b636b-46f2-4a35-a190-da1f857ede50",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "permission/preset": {
+                "preset": "danger-full-access"
+              },
+              "sandbox/mode": {
+                "mode": "danger-full-access"
+              },
+              "approval/policy": {
+                "policy": "never"
+              }
+            },
+            "publicConfiguration": {
+              "agentPreset": "standard",
+              "permissions": {
+                "currentValue": "danger-full-access"
+              },
+              "modelSelection": {
+                "lastUsed": {
+                  "provider": "codex",
+                  "model": "gpt-6-astra",
+                  "reasoningEffort": "high"
+                },
+                "next": {
+                  "provider": "codex",
+                  "model": "gpt-6-astra",
+                  "reasoningEffort": "high"
+                }
+              }
+            }
+          },
+          "historyCount": 1574,
+          "historySha256": "cb0324de2d02b8cabc1a4803e8455644d8f35fcfae882c6928503d1f76e59299"
+        },
+        {
+          "kind": "session",
+          "id": "session-70b620cd-a209-437d-b944-02fffa8df180",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 467,
+          "historySha256": "2f9ff28bb4d9667c3e6a59b298f39bcd1131c03ebbc0edb51f0a49968cd7a90e"
+        },
+        {
+          "kind": "session",
+          "id": "session-72ffc150-4e24-497b-b7a5-fa35c8a6255c",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "permission/preset": {
+                "preset": "danger-full-access"
+              },
+              "sandbox/mode": {
+                "mode": "danger-full-access"
+              },
+              "approval/policy": {
+                "policy": "never"
+              }
+            },
+            "publicConfiguration": {
+              "agentPreset": "standard",
+              "permissions": {
+                "currentValue": "danger-full-access"
+              },
+              "modelSelection": {
+                "lastUsed": {
+                  "provider": "codex",
+                  "model": "gpt-6-astra",
+                  "reasoningEffort": "high"
+                },
+                "next": {
+                  "provider": "codex",
+                  "model": "gpt-6-astra",
+                  "reasoningEffort": "high"
+                }
+              }
+            }
+          },
+          "historyCount": 1306,
+          "historySha256": "9bab7546bb3fbdbb20e82c047d54a02376f130301764c4a628c47a31e264daa0"
+        },
+        {
+          "kind": "session",
+          "id": "session-76f9b69f-8479-48af-9667-cdb299637598",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 340,
+          "historySha256": "d45d51ec350400492700fb3ea144378a9f9624b04bcbb650d38bac5019d82f9d"
+        },
+        {
+          "kind": "session",
+          "id": "session-7d166229-8aca-457c-ba59-61fd73307114",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "permission/preset": {
+                "preset": "danger-full-access"
+              },
+              "sandbox/mode": {
+                "mode": "danger-full-access"
+              },
+              "approval/policy": {
+                "policy": "never"
+              }
+            },
+            "publicConfiguration": {
+              "agentPreset": "standard",
+              "permissions": {
+                "currentValue": "danger-full-access"
+              },
+              "modelSelection": {
+                "lastUsed": {
+                  "provider": "codex",
+                  "model": "gpt-6-astra",
+                  "reasoningEffort": "high"
+                },
+                "next": {
+                  "provider": "codex",
+                  "model": "gpt-6-astra",
+                  "reasoningEffort": "high"
+                }
+              }
+            }
+          },
+          "historyCount": 1389,
+          "historySha256": "fb712045da6c24b29462542f21c401e481d978c8b6fb28817b1148ad3f67e726"
+        },
+        {
+          "kind": "session",
+          "id": "session-7d3a4151-62c4-4288-bb75-3eb5cd3afea4",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 809,
+          "historySha256": "d0c1e6e9ad913ea083f84622bb2281e13a934be5c1c6faed651ea8de999e8ae3"
+        },
+        {
+          "kind": "session",
+          "id": "session-8036f73a-6976-4811-90ae-7efba16fd53b",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 627,
+          "historySha256": "df21da24bc82a6de3c684b6e46f5664256a5d3f96135d7b71f24e01b71b26b0d"
+        },
+        {
+          "kind": "session",
+          "id": "session-82efc9ba-0af0-43ca-bdb9-0b2ab219833e",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 109,
+          "historySha256": "569f81f697367e4ffc21e4042e2aab760daefd652c7d2af0ff110071d7328ab2"
+        },
+        {
+          "kind": "session",
+          "id": "session-96eef4ed-f042-4165-8771-0666d5981c57",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 957,
+          "historySha256": "0b9a3876ab5b49272468424bb6dcb80fa3d9133a13764bd22795c09ade475e5e"
+        },
+        {
+          "kind": "session",
+          "id": "session-a4257fe4-806a-4f64-bfaa-bad372a10826",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {
+              "agentPreset": "standard",
+              "permissions": {
+                "currentValue": "danger-full-access"
+              },
+              "modelSelection": {
+                "lastUsed": {
+                  "provider": "codex",
+                  "model": "gpt-6.1-sol",
+                  "reasoningEffort": "medium"
+                },
+                "next": {
+                  "provider": "codex",
+                  "model": "gpt-6.1-sol",
+                  "reasoningEffort": "medium"
+                }
+              }
+            }
+          },
+          "historyCount": 1036,
+          "historySha256": "8e7275630a8542e4030ae8d8f77351a72f9374b918f48d5480e20dec675dd08b"
+        },
+        {
+          "kind": "session",
+          "id": "session-abfdbcc6-11d0-400a-96ac-13e4808512b1",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 964,
+          "historySha256": "ef65fc026b92d6a527a349dc7b703a05ae581c1dc8aca87cb98a50031d3a6532"
+        },
+        {
+          "kind": "session",
+          "id": "session-b3f5c11a-870b-4561-a324-0a867c04e3e2",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {
+              "agentPreset": "standard",
+              "permissions": {
+                "currentValue": "danger-full-access"
+              },
+              "modelSelection": {
+                "lastUsed": {
+                  "provider": "codex",
+                  "model": "gpt-6.1-sol",
+                  "reasoningEffort": "medium"
+                },
+                "next": {
+                  "provider": "codex",
+                  "model": "gpt-6.1-sol",
+                  "reasoningEffort": "medium"
+                }
+              }
+            }
+          },
+          "historyCount": 872,
+          "historySha256": "edbc6120bf90d36aa4f51fd3534042ae8124bf48f2369c00cf8b92f0e9d37e1d"
+        },
+        {
+          "kind": "session",
+          "id": "session-c4934057-134a-43bc-8c66-effdf5e92ad3",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 764,
+          "historySha256": "29e26cea5391ee9d97febdb8ecddef3141c9b62a769170b6e4f4a03a2645f772"
+        },
+        {
+          "kind": "session",
+          "id": "session-cf8c7767-3187-4ef6-b2b0-c5c5f6b4e9aa",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "permission/preset": {
+                "preset": "danger-full-access"
+              },
+              "sandbox/mode": {
+                "mode": "danger-full-access"
+              },
+              "approval/policy": {
+                "policy": "never"
+              },
+              "model/selection": {
+                "provider": "codex",
+                "model": "gpt-6.1-sol",
+                "reasoningEffort": "xhigh"
+              }
+            },
+            "publicConfiguration": {
+              "agentPreset": "standard",
+              "permissions": {
+                "currentValue": "danger-full-access"
+              },
+              "modelSelection": {
+                "lastUsed": {
+                  "provider": "codex",
+                  "model": "gpt-6.1-sol",
+                  "reasoningEffort": "xhigh"
+                },
+                "next": {
+                  "provider": "codex",
+                  "model": "gpt-6.1-sol",
+                  "reasoningEffort": "xhigh"
+                }
+              }
+            }
+          },
+          "historyCount": 2399,
+          "historySha256": "a9fd7e9401a233da2fa972ff75d6889f1bc83344456b7ad52ea507cb41a46e02"
+        },
+        {
+          "kind": "session",
+          "id": "session-d5bfb702-23a5-41cb-8a20-7f864d237513",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 2841,
+          "historySha256": "b9d712336a91443ab61d7c86a2c9793469fd98acd187a6f1ae806f3d2586653e"
+        },
+        {
+          "kind": "session",
+          "id": "session-da5e4b6f-a3de-49e6-ae4a-b250a300d815",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "permission/preset": {
+                "preset": "danger-full-access"
+              },
+              "sandbox/mode": {
+                "mode": "danger-full-access"
+              },
+              "approval/policy": {
+                "policy": "never"
+              }
+            },
+            "publicConfiguration": {
+              "agentPreset": "standard",
+              "permissions": {
+                "currentValue": "danger-full-access"
+              },
+              "modelSelection": {
+                "lastUsed": {
+                  "provider": "codex",
+                  "model": "gpt-6-astra",
+                  "reasoningEffort": "high"
+                },
+                "next": {
+                  "provider": "codex",
+                  "model": "gpt-6-astra",
+                  "reasoningEffort": "high"
+                }
+              }
+            }
+          },
+          "historyCount": 2558,
+          "historySha256": "764baa7deb661ad8e3eb1ecb3f2f95cfda98c614e3e8218204d8f5573efa8b0a"
+        },
+        {
+          "kind": "session",
+          "id": "session-de84754b-8c5f-4704-94fc-04b371e7f853",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 772,
+          "historySha256": "c38e87b5f27ac1411a9661bfe88490bc36ef8620f12202656fc81caac588705a"
+        },
+        {
+          "kind": "session",
+          "id": "session-e08f248c-cef2-4b05-a8e4-7e60f6b2e9fa",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 257,
+          "historySha256": "a493fc5b5606cdaf11f1acc884d82b7c267cce99d7feaea1b43d873b0d107539"
+        },
+        {
+          "kind": "session",
+          "id": "session-e611fd47-185c-431a-a925-422f6bda7cb1",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 245,
+          "historySha256": "f89e6ae77b1e863e6cc82ea7961344dd7da08a20dd7b69720b315c39be95dfcf"
+        },
+        {
+          "kind": "session",
+          "id": "session-e718bab3-8b39-469a-b55e-329193a9da2f",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {
+              "agentPreset": "standard",
+              "permissions": {
+                "currentValue": "danger-full-access"
+              },
+              "modelSelection": {
+                "lastUsed": {
+                  "provider": "codex",
+                  "model": "gpt-6.1-sol",
+                  "reasoningEffort": "medium"
+                },
+                "next": {
+                  "provider": "codex",
+                  "model": "gpt-6.1-sol",
+                  "reasoningEffort": "medium"
+                }
+              }
+            }
+          },
+          "historyCount": 273,
+          "historySha256": "125dc31119051d4b25a5c22c3a7913605f09d8b82571e21695c0284221d11140"
+        },
+        {
+          "kind": "session",
+          "id": "session-ed1a615b-b7d2-4ce7-bf5b-7148aa7a0697",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 1106,
+          "historySha256": "2824bc599761cb1effe2035104ecfdecedbc208cf663ba6f265cbc24c10974e6"
+        },
+        {
+          "kind": "session",
+          "id": "session-f329f695-ddb5-4280-b038-199cc9a30388",
+          "identity": {
+            "cwd": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/task-interaction-v3",
+            "agentPreset": "standard",
+            "config": {
+              "sandbox/mode": {
+                "mode": "danger-full-access",
+                "source": "delegation"
+              },
+              "approval/policy": {
+                "policy": "never",
+                "source": "delegation"
+              },
+              "permission/preset": {
+                "preset": "danger-full-access"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 236,
+          "historySha256": "debad81a31d871765eb471465f5a4fe1cc64467f4ffa0a49b68badbcec4ad38a"
+        }
+      ],
+      "warnings": [
+        "session-aac5dc70-7473-4f89-b003-0718720e5f25: persisted selection incomplete; effective policy requires later live public observation",
+        "session-e98cf45f-6066-4150-8657-bca485289ebb: persisted selection incomplete; effective policy requires later live public observation",
+        "session-fddb6534-3784-4b90-94c0-2ebcda5081f8: persisted selection incomplete; effective policy requires later live public observation",
+        "session-0ce6d51b-cfc0-4d36-a0e1-8e570667bafb: persisted selection incomplete; effective policy requires later live public observation",
+        "session-1f0abe49-1616-43ec-84b1-2d06d6130663: persisted selection incomplete; effective policy requires later live public observation",
+        "session-78b23871-99e3-4213-970a-6a3e1dfc02a0: persisted selection incomplete; effective policy requires later live public observation",
+        "session-b1d2dccd-aad3-4977-8e93-4b197e5facaa: persisted selection incomplete; effective policy requires later live public observation",
+        "session-c22770e9-75f9-4932-b610-a01352c736db: persisted selection incomplete; effective policy requires later live public observation",
+        "session-d0abceb0-e1b1-43af-9bc9-5d497e07dfc3: persisted selection incomplete; effective policy requires later live public observation",
+        "0f23f361-3f1a-43fe-8923-f45dabc015cd: persisted selection incomplete; effective policy requires later live public observation",
+        "135703da-6656-4cbc-961f-124fe5cceb2c: persisted selection incomplete; effective policy requires later live public observation",
+        "355fe52a-ae49-46d5-b587-55681b01c319: persisted selection incomplete; effective policy requires later live public observation",
+        "4fe8fece-ebd1-4da9-8a4a-79c82d399623: persisted selection incomplete; effective policy requires later live public observation",
+        "b3613725-3bc0-4795-aa5e-648f32a096c8: persisted selection incomplete; effective policy requires later live public observation",
+        "session-a1573b1b-f1ce-43bb-8e8e-e270e1776fa2: persisted selection incomplete; effective policy requires later live public observation",
+        "session-37302b02-f8a7-4fcd-a520-589b2299969b: persisted selection incomplete; effective policy requires later live public observation",
+        "session-a5137720-247a-49e5-a04b-3d8bcd6e39fe: persisted selection incomplete; effective policy requires later live public observation",
+        "session-f9408283-4f76-48e4-9703-7d9da47112a4: persisted selection incomplete; effective policy requires later live public observation",
+        "18df3b64-5abd-4202-9659-b6ec74353165: persisted selection incomplete; effective policy requires later live public observation",
+        "1e67156d-7961-4d4b-83c4-9367db44d684: persisted selection incomplete; effective policy requires later live public observation",
+        "2ad28d6d-a187-4757-bd81-7c3ae9d6686d: persisted selection incomplete; effective policy requires later live public observation",
+        "2fb9ab20-8e39-44d0-ad79-cdefdb698791: persisted selection incomplete; effective policy requires later live public observation",
+        "36f3a23d-2eaa-4737-92c4-7b6bef2a41d6: persisted selection incomplete; effective policy requires later live public observation",
+        "3e8f2c56-cbc2-42bf-978e-041a796df2d4: persisted selection incomplete; effective policy requires later live public observation",
+        "4b422697-5be7-43b9-9fa0-057cb6afcdb5: persisted selection incomplete; effective policy requires later live public observation",
+        "58ff3985-ac59-458e-8aeb-1c4cc06059ca: persisted selection incomplete; effective policy requires later live public observation",
+        "641beb30-6a8c-4d89-8912-3f08e9938873: persisted selection incomplete; effective policy requires later live public observation",
+        "9705b66c-7217-4eef-969c-b3ff66b75e3d: persisted selection incomplete; effective policy requires later live public observation",
+        "a507fb3c-83ec-4d8f-9ed3-f5d0771552a7: persisted selection incomplete; effective policy requires later live public observation",
+        "d08176e9-2231-4c27-a967-2cdae1ea9a94: persisted selection incomplete; effective policy requires later live public observation",
+        "d1e3d3c9-d2e6-4803-8871-31858289cc1a: persisted selection incomplete; effective policy requires later live public observation",
+        "fdd48811-d930-45d9-862e-bae607802b61: persisted selection incomplete; effective policy requires later live public observation",
+        "session-0bf12b17-ffa2-4af6-abb6-b06bfdd8a30f: persisted selection incomplete; effective policy requires later live public observation",
+        "session-1350b913-2434-4f1f-9d4b-1b7341b99ac5: persisted selection incomplete; effective policy requires later live public observation",
+        "session-13680870-542e-4703-98d3-61fefe02a491: persisted selection incomplete; effective policy requires later live public observation",
+        "session-13b1a82a-7a5e-4497-af08-7e2207397754: persisted selection incomplete; effective policy requires later live public observation",
+        "session-18f67a63-7c39-4a4e-89ed-3bf588c7fa92: persisted selection incomplete; effective policy requires later live public observation",
+        "session-1f5b2d85-c5a6-4c6d-8d4c-34f24370aa19: persisted selection incomplete; effective policy requires later live public observation",
+        "session-25926e66-1382-46e6-9aee-95485e5e336d: persisted selection incomplete; effective policy requires later live public observation",
+        "session-25bef557-597a-4418-96e4-7727946f1d20: persisted selection incomplete; effective policy requires later live public observation",
+        "session-294c5ff3-3da4-4c6e-b5bc-fb3826ccfede: persisted selection incomplete; effective policy requires later live public observation",
+        "session-29b4d6f9-7100-476e-a2f8-0a3b87d35d7a: persisted selection incomplete; effective policy requires later live public observation",
+        "session-30e6e648-a269-4302-8e1e-67367eb94ece: persisted selection incomplete; effective policy requires later live public observation",
+        "session-34d78ddc-66d5-4123-b894-9a02aaa1ee5d: persisted selection incomplete; effective policy requires later live public observation",
+        "session-35bf6fbc-7def-4c11-95a5-4f34c05528be: persisted selection incomplete; effective policy requires later live public observation",
+        "session-38144b65-3833-4acb-b43c-36e5daea1772: persisted selection incomplete; effective policy requires later live public observation",
+        "session-3ee1b56a-2b9d-42b5-b3bc-c150c6ee7490: persisted selection incomplete; effective policy requires later live public observation",
+        "session-50f06e91-88d3-4b40-bd2a-29a77f2b9acd: persisted selection incomplete; effective policy requires later live public observation",
+        "session-51a86c30-e8e8-4ec9-803a-054aec4a9e8d: persisted selection incomplete; effective policy requires later live public observation",
+        "session-54a82bf0-95a2-4861-96e8-ed02c7caebc2: persisted selection incomplete; effective policy requires later live public observation",
+        "session-5a3fa3bc-45aa-481f-b101-70e44d606273: persisted selection incomplete; effective policy requires later live public observation",
+        "session-5d324db4-1115-46c5-bcb8-eccc324fda7e: persisted selection incomplete; effective policy requires later live public observation",
+        "session-609b636b-46f2-4a35-a190-da1f857ede50: persisted selection incomplete; effective policy requires later live public observation",
+        "session-70b620cd-a209-437d-b944-02fffa8df180: persisted selection incomplete; effective policy requires later live public observation",
+        "session-72ffc150-4e24-497b-b7a5-fa35c8a6255c: persisted selection incomplete; effective policy requires later live public observation",
+        "session-76f9b69f-8479-48af-9667-cdb299637598: persisted selection incomplete; effective policy requires later live public observation",
+        "session-7d166229-8aca-457c-ba59-61fd73307114: persisted selection incomplete; effective policy requires later live public observation",
+        "session-7d3a4151-62c4-4288-bb75-3eb5cd3afea4: persisted selection incomplete; effective policy requires later live public observation",
+        "session-8036f73a-6976-4811-90ae-7efba16fd53b: persisted selection incomplete; effective policy requires later live public observation",
+        "session-82efc9ba-0af0-43ca-bdb9-0b2ab219833e: persisted selection incomplete; effective policy requires later live public observation",
+        "session-96eef4ed-f042-4165-8771-0666d5981c57: persisted selection incomplete; effective policy requires later live public observation",
+        "session-a4257fe4-806a-4f64-bfaa-bad372a10826: persisted selection incomplete; effective policy requires later live public observation",
+        "session-abfdbcc6-11d0-400a-96ac-13e4808512b1: persisted selection incomplete; effective policy requires later live public observation",
+        "session-b3f5c11a-870b-4561-a324-0a867c04e3e2: persisted selection incomplete; effective policy requires later live public observation",
+        "session-c4934057-134a-43bc-8c66-effdf5e92ad3: persisted selection incomplete; effective policy requires later live public observation",
+        "session-d5bfb702-23a5-41cb-8a20-7f864d237513: persisted selection incomplete; effective policy requires later live public observation",
+        "session-da5e4b6f-a3de-49e6-ae4a-b250a300d815: persisted selection incomplete; effective policy requires later live public observation",
+        "session-de84754b-8c5f-4704-94fc-04b371e7f853: persisted selection incomplete; effective policy requires later live public observation",
+        "session-e08f248c-cef2-4b05-a8e4-7e60f6b2e9fa: persisted selection incomplete; effective policy requires later live public observation",
+        "session-e611fd47-185c-431a-a925-422f6bda7cb1: persisted selection incomplete; effective policy requires later live public observation",
+        "session-e718bab3-8b39-469a-b55e-329193a9da2f: persisted selection incomplete; effective policy requires later live public observation",
+        "session-ed1a615b-b7d2-4ce7-bf5b-7148aa7a0697: persisted selection incomplete; effective policy requires later live public observation",
+        "session-f329f695-ddb5-4280-b038-199cc9a30388: persisted selection incomplete; effective policy requires later live public observation",
+        "work-v3 store absent: current instance may still use legacy plugin; not a v4 pass",
+        "Host artifact absent: apps/cli/lib/bin.js",
+        "Host artifact absent: packages/session/session/lib/index.js"
+      ]
+    },
+    "preview": {
+      "capturedAt": "2026-10-21T17:35:22.709Z",
+      "origin": "http://10.126.126.12:18782",
+      "program": "dsh-a2d2-v3-preview",
+      "service": "dsh-a2d2-v3-preview              RUNNING   pid 3863422, uptime 9:21:19",
+      "hostCommit": "a45068d2ec03326c800c68c9bdcd47508e3ccb9c",
+      "pluginRoot": "/data/_dsh-dev/previews/a2d2-v3-121/home/profiles/web/node_modules/dsh-a2d2",
+      "dependency": "file:/data/_dsh-dev/previews/a2d2-v3-121/artifacts/github-first-8c74fddd17c24b7f5263fa6f1ca0a53aeb752db0/dsh-a2d2-0.0.1.tgz",
+      "fingerprints": [
+        {
+          "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/sessions/--data-_dsh-dev-previews-a2d2-v3-121-workspace--/session-01facda2-1f2a-4f75-a503-34860ab4f1c4/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/previews/a2d2-v3-121/home/sessions/--data-_dsh-dev-previews-a2d2-v3-121-workspace--/session-01facda2-1f2a-4f75-a503-34860ab4f1c4/session.v4.jsonl.zstd",
+          "bytes": 39919,
+          "sha256": "854b8c13efbf68f276f9b2fb95f918ad7394f34c4e8ee644ef82aa68a4886856"
+        },
+        {
+          "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/sessions/--data-_dsh-dev-previews-a2d2-v3-121-workspace--/session-f44e2d0d-a4e1-4fb5-945a-a759a9480d9f/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/previews/a2d2-v3-121/home/sessions/--data-_dsh-dev-previews-a2d2-v3-121-workspace--/session-f44e2d0d-a4e1-4fb5-945a-a759a9480d9f/session.v4.jsonl.zstd",
+          "bytes": 33470,
+          "sha256": "161ce646e7c3eed5e962133ba303f1e6a82fb8b6b383f7febdc1751f662d911d"
+        },
+        {
+          "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/sessions/--data-_dsh-dev-previews-a2d2-v3-121-workspace--/session-f9282a68-4c3f-4251-adcb-bcd6f24d7515/session.v4.jsonl.zstd",
+          "realpath": "/data/_dsh-dev/previews/a2d2-v3-121/home/sessions/--data-_dsh-dev-previews-a2d2-v3-121-workspace--/session-f9282a68-4c3f-4251-adcb-bcd6f24d7515/session.v4.jsonl.zstd",
+          "bytes": 417,
+          "sha256": "7cfd5a79aa74170a2fcb456e13d2fc21b5f88446f7b329da76406812ab6c8e27"
+        },
+        {
+          "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/profiles/web/package.json",
+          "realpath": "/data/_dsh-dev/previews/a2d2-v3-121/home/profiles/web/package.json",
+          "bytes": 372,
+          "sha256": "d3e09aaf00f81b1eba63a55e9db935d30f6802baa33dba446e04655fbf57cefa"
+        },
+        {
+          "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/profiles/web/pnpm-lock.yaml",
+          "realpath": "/data/_dsh-dev/previews/a2d2-v3-121/home/profiles/web/pnpm-lock.yaml",
+          "bytes": 2069,
+          "sha256": "22a9e693af23abb9e80e1aa29de33622bcef8c1f680a40c98258c1284c5cc9e5"
+        },
+        {
+          "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/profiles/web/cordis.yml",
+          "realpath": "/data/_dsh-dev/previews/a2d2-v3-121/home/profiles/web/cordis.yml",
+          "bytes": 223,
+          "sha256": "c300dcf2ebc5f02062d6591268d29d3db6fe45e0cb138f5467276fe2ba06076e"
+        },
+        {
+          "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/profiles/web/cordis.patch.yml",
+          "realpath": "/data/_dsh-dev/previews/a2d2-v3-121/home/profiles/web/cordis.patch.yml",
+          "bytes": 217,
+          "sha256": "ef189a8c27db6d63930aa3046a3040482e952eafcb7487c644d508e8d461f027"
+        },
+        {
+          "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/profiles/web/node_modules/dsh-a2d2/package.json",
+          "realpath": "/data/_dsh-dev/previews/a2d2-v3-121/home/profiles/web/node_modules/dsh-a2d2/package.json",
+          "bytes": 7422,
+          "sha256": "13166f2d56dd51cafcdacc559c745160c7366b2a3bd0303ef2bc0e95f94a0d42"
+        },
+        {
+          "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/profiles/web/node_modules/dsh-a2d2/lib/client.js",
+          "realpath": "/data/_dsh-dev/previews/a2d2-v3-121/home/profiles/web/node_modules/dsh-a2d2/lib/client.js",
+          "bytes": 266972,
+          "sha256": "7af60c97e19076cb251235995bcca86fa59bcdfc1dccb22b8e8e3899d2127b70"
+        },
+        {
+          "path": "/data/_dsh-dev/previews/a2d2-v3-121/artifacts/github-first-8c74fddd17c24b7f5263fa6f1ca0a53aeb752db0/dsh-a2d2-0.0.1.tgz",
+          "realpath": "/data/_dsh-dev/previews/a2d2-v3-121/artifacts/github-first-8c74fddd17c24b7f5263fa6f1ca0a53aeb752db0/dsh-a2d2-0.0.1.tgz",
+          "bytes": 432291,
+          "sha256": "6cce296a8831dccead3447e0697d4bc7897ee221614678d291a10520ad6ba6b0"
+        },
+        {
+          "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/a2d2/work-v3/runtime-v1.json",
+          "realpath": "/data/_dsh-dev/previews/a2d2-v3-121/home/a2d2/work-v3/runtime-v1.json",
+          "bytes": 71,
+          "sha256": "04950804e999f711ab19780cf86a37f3894718214362a817bf4b696aa784dce7"
+        },
+        {
+          "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/a2d2/work-v3/work-v3.json",
+          "realpath": "/data/_dsh-dev/previews/a2d2-v3-121/home/a2d2/work-v3/work-v3.json",
+          "bytes": 26149688,
+          "sha256": "73c9061f52237bd314cf40b4576b4092cc2ab0580dfa501ef59902c59e246a03"
+        },
+        {
+          "path": "/data/_dsh-dev/previews/a2d2-v3-121/home/storages/workspace.json",
+          "realpath": "/data/_dsh-dev/previews/a2d2-v3-121/home/storages/workspace.json",
+          "bytes": 738,
+          "sha256": "c4eda57f49c615c766eeecbc46d4b1d79b35f5b9f34c0cd668f2c37ebf3cd5a8"
+        },
+        {
+          "path": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/apps/web/dist/index.html",
+          "realpath": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/apps/web/dist/index.html",
+          "bytes": 824,
+          "sha256": "50dfa6c7ad6387c2daad164cb78d95df3b6eed8fe3cc720bddd6cd6698bdee94"
+        },
+        {
+          "path": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/jobs/jobs-local/lib/index.js",
+          "realpath": "/data/src/github.com/deepseek-ai/deepseek-harness-dev/packages/jobs/jobs-local/lib/index.js",
+          "bytes": 31157,
+          "sha256": "3bed0cd38c649f39b148752e742ff1ef57696a6b9b11b15ff8cc6cd1d4f08f26"
+        }
+      ],
+      "coverage": {
+        "modelCalls": "not instrumented; no model command issued by this collector",
+        "effectiveLivePermissions": "not verified; persisted selections and public projections only",
+        "snapshot": "sequential read; repeat after settlement and Session flush before deployment"
+      },
+      "records": [
+        {
+          "kind": "session",
+          "id": "session-01facda2-1f2a-4f75-a503-34860ab4f1c4",
+          "identity": {
+            "cwd": "/data/_dsh-dev/previews/a2d2-v3-121/workspace",
+            "agentPreset": "standard",
+            "config": {
+              "model/selection": {
+                "provider": "codex",
+                "model": "gpt-6-astra"
+              },
+              "permission/preset": {
+                "preset": "workspace-write"
+              },
+              "sandbox/mode": {
+                "mode": "workspace-write"
+              },
+              "approval/policy": {
+                "policy": "ask"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 43,
+          "historySha256": "8edb9f4e5c9eed2f1dde5610dd0ccde43c1ccea32891da00717864f590c26d98"
+        },
+        {
+          "kind": "session",
+          "id": "session-f44e2d0d-a4e1-4fb5-945a-a759a9480d9f",
+          "identity": {
+            "cwd": "/data/_dsh-dev/previews/a2d2-v3-121/workspace",
+            "agentPreset": "standard",
+            "config": {
+              "model/selection": {
+                "provider": "codex",
+                "model": "gpt-6-astra",
+                "reasoningEffort": "high"
+              },
+              "permission/preset": {
+                "preset": "workspace-write"
+              },
+              "sandbox/mode": {
+                "mode": "workspace-write"
+              },
+              "approval/policy": {
+                "policy": "ask"
+              }
+            },
+            "publicConfiguration": {}
+          },
+          "historyCount": 28,
+          "historySha256": "591aca4b5401a0b225cbae2b5d59e9e9e8d658978aa920b4d668903608c90bc8"
+        },
+        {
+          "kind": "session",
+          "id": "session-f9282a68-4c3f-4251-adcb-bcd6f24d7515",
+          "identity": {
+            "cwd": "/data/_dsh-dev/previews/a2d2-v3-121/workspace",
+            "agentPreset": "standard",
+            "config": {
+              "permission/preset": {
+                "preset": "workspace-write"
+              },
+              "sandbox/mode": {
+                "mode": "workspace-write"
+              },
+              "approval/policy": {
+                "policy": "ask"
+              }
+            },
+            "publicConfiguration": {
+              "agentPreset": "standard",
+              "permissions": {
+                "currentValue": "workspace-write"
+              },
+              "modelSelection": {
+                "lastUsed": null,
+                "next": null
+              }
+            }
+          },
+          "historyCount": 5,
+          "historySha256": "1c7827551c7613e1a04a1574f8d2e0a2c991d45520b43e8703bd119fc3fd7402"
+        },
+        {
+          "kind": "runtime",
+          "id": "c01a3a7b-6deb-4820-9896-548d14220162",
+          "identity": {
+            "schemaVersion": 1,
+            "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "projects",
+          "id": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+          "identity": {
+            "sha256": "b9e48e4f1cee7566201ae4d7c9621dd54617d0eafe8f26baac8dadeb392352e2"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "projects",
+          "id": "1b3fd2f7-a492-4c1d-a965-7e7f8cc5cc58",
+          "identity": {
+            "sha256": "dee832f13d82dbd1da0d6e1d0b508dc6bb96dbb97dd6ed5d7776ad034c71a82d"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "projects",
+          "id": "76002c89-59b6-48a4-8c06-eedb1b05cfa8",
+          "identity": {
+            "sha256": "a1e47a000228e15a25c7179c059588d0e1c778f518dc97e9dc7f77efae61050f"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "agents",
+          "id": "a4b8b515-554a-4fe7-99c1-f0581a3da464",
+          "identity": {
+            "sha256": "3c451f788a32c5d49757d71f086305a502347e36e79774b910ec90557dec9579"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "agents",
+          "id": "57954e6d-886c-435e-807a-ff61ee88987d",
+          "identity": {
+            "sha256": "9e4bff56ef0f283caf4828c4977d6501e21b86aed567fec74f26395c017cf481"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "agents",
+          "id": "96d8bf6f-dd3f-4f15-8b6d-f2e7530f4716",
+          "identity": {
+            "sha256": "9c5d221f6e729e1fe30438258951ade03e664ecad04a544b7fcbd9e29047cdb1"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "tasks.activity",
+          "id": "76e75fb5-a0ee-45cb-94e0-8dc9cb849411",
+          "identity": {},
+          "historyCount": 4,
+          "historySha256": "3303130e5d3b2b2ee9a3b2fcb3a35135e716bdf16114da1853a669bfb26f4db3"
+        },
+        {
+          "kind": "tasks.specificationHistory",
+          "id": "76e75fb5-a0ee-45cb-94e0-8dc9cb849411",
+          "identity": {},
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "tasks",
+          "id": "76e75fb5-a0ee-45cb-94e0-8dc9cb849411",
+          "identity": {
+            "sha256": "791aff509df55dd4fc1055ecf23ff10dbdae6fa612a3099db6165d7e5276c2fb"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "tasks.activity",
+          "id": "0880f27a-5367-4679-b562-27c080cff7ab",
+          "identity": {},
+          "historyCount": 1,
+          "historySha256": "509122c828b4c6c17346b3e2f276e5a1560aecf0d8a8144214a7bc90906f592c"
+        },
+        {
+          "kind": "tasks.specificationHistory",
+          "id": "0880f27a-5367-4679-b562-27c080cff7ab",
+          "identity": {},
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "tasks",
+          "id": "0880f27a-5367-4679-b562-27c080cff7ab",
+          "identity": {
+            "sha256": "ea2793ac12a154e076089badf87db31f4f51e5428430365537daf87fb51751c8"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "tasks.activity",
+          "id": "3e00a048-42b1-48dd-ae22-d6655c06779d",
+          "identity": {},
+          "historyCount": 3,
+          "historySha256": "a78b5372fc7ea6c230a659f40a7b770039b8fdcf7dc0fa2c3852604091f22324"
+        },
+        {
+          "kind": "tasks.specificationHistory",
+          "id": "3e00a048-42b1-48dd-ae22-d6655c06779d",
+          "identity": {},
+          "historyCount": 1,
+          "historySha256": "c595ec1e074b11b7f87c0f68204a9dccc33f53653181dfe75d3f6bb0af8f7355"
+        },
+        {
+          "kind": "tasks",
+          "id": "3e00a048-42b1-48dd-ae22-d6655c06779d",
+          "identity": {
+            "sha256": "a0136f667c6177081a8dd56285a8ff37b386025ce0e4b8592932a72f29e11d7e"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "tasks.activity",
+          "id": "4c936541-0d4f-4bde-b810-bbfe946044da",
+          "identity": {},
+          "historyCount": 2,
+          "historySha256": "d87ced826f8924f99fddfe0114198f9350726ce7eed9e9664e83f26bd40c6d85"
+        },
+        {
+          "kind": "tasks.specificationHistory",
+          "id": "4c936541-0d4f-4bde-b810-bbfe946044da",
+          "identity": {},
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "tasks",
+          "id": "4c936541-0d4f-4bde-b810-bbfe946044da",
+          "identity": {
+            "sha256": "e14991606d0487dc8659a5a5780638c3fe2772adb2a3f0b04d7c98bcd47b2122"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "tasks.activity",
+          "id": "58913a7c-f12d-4cc3-be97-55faa221b370",
+          "identity": {},
+          "historyCount": 1,
+          "historySha256": "65bdc87224cd1c005317940a03e7527e5e9703e5d8faa8629c9a69ee907c383a"
+        },
+        {
+          "kind": "tasks.specificationHistory",
+          "id": "58913a7c-f12d-4cc3-be97-55faa221b370",
+          "identity": {},
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "tasks",
+          "id": "58913a7c-f12d-4cc3-be97-55faa221b370",
+          "identity": {
+            "sha256": "df6a8374feb0609a0406f7a677a5259a6ef80d183e2c15c4cb25aed58596020c"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "tasks.activity",
+          "id": "c0258593-c3df-4fdb-b62e-860202e03982",
+          "identity": {},
+          "historyCount": 4,
+          "historySha256": "1e61813959ed06ef8052a234f139dfaf323fc12d77b0b0e617ba848938d64186"
+        },
+        {
+          "kind": "tasks.specificationHistory",
+          "id": "c0258593-c3df-4fdb-b62e-860202e03982",
+          "identity": {},
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "tasks",
+          "id": "c0258593-c3df-4fdb-b62e-860202e03982",
+          "identity": {
+            "sha256": "0fdf5d41d18f485989a8d764131439d10924a2ee7380f7256c789e9924690abb"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "sources",
+          "id": "9cea4378-0219-4f99-a237-80f51bd36291",
+          "identity": {
+            "sha256": "44ece03eb70298d10674698d81f7c7fd21a15714822da3fb9e9120ac626f9ab9"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "sources",
+          "id": "c122502c-1632-4a96-acb5-8adbac61999d",
+          "identity": {
+            "sha256": "75482ad442e2879e41dad0b20f3c63e4ebb04fd1fc59889b4577261efb83be3c"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "sources",
+          "id": "6de5b019-9765-45dd-8596-1a02dbaa7cca",
+          "identity": {
+            "sha256": "9d159809318218bd4bff795d430f4b0fa2219ee963597b4af9d27ae6df9026f2"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "externalBindings",
+          "id": "b6264d612c0ba4f7ccaa3121b681f66b3b4744a5e494c7ace705935ed303dfe9",
+          "identity": {
+            "sha256": "0b10fdc9970602b73291b8cc1b849a589c5bc7ca6d0bd43d3f8b92579e681deb"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "externalBindings",
+          "id": "23de2546a684d1e359d8ca7141c6410bd0b96fde133ced31fe17161584b8303b",
+          "identity": {
+            "sha256": "ac010f6c655f7b3562a45a5e6d18ea5b5083791f4daeb859b57095b99cca9e80"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "executions.history",
+          "id": "14f11283-cf3a-4a8e-9a9d-2cecb129a114",
+          "identity": {},
+          "historyCount": 4,
+          "historySha256": "64cea19be2f5139ab915c05583645e13df56ed50491fe6c870cb6839caa0d50f"
+        },
+        {
+          "kind": "executions.events",
+          "id": "14f11283-cf3a-4a8e-9a9d-2cecb129a114",
+          "identity": {},
+          "historyCount": 1,
+          "historySha256": "59683be9c5fc2604a2a82aaac6123bab192e0b443c7cbe066134c09cd47af52c"
+        },
+        {
+          "kind": "executions.retired",
+          "id": "14f11283-cf3a-4a8e-9a9d-2cecb129a114",
+          "identity": {},
+          "historyCount": 1,
+          "historySha256": "5d3b4369968acf257538f7cc52363c9f36c9d526f6d1c9bc42f623e0e2deb5bb"
+        },
+        {
+          "kind": "executions",
+          "id": "14f11283-cf3a-4a8e-9a9d-2cecb129a114",
+          "identity": {
+            "sha256": "f884d532029d39a9d84e5393df0e910cb5f85eb0de1a5497932e73f1cd8130c9"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "preview-demo-project",
+          "identity": {
+            "sha256": "95b20da6ed3dab4ae48ce87131425e8361453c4788b4deb05c3ee2ab237c39a5"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "preview-demo-parent",
+          "identity": {
+            "sha256": "2cc42e02362ea00c29575a0795113a65a6fc316d144c7a1982d4bfb901640103"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "preview-demo-child",
+          "identity": {
+            "sha256": "186e78ba493004ad5782664e43a5ef88db8fa9c46d776b17403a2919a1300c76"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "preview-demo-breakdown",
+          "identity": {
+            "sha256": "ca7d56ab0f86d45d20b038ab6e3e0c202977c75d6ed2c1728fa43f2c497cac22"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "preview-demo-session",
+          "identity": {
+            "sha256": "28991af41638df779f8c373a4eb145041caa017e7b41678f3a5f605fa1b09b58"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "2f24c154-2fa5-4e39-ae49-43867e8abaa0",
+          "identity": {
+            "sha256": "c6f050d134251940e4653b7028c9f30d347e9772a4e06d3fb4d86f04910ec5cd"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "589266da-f852-442b-b3b9-74ef00bcd473",
+          "identity": {
+            "sha256": "c6d6cc37ad6087bccf607a718503ec82cd7cc007fbff62122d1324e438d058aa"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "99fd0517-4a31-4e8e-9927-c12c8bf5fc4d",
+          "identity": {
+            "sha256": "76f4561356a05dc755280bf6d0f33190127e59b95f1e252bbb764b0a0fb99d9f"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "3c67aef6-3073-44cf-bafc-4177f3d7f793",
+          "identity": {
+            "sha256": "a2620f9618b23bb0f832222ce1c02e792005d114bf3b9674a0aa3890cd5fdf88"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "8d8e4d69-4bef-467f-84b4-584ffef4047c",
+          "identity": {
+            "sha256": "30a4e1e8facde5f65b28ab43e471cb61cea92472a4e8ccbbb897cfc92736f613"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "4d805639-c502-41e9-a9bf-74786ec1238b",
+          "identity": {
+            "sha256": "93655aa5895cf5d7823b8263df193868bacea678a964cb7b9676c934e26e3f34"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "6c31d7b1-8f38-4c54-ab09-92a9d2ca5af1",
+          "identity": {
+            "sha256": "15408912e6d9004caf972db74daa0c7355ae25a038a21fc30dac56411ff1e821"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "5824a697-3ee7-4f71-89de-37729fed27f1",
+          "identity": {
+            "sha256": "906d1f046399c64d4648a7a96e1ce1f1b96cbe00dbeeeb250fa953aac0724c9d"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "b31a90c3-bbcd-45ec-ac8c-bb5d0025544c",
+          "identity": {
+            "sha256": "6af130fcd083a2be7a397b7d2d0fda8de91f0cbafc5fb7b8f09d1c9387fa4c98"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "b980c724-69e8-4ea6-b1ed-dfa5a3814600",
+          "identity": {
+            "sha256": "ec67ecfde4dcee1fcf0b276a8cab7beda3c734c0d2a2bba8d42026f0f7126758"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "23bb68c8-57ac-484a-b19d-50b1f5929303",
+          "identity": {
+            "sha256": "df04ee63b7a6b12c638368fc1b8d5182d8b1d2e50f5db8ef1ff07b35b0f1512b"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "02998210-99e8-4469-9d00-4a5b7201a5a4",
+          "identity": {
+            "sha256": "04af6d96272ed3f0763bcb2ea66a984285524ea173e18740cea6ad6260b72eea"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "report:4643d07aaa57d76dc65a433f7e8ebeda84d2f6a9f29b4b15d1b22b864d9059ea",
+          "identity": {
+            "sha256": "27949e777e77d8895064757748e1b8fed0dc69a69c11217ffd765c18ea3bea35"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "7a108c27-8fa0-424d-8e3d-64e1bc404c22",
+          "identity": {
+            "sha256": "4469345b1105007859872cb332ef4de31dcf0e176ecfeb80158e942238c9d7a2"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "bab7a646-9378-4931-a473-ba3d79ed83e9",
+          "identity": {
+            "sha256": "a5c6c5bc9fec821ea73f3193b268244516fbcb43fc03cb67d4752869fd362ebe"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "material:70b4172adef41e4e7470b7a34907ccaadbff7b5c24c798bba4ec6080d0bd6c5f",
+          "identity": {
+            "sha256": "703a135630f6a654d2f3effcc2b403983f98c403deebc3b37d38fbbc18ea72c1"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "report:e3fcd853005344bbe6f7b98bdfc129fb2957193190d118a5b6cf337a14234815",
+          "identity": {
+            "sha256": "70856494d74554bcc46b0d7cc621f318a69c49e8d5cb4fe0680c14b4c8a69243"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "311ff7c7-9ae1-4617-ac22-67b8db5e63aa",
+          "identity": {
+            "sha256": "06003c4ae0e467cf5397d00e32a4eb524b77b5568aa1ca5f601952c453654499"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "566f7915-9e27-4c60-bcfe-1564e16f7a09",
+          "identity": {
+            "sha256": "6961075bf67fd107e82c0efd057ea75face79f6df5c22548a87f54acee04670d"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "2b3f4b84-9422-482f-888f-199a72126a0d",
+          "identity": {
+            "sha256": "607d4c5b6b204a89bd85dba77c402edd3fe2330a84fcdb7674ae132424453aa1"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "commands",
+          "id": "d3c69ada-be75-41c8-a1b5-15a5985e7145",
+          "identity": {
+            "sha256": "2fcb9d1cdff3aaf258764939e1a2601d1db40545d6ca3c1741027bc5bd180e71"
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "kind": "externalIndex",
+          "id": "canonical",
+          "identity": {
+            "github:node:I_kwDOUmfSE88AAAABXdRGDA": {
+              "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+              "taskId": "4c936541-0d4f-4bde-b810-bbfe946044da"
+            },
+            "github:url:https://github.com/a2d2-dev/dsh-plugin/issues/112": {
+              "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+              "taskId": "4c936541-0d4f-4bde-b810-bbfe946044da"
+            },
+            "github:node:I_kwDOUmfSE88AAAABYUDZjg": {
+              "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+              "taskId": "58913a7c-f12d-4cc3-be97-55faa221b370"
+            },
+            "github:url:https://github.com/a2d2-dev/dsh-plugin/issues/124": {
+              "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+              "taskId": "58913a7c-f12d-4cc3-be97-55faa221b370"
+            }
+          },
+          "historyCount": 0,
+          "historySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        }
+      ],
+      "warnings": [
+        "session-f9282a68-4c3f-4251-adcb-bcd6f24d7515: persisted selection incomplete; effective policy requires later live public observation",
+        "Host artifact absent: apps/cli/lib/bin.js",
+        "Host artifact absent: packages/session/session/lib/index.js"
+      ]
+    }
+  },
+  "hostMissingEntrypoint": {
+    "/data/src/github.com/deepseek-ai/deepseek-harness-dev/apps/cli/lib": {
+      "exists": true,
+      "mtimeNs": 1792601945966593251,
+      "bytes": 4096,
+      "entries": [
+        "tsconfig.tsbuildinfo",
+        "types"
+      ]
+    },
+    "/data/src/github.com/deepseek-ai/deepseek-harness-dev/apps/cli/lib/bin.js": {
+      "exists": false
+    },
+    "/data/src/github.com/deepseek-ai/deepseek-harness-dev/apps/cli/lib/tsconfig.tsbuildinfo": {
+      "exists": true,
+      "mtimeNs": 1792601736447000000,
+      "bytes": 62238,
+      "entries": null
+    }
+  },
+  "serviceAssembly": [
+    {
+      "path": "/etc/supervisor/conf.d/dsh-dev-web-server.conf",
+      "sha256": "1bc21cd5a84eb1fc477cfc2331c9459762944dbb444c6cca0bb6a74693eaf9d8",
+      "mtimeNs": 1792079947732513497
+    },
+    {
+      "path": "/etc/supervisor/conf.d/dsh-a2d2-v3-preview.conf",
+      "sha256": "338b51779c2bfd24011618496afd51774d0b6942157a5de9bb5ecd8fc82cb98f",
+      "mtimeNs": 1792462039136737459
+    },
+    {
+      "path": "/data/_dsh-dev/previews/a2d2-v3-121/launch.mjs",
+      "sha256": "e5101472ab8b954293f8bb6c9c3c1054bad9482f667a3826da95c9f5eb3916b0",
+      "mtimeNs": 1792570443613511069
+    }
+  ],
+  "processes": [
+    {
+      "pid": 1423918,
+      "cwd": "/data/src/github.com/deepseek-ai/deepseek-harness-dev",
+      "executable": "/root/.nvm/versions/node/v22.23.1/bin/node",
+      "startTicks": "7934941"
+    },
+    {
+      "pid": 3863422,
+      "cwd": "/data/_dsh-dev/previews/a2d2-v3-121/workspace",
+      "executable": "/root/.nvm/versions/node/v22.23.1/bin/node",
+      "startTicks": "31295054"
+    },
+    {
+      "pid": 3863429,
+      "cwd": "/data/_dsh-dev/previews/a2d2-v3-121/workspace",
+      "executable": "/root/.nvm/versions/node/v22.23.1/bin/node",
+      "startTicks": "31295060"
+    }
+  ]
+}
