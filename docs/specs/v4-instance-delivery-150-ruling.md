@@ -34,7 +34,7 @@
 
 ## 整改闭合状态
 
-O-F1：执行者已提交并推送 493ab08258a62035ac279b3f870edbdee12c29d0。主会话亲读源码/tests/记录后确认正式转换与组合绑定方向成立；当前仍是加载URL后二次fetch，不能证明页面实际执行响应。已在同一项整改内要求捕获实际加载响应并覆盖“加载旧体、重新fetch新体”的反例；尚未闭合，不再派review。
+O-F1：源码与聚焦回归已闭合至 447e3ed2ad4e7c37281ebc8dc4df8c4c2f7ff1b3（前置转换/组合提交493ab08）。主会话亲读CDP capture、verify、断言、真实离线proof与27/27完整TAP，并独立执行 `node --test scripts/v4-acceptance/verify-live.test.mjs`：6/6、fail0/skipped0、exit0。现在以当前document的Script requestId/loaderId/frameId与真实response body绑定固定client，正式HTTP验证硬拒cache/SW/Fetch及身份缺失；再次fetch只作singleton组合，不可覆盖loaded旧体。离线about:blank/data证明捕获保留旧体且跨document归因，data协议缓存标志明确只属离线特性，不放宽HTTP要求。最终plan路径及冻结工具集成尚待核对，未做live浏览器验收。
 
 O-F2：源码与聚焦回归已闭合至 0343129dbac11623f7aa5ac24d1794b64ccbaad3。主会话亲读日志绑定/窗口、preview-stop、assessStop与断言，并独立运行 `node --test scripts/v4-acceptance/shutdown-log.test.mjs scripts/v4-acceptance/stopped-cut.test.mjs`：8/8、fail=0、skipped=0、exit0。真实error+exit0被拒新；日志身份/前缀/完整行/预算漂移不能声称无错误；raw只存私有文件；仍先做静态完整性才允许coherent rollback，不推断graceful。最终新plan/frozen tools集成尚待核对。
 
