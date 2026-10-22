@@ -18,6 +18,16 @@
 
 证据：[保存前原始响应](raw/cont-01-before-project.json)、[保存 UI 请求 HAR](raw/cont-02-policy-save.har)、[保存后原始响应](raw/cont-03-after-project.json)、[完整任务响应](raw/cont-04-after-task.json)、[页面文字](raw/cont-05-after-page.json)、[参数展开1440×1000](shots/cont-02-policy-expanded-1440.png)、[保存后1440×1000](shots/cont-03-policy-after-1440.png)、[保存后390×844](shots/cont-04-policy-after-390.png)。
 
+## 阶段二：真实自动准备（已验证）
+
+步骤：按主会话更正后的授权，通过同一正规表单将目标改为 28000，保留 reserveTokens=16000，启用不变。没有点击“准备接续”，没有修改 meter，也没有注入增量 token。宿主观察真实 usage=28185，自动生成接续。
+
+记录：policy v3；operationId `90c39ec5-5ca6-4327-af8e-23cfd0f35e6d`，commandId `auto:0ac555c0-125e-4ed2-9ad2-ded8c447b37a:1:3`，automatic=true，phase=material-requested，sourceEpoch=1，requestDelivery=delivered。source=`session-b36314e3-3c0e-4c4d-9247-928d6b4187af`，固定 successor=`session-1a48efa9-472c-495f-af04-ce499b931f48`，共同 runtime=`c01a3a7b-6deb-4820-9896-548d14220162`。当前 execution.session/owner/epoch 仍为原段身份；页面明文“原段仍负责，准备后继不切换当前入口”。
+
+operation.profile：codex / gpt-6.1-sol / high，cwd 为指定隔离 workspace；没有擅自改成 medium。真实原段模型收到宿主材料请求并回复：“我现在保存同一 Task 的接续材料，明确保留两项决定、真实身份与已有证据，并列出验收缺口和下一步；保存后停止，由宿主移交协调权。” 页面出现 work_continuation_material 调用，收取结果仍待后续观察。
+
+证据：[下调后任务](raw/cont-06-lowered-task.json)、[自动 operation 完整响应](raw/cont-07-auto-observation.json)、[材料请求模型现场](raw/cont-08-material-model-page.json)、[真实UI网络](raw/cont-09-auto-prepare.har)、[准备桌面](shots/cont-05-preparing-1440.png)、[准备手机](shots/cont-06-preparing-390.png)、[原段真实模型](shots/cont-07-source-model-1440.png)。
+
 ## 后续阶段
 
-准备、收取、接任、新段回复和旧段拒绝均待执行，不计通过。规格v2与原段报告已保留两项决定，但尚不能证明跨段保留。
+结果收取、正式接任、新段回复和旧段拒绝待执行，不计通过。
