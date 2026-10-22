@@ -14,6 +14,13 @@
 
 对照：`cont-before.png`（16px 平铺）→ `cont-after.png`（13px 表格）；`trajectory.png` 是同一会话的轨迹页参照。
 
+## 会话页「A²D² 接续」：左右两栏
+
+- tab 名从「接续」改成「**A²D² 接续**」，和 Chat / Trajectory 区分开，明确这是插件视图。
+- 左栏：任务卡片（项目名 / 标题 / 当前协调身份），下方是「返回工作详情」「刷新观察」两个跳转按钮。
+- 右栏：接续配置（参数表），主操作「准备接续 / 重试本次接续」在右栏顶部右侧。
+- 760px 以下自动堆叠成单栏。见 `cont-split.png`。
+
 ## 接续主操作的位置
 
 「准备接续 / 重试本次接续」原来挂在整段事实的最下面，而页头的「返回工作详情 / 刷新观察」在上面，主次颠倒。现在它和「接续」标题同一行、靠右上，底部副本删掉；用宿主的 brand-primary 填充色，和其他主按钮一致。见 `cont-action-top.png`。
@@ -38,6 +45,6 @@
 
 ## 构建
 
-- 源码 `feat/project-field-values` @ `e2ef6f9`（PR #170，Draft）。
-- 18783 已换装：client `edfe5d0a3fec1cd4ccff8ad03247bb376870e09e853af98d31efcb8cf6becc4a`。
+- 源码 `feat/project-field-values` @ `c76b5d4`（PR #170，Draft）。
+- 18783 已换装：client `0f1c2cdaf3f80dffaba3e67ebbc48c88b8a36be2967e91c58c534f02e573cb07`。
 - 18780/18781 仍是用上一轮的 `cf5c0986…`，没有跟进本轮样式；需要时说一声再切。
