@@ -613,7 +613,7 @@ export class WorkApplication {
       snapshotSchema.parse(state)
       await writeFileAtomic(this.file, `${JSON.stringify(state)}\n`, { mode: 0o600, dirMode: 0o700 })
       return result
-    })
+    }, { waitMs: 30_000 })
     if ((command.type === 'continuous.configure' || command.type === 'continuous.set-enabled') && receipt.status === 'completed') {
       await this.reconcileContinuous()
       return this.query({ type: 'continuous.status', projectId: command.projectId, sourceId: command.sourceId }, actor)
