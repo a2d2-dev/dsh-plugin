@@ -75,7 +75,7 @@ function NativeTaskContinuation({ controller, sessionId, work }: { controller: W
     } catch (error) { if (!scope.signal.aborted) setError(error instanceof Error ? error.message : String(error)) }
     finally { if (!scope.signal.aborted) setBusy(false) }
   }
-  return <section><div className={styles.surface}><strong>{work.title}</strong><div className={styles.row}><button type="button" onClick={() => void controller.revealTask(work.ref)}>返回工作详情</button><button type="button" disabled={busy} onClick={() => setRevision(value => value + 1)}>刷新观察</button></div>{error && <p role="alert">{error}</p>}</div>
+  return <section className={styles.nativeView}><div className={styles.surface}><strong>{work.title}</strong><div className={styles.row}><button type="button" onClick={() => void controller.revealTask(work.ref)}>返回工作详情</button><button type="button" disabled={busy} onClick={() => setRevision(value => value + 1)}>刷新观察</button></div>{error && <p role="alert">{error}</p>}</div>
     {detail ? <ExecutionContinuation graph={detail.executionGraph} execution={detail.execution} policy={policy} busy={busy} {...(work.purpose === 'control' && !detail.task?.completion && detail.progress?.processingState !== 'completed' && detail.execution?.session.sessionId === sessionId ? { onContinue: () => void continueWork() } : {})}/> : !error && <p role="status">正在读取接续事实…</p>}
   </section>
 }

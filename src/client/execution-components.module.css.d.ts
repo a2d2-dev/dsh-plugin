@@ -1,5 +1,6 @@
 declare const styles: {
   readonly surface: string
+  readonly nativeView: string
   readonly card: string
   readonly row: string
   readonly identity: string
