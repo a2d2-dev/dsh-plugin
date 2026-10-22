@@ -120,3 +120,19 @@
 - **#165 生效验证**：连续两次 `continuous.preview` 不再出现 `planning-basis-changed`，而是直达模型调用；新的失败消息 `Model planning failed: Model stopped with error` 说明模型失败与 basis 抖动已被区分（R3）。
 - **新缺陷 #167**：planner 仍失败，测量显示请求体约 350–400KB——`planningBasis` 把整个 source（实测 source 328,892 bytes，其中 observations 285,493 bytes / 49 条）与无关 Issue 全部发给模型；实际只需要候选身份与指令/Block/策略。已在独立 worktree `fix/planner-payload`（base 4f359b8）修复中：收窄来源摘要、候选有界字段、请求体上限与失败诊断。
 - 决策：GUI 暂不再次重启换装组合产物，等 #167 一并修好后再做一次最终同 URL 更新，避免为中间版本多付一次重启成本；当前 GUI 仍是已验收的 v4 + #163 修复版本。
+
+## 十一、持续委托串行调度：已真实跑通（2026-10-22 04:47–05:00Z）
+
+`#167` 修复部署到 preview（client `85abb961`、tgz `120aea75`、host 8282d612，sessions/storages 保留）后：
+
+1. **真实模型计划 v2**：`continuous.preview`（expectedVersion 7）HTTP200，plan v2 `createdAt=2026-10-22T04:48:11.830Z`，steps 有序 **A(#160) → B(#161)**，两者 `mode=new`（不再是 wait），含 why/nextAction，X(#162) 不在计划内。basis 从 ~2.2MB 降到 129KB 后模型调用恢复稳定。
+2. **Block 生效**：X item=`blocked`，reason「Issue is excluded by the persistent Block list」。
+3. **启用即自动推进**：`continuous.set-enabled`（v8→v9，enabled=true）后宿主自动为 A 建 Task `b8d20566` 与执行 `f3cf7e6a`（session `session-ab13…`），此时 B=queued、X=blocked，**同时只有一项 active**。
+4. **A 让槽**：A 在真实会话里保存 in-progress、写 `A.proof.json`，并调用 `work_control wait`（control action=wait status=applied）→ item A=`waiting`。
+5. **B 接槽**：A 让槽后宿主自动为 B 建 Task `d456f4bc` 与执行 `f3f33cb2`（session `session-d4ed19…`），item B=`active`，A 仍 `waiting`、X `blocked`——串行语义（A-start → A-wait → B-start，至多一项推进）真实成立。
+6. 快照：`continuous-serial-snapshot.json`（规则 v9/enabled=true、plan v2 modes、items、executions、tasks）。
+
+### 未完成（如实记录）
+
+- B 的模型在正确取得宿主推进槽后，仍以「串行槽前置条件缺少可核验回执」为由把自己置为 blocked，未开始 proof 执行；操作者两次正式 `task.input` 提供宿主槽证据（规则 v9 enabled、A=waiting、B=active、active ref=d456f4bc…）后仍未继续。这是**夹具/模型判断**问题，不是调度器缺陷；因此 B 未完成、未关闭 #161，A 的 RESUME 与最终完成也未验证。
+- 越界 node 拒绝（模型输出计划外节点）本轮未构造出真实场景，未验证。

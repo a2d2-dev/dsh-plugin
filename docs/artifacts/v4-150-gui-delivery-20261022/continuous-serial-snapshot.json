@@ -1,0 +1,1360 @@
+{
+ "capturedAt": "2026-10-22T05:15:14.310281Z",
+ "rule": {
+  "id": "373d1174-fcb6-49e9-aed0-2ebdb98281aa",
+  "version": 9,
+  "enabled": true,
+  "scope": {
+   "assignee": "@me",
+   "labels": [
+    "qa:v4-152-6b252218-r01-serial"
+   ],
+   "identity": {
+    "login": "imneov",
+    "nodeId": "MDQ6VXNlcjMxNjEyMDMz"
+   }
+  },
+  "model": {
+   "provider": "codex",
+   "model": "gpt-6.1-sol",
+   "reasoningEffort": "medium"
+  },
+  "resource": {
+   "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+   "workspaceId": "b2c6edcf-bb21-4925-8ccd-6b0e503de5dc"
+  }
+ },
+ "plan": {
+  "version": 2,
+  "draftVersion": 5,
+  "basis": {
+   "instruction": "本 run v4-152-6b252218-r01 只持续处理 a2d2-dev/dsh-plugin 的专用验收 A=#160、B=#161，顺序必须先 A 后 B。硬范围为分配给 imneov 且带 qa:v4-152-6b252218-r01-serial 标签的开放 Issue；X=#162 明确排除并加入 Block，绝不处理其它开发 Issue、P/C/E、freeland 或 Project14。只在 /data/_dsh-dev/acceptance-workspaces/v4-152-r01 工作，A 仅写 A.proof.json，B 仅写 B.proof.json，禁止 clone 或修改业务代码。先为 A 新建或复用它自己的真实会话，按正文记录身份与 in-progress 后明确 wait 等待 RESUME-A-v4-152-6b252218-r01 并让槽；再推进 B，完成真实 JSON/数量3/stable/SHA256 验收并关闭专用 B。收到真实继续令后 A 保持原 owner/资源重新取得槽并验收；若外部关闭冲突保留本地完成，等待测试器解决后补同步，不重做。当前只保存并预览，明确启用前不得启动 Task/Session 或写 proof。预览必须列出 A→B，每项说明理由、下一步和复用还是新建会话。",
+   "supplements": [
+    "补充确认：本轮只处理 A=#160、B=#161，先 A 等待让槽再 B；X=#162 明确排除并 Block。仅在 /data/_dsh-dev/acceptance-workspaces/v4-152-r01 分别写 A.proof.json、B.proof.json。A 等待真实 RESUME-A-v4-152-6b252218-r01；预览不得执行。每步说明纳入理由、下一步与新建或复用。",
+    "纠偏：X=#162 的持久 Block 必须保留。请生成启用后可执行的 A→B 计划；预览不执行由系统控制，不应因此把 mode 都设为 wait。A/B 当前没有 canonical Task 或已有执行，确认不存在时应 mode=new，新建各自会话；如已存在才 reuse。A 的 wait 是启动后按 Issue 正文记录身份/in-progress 再等待 RESUME-A 的动作，B 在 A 安全让槽后执行，并非等待启用的静态步骤。保持只处理 A/B、隔离目录及各自 proof 的所有限制。",
+    "补充：启用后 A=#160 必须立即新建自己的真实会话开始执行，计划步骤不要使用 wait 模式；A 会按正文保存 in-progress 后通过 work_control wait 自行让槽，这属于执行中的等待，不是计划层面的等待。B=#161 在 A 让槽后开始，正常验收并真实关闭自己的专用 Issue。X=#162 继续 Block。计划 mode 只用 new 或 existing。"
+   ],
+   "scopeVersion": 1,
+   "blocks": [
+    "I_kwDOUmfSE88AAAABY_H6TA"
+   ],
+   "scope": {
+    "assignee": "@me",
+    "labels": [
+     "qa:v4-152-6b252218-r01-serial"
+    ],
+    "identity": {
+     "login": "imneov",
+     "nodeId": "MDQ6VXNlcjMxNjEyMDMz"
+    }
+   },
+   "executionStrategy": {
+    "resource": {
+     "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+     "workspaceId": "b2c6edcf-bb21-4925-8ccd-6b0e503de5dc"
+    },
+    "model": {
+     "provider": "codex",
+     "model": "gpt-6.1-sol",
+     "reasoningEffort": "medium"
+    },
+    "agentPreset": "standard",
+    "permissionPreset": "workspace-write"
+   },
+   "relationshipAvailability": {
+    "nativeParentChildren": "observed-when-present",
+    "nativeDependencies": "unavailable-in-source-port"
+   },
+   "source": {
+    "id": "9cea4378-0219-4f99-a237-80f51bd36291",
+    "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+    "provider": "github",
+    "version": 3,
+    "enabled": true,
+    "sourceVersion": 3,
+    "candidateCount": 47,
+    "repository": {
+     "owner": "a2d2-dev",
+     "repository": "dsh-plugin"
+    },
+    "identity": {
+     "login": "imneov",
+     "nodeId": "MDQ6VXNlcjMxNjEyMDMz"
+    },
+    "repositorySnapshot": {
+     "sourceVersion": 3,
+     "identity": {
+      "login": "imneov",
+      "nodeId": "MDQ6VXNlcjMxNjEyMDMz"
+     }
+    }
+   },
+   "candidates": [
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABYUDIWA",
+      "number": 122,
+      "title": "[A²D² v3/02] 单项工作启动、当前协调会话与执行资格",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/122",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "a2d2:sub"
+      ],
+      "assignees": [
+       "imneov"
+      ],
+      "updatedAt": "2026-10-20T07:30:21Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABXdRGDA",
+      "number": 112,
+      "title": "一期：插件托管任务长程运行、主会话接续与事件归属",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/112",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "a2d2:main"
+      ],
+      "assignees": [
+       "imneov"
+      ],
+      "updatedAt": "2026-10-15T15:47:29Z"
+     },
+     "task": {
+      "ref": {
+       "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+       "taskId": "4c936541-0d4f-4bde-b810-bbfe946044da"
+      },
+      "agentId": "a4b8b515-554a-4fe7-99c1-f0581a3da464",
+      "goal": "一期：插件托管任务长程运行、主会话接续与事件归属",
+      "goalTruncated": false,
+      "goalIdentity": "4e550b97a6288765",
+      "specification": {
+       "version": 1
+      },
+      "children": []
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABYUDArQ",
+      "number": 120,
+      "title": "A²D² v3：DSH 内工作控制面板、会话连续性与持续接活",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/120",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "a2d2:main"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-20T16:44:46Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABYUENHQ",
+      "number": 129,
+      "title": "[A²D² v3/09] PR 目录、工作关联与真实评审会话",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/129",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-19T15:20:12Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABYUECGA",
+      "number": 128,
+      "title": "[A²D² v3/08] 持久化持续接活、串行领取与暂停恢复",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/128",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-19T15:20:01Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABYUD1ew",
+      "number": 127,
+      "title": "[A²D² v3/07] 本地验收完成、父通知与可恢复外部关闭",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/127",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-19T15:19:48Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABYUDtRQ",
+      "number": 126,
+      "title": "[A²D² v3/06] 可配置上下文接续与历史会话观察",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/126",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-19T15:19:40Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABYUDlBQ",
+      "number": 125,
+      "title": "[A²D² v3/05] 当前项目的真实视图与对应内容",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/125",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-19T15:19:32Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABYUDSAw",
+      "number": 123,
+      "title": "[A²D² v3/03] 旧工作记录安全迁移与恢复接管",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/123",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-19T15:19:13Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABUx8Suw",
+      "number": 96,
+      "title": "偶发：全量 pnpm test 并行负载下约 1/10 失败一条",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/96",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-10T17:39:49Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABWU29Gw",
+      "number": 110,
+      "title": "修复 #105：正确的本地模型调用、初始化重试和不可验证强度拒绝",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/110",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-10T16:41:18Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABWU28dw",
+      "number": 109,
+      "title": "修复 #105：DSH 正式会话本地模型选择接口，不写全局默认",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/109",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-10T16:41:17Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABWUio1A",
+      "number": 108,
+      "title": "验收 #105：真实 GUI 独立强度保存与子会话档位证据",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/108",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-10T16:34:13Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABWTTgUA",
+      "number": 105,
+      "title": "Agent 模型候选独立配置推理强度，贯通设置页与会话创建",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/105",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "a2d2:main"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-10T16:31:45Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABWUiogQ",
+      "number": 107,
+      "title": "评审 #105：逐候选强度与会话默认隔离的完整改动",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/107",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-10T16:01:01Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABUk4hOw",
+      "number": 70,
+      "title": "highway-card 跟进 ADR 0004/0005/0007/0009：按阶段指定 Agent",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/70",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "a2d2:main"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-03T12:43:20Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABUyFwIQ",
+      "number": 103,
+      "title": "A2D2 配置页跟随宿主主题变量，窄屏规则改 container query",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/103",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-03T12:36:08Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABUx8NFg",
+      "number": 92,
+      "title": "A2D2 配置页布局挤压：阶段行 Agent 标签竖排、模型状态挤成一列",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/92",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-03T12:28:34Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABY86SwQ",
+      "number": 150,
+      "title": "[v4/06] 现有DSH实例交付与真实模型验收（preview → GUI）",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/150",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "a2d2:sub"
+      ],
+      "assignees": [
+       "imneov"
+      ],
+      "updatedAt": "2026-10-22T03:36:41Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABY9AauQ",
+      "number": 152,
+      "title": "[v4/150-02] 原 18782 真实模型与全流程验收",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/152",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [
+       "imneov"
+      ],
+      "updatedAt": "2026-10-22T04:19:11Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABY_S4vg",
+      "number": 163,
+      "title": "[v4] 工作库单写锁被后台发现循环占满：交互写命令返回 work-record-unavailable（并发/大 Project 下可复现）",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/163",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-22T02:59:53Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABY_H6TA",
+      "number": 162,
+      "title": "[QA #152 v4 v4-152-6b252218-r01] X",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/162",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "qa:v4-152-6b252218-r01",
+       "qa:v4-152-6b252218-r01-serial"
+      ],
+      "assignees": [
+       "imneov"
+      ],
+      "updatedAt": "2026-10-22T02:10:49Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABY_H3PQ",
+      "number": 161,
+      "title": "[QA #152 v4 v4-152-6b252218-r01] B",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/161",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "qa:v4-152-6b252218-r01",
+       "qa:v4-152-6b252218-r01-serial"
+      ],
+      "assignees": [
+       "imneov"
+      ],
+      "updatedAt": "2026-10-22T02:10:45Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABY_H0fQ",
+      "number": 160,
+      "title": "[QA #152 v4 v4-152-6b252218-r01] A",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/160",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "qa:v4-152-6b252218-r01",
+       "qa:v4-152-6b252218-r01-serial",
+       "qa:v4-152-6b252218-r01-touch"
+      ],
+      "assignees": [
+       "imneov"
+      ],
+      "updatedAt": "2026-10-22T02:10:41Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABY_Ht3Q",
+      "number": 158,
+      "title": "[QA #152 v4 v4-152-6b252218-r01] C",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/158",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "qa:v4-152-6b252218-r01"
+      ],
+      "assignees": [
+       "imneov"
+      ],
+      "updatedAt": "2026-10-22T02:10:31Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABY_Hq1A",
+      "number": 157,
+      "title": "[QA #152 v4 v4-152-6b252218-r01] P",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/157",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "qa:v4-152-6b252218-r01"
+      ],
+      "assignees": [
+       "imneov"
+      ],
+      "updatedAt": "2026-10-22T02:10:27Z"
+     },
+     "task": {
+      "ref": {
+       "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+       "taskId": "9124c73c-3882-495d-803d-4b6d0e25bbe9"
+      },
+      "agentId": "a4b8b515-554a-4fe7-99c1-f0581a3da464",
+      "goal": "[QA #152 v4 v4-152-6b252218-r01] P",
+      "goalTruncated": false,
+      "goalIdentity": "6d2db3ba99e5c3b4",
+      "specification": {
+       "version": 2
+      },
+      "progress": {
+       "stage": "in-progress",
+       "specificationVersion": 2
+      },
+      "children": []
+     },
+     "execution": {
+      "id": "0ac555c0-125e-4ed2-9ad2-ded8c447b37a",
+      "ref": {
+       "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+       "taskId": "9124c73c-3882-495d-803d-4b6d0e25bbe9"
+      },
+      "agentId": "a4b8b515-554a-4fe7-99c1-f0581a3da464",
+      "owner": "657d73e9-40c5-4170-92fd-07ae0ada7367",
+      "epoch": 2,
+      "resource": {
+       "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+       "workspaceId": "b2c6edcf-bb21-4925-8ccd-6b0e503de5dc"
+      },
+      "model": {
+       "provider": "codex",
+       "model": "gpt-6.1-sol",
+       "reasoningEffort": "high"
+      },
+      "agentPreset": "standard",
+      "permissionPreset": "workspace-write",
+      "session": {
+       "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+       "sessionId": "session-1a48efa9-472c-495f-af04-ce499b931f48"
+      },
+      "state": "waiting",
+      "control": {
+       "action": "wait",
+       "status": "applied"
+      }
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABYxYq_A",
+      "number": 136,
+      "title": "参考 v4 原型完成 Issue 驱动、统一执行与持续处理整体交付",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/136",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "enhancement",
+       "a2d2:sub"
+      ],
+      "assignees": [
+       "imneov"
+      ],
+      "updatedAt": "2026-10-21T23:12:12Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABY4V84Q",
+      "number": 138,
+      "title": "[v4/02] 统一真实执行状态、子 Issue 入口与接续页面",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/138",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [
+       "imneov"
+      ],
+      "updatedAt": "2026-10-21T17:36:34Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABY4fQkQ",
+      "number": 142,
+      "title": "[v4/Host] 公开非消费作业观察与持久终态收取回执",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/142",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [
+       "imneov"
+      ],
+      "updatedAt": "2026-10-21T17:36:31Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABY4WJjA",
+      "number": 140,
+      "title": "[v4/04] 自然语言持续委托、真实计划与 Block 约束",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/140",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [
+       "imneov"
+      ],
+      "updatedAt": "2026-10-21T17:06:32Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABY4WQHg",
+      "number": 141,
+      "title": "[v4/05] 现有 DSH 实例集成、真实模型与全流程页面验收",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/141",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [
+       "imneov"
+      ],
+      "updatedAt": "2026-10-21T16:43:34Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABY4WC1Q",
+      "number": 139,
+      "title": "[v4/03] 验收完成、父通知与可恢复 GitHub 关闭补偿",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/139",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [
+       "imneov"
+      ],
+      "updatedAt": "2026-10-21T16:43:20Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABY4V2Aw",
+      "number": 137,
+      "title": "[v4/01] Project／仓库链接接入、真实视图与 PR 目录",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/137",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [
+       "imneov"
+      ],
+      "updatedAt": "2026-10-21T16:43:07Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABUyAi-Q",
+      "number": 98,
+      "title": "测试脆弱：ceo-prompt 用例在仓库路径含 claude/codex 时误红",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/98",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-03T12:24:47Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABUmX6Vw",
+      "number": 81,
+      "title": "等人时通知 LF：A²D² 语义 + dsh-notifier 投递",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/81",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "a2d2:main"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-03T12:16:28Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABUr_wTw",
+      "number": 90,
+      "title": "A2D2 配置页无法保存：settings 命名空间取成 entry.id（include:a2d2）",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/90",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "bug",
+       "ready-for-agent"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-03T12:15:59Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABUx8RRw",
+      "number": 95,
+      "title": "加固：受信任写路由校验 content-type，拒绝 text/plain 简单 POST",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/95",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-03T12:15:16Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABUx8Pxw",
+      "number": 94,
+      "title": "加固：项目本地文件读取加大小上限、拒绝符号链接、目录不抛错、单次读取",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/94",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-03T12:15:14Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABUx8Ocw",
+      "number": 93,
+      "title": "加固：派子代理失败时回滚会话 Agent 账本，账本可清理",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/93",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-03T12:15:11Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABUrz3PQ",
+      "number": 89,
+      "title": "[fork] dsh-feishu-connect：/feishu/admin/* 无认证，公网可改写机器人配置",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/89",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "bug",
+       "ready-for-agent"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-02T20:35:44Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABUrSGVg",
+      "number": 85,
+      "title": "[fork] dsh-feishu-connect：等人通知、/bind 与 notifier 服务",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/85",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-02T20:08:45Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABUrSEXA",
+      "number": 84,
+      "title": "[fork] dsh-feishu-connect：DSH 0.2 适配与包身份",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/84",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-02T19:46:47Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABUYROUA",
+      "number": 41,
+      "title": "A²D²：每个任务由主会话里的 CEO 推进（插件作为载体）",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/41",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "a2d2:main"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-01T16:58:01Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABUYRmzw",
+      "number": 42,
+      "title": "CEO 的 SOUL：提炼 LF 的原则",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/42",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "a2d2:sub"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-01T14:33:45Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABZAHCaw",
+      "number": 166,
+      "title": "[v4] 窄屏 390×844 持续委托面板横向裁切（textarea/按钮超出视口）",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/166",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-22T04:01:02Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABZAHBGQ",
+      "number": 165,
+      "title": "[v4] 持续委托计划校验过严：无关的 canonical/来源抖动会作废进行中的 preview（planning-basis-changed / model stopped）",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/165",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-22T04:18:43Z"
+     }
+    },
+    {
+     "issue": {
+      "nodeId": "I_kwDOUmfSE88AAAABZARTrg",
+      "number": 167,
+      "title": "[v4] 持续委托 planner 请求体过大且失败不透明：整份来源观测进入 basis，模型多次 stopped with error",
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/167",
+      "repository": {
+       "owner": "a2d2-dev",
+       "repository": "dsh-plugin"
+      },
+      "state": "open",
+      "labels": [
+       "ready-for-agent"
+      ],
+      "assignees": [],
+      "updatedAt": "2026-10-22T04:18:41Z"
+     }
+    }
+   ]
+  },
+  "steps": [
+   {
+    "nodeId": "I_kwDOUmfSE88AAAABY_H0fQ",
+    "why": "A=#160 为开放 Issue，分配给 imneov 且带指定 serial 标签，属于本轮授权范围并必须先于 B。所供候选未显示 A 的 canonical Task 或已有执行，因此计划新建其专属真实会话。X=#162 保持持久 Block，其余 Issue 均不纳入。当前仅预览，不启动执行或写 proof；原生依赖信息不可用，不推断额外依赖。",
+    "nextAction": "明确启用后先复核 A 的范围与 canonical 状态；若出现已有执行则复用，避免重复创建，否则按给定 executionStrategy 新建 A 自己的真实会话，保持指定资源、模型及权限。仅在 /data/_dsh-dev/acceptance-workspaces/v4-152-r01 工作，仅可写 A.proof.json，禁止 clone 或修改业务代码。读取正文以核对授权范围内的验收要求，记录真实身份和 in-progress 后，调用 work_control wait 等待真实 RESUME-A-v4-152-6b252218-r01 并安全让槽，使 B 可以开始。收到真实继续令后，沿用原会话、owner 和资源重新取得槽，完成真实 JSON、数量3、stable 与 SHA256 验收；若外部关闭冲突，保留本地完成状态，等待测试器解决后补同步，不重做。",
+    "mode": "new"
+   },
+   {
+    "nodeId": "I_kwDOUmfSE88AAAABY_H3PQ",
+    "why": "B=#161 为开放 Issue，分配给 imneov 且带指定 serial 标签，属于本轮授权范围，按用户指定顺序在 A 记录 in-progress 并安全让槽后推进。所供候选未显示 B 的 canonical Task 或已有执行，因此计划新建其专属真实会话；无需等待 A 完成验收。",
+    "nextAction": "明确启用且确认 A 已通过 work_control wait 安全让槽后，复核 B 的范围与 canonical 状态；若出现已有执行则复用，否则按给定 executionStrategy 新建 B 自己的真实会话。仅在 /data/_dsh-dev/acceptance-workspaces/v4-152-r01 工作，仅可写 B.proof.json，禁止 clone 或修改业务代码。核对正文中的授权验收要求，完成真实 JSON、数量3、stable 和 SHA256 验收，记录本地完成并真实关闭专用 B=#161。若外部关闭冲突，保留本地完成状态，等待测试器解决后补同步，不重做；不处理 X、其它开发 Issue、P/C/E、freeland 或 Project14。",
+    "mode": "new"
+   }
+  ],
+  "createdAt": "2026-10-22T04:48:11.830Z"
+ },
+ "items": [
+  {
+   "nodeId": "I_kwDOUmfSE88AAAABY_H0fQ",
+   "state": "waiting",
+   "attempts": 0,
+   "executionId": "f3cf7e6a-f7c7-454f-9014-2ddcf4102a5f",
+   "ref": {
+    "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+    "taskId": "b8d20566-011e-4011-b44d-5271d301e051"
+   },
+   "reason": "已保存 Issue #160 正文、验收标准及 in-progress，且仅创建 A.proof.json。明确等待真实 RESUME-A-v4-152-6b252218-r01；本轮立即结束，不轮询或自行继续。待真实继续令并正式恢复后，沿用原 session、owner、资源核验数量3、stable、JSON解析和SHA256，逐项验收并报告 done、closeExternal:true。"
+  },
+  {
+   "nodeId": "I_kwDOUmfSE88AAAABY_H3PQ",
+   "state": "active",
+   "attempts": 0,
+   "executionId": "f3f33cb2-5692-4372-808a-55ce5b90402b",
+   "ref": {
+    "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+    "taskId": "d456f4bc-eeaf-4f6a-88e5-0d5c03f7e5c3"
+   },
+   "reason": null
+  },
+  {
+   "nodeId": "I_kwDOUmfSE88AAAABY_H6TA",
+   "state": "blocked",
+   "attempts": 0,
+   "executionId": null,
+   "ref": null,
+   "reason": "Issue is excluded by the persistent Block list"
+  }
+ ],
+ "rules": {
+  "draftVersion": 5,
+  "blocks": [
+   "I_kwDOUmfSE88AAAABY_H6TA"
+  ]
+ },
+ "executions": [
+  {
+   "id": "0ac555c0-125e-4ed2-9ad2-ded8c447b37a",
+   "ref": {
+    "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+    "taskId": "9124c73c-3882-495d-803d-4b6d0e25bbe9"
+   },
+   "owner": "657d73e9-40c5-4170-92fd-07ae0ada7367",
+   "epoch": 2,
+   "state": "waiting",
+   "session": {
+    "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+    "sessionId": "session-1a48efa9-472c-495f-af04-ce499b931f48"
+   },
+   "control": {
+    "commandId": "tool:8c0777d94f9fcc3a01805fe2495024d3be221ce7848440641d78be83e96282a2",
+    "action": "wait",
+    "status": "applied",
+    "reason": "等待外部执行条件：宿主恢复可用的受限shell后端，及可提供codex/gpt-6.1-sol/medium真实请求回执的native child接口；danger-full-access重试已被用户拒绝，不再重试或绕过。当前Task v6/in-progress，唯一写入P.proof.json，必要原生子仅C/E已采纳。恢复后先完成P/E JSON与SHA256独立核验、读取E测试器交付checksum/退出码、核实C canonical Task验收，再创建并正式收取native只读child与自有checksum job，验证过早done拒绝及owner收尾。仍需实际收到FINISH-P-v4-152-6b252218-r01后才可验收done并请求关闭。"
+   }
+  },
+  {
+   "id": "f3cf7e6a-f7c7-454f-9014-2ddcf4102a5f",
+   "ref": {
+    "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+    "taskId": "b8d20566-011e-4011-b44d-5271d301e051"
+   },
+   "owner": "94b0a304-89db-42a5-89cb-d9e09982f25a",
+   "epoch": 1,
+   "state": "waiting",
+   "session": {
+    "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+    "sessionId": "session-ab13791a-3382-471d-9d00-bf04dd926db2"
+   },
+   "control": {
+    "commandId": "tool:e4f2f60902b0415403f05d02dd4362471a4ba54e84b61611e69e90490079a520",
+    "action": "wait",
+    "status": "applied",
+    "reason": "已保存 Issue #160 正文、验收标准及 in-progress，且仅创建 A.proof.json。明确等待真实 RESUME-A-v4-152-6b252218-r01；本轮立即结束，不轮询或自行继续。待真实继续令并正式恢复后，沿用原 session、owner、资源核验数量3、stable、JSON解析和SHA256，逐项验收并报告 done、closeExternal:true。"
+   }
+  },
+  {
+   "id": "f3f33cb2-5692-4372-808a-55ce5b90402b",
+   "ref": {
+    "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+    "taskId": "d456f4bc-eeaf-4f6a-88e5-0d5c03f7e5c3"
+   },
+   "owner": "c322c131-9b54-4992-a0df-99f2fbf8006d",
+   "epoch": 1,
+   "state": "ready",
+   "session": {
+    "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+    "sessionId": "session-d4ed190e-d014-4013-85cd-c467752e923a"
+   },
+   "control": {
+    "commandId": "tool:3e393b3a689a44b8ad4aff18b6dea62882901a15e1681e46eb552fb974d214d1",
+    "action": "resume",
+    "status": "accepted",
+    "reason": "用户已明确确认：本 run 串行规则 373d1174 enabled=true，A=#160 已通过 work_control wait 安全让槽（item A=waiting），B 取得本 run 唯一推进槽。正式恢复当前 B 执行，仅生成并验收 B.proof.json，完成后请求关闭 #161 并读取真实回执；不修改其它 fixture/Issue。"
+   }
+  }
+ ],
+ "tasks": [
+  {
+   "id": "9124c73c-3882-495d-803d-4b6d0e25bbe9",
+   "goal": "[QA #152 v4 v4-152-6b252218-r01] P",
+   "progress": {
+    "closeExternal": false,
+    "externalChildren": [],
+    "specificationVersion": 2,
+    "stage": "in-progress",
+    "summary": "继续同一GitHub #157 Task，已核实epoch=2当前Session/owner；恢复时已复述数量3、必须保留stable标签及未完成项。C/E完整来源已读取，source-children正式采纳仅C/E必要范围。已读取E实际proof与updatedAt；唯一创建及编辑的文件为P.proof.json，包含真实身份、decisions和实际checks。未完成JSON/SHA256、C canonical验收、E外部验收、native/job路由与正式收取。Shell因缺少沙箱后端被拒，权限重试被用户拒绝，已停止且未绕过；无job或child启动，无完成或关闭请求。",
+    "next": "等待宿主恢复可用的受限shell执行后，首先在本run目录独立JSON解析与SHA256核验P/E proof；读取E测试器真实交付checksum/退出码并对照当前updatedAt；通过受支持的真实接口核对codex/gpt-6.1-sol/medium路由并创建本Task native只读校验child及自有后台checksum job。保留真实请求/job回执；在正式收取前验证过早done被拒且owner仍可继续，随后owner job_output收取并读取结论。C必须由自己的canonical Task按当前规格验收；读取核实后关联真实child需求块。全部门槛及实际FINISH-P完成令齐备才可done/closeExternal。",
+    "blockers": [
+     "Shell未执行：宿主无可用workspace-write沙箱后端；同一只读命令的danger-full-access重试被用户拒绝，已停止，未绕过。",
+     "可用native subagent工具不暴露provider/model/reasoning选择参数；尚无codex/gpt-6.1-sol/medium真实请求路由回执，未以prompt或模型自报代替。",
+     "C尚无已读取的canonical Task验收；E尚缺测试器交付checksum/命令退出码。",
+     "尚未实际收到FINISH-P-v4-152-6b252218-r01。"
+    ],
+    "criteria": [
+     {
+      "index": 0,
+      "passed": true,
+      "evidence": [
+       "仅在专用run目录读取README.md和E.proof.json；唯一写入文件为P.proof.json；未clone或修改业务代码，未接入其他Issue。"
+      ]
+     },
+     {
+      "index": 1,
+      "passed": false,
+      "evidence": [
+       "epoch=2 work_control status核实Task=9124c73c-3882-495d-803d-4b6d0e25bbe9、Execution=0ac555c0-125e-4ed2-9ad2-ded8c447b37a、Session=session-1a48efa9-472c-495f-af04-ce499b931f48、owner=657d73e9-40c5-4170-92fd-07ae0ada7367。",
+       "P.proof.json已创建并通过read回读，包含run/fixture/真实身份/decisions/实际checks；JSON解析和SHA256因shell拒绝尚未执行，不能当作通过。"
+      ]
+     },
+     {
+      "index": 2,
+      "passed": true,
+      "evidence": [
+       "恢复后首先实际复述数量3、必须保留stable标签及未完成项；proof decisions={retainCount:3,keepTags:[\"stable\"]}。"
+      ]
+     },
+     {
+      "index": 3,
+      "passed": false,
+      "evidence": [
+       "已完整读取C #158、E #159正文。work_organize source-children成功，Task version=5，采用父observedAt=2026-10-22T03:51:50.606Z，必要原生子仅本run C/E。",
+       "C来源未返回canonical Task验收，尚不能通过；未伪造child引用。"
+      ]
+     },
+     {
+      "index": 4,
+      "passed": false,
+      "evidence": [
+       "E来源updatedAt=2026-10-22T02:19:59Z，observedAt=2026-10-22T03:48:45.176Z；已read实际E.proof.json，source.kind=external-automated-acceptance，executor=qa152b delegated acceptance agent。",
+       "E proof包含run/fixture/数量3/stable；尚未读到交付checksum和命令退出码，未将Closed作为验收，未为E创建Task/Session。"
+      ]
+     },
+     {
+      "index": 5,
+      "passed": false,
+      "evidence": [
+       "native child尚未创建；可用工具未暴露路由选择参数，不猜测实际模型。后台checksum job尚未创建；shell沙箱不可用且权限重试被拒绝。"
+      ]
+     },
+     {
+      "index": 6,
+      "passed": false,
+      "evidence": [
+       "无native/job请求或结果；未伪造job id、consumed通知、正式收取或过早done拒绝事实。"
+      ]
+     },
+     {
+      "index": 7,
+      "passed": true,
+      "evidence": [
+       "epoch=1报告及宿主接续材料已保存；epoch=2开始时已复述数量3、必须保留stable标签与未完成项，然后读取真实status。"
+      ]
+     },
+     {
+      "index": 8,
+      "passed": false,
+      "evidence": [
+       "完成令尚未实际收到；stage保持in-progress，closeExternal=false；不冒充LF或其他真人。"
+      ]
+     }
+    ],
+    "updatedAt": "2026-10-22T03:59:04.542Z"
+   },
+   "completion": null
+  },
+  {
+   "id": "b8d20566-011e-4011-b44d-5271d301e051",
+   "goal": "[QA #152 v4 v4-152-6b252218-r01] A",
+   "progress": {
+    "closeExternal": false,
+    "externalChildren": [],
+    "specificationVersion": 2,
+    "stage": "in-progress",
+    "summary": "复用当前 canonical Task 和已有真实执行，已原样保存 Issue #160 正文及验收要求。仅创建 A.proof.json，记录工具返回的真实身份与指定 decisions；最终四项检查均保持 pending。",
+    "next": "调用 work_control wait 等待真实 RESUME-A-v4-152-6b252218-r01，立即结束轮次；收到并正式恢复后沿用原会话、owner、资源，核验 JSON、数量3、stable 和 SHA256，再逐项报告 done 并 closeExternal:true。",
+    "blockers": [
+     "等待真实 RESUME-A-v4-152-6b252218-r01 及正式恢复；继续令之前不得进行最终验收。"
+    ],
+    "criteria": [
+     {
+      "index": 0,
+      "passed": true,
+      "evidence": [
+       "本轮文件写入仅为 /data/_dsh-dev/acceptance-workspaces/v4-152-r01/A.proof.json；未 clone 或修改业务代码、未接入其他 Issue。"
+      ]
+     },
+     {
+      "index": 1,
+      "passed": true,
+      "evidence": [
+       "work_control status: execution=f3cf7e6a-f7c7-454f-9014-2ddcf4102a5f, session=session-ab13791a-3382-471d-9d00-bf04dd926db2, owner=94b0a304-89db-42a5-89cb-d9e09982f25a, epoch=1。",
+       "write 工具确认创建 A.proof.json，记录 run、fixture、真实身份、decisions 和实际已执行/待执行 checks。"
+      ]
+     },
+     {
+      "index": 2,
+      "passed": false,
+      "evidence": [
+       "已保存本 in-progress 报告；下一步立即调用 work_control wait，随后结束轮次。"
+      ]
+     },
+     {
+      "index": 3,
+      "passed": false,
+      "evidence": [
+       "数量3、stable、JSON解析、SHA256 均待真实继续令和正式恢复后验证；未声称通过。"
+      ]
+     },
+     {
+      "index": 4,
+      "passed": false,
+      "evidence": [
+       "保留源 Issue 的冲突处理和路由证据要求；尚未请求关闭远端。"
+      ]
+     }
+    ],
+    "updatedAt": "2026-10-22T04:52:43.535Z"
+   },
+   "completion": null
+  },
+  {
+   "id": "d456f4bc-eeaf-4f6a-88e5-0d5c03f7e5c3",
+   "goal": "[QA #152 v4 v4-152-6b252218-r01] B",
+   "progress": {
+    "closeExternal": false,
+    "externalChildren": [],
+    "specificationVersion": 2,
+    "stage": "blocked",
+    "summary": "已复核 B=#161 的 canonical 身份并保存完整来源规格与 5 项验收条件；B 执行已存在。串行槽前置条件缺少可核验回执，尚未开始 proof 执行，等待该外部依赖。",
+    "next": "等待协调器提供本 run 串行规则启用与 A 的 work_control wait 成功回执/槽授予证据；随后复用当前 B 执行，仅写 B.proof.json，真实解析并核验 retainCount=3、keepTags=[stable] 与 SHA256，逐项验收，报告 done 和 closeExternal:true 并读取实际关闭结果。",
+    "blockers": [
+     "当前可见运行状态未提供本 run 串行规则已明确启用且 A 已通过 work_control wait 安全让槽的真实回执。A.proof.json 只记录 in-progress 和等待 RESUME-A，不能代替 durable wait 回执。"
+    ],
+    "criteria": [
+     {
+      "index": 0,
+      "passed": false,
+      "evidence": [
+       "已读取 B 当前 work_control status；现有 Execution f3f33cb2-5692-4372-808a-55ce5b90402b 将复用，无需新建。",
+       "尚未观察到 A 的 work_control wait 成功回执或可核验串行槽授予。"
+      ]
+     },
+     {
+      "index": 1,
+      "passed": true,
+      "evidence": [
+       "本轮仅在指定工作区读取 README.md、A.proof.json 并列出文件；未写文件、未 clone、未修改业务代码、未执行其他 Issue。"
+      ]
+     },
+     {
+      "index": 2,
+      "passed": false,
+      "evidence": [
+       "已以 work_organize 保存完整 Issue #161 正文及 5 项来源验收要求，当前 specification version 2。",
+       "work_control status 返回真实 task=d456f4bc-eeaf-4f6a-88e5-0d5c03f7e5c3、execution=f3f33cb2-5692-4372-808a-55ce5b90402b、session=session-d4ed190e-d014-4013-85cd-c467752e923a、owner=c322c131-9b54-4992-a0df-99f2fbf8006d、epoch=1。",
+       "B.proof.json 尚未创建，等待串行槽前置条件可核验。"
+      ]
+     },
+     {
+      "index": 3,
+      "passed": false,
+      "evidence": [
+       "尚未执行 B JSON/数量3/stable/SHA256 验收；本轮未启动 job 或子 agent，无待收取结果。"
+      ]
+     },
+     {
+      "index": 4,
+      "passed": false,
+      "evidence": [
+       "Issue #161 最近绑定观测为 open；本地未完成，未请求关闭。"
+      ]
+     }
+    ],
+    "updatedAt": "2026-10-22T04:57:06.743Z"
+   },
+   "completion": null
+  }
+ ]
+}
