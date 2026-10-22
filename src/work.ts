@@ -360,7 +360,19 @@ export class WorkApplication {
         if (!this.planner) throw new PlanningError('planning-model-unavailable', 'Host LLM planning capability is unavailable')
         const basis = planningBasis(snapshot, rule)
         const fingerprint = planningBasisFingerprint(basis)
-        const output = await this.planner.generate(basis, rule.model)
+        let output: unknown
+        try { output = await this.planner.generate(basis, rule.model) }
+        catch (error) {
+          // Only summarize the model message: never expose its stack or local paths.
+          const message = error instanceof Error ? error.message : typeof error === 'string' ? error : 'Unknown model error'
+          const summary = message.split(/[\r\n]/, 1)[0]!
+            .replace(/\b[a-z][a-z0-9+.-]*:\/\/\S+/gi, '[redacted URL]')
+            .replace(/\b[A-Za-z0-9_-]*(?:key|token|secret|password|passwd|credentials?)\s*[=:]\s*(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi, '[redacted credential]')
+            .replace(/\bBearer\s+\S+|\b(?:sk-|gh[pousr]_|github_pat_|xox[baprs]-)[A-Za-z0-9_-]+/gi, '[redacted credential]')
+            .replace(/(?:[A-Za-z]:[\\/]|\.{1,2}\/|~\/|\/)[^\s,;"'<>]+/g, '[redacted path]')
+            .slice(0, 500).trim()
+          throw new PlanningError('planning-model-failed', `Model planning failed: ${summary || 'Unknown model error'}`)
+        }
         return await this.sourceTransaction(async state => {
           const current = state.continuousRules!.find(item => item.id === rule.id)!
           if (current.version !== command.expectedVersion) return conflict(current.version)
