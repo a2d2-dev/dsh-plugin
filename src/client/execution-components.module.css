@@ -26,7 +26,7 @@
 /* The panel gives every details its own margin; this surface owns its own rhythm. */
 /* The native conversation tab shares the host's 16px body; give it the compact
    typographic scale the trajectory table uses instead of inheriting it. */
-.nativeView { font: var(--dsw-font-xs-13, 13px/20px inherit); }
+.nativeView { font: var(--dsw-font-xs-13, 13px/20px inherit); container-type: inline-size; }
 .nativeView .surface { padding: 10px 16px; gap: 10px; }
 .nativeView .split { display: grid; grid-template-columns: clamp(140px, 28%, 240px) minmax(0, 1fr); gap: 16px; align-items: start; padding: 10px 16px; }
 .nativeView .split .surface { padding: 0; }
@@ -39,7 +39,14 @@
 .taskActions { display: flex; flex-wrap: wrap; gap: 8px; }
 .taskActions button { font: var(--dsw-font-xs-13, 13px/20px inherit); color: inherit; background: transparent; border: 1px solid color-mix(in srgb, currentColor 22%, transparent); border-radius: 7px; padding: 5px 10px; cursor: pointer; }
 .taskActions button:disabled { opacity: .55; cursor: default; }
-@media (max-width: 760px) { .nativeView .split { grid-template-columns: minmax(0, 1fr); } }
+/* A narrow conversation pane (right sidebar open) stacks instead of squeezing
+   the settings column; the viewport width alone cannot see that. */
+@container (max-width: 560px) {
+  .nativeView .split { grid-template-columns: minmax(0, 1fr); }
+  .nativeView .taskPanel { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; }
+  .nativeView .taskCard { flex: 1 1 0; min-width: 0; }
+  .nativeView .taskActions { flex: 0 0 auto; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
+}
 .nativeView .surface h2 { font-size: 15px; margin: 0 0 8px; }
 /* The panel's global `details` margin is scoped to another CSS module, so double the hook here. */
 .surface.surface details { margin: 0; }

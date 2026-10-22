@@ -83,16 +83,31 @@ function ProjectViews({controller,source}:{controller:WorkPanelController;source
   const state=controller.getSnapshot().source,catalog=state.catalog,snapshot=source.projectSnapshot
   const [collapsed,setCollapsed]=useState<ReadonlySet<string>>(()=>new Set())
   const [extraColumns,setExtraColumns]=useState(false)
+  const [includeClosed,setIncludeClosed]=useState(false)
   if(!catalog)return <p>尚无真实 Project 视图缓存，请刷新来源。</p>
   const entry=source.entryUrls?.at(-1),url=entry?new URL(entry):undefined
   const entryView=Number(/\/views\/(\d+)/.exec(url?.pathname??'')?.[1])||null
   const viewNumber=state.viewNumber??entryView??catalog.views[0]?.number??null
   const view=catalog.views.find(view=>view.number===viewNumber)
   const slice=state.viewNumber===null&&!!url&&[...url.searchParams.keys()].some(key=>/slice/i.test(key))
-  const expression=(state.viewNumber===null?url?.searchParams.get('filterQuery'):undefined)??view?.filter??''
+  // The saved entry may carry an ad-hoc filterQuery for its view (GitHub keeps
+  // it in the URL, not in the view record). Rebuilding must not drop it when
+  // that same view is selected.
+  const entryFilter=url?.searchParams.get('filterQuery')??''
+  const expression=state.viewNumber===null
+    ? entryFilter||view?.filter||''
+    : viewNumber===entryView&&entryFilter ? entryFilter : view?.filter??''
   const filtered=snapshot?filterProjectItems(expression,snapshot.items,source.observations.map(item=>item.issue),snapshot.identity.login,catalog.fields.filter(field=>['SINGLE_SELECT','ITERATION','TEXT','NUMBER','DATE','MILESTONE'].includes(field.dataType)).map(field=>field.name)):null
   const page=state.viewPage,perPage=25,issues=source.observations.map(item=>item.issue)
-  const visible=filtered?.supported?filtered.items:[]
+  const matched=filtered?.supported?filtered.items:[]
+  const issuesByNode=new Map(issues.map(issue=>[issue.nodeId,issue]))
+  // The Project view's own filter is upstream truth; this local switch only
+  // hides items the view would otherwise include because GitHub shows closed
+  // issues when its filter is empty. A view that explicitly asks for closed
+  // items keeps them even with the switch off.
+  const closedRequested=/(^|\s)is:closed(\s|$)/i.test(expression)
+  const visible=includeClosed||closedRequested?matched:matched.filter(item=>issuesByNode.get(item.issueNodeId??'')?.state!=='closed')
+  const hiddenClosed=matched.length-visible.length
   const rows=orderProjectRows(visible.slice((page-1)*perPage,page*perPage),issues,collapsed)
   const columns=projectColumns(catalog.fields,orderProjectRows(visible,issues,new Set()),extraColumns),slots=projectColumnSlots(columns)
   const weightTotal=Math.max(1,columns.reduce((total,field)=>total+columnWeight(field.dataType),0))
@@ -103,7 +118,8 @@ function ProjectViews({controller,source}:{controller:WorkPanelController;source
   return <section>
     <div className={styles.projectToolbar}>
       <label>视图<select aria-label="Project 视图" value={viewNumber??''} onChange={event=>controller.setProjectView(Number(event.target.value))}>{catalog.views.map(view=><option key={view.id} value={view.number}>{view.name}</option>)}</select></label>
-      <span className={styles.projectCount}>{filtered?.supported?filtered.items.length:0} 项{snapshot&&snapshot.items.some(item=>item.kind==='restricted')?` · ${snapshot.items.filter(item=>item.kind==='restricted').length} 项权限受限`:''}</span>
+      <span className={styles.projectCount}>{filtered?.supported?visible.length:0} 项{hiddenClosed?` · 已隐藏 ${hiddenClosed} 个已关闭`:''}{snapshot&&snapshot.items.some(item=>item.kind==='restricted')?` · ${snapshot.items.filter(item=>item.kind==='restricted').length} 项权限受限`:''}</span>
+      <label className={styles.projectToggle}><input type="checkbox" checked={includeClosed} onChange={event=>setIncludeClosed(event.target.checked)}/> 含已关闭</label>
       <label className={styles.projectToggle}><input type="checkbox" checked={extraColumns} onChange={event=>setExtraColumns(event.target.checked)}/> 时间与仓库列</label>
       {entry&&<span className={styles.projectLink}><TrustedLink url={entry}>原始视图</TrustedLink></span>}
     </div>
@@ -119,7 +135,7 @@ function ProjectViews({controller,source}:{controller:WorkPanelController;source
           ?<td key={SESSION_SLOT}><div className={styles.cellClip}><SessionCell entry={sessionOf(row.issue?.nodeId?progressByNode.get(row.issue.nodeId):undefined)} onOpen={session=>controller.openSession(session)}/></div></td>
           :<ProjectCell key={slot.id} field={slot} row={row} fields={catalog.fields}/>)}
       </tr>)}</tbody></table></div>:<p>此视图没有可见匹配条目。</p>}
-      <div className={styles.toolbar}><button disabled={page<=1} onClick={()=>controller.setProjectView(viewNumber,page-1)}>上一页</button><span>第 {page} 页</span><button disabled={!filtered?.supported||page*perPage>=filtered.items.length} onClick={()=>controller.setProjectView(viewNumber,page+1)}>下一页</button></div>
+      <div className={styles.toolbar}><button disabled={page<=1} onClick={()=>controller.setProjectView(viewNumber,page-1)}>上一页</button><span>第 {page} 页</span><button disabled={!filtered?.supported||page*perPage>=visible.length} onClick={()=>controller.setProjectView(viewNumber,page+1)}>下一页</button></div>
     </>}
     <details><summary>字段定义</summary><ul>{catalog.fields.map(field=><li key={field.id}>{field.name} · {field.dataType}{field.options?.length?` · ${field.options.map(option=>`${option.name}(${option.color})`).join(' / ')}`:''}</li>)}</ul></details>
   </section>
