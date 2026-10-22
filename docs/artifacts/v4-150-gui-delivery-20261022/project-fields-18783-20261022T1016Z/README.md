@@ -80,3 +80,17 @@
 - 截图：`header-row.png`（概览）、`header-row-project.png`（项目表格）。
 
 构建：client `481900dfe1d59f481faced12f3608ff4b6288c378fe2523fb973a32049d7a6d5`，18783。
+
+## 表格收窄：不再被长标题撑开（2026-10-22 12:22Z）
+
+之前 auto 布局 + 9 列常显把表格撑到 ~1900px。现在：
+
+- `table-layout: fixed` + 按列类型加权分配宽度（标题 30%，其余按 Assignees/Status/Labels/Linked PR/Parent/Progress 权重分 70%）；
+- 每个单元格单行截断（省略号），标题也是；日期改成 `MM-DD`；
+- 仓库、Created/Updated/Closed、Milestone、Reviewers 默认隐藏，勾选「显示时间与仓库列」再出现；
+- 进度条分段上限 10 段、3px 宽，`10/11 · 90%` 完整显示；
+- 表头允许换行（`Linked pull requests` 显示为两行）。
+
+实测：表格宽度 901px = 容器 901px，`scrollWidth` 无溢出，列数 7。截图 `table-final2.png`。
+
+构建：client `27e9e89a58daab0d8e31d150937cfc125ec90c09f0c51acf5840c59d6ca47998`，仍在 18783。
