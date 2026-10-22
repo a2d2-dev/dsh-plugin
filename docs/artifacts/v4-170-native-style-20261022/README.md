@@ -14,6 +14,10 @@
 
 对照：`cont-before.png`（16px 平铺）→ `cont-after.png`（13px 表格）；`trajectory.png` 是同一会话的轨迹页参照。
 
+## 接续主操作的位置
+
+「准备接续 / 重试本次接续」原来挂在整段事实的最下面，而页头的「返回工作详情 / 刷新观察」在上面，主次颠倒。现在它和「接续」标题同一行、靠右上，底部副本删掉；用宿主的 brand-primary 填充色，和其他主按钮一致。见 `cont-action-top.png`。
+
 ## 处理会话表单：现在四项都能选
 
 上一版把「Agent 预设」和「权限」固定成宿主默认，理由是「只认证继承的选项」。这个契约不对：正常新会话能选的东西，从 A²D² 进来也应该能选。本轮把契约改成**宿主目录即权威**：
@@ -34,6 +38,6 @@
 
 ## 构建
 
-- 源码 `feat/project-field-values` @ `bf3f5d6`（PR #170，Draft）。
-- 18783 已换装：client `a871141518765f26bd1a2bd9c38f74ba4a826c79add0dbad30cb6f56fbdcfe18`。
+- 源码 `feat/project-field-values` @ `e2ef6f9`（PR #170，Draft）。
+- 18783 已换装：client `edfe5d0a3fec1cd4ccff8ad03247bb376870e09e853af98d31efcb8cf6becc4a`。
 - 18780/18781 仍是用上一轮的 `cf5c0986…`，没有跟进本轮样式；需要时说一声再切。
