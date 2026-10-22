@@ -4,13 +4,17 @@ import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import * as atomic from '@deepseek-ai/dsh-atomic-write'
 import { WorkApplication } from '../src/work.ts'
+import { reconcileProjectSources, startProjectDiscovery } from '../src/work-sources/discovery.ts'
 
 vi.mock('@deepseek-ai/dsh-atomic-write', { spy: true })
+vi.mock('../src/work-sources/discovery.ts', { spy: true })
 
 const roots: string[] = []
 const operator = { operator: true }
 const noHost = { resources: async () => [], sessions: async () => [] }
 afterEach(async () => {
+  vi.useRealTimers()
+  vi.clearAllMocks()
   for (const root of roots.splice(0)) {
     if (!root.startsWith(join(tmpdir(), 'a2d2-contention-'))) throw new Error('Unsafe cleanup')
     await rm(root, { recursive: true, force: true })
@@ -57,4 +61,61 @@ it('queues writers across application instances before attempting the cross-proc
   expect(await second).toMatchObject({ status: 'completed' })
   const state = JSON.parse(await readFile(join(directory, 'work-v3.json'), 'utf8'))
   expect(state.projects.map((project: { name: string }) => project.name)).toEqual(['First', 'Second'])
+})
+
+it('does not rewrite the store on a reconcile tick while Project observations are not due', async () => {
+  const { directory } = await open()
+  const projectRead = vi.fn()
+  const app = new WorkApplication(directory, noHost, { list: vi.fn(), detail: vi.fn(), project: projectRead })
+  const created = await app.execute({ type: 'project.create', commandId: 'idle-project', name: 'Idle' }, operator)
+  if (created.status !== 'completed' || !created.project) throw new Error('Expected project')
+  await app.execute({ type: 'source.configure-project', commandId: 'idle-source', projectId: created.project.id,
+    githubProject: { owner: 'a2d2-dev', type: 'org', number: 1 } }, operator)
+  const file = join(directory, 'work-v3.json')
+  const state = JSON.parse(await readFile(file, 'utf8'))
+  state.sources[0].discovery.nextAttemptAt = new Date(Date.now() + 60_000).toISOString()
+  await writeFile(file, JSON.stringify(state))
+  const writes = vi.mocked(atomic.writeFileAtomic)
+  writes.mockClear()
+  await app.reconcileSources()
+  expect(projectRead).not.toHaveBeenCalled()
+  expect(writes).not.toHaveBeenCalled()
+  expect(JSON.parse(await readFile(file, 'utf8'))).toEqual(state)
+})
+
+it('keeps a scheduling-only nextAttemptAt update in memory and honors it on the next tick', async () => {
+  const { directory } = await open()
+  const projectRead = vi.fn()
+  const app = new WorkApplication(directory, noHost, { list: vi.fn(), detail: vi.fn(), project: projectRead })
+  const created = await app.execute({ type: 'project.create', commandId: 'schedule-project', name: 'Scheduling' }, operator)
+  if (created.status !== 'completed' || !created.project) throw new Error('Expected project')
+  await app.execute({ type: 'source.configure-project', commandId: 'schedule-source', projectId: created.project.id,
+    githubProject: { owner: 'a2d2-dev', type: 'org', number: 1 } }, operator)
+  const file = join(directory, 'work-v3.json'), before = await readFile(file, 'utf8')
+  // Isolate the scheduler-to-storage contract: no observation or recovery fact changes.
+  vi.mocked(reconcileProjectSources).mockImplementationOnce(async transaction => {
+    await transaction(async state => { state.sources[0]!.discovery!.nextAttemptAt = new Date(Date.now() + 60_000).toISOString() })
+  })
+  const writes = vi.mocked(atomic.writeFileAtomic)
+  writes.mockClear()
+  await app.reconcileSources()
+  expect(writes).not.toHaveBeenCalled()
+  expect(await readFile(file, 'utf8')).toBe(before)
+  await app.reconcileSources()
+  expect(projectRead).not.toHaveBeenCalled()
+  expect(writes).not.toHaveBeenCalled()
+})
+
+it('polls discovery every thirty seconds by default instead of rewriting pressure every five seconds', async () => {
+  vi.useFakeTimers()
+  const reconcile = vi.fn(async () => {})
+  const stop = startProjectDiscovery({ reconcile })
+  try {
+    await vi.advanceTimersByTimeAsync(0)
+    expect(reconcile).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(29_999)
+    expect(reconcile).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(reconcile).toHaveBeenCalledTimes(2)
+  } finally { await stop() }
 })

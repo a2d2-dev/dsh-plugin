@@ -121,7 +121,7 @@ export async function reconcileProjectSources(transaction: SourceTransaction, po
 
 /** Lifecycle owns the timer and joins its current read; browser presence is irrelevant. */
 export function startProjectDiscovery(options: { reconcile: () => Promise<void>; pollMs?: number; onError?: (error: unknown) => void }): () => Promise<void> {
-  const pollMs = options.pollMs ?? 5_000
+  const pollMs = options.pollMs ?? 30_000
   if (!Number.isSafeInteger(pollMs) || pollMs < 1) throw new Error('Discovery poll interval must be a positive integer')
   let closed = false, running: Promise<void> | undefined
   const tick = () => {

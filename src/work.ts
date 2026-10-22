@@ -78,6 +78,7 @@ async function withWorkFileLock<T>(file: string, apply: () => Promise<T>): Promi
 /** Public local work commands and queries. One v3 snapshot is the only writer authority. */
 export class WorkApplication {
   private readonly file: string
+  private readonly discoverySchedule = new Map<string, { version: number; persisted: string; next: string }>()
   constructor(readonly directory: string, readonly host: WorkHost, readonly source?: GitHubSourcePort, readonly planner?: WorkPlanner) {
     if (!isAbsolute(directory)) throw new Error('Work record directory must be absolute')
     this.file = join(directory, 'work-v3.json')
@@ -167,7 +168,16 @@ export class WorkApplication {
     return graph
   }
   private async load(): Promise<WorkSnapshot> {
-    try { return snapshotSchema.parse(JSON.parse(await readFile(this.file, 'utf8'))) }
+    try {
+      const state = snapshotSchema.parse(JSON.parse(await readFile(this.file, 'utf8')))
+      for (const source of state.sources) {
+        const schedule = this.discoverySchedule.get(source.id)
+        if (!schedule) continue
+        if (source.version === schedule.version && source.discovery?.nextAttemptAt === schedule.persisted) source.discovery.nextAttemptAt = schedule.next
+        else this.discoverySchedule.delete(source.id)
+      }
+      return state
+    }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { schemaVersion: 3, projects: [], agents: [], tasks: [], commands: [], legacyMappings: [], sources: [], externalBindings: [], externalIndex: {}, executions: [] }
       throw error
@@ -177,11 +187,26 @@ export class WorkApplication {
     await mkdir(this.directory, { recursive: true, mode: 0o700 })
     return withWorkFileLock(this.file, async () => {
       const state = await this.load()
-      const before = JSON.stringify(state)
+      // Only nextAttemptAt may remain ephemeral; checkpoints and reader leases
+      // still commit atomically with source observations for restart recovery.
+      const comparable = (value: WorkSnapshot) => JSON.stringify({ ...value, sources: value.sources.map(source => ({
+        ...source, ...(source.discovery ? { discovery: { ...source.discovery, nextAttemptAt: undefined } } : {}),
+      })) })
+      const before = comparable(state)
+      const schedules = new Map(state.sources.map(source => [source.id, this.discoverySchedule.get(source.id)?.persisted ?? source.discovery?.nextAttemptAt]))
       const result = await apply(state)
       snapshotSchema.parse(state)
-      const after = JSON.stringify(state)
-      if (after !== before) await writeFileAtomic(this.file, `${after}\n`, { mode: 0o600, dirMode: 0o700 })
+      if (comparable(state) !== before) {
+        await writeFileAtomic(this.file, `${JSON.stringify(state)}\n`, { mode: 0o600, dirMode: 0o700 })
+        this.discoverySchedule.clear()
+      } else {
+        for (const source of state.sources) {
+          const persisted = schedules.get(source.id)
+          if (persisted && source.discovery && source.discovery.nextAttemptAt !== persisted) {
+            this.discoverySchedule.set(source.id, { version: source.version, persisted, next: source.discovery.nextAttemptAt })
+          } else this.discoverySchedule.delete(source.id)
+        }
+      }
       return result
     })
   }
