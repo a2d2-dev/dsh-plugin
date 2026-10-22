@@ -1,7 +1,7 @@
 import { refreshRepositoryCandidates } from './work-sources/repository-candidates.ts'
 import { buildExecutionGraph, type ExecutionObservation } from './work-execution/observation.ts'
 import { refreshCatalog } from './work-sources/catalog-application.ts'
-import { PlanningError, planningBasis, validatePlan, samePlannedExecution } from './work-planning.ts'
+import { PlanningError, planningBasis, planningBasisFingerprint, validatePlan, samePlannedExecution } from './work-planning.ts'
 import type { WorkPlanner } from './work-planning.ts'
 import { issueSchema } from './work-sources/schema.ts'
 import { SourceError } from './work-sources/errors.ts'
@@ -359,14 +359,14 @@ export class WorkApplication {
       try {
         if (!this.planner) throw new PlanningError('planning-model-unavailable', 'Host LLM planning capability is unavailable')
         const basis = planningBasis(snapshot, rule)
+        const fingerprint = planningBasisFingerprint(basis)
         const output = await this.planner.generate(basis, rule.model)
-        const plan = validatePlan(output, basis, rule)
-        return this.sourceTransaction(async state => {
+        return await this.sourceTransaction(async state => {
           const current = state.continuousRules!.find(item => item.id === rule.id)!
           if (current.version !== command.expectedVersion) return conflict(current.version)
           const fresh = planningBasis(state, current)
-          if (JSON.stringify(fresh) !== JSON.stringify(basis)) return failed('planning-basis-changed', 'Source or canonical work changed while planning; preview again')
-          validatePlan(plan, fresh, current)
+          if (planningBasisFingerprint(fresh) !== fingerprint) return failed('planning-basis-changed', 'Planning authority or candidate identities changed while planning; preview again')
+          const plan = validatePlan(output, fresh, current)
           const planning = current.planning!
           planning.plans.push({ version: (planning.plans.at(-1)?.version ?? 0) + 1, draftVersion: planning.draftVersion, basis, steps: plan.steps, createdAt: new Date().toISOString() })
           delete planning.error
