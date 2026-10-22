@@ -511,10 +511,13 @@ export class WorkPanelController {
   }
   async selectSource(sourceId:string):Promise<void> {
     this.advanceSourceRevision()
-    this.updateSource({...emptySource(),sources:this.state.source.sources,sourceId})
-    const reading=this.browseIssues({},false), revision=this.sourceRevision
-    await reading
-    if(revision!==this.sourceRevision)return
+    const project=this.state.source.sources.find(item=>item.id===sourceId)?.githubProject!==undefined
+    this.updateSource({...emptySource(),sources:this.state.source.sources,sourceId,...(project?{tab:'overview' as const}:{})})
+    if(!project){
+      const reading=this.browseIssues({},false), revision=this.sourceRevision
+      await reading
+      if(revision!==this.sourceRevision)return
+    }
     await this.browseDirectory(false)
   }
   async browseIssues(change:Partial<IssuePageRequest>={},refresh=false):Promise<void> {
@@ -602,7 +605,18 @@ export class WorkPanelController {
     await this.browseDirectory(true)
   }
   async selectConnectedSource(projectId:string,sourceId:string):Promise<void> {
-    if(projectId!==this.state.projectId){const selecting=this.selectProject(projectId,false),revision=this.revision;await selecting;if(revision!==this.revision)return}
+    if(projectId!==this.state.projectId){
+      const revision=this.revision+1
+      await this.selectProject(projectId,false)
+      if(revision!==this.revision)return
+      // Switching project clears the source list; load this project's sources
+      // before selecting one, otherwise the panel has no source to render.
+      const result=await this.client.query({type:'source.list',projectId})
+      if(this.state.projectId!==projectId)return
+      const sources=result.sources ?? []
+      this.update({projectSources:{...this.state.projectSources,[projectId]:sources}})
+      this.updateSource({sources})
+    }
     this.update({detail:null,object:'issues'})
     await this.selectSource(sourceId)
   }

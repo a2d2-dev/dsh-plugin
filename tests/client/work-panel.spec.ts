@@ -124,4 +124,24 @@ describe('work panel public navigation',()=>{
     expect(panel.getSnapshot().detail?.task?.title).toBe('保存本地工作')
     expect(panel.getSnapshot().detailTab).toBe('overview')
   })
+
+  it('loads the target project sources before selecting a connected source from another project', async () => {
+    const source = (id: string, projectId: string, extra: Record<string, unknown>) => ({ id, projectId, provider: 'github' as const, enabled: true, version: 1, sequence: 0, requests: {}, observations: [], pages: [], ...extra })
+    const sources: Record<string, unknown[]> = {
+      p1: [source('s1', 'p1', { repository: { owner: 'acme', repository: 'app' } })],
+      p2: [source('s2', 'p2', { githubProject: { owner: 'acme', type: 'org', number: 1 } })],
+    }
+    const client: WorkClient = { command: vi.fn(), query: async query => {
+      if (query.type === 'projects.list') return { status: 'completed', projects: [{ id: 'p1', name: 'one', version: 1, defaultAgentId: 'a1', resources: [] }, { id: 'p2', name: 'two', version: 1, defaultAgentId: 'a2', resources: [] }] }
+      if (query.type === 'project.detail') return { status: 'completed', tasks: [] }
+      if (query.type === 'source.list') return { status: 'completed', sources: (sources[query.projectId ?? ''] ?? []) as never }
+      return { status: 'completed' }
+    } }
+    const panel = new WorkPanelController(client, { selectPanel: vi.fn(), openSession: vi.fn() })
+    await panel.load()
+    await panel.selectConnectedSource('p2', 's2')
+    expect(panel.getSnapshot()).toMatchObject({ projectId: 'p2', source: { sourceId: 's2', sources: [{ id: 's2' }] } })
+    expect(panel.getSnapshot().detail).toBeNull()
+    panel.close()
+  })
 })
