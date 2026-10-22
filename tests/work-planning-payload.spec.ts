@@ -60,6 +60,21 @@ it('keeps the fingerprint stable for body and observation changes but fences can
   expect(planningBasisFingerprint(planningBasis(state, rule))).not.toBe(before)
 })
 
+it('preserves goal fingerprints across JSON persistence and detects truncated Unicode changes', () => {
+  const { state, rule } = fixture(1)
+  state.tasks[0]!.goal = '前'.repeat(2000) + '😀'
+  const basis = planningBasis(state, rule)
+  const fingerprint = planningBasisFingerprint(basis)
+  expect(basis.candidates[0]!.task).toMatchObject({ goal: '前'.repeat(2000), goalTruncated: true })
+  expect(planningBasisFingerprint(JSON.parse(JSON.stringify(basis)))).toBe(fingerprint)
+  state.sources[0]!.observations[0]!.issue.body = 'Changed body'
+  state.tasks[0]!.progress!.summary = 'Changed progress'
+  expect(planningBasisFingerprint(planningBasis(state, rule))).toBe(fingerprint)
+  state.tasks[0]!.goal = '前'.repeat(2000) + '😃'
+  expect(planningBasis(state, rule).candidates[0]!.task).toMatchObject({ goal: '前'.repeat(2000) })
+  expect(planningBasisFingerprint(planningBasis(state, rule))).not.toBe(fingerprint)
+})
+
 it('bounds explanatory text deterministically without dropping candidate identities', () => {
   const { state, rule } = fixture()
   // Escaping makes these <=2000-character goals much larger in serialized JSON.

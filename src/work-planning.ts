@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { issueSchema, sourceSchema, repositorySchema, githubProjectSchema } from './work-sources/schema.ts'
 import type { WorkSnapshot } from './work-schema.ts'
@@ -55,6 +54,20 @@ export function planningModelErrorSummary(error: unknown): string {
     .slice(0, 400).trim() || 'Unknown model error'
 }
 
+/** FNV-1a 64-bit over UTF-16LE code units, identical on host and client.
+ * This is a non-cryptographic change detector, never an authentication or security hash.
+ * Retain it with saved summaries so changes beyond the truncated goal remain observable.
+ */
+function goalIdentity(value: string): string {
+  let hash = 0xcbf29ce484222325n
+  for (let index = 0; index < value.length; index++) {
+    const unit = value.charCodeAt(index)
+    hash = BigInt.asUintN(64, (hash ^ BigInt(unit & 0xff)) * 0x100000001b3n)
+    hash = BigInt.asUintN(64, (hash ^ BigInt(unit >>> 8)) * 0x100000001b3n)
+  }
+  return hash.toString(16).padStart(16, '0')
+}
+
 export function planningBasis(state: WorkSnapshot, rule: ContinuousWorkRule): PlanningBasis {
   const source = state.sources.find(source => source.id === rule.sourceId)
   const error = sourceScopeError(rule, source)
@@ -73,7 +86,7 @@ export function planningBasis(state: WorkSnapshot, rule: ContinuousWorkRule): Pl
       ...(issue.parent !== undefined ? { parent: issue.parent && relation(issue.parent) } : {}),
       ...(issue.subIssues ? { subIssues: { ...issue.subIssues, items: issue.subIssues.items.map(relation) } } : {}) },
       ...(task ? { task: JSON.parse(JSON.stringify({ ref: binding!.ref, agentId: task.agentId, goal,
-        goalTruncated: task.goal.length > 2000, goalIdentity: createHash('sha256').update(task.goal).digest('hex'),
+        goalTruncated: task.goal.length > 2000, goalIdentity: goalIdentity(task.goal),
         specification: { version: task.specification.version }, progress: task.progress && { stage: task.progress.stage, specificationVersion: task.progress.specificationVersion }, children: task.children, parent: task.parent })) } : {}),
       ...(execution ? { execution: JSON.parse(JSON.stringify({ id: execution.id, ref: execution.ref, agentId: execution.agentId, owner: execution.owner, epoch: execution.epoch, resource: execution.resource, model: execution.model, agentPreset: execution.agentPreset, permissionPreset: execution.permissionPreset, session: execution.session, state: execution.state,
         control: execution.control && { action: execution.control.action, status: execution.control.status } })) } : {}), ...(owner ? { ownerRuleId: owner.id } : {}) }
@@ -132,7 +145,7 @@ export function planningBasisFingerprint(basis: z.infer<typeof savedBasisSchema>
       const task = candidate.task as { specification?: { version?: number }; goal?: string; goalIdentity?: string } | undefined
       return {
         nodeId: candidate.issue.nodeId, ownerRuleId: candidate.ownerRuleId,
-        task: task && { ...pick(task, ['ref', 'agentId', 'children', 'parent']), goalIdentity: task.goalIdentity ?? createHash('sha256').update(task.goal ?? '').digest('hex'), specificationVersion: task.specification?.version },
+        task: task && { ...pick(task, ['ref', 'agentId', 'children', 'parent']), goalIdentity: task.goalIdentity ?? goalIdentity(task.goal ?? ''), specificationVersion: task.specification?.version },
         execution: pick(candidate.execution, ['id', 'ref', 'agentId', 'owner', 'epoch', 'resource', 'model', 'agentPreset', 'permissionPreset', 'session']),
       }
     }).sort((a, b) => a.nodeId.localeCompare(b.nodeId)),
