@@ -1,15 +1,114 @@
 {
   "run": "v4-152-6b252218-r01",
   "target": "http://10.126.126.12:18782/",
-  "stage": "执行链进行中",
+  "stage": "blocked：P/C 详情 HTTP503；qa152b 已关闭等待单客户端复测",
   "fixtures": {
-    "P": {"issue": 157, "taskId": null, "executionId": null, "sessionId": null, "owner": null, "epoch": null, "status": "入口未进入，待正式 API 复核"},
-    "C": {"issue": 158, "taskId": null, "executionId": null, "sessionId": null, "owner": null, "epoch": null, "status": "未开始"},
-    "E": {"issue": 159, "taskId": null, "executionId": null, "sessionId": null, "owner": null, "epoch": null, "status": "外部交付并已关闭", "proof": "/data/_dsh-dev/acceptance-workspaces/v4-152-r01/E.proof.json", "sha256": "5a3859f7ab57d2d0408fde36d278894b5409a536db45e1478273efadbdf11a3f", "deliveryComment": "https://github.com/a2d2-dev/dsh-plugin/issues/159#issuecomment-6331115575", "verification": "raw/part2-E-verification.json", "closure": "raw/part2-E-closed.json"}
+    "P": {
+      "issue": 157,
+      "taskId": null,
+      "executionId": null,
+      "sessionId": null,
+      "owner": null,
+      "epoch": null,
+      "status": "未创建；source.issue refresh:true 返回 HTTP503 work-record-unavailable"
+    },
+    "C": {
+      "issue": 158,
+      "taskId": null,
+      "executionId": null,
+      "sessionId": null,
+      "owner": null,
+      "epoch": null,
+      "status": "未创建；source.issue refresh:true 返回 HTTP503 work-record-unavailable"
+    },
+    "E": {
+      "issue": 159,
+      "taskId": null,
+      "executionId": null,
+      "sessionId": null,
+      "owner": null,
+      "epoch": null,
+      "status": "外部交付并已关闭",
+      "proof": "/data/_dsh-dev/acceptance-workspaces/v4-152-r01/E.proof.json",
+      "sha256": "5a3859f7ab57d2d0408fde36d278894b5409a536db45e1478273efadbdf11a3f",
+      "deliveryComment": "https://github.com/a2d2-dev/dsh-plugin/issues/159#issuecomment-6331115575",
+      "verification": "raw/part2-E-verification.json",
+      "closure": "raw/part2-E-closed.json",
+      "closedAt": "2026-10-22T02:19:59Z",
+      "updatedAt": "2026-10-22T02:19:59Z",
+      "parentAccepted": false
+    }
   },
   "jobs": [],
   "continuations": [],
   "modelRequests": [],
-  "observations": [{"code": "work-record-unavailable", "message": "Local work records could not be accessed safely", "status": "正在复核", "evidence": "raw/part2-initial-entry-failure.json"}],
-  "scope": "只写 part2 证据和 E 专用 proof；不修改 ledger.json/report-part1.md、产品代码或服务。"
+  "observations": [
+    {
+      "id": "PC-ENTRY-503",
+      "status": "blocked",
+      "code": "work-record-unavailable",
+      "message": "Local work records could not be accessed safely",
+      "attemptsWithPreservedFormalResponses": 4,
+      "timeWindowUTC": [
+        "2026-10-22T02:22:59.682Z",
+        "2026-10-22T02:24:41.159Z"
+      ],
+      "evidence": [
+        "raw/part2-P-source-issue-503.json",
+        "raw/part2-PC-source-boundary-503.json"
+      ],
+      "diagnosisAttribution": "主会话后续指出全局单文件写锁竞争；本执行者未独立读取宿主锁实现，不将推测替代原始503。"
+    }
+  ],
+  "scope": "只写 part2 证据和 E 专用 proof；不修改 ledger.json/report-part1.md、产品代码或服务。",
+  "jobStateLayers": {
+    "未收结果": "无本run job，未测",
+    "待收": "无本run job，未测",
+    "已收取": "无本run job，未测",
+    "未知消费": "无本run job，未测"
+  },
+  "continuationStages": {
+    "准备": "未触发：P未建立、无本run meter",
+    "准备时旧入口保持": "未触发：P未建立、无本run meter",
+    "结果收取": "未触发：P未建立、无本run meter",
+    "正式接任及入口切换": "未触发：P未建立、无本run meter"
+  },
+  "continuationAutomatic": null,
+  "modelEvidence": {
+    "requestedRoute": {
+      "provider": "codex",
+      "model": "gpt-6.1-sol",
+      "reasoningEffort": "medium"
+    },
+    "availableModelConfirmed": true,
+    "actualRequest": null,
+    "usage": null,
+    "status": "未调用；不能用候选模型或历史接续记录当本run证据",
+    "evidence": "raw/part2-project-and-options.json"
+  },
+  "screenshots": [
+    {
+      "path": "shots/part2-fresh-entry-desktop.png",
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "path": "shots/part2-fresh-entry-mobile.png",
+      "width": 390,
+      "height": 844
+    },
+    {
+      "path": "shots/part2-mobile-error-scrolled.png",
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "browserBackgroundCommand": {
+    "jobId": "bash-3258",
+    "exitCode": 1,
+    "collected": true,
+    "meaning": "浏览器eval超时；不属于P job",
+    "evidence": "raw/part2-formal-sources-query.json"
+  },
+  "stoppedClient": "qa152b closed; no further refresh requests until parent assigns recovery window"
 }

@@ -1,0 +1,104 @@
+{
+  "at": "2026-10-22T02:24:34.310Z",
+  "buttons": [
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "a2d2-dev/dsh-plugin 仓库",
+    "DSH A²D² Project",
+    "项目管理 v3.0 Project",
+    "＋",
+    "关闭面板",
+    "保存委托",
+    "生成计划预览",
+    "启用此计划",
+    "加入 Block",
+    "执行目录与模型",
+    "概览",
+    "Issue",
+    "PR",
+    "应用搜索与标签",
+    "刷新 Issues",
+    "全部",
+    "未开始",
+    "处理中",
+    "等待",
+    "阻塞",
+    "已完成",
+    "读取缓存列表",
+    "停用来源",
+    "200K",
+    "300K",
+    "保存接续策略",
+    "",
+    "",
+    "",
+    ""
+  ],
+  "errors": [
+    {
+      "request": {
+        "kind": "query",
+        "value": {
+          "number": 157,
+          "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+          "refresh": true,
+          "sourceId": "9cea4378-0219-4f99-a237-80f51bd36291",
+          "type": "source.issue"
+        }
+      },
+      "startedAt": "2026-10-22T02:24:20.725Z"
+    },
+    {
+      "at": "2026-10-22T02:24:25.937Z",
+      "body": {
+        "error": {
+          "code": "work-record-unavailable",
+          "message": "Local work records could not be accessed safely"
+        },
+        "status": "failed"
+      },
+      "request": {
+        "kind": "query",
+        "value": {
+          "number": 158,
+          "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+          "refresh": true,
+          "sourceId": "9cea4378-0219-4f99-a237-80f51bd36291",
+          "type": "source.issue"
+        }
+      },
+      "startedAt": "2026-10-22T02:24:20.726Z",
+      "status": 503
+    },
+    {
+      "at": "2026-10-22T02:24:28.221Z",
+      "body": {
+        "error": {
+          "code": "work-record-unavailable",
+          "message": "Local work records could not be accessed safely"
+        },
+        "status": "failed"
+      },
+      "request": {
+        "kind": "query",
+        "value": {
+          "number": 158,
+          "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+          "refresh": true,
+          "sourceId": "c122502c-1632-4a96-acb5-8adbac61999d",
+          "type": "source.issue"
+        }
+      },
+      "startedAt": "2026-10-22T02:24:20.726Z",
+      "status": 503
+    }
+  ],
+  "height": 844,
+  "text": "A²D² 控制面板\na2d2-dev/dsh-plugin 仓库\nDSH A²D² Project\n项目管理 v3.0 Project\n＋\n关闭面板\n\n状态更新暂不可用，保留上次内容：source-page-unobserved: This page has not been retrieved; refresh explicitly\n\na2d2-dev/dsh-plugin\n仓库 · a2d2-dev/dsh-plugin\n读取账号：imneov\n持续委托\n概览\nIssue\nPR\nIssues\n来源\na2d2-dev/dsh-plugin\nDSH A²D²\n搜索当前来源\n必须包含的标签\n应用搜索与标签\n负责人 \n分配给我\n全部负责人\nGitHub 状态 \nOpen\nClosed\n全部\n刷新 Issues\n全部\n未开始\n处理中\n等待\n阻塞\n已完成\n\n缓存 / 最后已知列表 · 第 1 页 · 搜索与处理状态筛选仅作用于当前已载入页\n\n此筛选页尚无可读缓存，请刷新 Issues。读取失败不表示列表为空。\n\n来源状态与缓存\n\nwork-record-unavailable: Local work records could not be accessed safely\n\n新执行默认自动接续",
+  "width": 390
+}

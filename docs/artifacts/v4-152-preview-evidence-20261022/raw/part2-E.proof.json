@@ -1,0 +1,9 @@
+{
+  "run": "v4-152-6b252218-r01",
+  "fixture": "E",
+  "issue": "https://github.com/a2d2-dev/dsh-plugin/issues/159",
+  "source": {"kind": "external-automated-acceptance", "executor": "qa152b delegated acceptance agent", "identity": "external tester; no E Task/Execution/Session created"},
+  "decisions": {"retainCount": 3, "keepTags": ["stable"]},
+  "checks": ["proof JSON written in the isolated run workspace", "JSON parse, fixture/run identity, retainCount=3 and stable tag verified by a separate command after write"],
+  "scope": "only this run fixture E; no business code or other issues modified"
+}

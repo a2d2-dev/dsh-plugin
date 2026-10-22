@@ -1,0 +1,68 @@
+[
+  {
+    "at": "2026-10-22T02:24:41.159Z",
+    "body": {
+      "error": {
+        "code": "work-record-unavailable",
+        "message": "Local work records could not be accessed safely"
+      },
+      "status": "failed"
+    },
+    "request": {
+      "kind": "query",
+      "value": {
+        "number": 157,
+        "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+        "refresh": true,
+        "sourceId": "9cea4378-0219-4f99-a237-80f51bd36291",
+        "type": "source.issue"
+      }
+    },
+    "startedAt": "2026-10-22T02:24:20.725Z",
+    "status": 503
+  },
+  {
+    "at": "2026-10-22T02:24:25.937Z",
+    "body": {
+      "error": {
+        "code": "work-record-unavailable",
+        "message": "Local work records could not be accessed safely"
+      },
+      "status": "failed"
+    },
+    "request": {
+      "kind": "query",
+      "value": {
+        "number": 158,
+        "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+        "refresh": true,
+        "sourceId": "9cea4378-0219-4f99-a237-80f51bd36291",
+        "type": "source.issue"
+      }
+    },
+    "startedAt": "2026-10-22T02:24:20.726Z",
+    "status": 503
+  },
+  {
+    "at": "2026-10-22T02:24:28.221Z",
+    "body": {
+      "error": {
+        "code": "work-record-unavailable",
+        "message": "Local work records could not be accessed safely"
+      },
+      "status": "failed"
+    },
+    "request": {
+      "kind": "query",
+      "value": {
+        "number": 158,
+        "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+        "refresh": true,
+        "sourceId": "c122502c-1632-4a96-acb5-8adbac61999d",
+        "type": "source.issue"
+      }
+    },
+    "startedAt": "2026-10-22T02:24:20.726Z",
+    "status": 503
+  }
+]

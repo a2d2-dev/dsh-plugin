@@ -1,0 +1,24 @@
+{
+  "request": {
+    "kind": "query",
+    "value": {
+      "number": 157,
+      "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+      "refresh": true,
+      "sourceId": "c122502c-1632-4a96-acb5-8adbac61999d",
+      "type": "source.issue"
+    }
+  },
+  "result": {
+    "at": "2026-10-22T02:23:03.245Z",
+    "body": {
+      "error": {
+        "code": "work-record-unavailable",
+        "message": "Local work records could not be accessed safely"
+      },
+      "status": "failed"
+    },
+    "status": 503
+  },
+  "startedAt": "2026-10-22T02:22:59.682Z"
+}

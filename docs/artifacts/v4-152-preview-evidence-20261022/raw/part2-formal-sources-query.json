@@ -1,0 +1,7 @@
+{
+  "command": "agent-browser --session qa152b eval source.list queries",
+  "backgroundJobId": "bash-3258",
+  "exitCode": 1,
+  "stderr": "CDP command timed out: Runtime.evaluate",
+  "interpretation": "浏览器等待超时不等于服务端查询失败。后续 window.__qaWork 捕获到三项 source.list 均 HTTP200/completed。真实回执保留于 part2-fresh-runtime-observation.json。"
+}
