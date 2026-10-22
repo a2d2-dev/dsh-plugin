@@ -86,3 +86,10 @@
 ## 七、未验证边界（不得视为通过）
 
 真实自动接续与后继决定保留、父子独立验收（C/E 纳入父完成）、后台 job 收取分层、持续委托真实模型计划/Block/串行/等待让槽/关闭补偿、关闭冲突补同步、稳定分页与 PR 关闭空结果。#152 保持 Open 覆盖这些场景；#163 修复 PR 与 #149 均等维护者合并。
+
+## 八、补充核对（轮次内追加）
+
+- **分页不是后端缺陷**：preview 真实 API 用 `source.issues`（Project1 来源，`perPage=5`）：第 1 页 `status=completed`、`nextPage=2`、首项 `#112`；第 2 页 `completed`、首项 `#12`（条目不同）。服务端分页正确。GUI 上「下一页」按钮在 `@me + Open`（16/16 项 < 20/页）时本来 disabled，不属于缺陷；UI 点击行为仍未稳定复现，记为未定性。
+- **接续 blocker 的根因是陈旧 policy**：P 详情里用正规入口显式重存自动接续策略（target 200,000 / reserve 16,000，HTTP 200，policy v2）后，`Exact model route or capacity changed` blocker 消失，只剩 fixture 自身要求的 FINISH 等待；说明该 blocker 是“策略与当前路由不匹配，需显式重配”的设计路径，不是接续功能损坏。
+- **持续委托的 `source-snapshot-unavailable` 属实现细节**：repo 来源需要 `repositorySnapshot.sourceVersion === source.version`；该版本匹配扫描由 `continuous.preview` 自身在规划前执行（1 页 100 条、最多 10 页），后台 reconcile 只在规则 `enabled=true && planning` 时补扫。对 disabled 的规则直接查 status 会看到该错误，属预期，不代表功能不可用。
+- GUI 侧 `invalid-request` 假警报：用 DOM 直接改筛选值导致 React 状态带上非法枚举（`assignee='all'`），恢复为 `@me` 后真实刷新成功（16 项，观察时间 2026-10-22T03:38:16Z）。不是产品缺陷。
