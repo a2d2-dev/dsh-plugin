@@ -30,6 +30,12 @@ function resultStatus(result: WorkResult): number {
   return 400
 }
 class Oversize extends Error {}
+function recordFailureReason(error: unknown): string {
+  if (error instanceof SyntaxError || error instanceof z.ZodError) return 'invalid-state'
+  if (error instanceof Error && error.message.startsWith('atomic-write: timed out waiting for the writer lock at ')) return 'lock-timeout'
+  const code = (error as NodeJS.ErrnoException | undefined)?.code
+  return typeof code === 'string' && /^E[A-Z0-9_]{1,30}$/.test(code) ? code.toLowerCase() : 'storage-error'
+}
 async function readJson(request: IncomingMessage): Promise<unknown> {
   const declared = request.headers['content-length']
   if (typeof declared === 'string' && Number(declared) > BODY_LIMIT) throw new Oversize()
@@ -79,7 +85,7 @@ export function createWorkHandler(app: WorkApplication, requestRejection: Reques
       respond(response, resultStatus(result), result)
     } catch (error) {
       if (error instanceof WorkHostUnavailable) fail(response, 503, 'host-capability-unavailable', error.message)
-      else fail(response, 503, 'work-record-unavailable', 'Local work records could not be accessed safely')
+      else fail(response, 503, 'work-record-unavailable', `Local work records could not be accessed safely (${recordFailureReason(error)})`)
     }
   }
 }

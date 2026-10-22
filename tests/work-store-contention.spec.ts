@@ -1,3 +1,5 @@
+import { createServer } from 'node:http'
+import { createWorkHandler } from '../src/work-route.ts'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -104,6 +106,29 @@ it('keeps a scheduling-only nextAttemptAt update in memory and honors it on the 
   await app.reconcileSources()
   expect(projectRead).not.toHaveBeenCalled()
   expect(writes).not.toHaveBeenCalled()
+})
+
+it.each(['bad-json', 'bad-schema', 'lock-timeout', 'EACCES'] as const)('reports a safe storage reason over HTTP for %s', async failure => {
+  const { directory, app } = await open()
+  if (failure === 'bad-json') await writeFile(join(directory, 'work-v3.json'), '{broken')
+  if (failure === 'bad-schema') await writeFile(join(directory, 'work-v3.json'), '{}')
+  if (failure === 'lock-timeout') vi.mocked(atomic.withFileLock).mockRejectedValueOnce(new Error(`atomic-write: timed out waiting for the writer lock at ${directory}/work-v3.json.lock`))
+  if (failure === 'EACCES') vi.mocked(atomic.writeFileAtomic).mockRejectedValueOnce(Object.assign(new Error(`EACCES: permission denied, open '${directory}/work-v3.json'`), { code: 'EACCES' }))
+  const handler = createWorkHandler(app, () => undefined)
+  const server = createServer((request, response) => { void handler(request, response) })
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+  try {
+    const address = server.address()
+    if (!address || typeof address === 'string') throw new Error('Expected isolated port')
+    const response = await fetch(`http://127.0.0.1:${address.port}`, { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ kind: 'command', value: { type: 'project.create', commandId: 'diagnose', name: 'Write' } }) })
+    expect(response.status).toBe(503)
+    const result = await response.json()
+    const reason = failure.startsWith('bad-') ? 'invalid-state' : failure.toLowerCase()
+    expect(result).toMatchObject({ status: 'failed', error: { code: 'work-record-unavailable', message: expect.stringContaining(reason) } })
+    expect(result.error.message).not.toContain(directory)
+    expect(result.error.message).not.toContain('work-v3.json')
+  } finally { await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())) }
 })
 
 it('polls discovery every thirty seconds by default instead of rewriting pressure every five seconds', async () => {
