@@ -7,13 +7,18 @@ export interface GitHubIssue {
   nodeId: string; url: string; number: number; title: string; body: string | null
   repository: GitHubRepository; assignees: string[]; labels: string[]; state: 'open' | 'closed'
   updatedAt: string; observedAt: string
+  createdAt?: string; closedAt?: string | null
   parent?: GitHubIssueReference | null
   subIssues?: { items: GitHubIssueReference[]; totalCount: number; hasNextPage: boolean }
+  subIssuesSummary?: { total: number; completed: number }
+  linkedPullRequests?: GitHubLinkedPullRequest[]
 }
+export interface GitHubLinkedPullRequest { number: number; title: string; url: string; state: 'open' | 'closed' | 'merged'; draft: boolean }
 export interface GitHubProjectField { id: string; name: string; type: 'single-select' | 'iteration' | 'text' | 'number' | 'date'; value: string }
 export interface GitHubProjectItem {
   id: string; kind: 'issue' | 'pull-request' | 'draft' | 'restricted'; archived: boolean
-  facts?: { draft?: boolean; assignees: string[]; labels: string[]; state: string; repository: GitHubRepository; body?: string | null }
+  facts?: { draft?: boolean; assignees: string[]; labels: string[]; state: string; repository: GitHubRepository; body?: string | null
+    reviewers?: string[]; createdAt?: string; updatedAt?: string; closedAt?: string | null }
   issueNodeId?: string; title?: string; url?: string
   fields: GitHubProjectField[]; fieldsPartial: boolean
 }

@@ -7,12 +7,17 @@ export const githubProjectSchema = z.object({ owner, type: z.enum(['org', 'user'
 const identity = z.object({ login: z.string().min(1), nodeId, name: z.string().nullable() }).strict()
 const issueReference = z.object({ nodeId, url: z.string().regex(/^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+\/issues\/[1-9][0-9]*$/), number: z.number().int().positive(), title: z.string().min(1).max(100_000), repository: repositorySchema, state: z.enum(['open', 'closed']) }).strict()
 export const nativeChildrenSchema = z.object({ items: z.array(issueReference), totalCount: z.number().int().nonnegative(), hasNextPage: z.boolean() }).strict()
+export const linkedPullRequestSchema = z.object({ number: z.number().int().positive(), title: z.string().min(1).max(100_000), url: z.string().regex(/^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+\/pull\/[1-9][0-9]*$/), state: z.enum(['open', 'closed', 'merged']), draft: z.boolean() }).strict()
 export const issueSchema = issueReference.extend({ body: z.string().max(1_000_000).nullable(), assignees: z.array(z.string()), labels: z.array(z.string()), updatedAt: z.iso.datetime(), observedAt: z.iso.datetime(),
+  createdAt: z.iso.datetime().optional(), closedAt: z.iso.datetime().nullable().optional(),
   parent: issueReference.nullable().optional(), subIssues: nativeChildrenSchema.optional(),
+  subIssuesSummary: z.object({ total: z.number().int().nonnegative(), completed: z.number().int().nonnegative() }).strict().optional(),
+  linkedPullRequests: z.array(linkedPullRequestSchema).max(20).optional(),
 }).strict()
 const projectMetadata = z.object({ nodeId, title: z.string(), url: z.string().regex(/^https:\/\/github\.com\/(?:orgs|users)\/[a-zA-Z0-9-]+\/projects\/[1-9][0-9]*$/), closed: z.boolean() }).strict()
 const projectItem = z.object({ id: nodeId, kind: z.enum(['issue', 'pull-request', 'draft', 'restricted']), archived: z.boolean(), issueNodeId: nodeId.optional(), title: z.string().optional(), url: z.string().regex(/^https:\/\/github\.com\//).optional(),
-  facts: z.object({ draft: z.boolean().optional(), assignees: z.array(z.string()), labels: z.array(z.string()), state: z.string(), repository: repositorySchema, body: z.string().nullable().optional() }).strict().optional(),
+  facts: z.object({ draft: z.boolean().optional(), assignees: z.array(z.string()), labels: z.array(z.string()), state: z.string(), repository: repositorySchema, body: z.string().nullable().optional(),
+    reviewers: z.array(z.string()).optional(), createdAt: z.iso.datetime().optional(), updatedAt: z.iso.datetime().optional(), closedAt: z.iso.datetime().nullable().optional() }).strict().optional(),
   fields: z.array(z.object({ id: nodeId, name: z.string(), type: z.enum(['single-select', 'iteration', 'text', 'number', 'date']), value: z.string() }).strict()), fieldsPartial: z.boolean(),
 }).strict()
 export const projectPageSchema = z.object({ identity, project: projectMetadata, items: z.array(projectItem), issues: z.array(issueSchema), observedAt: z.iso.datetime(), nextCursor: z.string().min(1).max(2048).optional() }).strict()
