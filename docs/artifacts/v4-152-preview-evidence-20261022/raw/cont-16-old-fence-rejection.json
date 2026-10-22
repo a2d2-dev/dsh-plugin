@@ -1,0 +1,27 @@
+{
+  "at": "2026-10-22T03:52:21.386Z",
+  "request": {
+    "kind": "command",
+    "value": {
+      "type": "task.control",
+      "action": "progress",
+      "text": "old segment progress probe",
+      "ref": {
+        "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+        "taskId": "9124c73c-3882-495d-803d-4b6d0e25bbe9"
+      },
+      "executionId": "0ac555c0-125e-4ed2-9ad2-ded8c447b37a",
+      "owner": "657d73e9-40c5-4170-92fd-07ae0ada7367",
+      "epoch": 1,
+      "commandId": "probe-old-epoch-qa152f-20261022-035200"
+    }
+  },
+  "httpStatus": 400,
+  "response": {
+    "status": "failed",
+    "error": {
+      "code": "stale-execution-authority",
+      "message": "Execution identity, owner or epoch is stale"
+    }
+  }
+}

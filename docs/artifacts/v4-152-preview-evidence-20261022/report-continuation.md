@@ -28,6 +28,48 @@ operation.profile：codex / gpt-6.1-sol / high，cwd 为指定隔离 workspace�
 
 证据：[下调后任务](raw/cont-06-lowered-task.json)、[自动 operation 完整响应](raw/cont-07-auto-observation.json)、[材料请求模型现场](raw/cont-08-material-model-page.json)、[真实UI网络](raw/cont-09-auto-prepare.har)、[准备桌面](shots/cont-05-preparing-1440.png)、[准备手机](shots/cont-06-preparing-390.png)、[原段真实模型](shots/cont-07-source-model-1440.png)。
 
-## 后续阶段
+## 阶段三：原段材料结果收齐（已验证；后台 job 收取未验证）
 
-结果收取、正式接任、新段回复和旧段拒绝待执行，不计通过。
+目的：在正式接任前等待真实原段模型响应和工具返回，保留决定、证据、未完成项与下一步。
+
+记录：宿主请求原文为 `Prepare a safe continuation of this same Task. Call work_continuation_material now, with expected_epoch 1. Preserve original concrete decisions, evidence, unfinished acceptance work and the exact next step. Include necessary local references and unsaved discussion in body. Explicitly state gaps. Do not claim the Task is complete. After saving, stop; the host will transfer coordination.`
+
+只读 task.history 原段第二页给出可核对的真实时序：seq52 request/header；seq62 assistant/message；seq63 tool/call work_continuation_material；seq64 tool/result status=completed；seq65 step/end；seq66 turn/end reason=blocked；seq67 接续 intake-seal。03:46:35.636Z task.detail 的 operation.phase=material-saved，material 中完整保存 body/decisions/evidence/unfinished/next；当时仍是原段 Session、原 owner、epoch1，executionGraph.settlement=settled。
+
+material.decisions 原文含：“已确认且不得丢失：镜像保留数量3；必须保留stable标签。精确对象为 decisions:{retainCount:3,keepTags:[\"stable\"]}。” 未完成项包括 C canonical 验收、E proof/checksum/updatedAt、P proof 与 JSON/SHA256、native child 路由回执、自有 job 正式收取和完成令；未把 Closed 或模型自报当业务验收。
+
+**本轮无可收取的后台 job**：材料保存前后 executionGraph.jobs=[]、tools=[]（已结算），没有 native checksum job id。已验证的是实际工作响应/材料工具结果被宿主收齐后接任；没有验证后台 job “结果待收→正式 job_output 收取→可接任”，也没有看到单独 awaiting-results/ready-to-takeover phase 快照，不为它们填写虚构状态。
+
+证据：[材料已保存完整任务响应](raw/cont-10-material-result-task.json)、[原段工具详情](raw/cont-13-material-tool-result.json)、[原段历史首页](raw/cont-15-source-history.json)、[原段历史续页与真实tool/result](raw/cont-17-source-history-next.json)。
+
+## 阶段四：宿主正式接任与决定跨段保留（已验证）
+
+03:47:27.139Z，operation.phase=delivered，automatic=true，sourceEpoch=1，requestDelivery=delivered，kickoffDelivery=delivered，inputSeal=67。固定 source/successor 与阶段二相同。Task/Execution 不变，owner 身份保留为 `657d73e9-40c5-4170-92fd-07ae0ada7367`；epoch 从1变2，currentSession 指向 `session-1a48efa9-472c-495f-af04-ce499b931f48`。executionGraph 旧段 role=retired/status=idle、新段 role=current/status=running。页面“正式接任已提交，当前入口以有效协调记录为准”，从 P 的“进入当前会话”实际进入新段。没有手工点击模拟准备、收取或接任阶段；宿主自动完成。
+
+owner ID 保留是主会话确认的规格行为，授权边界由当前 Session + epoch 更新体现，**不记作缺陷**。
+
+新段真实模型首条回复原文：
+
+> 已保留两项决定：数量3、必须保留stable标签。未完成项包括 C/E 验收、P proof 的 JSON/SHA256 核验、native 只读 child 的路由回执核对、后台 job 正式收取，以及等待明确完成令。我先读取当前 Task 和执行身份，再继续收集实际证据。
+
+新段随后真实调用 work_control status，并回复“当前已核实为 epoch=2，新 Session 已接续原 Task”。首条回复实际文本使用“数量3”，不伪造为含“镜像”字样的逐字引文。已额外向新段提出只回答两项决定完整名称与未完成项的自然语言问题，未在问题中给答案；排队回答待补。
+
+模型路由实证：原段 task.history seq52 的 request/header.config 为 codex/gpt-6.1-sol/high/maxTokens128000，seq62/64 为真实模型消息/工具返回；原段前3次请求 TRANSPORT Connection error 后由真实重试成功。新段 Trajectory → Request#1 的实际 Options 同为 codex/gpt-6.1-sol/high/maxTokens128000，Usage input15358/output111，首请求界面显示 Connection error 和 Scheduled 2 of41 后完成。**high 是实际父执行档位；没有把它写成 medium，native child medium 尚未验证。**
+
+证据：[正式接任完整响应](raw/cont-11-takeover-task.json)、[新段真实模型回复](raw/cont-12-successor-model-page.json)、[新段实际请求详情](raw/cont-19-successor-request-details.json)、[接任桌面](shots/cont-08-takeover-1440.png)、[接任手机](shots/cont-09-takeover-390.png)、[新段复述桌面](shots/cont-10-successor-reply-1440.png)、[新段复述手机](shots/cont-11-successor-reply-390.png)。对当前新段调用 task.history 被 `unrelated-history: Session is not retired history of this Task` 拒绝，这是正确只读历史边界，不计缺陷；原始响应保留于 [当前段历史边界](raw/cont-18-successor-history.json)。
+
+## 阶段五：旧段普通推进拒绝（已验证）
+
+03:52:21.386Z，通过公开 task.control action=progress 提交旧 executionId/owner/epoch1 fence，commandId=`probe-old-epoch-qa152f-20261022-035200`。HTTP400、status=failed；error.code=`stale-execution-authority`，拒绝原文：
+
+> Execution identity, owner or epoch is stale
+
+这是正式服务端 fence 验证，不冒充旧段模型工具调用。此前另尝试一次旧会话自然语言探针，session/prompt 返回 accepted，真实历史 seq69~72 仅记录新输入入队、turn3启动后 blocked，没有模型请求/工具，不能用该空界面冒充拒绝原文。正式拒绝以 [旧 fence 请求与响应](raw/cont-16-old-fence-rejection.json) 为准；[旧段页面](raw/cont-14-retired-probe-page.json) 仅作现场。
+
+## 未完成项与产品/环境观察
+
+- 未验证真实后台 job 待收与 job_output 正式收取门槛；没有创建假job或手造 consumed。
+- 未捕获单独可接任中间 phase，只记录实际 material-requested→material-saved→delivered。不把缺少快照当产品缺陷。
+- 新段业务继续时，bash 因 `sandbox mode \"workspace-write\" is requested but no sandbox backend is usable on this host; refusing to run the command unconfined` 失败；write 首次因空 justification 失败后成功写 P proof。此为新段真实执行观察，未改 Host/profile/权限规避；本次接续不因此冒称全部业务验收完成。
+- 接任后按主会话要求没有再改 policy（仍v3，28000/16000）；新段继续运行的最终身份快照待收口补充。
+- 自动策略重存消除 route blocker、真实 automatic operation、材料保存、当前入口切换、epoch+1、决定与未完成项复述、旧 fence 拒绝均有实证。本次不能宣称 #152 整体验收通过。

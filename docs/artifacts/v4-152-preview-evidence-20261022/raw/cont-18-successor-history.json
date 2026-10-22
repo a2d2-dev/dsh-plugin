@@ -1,0 +1,25 @@
+{
+  "at": "2026-10-22T03:53:43.743Z",
+  "request": {
+    "kind": "query",
+    "value": {
+      "type": "task.history",
+      "ref": {
+        "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+        "taskId": "9124c73c-3882-495d-803d-4b6d0e25bbe9"
+      },
+      "session": {
+        "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+        "sessionId": "session-1a48efa9-472c-495f-af04-ce499b931f48"
+      }
+    }
+  },
+  "httpStatus": 400,
+  "response": {
+    "status": "failed",
+    "error": {
+      "code": "unrelated-history",
+      "message": "Session is not retired history of this Task"
+    }
+  }
+}
