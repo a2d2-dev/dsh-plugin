@@ -38,6 +38,12 @@
   3. `#136`（I_kwDOUmfSE88AAAABYxYq_A）`wait`
 - 规则 version 5、`enabled=false`、未启用、未创建任何 Task/Execution（本轮只做预览）。
 
+### GUI 侧状态改动（本轮引入，便于后继接手）
+
+- 该来源此前**没有**持续委托规则（面板显示「接新工作已暂停」为未配置默认文案）。本轮为跑计划新建了规则 `ef81e9a7-ee24-4378-9a93-ee42e81b210a`：先 `continuous.configure`（v1，resource=task-interaction-v3、model=deepseek-flash），再两次 `continuous.instruct`（主委托 + 补充），再用面板把模型改成 codex/gpt-6.1-sol（v4），预览成功后规则 version 5。
+- 规则当前：`enabled=false`、`plans[0]` 为 plan v1、`items` 47 项全部 `skipped`、无 `active`、**未创建任何 Task/Execution**。未启用计划，因此没有真实工作在跑。
+- 工作库：`/data/_dsh-dev/a2d2/work-v3/work-v3.json`（命令历史仅 6 条，可回溯本轮全部写操作）。
+
 ## 4. 本轮未验证 / 遗留（不得写成通过）
 
 - B 完成 → 关闭 #161 → A RESUME：未验证（B 仍卡在模型对"串行槽前置条件"的自我判定）。
