@@ -42,3 +42,16 @@
 - 截图：`gui-18783-final.png`（层级/徽章/头像）、`gui-18783-progress-bars.png`（进度条/父项/日期）。
 
 仍未做：GitHub view 的列配置不开放 API（用「目录字段 − 全空列」近似）；`is:open` 下关闭的子项不会像看板那样挂在父行下；18780 未部署。
+
+## 追加：1:1 行高与单元格（2026-10-22 11:24Z，PR #170）
+
+按 GitHub 自己的度量重做行密度（不引第三方 UI 库：本插件的 client 是 tsdown 单包 + CSS Modules，class 名在 `css.d.ts` 里逐条声明，Tailwind/shadcn 需要额外 PostCSS 管线并会与宿主主题冲突；这里直接照抄 GitHub Primer 的数值）：
+
+- 行高 40px、表头 32px 且 sticky、行分隔 1px `#d1d9e0`、单元格 12px（标题 14px）；
+- 所有单元格单行 + 省略号（Repository / Parent issue 不再把行撑高）；chips 与头像 20px；
+- Sub-issues progress 改为**分段条**（每项一段，最多 20 段）+ `10/11 · 90%`；
+- 表头列名沿用 GitHub 字段名。
+
+截图：`gui-18783-github1to1.png`（左半，行密度/徽章/头像）、`gui-18783-github1to1-right.png`（右半，分段进度条、父项省略、日期）。
+
+线上构建：client `4c0fa0773f7545291d922b40da9ca5895841081b7035a99457f0719fb550b19d`，仍在 18783；18780 未部署。
