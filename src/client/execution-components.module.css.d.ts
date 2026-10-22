@@ -9,5 +9,25 @@ declare const styles: {
   readonly entry: string
   readonly popover: string
   readonly dock: string
+  readonly overview: string
+  readonly sessionShort: string
+  readonly statusTag: string
+  readonly group: string
+  readonly sessionItem: string
+  readonly events: string
+  readonly jobItem: string
+  readonly jobSummary: string
+  readonly jobId: string
+  readonly jobMeta: string
+  readonly failTag: string
+  readonly jobPreview: string
+  readonly jobBody: string
+  readonly command: string
+  readonly eventItem: string
+  readonly eventSummary: string
+  readonly eventPreview: string
+  readonly eventText: string
+  readonly subGroup: string
+  readonly limit: string
 }
 export default styles

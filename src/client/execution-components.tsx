@@ -12,28 +12,74 @@ export interface ExecutionNavigation {
 const roles = { current: '当前协调', retired: '接续历史 · 只读', related: '关联执行', review: '评审执行', 'native-child': '原生子会话' }
 const statuses = { running: '运行中', idle: '空闲', inactive: '未激活', unknown: '状态未知', stopping: '停止中', completed: '已返回', failed: '失败', killed: '已停止' }
 const sessionId = (session: SessionRef) => `${session.runtimeId} / ${session.sessionId}`
-function JobFacts({ job }: { job: ExecutionJob }) {
-  return <li className={styles.job}>
-    <div className={styles.row}><strong>{job.label || job.kind}</strong><code>{job.id}</code><span>{job.availability === 'lost' ? '旧作业不可恢复' : statuses[job.status]}</span></div>
-    <p>执行者：{sessionId(job.owner)}</p>
-    <p>{job.delivery === 'delivered' ? '输出已交付' : job.delivery === 'pending' ? '输出待交付' : '输出交付未知'} · {job.result === 'consumed' ? '已消费' : job.result === 'pending' ? '消费待确认' : '消费未知'} · 未验收</p>
-    {job.detail && <p>{job.detail}</p>}
-    <small>{job.registryEpoch && job.instanceId ? `Registry ${job.registryEpoch} · Instance ${job.instanceId}` : '宿主未提供稳定作业身份'} · {job.persistence === 'session-journal' ? '持久生命周期记录' : '宿主进程内作业'}</small>
+/** Short handles keep the page scannable; the full value stays in the text or the element title. */
+const short = (value: string, length = 8) => value.length > length ? `${value.slice(0, length)}…` : value
+const shortSession = (session: SessionRef) => session.sessionId.startsWith('session-') ? `session-${session.sessionId.slice(8, 16)}` : short(session.sessionId)
+const attemptReasons: Record<string, string> = { aborted: '已中止', blocked: '已阻塞', failed: '失败', timeout: '超时' }
+const reasonLabel = (reason?: string) => reason ? attemptReasons[reason] ?? reason : '结果未知'
+const firstLine = (text: string, length = 96) => {
+  const line = text.trim().split('\n')[0] ?? ''
+  return line.length > length ? `${line.slice(0, length)}…` : line
+}
+const deliveryLabel = (delivery: ExecutionJob['delivery']) => delivery === 'delivered' ? '输出已交付' : delivery === 'pending' ? '输出待交付' : '输出交付未知'
+const resultLabel = (result: ExecutionJob['result']) => result === 'consumed' ? '已消费' : result === 'pending' ? '消费待确认' : '消费未知'
+const nonzeroExit = (job: ExecutionJob) => /exit code: [1-9]/u.test(job.detail ?? '')
+const jobKey = (job: ExecutionJob) => `${job.owner.sessionId}/${job.id}/${job.instanceId ?? job.registryEpoch ?? ''}`
+
+/** One background job: its head line is scannable, the command and registry stay one click away. */
+function JobRow({ job }: { job: ExecutionJob }) {
+  return <li>
+    <details className={styles.jobItem}>
+      <summary><span className={styles.jobSummary}>
+        <code className={styles.jobId}>{job.id}</code>
+        <span className={styles.statusTag} data-state={job.status}>{job.availability === 'lost' ? '旧作业不可恢复' : statuses[job.status]}</span>
+        {nonzeroExit(job) ? <span className={styles.failTag}>非零退出</span> : job.detail && job.status !== 'completed' && <span className={styles.jobMeta}>{job.detail}</span>}
+        <span className={styles.jobPreview}>{firstLine(job.label || job.kind)}</span>
+      </span></summary>
+      <div className={styles.jobBody}>
+        <p className={styles.identity} title={sessionId(job.owner)}>执行者：{shortSession(job.owner)}</p>
+        <p>{deliveryLabel(job.delivery)} · {resultLabel(job.result)} · 未验收{job.detail ? ` · ${job.detail}` : ''}</p>
+        {job.label && <pre className={styles.command}>{job.label}</pre>}
+        <small>{job.registryEpoch && job.instanceId ? `Registry ${short(job.registryEpoch)} · Instance ${short(job.instanceId)} · 持久生命周期记录` : '宿主未提供稳定作业身份'} · {job.persistence === 'session-journal' ? '持久生命周期记录' : '宿主进程内作业'}</small>
+      </div>
+    </details>
   </li>
 }
-function SessionFacts({ row, navigation }: { row: ObservedSession; navigation: ExecutionNavigation }) {
-  return <article className={styles.card}>
-    <div className={styles.row}><strong>{roles[row.role]}</strong><span>{statuses[row.status]}</span>
+
+/** One input or result fact: a single-line preview, full text behind the disclosure. */
+function EventRow({ event }: { event: WorkExecution['events'][number] }) {
+  return <li>
+    <details className={styles.eventItem}>
+      <summary><span className={styles.eventSummary}>
+        <strong>{event.kind === 'result' ? '结果' : '输入'}</strong>
+        <span>{event.delivery === 'consumed' ? '已消费' : event.delivery === 'delivered' ? '已投递' : '已接受'} · 未验收</span>
+        <span className={styles.eventPreview}>{firstLine(event.text)}</span>
+      </span></summary>
+      <p className={styles.eventText}>{event.text}</p>
+    </details>
+  </li>
+}
+
+/** Identity, attempts and native children are shared by the primary card and the other-session rows. */
+function SessionBody({ row }: { row: ObservedSession }) {
+  return <>
+    <p className={styles.identity}><code title={sessionId(row.session)}>{sessionId(row.session)}</code></p>
+    {row.attempt && <p className={styles.identity}>第 {row.attempt.turn} 次 turn · {reasonLabel(row.attempt.reason)}</p>}
+    {row.parent && <p className={styles.identity}>原生父会话：{sessionId(row.parent)}</p>}
+    {row.children.length > 0 && <details className={styles.subGroup}><summary>原生子会话 · {row.children.length}</summary><ul>{row.children.map(child => <li key={sessionId(child.session)}><code title={sessionId(child.session)}>{shortSession(child.session)}</code> · {child.mode} · {child.returned ? '已返回' : '尚未返回'} · {child.result === 'consumed' ? '结算通知已消费' : child.result === 'pending' ? '结算通知待消费' : '消费未知'}</li>)}</ul></details>}
+  </>
+}
+
+function SessionFacts({ row, navigation, showJobs = false }: { row: ObservedSession; navigation: ExecutionNavigation; showJobs?: boolean }) {
+  return <article className={styles.sessionItem}>
+    <div className={styles.row}><strong>{roles[row.role]}</strong><span className={styles.statusTag} data-state={row.status}>{statuses[row.status]}</span>
+      {row.waitingHuman && <span role="status">等待人类确认</span>}
       {row.role === 'retired'
         ? navigation.onReadHistory && <button type="button" onClick={() => navigation.onReadHistory!(row.session)}>只读历史</button>
         : navigation.onOpenSession && <button type="button" onClick={() => navigation.onOpenSession!(row.session)}>查看会话</button>}
     </div>
-    <p className={styles.identity}>{sessionId(row.session)}</p>
-    {row.parent && <p>原生父会话：{sessionId(row.parent)}</p>}
-    {row.attempt && <p>第 {row.attempt.turn} 次 turn · {row.attempt.reason ?? '结果未知'}</p>}
-    {row.waitingHuman && <p role="status">等待人类确认</p>}
-    {row.children.length > 0 && <ul>{row.children.map(child => <li key={sessionId(child.session)}><span>原生子会话：{sessionId(child.session)} · {child.mode} · {child.returned ? '已返回' : '尚未返回'} · {child.result === 'consumed' ? '结算通知已消费' : child.result === 'pending' ? '结算通知待消费' : '消费未知'}</span></li>)}</ul>}
-    {row.jobs.length > 0 && <ul className={styles.jobs} aria-label="所属后台作业">{row.jobs.map(job => <JobFacts key={`${job.registryEpoch ?? 'unknown'}/${job.instanceId ?? job.id}`} job={job}/>)}</ul>}
+    <SessionBody row={row}/>
+    {showJobs && row.jobs.length > 0 && <details className={styles.subGroup}><summary>后台作业 · {row.jobs.length}</summary><ul className={styles.jobs}>{row.jobs.map(job => <JobRow key={jobKey(job)} job={job}/>)}</ul></details>}
   </article>
 }
 
@@ -41,29 +87,40 @@ function SessionFacts({ row, navigation }: { row: ObservedSession; navigation: E
 export function ExecutionSessions({ graph, ...navigation }: { graph: ExecutionGraph } & ExecutionNavigation) {
   const current = graph.sessions.filter(row => row.role !== 'retired')
   const history = graph.sessions.filter(row => row.role === 'retired')
-  return <section className={styles.surface} aria-label="会话与执行"><h2>会话与执行</h2>
-    {graph.owner && <p>协调负责人：{graph.owner.id} · Agent {graph.owner.agentId} · 代次 {graph.owner.epoch}</p>}
-    {!graph.executionId && <p>此 Task 尚未启动执行。</p>}
-    {current.map(row => <SessionFacts key={sessionId(row.session)} row={row} navigation={navigation}/>)}
-    <section aria-label="独立子 Issue 入口"><h3>独立子 Issue / Task</h3>
-      {!graph.childTasks.length && <p>尚无独立子工作。</p>}
-      {graph.childTasks.map(child => <article className={styles.card} key={`${child.ref.projectId}/${child.ref.taskId}`}>
-        <div className={styles.row}><strong>{child.issue ? `#${child.issue.number} ` : ''}{child.title}</strong>{navigation.onOpenTask && <button type="button" onClick={() => navigation.onOpenTask!(child.ref)}>查看子工作</button>}{child.currentSession && navigation.onEnterTask && <button type="button" onClick={() => navigation.onEnterTask!(child.ref)}>进入独立处理入口</button>}</div>
-        <p>负责人：{child.owner ?? child.agentId}{child.issue && ` · Issue 负责人：${child.issue.assignees.join('、') || '未指派'}`}</p>
-        <p>{child.currentSession ? sessionId(child.currentSession) : '尚未启动独立执行'}</p>
-        {child.observation && <p>子执行结算：{child.observation.settlement === 'settled' ? '已结算' : child.observation.settlement === 'pending' ? '等待结果' : '未知'}</p>}
-      </article>)}
-    </section>
-    {!!graph.nativeIssues?.length && <section aria-label="原生子 Issue 观察"><h3>原生子 Issue</h3>{graph.nativeIssues.map(child => <article className={styles.card} key={child.issue.nodeId}>
+  const primary = current.find(row => row.role === 'current')
+  const others = current.filter(row => row !== primary)
+  const jobs = current.flatMap(row => row.jobs)
+  const failures = jobs.filter(nonzeroExit).length
+  return <section className={styles.surface} aria-label="会话与执行">
+    <header className={styles.overview}>
+      <div className={styles.row}>
+        <h2>会话与执行</h2>
+        {primary && <span className={styles.statusTag} data-state={primary.status}>{statuses[primary.status]}</span>}
+        {primary && <code className={styles.sessionShort} title={sessionId(primary.session)}>{shortSession(primary.session)}</code>}
+        {primary?.waitingHuman && <span role="status">等待人类确认</span>}
+        {primary && navigation.onOpenSession && <button type="button" onClick={() => navigation.onOpenSession!(primary.session)}>查看会话</button>}
+      </div>
+      {graph.owner && <p className={styles.identity} title={`协调负责人 ${graph.owner.id} · Agent ${graph.owner.agentId}`}>代次 {graph.owner.epoch} · 协调负责人：{short(graph.owner.id)} · Agent {short(graph.owner.agentId)}</p>}
+    </header>
+    {!graph.executionId ? <p>此 Task 尚未启动执行。</p> : primary ? <article className={styles.card}><SessionBody row={primary}/></article> : null}
+    {others.length > 0 && <details className={styles.group}><summary>其他执行会话 · {others.length}</summary>{others.map(row => <SessionFacts key={sessionId(row.session)} row={row} navigation={navigation}/>)}</details>}
+    {jobs.length > 0 && <details className={styles.group}><summary>后台作业 · {jobs.length}{failures ? ` · ${failures} 个非零退出` : ''}</summary><ul className={styles.jobs}>{jobs.map(job => <JobRow key={jobKey(job)} job={job}/>)}</ul></details>}
+    {graph.childTasks.length > 0 && <details className={styles.group}><summary>独立子 Issue / Task · {graph.childTasks.length}</summary>{graph.childTasks.map(child => <article className={styles.card} key={`${child.ref.projectId}/${child.ref.taskId}`}>
+      <div className={styles.row}><strong>{child.issue ? `#${child.issue.number} ` : ''}{child.title}</strong>{navigation.onOpenTask && <button type="button" onClick={() => navigation.onOpenTask!(child.ref)}>查看子工作</button>}{child.currentSession && navigation.onEnterTask && <button type="button" onClick={() => navigation.onEnterTask!(child.ref)}>进入独立处理入口</button>}</div>
+      <p>负责人：{child.owner ?? child.agentId}{child.issue && ` · Issue 负责人：${child.issue.assignees.join('、') || '未指派'}`}</p>
+      <p>{child.currentSession ? sessionId(child.currentSession) : '尚未启动独立执行'}</p>
+      {child.observation && <p>子执行结算：{child.observation.settlement === 'settled' ? '已结算' : child.observation.settlement === 'pending' ? '等待结果' : '未知'}</p>}
+    </article>)}</details>}
+    {!!graph.nativeIssues?.length && <details className={styles.group}><summary>原生子 Issue · {graph.nativeIssues.length}</summary>{graph.nativeIssues.map(child => <article className={styles.card} key={child.issue.nodeId}>
       <strong>{child.issue.repository.owner}/{child.issue.repository.repository} #{child.issue.number} · {child.issue.title}</strong>
       <p>{child.status === 'started' ? '已有独立执行' : child.status === 'not-started' ? '尚未开始' : '尚未读取完整要求'} · Issue 负责人：{child.assignees ? child.assignees.join('、') || '未指派' : '未知'}</p>
-      {child.owner && <p>协调负责人：{child.owner} · 代次 {child.epoch}</p>}
+      {child.owner && <p>协调负责人：{short(child.owner)} · 代次 {child.epoch}</p>}
       <div className={styles.row}>{child.ref && navigation.onOpenTask ? <button type="button" onClick={() => navigation.onOpenTask!(child.ref!)}>查看独立工作</button> : navigation.onReadIssue && <button type="button" onClick={() => navigation.onReadIssue!(child.issue)}>读取子 Issue 要求</button>}{child.ref && child.currentSession && navigation.onEnterTask && <button type="button" onClick={() => navigation.onEnterTask!(child.ref!)}>进入独立处理入口</button>}<a href={child.issue.url} target="_blank" rel="noreferrer">GitHub 原文</a></div>
-    </article>)}</section>}
-    {graph.events.length > 0 && <section aria-label="输入与结果事实"><h3>输入与结果</h3><ul>{graph.events.map(event => <li key={event.id}>{event.kind === 'result' ? '结果' : '输入'} · {event.delivery === 'consumed' ? '已消费' : event.delivery === 'delivered' ? '已投递' : '已接受'} · 未验收<p>{event.text}</p></li>)}</ul></section>}
-    {history.length > 0 && <details><summary>历史会话与尝试 · {history.length}</summary>{history.map(row => <SessionFacts key={sessionId(row.session)} row={row} navigation={navigation}/>)}</details>}
-    {graph.history.length > 0 && <details><summary>执行尝试记录 · 只读</summary><ol>{graph.history.map((attempt, index) => <li key={`${attempt.commandId}/${index}`}>{attempt.state} · {attempt.commandId}</li>)}</ol></details>}
-    {graph.limitations.map((text, index) => <p role="status" key={index}>{text}</p>)}
+    </article>)}</details>}
+    {graph.events.length > 0 && <details className={styles.group}><summary>输入与结果 · {graph.events.length}</summary><ul className={styles.events}>{graph.events.map(event => <EventRow key={event.id} event={event}/>)}</ul></details>}
+    {history.length > 0 && <details className={styles.group}><summary>历史会话与尝试 · {history.length}</summary>{history.map(row => <SessionFacts key={sessionId(row.session)} row={row} navigation={navigation} showJobs/>)}</details>}
+    {graph.history.length > 0 && <details className={styles.group}><summary>执行尝试记录 · 只读 · {graph.history.length}</summary><ol>{graph.history.map((attempt, index) => <li key={`${attempt.commandId}/${index}`}>{attempt.state} · {attempt.commandId}</li>)}</ol></details>}
+    {graph.limitations.map((text, index) => <p className={styles.limit} role="status" key={index}>{text}</p>)}
   </section>
 }
 
