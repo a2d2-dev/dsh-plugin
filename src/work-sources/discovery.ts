@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { SourceTransaction } from './application.ts'
 import { SourceError } from './errors.ts'
 import { projectPageSchema } from './schema.ts'
+import { applyObservedIssue } from './observations.ts'
 import type { GitHubSourcePort, ProjectCheckpoint, SourceDiscovery, WorkSource } from './types.ts'
 
 export interface DiscoveryOptions {
@@ -80,7 +81,8 @@ export async function reconcileProjectSources(transaction: SourceTransaction, po
             if (previous) { previous.issue = issue; previous.sequence = source.sequence }
             else source.observations.push({ issue, sequence: source.sequence })
             const binding = state.externalBindings.find(item => item.nodeId === issue.nodeId)
-            if (binding && issue.updatedAt >= binding.lastObserved.updatedAt) binding.lastObserved = issue
+            const observed = binding && applyObservedIssue(binding.lastObserved, issue)
+            if (binding && observed) binding.lastObserved = observed
           }
           source.projectSnapshot = { identity: page.identity, project: page.project, items: pending.items, observedAt: page.observedAt }
           source.identity = page.identity
