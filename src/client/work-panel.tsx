@@ -210,7 +210,7 @@ function CurrentExecution({controller}:{controller:WorkPanelController}) {
     </> : completed ? <p>本地已验收；执行观察尚未取得，请刷新详情读取收口状态。</p> : <>
       <p>尚未开始处理。开始后会在所选执行目录创建会话。</p>
       {options && selection ? <form className={styles.form} onSubmit={event=>{event.preventDefault();void controller.startPrepared()}}>
-        <p>请确认执行目录和模型；Agent 预设与权限由宿主当前策略固定，其余优先使用项目与规则默认配置。</p>
+        <p>请确认执行目录、模型、Agent 预设与权限；未修改时使用宿主与项目的默认配置。</p>
         <label>工作目录{options.resources.length>1 ? <select disabled={busy} value={selection.resourceIndex} onChange={event=>controller.selectStart({resourceIndex:Number(event.target.value)})}>{options.resources.map((resource,index)=><option key={`${resource.ref.runtimeId}/${resource.ref.workspaceId}`} value={index}>{resource.title}</option>)}</select> : <span title="宿主或项目规则只提供这一个执行目录">{options.resources[0]?.title}</span>}</label>
         <label>模型{options.models.length>1 ? <select disabled={busy} value={selection.modelIndex} onChange={event=>controller.selectStart({modelIndex:Number(event.target.value)})}>{options.models.map((model,index)=><option key={`${model.provider}/${model.model}`} value={index}>{model.provider}/{model.model}</option>)}</select> : <span title="宿主或项目 Agent 只允许这一个模型">{options.models[0]?.provider}/{options.models[0]?.model}</span>}</label>
         <label>Agent 预设{options.agentPresets.length>1 ? <select disabled={busy} value={selection.agentPreset} onChange={event=>controller.selectStart({agentPreset:event.target.value})}>{options.agentPresets.map(preset=><option key={preset}>{preset}</option>)}</select> : <span title="宿主只暴露默认 Agent 预设">{selection.agentPreset}</span>}</label>

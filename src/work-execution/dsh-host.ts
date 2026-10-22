@@ -247,9 +247,18 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     const manifest = createRequire(import.meta.url)('@deepseek-ai/dsh-api-session-controller/package.json') as { version: string }
     if (manifest.version !== '0.2.0-rc.2') throw new WorkExecutionError('unsupported-host-controller', 'This adapter is certified for the fixed-identity SessionController 0.2.0-rc.2 contract; other create semantics require a separately verified adapter')
     const catalog = await this.service('sessionController', 'modelCatalog').modelCatalog()
-    const agentPreset = this.service('agentPresets').defaultId
-    const permissionPreset = this.service('permissionPresets').defaultPreset
-    return { agentPresets: [agentPreset], permissionPresets: [permissionPreset],
+    // The host's own catalogs are the authority, like a normal new Session: a
+    // managed execution may use any activated Agent preset and any configured
+    // permission preset (the derived auto mode is not a fixed sandbox).
+    const declared = (await this.service('agentPresets').list()).filter(preset => preset.broken === undefined).map(preset => preset.id)
+    const defaultAgentPreset = this.service('agentPresets').defaultId
+    const agentPresets = declared.length ? declared : [defaultAgentPreset]
+    const agentPreset = agentPresets.includes(defaultAgentPreset) ? defaultAgentPreset : agentPresets[0]!
+    const declaredPermissions = this.service('permissionPresets').names.filter(name => name !== 'auto')
+    const defaultPermissionPreset = this.service('permissionPresets').defaultPreset
+    const permissionPresets = declaredPermissions.length ? [...declaredPermissions] : [defaultPermissionPreset]
+    const permissionPreset = permissionPresets.includes(defaultPermissionPreset) ? defaultPermissionPreset : permissionPresets[0]!
+    return { agentPresets, permissionPresets,
       models: catalog.groups.flatMap(group => group.models.map(model => ({ provider: group.id, model: model.id }))),
       defaults: { agentPreset, permissionPreset, model: { provider: catalog.default.provider, model: catalog.default.model } } }
   }
