@@ -52,7 +52,7 @@ export interface SourceCatalog {
   identity?: GitHubIdentity
   observedAt: string; openIssueCount?: number; pullRequests: GitHubPullRequest[]; pullRequestsComplete: boolean
   views: { id: string; number: number; name: string; filter: string; layout: string }[]
-  fields: { id: string; name: string; dataType: string }[]; viewsComplete: boolean; limitations: string[]
+  fields: { id: string; name: string; dataType: string; options?: { id: string; name: string; color: string }[] }[]; viewsComplete: boolean; limitations: string[]
 }
 export type SourceCandidate = { kind: 'project' | 'repository'; nodeId: string; title: string; url: string; entryUrl: string; identity: GitHubIdentity; repository?: GitHubRepository; githubProject?: GitHubProjectRef }
 export interface GitHubSourcePort {

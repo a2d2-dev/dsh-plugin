@@ -17,6 +17,28 @@ declare module '*.module.css' {
     readonly eyebrow: string
     readonly issueHeader: string
     readonly badge: string
+    readonly projectTable: string
+    readonly hierarchy: string
+    readonly chevron: string
+    readonly chevronSpacer: string
+    readonly rowState: string
+    readonly avatar: string
+    readonly labelPill: string
+    readonly chip: string
+    readonly chipGray: string
+    readonly chipBlue: string
+    readonly chipGreen: string
+    readonly chipYellow: string
+    readonly chipOrange: string
+    readonly chipRed: string
+    readonly chipPink: string
+    readonly chipPurple: string
+    readonly progress: string
+    readonly progressBar: string
+    readonly progressFill: string
+    readonly progressText: string
+    readonly titleCell: string
+    readonly rowTitle: string
     readonly detailGrid: string
     readonly sourceSummary: string
     readonly requirementBranch: string

@@ -4,6 +4,8 @@ import type { WorkPanelController, SourceTab } from './work-panel-controller.ts'
 import type { WorkSource } from '../work-sources/types.ts'
 import { filterProjectItems } from '../work-sources/views.ts'
 import { projectFieldCell } from './project-fields.ts'
+import { fieldOption, orderProjectRows, projectColumns } from './project-rows.ts'
+import type { ProjectRow } from './project-rows.ts'
 import styles from './work-panel.module.css'
 
 const sourceName = (source: WorkSource) => source.title ?? source.projectSnapshot?.project.title ?? (source.repository ? `${source.repository.owner}/${source.repository.repository}` : `${source.githubProject?.owner} / Project #${source.githubProject?.number}`)
@@ -51,6 +53,7 @@ function SourceOverview({controller,source}:{controller:WorkPanelController;sour
 }
 function ProjectViews({controller,source}:{controller:WorkPanelController;source:WorkSource}) {
   const state=controller.getSnapshot().source,catalog=state.catalog,snapshot=source.projectSnapshot
+  const [collapsed,setCollapsed]=useState<ReadonlySet<string>>(()=>new Set())
   if(!catalog)return <p>尚无真实 Project 视图缓存，请刷新来源。</p>
   const entry=source.entryUrls?.at(-1),url=entry?new URL(entry):undefined
   const entryView=Number(/\/views\/(\d+)/.exec(url?.pathname??'')?.[1])||null
@@ -59,16 +62,44 @@ function ProjectViews({controller,source}:{controller:WorkPanelController;source
   const slice=state.viewNumber===null&&!!url&&[...url.searchParams.keys()].some(key=>/slice/i.test(key))
   const expression=(state.viewNumber===null?url?.searchParams.get('filterQuery'):undefined)??view?.filter??''
   const filtered=snapshot?filterProjectItems(expression,snapshot.items,source.observations.map(item=>item.issue),snapshot.identity.login,catalog.fields.filter(field=>['SINGLE_SELECT','ITERATION','TEXT','NUMBER','DATE','MILESTONE'].includes(field.dataType)).map(field=>field.name)):null
-  const page=state.viewPage,perPage=25,items=filtered?.supported?filtered.items.slice((page-1)*perPage,page*perPage):[]
+  const page=state.viewPage,perPage=25,issues=source.observations.map(item=>item.issue)
+  const visible=filtered?.supported?filtered.items:[]
+  const rows=orderProjectRows(visible.slice((page-1)*perPage,page*perPage),issues,collapsed)
+  const columns=projectColumns(catalog.fields,orderProjectRows(visible,issues,new Set()))
+  const parents=new Set(visible.flatMap(item=>{const parent=issues.find(issue=>issue.nodeId===item.issueNodeId)?.parent?.nodeId;return parent?[parent]:[]}))
+  const toggle=(nodeId:string)=>setCollapsed(current=>{const next=new Set(current);if(next.has(nodeId))next.delete(nodeId);else next.add(nodeId);return next})
   return <section><h2>真实 Project 视图与字段</h2><label>视图<select aria-label="Project 视图" value={viewNumber??''} onChange={event=>controller.setProjectView(Number(event.target.value))}>{catalog.views.map(view=><option key={view.id} value={view.number}>{view.name}</option>)}</select></label>
     <p>{catalog.viewsComplete?'视图与字段目录读取完整':'视图或字段目录为部分观察'} · {view?.layout}</p><p>筛选：<code>{expression||'（无筛选）'}</code></p>
     {entry&&<p>保存入口：<TrustedLink url={entry}>打开原始 view / 切片</TrustedLink></p>}
     {slice?<p role="alert">已保留原始切片入口；当前未支持此 slice 参数，无法准确呈现该切片，请在 GitHub 查看。</p>:!view?<p role="alert">保存的 view 不在当前可读取目录中，请选择真实视图。</p>:!snapshot?<p role="status">完整 Project 成员扫描尚未完成，请刷新继续；没有用全列表冒充视图。</p>:filtered&&!filtered.supported?<p role="alert">{filtered.reason}</p>:<>
       <p>可见匹配 {filtered?.supported?filtered.items.length:0} 项 · {snapshot?.observedAt} · {snapshot?.items.filter(item=>item.kind==='restricted').length??0} 项权限受限，无法参与精确筛选。</p>
-      <div className={styles.tableScroll}><table aria-label="真实 Project 条目"><thead><tr><th>条目</th>{catalog.fields.filter(field=>field.dataType!=='TITLE').map(field=><th key={field.id}>{field.name}</th>)}</tr></thead><tbody>{items.map(item=>{const issue=source.observations.find(value=>value.issue.nodeId===item.issueNodeId)?.issue;return <tr key={item.id}><td>{issue?<button className={styles.issueLink} onClick={()=>void controller.openIssue(issue.number,source.enabled,issue.nodeId)}>{issue.repository.owner}/{issue.repository.repository} #{issue.number} {issue.title}</button>:item.url?<TrustedLink url={item.url}>{item.title??item.kind}</TrustedLink>:item.title??({draft:'草稿',restricted:'权限受限',issue:'Issue','pull-request':'PR'})[item.kind]}{item.archived&&<span> · 已归档</span>}</td>{catalog.fields.filter(field=>field.dataType!=='TITLE').map(field=><td key={field.id}>{(() => {const cell=projectFieldCell(field,issue,item);return <>{cell.parts?cell.parts.map((part,index)=>part.url?<TrustedLink key={index} url={part.url}>{part.label}</TrustedLink>:<span key={index}>{part.label}</span>):cell.text}{item.fieldsPartial?' · 字段部分观察':''}</>})()}</td>)}</tr>})}</tbody></table></div>{!items.length&&<p>此视图没有可见匹配条目。</p>}<div className={styles.toolbar}><button disabled={page<=1} onClick={()=>controller.setProjectView(viewNumber,page-1)}>上一页</button><span>第 {page} 页</span><button disabled={!filtered?.supported||page*perPage>=filtered.items.length} onClick={()=>controller.setProjectView(viewNumber,page+1)}>下一页</button></div>
+      {rows.length?<div className={styles.tableScroll}><table className={styles.projectTable} aria-label="真实 Project 条目"><thead><tr><th>条目</th>{columns.map(field=><th key={field.id}>{field.name}</th>)}</tr></thead><tbody>{rows.map(row=><tr key={row.item.id}>
+        <td className={styles.titleCell}><div className={styles.hierarchy} style={{paddingLeft:row.depth*22}}>
+          {row.item.issueNodeId&&parents.has(row.item.issueNodeId)?<button className={styles.chevron} aria-label={collapsed.has(row.item.issueNodeId!)?'展开子项':'收起子项'} aria-expanded={!collapsed.has(row.item.issueNodeId!)} onClick={()=>toggle(row.item.issueNodeId!)}>{collapsed.has(row.item.issueNodeId!)?'▸':'▾'}</button>:<span className={styles.chevronSpacer}/>}
+          <span className={styles.rowState} data-closed={row.issue?.state==='closed'?'true':undefined} title={row.issue?.state==='closed'?'已关闭':'打开'}/>
+          {row.issue?<button className={styles.rowTitle} title={`${row.issue.repository.owner}/${row.issue.repository.repository} #${row.issue.number}`} onClick={()=>void controller.openIssue(row.issue!.number,source.enabled,row.issue!.nodeId)}>#{row.issue.number} {row.issue.title}</button>:row.item.url?<TrustedLink url={row.item.url}>{row.item.title??row.item.kind}</TrustedLink>:row.item.title??({draft:'草稿',restricted:'权限受限',issue:'Issue','pull-request':'PR'} as Record<string,string>)[row.item.kind]}
+          {row.item.archived&&<span> · 已归档</span>}
+        </div></td>
+        {columns.map(field=><ProjectCell key={field.id} field={field} row={row} fields={catalog.fields}/>)}
+      </tr>)}</tbody></table></div>:<p>此视图没有可见匹配条目。</p>}
+      <div className={styles.toolbar}><button disabled={page<=1} onClick={()=>controller.setProjectView(viewNumber,page-1)}>上一页</button><span>第 {page} 页</span><button disabled={!filtered?.supported||page*perPage>=filtered.items.length} onClick={()=>controller.setProjectView(viewNumber,page+1)}>下一页</button></div>
     </>}
-    <details><summary>真实字段定义</summary><ul>{catalog.fields.map(field=><li key={field.id}>{field.name} · {field.dataType}</li>)}</ul></details>
+    <details><summary>真实字段定义</summary><ul>{catalog.fields.map(field=><li key={field.id}>{field.name} · {field.dataType}{field.options?.length?` · ${field.options.map(option=>`${option.name}(${option.color})`).join(' / ')}`:''}</li>)}</ul></details>
   </section>
+}
+type ProjectFieldDefinition = { id: string; name: string; dataType: string; options?: { id: string; name: string; color: string }[] }
+const chipClasses: Record<string,string> = { GRAY: styles.chipGray, BLUE: styles.chipBlue, GREEN: styles.chipGreen, YELLOW: styles.chipYellow, ORANGE: styles.chipOrange, RED: styles.chipRed, PINK: styles.chipPink, PURPLE: styles.chipPurple }
+const avatarPalette = ['#1f6feb','#8250df','#1a7f37','#bc4c00','#cf222e','#0969da','#bf3989','#57606a']
+function avatarColor(login: string) { let hash = 0; for (const character of login) hash = (hash * 31 + character.charCodeAt(0)) >>> 0; return avatarPalette[hash % avatarPalette.length]! }
+/** One Project cell rendered like the GitHub board: chips, avatars, label pills and a progress bar. */
+function ProjectCell({field,row,fields}:{field:ProjectFieldDefinition;row:ProjectRow;fields:ProjectFieldDefinition[]}) {
+  const {item,issue}=row, cell=projectFieldCell(field,issue,item), partial=item.fieldsPartial?' · 字段部分观察':''
+  if(field.dataType==='ASSIGNEES'){const logins=issue?.assignees??item.facts?.assignees??[];return <td>{logins.length?logins.map(login=><span key={login} style={{whiteSpace:'nowrap',marginRight:8}}><span className={styles.avatar} style={{background:avatarColor(login)}}>{login.slice(0,1)}</span>{login}</span>):'—'}{partial}</td>}
+  if(field.dataType==='LABELS'){const labels=issue?.labels??item.facts?.labels??[];return <td>{labels.length?labels.map(label=><span key={label} className={styles.labelPill}>{label}</span>):'—'}{partial}</td>}
+  if(field.dataType==='SUB_ISSUES_PROGRESS'){const summary=issue?.subIssuesSummary,children=issue?.subIssues,total=summary?.total??children?.totalCount;if(!total)return <td>—{partial}</td>;const completed=summary?.completed??children?.items.filter(child=>child.state==='closed').length??0,pct=Math.floor(completed/total*100)
+    return <td><div className={styles.progress}><div className={styles.progressBar}><div className={styles.progressFill} style={{width:`${pct}%`}}/></div><span className={styles.progressText}>{completed}/{total} · {pct}%{summary===undefined&&children?.hasNextPage?' · 部分观察':''}</span></div></td>}
+  const option=fieldOption(fields,field.id,cell.text)
+  return <td>{option?<span className={`${styles.chip} ${chipClasses[option.color.toUpperCase()]??styles.chipGray}`}>{cell.text}</span>:cell.parts?cell.parts.map((part,index)=>part.url?<TrustedLink key={index} url={part.url}>{part.label}</TrustedLink>:<span key={index}>{part.label}</span>):cell.text}{partial}</td>
 }
 function PullRequests({controller}:{controller:WorkPanelController}) {
   const catalog=controller.getSnapshot().source.catalog
