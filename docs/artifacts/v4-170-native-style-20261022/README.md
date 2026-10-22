@@ -14,21 +14,26 @@
 
 对照：`cont-before.png`（16px 平铺）→ `cont-after.png`（13px 表格）；`trajectory.png` 是同一会话的轨迹页参照。
 
-## 处理会话表单：能改的与改不了的
+## 处理会话表单：现在四项都能选
 
-| 字段 | 状态 | 原因 |
+上一版把「Agent 预设」和「权限」固定成宿主默认，理由是「只认证继承的选项」。这个契约不对：正常新会话能选的东西，从 A²D² 进来也应该能选。本轮把契约改成**宿主目录即权威**：
+
+| 字段 | 现在 | 18783 实测选项 |
 | --- | --- | --- |
-| 工作目录 | 可改（下拉） | 宿主/项目给出多个执行目录；18780 上是 4 个，18783 上也是 4 个 |
-| 模型 | 可改（下拉） | 18780 上 60 个模型；18783 上 2 个 |
-| Agent 预设 | 固定 | 宿主适配器只暴露默认 preset（`choices()` 返回单元素） |
-| 权限 | 固定 | 同上，只暴露 `workspace-write`；更宽的预设会被工作层以 `disallowed-permission-preset` 拒绝（`tests/work-execution.spec.ts` 的既有契约） |
+| 工作目录 | 下拉 | 4 个 |
+| 模型 | 下拉 | 2 个（18780 上 60 个） |
+| Agent 预设 | 下拉 | `standard` / `ptc` / `minimal` / `cordis` |
+| 权限 | 下拉 | `read-only` / `workspace-write` / `danger-full-access` |
 
-本轮把表单说明改成「请确认执行目录和模型；Agent 预设与权限由宿主当前策略固定，其余优先使用项目与规则默认配置」，并给每个单选项加了 `title` 说明，避免看起来像坏掉的控件。`start-form-after.png` 是改后的样子（工作目录/模型是下拉，Agent/权限是固定值）。
+- 宿主适配器 `choices()` 现在返回 `agentPresets.list()` 里已激活的 preset 和 `permissionPresets.names`（去掉派生的 `auto`），默认值仍是宿主默认。
+- 工作层保留成员校验；宿主仍会拒绝目录外名称（`invalid-permission-preset`）。契约测试改成：任意伪造 preset 被拒，`danger-full-access` 现在是真实可选项，而不是「先展示再拒绝」。
+- 表单说明改成「请确认执行目录、模型、Agent 预设与权限；未修改时使用宿主与项目的默认配置」。
+- `start-form-all-selects.png` 是四项全下拉的样子。
 
-如果希望权限也能选（例如只读，或放开 `danger-full-access`），那是一次产品策略变更：需要让宿主适配器暴露更多 preset，并同步修改上面那条拒绝契约，本轮没有擅自打开。
+需要提醒的是：选 `danger-full-access` 会按宿主该 preset 的审批策略运行（通常是 `never`）；`minimal`/`cordis` 这类 preset 的工具集与 `standard` 不同，A²D² 的 `work_report`/`work_control` 工具未必在，选之前心里有数。
 
 ## 构建
 
-- 源码 `feat/project-field-values` @ `69fff11`（PR #170，Draft）。
-- 18783 已换装：client `4dbbef714dcedb92b73e2ba2f39d6a345f47ff573e468f0fa12f583884f0f07a`。
+- 源码 `feat/project-field-values` @ `bf3f5d6`（PR #170，Draft）。
+- 18783 已换装：client `a871141518765f26bd1a2bd9c38f74ba4a826c79add0dbad30cb6f56fbdcfe18`。
 - 18780/18781 仍是用上一轮的 `cf5c0986…`，没有跟进本轮样式；需要时说一声再切。
