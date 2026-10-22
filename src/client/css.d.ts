@@ -45,6 +45,10 @@ declare module '*.module.css' {
     readonly cellClip: string
     readonly detailGrid: string
     readonly sourceSummary: string
+    readonly sourceHeader: string
+    readonly sourceIdentity: string
+    readonly sourceActions: string
+    readonly iconButton: string
     readonly requirementBranch: string
     readonly requirement: string
     readonly formRow: string
