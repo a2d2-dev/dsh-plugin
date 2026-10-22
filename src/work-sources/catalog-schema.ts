@@ -8,5 +8,5 @@ export const catalogSchema = z.object({
     issues: z.array(z.object({ number: z.number().int().positive(), url: z.string(), title: z.string() }).strict()), issuesComplete: z.boolean(), checks: z.string().nullable(), review: z.string().nullable(), membership: z.enum(['repository','project','issue-reference']),
   }).strict()), pullRequestsComplete: z.boolean(),
   views: z.array(z.object({ id: z.string(), number: z.number(), name: z.string(), filter: z.string(), layout: z.string() }).strict()),
-  fields: z.array(z.object({ id: z.string(), name: z.string(), dataType: z.string() }).strict()), viewsComplete: z.boolean(), limitations: z.array(z.string()),
+  fields: z.array(z.object({ id: z.string(), name: z.string(), dataType: z.string(), options: z.array(z.object({ id: z.string(), name: z.string(), color: z.string() }).strict()).optional() }).strict()), viewsComplete: z.boolean(), limitations: z.array(z.string()),
 }).strict()

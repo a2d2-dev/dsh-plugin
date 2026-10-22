@@ -27,7 +27,7 @@ export function ContinuousDelegation(props: ContinuousDelegationProps) {
   const canEnable = !!plan && plan.draftVersion === planning?.draftVersion && !state.draft.trim()
   return <section className={styles.panel} aria-label={`${props.sourceTitle} 持续委托`} aria-busy={state.busy}>
     <header className={styles.toolbar}>
-      <div><strong>持续委托</strong><p>来源：{props.sourceTitle} · {rule?.enabled ? '已启用' : '接新工作已暂停'}</p></div>
+      <div><p>来源：{props.sourceTitle} · {rule?.enabled ? '已启用' : '接新工作已暂停'}</p></div>
       {rule?.enabled && <button type="button" disabled={disabled} onClick={() => void controller.enable(false)}>暂停接新</button>}
     </header>
     {!rule && <p role="status">请先确认此来源的执行目录、模型与权限，再保存委托。</p>}

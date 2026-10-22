@@ -3,7 +3,11 @@ import { GitHubSource } from '../src/work-sources/github.ts'
 import { readGitHubProject } from '../src/work-sources/project.ts'
 const target = { owner: 'a2d2-dev', type: 'org' as const, number: 1 }
 const reference = (id = 'I_1', repository = 'one') => ({ id, number: 1, title: id, url: `https://github.com/a2d2-dev/${repository}/issues/1`, state: 'OPEN', repository: { name: repository, owner: { login: 'a2d2-dev' } } })
-function issue(id = 'I_1', repository = 'one') { return { ...reference(id, repository), __typename: 'Issue', body: 'Original\n  source', updatedAt: '2026-10-20T00:00:00Z', assignees: { nodes: [{ login: 'imneov' }] }, labels: { nodes: [{ name: 'ready-for-agent' }] }, parent: reference('I_parent', 'parent'), subIssues: { totalCount: 60, pageInfo: { hasNextPage: true }, nodes: [reference('I_child', 'child')] } } }
+function issue(id = 'I_1', repository = 'one') { return { ...reference(id, repository), __typename: 'Issue', body: 'Original\n  source', updatedAt: '2026-10-20T00:00:00Z', createdAt: '2026-10-01T00:00:00Z', closedAt: null,
+  assignees: { nodes: [{ login: 'imneov' }] }, labels: { nodes: [{ name: 'ready-for-agent' }] }, parent: reference('I_parent', 'parent'),
+  subIssues: { totalCount: 60, pageInfo: { hasNextPage: true }, nodes: [reference('I_child', 'child')] },
+  subIssuesSummary: { total: 11, completed: 10 },
+  closedByPullRequestsReferences: { nodes: [{ number: 143, title: 'feat: deliver', url: 'https://github.com/a2d2-dev/one/pull/143', state: 'MERGED', isDraft: false }] } } }
 function item(content: unknown, id = 'PVTI_1') { return { id, type: 'ISSUE', isArchived: false, content, fieldValues: { pageInfo: { hasNextPage: false }, nodes: [
   { __typename: 'ProjectV2ItemFieldSingleSelectValue', name: 'In progress', field: { id: 'F_status', name: 'Status' } },
   { __typename: 'ProjectV2ItemFieldSingleSelectValue', name: 'P1', field: { id: 'F_priority', name: 'Priority' } },
@@ -24,7 +28,7 @@ describe('GitHub Project source', () => {
     expect(page.identity).toEqual({ nodeId: 'U_1', login: 'imneov', name: 'LiuFeng' })
     expect(page.nextCursor).toBe('cursor-next')
     expect(page.issues).toHaveLength(2)
-    expect(page.issues[0]).toMatchObject({ nodeId: 'I_1', body: 'Original\n  source', parent: { nodeId: 'I_parent', repository: { repository: 'parent' } }, subIssues: { totalCount: 60, hasNextPage: true, items: [{ nodeId: 'I_child' }] } })
+    expect(page.issues[0]).toMatchObject({ nodeId: 'I_1', body: 'Original\n  source', createdAt: '2026-10-01T00:00:00Z', closedAt: null, parent: { nodeId: 'I_parent', repository: { repository: 'parent' } }, subIssues: { totalCount: 60, hasNextPage: true, items: [{ nodeId: 'I_child' }] }, subIssuesSummary: { total: 11, completed: 10 }, linkedPullRequests: [{ number: 143, state: 'merged', draft: false, url: 'https://github.com/a2d2-dev/one/pull/143' }] })
     expect(page.issues[1]).toMatchObject({ nodeId: 'I_other', number: 1, repository: { repository: 'two' } })
     expect(page.items.map(item => item.kind)).toEqual(['issue', 'issue', 'restricted', 'draft', 'pull-request'])
     expect(page.items[0]?.fields).toEqual([{ id: 'F_status', name: 'Status', type: 'single-select', value: 'In progress' }, { id: 'F_priority', name: 'Priority', type: 'single-select', value: 'P1' }, { id: 'F_iteration', name: 'Iteration', type: 'iteration', value: 'Iteration 2' }])

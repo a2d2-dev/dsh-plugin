@@ -91,11 +91,11 @@ export async function readSourceCatalog(scope: { repository?: GitHubRepository; 
     const variables = { owner: ref.owner, number: ref.number }
     for (const name of ['views','fields'] as const) {
       let cursor: string | undefined
-      const body = name === 'views' ? 'nodes { id number name filter layout }' : 'nodes { ... on ProjectV2FieldCommon { id name dataType } }'
+      const body = name === 'views' ? 'nodes { id number name filter layout }' : 'nodes { ... on ProjectV2FieldCommon { id name dataType } ... on ProjectV2SingleSelectField { options { id name color } } }'
       const query = wrap(`${name}(first:100,after:$cursor) { pageInfo { hasNextPage endCursor } ${body} }`)
       for (let page = 0; page < 100; page++) {
         const project = extract(await request(query, { ...variables, ...(cursor ? { cursor } : {}) }, reader))
-        const schema = z.object({ pageInfo, nodes: z.array(name === 'views' ? z.object({ id: z.string(), number: z.number(), name: z.string(), filter: z.string(), layout: z.string() }) : z.object({ id: z.string(), name: z.string(), dataType: z.string() })) })
+        const schema = z.object({ pageInfo, nodes: z.array(name === 'views' ? z.object({ id: z.string(), number: z.number(), name: z.string(), filter: z.string(), layout: z.string() }) : z.object({ id: z.string(), name: z.string(), dataType: z.string(), options: z.array(z.object({ id: z.string(), name: z.string(), color: z.string() })).optional() })) })
         const connection = schema.safeParse(project[name])
         if (!connection.success) throw new SourceError('github-invalid-response', `GitHub 未返回完整 Project ${name}`)
         if (name === 'views') result.views.push(...connection.data.nodes as SourceCatalog['views'])

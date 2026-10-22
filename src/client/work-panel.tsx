@@ -3,6 +3,7 @@ import { CompletionStatus } from './completion-status.tsx'
 import { ContinuousDelegation } from './continuous-delegation.tsx'
 import { SourceConnect } from './source-connect.tsx'
 import { SourceDirectory, SourceTabs } from './source-directory.tsx'
+import { SessionCell, sessionOf } from './session-cell.tsx'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import type { DetailTab, WorkPanelController } from './work-panel-controller.ts'
@@ -16,7 +17,7 @@ const issueFilters = [['all','全部'],['not-started','未开始'],['processing'
 
 export function WorkPanel({ controller }: { controller: WorkPanelController }) {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot)
-  const [connecting,setConnecting]=useState(false),[surface,setSurface]=useState<HTMLElement|null>(null)
+  const [connecting,setConnecting]=useState(false),[surface,setSurface]=useState<HTMLElement|null>(null),[panel,setPanel]=useState<'none'|'delegation'|'continuation'>('none')
   useEffect(() => { void controller.initialize(); return () => controller.leavePanel() }, [controller])
   useEffect(() => {
     if(connecting||!surface||typeof document==='undefined') return
@@ -61,8 +62,7 @@ export function WorkPanel({ controller }: { controller: WorkPanelController }) {
       </div>
       <ErrorText error={state.source.error??''}/>
     </>:state.projectId&&<>
-      <SourceDirectory controller={controller} delegation={source&&<ContinuousProcessing key={`${state.projectId}/${source.id}`} controller={controller}/>} issues={<IssueSourcePanel key={source?.id} controller={controller}/>}/>
-      {project&&<details><summary>新执行默认自动接续</summary><ContinuationSettings key={`${project.id}/${project.continuationPolicy?.version??0}`} controller={controller} policy={project.continuationPolicy}/></details>}
+      <SourceDirectory controller={controller} panel={panel} onPanel={setPanel} panelContent={panel==='delegation'&&source?<ContinuousProcessing key={`${state.projectId}/${source.id}`} controller={controller} onClose={()=>setPanel('none')}/>:panel==='continuation'&&project?<section className={styles.settingsPanel} aria-label="新执行默认自动接续"><div className={styles.delegationHeader}><strong>新执行默认自动接续</strong><button onClick={()=>setPanel('none')}>收起</button></div><ContinuationSettings key={`${project.id}/${project.continuationPolicy?.version??0}`} controller={controller} policy={project.continuationPolicy}/></section>:null} issues={<IssueSourcePanel key={source?.id} controller={controller}/>}/>
     </>}
   </main>
 }
@@ -109,14 +109,20 @@ function IssueSourcePanel({controller}:{controller:WorkPanelController}) {
       <nav className={styles.tabs} aria-label="Issue 处理状态">{issueFilters.map(([id,label])=><button key={id} aria-pressed={state.issueFilter===id} onClick={()=>controller.setIssueFilter(id)}>{label}</button>)}</nav>
       <p>{cached?'缓存 / 最后已知列表':'本次读取列表'} · 第 {sourceState.page} 页 · 搜索与处理状态筛选仅作用于当前已载入页{listing?`（${rows.length} / ${listing.items.length} 项） · 观察时间：${listing.observedAt}`:''}</p>
       {!source.enabled&&<p role="status">来源已停用，显示已保存的内容。</p>}
-      {listing&&<><div className={styles.tableScroll}><table aria-label="GitHub Issue 列表"><thead><tr><th>Issue / 原始要求</th><th>进展与下一步</th><th>负责人 / 标签</th></tr></thead><tbody>{rows.map(issue=>{const progress=controller.progressForIssue(issue);return <tr key={issue.nodeId}><td><button className={styles.issueLink} onClick={()=>void controller.openIssue(issue.number,source.enabled,issue.nodeId)}>#{issue.number} {issue.title}</button><p>{issue.repository.owner}/{issue.repository.repository} · GitHub {issue.state}</p></td><td><span className={styles.badge}>{processingLabel(progress)}</span>{progress&&<>{progress.execution&&<p>{executionLabel(progress.execution.state,progress)}</p>}<p>{progress.summary}</p>{progress.next&&<p>下一步：{progress.next}</p>}{progress.processingReason&&<p>{progress.processingReason}</p>}{progress.blockers.map((blocker,index)=><p className={styles.failure} key={index}>阻塞：{blocker}</p>)}</>}</td><td>{issue.assignees.join(', ')||'未指派'}<p>{issue.labels.join(' · ')}</p></td></tr>})}</tbody></table></div>{!rows.length&&<p>{listing.items.length?'当前页没有匹配筛选的 Issue。':listing.nextPage?'本页没有 Issue，仍可读取下一页。':'当前页没有匹配的 Issue。'}</p>}<div className={styles.toolbar}><button disabled={loading||sourceState.page<=1} onClick={()=>void controller.browseIssues({page:sourceState.page-1},source.enabled)}>上一页</button><span>第 {sourceState.page} 页</span><button disabled={loading||!listing.nextPage} onClick={()=>void controller.browseIssues({page:listing.nextPage!},source.enabled)}>下一页</button></div></>}
+      {listing&&<><div className={styles.tableScroll}><table className={styles.projectTable} aria-label="GitHub Issue 列表"><colgroup><col style={{width:'42%'}}/><col style={{width:'12%'}}/><col style={{width:'16%'}}/><col style={{width:'14%'}}/><col style={{width:'16%'}}/></colgroup><thead><tr><th>Issue</th><th>状态</th><th>会话</th><th>负责人</th><th>标签</th></tr></thead><tbody>{rows.map(issue=>{const progress=controller.progressForIssue(issue),detail=[progress?.summary,progress?.next?`下一步：${progress.next}`:'',...(progress?.blockers??[]).map(blocker=>`阻塞：${blocker}`)].filter(Boolean).join(' / ');return <tr key={issue.nodeId}>
+  <td><div className={styles.cellClip}><button className={styles.rowTitle} title={`#${issue.number} ${issue.title} · ${issue.repository.owner}/${issue.repository.repository}`} onClick={()=>void controller.openIssue(issue.number,source.enabled,issue.nodeId)}>#{issue.number} {issue.title}</button></div></td>
+  <td><div className={styles.cellClip} title={detail||undefined}><span className={styles.badge}>{processingLabel(progress)}</span>{progress?.blockers.length?<span className={styles.failure}> · 阻塞</span>:null}</div></td>
+  <td><div className={styles.cellClip}><SessionCell entry={sessionOf(progress)} onOpen={session=>controller.openSession(session)}/></div></td>
+  <td><div className={styles.cellClip}>{issue.assignees.join(', ')||'—'}</div></td>
+  <td><div className={styles.cellClip}>{issue.labels.length?issue.labels.map(label=><span key={label} className={styles.labelPill}>{label}</span>):'—'}</div></td>
+</tr>})}</tbody></table></div>{!rows.length&&<p>{listing.items.length?'当前页没有匹配筛选的 Issue。':listing.nextPage?'本页没有 Issue，仍可读取下一页。':'当前页没有匹配的 Issue。'}</p>}<div className={styles.toolbar}><button disabled={loading||sourceState.page<=1} onClick={()=>void controller.browseIssues({page:sourceState.page-1},source.enabled)}>上一页</button><span>第 {sourceState.page} 页</span><button disabled={loading||!listing.nextPage} onClick={()=>void controller.browseIssues({page:listing.nextPage!},source.enabled)}>下一页</button></div></>}
       {!listing&&!loading&&<p>此筛选页尚无可读缓存，请刷新 Issues。读取失败不表示列表为空。</p>}
       <details><summary>来源状态与缓存</summary><p>最近确认账号：{source.identity?.login??'尚未确认'} · {source.discovery?.lastSuccessAt?`最近同步：${source.discovery.lastSuccessAt}`:'尚无同步时间'}</p>{source.lastError?.retryAt&&<p>可重试时间：{source.lastError.retryAt}</p>}<div className={styles.toolbar}><button disabled={loading} onClick={()=>void controller.browseIssues({},false)}>读取缓存列表</button><button disabled={loading} onClick={()=>void controller.setSourceEnabled(!source.enabled)}>{source.enabled?'停用来源':'启用来源'}</button></div></details>
     </>}
     {loading&&<p role="status">正在读取 Issues…</p>}<ErrorText error={error??''}/>{!source&&!loading&&!error&&<p>选择 Project 或仓库来源以读取 Issues。</p>}
   </Section>
 }
-function ContinuousProcessing({controller}:{controller:WorkPanelController}) {
+function ContinuousProcessing({controller,onClose}:{controller:WorkPanelController;onClose:()=>void}) {
   const snapshot=controller.getSnapshot(),projectId=snapshot.projectId!,sourceId=snapshot.source.sourceId!
   const [rule,setRule]=useState<ContinuousWorkRule|undefined>(undefined),[loaded,setLoaded]=useState(false),[editing,setEditing]=useState(false)
   const [options,setOptions]=useState<WorkExecutionOptions|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[statusError,setStatusError]=useState('')
@@ -155,7 +161,8 @@ function ContinuousProcessing({controller}:{controller:WorkPanelController}) {
       if(!scope.signal.aborted){setRule(result.continuousRule);setEditing(false)}
     }catch(error){if(!scope.signal.aborted)setError(message(error))}finally{if(!scope.signal.aborted)setBusy(false)}
   }
-  return <details className={styles.delegation}><summary>持续委托{rule?.enabled?' · 已启用':''}</summary>
+  return <section className={styles.delegation} aria-label="持续委托">
+    <div className={styles.delegationHeader}><strong>持续委托{rule?.enabled?' · 已启用':''}</strong><button onClick={onClose}>收起</button></div>
     <ContinuousDelegation client={controller.client} projectId={projectId} sourceId={sourceId} sourceTitle={snapshot.source.sources.find(item=>item.id===sourceId)?.title??snapshot.source.sources.find(item=>item.id===sourceId)?.projectSnapshot?.project.title??'当前来源'} rule={rule} onRuleChanged={setRule}/>
     <button disabled={busy||!loaded} onClick={()=>void configure()}>{rule?'执行目录与模型':'配置执行资源'}</button>
     {rule?.active&&<button onClick={()=>void controller.openTask(rule.active!)}>查看当前执行 / 暂停处理</button>}
@@ -166,7 +173,7 @@ function ContinuousProcessing({controller}:{controller:WorkPanelController}) {
       <details><summary>执行预设</summary><div className={styles.formRow}><label>Agent 预设<select disabled={busy} value={agentPreset} onChange={event=>setAgentPreset(event.target.value)}>{options.agentPresets.map(item=><option key={item}>{item}</option>)}</select></label><label>权限预设<select disabled={busy} value={permissionPreset} onChange={event=>setPermissionPreset(event.target.value)}>{options.permissionPresets.map(item=><option key={item}>{item}</option>)}</select></label></div></details>
       <div className={styles.toolbar}><button className={styles.primary} type="submit" disabled={busy}>{busy?'正在保存…':'保存执行资源'}</button><button type="button" disabled={busy} onClick={()=>setEditing(false)}>取消配置</button></div>
     </form>}
-    </details>
+    </section>
 }
 function Sessions({controller,task}:{controller:WorkPanelController;task:WorkTask}) {
   return <Section title="相关会话"><p>关联记录仅用于查看；当前处理会话与接续历史分别列出。</p>{task.sessions.length?<ul>{task.sessions.map(item=><li key={`${item.session.runtimeId}/${item.session.sessionId}`}>{item.purpose==='review'?'评审':'相关'} · {item.session.sessionId} <button onClick={()=>controller.openSession(item.session)}>打开会话</button></li>)}</ul>:<p>尚无其他关联会话。</p>}</Section>

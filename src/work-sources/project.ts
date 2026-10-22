@@ -27,13 +27,17 @@ export function projectQuery(type: GitHubProjectRef['type']): string {
           ... on ProjectV2ItemFieldDateValue { date field { ... on ProjectV2FieldCommon { id name } } }
         } }
         content { __typename
-          ... on Issue { ${referenceFields} body updatedAt
+          ... on Issue { ${referenceFields} body updatedAt createdAt closedAt
             assignees(first:100) { nodes { login } }
             labels(first:100) { nodes { name } }
             parent { ${referenceFields} }
             subIssues(first:50) { totalCount pageInfo { hasNextPage } nodes { ${referenceFields} } }
+            subIssuesSummary { total completed }
+            closedByPullRequestsReferences(first:20) { nodes { number title url state isDraft } }
           }
-          ... on PullRequest { title url state isDraft repository { name owner { login } } assignees(first:100) { nodes { login } } labels(first:100) { nodes { name } } }
+          ... on PullRequest { title url state isDraft repository { name owner { login } } createdAt updatedAt closedAt assignees(first:100) { nodes { login } } labels(first:100) { nodes { name } }
+            reviewRequests(first:20) { nodes { requestedReviewer { __typename ... on User { login } } } }
+          }
           ... on DraftIssue { title }
         }
       } }
@@ -77,11 +81,16 @@ const graphql: ProjectGraphQL = async (query, variables) => {
   }
 }
 const refSchema = z.object({ id: z.string().min(1), number: z.number().int().positive(), title: z.string().min(1), url: z.string(), state: z.enum(['OPEN', 'CLOSED']), repository: z.object({ name: z.string(), owner: z.object({ login: z.string() }) }) })
-const issue = refSchema.extend({ __typename: z.literal('Issue'), body: z.string().nullable(), updatedAt: z.iso.datetime(),
+const linkedPullRequest = z.object({ number: z.number().int().positive(), title: z.string().min(1), url: z.string(), state: z.enum(['OPEN', 'CLOSED', 'MERGED']), isDraft: z.boolean() })
+const issue = refSchema.extend({ __typename: z.literal('Issue'), body: z.string().nullable(), updatedAt: z.iso.datetime(), createdAt: z.iso.datetime(), closedAt: z.iso.datetime().nullable(),
   assignees: z.object({ nodes: z.array(z.object({ login: z.string() })) }), labels: z.object({ nodes: z.array(z.object({ name: z.string() })) }),
   parent: refSchema.nullable(), subIssues: z.object({ totalCount: z.number().int().nonnegative(), pageInfo: z.object({ hasNextPage: z.boolean() }), nodes: z.array(refSchema) }),
+  subIssuesSummary: z.object({ total: z.number().int().nonnegative(), completed: z.number().int().nonnegative() }),
+  closedByPullRequestsReferences: z.object({ nodes: z.array(linkedPullRequest) }),
 })
-const content = z.discriminatedUnion('__typename', [issue, z.object({ __typename: z.literal('PullRequest'), title: z.string(), url: z.string(), state: z.enum(['OPEN','CLOSED','MERGED']).optional(), isDraft: z.boolean().optional(), repository: z.object({ name: z.string(), owner: z.object({ login: z.string() }) }).optional(), assignees: z.object({ nodes: z.array(z.object({ login: z.string() })) }).optional(), labels: z.object({ nodes: z.array(z.object({ name: z.string() })) }).optional() }), z.object({ __typename: z.literal('DraftIssue'), title: z.string() })])
+const content = z.discriminatedUnion('__typename', [issue, z.object({ __typename: z.literal('PullRequest'), title: z.string(), url: z.string(), state: z.enum(['OPEN','CLOSED','MERGED']).optional(), isDraft: z.boolean().optional(), repository: z.object({ name: z.string(), owner: z.object({ login: z.string() }) }).optional(), assignees: z.object({ nodes: z.array(z.object({ login: z.string() })) }).optional(), labels: z.object({ nodes: z.array(z.object({ name: z.string() })) }).optional(),
+  createdAt: z.iso.datetime().optional(), updatedAt: z.iso.datetime().optional(), closedAt: z.iso.datetime().nullable().optional(),
+  reviewRequests: z.object({ nodes: z.array(z.object({ requestedReviewer: z.object({ login: z.string().optional() }).passthrough().nullable().optional() })) }).optional() }), z.object({ __typename: z.literal('DraftIssue'), title: z.string() })])
 const rawField = z.object({ __typename: z.string(), milestone: z.object({ title: z.string() }).nullable().optional(), field: z.object({ id: z.string(), name: z.string() }).optional(), name: z.string().nullable().optional(), title: z.string().nullable().optional(), text: z.string().nullable().optional(), number: z.number().nullable().optional(), date: z.string().nullable().optional() })
 const rawProject = z.object({ id: z.string().min(1), title: z.string(), url: z.string(), closed: z.boolean(), items: z.object({
   pageInfo: z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable() }),
@@ -129,11 +138,15 @@ export async function readGitHubProject(project: GitHubProjectRef, request: Proj
     const content = item.content
     if (!content) return { ...shared, kind: 'restricted' as const }
     if (content.__typename === 'Issue') {
-      issues.push({ ...reference(content), body: content.body, updatedAt: content.updatedAt, observedAt, assignees: content.assignees.nodes.map(item => item.login), labels: content.labels.nodes.map(item => item.name), parent: content.parent ? reference(content.parent) : null,
-        subIssues: { items: content.subIssues.nodes.map(reference), totalCount: content.subIssues.totalCount, hasNextPage: content.subIssues.pageInfo.hasNextPage } })
+      issues.push({ ...reference(content), body: content.body, updatedAt: content.updatedAt, observedAt, createdAt: content.createdAt, closedAt: content.closedAt, assignees: content.assignees.nodes.map(item => item.login), labels: content.labels.nodes.map(item => item.name), parent: content.parent ? reference(content.parent) : null,
+        subIssues: { items: content.subIssues.nodes.map(reference), totalCount: content.subIssues.totalCount, hasNextPage: content.subIssues.pageInfo.hasNextPage },
+        subIssuesSummary: content.subIssuesSummary,
+        linkedPullRequests: content.closedByPullRequestsReferences.nodes.map(pull => ({ number: pull.number, title: pull.title, url: pull.url, state: pull.state.toLowerCase() as 'open' | 'closed' | 'merged', draft: pull.isDraft })) })
       return { ...shared, kind: 'issue' as const, issueNodeId: content.id, title: content.title, url: content.url }
     }
-    return content.__typename === 'PullRequest' ? { ...shared, kind: 'pull-request' as const, title: content.title, url: content.url, ...(content.repository && content.state && content.assignees && content.labels ? { facts: { ...(content.isDraft===undefined?{}:{draft:content.isDraft}), repository: { owner: content.repository.owner.login, repository: content.repository.name }, state: content.state.toLowerCase(), assignees: content.assignees.nodes.map(item=>item.login), labels: content.labels.nodes.map(item=>item.name) } } : {}) } : { ...shared, kind: 'draft' as const, title: content.title }
+    return content.__typename === 'PullRequest' ? { ...shared, kind: 'pull-request' as const, title: content.title, url: content.url, ...(content.repository && content.state && content.assignees && content.labels ? { facts: { ...(content.isDraft===undefined?{}:{draft:content.isDraft}), repository: { owner: content.repository.owner.login, repository: content.repository.name }, state: content.state.toLowerCase(), assignees: content.assignees.nodes.map(item=>item.login), labels: content.labels.nodes.map(item=>item.name),
+      ...(content.createdAt===undefined?{}:{ createdAt: content.createdAt }), ...(content.updatedAt===undefined?{}:{ updatedAt: content.updatedAt }), ...(content.closedAt===undefined?{}:{ closedAt: content.closedAt }),
+      ...(content.reviewRequests===undefined?{}:{ reviewers: content.reviewRequests.nodes.flatMap(node => node.requestedReviewer?.login ? [node.requestedReviewer.login] : []) }) } } : {}) } : { ...shared, kind: 'draft' as const, title: content.title }
   })
   const result = projectPageSchema.safeParse({ identity: { nodeId: data.viewer.id, login: data.viewer.login, name: data.viewer.name }, project: { nodeId: value.id, title: value.title, url: value.url, closed: value.closed }, items, issues, observedAt, ...(value.items.pageInfo.hasNextPage ? { nextCursor: value.items.pageInfo.endCursor! } : {}) })
   if (!result.success) throw new SourceError('github-invalid-response', 'GitHub returned invalid Project observations')
