@@ -111,6 +111,14 @@ it('retains execution authority and tool control while excluding diagnostic and 
   expect(JSON.stringify(basis)).not.toContain('ERROR_BODY')
 })
 
+it('derives Issue URLs from repository identity rather than copying observation links', () => {
+  const { state, rule } = fixture(1)
+  state.sources[0]!.observations[0]!.issue.url = 'https://untrusted.example/arbitrary?token=private'
+  const basis = planningBasis(state, rule)
+  expect(basis.candidates[0]!.issue.url).toBe('https://github.com/acme/repo/issues/1')
+  expect(JSON.stringify(basis)).not.toContain('untrusted.example')
+})
+
 it('uses title truncation when the remaining explanatory goals are empty', () => {
   const { state, rule } = fixture(1)
   state.tasks[0]!.goal = ''
@@ -126,7 +134,9 @@ it('fails explicitly when mandatory scope cannot fit without dropping candidates
   const { state, rule } = fixture()
   rule.planning!.supplements = Array.from({ length: 4 }, () => 'Authorized instruction '.repeat(4000))
   expect(() => planningBasis(state, rule)).toThrowError(/Planning identities and instructions exceed request limit: requestCharacters=\d+, candidates=46, limit=253952/)
+  expect(() => planningBasis(state, rule)).toThrowError(expect.objectContaining({ code: 'planning-payload-too-large' }))
   expect(state.sources[0]!.observations).toHaveLength(46)
+  expect(state.sources[0]!.observations.map(({ issue }) => issue.nodeId)).toEqual(Array.from({ length: 46 }, (_, index) => `ISSUE_${index + 1}`))
 })
 
 it('reads existing saved plans without rewriting their basis or persistent fields', () => {
