@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "agent-browser",
+    "--session",
+    "qa152",
+    "eval",
+    "(async()=>{const r=await fetch(\"/api/workspace/create\",{method:\"POST\",headers:{\"content-type\":\"application/json\"},body:JSON.stringify({\"type\": \"client-request\", \"rpcId\": \"qa152-workspace\", \"method\": \"workspace/create\", \"payload\": {\"args\": {\"request\": {\"path\": \"/data/_dsh-dev/acceptance-workspaces/v4-152-r01\"}}}})});return {http:r.status,text:await r.text()}})()"
+  ],
+  "exit": 0,
+  "stdout": "{\n  \"http\": 200,\n  \"text\": \"{\\\"type\\\":\\\"server-response\\\",\\\"rpcId\\\":\\\"qa152-workspace\\\",\\\"result\\\":{\\\"ok\\\":true,\\\"value\\\":{\\\"workspace\\\":{\\\"workspaceId\\\":\\\"b2c6edcf-bb21-4925-8ccd-6b0e503de5dc\\\",\\\"path\\\":\\\"/data/_dsh-dev/acceptance-workspaces/v4-152-r01\\\",\\\"title\\\":\\\"v4-152-r01\\\",\\\"sessionIds\\\":[\\\"session-df9adec7-379c-482d-bb4d-0f0ccc493351\\\"],\\\"createdAt\\\":\\\"2026-10-22T02:09:20.666Z\\\",\\\"updatedAt\\\":\\\"2026-10-22T02:09:23.486Z\\\"},\\\"created\\\":false}}}\"\n}\n",
+  "stderr": ""
+}

@@ -1,0 +1,157 @@
+{
+  "state": "prepared-workspace-registered-six-issues-four-project-items-no-task-no-execution",
+  "run": "v4-152-6b252218-r01",
+  "workspacePath": "/data/_dsh-dev/acceptance-workspaces/v4-152-r01",
+  "resourceRef": {
+    "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+    "workspaceId": "b2c6edcf-bb21-4925-8ccd-6b0e503de5dc"
+  },
+  "projectId": null,
+  "defaultAgentId": null,
+  "ruleId": null,
+  "runLabel": "qa:v4-152-6b252218-r01",
+  "serialLabel": "qa:v4-152-6b252218-r01-serial",
+  "touchLabel": "qa:v4-152-6b252218-r01-touch",
+  "actualFixtureIdentities": [
+    {
+      "fixture": "P",
+      "number": 157,
+      "node_id": "I_kwDOUmfSE88AAAABY_Hq1A",
+      "database_id": 5971765972,
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/157",
+      "updatedAt": "2026-10-22T02:10:27Z",
+      "state": "open",
+      "labels": [
+        "qa:v4-152-6b252218-r01"
+      ],
+      "assignees": [
+        "imneov"
+      ]
+    },
+    {
+      "fixture": "C",
+      "number": 158,
+      "node_id": "I_kwDOUmfSE88AAAABY_Ht3Q",
+      "database_id": 5971766749,
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/158",
+      "updatedAt": "2026-10-22T02:10:31Z",
+      "state": "open",
+      "labels": [
+        "qa:v4-152-6b252218-r01"
+      ],
+      "assignees": [
+        "imneov"
+      ]
+    },
+    {
+      "fixture": "E",
+      "number": 159,
+      "node_id": "I_kwDOUmfSE88AAAABY_HxBA",
+      "database_id": 5971767556,
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/159",
+      "updatedAt": "2026-10-22T02:10:36Z",
+      "state": "open",
+      "labels": [
+        "qa:v4-152-6b252218-r01"
+      ],
+      "assignees": [
+        "imneov"
+      ]
+    },
+    {
+      "fixture": "A",
+      "number": 160,
+      "node_id": "I_kwDOUmfSE88AAAABY_H0fQ",
+      "database_id": 5971768445,
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/160",
+      "updatedAt": "2026-10-22T02:10:41Z",
+      "state": "open",
+      "labels": [
+        "qa:v4-152-6b252218-r01",
+        "qa:v4-152-6b252218-r01-serial",
+        "qa:v4-152-6b252218-r01-touch"
+      ],
+      "assignees": [
+        "imneov"
+      ]
+    },
+    {
+      "fixture": "B",
+      "number": 161,
+      "node_id": "I_kwDOUmfSE88AAAABY_H3PQ",
+      "database_id": 5971769149,
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/161",
+      "updatedAt": "2026-10-22T02:10:45Z",
+      "state": "open",
+      "labels": [
+        "qa:v4-152-6b252218-r01",
+        "qa:v4-152-6b252218-r01-serial"
+      ],
+      "assignees": [
+        "imneov"
+      ]
+    },
+    {
+      "fixture": "X",
+      "number": 162,
+      "node_id": "I_kwDOUmfSE88AAAABY_H6TA",
+      "database_id": 5971769932,
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/162",
+      "updatedAt": "2026-10-22T02:10:49Z",
+      "state": "open",
+      "labels": [
+        "qa:v4-152-6b252218-r01",
+        "qa:v4-152-6b252218-r01-serial"
+      ],
+      "assignees": [
+        "imneov"
+      ]
+    }
+  ],
+  "actualProjectItems": [
+    {
+      "fixture": "P",
+      "issueNumber": 157,
+      "itemId": "PVTI_lADODqZowM4BnNzFzhCk6LI"
+    },
+    {
+      "fixture": "C",
+      "issueNumber": 158,
+      "itemId": "PVTI_lADODqZowM4BnNzFzhCk6NY"
+    },
+    {
+      "fixture": "E",
+      "issueNumber": 159,
+      "itemId": "PVTI_lADODqZowM4BnNzFzhCk6Ns"
+    },
+    {
+      "fixture": "A",
+      "issueNumber": 160,
+      "itemId": "PVTI_lADODqZowM4BnNzFzhCk6Sg"
+    }
+  ],
+  "allowedPlanNodes": [
+    "I_kwDOUmfSE88AAAABY_H0fQ",
+    "I_kwDOUmfSE88AAAABY_H3PQ"
+  ],
+  "actualExecutions": [],
+  "actualModelRequests": [],
+  "evidence": [
+    "raw/workspace-resources.json",
+    "raw/github-subissues-confirm.json"
+  ],
+  "reusedSourceProjectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+  "sourceIds": {
+    "repo": "9cea4378-0219-4f99-a237-80f51bd36291",
+    "project": "c122502c-1632-4a96-acb5-8adbac61999d"
+  },
+  "nativeSubIssues": {
+    "parent": 157,
+    "children": [
+      158,
+      159
+    ],
+    "verified": true
+  },
+  "githubProjectId": "PVT_kwDODqZowM4BnNzF"
+}

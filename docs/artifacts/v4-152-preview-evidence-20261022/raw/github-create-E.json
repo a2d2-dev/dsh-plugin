@@ -1,0 +1,20 @@
+{
+  "argv": [
+    "gh",
+    "issue",
+    "create",
+    "--repo",
+    "a2d2-dev/dsh-plugin",
+    "--title",
+    "[QA #152 v4 v4-152-6b252218-r01] E",
+    "--body-file",
+    "docs/artifacts/v4-152-live-acceptance/E.body.md",
+    "--assignee",
+    "imneov",
+    "--label",
+    "qa:v4-152-6b252218-r01"
+  ],
+  "exit": 0,
+  "stdout": "https://github.com/a2d2-dev/dsh-plugin/issues/159\n",
+  "stderr": ""
+}

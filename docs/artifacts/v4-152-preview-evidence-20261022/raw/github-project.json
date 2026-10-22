@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "gh",
+    "project",
+    "view",
+    "1",
+    "--owner",
+    "a2d2-dev",
+    "--format",
+    "json"
+  ],
+  "exit": 0,
+  "stdout": "{\"closed\":false,\"fields\":{\"totalCount\":13},\"id\":\"PVT_kwDODqZowM4BnNzF\",\"items\":{\"totalCount\":77},\"number\":1,\"owner\":{\"login\":\"a2d2-dev\",\"type\":\"Organization\"},\"public\":false,\"readme\":\"\",\"shortDescription\":\"\",\"title\":\"DSH A²D²\",\"url\":\"https://github.com/orgs/a2d2-dev/projects/1\"}\n",
+  "stderr": ""
+}

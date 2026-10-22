@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "agent-browser",
+    "--session",
+    "qa152",
+    "eval",
+    "(async()=>{const r=await fetch(\"/api/session/list\",{method:\"POST\",headers:{\"content-type\":\"application/json\"},body:JSON.stringify({\"type\": \"client-request\", \"rpcId\": \"qa152-sessions\", \"method\": \"session/list\", \"payload\": {\"args\": {}}})});return {http:r.status,text:await r.text()}})()"
+  ],
+  "exit": 0,
+  "stdout": "{\n  \"http\": 200,\n  \"text\": \"{\\\"type\\\":\\\"server-response\\\",\\\"rpcId\\\":\\\"qa152-sessions\\\",\\\"result\\\":{\\\"ok\\\":false,\\\"error\\\":{\\\"code\\\":\\\"gateway/arguments-invalid\\\",\\\"message\\\":\\\"typert gateway: session/list: args fields do not match the descriptor: missing \\\\\\\"_request\\\\\\\"\\\",\\\"details\\\":{\\\"endpoint\\\":\\\"session/list\\\"}}}}\"\n}\n",
+  "stderr": ""
+}

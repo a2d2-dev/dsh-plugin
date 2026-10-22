@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "agent-browser",
+    "--session",
+    "qa152",
+    "eval",
+    "(async()=>{const r=await fetch(\"/api/session/list\",{method:\"POST\",headers:{\"content-type\":\"application/json\"},body:JSON.stringify({type:\"client-request\",rpcId:\"qa152-before\",method:\"session/list\",payload:{}})});return {http:r.status,body:await r.json()}})()"
+  ],
+  "exit": 0,
+  "stdout": "{\n  \"body\": {\n    \"result\": {\n      \"error\": {\n        \"code\": \"gateway/internal\",\n        \"details\": {},\n        \"message\": \"Remote payload must contain exactly one plain-object args field\"\n      },\n      \"ok\": false\n    },\n    \"rpcId\": \"qa152-before\",\n    \"type\": \"server-response\"\n  },\n  \"http\": 200\n}\n",
+  "stderr": ""
+}

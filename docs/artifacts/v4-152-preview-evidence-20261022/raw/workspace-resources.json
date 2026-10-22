@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "agent-browser",
+    "--session",
+    "qa152",
+    "eval",
+    "(async()=>{const r=await fetch(\"/a2d2/api/work\",{method:\"POST\",headers:{\"content-type\":\"application/json\"},body:JSON.stringify({\"kind\": \"query\", \"value\": {\"type\": \"resources.list\"}})});return {http:r.status,body:await r.json()}})()"
+  ],
+  "exit": 0,
+  "stdout": "{\n  \"body\": {\n    \"resources\": [\n      {\n        \"ref\": {\n          \"runtimeId\": \"c01a3a7b-6deb-4820-9896-548d14220162\",\n          \"workspaceId\": \"b2c6edcf-bb21-4925-8ccd-6b0e503de5dc\"\n        },\n        \"title\": \"v4-152-r01\"\n      },\n      {\n        \"owner\": {\n          \"projectId\": \"ec480d94-c5e8-44a0-80a0-897945df1a67\",\n          \"projectName\": \"演示项目 · 本地工作\"\n        },\n        \"ref\": {\n          \"runtimeId\": \"c01a3a7b-6deb-4820-9896-548d14220162\",\n          \"workspaceId\": \"56cdbb60-67bc-4f87-bca8-9dcaf46f2976\"\n        },\n        \"title\": \"workspace\"\n      }\n    ],\n    \"status\": \"completed\"\n  },\n  \"http\": 200\n}\n",
+  "stderr": ""
+}

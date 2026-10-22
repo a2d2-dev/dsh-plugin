@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "agent-browser",
+    "--session",
+    "qa152",
+    "screenshot",
+    "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/v4-152-live-acceptance/docs/artifacts/v4-152-preview-evidence-20261022/shots/02-workspace-registered-desktop.png"
+  ],
+  "exit": 0,
+  "stdout": "✓ Screenshot saved to /data/src/github.com/a2d2-dev/dsh-plugin.worktrees/v4-152-live-acceptance/docs/artifacts/v4-152-preview-evidence-20261022/shots/02-workspace-registered-desktop.png\n",
+  "stderr": ""
+}

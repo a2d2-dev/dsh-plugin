@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "agent-browser",
+    "--session",
+    "qa152",
+    "eval",
+    "(async()=>{const output={};for(const kind of ['session','workspace']){const r=await fetch('/api/'+kind+'/list',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:'client-request',rpcId:'qa152-'+kind,method:kind+'/list',payload:{args:{}}})});output[kind]={http:r.status,body:await r.json()}}return output})()"
+  ],
+  "exit": 1,
+  "stdout": "",
+  "stderr": "✗ Evaluation error: SyntaxError: Unexpected token 'o', \"not found\" is not valid JSON\n"
+}

@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "agent-browser",
+    "--session",
+    "qa152",
+    "eval",
+    "(()=>{window.__qa152Traffic=[];const original=window.fetch;window.fetch=async function(input,options){const url=String(input instanceof Request?input.url:input);const record={time:new Date().toISOString(),url:new URL(url,location.href).pathname,method:options?.method||'GET',body:options?.body};window.__qa152Traffic.push(record);try{const response=await original.apply(this,arguments);record.status=response.status;return response}catch(e){record.error=String(e);throw e}};return {installed:true,time:new Date().toISOString()}})()"
+  ],
+  "exit": 0,
+  "stdout": "{\n  \"installed\": true,\n  \"time\": \"2026-10-22T02:11:10.972Z\"\n}\n",
+  "stderr": ""
+}

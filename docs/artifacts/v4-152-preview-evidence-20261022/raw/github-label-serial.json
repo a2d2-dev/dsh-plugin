@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "gh",
+    "label",
+    "create",
+    "qa:v4-152-6b252218-r01-serial",
+    "--repo",
+    "a2d2-dev/dsh-plugin",
+    "--color",
+    "BFDADC",
+    "--description",
+    "专用 v4 #152 验收 v4-152-6b252218-r01"
+  ],
+  "exit": 0,
+  "stdout": "",
+  "stderr": ""
+}
