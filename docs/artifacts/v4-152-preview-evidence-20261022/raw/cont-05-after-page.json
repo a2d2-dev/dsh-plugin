@@ -1,0 +1,27 @@
+{
+  "at": "2026-10-22T03:41:17.961Z",
+  "url": "http://10.126.126.12:18782/",
+  "text": "DSH Local Build\nNew Session\nPlugins\nA²D² 控制面板\nWorkspaces\nv4-152-r01\nNew Session\nCoordinate accepted work and its\n25min\nworkspace\nSettings\nA²D² 控制面板\na2d2-dev/dsh-plugin 仓库\nDSH A²D² Project\n项目管理 v3.0 Project\n＋\n关闭面板\n← 返回 Issue 列表\n\na2d2-dev/dsh-plugin · #157\n\n#157 [QA #152 v4 v4-152-6b252218-r01] P\n在 GitHub 查看来源\n阻塞\n刷新详情\n编辑自动接续设置\n当前执行自动接续\n\n200,000 token 目标\n\n自动接续\n关闭\n启用\n200K\n300K\n提前接续目标（token）\n高级接续设置\n\n这是安全边界上的提前接续目标。宿主会按实际模型窗口和输出预留检查；长轮次可能超过目标。保存后适用于当前执行。\n\n保存接续策略\n概览\n需求与子 Issue\n会话与执行\n接续\n活动\n接续\n自动接续\n已开启\n提前接续目标\n200,000 tokens\n安全余量\n16,000 tokens\n当前上下文观察\n暂无宿主计量\n输出预留\n未知\n执行结算\n相关执行已结算\n\n阈值为提前接续软目标；正式接任仍须宿主维护边界核验。原生 job_output 收取结果后再观察，收取不代表业务验收。\n\n准备接续",
+  "fields": [
+    {
+      "tag": "INPUT",
+      "type": "text",
+      "value": ""
+    },
+    {
+      "tag": "SELECT",
+      "type": "select-one",
+      "value": "on"
+    },
+    {
+      "tag": "INPUT",
+      "type": "number",
+      "value": "200000"
+    },
+    {
+      "tag": "INPUT",
+      "type": "number",
+      "value": "16000"
+    }
+  ]
+}
