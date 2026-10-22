@@ -1,0 +1,10 @@
+{
+  "at": "2026-10-22T02:18:51.632606+00:00",
+  "path": "/data/_dsh-dev/acceptance-workspaces/v4-152-r01/E.proof.json",
+  "sha256": "5a3859f7ab57d2d0408fde36d278894b5409a536db45e1478273efadbdf11a3f",
+  "parse": "passed",
+  "identity": "passed",
+  "decisions": "passed",
+  "exitCode": 0,
+  "source": "external qa152b automated tester; not LF; no E execution identity"
+}

@@ -1,0 +1,15 @@
+{
+  "run": "v4-152-6b252218-r01",
+  "target": "http://10.126.126.12:18782/",
+  "stage": "执行链进行中",
+  "fixtures": {
+    "P": {"issue": 157, "taskId": null, "executionId": null, "sessionId": null, "owner": null, "epoch": null, "status": "入口未进入，待正式 API 复核"},
+    "C": {"issue": 158, "taskId": null, "executionId": null, "sessionId": null, "owner": null, "epoch": null, "status": "未开始"},
+    "E": {"issue": 159, "taskId": null, "executionId": null, "sessionId": null, "owner": null, "epoch": null, "status": "外部交付并已关闭", "proof": "/data/_dsh-dev/acceptance-workspaces/v4-152-r01/E.proof.json", "sha256": "5a3859f7ab57d2d0408fde36d278894b5409a536db45e1478273efadbdf11a3f", "deliveryComment": "https://github.com/a2d2-dev/dsh-plugin/issues/159#issuecomment-6331115575", "verification": "raw/part2-E-verification.json", "closure": "raw/part2-E-closed.json"}
+  },
+  "jobs": [],
+  "continuations": [],
+  "modelRequests": [],
+  "observations": [{"code": "work-record-unavailable", "message": "Local work records could not be accessed safely", "status": "正在复核", "evidence": "raw/part2-initial-entry-failure.json"}],
+  "scope": "只写 part2 证据和 E 专用 proof；不修改 ledger.json/report-part1.md、产品代码或服务。"
+}
