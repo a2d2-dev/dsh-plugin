@@ -2,7 +2,7 @@ import type { GitHubIssue, GitHubProjectItem } from '../work-sources/types.ts'
 
 /** One rendered Project table cell; parts keep real GitHub targets clickable inside the cell text. */
 export interface ProjectFieldCell { text: string; parts?: { label: string; url?: string }[] }
-const date = (value?: string | null) => value ? value.slice(0, 10) : undefined
+const date = (value?: string | null) => value ? value.slice(5, 10) : undefined
 
 /**
  * Project a GitHub Project field value for one item.

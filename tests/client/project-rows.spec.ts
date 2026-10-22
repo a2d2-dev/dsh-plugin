@@ -5,7 +5,7 @@ import type { GitHubIssue, GitHubProjectItem } from '../../src/work-sources/type
 const reference = (nodeId: string, number: number, title: string) => ({ nodeId, number, title, state: 'open' as const, repository: { owner: 'a2d2-dev', repository: 'dsh-plugin' }, url: `https://github.com/a2d2-dev/dsh-plugin/issues/${number}` })
 const issue = (nodeId: string, number: number, parent?: string): GitHubIssue => ({
   nodeId, url: `https://github.com/a2d2-dev/dsh-plugin/issues/${number}`, number, title: `Issue ${number}`, body: null,
-  repository: { owner: 'a2d2-dev', repository: 'dsh-plugin' }, state: 'open', labels: [], assignees: [], updatedAt: '2026-10-22T00:00:00Z', observedAt: '2026-10-22T00:00:00Z',
+  repository: { owner: 'a2d2-dev', repository: 'dsh-plugin' }, state: 'open', labels: [], assignees: [], createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-22T00:00:00Z', observedAt: '2026-10-22T00:00:00Z',
   ...(parent ? { parent: reference(parent, 1, 'Parent') } : {}),
 })
 const item = (nodeId: string): GitHubProjectItem => ({ id: `PVTI_${nodeId}`, kind: 'issue', archived: false, issueNodeId: nodeId, title: nodeId, url: `https://github.com/a2d2-dev/dsh-plugin/issues/${nodeId}`, fields: [], fieldsPartial: false })
@@ -32,4 +32,7 @@ it('hides only fully empty columns and keeps unread field types visible', () => 
   expect(projectColumns(fields, rows).map(field => field.name)).toEqual(['Owner'])
   expect(isEmptyColumn(fields[1]!, rows)).toBe(true)
   expect(isEmptyColumn(fields[3]!, rows)).toBe(false)
+  const wide = [{ id: 'F_repository', name: 'Repository', dataType: 'REPOSITORY' }, { id: 'F_created', name: 'Created', dataType: 'CREATED' }]
+  expect(projectColumns(wide, rows).map(field => field.name)).toEqual([])
+  expect(projectColumns(wide, rows, true).map(field => field.name)).toEqual(['Repository', 'Created'])
 })

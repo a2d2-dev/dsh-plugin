@@ -63,6 +63,7 @@ function SourceOverview({controller,source}:{controller:WorkPanelController;sour
 function ProjectViews({controller,source}:{controller:WorkPanelController;source:WorkSource}) {
   const state=controller.getSnapshot().source,catalog=state.catalog,snapshot=source.projectSnapshot
   const [collapsed,setCollapsed]=useState<ReadonlySet<string>>(()=>new Set())
+  const [extraColumns,setExtraColumns]=useState(false)
   if(!catalog)return <p>尚无真实 Project 视图缓存，请刷新来源。</p>
   const entry=source.entryUrls?.at(-1),url=entry?new URL(entry):undefined
   const entryView=Number(/\/views\/(\d+)/.exec(url?.pathname??'')?.[1])||null
@@ -74,19 +75,19 @@ function ProjectViews({controller,source}:{controller:WorkPanelController;source
   const page=state.viewPage,perPage=25,issues=source.observations.map(item=>item.issue)
   const visible=filtered?.supported?filtered.items:[]
   const rows=orderProjectRows(visible.slice((page-1)*perPage,page*perPage),issues,collapsed)
-  const columns=projectColumns(catalog.fields,orderProjectRows(visible,issues,new Set()))
+  const columns=projectColumns(catalog.fields,orderProjectRows(visible,issues,new Set()),extraColumns)
   const parents=new Set(visible.flatMap(item=>{const parent=issues.find(issue=>issue.nodeId===item.issueNodeId)?.parent?.nodeId;return parent?[parent]:[]}))
   const toggle=(nodeId:string)=>setCollapsed(current=>{const next=new Set(current);if(next.has(nodeId))next.delete(nodeId);else next.add(nodeId);return next})
   return <section><h2>真实 Project 视图与字段</h2><label>视图<select aria-label="Project 视图" value={viewNumber??''} onChange={event=>controller.setProjectView(Number(event.target.value))}>{catalog.views.map(view=><option key={view.id} value={view.number}>{view.name}</option>)}</select></label>
-    <p>{catalog.viewsComplete?'视图与字段目录读取完整':'视图或字段目录为部分观察'} · {view?.layout}</p><p>筛选：<code>{expression||'（无筛选）'}</code></p>
+    <p>{catalog.viewsComplete?'视图与字段目录读取完整':'视图或字段目录为部分观察'} · {view?.layout}</p><p>筛选：<code>{expression||'（无筛选）'}</code> <label><input type="checkbox" checked={extraColumns} onChange={event=>setExtraColumns(event.target.checked)}/> 显示时间与仓库列</label></p>
     {entry&&<p>保存入口：<TrustedLink url={entry}>打开原始 view / 切片</TrustedLink></p>}
     {slice?<p role="alert">已保留原始切片入口；当前未支持此 slice 参数，无法准确呈现该切片，请在 GitHub 查看。</p>:!view?<p role="alert">保存的 view 不在当前可读取目录中，请选择真实视图。</p>:!snapshot?<p role="status">完整 Project 成员扫描尚未完成，请刷新继续；没有用全列表冒充视图。</p>:filtered&&!filtered.supported?<p role="alert">{filtered.reason}</p>:<>
       <p>可见匹配 {filtered?.supported?filtered.items.length:0} 项 · {snapshot?.observedAt} · {snapshot?.items.filter(item=>item.kind==='restricted').length??0} 项权限受限，无法参与精确筛选。</p>
-      {rows.length?<div className={styles.tableScroll}><table className={styles.projectTable} aria-label="真实 Project 条目"><thead><tr><th>条目</th>{columns.map(field=><th key={field.id}>{field.name}</th>)}</tr></thead><tbody>{rows.map(row=><tr key={row.item.id}>
+      {rows.length?<div className={styles.tableScroll}><table className={styles.projectTable} aria-label="真实 Project 条目"><colgroup><col style={{width:'30%'}}/>{columns.map(field=><col key={field.id} style={{width:`${70*columnWeight(field.dataType)/Math.max(1,columns.reduce((total,item)=>total+columnWeight(item.dataType),0))}%`}}/>)}</colgroup><thead><tr><th>条目</th>{columns.map(field=><th key={field.id}>{field.name}</th>)}</tr></thead><tbody>{rows.map(row=><tr key={row.item.id}>
         <td className={styles.titleCell}><div className={styles.hierarchy} style={{paddingLeft:row.depth*22}}>
           {row.item.issueNodeId&&parents.has(row.item.issueNodeId)?<button className={styles.chevron} aria-label={collapsed.has(row.item.issueNodeId!)?'展开子项':'收起子项'} aria-expanded={!collapsed.has(row.item.issueNodeId!)} onClick={()=>toggle(row.item.issueNodeId!)}>{collapsed.has(row.item.issueNodeId!)?'▸':'▾'}</button>:<span className={styles.chevronSpacer}/>}
           <span className={styles.rowState} data-closed={row.issue?.state==='closed'?'true':undefined} title={row.issue?.state==='closed'?'已关闭':'打开'}/>
-          {row.issue?<button className={styles.rowTitle} title={`${row.issue.repository.owner}/${row.issue.repository.repository} #${row.issue.number}`} onClick={()=>void controller.openIssue(row.issue!.number,source.enabled,row.issue!.nodeId)}>#{row.issue.number} {row.issue.title}</button>:row.item.url?<TrustedLink url={row.item.url}>{row.item.title??row.item.kind}</TrustedLink>:row.item.title??({draft:'草稿',restricted:'权限受限',issue:'Issue','pull-request':'PR'} as Record<string,string>)[row.item.kind]}
+          {row.issue?<button className={styles.rowTitle} title={`#${row.issue.number} ${row.issue.title} · ${row.issue.repository.owner}/${row.issue.repository.repository}`} onClick={()=>void controller.openIssue(row.issue!.number,source.enabled,row.issue!.nodeId)}>#{row.issue.number} {row.issue.title}</button>:row.item.url?<TrustedLink url={row.item.url}>{row.item.title??row.item.kind}</TrustedLink>:row.item.title??({draft:'草稿',restricted:'权限受限',issue:'Issue','pull-request':'PR'} as Record<string,string>)[row.item.kind]}
           {row.item.archived&&<span> · 已归档</span>}
         </div></td>
         {columns.map(field=><ProjectCell key={field.id} field={field} row={row} fields={catalog.fields}/>)}
@@ -97,6 +98,8 @@ function ProjectViews({controller,source}:{controller:WorkPanelController;source
   </section>
 }
 type ProjectFieldDefinition = { id: string; name: string; dataType: string; options?: { id: string; name: string; color: string }[] }
+const columnWeights: Record<string, number> = { ASSIGNEES: 12, STATUS: 9, LABELS: 12, LINKED_PULL_REQUESTS: 9, PARENT_ISSUE: 13, SUB_ISSUES_PROGRESS: 18, REPOSITORY: 13, MILESTONE: 10, REVIEWERS: 10, CREATED: 8, UPDATED: 8, CLOSED: 8 }
+const columnWeight = (dataType: string) => columnWeights[dataType] ?? 10
 const chipClasses: Record<string,string> = { GRAY: styles.chipGray, BLUE: styles.chipBlue, GREEN: styles.chipGreen, YELLOW: styles.chipYellow, ORANGE: styles.chipOrange, RED: styles.chipRed, PINK: styles.chipPink, PURPLE: styles.chipPurple }
 const avatarPalette = ['#1f6feb','#8250df','#1a7f37','#bc4c00','#cf222e','#0969da','#bf3989','#57606a']
 function avatarColor(login: string) { let hash = 0; for (const character of login) hash = (hash * 31 + character.charCodeAt(0)) >>> 0; return avatarPalette[hash % avatarPalette.length]! }
@@ -106,7 +109,7 @@ function ProjectCell({field,row,fields}:{field:ProjectFieldDefinition;row:Projec
   if(field.dataType==='ASSIGNEES'){const logins=issue?.assignees??item.facts?.assignees??[];return <td><div className={styles.cellClip}>{logins.length?logins.map(login=><span key={login} style={{whiteSpace:'nowrap',marginRight:8}}><span className={styles.avatar} style={{background:avatarColor(login)}}>{login.slice(0,1)}</span>{login}</span>):'—'}{partial}</div></td>}
   if(field.dataType==='LABELS'){const labels=issue?.labels??item.facts?.labels??[];return <td><div className={styles.cellClip}>{labels.length?labels.map(label=><span key={label} className={styles.labelPill}>{label}</span>):'—'}{partial}</div></td>}
   if(field.dataType==='SUB_ISSUES_PROGRESS'){const summary=issue?.subIssuesSummary,children=issue?.subIssues,total=summary?.total??children?.totalCount;if(!total)return <td><div className={styles.cellClip}>—{partial}</div></td>;const completed=summary?.completed??children?.items.filter(child=>child.state==='closed').length??0,pct=Math.floor(completed/total*100)
-    const segments=Math.min(total,20),filled=Math.round((completed/total)*segments)
+    const segments=Math.min(total,10),filled=Math.round((completed/total)*segments)
     return <td><div className={styles.progress}><div className={styles.progressSegments}>{Array.from({length:segments},(_,index)=><span key={index} className={index<filled?styles.segmentOn:styles.segmentOff}/>)}</div><span className={styles.progressText}>{completed}/{total} · {pct}%{summary===undefined&&children?.hasNextPage?' · 部分观察':''}</span></div></td>}
   const option=fieldOption(fields,field.id,cell.text)
   return <td><div className={styles.cellClip}>{option?<span className={`${styles.chip} ${chipClasses[option.color.toUpperCase()]??styles.chipGray}`}>{cell.text}</span>:cell.parts?cell.parts.map((part,index)=>part.url?<TrustedLink key={index} url={part.url}>{part.label}</TrustedLink>:<span key={index}>{part.label}</span>):cell.text}{partial}</div></td>
