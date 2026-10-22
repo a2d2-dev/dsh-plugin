@@ -1,0 +1,136 @@
+- generic [ref=e1] clickable [onclick]
+  - generic
+    - button "New session" [ref=e3]
+    - button "Collapse sidebar" [ref=e4]
+    - button "New session" [ref=e5]
+      - StaticText "New Session"
+    - navigation "Global panels" [ref=e6]
+      - button "Plugins" [ref=e16]
+        - StaticText "Plugins"
+      - button "A²D² 控制面板" [ref=e17]
+        - StaticText "A²D² 控制面板"
+    - StaticText "Workspaces"
+    - generic [ref=e7] clickable [onclick]
+      - button "Search sessions" [expanded=false, ref=e18]
+      - textbox "Search session names" [ref=e19]
+    - button "View options" [ref=e8]
+    - button "Add workspace" [ref=e9]
+    - generic
+      - tree "Sessions"
+        - generic
+          - treeitem "v4-152-r01" [level=1, expanded=true, ref=e32]
+            - StaticText "v4-152-r01"
+          - treeitem "New Session" [level=1, ref=e33]
+            - StaticText "New Session"
+        - treeitem "workspace" [level=1, expanded=false, ref=e34]
+          - StaticText "workspace"
+    - button "Settings" [expanded=false, ref=e20]
+      - StaticText "Settings"
+    - main "A²D² 控制面板" [ref=e2]
+      - navigation "来源标签" [ref=e10]
+        - strong
+          - StaticText "A²D² 控制面板"
+        - button "a2d2-dev/dsh-plugin 仓库" [ref=e21]
+          - StaticText "a2d2-dev/dsh-plugin 仓库"
+        - button "DSH A²D² Project" [ref=e22]
+          - StaticText "DSH A²D² Project"
+        - button "项目管理 v3.0 Project" [ref=e23]
+          - StaticText "项目管理 v3.0 Project"
+        - button "添加来源" [ref=e24]
+          - StaticText "＋"
+      - button "关闭面板" [ref=e11]
+      - strong
+        - StaticText "DSH A²D²"
+      - StaticText "Project · a2d2-dev / #1 · 组织"
+      - StaticText "读取账号："
+      - StaticText "imneov"
+      - group
+        - DisclosureTriangle "持续委托" [expanded=false]
+          - StaticText "持续委托"
+      - navigation "来源目录" [ref=e12]
+        - button "概览" [ref=e25]
+        - button "项目" [ref=e26]
+        - button "Issue" [ref=e27]
+        - button "PR" [ref=e28]
+      - button "刷新来源" [ref=e13]
+      - button "读取目录缓存" [ref=e14]
+      - StaticText "缓存 / 最后已知观察"
+      - StaticText " · 2026-10-22T03:02:06.942Z"
+      - region "来源概览" [ref=e15]
+        - heading "来源概览" [level=2, ref=e29]
+        - article
+          - StaticText "开放 Issue"
+          - strong
+            - StaticText "43"
+          - paragraph
+            - StaticText "完整扫描的可见收录 · 2026-10-22T03:02:20.697Z"
+        - article
+          - StaticText "PR"
+          - strong
+            - StaticText "62"
+          - paragraph
+            - StaticText "当前范围完整观察"
+        - article
+          - StaticText "处理中"
+          - strong
+            - StaticText "0"
+          - paragraph
+            - StaticText "当前来源已关联的本地工作"
+        - article
+          - StaticText "需要关注"
+          - strong
+            - StaticText "0"
+          - paragraph
+            - StaticText "等待、暂停或阻塞"
+        - group
+          - DisclosureTriangle "需要关注 · 0" [expanded=false]
+            - StaticText "需要关注 · 0"
+        - group
+          - DisclosureTriangle "正在处理 · 0" [expanded=false]
+            - StaticText "正在处理 · 0"
+        - heading "最近进展" [level=3, ref=e30]
+        - list
+          - listitem [level=1]
+            - ListMarker "• "
+            - button "#112 一期：插件托管任务长程运行、主会话接续与事件归属" [ref=e35]
+              - StaticText "#112 一期：插件托管任务长程运行、主会话接续与事件归属"
+            - paragraph
+              - StaticText "尚未开始处理"
+          - listitem [level=1]
+            - ListMarker "• "
+            - button "#124 [A²D² v3/04] GitHub Issue 来源、唯一接入与本地内容保留" [ref=e36]
+              - StaticText "#124 [A²D² v3/04] GitHub Issue 来源、唯一接入与本地内容保留"
+            - paragraph
+              - StaticText "尚未开始处理"
+        - heading "最近外部更新" [level=3, ref=e31]
+        - list
+          - listitem [level=1]
+            - ListMarker "• "
+            - link "a2d2-dev/dsh-plugin#156 docs(qa): prepare isolated v4 acceptance Issue bodies for #152" [ref=e37]
+              - StaticText "a2d2-dev/dsh-plugin#156 docs(qa): prepare isolated v4 acceptance Issue bodies for #152"
+            - StaticText " · 2026-10-22T02:36:08Z"
+          - listitem [level=1]
+            - ListMarker "• "
+            - link "a2d2-dev/dsh-plugin#148 test(v4): prepare existing-instance retention and upgrade acceptance" [ref=e38]
+              - StaticText "a2d2-dev/dsh-plugin#148 test(v4): prepare existing-instance retention and upgrade acceptance"
+            - StaticText " · 2026-10-21T23:29:55Z"
+          - listitem [level=1]
+            - ListMarker "• "
+            - link "a2d2-dev/dsh-plugin#153 docs(v4): define existing-instance delivery and acceptance for #150" [ref=e39]
+              - StaticText "a2d2-dev/dsh-plugin#153 docs(v4): define existing-instance delivery and acceptance for #150"
+            - StaticText " · 2026-10-21T23:22:51Z"
+          - listitem [level=1]
+            - ListMarker "• "
+            - link "a2d2-dev/dsh-plugin#143 feat: deliver Issue-driven work and continuous execution from v4 prototype" [ref=e40]
+              - StaticText "a2d2-dev/dsh-plugin#143 feat: deliver Issue-driven work and continuous execution from v4 prototype"
+            - StaticText " · 2026-10-21T21:58:26Z"
+          - listitem [level=1]
+            - ListMarker "• "
+            - link "a2d2-dev/dsh-plugin#149 feat(v4): 整合工作台并闭合完成与原生子验收边界" [ref=e41]
+              - StaticText "a2d2-dev/dsh-plugin#149 feat(v4): 整合工作台并闭合完成与原生子验收边界"
+            - StaticText " · 2026-10-21T21:49:12Z"
+        - paragraph
+          - StaticText "PR 引用、检查或合并是外部观察，不能替代任务验收。分页 Issue 列表不作为全量统计。"
+      - group
+        - DisclosureTriangle "新执行默认自动接续" [expanded=false]
+          - StaticText "新执行默认自动接续"

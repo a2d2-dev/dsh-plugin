@@ -1,0 +1,24 @@
+{
+  "issue": 152,
+  "browserSession": "qa152e",
+  "previewUrl": "http://10.126.126.12:18782",
+  "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+  "sourceId": "c122502c-1632-4a96-acb5-8adbac61999d",
+  "workspaceId": "b2c6edcf-bb21-4925-8ccd-6b0e503de5dc",
+  "refresh": {
+    "at": "2026-10-22T03:02:05.057Z",
+    "uiClicks": 1,
+    "catalogHttpStatus": 200,
+    "issuesHttpStatus": 200,
+    "requestIds": ["4036622.142", "4036622.143"],
+    "batchDurationsMs": [12988.3, 21910.3],
+    "timingLimitation": "Resource Timing 不含请求体，两项耗时不能分别归属；整批约21.9秒",
+    "workRecordUnavailableVisible": false,
+    "openIssues": 43,
+    "prs": 62
+  },
+  "taskId": null,
+  "sessionId": null,
+  "executionId": null,
+  "remaining": ["项目视图", "Issue筛选分页", "PR", "P真实模型会话", "接续入口", "重开持久性"]
+}
