@@ -1,0 +1,36 @@
+{
+  "command": {
+    "agentPreset": "standard",
+    "assignee": "@me",
+    "commandId": "qa:v4-152-6b252218-r01:serial-configure",
+    "enabled": false,
+    "expectedVersion": 0,
+    "labels": [
+      "qa:v4-152-6b252218-r01-serial"
+    ],
+    "model": {
+      "model": "gpt-6.1-sol",
+      "provider": "codex",
+      "reasoningEffort": "medium"
+    },
+    "permissionPreset": "workspace-write",
+    "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+    "resource": {
+      "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+      "workspaceId": "b2c6edcf-bb21-4925-8ccd-6b0e503de5dc"
+    },
+    "sourceId": "9cea4378-0219-4f99-a237-80f51bd36291",
+    "type": "continuous.configure"
+  },
+  "result": {
+    "body": {
+      "error": {
+        "code": "work-record-unavailable",
+        "message": "Local work records could not be accessed safely"
+      },
+      "status": "failed"
+    },
+    "http": 503
+  },
+  "time": "2026-10-22T02:20:57.263Z"
+}
