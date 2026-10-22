@@ -10,7 +10,7 @@
 - **preview 18782**：组合构建（client `85abb961`）。
 - **产品缺陷**：#163 已修（PR #164 Draft）、#165 已修（`fix/planning-basis-stability` HEAD 4f359b8）、#167 已修（`fix/planner-payload` HEAD 9096e0d）；#166（390×844 横向裁切）只登记未修。均未合并，等维护者。
 - **串行链路已通过（08:08–08:35Z）**：B 完成 → #161 关闭（08:11:28Z）→ A RESUME → #160 关闭（08:34:58Z）。环境侧安装了 `bubblewrap 0.6.1` 让 workspace-write 可用（未放宽权限）。
-- **新缺陷 #168**：持续候选扫描覆盖 `binding.lastObserved`（无 `subIssues`、`<=` 覆盖），导致 `source-children` 采纳 superseded、`done` 被 native-child-scope-incomplete 拒绝；暂停接新可绕过，已登记未修。
+- **新缺陷 #168**：持续候选扫描覆盖 `binding.lastObserved`（无 `subIssues`、`<=` 覆盖），导致 `source-children` 采纳 superseded、`done` 被 native-child-scope-incomplete 拒绝；暂停接新可绕过。修复候选 Draft PR #169（`applyObservedIssue`，54/54 测试 + typecheck 通过，**未在 preview 复验**），等维护者。
 - **#152 仍未完成**：越界 node 拒绝（真实模型两次都拒绝输出候选外节点，守卫只有单元测试实证）、B 模型判断问题；另有 deepseek-flash `max-tokens`（47 候选）模型侧现象。
 
 ## 下一步（按顺序）

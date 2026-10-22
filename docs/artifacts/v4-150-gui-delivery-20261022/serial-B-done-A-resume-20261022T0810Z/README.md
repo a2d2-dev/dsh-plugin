@@ -37,7 +37,9 @@
 - `src/work-sources/repository-candidates.ts:63`：`binding.lastObserved.updatedAt <= issue.updatedAt` → `binding.lastObserved = issue`（等版本也覆盖，且列表观察没有原生子字段）
 - `src/work-organization.ts:30-31`：采纳要求 `observed.observedAt === intent.observedAt`
 - 结果：A 两次按精确 observedAt 采纳都被 `source-observation-superseded` 拒绝，`done` 又被 `native-child-scope-incomplete` 拒绝（实测 `lastObserved.observedAt` 08:24:40.736Z → 08:25:20.404Z 持续前进，`subIssues=null`）。
-- 绕过：`continuous.set-enabled false`（v12）停掉候选扫描后，`lastObserved` 稳定为 `subIssues={items:[],totalCount:0,hasNextPage:false}`，A 一次采纳成功。已开 #168 并给出修复建议（严格更新 + 保留丰富字段，或按 `updatedAt` 做权威校验）。
+- 绕过：`continuous.set-enabled false`（v12）停掉候选扫描后，`lastObserved` 稳定为 `subIssues={items:[],totalCount:0,hasNextPage:false}`，A 一次采纳成功。
+
+修复候选：Draft PR #169（分支 `fix/binding-observation-clobber`，HEAD `fbc0841`，栈在 `fix/planner-payload` 之上）。新增 `applyObservedIssue`：只有严格更新 `updatedAt` 才替换观察，替换时保留已知 `subIssues`；三个写点统一。回归 `tests/work-observation-refresh.spec.ts` 2 项，连同相关 4 个 spec 文件 54/54 通过，`tsc --noEmit` exit 0。**未在 preview 复验**（需要重新构建部署后复跑持续规则开启的父任务完成链路）。
 
 ## 越界 node 拒绝：真实模型侧未触发（未验证）
 

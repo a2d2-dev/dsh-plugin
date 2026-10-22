@@ -171,7 +171,7 @@
 - **B**：真实会话写入 `B.proof.json` 并以 workspace-write 实际执行 JSON/数量/标签/SHA256 校验（全 passed），08:08:22 `done` + `closeExternal`；#161 于 08:11:28Z 关闭（external 先 `unknown`，随后观察为 `closed`）。
 - **A**：正式 `task.control resume`（`RESUME-A-v4-152-6b252218-r01`）后沿用原 session/owner/资源恢复，08:31:59 采纳 #160 完整原生子范围（0 子项），08:32:38 `done` + `closeExternal`；#160 于 08:34:58Z 由宿主 completion outbox 自动关闭（closeout settled，external closed/attempts 1）。
 - **环境修复**：宿主原先没有 workspace-write 沙箱后端。安装 `bubblewrap 0.6.1` 并用产品自身模板实测只读 + workspace-write 均通过后，重启 preview 重新探测；此后 A/B 的 bash 以默认权限成功执行。B 曾发起的 danger-full-access 扩权请求被**拒绝**，未放宽权限。
-- **新缺陷 #168**：持续候选扫描每 ~30s 用不含 `subIssues` 的列表观察覆盖 `binding.lastObserved`（`repository-candidates.ts:63` 用 `<=`），令 `source-children` 采纳必然 `source-observation-superseded`、`done` 被 `native-child-scope-incomplete` 拒绝。暂停接新（rule v12 enabled=false）后一次采纳成功——绕过而非修复；已按建议登记 #168。
+- **新缺陷 #168**：持续候选扫描每 ~30s 用不含 `subIssues` 的列表观察覆盖 `binding.lastObserved`（`repository-candidates.ts:63` 用 `<=`），令 `source-children` 采纳必然 `source-observation-superseded`、`done` 被 `native-child-scope-incomplete` 拒绝。暂停接新（rule v12 enabled=false）后一次采纳成功——绕过而非修复；已登记 #168，并给出修复候选 Draft PR #169（`applyObservedIssue`：严格更新 + 保留 `subIssues`；相关 54/54 测试与 typecheck 通过，**未在 preview 复验**）。
 - **越界 node 拒绝**：用真实模型两次刻意构造，模型均拒绝输出候选外节点（plan v2/v3，HTTP 200），因此 `planning-outside-source` 仍只有单元测试覆盖，**未取得真实模型实证**。
 - **B 模型判断问题**：未消除；B 仍需操作者给出正式槽位事实才推进。
 - **仍未验证**：47 候选 + deepseek-flash 的 `max-tokens`、#166 窄屏裁切、分页稳定、PR 关闭空结果、后台 job 收取分层、关闭冲突补偿。
