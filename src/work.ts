@@ -51,6 +51,30 @@ function sourceIssuesAt(state: WorkSnapshot, ref: TaskRef): import('./work-sourc
     .map(({ lastObserved: issue }) => ({ nodeId: issue.nodeId, url: issue.url, number: issue.number, title: issue.title, repository: issue.repository, state: issue.state }))
 }
 
+const workWriters = new Map<string, Promise<void>>()
+const WORK_WRITE_WAIT_MS = 30_000
+/** Queue local writers before the cross-process lock; both waits share one budget. */
+async function withWorkFileLock<T>(file: string, apply: () => Promise<T>): Promise<T> {
+  const deadline = Date.now() + WORK_WRITE_WAIT_MS
+  const previous = workWriters.get(file) ?? Promise.resolve()
+  let release!: () => void
+  const turn = new Promise<void>(resolve => { release = resolve })
+  const tail = previous.then(() => turn)
+  workWriters.set(file, tail)
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    await Promise.race([previous, new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`atomic-write: timed out waiting for the writer lock at ${file}.lock`)), WORK_WRITE_WAIT_MS)
+    })])
+    clearTimeout(timer)
+    return await withFileLock(file, apply, { waitMs: Math.max(0, deadline - Date.now()) })
+  } finally {
+    clearTimeout(timer)
+    release()
+    void tail.then(() => { if (workWriters.get(file) === tail) workWriters.delete(file) })
+  }
+}
+
 /** Public local work commands and queries. One v3 snapshot is the only writer authority. */
 export class WorkApplication {
   private readonly file: string
@@ -87,7 +111,7 @@ export class WorkApplication {
       if (state.executions.some(item => item.retired?.some(old => old.session.sessionId === sessionId) || (item.continuation?.successor.sessionId === sessionId && item.session.sessionId !== sessionId))) return false
       const execution = state.executions.find(item => item.session.sessionId === sessionId)
       if (mayAdvance(execution) || messages.length === 0) return mayAdvance(execution)
-      return withFileLock(this.file, async () => {
+      return withWorkFileLock(this.file, async () => {
         const current = await this.load()
         const owner = current.executions.find(item => item.session.sessionId === sessionId)
         if (current.executions.some(item => item.retired?.some(old => old.session.sessionId === sessionId))) return false
@@ -151,7 +175,7 @@ export class WorkApplication {
   }
   private async sourceTransaction<T>(apply: (state: WorkSnapshot) => Promise<T>): Promise<T> {
     await mkdir(this.directory, { recursive: true, mode: 0o700 })
-    return withFileLock(this.file, async () => {
+    return withWorkFileLock(this.file, async () => {
       const state = await this.load()
       const before = JSON.stringify(state)
       const result = await apply(state)
@@ -591,7 +615,7 @@ export class WorkApplication {
       catch (error) { return failed(error instanceof WorkExecutionError ? error.code : 'host-admission-failed', error instanceof WorkExecutionError ? error.message : 'Host execution admission failed') }
     }
     await mkdir(this.directory, { recursive: true, mode: 0o700 })
-    const receipt = await withFileLock<WorkResult>(this.file, async () => {
+    const receipt = await withWorkFileLock<WorkResult>(this.file, async () => {
       const state = await this.load()
       if (!actor.operator) {
         const execution = 'executionId' in command ? state.executions.find(item => item.id === command.executionId) : undefined
@@ -613,7 +637,7 @@ export class WorkApplication {
       snapshotSchema.parse(state)
       await writeFileAtomic(this.file, `${JSON.stringify(state)}\n`, { mode: 0o600, dirMode: 0o700 })
       return result
-    }, { waitMs: 30_000 })
+    })
     if ((command.type === 'continuous.configure' || command.type === 'continuous.set-enabled') && receipt.status === 'completed') {
       await this.reconcileContinuous()
       return this.query({ type: 'continuous.status', projectId: command.projectId, sourceId: command.sourceId }, actor)
@@ -866,7 +890,7 @@ export class WorkApplication {
   private async ensureExecution(id: string, commandId: string): Promise<WorkResult> {
     const lease = join(this.directory, `${id}.execution`)
     return withFileLock<WorkResult>(lease, async () => {
-      const save = async (change: (execution: import('./work-types.ts').WorkExecution) => void) => withFileLock(this.file, async () => {
+      const save = async (change: (execution: import('./work-types.ts').WorkExecution) => void) => withWorkFileLock(this.file, async () => {
         const state = await this.load()
         const execution = state.executions.find(item => item.id === id)!
         change(execution)
