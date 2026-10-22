@@ -1,0 +1,129 @@
+DSH Local Build
+New Session
+Plugins
+A²D² 控制面板
+Workspaces
+task-interaction-v3
+New Session
+Running
+继续 v4 交付收尾核对
+12min
+继续完成任务交互原型工作
+37min
+Untitled
+5h
+Untitled
+9h
+Untitled
+14h
+Untitled
+15h
+Show 7 more sessions
+plugin-only-compat
+a2d2-dev
+edge-platform
+runtime-verification
+Settings
+A²D² 控制面板
+a2d2-dev/dsh-plugin 仓库
+＋
+关闭面板
+a2d2-dev/dsh-plugin
+仓库 · a2d2-dev/dsh-plugin
+读取账号：imneov
+持续委托
+持续委托
+
+来源：a2d2-dev/dsh-plugin · 接新工作已暂停
+
+授权范围：所有负责人；标签：不限。暂停接新会保留当前处理与必要收尾。
+
+已保存委托与补充
+补充委托或纠偏
+保存补充
+生成计划预览
+启用此计划
+计划 v1 · 预览
+
+委托范围：仓库 a2d2-dev/dsh-plugin 的完整可见开放 Issue · 来源版本 1 · 授权范围版本 2。浏览视图不改变此范围。
+
+依赖关系：来源接口未公开，状态未知。原生父子关系仅使用已观察事实；权限不可见对象不计作已覆盖。
+
+a2d2-dev/dsh-plugin #152 · [v4/150-02] 原 18782 真实模型与全流程验收
+Block 后续接入
+
+新建执行 · skipped
+
+纳入原因：#152 是用户指定的首项验收补测，处于开放状态；用户说明当前没有已启动工作，且该项符合 assignee 和 label 范围。现有数据未提供其原生父子关系，不能仅凭 QA Issue 标题推定子项或依赖。
+
+下一步：仅启动 #152 的新工作，核对验收要求及原生子项覆盖情况，开展真实模型与全流程补测并记录证据；若发现原生子项覆盖不完整或需要用户确认，暂停该项及后续推进。
+
+Issue is not in an explicitly enabled model plan
+
+a2d2-dev/dsh-plugin #150 · [v4/06] 现有DSH实例交付与真实模型验收（preview → GUI）
+Block 后续接入
+
+等待 / 观察 · skipped
+
+纳入原因：用户要求在 #152 补测后跟进 #150 收口；当前尚未完成前项，且未提供 #150 的完整原生子项覆盖信息，暂不能判定具备收口条件。此顺序来自用户要求，不代表已确认 GitHub 原生依赖。
+
+下一步：等待 #152 补测完成，再核实 #150 的原生子项清单与完成证据；覆盖不完整时继续等待，覆盖完整且所有开放子项处理完毕后重新评估启动收口工作。
+
+Issue is not in an explicitly enabled model plan
+
+a2d2-dev/dsh-plugin #136 · 参考 v4 原型完成 Issue 驱动、统一执行与持续处理整体交付
+Block 后续接入
+
+等待 / 观察 · skipped
+
+纳入原因：#136 属于用户指定的整体交付收口范围，应按要求在前项之后串行处理；当前未提供其完整原生子项覆盖信息，不能根据标题认定子项齐备或整体交付完成。
+
+下一步：等待前述验收及收口步骤完成，核实 #136 的原生子项覆盖和交付证据；先处理确认存在的开放子项，覆盖完整且满足验收要求后再评估整体收口，需要用户确认时暂停。
+
+Issue is not in an explicitly enabled model plan
+
+Block 名单（0）
+执行目录与模型
+概览
+Issue
+PR
+刷新来源
+读取目录缓存
+缓存 / 最后已知观察 · 2026-10-22T03:38:20.905Z
+来源概览
+开放 Issue
+44
+
+GitHub 全仓库计数
+
+PR
+74
+
+当前范围完整观察
+
+处理中
+0
+
+当前来源已关联的本地工作
+
+需要关注
+0
+
+等待、暂停或阻塞
+
+需要关注 · 0
+正在处理 · 0
+最近进展
+
+当前来源尚无已关联的工作进展。
+
+最近外部更新
+a2d2-dev/dsh-plugin#143 feat: deliver Issue-driven work and continuous execution from v4 prototype · 2026-10-22T03:36:08Z
+a2d2-dev/dsh-plugin#156 docs(qa): prepare isolated v4 acceptance Issue bodies for #152 · 2026-10-22T03:24:09Z
+a2d2-dev/dsh-plugin#164 fix(work): unblock the work store under concurrent writers and large projects (#163) · 2026-10-22T02:59:41Z
+a2d2-dev/dsh-plugin#148 test(v4): prepare existing-instance retention and upgrade acceptance · 2026-10-21T23:29:55Z
+a2d2-dev/dsh-plugin#153 docs(v4): define existing-instance delivery and acceptance for #150 · 2026-10-21T23:22:51Z
+
+PR 引用、检查或合并是外部观察，不能替代任务验收。分页 Issue 列表不作为全量统计。
+
+新执行默认自动接续

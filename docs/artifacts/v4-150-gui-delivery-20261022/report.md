@@ -136,3 +136,30 @@
 
 - B 的模型在正确取得宿主推进槽后，仍以「串行槽前置条件缺少可核验回执」为由把自己置为 blocked，未开始 proof 执行；操作者两次正式 `task.input` 提供宿主槽证据（规则 v9 enabled、A=waiting、B=active、active ref=d456f4bc…）后仍未继续。这是**夹具/模型判断**问题，不是调度器缺陷；因此 B 未完成、未关闭 #161，A 的 RESUME 与最终完成也未验证。
 - 越界 node 拒绝（模型输出计划外节点）本轮未构造出真实场景，未验证。
+
+## 十二、最终同 URL 核对：GUI 组合构建与真实模型计划（2026-10-22 07:19–07:31Z）
+
+主会话 #136（父 #150）收尾轮次，全部核对走外部地址 `http://10.126.126.12:18780/`。详细证据与原始文件见 `final-verify-20261022T0730Z/README.md`。
+
+### GUI 已是组合构建
+
+- 切换发生在 06:56Z（受管 runner `systemd-run --on-active` 延迟执行）：`deployments/v4-gui-20261022T065636Z/runner.log` → `RESULT=updated-and-verified`、`LOST_PATHS=0`；因此本轮**不需要**再跑 `v4-gui-runner.sh --execute`。
+- 独立复核：profile `client.js` sha256 = `85abb961…`；CLI pid `749945` cwd = `…/v4-141-release-8282d612`（`git HEAD 8282d61299`）；supervisor command = `python3 …/launch-v4.py`。
+- 浏览器实取 `plugins/??dsh-a2d2/client.js&rev=a7da043b78de`（200，353,942B），还原服务端注入的 sourceMappingURL 行后 sha256 = `85abb961…`，逐字节等于磁盘文件——排除"磁盘新、服务端仍发旧 bundle"。
+
+### 面板 / 来源 / 保留
+
+- 「A²D² 控制面板」在侧栏；五个原工作区与原有会话保留；repo 来源 `a2d2-dev/dsh-plugin`（读取账号 imneov，44 开放 Issue / 74 PR）保留。
+- 按路径集合比对切换前清单：`LOST_PATHS=0`（sessions 208→210 仅新增，storages/a2d2/projects 计数不变）。
+
+### GUI 侧真实模型计划（#167 的 GUI 证明）
+
+- 三次真实 `continuous.preview`：deepseek-flash 32.4s → `planning-execution-mismatch`（模型把 #160 判成 `existing`，而工作库 0 Task/0 Execution）；deepseek-flash ~50s → `planning-model-failed: Model stopped with max-tokens; requestCharacters=16386, candidates=47`；**codex/gpt-6.1-sol 28.4s → HTTP 200，plan v1：3 步，#152 `new` → #150 `wait` → #136 `wait`**。
+- 载荷量：修前约 350–400KB；GUI 侧现 `requestCharacters=16386`（47 候选），落盘 basis 21,835 chars。模型真实返回并被解析，说明 #167 的失败模式在 GUI 消失。
+- 本轮只做预览：规则 v5 `enabled=false`，未创建 Task/Execution。
+
+### 本节新增的未验证项（不得写成通过）
+
+- 47 候选 + deepseek-flash 触发 `max-tokens`（模型输出预算），未定性为产品缺陷。
+- 模型对 canonical 执行存在性的判断与工作库事实不一致（#160 被判 `existing`）。
+- #166 窄屏裁切本轮未复测；分页稳定、PR 关闭空结果、后台 job 分层、关闭冲突补偿沿用前次未验证结论。
