@@ -31,6 +31,9 @@
 .nativeView .surface h2 { font-size: 15px; margin: 0 0 8px; }
 /* The panel's global `details` margin is scoped to another CSS module, so double the hook here. */
 .surface.surface details { margin: 0; }
+.sectionHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sectionHead h2 { margin: 0; }
+.sectionHead .primaryAction { padding: 5px 12px; border-color: transparent; background: var(--dsw-alias-brand-primary, #1f2328); color: var(--dsw-alias-label-primary-inverted, #fff); font-weight: 600; }
 .overview { display: grid; gap: 6px; }
 .sessionShort { font-size: 12px; opacity: .8; }
 .statusTag { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; font-size: 12px; background: color-mix(in srgb, currentColor 10%, transparent); }

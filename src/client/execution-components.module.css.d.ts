@@ -11,6 +11,8 @@ declare const styles: {
   readonly popover: string
   readonly dock: string
   readonly overview: string
+  readonly sectionHead: string
+  readonly primaryAction: string
   readonly sessionShort: string
   readonly statusTag: string
   readonly group: string

@@ -129,7 +129,10 @@ const phases = { reserved: '准备接续', 'material-requested': '等待原段�
 export function ExecutionContinuation({ graph, execution, policy, busy = false, onContinue }: { graph?: ExecutionGraph; execution?: WorkExecution; policy?: ContinuationPolicy; busy?: boolean; onContinue?: () => void }) {
   const op = execution?.continuation
   const observation = execution?.continuationObservation
-  return <section className={styles.surface} aria-label="接续"><h2>接续</h2>
+  return <section className={styles.surface} aria-label="接续">
+    <div className={styles.sectionHead}><h2>接续</h2>
+      {onContinue && <button type="button" className={styles.primaryAction} disabled={busy || !execution?.actual} onClick={onContinue}>{busy ? '正在准备接续…' : op && op.phase !== 'delivered' ? '重试本次接续' : '准备接续'}</button>}
+    </div>
     <dl className={styles.parameters}>
       <dt>自动接续</dt><dd>{policy ? policy.enabled ? '已开启' : '已关闭' : '尚未配置'}</dd>
       <dt>提前接续目标</dt><dd>{policy ? `${policy.targetTokens.toLocaleString('en-US')} tokens` : '未配置'}</dd>
@@ -142,7 +145,6 @@ export function ExecutionContinuation({ graph, execution, policy, busy = false, 
     {graph?.blockers.length ? <ul aria-label="接续等待项">{graph.blockers.map((blocker, index) => <li key={index}>{blocker.code} · {blocker.session.sessionId}{blocker.jobId && ` / ${blocker.jobId}`}</li>)}</ul> : null}
     {op && <article className={styles.card}><h3>{phases[op.phase]}</h3><p>原段：{sessionId(op.source)}</p><p>固定后继：{sessionId(op.successor)}</p><p>{['taken', 'delivered'].includes(op.phase) ? '正式接任已提交，当前入口以有效协调记录为准。' : '原段仍负责，准备后继不切换当前入口。'}</p>{op.error && <p role="alert">{op.error.code}：{op.error.message} · 重试复用同一操作与后继。</p>}{op.material && <details><summary>已保存决定与未完成项</summary><p>决定：{op.material.decisions}</p><p>证据：{op.material.evidence}</p><p>未完成：{op.material.unfinished}</p><p>下一步：{op.material.next}</p></details>}</article>}
     {execution?.continuationBlocked && <p role="status">{execution.continuationBlocked.code}：{execution.continuationBlocked.message}</p>}
-    {onContinue && <button type="button" disabled={busy || !execution?.actual} onClick={onContinue}>{busy ? '正在准备接续…' : op && op.phase !== 'delivered' ? '重试本次接续' : '准备接续'}</button>}
     {!!execution?.continuationHistory?.length && <details><summary>接续历史 · 只读</summary>{execution.continuationHistory.map(item => <p key={item.operationId}>{phases[item.phase]} · {item.source.sessionId} → {item.successor.sessionId}{item.error && ` · ${item.error.message}`}</p>)}</details>}
   </section>
 }
