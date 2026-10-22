@@ -119,7 +119,9 @@ it('refuses a live foreign writer and recovers its dead PID lock without losing 
   const command = { type: 'project.create', commandId: 'after-lock', name: 'After lock' }
   await app.execute({ ...command, commandId: 'before-lock' }, operator)
   const holder = await worker(directory, {}, 'hold-lock')
+  const waitingAt = Date.now()
   await expect(app.execute(command, operator)).rejects.toThrow('timed out waiting for the writer lock')
+  expect(Date.now() - waitingAt).toBeGreaterThanOrEqual(30_000)
   const unchanged = await app.query({ type: 'projects.list' }, operator)
   expect(unchanged.status === 'completed' && unchanged.projects).toHaveLength(1)
   const exited = once(holder.child, 'exit')
@@ -128,7 +130,7 @@ it('refuses a live foreign writer and recovers its dead PID lock without losing 
   expect(await app.execute(command, operator)).toMatchObject({ status: 'completed' })
   const reloaded = await new WorkApplication(directory, host).query({ type: 'projects.list' }, operator)
   expect(reloaded.status === 'completed' && reloaded.projects).toHaveLength(2)
-}, 10_000)
+}, 40_000)
 
 it('fails closed on unknown records and preserves the file rather than resetting accepted data', async () => {
   const directory = await root()
