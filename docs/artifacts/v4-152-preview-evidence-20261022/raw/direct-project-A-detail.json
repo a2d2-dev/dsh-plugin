@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "agent-browser",
+    "--session",
+    "qa152",
+    "eval",
+    "(async()=>{const r=await fetch(\"/a2d2/api/work\",{method:\"POST\",headers:{\"content-type\":\"application/json\"},body:JSON.stringify({\"kind\": \"query\", \"value\": {\"type\": \"source.issue\", \"projectId\": \"ec480d94-c5e8-44a0-80a0-897945df1a67\", \"sourceId\": \"c122502c-1632-4a96-acb5-8adbac61999d\", \"number\": 160, \"nodeId\": \"I_kwDOUmfSE88AAAABY_H0fQ\", \"refresh\": true}})});return {http:r.status,body:await r.json()}})()"
+  ],
+  "exit": 0,
+  "stdout": "{\n  \"body\": {\n    \"error\": {\n      \"code\": \"work-record-unavailable\",\n      \"message\": \"Local work records could not be accessed safely\"\n    },\n    \"status\": \"failed\"\n  },\n  \"http\": 503\n}\n",
+  "stderr": ""
+}

@@ -1,0 +1,16 @@
+{
+  "exit": 0,
+  "validatedAt": "2026-10-22T02:34:55.174775+00:00",
+  "localMarkdownLinks": "all-exist",
+  "json": "all-valid",
+  "screenshots": {
+    "(1440, 1000)": 23,
+    "(390, 844)": 21
+  },
+  "browserWindowStart": "2026-10-22T02:18:16.238000+00:00",
+  "browserWindowEnd": "2026-10-22T02:27:34.038000+00:00",
+  "browserRequests": 300,
+  "browserCommands": 0,
+  "headersAndLoginUrlsExcluded": true,
+  "otherStageFilesExcluded": true
+}

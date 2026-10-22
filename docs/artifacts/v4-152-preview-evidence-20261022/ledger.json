@@ -1,5 +1,5 @@
 {
-  "state": "prepared-workspace-registered-six-issues-four-project-items-no-task-no-execution",
+  "state": "part1-delivered-with-product-defect-163-and-explicit-unverified-items",
   "run": "v4-152-6b252218-r01",
   "workspacePath": "/data/_dsh-dev/acceptance-workspaces/v4-152-r01",
   "resourceRef": {
@@ -153,5 +153,31 @@
     ],
     "verified": true
   },
-  "githubProjectId": "PVT_kwDODqZowM4BnNzF"
+  "githubProjectId": "PVT_kwDODqZowM4BnNzF",
+  "workspaceInitializationSession": "session-df9adec7-379c-482d-bb4d-0f0ccc493351",
+  "workspaceInitializationSessionBlank": true,
+  "snapshotScope": "part1 preparation snapshot; execution identities are maintained separately by part2",
+  "acceptancePart1": {
+    "workspaceRegistered": true,
+    "sixIssuesCreated": true,
+    "nativeSubIssuesConfirmed": true,
+    "fourProjectItemsConfirmed": true,
+    "fourProjectItemsVisibleInCachedIssuePage": true,
+    "canonicalUiReuse": "not-verified-due-to-work-record-unavailable",
+    "refreshConcurrencyDefectObserved": true,
+    "browserWindowRequests": 300,
+    "browserWindowCommands": 0,
+    "newSourceCreated": false,
+    "ruleEnabledByPart1": false,
+    "modelStartedByPart1": false
+  },
+  "workspaceReadmeSha256": "e3bc1e1486f1ec529da2afe8d824b591909fa281d27612d8a397d3b5a9de3d5c",
+  "productDefects": [
+    {
+      "issue": 163,
+      "url": "https://github.com/a2d2-dev/dsh-plugin/issues/163",
+      "code": "work-record-unavailable",
+      "retest": "pending-main-session-redeployment-and-serial-retest"
+    }
+  ]
 }

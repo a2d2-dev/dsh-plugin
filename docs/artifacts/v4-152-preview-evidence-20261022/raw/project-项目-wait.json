@@ -1,0 +1,13 @@
+{
+  "argv": [
+    "agent-browser",
+    "--session",
+    "qa152",
+    "wait",
+    "--load",
+    "networkidle"
+  ],
+  "exit": 0,
+  "stdout": "✓ Done\n",
+  "stderr": ""
+}

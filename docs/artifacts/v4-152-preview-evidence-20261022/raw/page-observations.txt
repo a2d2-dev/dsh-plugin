@@ -1,0 +1,959 @@
+
+===== 16-project-four-fixtures =====
+- generic [ref=e1] clickable [onclick]
+  - generic
+    - button "New session" [ref=e3]
+    - button "Collapse sidebar" [ref=e4]
+    - button "New session" [ref=e5]
+      - StaticText "New Session"
+    - navigation "Global panels" [ref=e6]
+      - button "Plugins" [ref=e13]
+        - StaticText "Plugins"
+      - button "A²D² 控制面板" [ref=e14]
+        - StaticText "A²D² 控制面板"
+    - StaticText "Workspaces"
+    - generic [ref=e7] clickable [onclick]
+      - button "Search sessions" [expanded=false, ref=e15]
+      - textbox "Search session names" [ref=e16]
+    - button "View options" [ref=e8]
+    - button "Add workspace" [ref=e9]
+    - generic
+      - tree "Sessions"
+        - generic
+          - treeitem "v4-152-r01" [level=1, expanded=true, ref=e42]
+            - StaticText "v4-152-r01"
+          - treeitem "New Session" [level=1, ref=e43]
+            - StaticText "New Session"
+        - generic
+          - treeitem "workspace" [level=1, expanded=true, ref=e44]
+            - StaticText "workspace"
+          - treeitem "Untitled 21h" [level=1, ref=e45]
+            - StaticText "Untitled"
+            - StaticText "21h"
+          - treeitem "Untitled 21h" [level=1, ref=e46]
+            - StaticText "Untitled"
+            - StaticText "21h"
+    - button "Settings" [expanded=false, ref=e17]
+      - StaticText "Settings"
+    - main "A²D² 控制面板" [ref=e2]
+      - navigation "来源标签" [ref=e10]
+        - strong
+          - StaticText "A²D² 控制面板"
+        - button "a2d2-dev/dsh-plugin 仓库" [ref=e18]
+          - StaticText "a2d2-dev/dsh-plugin 仓库"
+        - button "DSH A²D² Project" [ref=e19]
+          - StaticText "DSH A²D² Project"
+        - button "项目管理 v3.0 Project" [ref=e20]
+          - StaticText "项目管理 v3.0 Project"
+        - button "添加来源" [ref=e21]
+          - StaticText "＋"
+      - button "关闭面板" [ref=e11]
+      - strong
+        - StaticText "DSH A²D²"
+      - StaticText "Project · a2d2-dev / #1 · 组织"
+      - StaticText "读取账号："
+      - StaticText "imneov"
+      - group
+        - DisclosureTriangle "持续委托" [expanded=false]
+          - StaticText "持续委托"
+      - navigation "来源目录" [ref=e12]
+        - button "概览" [ref=e22]
+        - button "项目" [ref=e23]
+        - button "Issue" [ref=e24]
+        - button "PR" [ref=e25]
+      - generic
+        - heading "Issues" [level=2, ref=e26]
+        - LabelText
+          - StaticText "来源"
+          - combobox "来源" [expanded=false, ref=e32]: DSH A²D²
+            - MenuListPopup
+              - option "a2d2-dev/dsh-plugin" [ref=e61]
+              - option "DSH A²D²" [selected, ref=e62]
+        - form
+          - LabelText
+            - StaticText "搜索当前来源"
+            - textbox "搜索来源 Issues" [ref=e47]
+          - LabelText
+            - StaticText "必须包含的标签"
+            - textbox "Issue 标签" [ref=e48]
+          - button "应用搜索与标签" [ref=e33]
+        - LabelText
+          - StaticText "负责人 "
+          - combobox "Issue 负责人" [expanded=false, ref=e34]: 分配给我
+            - MenuListPopup
+              - option "分配给我" [disabled, ref=e63]
+              - option "全部负责人" [disabled, ref=e64]
+        - LabelText
+          - StaticText "GitHub 状态 "
+          - combobox "Issue 远端状态" [expanded=false, ref=e35]: Open
+            - MenuListPopup
+              - option "Open" [disabled, ref=e65]
+              - option "Closed" [disabled, ref=e66]
+              - option "全部" [disabled, ref=e67]
+        - textbox "搜索当前页 Issues" [ref=e27]: v4-152-6b252218-r01
+          - StaticText "v4-152-6b252218-r01"
+        - button "刷新 Issues" [ref=e28]
+        - navigation "Issue 处理状态" [ref=e29]
+          - button "全部" [ref=e36]
+          - button "未开始" [ref=e37]
+          - button "处理中" [ref=e38]
+          - button "等待" [ref=e39]
+          - button "阻塞" [ref=e40]
+          - button "已完成" [ref=e41]
+        - paragraph
+          - StaticText "缓存 / 最后已知列表 · 第 1 页 · 搜索与处理状态筛选仅作用于当前已载入页（4 / 17 项） · 观察时间：2026-10-22T02:18:59.158Z"
+        - table "GitHub Issue 列表"
+          - rowgroup
+            - row
+              - columnheader "Issue / 原始要求" [ref=e68]
+              - columnheader "进展与下一步" [ref=e69]
+              - columnheader "负责人 / 标签" [ref=e70]
+          - row
+            - cell "#157 [QA #152 v4 v4-152-6b252218-r01] P a2d2-dev/dsh-plugin · GitHub open" [ref=e49]
+              - button "#157 [QA #152 v4 v4-152-6b252218-r01] P" [ref=e71]
+                - StaticText "#157 [QA #152 v4 v4-152-6b252218-r01] P"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub open"
+            - cell "未开始" [ref=e50]
+            - cell "imneov qa:v4-152-6b252218-r01" [ref=e51]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "qa:v4-152-6b252218-r01"
+          - row
+            - cell "#158 [QA #152 v4 v4-152-6b252218-r01] C a2d2-dev/dsh-plugin · GitHub open" [ref=e52]
+              - button "#158 [QA #152 v4 v4-152-6b252218-r01] C" [ref=e72]
+                - StaticText "#158 [QA #152 v4 v4-152-6b252218-r01] C"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub open"
+            - cell "未开始" [ref=e53]
+            - cell "imneov qa:v4-152-6b252218-r01" [ref=e54]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "qa:v4-152-6b252218-r01"
+          - row
+            - cell "#159 [QA #152 v4 v4-152-6b252218-r01] E a2d2-dev/dsh-plugin · GitHub open" [ref=e55]
+              - button "#159 [QA #152 v4 v4-152-6b252218-r01] E" [ref=e73]
+                - StaticText "#159 [QA #152 v4 v4-152-6b252218-r01] E"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub open"
+            - cell "未开始" [ref=e56]
+            - cell "imneov qa:v4-152-6b252218-r01" [ref=e57]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "qa:v4-152-6b252218-r01"
+          - row
+            - cell "#160 [QA #152 v4 v4-152-6b252218-r01] A a2d2-dev/dsh-plugin · GitHub open" [ref=e58]
+              - button "#160 [QA #152 v4 v4-152-6b252218-r01] A" [ref=e74]
+                - StaticText "#160 [QA #152 v4 v4-152-6b252218-r01] A"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub open"
+            - cell "未开始" [ref=e59]
+            - cell "imneov qa:v4-152-6b252218-r01 · qa:v4-152-6b252218-r01-serial · qa:v4-152-6b252218-r01-touch" [ref=e60]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "qa:v4-152-6b252218-r01 · qa:v4-152-6b252218-r01-serial · qa:v4-152-6b252218-r01-touch"
+        - button "上一页" [disabled, ref=e30]
+        - StaticText "第 "
+        - StaticText "1"
+        - StaticText " 页"
+        - button "下一页" [disabled, ref=e31]
+        - group
+          - DisclosureTriangle "来源状态与缓存" [expanded=false]
+            - StaticText "来源状态与缓存"
+      - group
+        - DisclosureTriangle "新执行默认自动接续" [expanded=false]
+          - StaticText "新执行默认自动接续"
+
+
+===== 18-repo-label-search-error =====
+- generic [ref=e1] clickable [onclick]
+  - generic
+    - button "New session" [ref=e3]
+    - button "Collapse sidebar" [ref=e4]
+    - button "New session" [ref=e5]
+      - StaticText "New Session"
+    - navigation "Global panels" [ref=e6]
+      - button "Plugins" [ref=e13]
+        - StaticText "Plugins"
+      - button "A²D² 控制面板" [ref=e14]
+        - StaticText "A²D² 控制面板"
+    - StaticText "Workspaces"
+    - generic [ref=e7] clickable [onclick]
+      - button "Search sessions" [expanded=false, ref=e15]
+      - textbox "Search session names" [ref=e16]
+    - button "View options" [ref=e8]
+    - button "Add workspace" [ref=e9]
+    - generic
+      - tree "Sessions"
+        - generic
+          - treeitem "v4-152-r01" [level=1, expanded=true, ref=e39]
+            - StaticText "v4-152-r01"
+          - treeitem "New Session" [level=1, ref=e40]
+            - StaticText "New Session"
+        - generic
+          - treeitem "workspace" [level=1, expanded=true, ref=e41]
+            - StaticText "workspace"
+          - treeitem "Untitled 21h" [level=1, ref=e42]
+            - StaticText "Untitled"
+            - StaticText "21h"
+          - treeitem "Untitled 21h" [level=1, ref=e43]
+            - StaticText "Untitled"
+            - StaticText "21h"
+    - button "Settings" [expanded=false, ref=e17]
+      - StaticText "Settings"
+    - main "A²D² 控制面板" [ref=e2]
+      - navigation "来源标签" [ref=e10]
+        - strong
+          - StaticText "A²D² 控制面板"
+        - button "a2d2-dev/dsh-plugin 仓库" [ref=e18]
+          - StaticText "a2d2-dev/dsh-plugin 仓库"
+        - button "DSH A²D² Project" [ref=e19]
+          - StaticText "DSH A²D² Project"
+        - button "项目管理 v3.0 Project" [ref=e20]
+          - StaticText "项目管理 v3.0 Project"
+        - button "添加来源" [ref=e21]
+          - StaticText "＋"
+      - button "关闭面板" [ref=e11]
+      - status
+        - StaticText "状态更新暂不可用，保留上次内容：source-page-unobserved: This page has not been retrieved; refresh explicitly"
+      - strong
+        - StaticText "a2d2-dev/dsh-plugin"
+      - StaticText "仓库 · a2d2-dev/dsh-plugin"
+      - StaticText "读取账号："
+      - StaticText "imneov"
+      - group
+        - DisclosureTriangle "持续委托" [expanded=false]
+          - StaticText "持续委托"
+      - navigation "来源目录" [ref=e12]
+        - button "概览" [ref=e22]
+        - button "Issue" [ref=e23]
+        - button "PR" [ref=e24]
+      - generic
+        - heading "Issues" [level=2, ref=e25]
+        - LabelText
+          - StaticText "来源"
+          - combobox "来源" [expanded=false, ref=e29]: a2d2-dev/dsh-plugin
+            - MenuListPopup
+              - option "a2d2-dev/dsh-plugin" [selected, ref=e46]
+              - option "DSH A²D²" [ref=e47]
+        - form
+          - LabelText
+            - StaticText "搜索当前来源"
+            - textbox "搜索来源 Issues" [ref=e44]
+          - LabelText
+            - StaticText "必须包含的标签"
+            - textbox "Issue 标签" [ref=e45]: qa:v4-152-6b252218-r01
+              - StaticText "qa:v4-152-6b252218-r01"
+          - button "应用搜索与标签" [ref=e30]
+        - LabelText
+          - StaticText "负责人 "
+          - combobox "Issue 负责人" [expanded=false, ref=e31]: 分配给我
+            - MenuListPopup
+              - option "分配给我" [disabled, ref=e48]
+              - option "全部负责人" [disabled, ref=e49]
+        - LabelText
+          - StaticText "GitHub 状态 "
+          - combobox "Issue 远端状态" [expanded=false, ref=e32]: Open
+            - MenuListPopup
+              - option "Open" [disabled, ref=e50]
+              - option "Closed" [disabled, ref=e51]
+              - option "全部" [disabled, ref=e52]
+        - textbox "搜索当前页 Issues" [ref=e26]: v4-152-6b252218-r01
+          - StaticText "v4-152-6b252218-r01"
+        - button "刷新 Issues" [ref=e27]
+        - navigation "Issue 处理状态" [ref=e28]
+          - button "全部" [ref=e33]
+          - button "未开始" [ref=e34]
+          - button "处理中" [ref=e35]
+          - button "等待" [ref=e36]
+          - button "阻塞" [ref=e37]
+          - button "已完成" [ref=e38]
+        - paragraph
+          - StaticText "缓存 / 最后已知列表 · 第 1 页 · 搜索与处理状态筛选仅作用于当前已载入页"
+        - paragraph
+          - StaticText "此筛选页尚无可读缓存，请刷新 Issues。读取失败不表示列表为空。"
+        - group
+          - DisclosureTriangle "来源状态与缓存" [expanded=false]
+            - StaticText "来源状态与缓存"
+        - alert
+          - StaticText "work-record-unavailable: Local work records could not be accessed safely"
+      - group
+        - DisclosureTriangle "新执行默认自动接续" [expanded=false]
+          - StaticText "新执行默认自动接续"
+
+
+===== 20-project-open-A-error =====
+- generic [ref=e1] clickable [onclick]
+  - generic
+    - button "New session" [ref=e3]
+    - button "Collapse sidebar" [ref=e4]
+    - button "New session" [ref=e5]
+      - StaticText "New Session"
+    - navigation "Global panels" [ref=e6]
+      - button "Plugins" [ref=e13]
+        - StaticText "Plugins"
+      - button "A²D² 控制面板" [ref=e14]
+        - StaticText "A²D² 控制面板"
+    - StaticText "Workspaces"
+    - generic [ref=e7] clickable [onclick]
+      - button "Search sessions" [expanded=false, ref=e15]
+      - textbox "Search session names" [ref=e16]
+    - button "View options" [ref=e8]
+    - button "Add workspace" [ref=e9]
+    - generic
+      - tree "Sessions"
+        - generic
+          - treeitem "v4-152-r01" [level=1, expanded=true, ref=e42]
+            - StaticText "v4-152-r01"
+          - treeitem "New Session" [level=1, ref=e43]
+            - StaticText "New Session"
+        - generic
+          - treeitem "workspace" [level=1, expanded=true, ref=e44]
+            - StaticText "workspace"
+          - treeitem "Untitled 21h" [level=1, ref=e45]
+            - StaticText "Untitled"
+            - StaticText "21h"
+          - treeitem "Untitled 21h" [level=1, ref=e46]
+            - StaticText "Untitled"
+            - StaticText "21h"
+    - button "Settings" [expanded=false, ref=e17]
+      - StaticText "Settings"
+    - main "A²D² 控制面板" [ref=e2]
+      - navigation "来源标签" [ref=e10]
+        - strong
+          - StaticText "A²D² 控制面板"
+        - button "a2d2-dev/dsh-plugin 仓库" [ref=e18]
+          - StaticText "a2d2-dev/dsh-plugin 仓库"
+        - button "DSH A²D² Project" [ref=e19]
+          - StaticText "DSH A²D² Project"
+        - button "项目管理 v3.0 Project" [ref=e20]
+          - StaticText "项目管理 v3.0 Project"
+        - button "添加来源" [ref=e21]
+          - StaticText "＋"
+      - button "关闭面板" [ref=e11]
+      - strong
+        - StaticText "DSH A²D²"
+      - StaticText "Project · a2d2-dev / #1 · 组织"
+      - StaticText "读取账号："
+      - StaticText "imneov"
+      - group
+        - DisclosureTriangle "持续委托" [expanded=false]
+          - StaticText "持续委托"
+      - navigation "来源目录" [ref=e12]
+        - button "概览" [ref=e22]
+        - button "项目" [ref=e23]
+        - button "Issue" [ref=e24]
+        - button "PR" [ref=e25]
+      - generic
+        - heading "Issues" [level=2, ref=e26]
+        - LabelText
+          - StaticText "来源"
+          - combobox "来源" [expanded=false, ref=e32]: DSH A²D²
+            - MenuListPopup
+              - option "a2d2-dev/dsh-plugin" [ref=e61]
+              - option "DSH A²D²" [selected, ref=e62]
+        - form
+          - LabelText
+            - StaticText "搜索当前来源"
+            - textbox "搜索来源 Issues" [ref=e47]
+          - LabelText
+            - StaticText "必须包含的标签"
+            - textbox "Issue 标签" [ref=e48]: qa:v4-152-6b252218-r01
+              - StaticText "qa:v4-152-6b252218-r01"
+          - button "应用搜索与标签" [ref=e33]
+        - LabelText
+          - StaticText "负责人 "
+          - combobox "Issue 负责人" [expanded=false, ref=e34]: 分配给我
+            - MenuListPopup
+              - option "分配给我" [disabled, ref=e63]
+              - option "全部负责人" [disabled, ref=e64]
+        - LabelText
+          - StaticText "GitHub 状态 "
+          - combobox "Issue 远端状态" [expanded=false, ref=e35]: Open
+            - MenuListPopup
+              - option "Open" [disabled, ref=e65]
+              - option "Closed" [disabled, ref=e66]
+              - option "全部" [disabled, ref=e67]
+        - textbox "搜索当前页 Issues" [ref=e27]: v4-152-6b252218-r01
+          - StaticText "v4-152-6b252218-r01"
+        - button "刷新 Issues" [ref=e28]
+        - navigation "Issue 处理状态" [ref=e29]
+          - button "全部" [ref=e36]
+          - button "未开始" [ref=e37]
+          - button "处理中" [ref=e38]
+          - button "等待" [ref=e39]
+          - button "阻塞" [ref=e40]
+          - button "已完成" [ref=e41]
+        - paragraph
+          - StaticText "缓存 / 最后已知列表 · 第 1 页 · 搜索与处理状态筛选仅作用于当前已载入页（4 / 4 项） · 观察时间：2026-10-22T02:18:59.158Z"
+        - table "GitHub Issue 列表"
+          - rowgroup
+            - row
+              - columnheader "Issue / 原始要求" [ref=e68]
+              - columnheader "进展与下一步" [ref=e69]
+              - columnheader "负责人 / 标签" [ref=e70]
+          - row
+            - cell "#157 [QA #152 v4 v4-152-6b252218-r01] P a2d2-dev/dsh-plugin · GitHub open" [ref=e49]
+              - button "#157 [QA #152 v4 v4-152-6b252218-r01] P" [ref=e71]
+                - StaticText "#157 [QA #152 v4 v4-152-6b252218-r01] P"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub open"
+            - cell "未开始" [ref=e50]
+            - cell "imneov qa:v4-152-6b252218-r01" [ref=e51]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "qa:v4-152-6b252218-r01"
+          - row
+            - cell "#158 [QA #152 v4 v4-152-6b252218-r01] C a2d2-dev/dsh-plugin · GitHub open" [ref=e52]
+              - button "#158 [QA #152 v4 v4-152-6b252218-r01] C" [ref=e72]
+                - StaticText "#158 [QA #152 v4 v4-152-6b252218-r01] C"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub open"
+            - cell "未开始" [ref=e53]
+            - cell "imneov qa:v4-152-6b252218-r01" [ref=e54]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "qa:v4-152-6b252218-r01"
+          - row
+            - cell "#159 [QA #152 v4 v4-152-6b252218-r01] E a2d2-dev/dsh-plugin · GitHub open" [ref=e55]
+              - button "#159 [QA #152 v4 v4-152-6b252218-r01] E" [ref=e73]
+                - StaticText "#159 [QA #152 v4 v4-152-6b252218-r01] E"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub open"
+            - cell "未开始" [ref=e56]
+            - cell "imneov qa:v4-152-6b252218-r01" [ref=e57]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "qa:v4-152-6b252218-r01"
+          - row
+            - cell "#160 [QA #152 v4 v4-152-6b252218-r01] A a2d2-dev/dsh-plugin · GitHub open" [ref=e58]
+              - button "#160 [QA #152 v4 v4-152-6b252218-r01] A" [ref=e74]
+                - StaticText "#160 [QA #152 v4 v4-152-6b252218-r01] A"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub open"
+            - cell "未开始" [ref=e59]
+            - cell "imneov qa:v4-152-6b252218-r01 · qa:v4-152-6b252218-r01-serial · qa:v4-152-6b252218-r01-touch" [ref=e60]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "qa:v4-152-6b252218-r01 · qa:v4-152-6b252218-r01-serial · qa:v4-152-6b252218-r01-touch"
+        - button "上一页" [disabled, ref=e30]
+        - StaticText "第 "
+        - StaticText "1"
+        - StaticText " 页"
+        - button "下一页" [disabled, ref=e31]
+        - group
+          - DisclosureTriangle "来源状态与缓存" [expanded=false]
+            - StaticText "来源状态与缓存"
+        - alert
+          - StaticText "work-record-unavailable: Local work records could not be accessed safely"
+      - group
+        - DisclosureTriangle "新执行默认自动接续" [expanded=false]
+          - StaticText "新执行默认自动接续"
+
+
+===== 21-project-local-empty =====
+- generic [ref=e1] clickable [onclick]
+  - generic
+    - button "New session" [ref=e3]
+    - button "Collapse sidebar" [ref=e4]
+    - button "New session" [ref=e5]
+      - StaticText "New Session"
+    - navigation "Global panels" [ref=e6]
+      - button "Plugins" [ref=e13]
+        - StaticText "Plugins"
+      - button "A²D² 控制面板" [ref=e14]
+        - StaticText "A²D² 控制面板"
+    - StaticText "Workspaces"
+    - generic [ref=e7] clickable [onclick]
+      - button "Search sessions" [expanded=false, ref=e15]
+      - textbox "Search session names" [ref=e16]
+    - button "View options" [ref=e8]
+    - button "Add workspace" [ref=e9]
+    - generic
+      - tree "Sessions"
+        - generic
+          - treeitem "v4-152-r01" [level=1, expanded=true, ref=e42]
+            - StaticText "v4-152-r01"
+          - treeitem "New Session" [level=1, ref=e43]
+            - StaticText "New Session"
+        - generic
+          - treeitem "workspace" [level=1, expanded=true, ref=e44]
+            - StaticText "workspace"
+          - treeitem "Untitled 21h" [level=1, ref=e45]
+            - StaticText "Untitled"
+            - StaticText "21h"
+          - treeitem "Untitled 21h" [level=1, ref=e46]
+            - StaticText "Untitled"
+            - StaticText "21h"
+    - button "Settings" [expanded=false, ref=e17]
+      - StaticText "Settings"
+    - main "A²D² 控制面板" [ref=e2]
+      - navigation "来源标签" [ref=e10]
+        - strong
+          - StaticText "A²D² 控制面板"
+        - button "a2d2-dev/dsh-plugin 仓库" [ref=e18]
+          - StaticText "a2d2-dev/dsh-plugin 仓库"
+        - button "DSH A²D² Project" [ref=e19]
+          - StaticText "DSH A²D² Project"
+        - button "项目管理 v3.0 Project" [ref=e20]
+          - StaticText "项目管理 v3.0 Project"
+        - button "添加来源" [ref=e21]
+          - StaticText "＋"
+      - button "关闭面板" [ref=e11]
+      - strong
+        - StaticText "DSH A²D²"
+      - StaticText "Project · a2d2-dev / #1 · 组织"
+      - StaticText "读取账号："
+      - StaticText "imneov"
+      - group
+        - DisclosureTriangle "持续委托" [expanded=false]
+          - StaticText "持续委托"
+      - navigation "来源目录" [ref=e12]
+        - button "概览" [ref=e22]
+        - button "项目" [ref=e23]
+        - button "Issue" [ref=e24]
+        - button "PR" [ref=e25]
+      - generic
+        - heading "Issues" [level=2, ref=e26]
+        - LabelText
+          - StaticText "来源"
+          - combobox "来源" [expanded=false, ref=e32]: DSH A²D²
+            - MenuListPopup
+              - option "a2d2-dev/dsh-plugin" [ref=e49]
+              - option "DSH A²D²" [selected, ref=e50]
+        - form
+          - LabelText
+            - StaticText "搜索当前来源"
+            - textbox "搜索来源 Issues" [ref=e47]
+          - LabelText
+            - StaticText "必须包含的标签"
+            - textbox "Issue 标签" [ref=e48]: qa:v4-152-6b252218-r01
+              - StaticText "qa:v4-152-6b252218-r01"
+          - button "应用搜索与标签" [ref=e33]
+        - LabelText
+          - StaticText "负责人 "
+          - combobox "Issue 负责人" [expanded=false, ref=e34]: 分配给我
+            - MenuListPopup
+              - option "分配给我" [disabled, ref=e51]
+              - option "全部负责人" [disabled, ref=e52]
+        - LabelText
+          - StaticText "GitHub 状态 "
+          - combobox "Issue 远端状态" [expanded=false, ref=e35]: Open
+            - MenuListPopup
+              - option "Open" [disabled, ref=e53]
+              - option "Closed" [disabled, ref=e54]
+              - option "全部" [disabled, ref=e55]
+        - textbox "搜索当前页 Issues" [ref=e27]: NO-MATCH-v4-152-6b252218-r01
+          - StaticText "NO-MATCH-v4-152-6b252218-r01"
+        - button "刷新 Issues" [ref=e28]
+        - navigation "Issue 处理状态" [ref=e29]
+          - button "全部" [ref=e36]
+          - button "未开始" [ref=e37]
+          - button "处理中" [ref=e38]
+          - button "等待" [ref=e39]
+          - button "阻塞" [ref=e40]
+          - button "已完成" [ref=e41]
+        - paragraph
+          - StaticText "缓存 / 最后已知列表 · 第 1 页 · 搜索与处理状态筛选仅作用于当前已载入页（0 / 4 项） · 观察时间：2026-10-22T02:18:59.158Z"
+        - table "GitHub Issue 列表"
+          - rowgroup
+            - row
+              - columnheader "Issue / 原始要求" [ref=e56]
+              - columnheader "进展与下一步" [ref=e57]
+              - columnheader "负责人 / 标签" [ref=e58]
+        - paragraph
+          - StaticText "当前页没有匹配筛选的 Issue。"
+        - button "上一页" [disabled, ref=e30]
+        - StaticText "第 "
+        - StaticText "1"
+        - StaticText " 页"
+        - button "下一页" [disabled, ref=e31]
+        - group
+          - DisclosureTriangle "来源状态与缓存" [expanded=false]
+            - StaticText "来源状态与缓存"
+        - alert
+          - StaticText "work-record-unavailable: Local work records could not be accessed safely"
+      - group
+        - DisclosureTriangle "新执行默认自动接续" [expanded=false]
+          - StaticText "新执行默认自动接续"
+
+
+===== 22-repo-overview-final =====
+- generic [ref=e1] clickable [onclick]
+  - generic
+    - button "New session" [ref=e3]
+    - button "Collapse sidebar" [ref=e4]
+    - button "New session" [ref=e5]
+      - StaticText "New Session"
+    - navigation "Global panels" [ref=e6]
+      - button "Plugins" [ref=e16]
+        - StaticText "Plugins"
+      - button "A²D² 控制面板" [ref=e17]
+        - StaticText "A²D² 控制面板"
+    - StaticText "Workspaces"
+    - generic [ref=e7] clickable [onclick]
+      - button "Search sessions" [expanded=false, ref=e18]
+      - textbox "Search session names" [ref=e19]
+    - button "View options" [ref=e8]
+    - button "Add workspace" [ref=e9]
+    - generic
+      - tree "Sessions"
+        - generic
+          - treeitem "v4-152-r01" [level=1, expanded=true, ref=e31]
+            - StaticText "v4-152-r01"
+          - treeitem "New Session" [level=1, ref=e32]
+            - StaticText "New Session"
+        - generic
+          - treeitem "workspace" [level=1, expanded=true, ref=e33]
+            - StaticText "workspace"
+          - treeitem "Untitled 21h" [level=1, ref=e34]
+            - StaticText "Untitled"
+            - StaticText "21h"
+          - treeitem "Untitled 21h" [level=1, ref=e35]
+            - StaticText "Untitled"
+            - StaticText "21h"
+    - button "Settings" [expanded=false, ref=e20]
+      - StaticText "Settings"
+    - main "A²D² 控制面板" [ref=e2]
+      - navigation "来源标签" [ref=e10]
+        - strong
+          - StaticText "A²D² 控制面板"
+        - button "a2d2-dev/dsh-plugin 仓库" [ref=e21]
+          - StaticText "a2d2-dev/dsh-plugin 仓库"
+        - button "DSH A²D² Project" [ref=e22]
+          - StaticText "DSH A²D² Project"
+        - button "项目管理 v3.0 Project" [ref=e23]
+          - StaticText "项目管理 v3.0 Project"
+        - button "添加来源" [ref=e24]
+          - StaticText "＋"
+      - button "关闭面板" [ref=e11]
+      - status
+        - StaticText "状态更新暂不可用，保留上次内容：source-page-unobserved: This page has not been retrieved; refresh explicitly"
+      - strong
+        - StaticText "a2d2-dev/dsh-plugin"
+      - StaticText "仓库 · a2d2-dev/dsh-plugin"
+      - StaticText "读取账号："
+      - StaticText "imneov"
+      - group
+        - DisclosureTriangle "持续委托" [expanded=false]
+          - StaticText "持续委托"
+      - navigation "来源目录" [ref=e12]
+        - button "概览" [ref=e25]
+        - button "Issue" [ref=e26]
+        - button "PR" [ref=e27]
+      - button "刷新来源" [ref=e13]
+      - button "读取目录缓存" [ref=e14]
+      - StaticText "缓存 / 最后已知观察"
+      - StaticText " · 2026-10-22T02:23:49.226Z"
+      - region "来源概览" [ref=e15]
+        - heading "来源概览" [level=2, ref=e28]
+        - article
+          - StaticText "开放 Issue"
+          - strong
+            - StaticText "45"
+          - paragraph
+            - StaticText "GitHub 全仓库计数"
+        - article
+          - StaticText "PR"
+          - strong
+            - StaticText "73"
+          - paragraph
+            - StaticText "当前范围完整观察"
+        - article
+          - StaticText "处理中"
+          - strong
+            - StaticText "0"
+          - paragraph
+            - StaticText "当前来源已关联的本地工作"
+        - article
+          - StaticText "需要关注"
+          - strong
+            - StaticText "0"
+          - paragraph
+            - StaticText "等待、暂停或阻塞"
+        - group
+          - DisclosureTriangle "需要关注 · 0" [expanded=false]
+            - StaticText "需要关注 · 0"
+        - group
+          - DisclosureTriangle "正在处理 · 0" [expanded=false]
+            - StaticText "正在处理 · 0"
+        - heading "最近进展" [level=3, ref=e29]
+        - list
+          - listitem [level=1]
+            - ListMarker "• "
+            - button "#112 一期：插件托管任务长程运行、主会话接续与事件归属" [ref=e36]
+              - StaticText "#112 一期：插件托管任务长程运行、主会话接续与事件归属"
+            - paragraph
+              - StaticText "尚未开始处理"
+          - listitem [level=1]
+            - ListMarker "• "
+            - button "#124 [A²D² v3/04] GitHub Issue 来源、唯一接入与本地内容保留" [ref=e37]
+              - StaticText "#124 [A²D² v3/04] GitHub Issue 来源、唯一接入与本地内容保留"
+            - paragraph
+              - StaticText "尚未开始处理"
+        - heading "最近外部更新" [level=3, ref=e30]
+        - list
+          - listitem [level=1]
+            - ListMarker "• "
+            - link "a2d2-dev/dsh-plugin#148 test(v4): prepare existing-instance retention and upgrade acceptance" [ref=e38]
+              - StaticText "a2d2-dev/dsh-plugin#148 test(v4): prepare existing-instance retention and upgrade acceptance"
+            - StaticText " · 2026-10-21T23:29:55Z"
+          - listitem [level=1]
+            - ListMarker "• "
+            - link "a2d2-dev/dsh-plugin#153 docs(v4): define existing-instance delivery and acceptance for #150" [ref=e39]
+              - StaticText "a2d2-dev/dsh-plugin#153 docs(v4): define existing-instance delivery and acceptance for #150"
+            - StaticText " · 2026-10-21T23:22:51Z"
+          - listitem [level=1]
+            - ListMarker "• "
+            - link "a2d2-dev/dsh-plugin#156 docs(qa): prepare isolated v4 acceptance Issue bodies for #152" [ref=e40]
+              - StaticText "a2d2-dev/dsh-plugin#156 docs(qa): prepare isolated v4 acceptance Issue bodies for #152"
+            - StaticText " · 2026-10-21T23:03:08Z"
+          - listitem [level=1]
+            - ListMarker "• "
+            - link "a2d2-dev/dsh-plugin#143 feat: deliver Issue-driven work and continuous execution from v4 prototype" [ref=e41]
+              - StaticText "a2d2-dev/dsh-plugin#143 feat: deliver Issue-driven work and continuous execution from v4 prototype"
+            - StaticText " · 2026-10-21T21:58:26Z"
+          - listitem [level=1]
+            - ListMarker "• "
+            - link "a2d2-dev/dsh-plugin#149 feat(v4): 整合工作台并闭合完成与原生子验收边界" [ref=e42]
+              - StaticText "a2d2-dev/dsh-plugin#149 feat(v4): 整合工作台并闭合完成与原生子验收边界"
+            - StaticText " · 2026-10-21T21:49:12Z"
+        - paragraph
+          - StaticText "PR 引用、检查或合并是外部观察，不能替代任务验收。分页 Issue 列表不作为全量统计。"
+      - group
+        - DisclosureTriangle "新执行默认自动接续" [expanded=false]
+          - StaticText "新执行默认自动接续"
+
+
+===== 23-repo-list-final =====
+- generic [ref=e1] clickable [onclick]
+  - generic
+    - button "New session" [ref=e3]
+    - button "Collapse sidebar" [ref=e4]
+    - button "New session" [ref=e5]
+      - StaticText "New Session"
+    - navigation "Global panels" [ref=e6]
+      - button "Plugins" [ref=e13]
+        - StaticText "Plugins"
+      - button "A²D² 控制面板" [ref=e14]
+        - StaticText "A²D² 控制面板"
+    - StaticText "Workspaces"
+    - generic [ref=e7] clickable [onclick]
+      - button "Search sessions" [expanded=false, ref=e15]
+      - textbox "Search session names" [ref=e16]
+    - button "View options" [ref=e8]
+    - button "Add workspace" [ref=e9]
+    - generic
+      - tree "Sessions"
+        - generic
+          - treeitem "v4-152-r01" [level=1, expanded=true, ref=e39]
+            - StaticText "v4-152-r01"
+          - treeitem "New Session" [level=1, ref=e40]
+            - StaticText "New Session"
+        - generic
+          - treeitem "workspace" [level=1, expanded=true, ref=e41]
+            - StaticText "workspace"
+          - treeitem "Untitled 21h" [level=1, ref=e42]
+            - StaticText "Untitled"
+            - StaticText "21h"
+          - treeitem "Untitled 21h" [level=1, ref=e43]
+            - StaticText "Untitled"
+            - StaticText "21h"
+    - button "Settings" [expanded=false, ref=e17]
+      - StaticText "Settings"
+    - main "A²D² 控制面板" [ref=e2]
+      - navigation "来源标签" [ref=e10]
+        - strong
+          - StaticText "A²D² 控制面板"
+        - button "a2d2-dev/dsh-plugin 仓库" [ref=e18]
+          - StaticText "a2d2-dev/dsh-plugin 仓库"
+        - button "DSH A²D² Project" [ref=e19]
+          - StaticText "DSH A²D² Project"
+        - button "项目管理 v3.0 Project" [ref=e20]
+          - StaticText "项目管理 v3.0 Project"
+        - button "添加来源" [ref=e21]
+          - StaticText "＋"
+      - button "关闭面板" [ref=e11]
+      - strong
+        - StaticText "a2d2-dev/dsh-plugin"
+      - StaticText "仓库 · a2d2-dev/dsh-plugin"
+      - StaticText "读取账号："
+      - StaticText "imneov"
+      - group
+        - DisclosureTriangle "持续委托" [expanded=false]
+          - StaticText "持续委托"
+      - navigation "来源目录" [ref=e12]
+        - button "概览" [ref=e22]
+        - button "Issue" [ref=e23]
+        - button "PR" [ref=e24]
+      - generic
+        - heading "Issues" [level=2, ref=e25]
+        - LabelText
+          - StaticText "来源"
+          - combobox "来源" [expanded=false, ref=e29]: a2d2-dev/dsh-plugin
+            - MenuListPopup
+              - option "a2d2-dev/dsh-plugin" [selected, ref=e46]
+              - option "DSH A²D²" [ref=e47]
+        - form
+          - LabelText
+            - StaticText "搜索当前来源"
+            - textbox "搜索来源 Issues" [ref=e44]
+          - LabelText
+            - StaticText "必须包含的标签"
+            - textbox "Issue 标签" [ref=e45]: qa:v4-152-6b252218-r01
+              - StaticText "qa:v4-152-6b252218-r01"
+          - button "应用搜索与标签" [disabled, ref=e30]
+        - LabelText
+          - StaticText "负责人 "
+          - combobox "Issue 负责人" [expanded=false, disabled, ref=e31]: 分配给我
+            - MenuListPopup
+              - option "分配给我" [disabled, ref=e48]
+              - option "全部负责人" [disabled, ref=e49]
+        - LabelText
+          - StaticText "GitHub 状态 "
+          - combobox "Issue 远端状态" [expanded=false, disabled, ref=e32]: Open
+            - MenuListPopup
+              - option "Open" [disabled, ref=e50]
+              - option "Closed" [disabled, ref=e51]
+              - option "全部" [disabled, ref=e52]
+        - textbox "搜索当前页 Issues" [ref=e26]: v4-152-6b252218-r01
+          - StaticText "v4-152-6b252218-r01"
+        - button "刷新 Issues" [disabled, ref=e27]
+        - navigation "Issue 处理状态" [ref=e28]
+          - button "全部" [ref=e33]
+          - button "未开始" [ref=e34]
+          - button "处理中" [ref=e35]
+          - button "等待" [ref=e36]
+          - button "阻塞" [ref=e37]
+          - button "已完成" [ref=e38]
+        - paragraph
+          - StaticText "缓存 / 最后已知列表 · 第 1 页 · 搜索与处理状态筛选仅作用于当前已载入页"
+        - group
+          - DisclosureTriangle "来源状态与缓存" [expanded=false]
+            - StaticText "来源状态与缓存"
+        - status
+          - StaticText "正在读取 Issues…"
+      - group
+        - DisclosureTriangle "新执行默认自动接续" [expanded=false]
+          - StaticText "新执行默认自动接续"
+
+
+===== 24-switch-final-project =====
+- generic [ref=e1] clickable [onclick]
+  - generic
+    - button "New session" [ref=e3]
+    - button "Collapse sidebar" [ref=e4]
+    - button "New session" [ref=e5]
+      - StaticText "New Session"
+    - navigation "Global panels" [ref=e6]
+      - button "Plugins" [ref=e16]
+        - StaticText "Plugins"
+      - button "A²D² 控制面板" [ref=e17]
+        - StaticText "A²D² 控制面板"
+    - StaticText "Workspaces"
+    - generic [ref=e7] clickable [onclick]
+      - button "Search sessions" [expanded=false, ref=e18]
+      - textbox "Search session names" [ref=e19]
+    - button "View options" [ref=e8]
+    - button "Add workspace" [ref=e9]
+    - generic
+      - tree "Sessions"
+        - generic
+          - treeitem "v4-152-r01" [level=1, expanded=true, ref=e31]
+            - StaticText "v4-152-r01"
+          - treeitem "New Session" [level=1, ref=e32]
+            - StaticText "New Session"
+        - generic
+          - treeitem "workspace" [level=1, expanded=true, ref=e33]
+            - StaticText "workspace"
+          - treeitem "Untitled 21h" [level=1, ref=e34]
+            - StaticText "Untitled"
+            - StaticText "21h"
+          - treeitem "Untitled 21h" [level=1, ref=e35]
+            - StaticText "Untitled"
+            - StaticText "21h"
+    - button "Settings" [expanded=false, ref=e20]
+      - StaticText "Settings"
+    - main "A²D² 控制面板" [ref=e2]
+      - navigation "来源标签" [ref=e10]
+        - strong
+          - StaticText "A²D² 控制面板"
+        - button "a2d2-dev/dsh-plugin 仓库" [ref=e21]
+          - StaticText "a2d2-dev/dsh-plugin 仓库"
+        - button "DSH A²D² Project" [ref=e22]
+          - StaticText "DSH A²D² Project"
+        - button "项目管理 v3.0 Project" [ref=e23]
+          - StaticText "项目管理 v3.0 Project"
+        - button "添加来源" [ref=e24]
+          - StaticText "＋"
+      - button "关闭面板" [ref=e11]
+      - strong
+        - StaticText "DSH A²D²"
+      - StaticText "Project · a2d2-dev / #1 · 组织"
+      - StaticText "读取账号："
+      - StaticText "imneov"
+      - group
+        - DisclosureTriangle "持续委托" [expanded=false]
+          - StaticText "持续委托"
+      - navigation "来源目录" [ref=e12]
+        - button "概览" [ref=e25]
+        - button "项目" [ref=e26]
+        - button "Issue" [ref=e27]
+        - button "PR" [ref=e28]
+      - button "刷新来源" [disabled, ref=e13]
+      - button "读取目录缓存" [disabled, ref=e14]
+      - StaticText "缓存 / 最后已知观察"
+      - StaticText " · 尚无目录缓存"
+      - status
+        - StaticText "正在读取来源目录…"
+      - region "来源概览" [ref=e15]
+        - heading "来源概览" [level=2, ref=e29]
+        - article
+          - StaticText "开放 Issue"
+          - strong
+            - StaticText "43"
+          - paragraph
+            - StaticText "完整扫描的可见收录 · 2026-10-22T02:25:11.288Z"
+        - article
+          - StaticText "PR"
+          - strong
+            - StaticText "—"
+          - paragraph
+            - StaticText "尚未完整观察"
+        - article
+          - StaticText "处理中"
+          - strong
+            - StaticText "—"
+          - paragraph
+            - StaticText "本地工作聚合尚未读取"
+        - article
+          - StaticText "需要关注"
+          - strong
+            - StaticText "—"
+          - paragraph
+            - StaticText "本地工作聚合尚未读取"
+        - group
+          - DisclosureTriangle "需要关注 · —" [expanded=false]
+            - StaticText "需要关注 · —"
+        - group
+          - DisclosureTriangle "正在处理 · —" [expanded=false]
+            - StaticText "正在处理 · —"
+        - heading "最近进展" [level=3, ref=e30]
+        - list
+          - listitem [level=1]
+            - ListMarker "• "
+            - button "#112 一期：插件托管任务长程运行、主会话接续与事件归属" [ref=e36]
+              - StaticText "#112 一期：插件托管任务长程运行、主会话接续与事件归属"
+            - paragraph
+              - StaticText "尚未开始处理"
+          - listitem [level=1]
+            - ListMarker "• "
+            - button "#124 [A²D² v3/04] GitHub Issue 来源、唯一接入与本地内容保留" [ref=e37]
+              - StaticText "#124 [A²D² v3/04] GitHub Issue 来源、唯一接入与本地内容保留"
+            - paragraph
+              - StaticText "尚未开始处理"
+        - paragraph
+          - StaticText "PR 引用、检查或合并是外部观察，不能替代任务验收。分页 Issue 列表不作为全量统计。"
+      - group
+        - DisclosureTriangle "新执行默认自动接续" [expanded=false]
+          - StaticText "新执行默认自动接续"

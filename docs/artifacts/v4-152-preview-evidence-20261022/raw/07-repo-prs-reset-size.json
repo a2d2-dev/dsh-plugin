@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "agent-browser",
+    "--session",
+    "qa152",
+    "set",
+    "viewport",
+    "1440",
+    "1000"
+  ],
+  "exit": 0,
+  "stdout": "✓ Done\n",
+  "stderr": ""
+}

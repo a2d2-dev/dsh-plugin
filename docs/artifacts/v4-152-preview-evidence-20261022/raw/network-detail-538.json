@@ -1,0 +1,14 @@
+{
+  "exit": 0,
+  "data": {
+    "method": "POST",
+    "mimeType": "application/json",
+    "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":true}}",
+    "requestId": "3809542.538",
+    "resourceType": "Fetch",
+    "responseBody": "{\"status\":\"failed\",\"error\":{\"code\":\"work-record-unavailable\",\"message\":\"Local work records could not be accessed safely\"}}",
+    "status": 503,
+    "timestamp": 1792635297949,
+    "url": "http://10.126.126.12:18782/a2d2/api/work"
+  }
+}

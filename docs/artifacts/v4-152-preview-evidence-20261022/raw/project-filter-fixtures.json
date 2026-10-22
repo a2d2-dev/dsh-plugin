@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "agent-browser",
+    "--session",
+    "qa152",
+    "find",
+    "role",
+    "textbox",
+    "fill",
+    "v4-152-6b252218-r01",
+    "--name",
+    "搜索当前页 Issues",
+    "--exact"
+  ],
+  "exit": 1,
+  "stdout": "",
+  "stderr": "✗ Element not found. Verify the selector is correct and the element exists in the DOM.\n"
+}

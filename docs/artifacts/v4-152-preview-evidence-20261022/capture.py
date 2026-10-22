@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """本 run 命令证据；不记录登录请求、cookie 或口令。"""
 import subprocess,json,sys
+sys.dont_write_bytecode=True
 from pathlib import Path
 ROOT=Path(__file__).resolve().parent
 
 def run(name,args):
  p=subprocess.run(args,capture_output=True,text=True)
- (ROOT/'raw'/f'{name}.json').write_text(json.dumps({'argv':args,'exit':p.returncode,'stdout':p.stdout,'stderr':p.stderr},ensure_ascii=False,indent=2))
+ (ROOT/'raw'/f'{name.replace(chr(47), chr(95))}.json').write_text(json.dumps({'argv':args,'exit':p.returncode,'stdout':p.stdout,'stderr':p.stderr},ensure_ascii=False,indent=2))
  print(name,'exit',p.returncode)
  if p.returncode: raise SystemExit(p.stderr)
  return p.stdout

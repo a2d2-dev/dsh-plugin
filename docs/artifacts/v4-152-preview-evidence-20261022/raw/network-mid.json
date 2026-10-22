@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "agent-browser",
+    "--session",
+    "qa152",
+    "eval",
+    "window.__qa152Traffic"
+  ],
+  "exit": 0,
+  "stdout": "[\n  {\n    \"body\": \"{\\\"type\\\":\\\"client-request\\\",\\\"rpcId\\\":\\\"qa152-before-valid\\\",\\\"method\\\":\\\"session/list\\\",\\\"payload\\\":{\\\"args\\\":{\\\"_request\\\":{}}}}\",\n    \"method\": \"POST\",\n    \"status\": 200,\n    \"time\": \"2026-10-22T02:11:32.226Z\",\n    \"url\": \"/api/session/list\"\n  }\n]\n",
+  "stderr": ""
+}

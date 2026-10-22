@@ -1,0 +1,11 @@
+{
+  "argv": [
+    "agent-browser",
+    "--session",
+    "qa152",
+    "snapshot"
+  ],
+  "exit": 0,
+  "stdout": "- generic [ref=e1] clickable [onclick]\n  - generic\n    - button \"Open sidebar\" [ref=e3]\n    - button \"New session\" [ref=e4]\n    - navigation \"Global panels\" [ref=e5]\n      - button \"Plugins\" [ref=e12]\n      - button \"A²D² 控制面板\" [ref=e13]\n    - generic\n      - button \"Add workspace\" [ref=e14]\n    - button \"Search sessions\" [ref=e6]\n    - button \"Settings\" [expanded=false, ref=e15]\n    - main \"A²D² 控制面板\" [ref=e2]\n      - navigation \"来源标签\" [ref=e7]\n        - strong\n          - StaticText \"A²D² 控制面板\"\n        - button \"a2d2-dev/dsh-plugin 仓库\" [ref=e16]\n          - StaticText \"a2d2-dev/dsh-plugin 仓库\"\n        - button \"DSH A²D² Project\" [ref=e17]\n          - StaticText \"DSH A²D² Project\"\n        - button \"项目管理 v3.0 Project\" [ref=e18]\n          - StaticText \"项目管理 v3.0 Project\"\n        - button \"添加来源\" [ref=e19]\n          - StaticText \"＋\"\n      - button \"关闭面板\" [ref=e8]\n      - strong\n        - StaticText \"DSH A²D²\"\n      - StaticText \"Project · a2d2-dev / #1 · 组织\"\n      - StaticText \"读取账号：\"\n      - StaticText \"imneov\"\n      - group\n        - DisclosureTriangle \"持续委托\" [expanded=false]\n          - StaticText \"持续委托\"\n      - navigation \"来源目录\" [ref=e9]\n        - button \"概览\" [ref=e20]\n        - button \"项目\" [ref=e21]\n        - button \"Issue\" [ref=e22]\n        - button \"PR\" [ref=e23]\n      - button \"刷新来源\" [disabled, ref=e10]\n      - button \"读取目录缓存\" [disabled, ref=e11]\n      - StaticText \"缓存 / 最后已知观察\"\n      - StaticText \" · 尚无目录缓存\"\n      - status\n        - StaticText \"正在读取来源目录…\"\n      - paragraph\n        - StaticText \"尚无真实 Project 视图缓存，请刷新来源。\"\n      - group\n        - DisclosureTriangle \"新执行默认自动接续\" [expanded=false]\n          - StaticText \"新执行默认自动接续\"\n",
+  "stderr": ""
+}

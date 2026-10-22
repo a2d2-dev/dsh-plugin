@@ -1,0 +1,2954 @@
+{
+  "command": "agent-browser --session qa152 network requests --json",
+  "exit": 0,
+  "requests": [
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.676",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635496238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.677",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635496238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.678",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635496238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.679",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635497439,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.680",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635501239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.681",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635501239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.682",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635501239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.683",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635502439,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.684",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635507438,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.catalog\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"refresh\":false}}",
+      "requestId": "3809542.685",
+      "resourceType": "Fetch",
+      "status": 400,
+      "timestamp": 1792635511139,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.686",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635515465,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.687",
+      "resourceType": "Fetch",
+      "timestamp": 1792635516238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.688",
+      "resourceType": "Fetch",
+      "timestamp": 1792635516238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.689",
+      "resourceType": "Fetch",
+      "timestamp": 1792635516238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.690",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635516976,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.691",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635521400,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.692",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635526238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.693",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635526238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.694",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635526238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.695",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635527438,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.696",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635531238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.697",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635531238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.698",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635531238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.699",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635532442,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.700",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635536238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.701",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635536238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.702",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635536238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.703",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635537438,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.704",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635546238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.705",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635546238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.706",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635546238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.707",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635547438,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.708",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635551238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.709",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635551239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.710",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635551239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.711",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635552438,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.712",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635556339,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.713",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635556339,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.714",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635556339,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.715",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635557438,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.716",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635561238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.717",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635561238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.718",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635561238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.719",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635562438,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.720",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635566238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.721",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635566238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.722",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635566238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.723",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635567438,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.724",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635571239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.725",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635571239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.726",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635571239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.727",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635572438,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.728",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635576238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.729",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635576238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.730",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635576238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.731",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635577439,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.732",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635582439,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.733",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635586239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.734",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635586239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.735",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635586239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.736",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635587450,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.737",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635591239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.738",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635591239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.739",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635591239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.740",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635597438,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.741",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635601239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.742",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635601239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.743",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635601239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.744",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635602438,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.745",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635606238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.746",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635606238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.747",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635606238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.748",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635607439,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.749",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635611239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.750",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635611239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.751",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635611239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.752",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635612438,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.753",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635616239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.754",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635616239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.755",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635616239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.756",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635617438,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.757",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635621348,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.758",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635621348,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.759",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635621348,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.760",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635622415,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.761",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635627438,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.762",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635631238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.763",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635631238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.764",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635631238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.765",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635632438,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.766",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635636238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.767",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635636238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.768",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635636238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.769",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635637438,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.770",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635646238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.771",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635646238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.772",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635646238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.773",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635647439,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.774",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635651239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.775",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635651239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.776",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635651239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.777",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635652438,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.778",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635661239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.779",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635661239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.780",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635661239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.781",
+      "resourceType": "Fetch",
+      "timestamp": 1792635662438,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.782",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635664246,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.783",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635664246,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":true}}",
+      "requestId": "3809542.784",
+      "resourceType": "Fetch",
+      "status": 503,
+      "timestamp": 1792635664463,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.785",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635669238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.786",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635671238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.787",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635671238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.788",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635671238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.789",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635674239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.790",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635676238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.791",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635676238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.792",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635676238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.793",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635679239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.794",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635684239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.795",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635686240,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.796",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635686240,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.797",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635686240,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.798",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635689239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.799",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635694240,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.800",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635696238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.801",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635696238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.802",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635696238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.803",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635699238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.804",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635701239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.805",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635701239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.806",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635701239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.807",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635704239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.808",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635709238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.809",
+      "resourceType": "Fetch",
+      "timestamp": 1792635711239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.810",
+      "resourceType": "Fetch",
+      "timestamp": 1792635711239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "3809542.811",
+      "resourceType": "Fetch",
+      "timestamp": 1792635711239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":true}}",
+      "requestId": "3809542.812",
+      "resourceType": "Fetch",
+      "status": 503,
+      "timestamp": 1792635713539,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.813",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635714238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.814",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635721239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.815",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635721239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.816",
+      "resourceType": "Fetch",
+      "status": 400,
+      "timestamp": 1792635721239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.817",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635724239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.818",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635726239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.819",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635726239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.820",
+      "resourceType": "Fetch",
+      "status": 400,
+      "timestamp": 1792635726239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.821",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635729238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.822",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635731239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.823",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635731239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.824",
+      "resourceType": "Fetch",
+      "status": 400,
+      "timestamp": 1792635731239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.825",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635734238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.826",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635736238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.827",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635736238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.828",
+      "resourceType": "Fetch",
+      "status": 400,
+      "timestamp": 1792635736238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.829",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635739239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.830",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635746339,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.831",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635746339,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.832",
+      "resourceType": "Fetch",
+      "status": 400,
+      "timestamp": 1792635746339,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.833",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635749239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.834",
+      "resourceType": "Fetch",
+      "timestamp": 1792635756239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.835",
+      "resourceType": "Fetch",
+      "timestamp": 1792635756239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.836",
+      "resourceType": "Fetch",
+      "timestamp": 1792635756239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.837",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635759239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.838",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635769239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.839",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635774238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.840",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635779238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.identify\",\"url\":\"https://github.com/a2d2-dev/dsh-plugin\"}}",
+      "requestId": "3809542.841",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635787953,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.842",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635789238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.843",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635794239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.844",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635799239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.845",
+      "resourceType": "Fetch",
+      "timestamp": 1792635809339,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.846",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635814148,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.847",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635814149,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":true}}",
+      "requestId": "3809542.848",
+      "resourceType": "Fetch",
+      "status": 503,
+      "timestamp": 1792635814339,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.849",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635819139,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.850",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635824038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.851",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635824039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.852",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635824039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issue\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"number\":160,\"nodeId\":\"I_kwDOUmfSE88AAAABY_H0fQ\",\"refresh\":false}}",
+      "requestId": "3809542.853",
+      "resourceType": "Fetch",
+      "status": 400,
+      "timestamp": 1792635830832,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.854",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635830832,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issue\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"number\":160,\"nodeId\":\"I_kwDOUmfSE88AAAABY_H0fQ\",\"refresh\":false}}",
+      "requestId": "3809542.855",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635837782,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.856",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635837782,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.857",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635837782,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.858",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635837783,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.859",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635837783,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.860",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635844039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.861",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635844039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.862",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635844039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.863",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635844138,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.864",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635854039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.865",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635854039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.866",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635854039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.867",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635854138,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.868",
+      "resourceType": "Fetch",
+      "timestamp": 1792635864038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.869",
+      "resourceType": "Fetch",
+      "timestamp": 1792635864038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.870",
+      "resourceType": "Fetch",
+      "timestamp": 1792635864038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.871",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635864138,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issue\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"number\":160,\"refresh\":true,\"nodeId\":\"I_kwDOUmfSE88AAAABY_H0fQ\"}}",
+      "requestId": "3809542.872",
+      "resourceType": "Fetch",
+      "status": 503,
+      "timestamp": 1792635866438,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.873",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635869138,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.874",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635874039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.875",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635874039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.876",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635874039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.877",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635879038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.878",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635879038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.879",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635879038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.880",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635879138,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.881",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635889038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.882",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635889038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.883",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635889038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.884",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635889138,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.885",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635899038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.886",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635899038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.887",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635899038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.888",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635899139,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.889",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635904138,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.890",
+      "resourceType": "Fetch",
+      "timestamp": 1792635908977,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.891",
+      "resourceType": "Fetch",
+      "timestamp": 1792635908977,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.892",
+      "resourceType": "Fetch",
+      "timestamp": 1792635908977,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.893",
+      "resourceType": "Fetch",
+      "timestamp": 1792635909139,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.894",
+      "resourceType": "Fetch",
+      "status": 400,
+      "timestamp": 1792635912039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.895",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635912039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.catalog\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"refresh\":false}}",
+      "requestId": "3809542.896",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635918238,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.897",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635922039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.898",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635924038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.899",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635924038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.900",
+      "resourceType": "Fetch",
+      "status": 400,
+      "timestamp": 1792635924038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.901",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635927038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.902",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635934039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.903",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635934039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.904",
+      "resourceType": "Fetch",
+      "status": 400,
+      "timestamp": 1792635934039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.905",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635937040,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.906",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635944038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.907",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635944038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.908",
+      "resourceType": "Fetch",
+      "status": 400,
+      "timestamp": 1792635944038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.909",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635947039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.910",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635949038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.911",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635949038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.912",
+      "resourceType": "Fetch",
+      "status": 400,
+      "timestamp": 1792635949038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.913",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635952038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.914",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635959038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.915",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635959038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.916",
+      "resourceType": "Fetch",
+      "status": 400,
+      "timestamp": 1792635959038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.917",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635962038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.918",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635967038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.919",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635969038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.920",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635969038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.921",
+      "resourceType": "Fetch",
+      "status": 400,
+      "timestamp": 1792635969038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.922",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635972038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.923",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635977039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.924",
+      "resourceType": "Fetch",
+      "timestamp": 1792635979039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.925",
+      "resourceType": "Fetch",
+      "timestamp": 1792635979039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.926",
+      "resourceType": "Fetch",
+      "timestamp": 1792635979039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\"}}",
+      "requestId": "3809542.927",
+      "resourceType": "Fetch",
+      "timestamp": 1792635982038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":true}}",
+      "requestId": "3809542.928",
+      "resourceType": "Fetch",
+      "status": 503,
+      "timestamp": 1792635982239,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.929",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635984040,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.930",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635984040,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.catalog\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"refresh\":false}}",
+      "requestId": "3809542.931",
+      "resourceType": "Fetch",
+      "status": 400,
+      "timestamp": 1792635991838,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.932",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635994038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.933",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635999038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.934",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635999038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.935",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792635999038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.936",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636004038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.937",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636009040,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.938",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636009040,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.939",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636009040,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.940",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636014039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.941",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636014039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.942",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636014039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.943",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636014039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.944",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636019038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.945",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636019039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.946",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636019039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.947",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636019039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.948",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636024039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.949",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636024039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.950",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636024039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.951",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636024039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.952",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636029038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.953",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636029038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.954",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636029038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.955",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636029038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.956",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636034039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.957",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636034039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.958",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636034039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.959",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636034039,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.960",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636039038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.961",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636039038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.962",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636039038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.963",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636039038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.964",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636044038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.965",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636044038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.966",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636044038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.967",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636044038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.968",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636049038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.969",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636049038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.970",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636049038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.971",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792636049038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.972",
+      "resourceType": "Fetch",
+      "timestamp": 1792636054038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "3809542.973",
+      "resourceType": "Fetch",
+      "timestamp": 1792636054038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "requestId": "3809542.974",
+      "resourceType": "Fetch",
+      "timestamp": 1792636054038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "3809542.975",
+      "resourceType": "Fetch",
+      "timestamp": 1792636054038,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    }
+  ]
+}

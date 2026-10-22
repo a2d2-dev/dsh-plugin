@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "agent-browser",
+    "--session",
+    "qa152",
+    "find",
+    "role",
+    "button",
+    "click",
+    "--name",
+    "a2d2-dev/dsh-plugin 仓库",
+    "--exact"
+  ],
+  "exit": 0,
+  "stdout": "✓ Done\n",
+  "stderr": ""
+}

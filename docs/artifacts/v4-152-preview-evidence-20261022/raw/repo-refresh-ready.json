@@ -1,0 +1,13 @@
+{
+  "argv": [
+    "agent-browser",
+    "--session",
+    "qa152",
+    "wait",
+    "--fn",
+    "!document.querySelector(\"main\")?.innerText.includes(\"正在读取 Issue\")"
+  ],
+  "exit": 0,
+  "stdout": "true\n",
+  "stderr": ""
+}

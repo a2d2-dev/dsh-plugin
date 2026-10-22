@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "agent-browser",
+    "--session",
+    "qa152",
+    "find",
+    "text",
+    "来源状态与缓存",
+    "click",
+    "--exact"
+  ],
+  "exit": 0,
+  "stdout": "✓ Done\n",
+  "stderr": ""
+}

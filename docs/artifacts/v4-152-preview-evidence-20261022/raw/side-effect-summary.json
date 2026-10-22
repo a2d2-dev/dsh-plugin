@@ -1,0 +1,200 @@
+{
+  "capturedAt": "2026-10-22T02:27:35.335428+00:00",
+  "requests": 300,
+  "workKinds": {
+    "query": 300
+  },
+  "workTypes": {
+    "project.detail": 65,
+    "source.list": 65,
+    "source.issues": 74,
+    "continuous.status": 89,
+    "source.catalog": 3,
+    "source.identify": 1,
+    "source.issue": 3
+  },
+  "commands": [],
+  "failedRequests": [
+    {
+      "requestId": "3809542.685",
+      "status": 400,
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.catalog\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"refresh\":false}}",
+      "error": {
+        "code": "source-catalog-unobserved",
+        "message": "目录尚无可读缓存，请刷新来源"
+      }
+    },
+    {
+      "requestId": "3809542.784",
+      "status": 503,
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":true}}",
+      "error": {
+        "code": "work-record-unavailable",
+        "message": "Local work records could not be accessed safely"
+      }
+    },
+    {
+      "requestId": "3809542.812",
+      "status": 503,
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":true}}",
+      "error": {
+        "code": "work-record-unavailable",
+        "message": "Local work records could not be accessed safely"
+      }
+    },
+    {
+      "requestId": "3809542.816",
+      "status": 400,
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "error": {
+        "code": "source-page-unobserved",
+        "message": "This page has not been retrieved; refresh explicitly"
+      }
+    },
+    {
+      "requestId": "3809542.820",
+      "status": 400,
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "error": {
+        "code": "source-page-unobserved",
+        "message": "This page has not been retrieved; refresh explicitly"
+      }
+    },
+    {
+      "requestId": "3809542.824",
+      "status": 400,
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "error": {
+        "code": "source-page-unobserved",
+        "message": "This page has not been retrieved; refresh explicitly"
+      }
+    },
+    {
+      "requestId": "3809542.828",
+      "status": 400,
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "error": {
+        "code": "source-page-unobserved",
+        "message": "This page has not been retrieved; refresh explicitly"
+      }
+    },
+    {
+      "requestId": "3809542.832",
+      "status": 400,
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "error": {
+        "code": "source-page-unobserved",
+        "message": "This page has not been retrieved; refresh explicitly"
+      }
+    },
+    {
+      "requestId": "3809542.848",
+      "status": 503,
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":true}}",
+      "error": {
+        "code": "work-record-unavailable",
+        "message": "Local work records could not be accessed safely"
+      }
+    },
+    {
+      "requestId": "3809542.853",
+      "status": 400,
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issue\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"number\":160,\"nodeId\":\"I_kwDOUmfSE88AAAABY_H0fQ\",\"refresh\":false}}",
+      "error": {
+        "code": "source-content-unavailable",
+        "message": "Issue content has never been retrieved"
+      }
+    },
+    {
+      "requestId": "3809542.872",
+      "status": 503,
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issue\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"number\":160,\"refresh\":true,\"nodeId\":\"I_kwDOUmfSE88AAAABY_H0fQ\"}}",
+      "error": {
+        "code": "work-record-unavailable",
+        "message": "Local work records could not be accessed safely"
+      }
+    },
+    {
+      "requestId": "3809542.894",
+      "status": 400,
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "error": {
+        "code": "source-page-unobserved",
+        "message": "This page has not been retrieved; refresh explicitly"
+      }
+    },
+    {
+      "requestId": "3809542.900",
+      "status": 400,
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "error": {
+        "code": "source-page-unobserved",
+        "message": "This page has not been retrieved; refresh explicitly"
+      }
+    },
+    {
+      "requestId": "3809542.904",
+      "status": 400,
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "error": {
+        "code": "source-page-unobserved",
+        "message": "This page has not been retrieved; refresh explicitly"
+      }
+    },
+    {
+      "requestId": "3809542.908",
+      "status": 400,
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "error": {
+        "code": "source-page-unobserved",
+        "message": "This page has not been retrieved; refresh explicitly"
+      }
+    },
+    {
+      "requestId": "3809542.912",
+      "status": 400,
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "error": {
+        "code": "source-page-unobserved",
+        "message": "This page has not been retrieved; refresh explicitly"
+      }
+    },
+    {
+      "requestId": "3809542.916",
+      "status": 400,
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "error": {
+        "code": "source-page-unobserved",
+        "message": "This page has not been retrieved; refresh explicitly"
+      }
+    },
+    {
+      "requestId": "3809542.921",
+      "status": 400,
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":false}}",
+      "error": {
+        "code": "source-page-unobserved",
+        "message": "This page has not been retrieved; refresh explicitly"
+      }
+    },
+    {
+      "requestId": "3809542.928",
+      "status": 503,
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"9cea4378-0219-4f99-a237-80f51bd36291\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"labels\":[\"qa:v4-152-6b252218-r01\"],\"refresh\":true}}",
+      "error": {
+        "code": "work-record-unavailable",
+        "message": "Local work records could not be accessed safely"
+      }
+    },
+    {
+      "requestId": "3809542.931",
+      "status": 400,
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.catalog\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"refresh\":false}}",
+      "error": {
+        "code": "source-catalog-unobserved",
+        "message": "目录尚无可读缓存，请刷新来源"
+      }
+    }
+  ],
+  "nonWorkRequests": []
+}

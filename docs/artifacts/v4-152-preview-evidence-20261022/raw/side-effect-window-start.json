@@ -1,0 +1,5 @@
+{
+  "command": "agent-browser --session qa152 network requests --clear",
+  "exit": 0,
+  "note": "旧网络缓存可能包含登录URL，故不写原stdout；此后窗口只执行来源浏览与只读查询。"
+}

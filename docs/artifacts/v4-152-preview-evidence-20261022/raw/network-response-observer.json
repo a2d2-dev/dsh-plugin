@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "agent-browser",
+    "--session",
+    "qa152",
+    "eval",
+    "(()=>{const prior=window.fetch;window.fetch=async function(input,options){const response=await prior.apply(this,arguments);if(String(input).includes('/a2d2/api/work')){const entry=window.__qa152Traffic.at(-1);entry.response=await response.clone().text()}return response};return {responseCapture:true}})()"
+  ],
+  "exit": 0,
+  "stdout": "{\n  \"responseCapture\": true\n}\n",
+  "stderr": ""
+}

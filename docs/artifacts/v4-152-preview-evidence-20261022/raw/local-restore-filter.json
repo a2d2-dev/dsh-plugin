@@ -1,0 +1,13 @@
+{
+  "argv": [
+    "agent-browser",
+    "--session",
+    "qa152",
+    "fill",
+    "input[aria-label=\"搜索当前页 Issues\"]",
+    "v4-152-6b252218-r01"
+  ],
+  "exit": 0,
+  "stdout": "✓ Done\n",
+  "stderr": ""
+}
