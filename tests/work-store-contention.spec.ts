@@ -28,8 +28,28 @@ async function open() {
   return { directory, app: new WorkApplication(directory, noHost) }
 }
 
+async function largeStore(directory: string, app: WorkApplication) {
+  const result = await app.execute({ type: 'project.create', commandId: 'large-project', name: 'Large Project' }, operator)
+  if (result.status !== 'completed' || !result.project) throw new Error('Expected project')
+  await app.execute({ type: 'source.configure-project', commandId: 'large-source', projectId: result.project.id,
+    githubProject: { owner: 'a2d2-dev', type: 'org', number: 1 } }, operator)
+  const file = join(directory, 'work-v3.json'), state = JSON.parse(await readFile(file, 'utf8'))
+  const issues = Array.from({ length: 3000 }, (_, index) => ({ nodeId: `I_${index + 1}`, number: index + 1, title: `Issue ${index + 1}`,
+    body: 'Accepted observation '.repeat(205), repository: { owner: 'a2d2-dev', repository: 'dsh-plugin' },
+    url: `https://github.com/a2d2-dev/dsh-plugin/issues/${index + 1}`, state: 'open', labels: [], assignees: [],
+    updatedAt: '2026-10-20T00:00:00Z', observedAt: '2026-10-20T00:00:00Z' }))
+  state.sources[0].observations = issues.map(issue => ({ issue, sequence: 1 }))
+  state.sources[0].sequence = 1
+  state.sources[0].discovery.checkpoint = { sourceVersion: 1, startedAt: '2026-10-20T00:00:00Z', pages: 1, cursor: 'next', items: [], issues }
+  const content = JSON.stringify(state)
+  expect(Buffer.byteLength(content)).toBeGreaterThanOrEqual(20 * 1024 * 1024)
+  await writeFile(file, content)
+  return state
+}
+
 it('lets an interactive write wait for a live same-PID writer holding the file lock for five seconds', async () => {
   const { directory, app } = await open()
+  await largeStore(directory, app)
   const lock = join(directory, 'work-v3.json.lock')
   await writeFile(lock, `${process.pid}\n`, { flag: 'wx' })
   const release = new Promise<void>((resolve, reject) => setTimeout(() => {
@@ -39,8 +59,46 @@ it('lets an interactive write wait for a live same-PID writer holding the file l
   try {
     await expect(app.execute({ type: 'project.create', commandId: 'waited', name: 'Interactive work' }, operator))
       .resolves.toMatchObject({ status: 'completed', project: { name: 'Interactive work' } })
-    expect(JSON.parse(await readFile(join(directory, 'work-v3.json'), 'utf8')).projects).toHaveLength(1)
+    expect(JSON.parse(await readFile(join(directory, 'work-v3.json'), 'utf8')).projects.map((project: { name: string }) => project.name)).toEqual(['Large Project', 'Interactive work'])
   } finally { await release }
+}, 35_000)
+
+it('round-trips all 3000 observations and the large checkpoint within the write budget', async () => {
+  const { directory, app } = await open()
+  const before = await largeStore(directory, app)
+  await expect(new WorkApplication(directory, noHost).execute({ type: 'project.create', commandId: 'large-write', name: 'Smoke write' }, operator))
+    .resolves.toMatchObject({ status: 'completed' })
+  const after = JSON.parse(await readFile(join(directory, 'work-v3.json'), 'utf8'))
+  expect(after.schemaVersion).toBe(3)
+  expect(after.sources).toEqual(before.sources)
+  expect(after.sources[0].observations).toHaveLength(3000)
+  expect(after.sources[0].discovery.checkpoint.issues).toHaveLength(3000)
+}, 30_000)
+
+it('completes an interactive large-store write while background discovery holds the writer for five seconds', async () => {
+  const { directory, app: seed } = await open()
+  await largeStore(directory, seed)
+  const app = new WorkApplication(directory, noHost, { list: vi.fn(), detail: vi.fn(), project: async () => ({
+    identity: { login: 'reader', nodeId: 'U_1', name: null },
+    project: { nodeId: 'PVT_1', title: 'Large Project', url: 'https://github.com/orgs/a2d2-dev/projects/1', closed: false },
+    items: [], issues: [], observedAt: '2026-10-22T00:00:00Z',
+  }) })
+  const original = await vi.importActual<typeof atomic>('@deepseek-ai/dsh-atomic-write')
+  let started!: () => void
+  const entered = new Promise<void>(resolve => { started = resolve })
+  vi.mocked(atomic.writeFileAtomic).mockImplementationOnce(async (...args) => {
+    started()
+    await new Promise(resolve => setTimeout(resolve, 5_000))
+    await original.writeFileAtomic(...args)
+  })
+  const background = app.reconcileSources()
+  await entered
+  try {
+    await expect(app.execute({ type: 'project.create', commandId: 'during-discovery', name: 'Interactive during discovery' }, operator))
+      .resolves.toMatchObject({ status: 'completed' })
+  } finally { await background }
+  expect(JSON.parse(await readFile(join(directory, 'work-v3.json'), 'utf8')).projects.map((project: { name: string }) => project.name))
+    .toContain('Interactive during discovery')
 }, 35_000)
 
 it('queues writers across application instances before attempting the cross-process lock', async () => {
@@ -123,7 +181,7 @@ it.each(['bad-json', 'bad-schema', 'lock-timeout', 'EACCES'] as const)('reports 
     const response = await fetch(`http://127.0.0.1:${address.port}`, { method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ kind: 'command', value: { type: 'project.create', commandId: 'diagnose', name: 'Write' } }) })
     expect(response.status).toBe(503)
-    const result = await response.json()
+    const result = await response.json() as { error: { message: string } }
     const reason = failure.startsWith('bad-') ? 'invalid-state' : failure.toLowerCase()
     expect(result).toMatchObject({ status: 'failed', error: { code: 'work-record-unavailable', message: expect.stringContaining(reason) } })
     expect(result.error.message).not.toContain(directory)
