@@ -111,7 +111,7 @@ function IssueSourcePanel({controller}:{controller:WorkPanelController}) {
       {!source.enabled&&<p role="status">来源已停用，显示已保存的内容。</p>}
       {listing&&<><div className={styles.tableScroll}><table className={styles.projectTable} aria-label="GitHub Issue 列表"><colgroup><col style={{width:'42%'}}/><col style={{width:'12%'}}/><col style={{width:'16%'}}/><col style={{width:'14%'}}/><col style={{width:'16%'}}/></colgroup><thead><tr><th>Issue</th><th>状态</th><th>会话</th><th>负责人</th><th>标签</th></tr></thead><tbody>{rows.map(issue=>{const progress=controller.progressForIssue(issue),detail=[progress?.summary,progress?.next?`下一步：${progress.next}`:'',...(progress?.blockers??[]).map(blocker=>`阻塞：${blocker}`)].filter(Boolean).join(' / ');return <tr key={issue.nodeId}>
   <td><div className={styles.cellClip}><button className={styles.rowTitle} title={`#${issue.number} ${issue.title} · ${issue.repository.owner}/${issue.repository.repository}`} onClick={()=>void controller.openIssue(issue.number,source.enabled,issue.nodeId)}>#{issue.number} {issue.title}</button></div></td>
-  <td><div className={styles.cellClip} title={detail||undefined}><span className={styles.badge}>{processingLabel(progress)}</span>{progress?.blockers.length?<span className={styles.failure}> · 阻塞</span>:null}</div></td>
+  <td><div className={styles.cellClip} title={detail||undefined}><span className={styles.badge}>{processingLabel(progress)}</span>{progress?.blockers.length&&processingLabel(progress)!=='阻塞'?<span className={styles.failure}> · 阻塞</span>:null}</div></td>
   <td><div className={styles.cellClip}><SessionCell entry={sessionOf(progress)} onOpen={session=>controller.openSession(session)}/></div></td>
   <td><div className={styles.cellClip}>{issue.assignees.join(', ')||'—'}</div></td>
   <td><div className={styles.cellClip}>{issue.labels.length?issue.labels.map(label=><span key={label} className={styles.labelPill}>{label}</span>):'—'}</div></td>
@@ -174,9 +174,6 @@ function ContinuousProcessing({controller,onClose}:{controller:WorkPanelControll
       <div className={styles.toolbar}><button className={styles.primary} type="submit" disabled={busy}>{busy?'正在保存…':'保存执行资源'}</button><button type="button" disabled={busy} onClick={()=>setEditing(false)}>取消配置</button></div>
     </form>}
     </section>
-}
-function Sessions({controller,task}:{controller:WorkPanelController;task:WorkTask}) {
-  return <Section title="相关会话"><p>关联记录仅用于查看；当前处理会话与接续历史分别列出。</p>{task.sessions.length?<ul>{task.sessions.map(item=><li key={`${item.session.runtimeId}/${item.session.sessionId}`}>{item.purpose==='review'?'评审':'相关'} · {item.session.sessionId} <button onClick={()=>controller.openSession(item.session)}>打开会话</button></li>)}</ul>:<p>尚无其他关联会话。</p>}</Section>
 }
 function stageLabel(stage: import('../work-progress.ts').WorkStage): string { return ({planned:'待处理','in-progress':'处理中',review:'待验收',blocked:'受阻',done:'已验收完成'})[stage] }
 function CriteriaCount({criteria}:{criteria:import('../work-progress.ts').TaskProgressView['criteria']}) {

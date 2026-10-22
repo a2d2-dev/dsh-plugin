@@ -57,4 +57,21 @@ export function projectColumns(fields: Field[], rows: ProjectRow[], extras = fal
   return fields.filter(field => field.dataType !== 'TITLE' && (extras || !optionalTypes.has(field.dataType)) && !isEmptyColumn(field, rows))
 }
 
+/** The local session column shares the Issue and Project tables; it is not a Project field. */
+export const SESSION_SLOT = 'session' as const
+export type ProjectColumnSlot = Field | typeof SESSION_SLOT
+
+/**
+ * Keep GitHub's own field order and place the local session column right after
+ * STATUS, so identity fields such as Assignees keep their familiar position and
+ * width. Views without a Status column still show the session column first.
+ * GitHub's built-in Status field is a single select named "Status"; the STATUS
+ * data type is only what fixtures use.
+ */
+export function projectColumnSlots(columns: Field[]): ProjectColumnSlot[] {
+  const status = columns.findIndex(field => field.dataType === 'STATUS' || field.name.trim().toLowerCase() === 'status')
+  const at = status < 0 ? 0 : status + 1
+  return [...columns.slice(0, at), SESSION_SLOT, ...columns.slice(at)]
+}
+
 export type { Field as ProjectField, SourceCatalog }

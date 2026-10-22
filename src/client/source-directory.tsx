@@ -4,7 +4,7 @@ import type { WorkPanelController, SourceTab } from './work-panel-controller.ts'
 import type { WorkSource } from '../work-sources/types.ts'
 import { filterProjectItems } from '../work-sources/views.ts'
 import { projectFieldCell } from './project-fields.ts'
-import { fieldOption, orderProjectRows, projectColumns } from './project-rows.ts'
+import { SESSION_SLOT, fieldOption, orderProjectRows, projectColumnSlots, projectColumns } from './project-rows.ts'
 import { SessionCell, sessionOf } from './session-cell.tsx'
 import type { ProjectRow } from './project-rows.ts'
 import styles from './work-panel.module.css'
@@ -94,7 +94,9 @@ function ProjectViews({controller,source}:{controller:WorkPanelController;source
   const page=state.viewPage,perPage=25,issues=source.observations.map(item=>item.issue)
   const visible=filtered?.supported?filtered.items:[]
   const rows=orderProjectRows(visible.slice((page-1)*perPage,page*perPage),issues,collapsed)
-  const columns=projectColumns(catalog.fields,orderProjectRows(visible,issues,new Set()),extraColumns)
+  const columns=projectColumns(catalog.fields,orderProjectRows(visible,issues,new Set()),extraColumns),slots=projectColumnSlots(columns)
+  const weightTotal=Math.max(1,columns.reduce((total,field)=>total+columnWeight(field.dataType),0))
+  const fieldWidth=(field:ProjectFieldDefinition)=>`${60*columnWeight(field.dataType)/weightTotal}%`
   const parents=new Set(visible.flatMap(item=>{const parent=issues.find(issue=>issue.nodeId===item.issueNodeId)?.parent?.nodeId;return parent?[parent]:[]}))
   const progressByNode=new Map(controller.getSnapshot().progressItems.flatMap(item=>item.source?.nodeId?[[item.source.nodeId,item] as const]:[]))
   const toggle=(nodeId:string)=>setCollapsed(current=>{const next=new Set(current);if(next.has(nodeId))next.delete(nodeId);else next.add(nodeId);return next})
@@ -106,15 +108,16 @@ function ProjectViews({controller,source}:{controller:WorkPanelController;source
       {entry&&<span className={styles.projectLink}><TrustedLink url={entry}>原始视图</TrustedLink></span>}
     </div>
     {slice?<p role="alert">已保留原始切片入口；当前未支持此 slice 参数，无法准确呈现该切片，请在 GitHub 查看。</p>:!view?<p role="alert">保存的 view 不在当前可读取目录中，请选择真实视图。</p>:!snapshot?<p role="status">完整 Project 成员扫描尚未完成，请刷新继续；没有用全列表冒充视图。</p>:filtered&&!filtered.supported?<p role="alert">{filtered.reason}</p>:<>
-      {rows.length?<div className={styles.tableScroll}><table className={styles.projectTable} aria-label="真实 Project 条目"><colgroup><col style={{width:'26%'}}/><col style={{width:'10%'}}/>{columns.map(field=><col key={field.id} style={{width:`${64*columnWeight(field.dataType)/Math.max(1,columns.reduce((total,item)=>total+columnWeight(item.dataType),0))}%`}}/>)}</colgroup><thead><tr><th>条目</th><th>会话</th>{columns.map(field=><th key={field.id}>{field.name}</th>)}</tr></thead><tbody>{rows.map(row=><tr key={row.item.id}>
+      {rows.length?<div className={styles.tableScroll}><table className={styles.projectTable} aria-label="真实 Project 条目"><colgroup><col style={{width:'25%'}}/>{slots.map(slot=>slot===SESSION_SLOT?<col key={SESSION_SLOT} style={{width:'15%'}}/>:<col key={slot.id} style={{width:fieldWidth(slot)}}/>)}</colgroup><thead><tr><th>条目</th>{slots.map(slot=>slot===SESSION_SLOT?<th key={SESSION_SLOT}>会话</th>:<th key={slot.id}>{slot.name}</th>)}</tr></thead><tbody>{rows.map(row=><tr key={row.item.id}>
         <td className={styles.titleCell}><div className={styles.hierarchy} style={{paddingLeft:row.depth*22}}>
           {row.item.issueNodeId&&parents.has(row.item.issueNodeId)?<button className={styles.chevron} aria-label={collapsed.has(row.item.issueNodeId)?'展开子项':'收起子项'} aria-expanded={!collapsed.has(row.item.issueNodeId)} onClick={()=>toggle(row.item.issueNodeId!)}>{collapsed.has(row.item.issueNodeId)?'▸':'▾'}</button>:<span className={styles.chevronSpacer}/>}
           <span className={styles.rowState} data-closed={row.issue?.state==='closed'?'true':undefined} title={row.issue?.state==='closed'?'已关闭':'打开'}/>
           {row.issue?<button className={styles.rowTitle} title={`#${row.issue.number} ${row.issue.title} · ${row.issue.repository.owner}/${row.issue.repository.repository}`} onClick={()=>void controller.openIssue(row.issue!.number,source.enabled,row.issue!.nodeId)}>#{row.issue.number} {row.issue.title}</button>:row.item.url?<TrustedLink url={row.item.url}>{row.item.title??row.item.kind}</TrustedLink>:row.item.title??({draft:'草稿',restricted:'权限受限',issue:'Issue','pull-request':'PR'} as Record<string,string>)[row.item.kind]}
           {row.item.archived&&<span> · 已归档</span>}
         </div></td>
-        <td><div className={styles.cellClip}><SessionCell entry={sessionOf(row.issue?.nodeId?progressByNode.get(row.issue.nodeId):undefined)} onOpen={session=>controller.openSession(session)}/></div></td>
-        {columns.map(field=><ProjectCell key={field.id} field={field} row={row} fields={catalog.fields}/>)}
+        {slots.map(slot=>slot===SESSION_SLOT
+          ?<td key={SESSION_SLOT}><div className={styles.cellClip}><SessionCell entry={sessionOf(row.issue?.nodeId?progressByNode.get(row.issue.nodeId):undefined)} onOpen={session=>controller.openSession(session)}/></div></td>
+          :<ProjectCell key={slot.id} field={slot} row={row} fields={catalog.fields}/>)}
       </tr>)}</tbody></table></div>:<p>此视图没有可见匹配条目。</p>}
       <div className={styles.toolbar}><button disabled={page<=1} onClick={()=>controller.setProjectView(viewNumber,page-1)}>上一页</button><span>第 {page} 页</span><button disabled={!filtered?.supported||page*perPage>=filtered.items.length} onClick={()=>controller.setProjectView(viewNumber,page+1)}>下一页</button></div>
     </>}
@@ -122,7 +125,7 @@ function ProjectViews({controller,source}:{controller:WorkPanelController;source
   </section>
 }
 type ProjectFieldDefinition = { id: string; name: string; dataType: string; options?: { id: string; name: string; color: string }[] }
-const columnWeights: Record<string, number> = { ASSIGNEES: 12, STATUS: 9, LABELS: 12, LINKED_PULL_REQUESTS: 9, PARENT_ISSUE: 13, SUB_ISSUES_PROGRESS: 18, REPOSITORY: 13, MILESTONE: 10, REVIEWERS: 10, CREATED: 8, UPDATED: 8, CLOSED: 8 }
+const columnWeights: Record<string, number> = { ASSIGNEES: 16, STATUS: 8, LABELS: 11, LINKED_PULL_REQUESTS: 8, PARENT_ISSUE: 11, SUB_ISSUES_PROGRESS: 15, REPOSITORY: 11, MILESTONE: 9, REVIEWERS: 9, CREATED: 7, UPDATED: 7, CLOSED: 7 }
 const columnWeight = (dataType: string) => columnWeights[dataType] ?? 10
 const chipClasses: Record<string,string> = { GRAY: styles.chipGray, BLUE: styles.chipBlue, GREEN: styles.chipGreen, YELLOW: styles.chipYellow, ORANGE: styles.chipOrange, RED: styles.chipRed, PINK: styles.chipPink, PURPLE: styles.chipPurple }
 const avatarPalette = ['#1f6feb','#8250df','#1a7f37','#bc4c00','#cf222e','#0969da','#bf3989','#57606a']
