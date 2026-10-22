@@ -354,7 +354,8 @@ it('persists a natural language model plan without dispatching on preview or res
   const rule = await h.status()
   expect(rule.planning).toMatchObject({ instruction: '先推进第二项，再处理第一项。', plans: [{ version: 1, steps: [{ nodeId: 'ISSUE_2' }, { nodeId: 'ISSUE_1' }] }] })
   expect(generate).toHaveBeenCalledTimes(1)
-  expect(generate.mock.calls[0]![0].candidates[0]!.issue.body).toBe('Implement the agreed work.')
+  expect(generate.mock.calls[0]![0].candidates[0]!.issue).not.toHaveProperty('body')
+  expect(generate.mock.calls[0]![0].candidates[0]!.issue).toMatchObject({ nodeId: 'ISSUE_1', title: 'Issue 1' })
   expect(h.host.sends).toHaveLength(0)
   await h.app.execute(preview, operator)
   const restored = new WorkApplication(h.directory, h.host, h.source, { generate })
@@ -414,11 +415,14 @@ it('adopts canonical existing execution without changing owner epoch resource or
 it('completes preview across a discovery tick while the model is generating', async () => {
   let h!: Awaited<ReturnType<typeof setup>>
   const generate = vi.fn(async (basis: import('../src/work-planning.ts').PlanningBasis) => {
+    const before = completed(await h.app.query({ type: 'source.list', projectId: h.scope.projectId }, operator)).sources![0]!
+    expect(basis.source).not.toHaveProperty('sequence')
+    expect(basis.source).not.toHaveProperty('discovery')
     vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 60_000)
     await h.app.reconcileSources()
     const fresh = completed(await h.app.query({ type: 'source.list', projectId: h.scope.projectId }, operator)).sources![0]!
-    expect(fresh.sequence).toBeGreaterThan(basis.source.sequence)
-    expect(fresh.discovery!.nextAttemptAt).not.toBe(basis.source.discovery!.nextAttemptAt)
+    expect(fresh.sequence).toBeGreaterThan(before.sequence)
+    expect(fresh.discovery!.nextAttemptAt).not.toBe(before.discovery!.nextAttemptAt)
     return { steps: [{ nodeId: 'ISSUE_1', why: 'Within scope', nextAction: 'Work', mode: 'new' }] }
   })
   h = await setup(false, { generate })

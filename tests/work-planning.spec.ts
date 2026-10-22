@@ -1,5 +1,11 @@
 import { expect, it } from 'vitest'
-import { planningBasisFingerprint, type PlanningBasis } from '../src/work-planning.ts'
+import { planningBasisFingerprint, type PlanningBasis as CompactPlanningBasis } from '../src/work-planning.ts'
+import type { WorkSnapshot } from '../src/work-schema.ts'
+// These fixtures also verify the read contract for plans saved before payload compaction.
+type PlanningBasis = Omit<CompactPlanningBasis, 'source' | 'candidates'> & {
+  source: WorkSnapshot['sources'][number]
+  candidates: (Omit<CompactPlanningBasis['candidates'][number], 'issue'> & { issue: WorkSnapshot['sources'][number]['observations'][number]['issue'] })[]
+}
 
 function basis(): PlanningBasis {
   const identity = { login: 'alice', nodeId: 'ALICE', name: null }

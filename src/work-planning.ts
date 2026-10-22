@@ -1,5 +1,6 @@
+import { createHash } from 'node:crypto'
 import { z } from 'zod'
-import { issueSchema, sourceSchema } from './work-sources/schema.ts'
+import { issueSchema, sourceSchema, repositorySchema, githubProjectSchema } from './work-sources/schema.ts'
 import type { WorkSnapshot } from './work-schema.ts'
 import type { ContinuousWorkRule } from './work-types.ts'
 import { sourceScopeError } from './work-continuous.ts'
@@ -7,17 +8,33 @@ import { sourceScopeError } from './work-continuous.ts'
 const text = z.string().trim().min(1).max(100_000)
 export const planStepSchema = z.object({ nodeId: z.string().min(1).max(256), why: text.max(10_000), nextAction: text.max(10_000), mode: z.enum(['new', 'existing', 'wait']) }).strict()
 export const planOutputSchema = z.object({ steps: z.array(planStepSchema).max(1000) }).strict()
+const identitySchema = z.object({ login: z.string(), nodeId: z.string() }).strict()
+const sourceSummarySchema = z.object({
+  id: z.string(), projectId: z.string(), provider: z.literal('github'), version: z.number(), enabled: z.boolean(),
+  sourceVersion: z.number(), candidateCount: z.number().int().nonnegative(),
+  repository: repositorySchema.optional(), githubProject: githubProjectSchema.optional(), nodeId: z.string().optional(), identity: identitySchema.optional(),
+  repositorySnapshot: z.object({ sourceVersion: z.number(), identity: identitySchema }).strict().optional(),
+  projectSnapshot: z.object({ identity: identitySchema, project: z.object({ nodeId: z.string(), url: z.string(), closed: z.boolean() }).strict() }).strict().optional(),
+}).strict()
+const relationSchema = z.object({ nodeId: z.string(), state: z.enum(['open', 'closed']) }).strict()
+const candidateIssueSchema = z.object({
+  nodeId: z.string().max(256), number: z.number(), title: z.string().max(300), repository: repositorySchema, state: z.enum(['open', 'closed']),
+  labels: z.array(z.string()), assignees: z.array(z.string()), updatedAt: z.string().optional(),
+  parent: relationSchema.nullable().optional(), subIssues: z.object({ items: z.array(relationSchema), totalCount: z.number(), hasNextPage: z.boolean() }).strict().optional(),
+}).strict()
 export const planningBasisSchema = z.object({
   instruction: text, supplements: z.array(text), scopeVersion: z.number().int().positive(), blocks: z.array(z.string()),
   scope: z.object({ assignee: z.enum(['@me', '*']), labels: z.array(z.string()), identity: z.object({ login: z.string(), nodeId: z.string() }).optional() }).strict(),
   executionStrategy: z.object({ resource: z.object({ runtimeId: z.string(), workspaceId: z.string() }), model: z.object({ provider: z.string(), model: z.string(), reasoningEffort: z.string().optional() }), agentPreset: z.string(), permissionPreset: z.string() }).strict(),
   relationshipAvailability: z.object({ nativeParentChildren: z.literal('observed-when-present'), nativeDependencies: z.literal('unavailable-in-source-port') }).strict(),
-  source: sourceSchema,
-  candidates: z.array(z.object({ issue: issueSchema, task: z.json().optional(), execution: z.json().optional(), ownerRuleId: z.string().optional() }).strict()),
+  source: sourceSummarySchema,
+  candidates: z.array(z.object({ issue: candidateIssueSchema, task: z.json().optional(), execution: z.json().optional(), ownerRuleId: z.string().optional() }).strict()),
 }).strict()
+// Existing saved plans remain readable; only freshly constructed requests use the compact schema.
+const savedBasisSchema = z.union([planningBasisSchema, planningBasisSchema.extend({ source: sourceSchema, candidates: z.array(z.object({ issue: issueSchema, task: z.json().optional(), execution: z.json().optional(), ownerRuleId: z.string().optional() }).strict()) })])
 export const planningSchema = z.object({
   instruction: text, supplements: z.array(text), scopeVersion: z.number().int().positive(), draftVersion: z.number().int().positive(), blocks: z.array(z.string().min(1).max(256)),
-  plans: z.array(z.object({ version: z.number().int().positive(), draftVersion: z.number().int().positive(), basis: planningBasisSchema, steps: z.array(planStepSchema), createdAt: z.string().datetime() }).strict()),
+  plans: z.array(z.object({ version: z.number().int().positive(), draftVersion: z.number().int().positive(), basis: savedBasisSchema, steps: z.array(planStepSchema), createdAt: z.string().datetime() }).strict()),
   enabledPlanVersion: z.number().int().positive().optional(), error: z.object({ code: z.string(), message: text }).strict().optional(),
 }).strict()
 export type WorkPlanning = z.infer<typeof planningSchema>
@@ -38,17 +55,52 @@ export function planningBasis(state: WorkSnapshot, rule: ContinuousWorkRule): Pl
     const task = binding && state.tasks.find(task => task.id === binding.ref.taskId && task.projectId === binding.ref.projectId)
     const execution = task && state.executions.find(execution => execution.ref.taskId === task.id && execution.ref.projectId === task.projectId)
     const owner = task && state.continuousRules?.find(rule => rule.items.some(item => item.ref?.taskId === task.id && item.ref.projectId === task.projectId))
-    // Only canonical work facts; unrelated Session history never enters a planning request.
-    return { issue, ...(task ? { task: JSON.parse(JSON.stringify({ ref: binding!.ref, agentId: task.agentId, goal: task.goal, specification: task.specification, progress: task.progress, children: task.children, parent: task.parent, breakdown: task.breakdown })) } : {}),
-      ...(execution ? { execution: JSON.parse(JSON.stringify({ id: execution.id, ref: execution.ref, agentId: execution.agentId, owner: execution.owner, epoch: execution.epoch, resource: execution.resource, model: execution.model, agentPreset: execution.agentPreset, permissionPreset: execution.permissionPreset, session: execution.session, state: execution.state, control: execution.control, error: execution.error })) } : {}), ...(owner ? { ownerRuleId: owner.id } : {}) }
+    // Explanatory text is bounded independently of canonical identity and safety facts.
+    const relation = ({ nodeId, state }: { nodeId: string; state: 'open' | 'closed' }) => ({ nodeId, state })
+    const goal = task?.goal.slice(0, 2000)
+    return { issue: { nodeId: issue.nodeId, number: issue.number, title: issue.title.slice(0, 300), repository: issue.repository, state: issue.state, labels: issue.labels, assignees: issue.assignees, updatedAt: issue.updatedAt,
+      ...(issue.parent !== undefined ? { parent: issue.parent && relation(issue.parent) } : {}),
+      ...(issue.subIssues ? { subIssues: { ...issue.subIssues, items: issue.subIssues.items.map(relation) } } : {}) },
+      ...(task ? { task: JSON.parse(JSON.stringify({ ref: binding!.ref, agentId: task.agentId, goal,
+        goalTruncated: task.goal.length > 2000, goalIdentity: createHash('sha256').update(task.goal).digest('hex'),
+        specification: { version: task.specification.version }, progress: task.progress && { stage: task.progress.stage, specificationVersion: task.progress.specificationVersion }, children: task.children, parent: task.parent })) } : {}),
+      ...(execution ? { execution: JSON.parse(JSON.stringify({ id: execution.id, ref: execution.ref, agentId: execution.agentId, owner: execution.owner, epoch: execution.epoch, resource: execution.resource, model: execution.model, agentPreset: execution.agentPreset, permissionPreset: execution.permissionPreset, session: execution.session, state: execution.state,
+        control: execution.control && { action: execution.control.action, status: execution.control.status } })) } : {}), ...(owner ? { ownerRuleId: owner.id } : {}) }
   })
-  return planningBasisSchema.parse({ instruction: rule.planning.instruction, supplements: rule.planning.supplements, blocks: rule.planning.blocks, scopeVersion: rule.planning.scopeVersion, scope: rule.scope, executionStrategy: { resource: rule.resource, model: rule.model, agentPreset: rule.agentPreset, permissionPreset: rule.permissionPreset }, relationshipAvailability: { nativeParentChildren: 'observed-when-present', nativeDependencies: 'unavailable-in-source-port' }, source, candidates })
+  const identity = (value: { login: string; nodeId: string } | undefined) => value && { login: value.login, nodeId: value.nodeId }
+  const summary = { id: source!.id, projectId: source!.projectId, provider: source!.provider, version: source!.version, enabled: source!.enabled,
+    sourceVersion: source!.repositorySnapshot?.sourceVersion ?? source!.version, candidateCount: candidates.length,
+    repository: source!.repository, githubProject: source!.githubProject, nodeId: source!.nodeId, identity: identity(source!.identity),
+    repositorySnapshot: source!.repositorySnapshot && { sourceVersion: source!.repositorySnapshot.sourceVersion, identity: identity(source!.repositorySnapshot.identity) },
+    projectSnapshot: source!.projectSnapshot && { identity: identity(source!.projectSnapshot.identity), project: { nodeId: source!.projectSnapshot.project.nodeId, url: source!.projectSnapshot.project.url, closed: source!.projectSnapshot.project.closed } },
+  }
+  const basis = planningBasisSchema.parse({ instruction: rule.planning.instruction, supplements: rule.planning.supplements, blocks: rule.planning.blocks, scopeVersion: rule.planning.scopeVersion, scope: rule.scope, executionStrategy: { resource: rule.resource, model: rule.model, agentPreset: rule.agentPreset, permissionPreset: rule.permissionPreset }, relationshipAvailability: { nativeParentChildren: 'observed-when-present', nativeDependencies: 'unavailable-in-source-port' }, source: summary, candidates })
+  const limit = planningBasisCharacterLimit(candidates.length)
+  // Check serialized length: JSON escaping can multiply the size of bounded strings.
+  // Remove why-related goal text first, then titles, always in stable nodeId order.
+  const ordered = [...basis.candidates].sort((a, b) => a.issue.nodeId.localeCompare(b.issue.nodeId))
+  let length = JSON.stringify(basis).length
+  for (const candidate of ordered) {
+    if (length <= limit) break
+    const task = candidate.task as { goal?: string; goalTruncated?: boolean } | undefined
+    if (task?.goal) { const previous = JSON.stringify(candidate).length; task.goal = ''; task.goalTruncated = true; length += JSON.stringify(candidate).length - previous }
+  }
+  for (const candidate of ordered) {
+    if (length <= limit) break
+    const previous = JSON.stringify(candidate).length
+    candidate.issue.title = ''
+    length += JSON.stringify(candidate).length - previous
+  }
+  // Never drop candidates, scope or canonical facts to make an unsafe request fit.
+  if (length > limit) throw new PlanningError('planning-payload-too-large', `Planning identities and instructions exceed request limit: requestCharacters=${length}, candidates=${candidates.length}, limit=${limit}`)
+  return basis
 }
 
-/** Compare planning authority, not discovery bookkeeping or live execution progress.
- * The full basis remains available to the model and to fresh safety validation.
- */
-export function planningBasisFingerprint(basis: PlanningBasis): string {
+/** 64KiB fixed context plus 4KiB per candidate; 46 candidates fit within 256KiB. */
+export function planningBasisCharacterLimit(candidateCount: number): number { return 64 * 1024 + 4096 * candidateCount }
+
+/** Compare planning authority, not discovery bookkeeping or live execution progress. */
+export function planningBasisFingerprint(basis: z.infer<typeof savedBasisSchema>): string {
   const pick = (value: unknown, keys: string[]) => {
     const record = value as Record<string, unknown> | undefined
     return record && Object.fromEntries(keys.map(key => [key, record[key]]))
@@ -60,15 +112,16 @@ export function planningBasisFingerprint(basis: PlanningBasis): string {
     scopeVersion: basis.scopeVersion, scope: { ...basis.scope, labels: [...basis.scope.labels].sort() }, executionStrategy: basis.executionStrategy,
     source: {
       id: source.id, projectId: source.projectId, provider: source.provider, version: source.version, enabled: source.enabled,
+      sourceVersion: 'sourceVersion' in source ? source.sourceVersion : source.repositorySnapshot?.sourceVersion ?? source.version,
       repository: source.repository, githubProject: source.githubProject, nodeId: source.nodeId, identity: identity(source.identity),
       repositorySnapshot: source.repositorySnapshot && { sourceVersion: source.repositorySnapshot.sourceVersion, identity: identity(source.repositorySnapshot.identity) },
       projectSnapshot: source.projectSnapshot && { identity: identity(source.projectSnapshot.identity), project: pick(source.projectSnapshot.project, ['nodeId', 'url', 'closed']) },
     },
     candidates: basis.candidates.map(candidate => {
-      const task = candidate.task as { specification?: { version?: number } } | undefined
+      const task = candidate.task as { specification?: { version?: number }; goal?: string; goalIdentity?: string } | undefined
       return {
         nodeId: candidate.issue.nodeId, ownerRuleId: candidate.ownerRuleId,
-        task: task && { ...pick(task, ['ref', 'agentId', 'goal', 'children', 'parent']), specificationVersion: task.specification?.version },
+        task: task && { ...pick(task, ['ref', 'agentId', 'children', 'parent']), goalIdentity: task.goalIdentity ?? createHash('sha256').update(task.goal ?? '').digest('hex'), specificationVersion: task.specification?.version },
         execution: pick(candidate.execution, ['id', 'ref', 'agentId', 'owner', 'epoch', 'resource', 'model', 'agentPreset', 'permissionPreset', 'session']),
       }
     }).sort((a, b) => a.nodeId.localeCompare(b.nodeId)),
