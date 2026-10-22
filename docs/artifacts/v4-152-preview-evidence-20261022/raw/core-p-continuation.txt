@@ -1,0 +1,90 @@
+- generic [ref=e1] clickable [onclick]
+  - generic
+    - button "New session" [ref=e3]
+    - button "Collapse sidebar" [ref=e4]
+    - button "New session" [ref=e5]
+      - StaticText "New Session"
+    - navigation "Global panels" [ref=e6]
+      - button "Plugins" [ref=e12]
+        - StaticText "Plugins"
+      - button "A²D² 控制面板" [ref=e13]
+        - StaticText "A²D² 控制面板"
+    - StaticText "Workspaces"
+    - generic [ref=e7] clickable [onclick]
+      - button "Search sessions" [expanded=false, ref=e14]
+      - textbox "Search session names" [ref=e15]
+    - button "View options" [ref=e8]
+    - button "Add workspace" [ref=e9]
+    - generic
+      - tree "Sessions"
+        - generic
+          - treeitem "v4-152-r01" [level=1, expanded=true, ref=e33]
+            - StaticText "v4-152-r01"
+          - treeitem "Running Coordinate accepted work and its 1min" [level=1, ref=e34]
+            - StaticText "Running"
+            - StaticText "Coordinate accepted work and its"
+            - StaticText "1min"
+        - treeitem "workspace" [level=1, expanded=false, ref=e35]
+          - StaticText "workspace"
+    - button "Settings" [expanded=false, ref=e16]
+      - StaticText "Settings"
+    - main "A²D² 控制面板" [ref=e2]
+      - navigation "来源标签" [ref=e10]
+        - strong
+          - StaticText "A²D² 控制面板"
+        - button "a2d2-dev/dsh-plugin 仓库" [ref=e17]
+          - StaticText "a2d2-dev/dsh-plugin 仓库"
+        - button "DSH A²D² Project" [ref=e18]
+          - StaticText "DSH A²D² Project"
+        - button "项目管理 v3.0 Project" [ref=e19]
+          - StaticText "项目管理 v3.0 Project"
+        - button "添加来源" [ref=e20]
+          - StaticText "＋"
+      - button "关闭面板" [ref=e11]
+      - sectionheader
+        - button "← 返回 Issue 列表" [ref=e21]
+          - StaticText "← 返回 Issue 列表"
+        - paragraph
+          - StaticText "a2d2-dev/dsh-plugin · #157"
+        - heading "#157 [QA #152 v4 v4-152-6b252218-r01] P" [level=1, ref=e22]
+        - link "在 GitHub 查看来源" [ref=e23]
+        - StaticText "处理中"
+        - button "刷新详情" [ref=e24]
+      - group
+        - DisclosureTriangle "编辑自动接续设置" [expanded=false]
+          - StaticText "编辑自动接续设置"
+      - tablist "Issue 详情标签"
+        - tab "概览" [ref=e25]
+        - tab "需求与子 Issue" [ref=e26]
+        - tab "会话与执行" [ref=e27]
+        - tab "接续" [selected, ref=e28]
+        - tab "活动" [ref=e29]
+      - tabpanel "接续"
+        - region "接续" [ref=e30]
+          - heading "接续" [level=2, ref=e31]
+          - DescriptionList
+            - term "自动接续"
+            - definition
+              - StaticText "已开启"
+            - term "提前接续目标"
+            - definition
+              - StaticText "200,000 tokens"
+            - term "安全余量"
+            - definition
+              - StaticText "16,000 tokens"
+            - term "当前上下文观察"
+            - definition
+              - StaticText "0 / 1,050,000 tokens · none · 2026-10-22T03:13:33.623Z"
+            - term "输出预留"
+            - definition
+              - StaticText "128,000 tokens"
+            - term "执行结算"
+            - definition
+              - StaticText "等待相关执行结算"
+          - paragraph
+            - StaticText "阈值为提前接续软目标；正式接任仍须宿主维护边界核验。原生 job_output 收取结果后再观察，收取不代表业务验收。"
+          - list "接续等待项"
+            - listitem [level=1]
+              - ListMarker "• "
+              - StaticText "executor-unsettled · session-b36314e3-3c0e-4c4d-9247-928d6b4187af"
+          - button "准备接续" [ref=e32]

@@ -1,0 +1,57 @@
+- generic [ref=e1] clickable [onclick]
+  - generic
+    - button "New session" [ref=e2]
+    - button "Collapse sidebar" [ref=e3]
+    - button "New session" [ref=e4]
+      - StaticText "New Session"
+    - navigation "Global panels" [ref=e5]
+      - button "Plugins" [ref=e9]
+        - StaticText "Plugins"
+      - button "A²D² 控制面板" [ref=e10]
+        - StaticText "A²D² 控制面板"
+    - StaticText "Workspaces"
+    - generic [ref=e6] clickable [onclick]
+      - button "Search sessions" [expanded=false, ref=e11]
+      - textbox "Search session names" [ref=e12]
+    - button "View options" [ref=e7]
+    - button "Add workspace" [ref=e8]
+    - generic
+      - tree "Sessions"
+        - generic
+          - treeitem "v4-152-r01" [level=1, expanded=true, ref=e20]
+            - StaticText "v4-152-r01"
+          - treeitem "Running Untitled now" [level=1, selected, ref=e21]
+            - StaticText "Running"
+            - StaticText "Untitled"
+            - StaticText "now"
+        - treeitem "workspace" [level=1, expanded=false, ref=e22]
+          - StaticText "workspace"
+    - button "Settings" [expanded=false, ref=e13]
+      - StaticText "Settings"
+    - generic
+      - banner
+        - navigation "Session hierarchy" [ref=e14]
+          - StaticText "v4-152-r01"
+        - StaticText "Standard mode"
+        - group
+          - DisclosureTriangle "关联任务 · 1" [expanded=false]
+            - StaticText "关联任务 · 1"
+        - button "More actions" [expanded=false, ref=e15]
+        - button "Open right sidebar" [ref=e16]
+        - tablist
+          - tab "Chat" [selected, ref=e17]
+          - tab "Trajectory" [ref=e18]
+          - tab "接续" [ref=e19]
+      - generic
+        - status
+          - StaticText "Deep diving"
+        - StaticText "Deep diving for 20s ···"
+        - generic
+          - textbox "Message or run a task, / commands, @ files or sessions" [ref=e26]
+          - button "Add files or run commands" [expanded=false, ref=e23]
+          - button "Access mode, current: Workspace Write" [ref=e24]
+            - StaticText "Workspace Write"
+          - button "Select model, current gpt-6.1-sol, reasoning effort High" [expanded=false, ref=e27]
+            - StaticText "gpt-6.1-sol"
+            - StaticText "High"
+          - button "Stop generating" [ref=e25]

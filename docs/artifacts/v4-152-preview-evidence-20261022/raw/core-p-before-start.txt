@@ -1,0 +1,102 @@
+- generic [ref=e1] clickable [onclick]
+  - generic
+    - button "New session" [ref=e3]
+    - button "Collapse sidebar" [ref=e4]
+    - button "New session" [ref=e5]
+      - StaticText "New Session"
+    - navigation "Global panels" [ref=e6]
+      - button "Plugins" [ref=e12]
+        - StaticText "Plugins"
+      - button "A²D² 控制面板" [ref=e13]
+        - StaticText "A²D² 控制面板"
+    - StaticText "Workspaces"
+    - generic [ref=e7] clickable [onclick]
+      - button "Search sessions" [expanded=false, ref=e14]
+      - textbox "Search session names" [ref=e15]
+    - button "View options" [ref=e8]
+    - button "Add workspace" [ref=e9]
+    - generic
+      - tree "Sessions"
+        - generic
+          - treeitem "v4-152-r01" [level=1, expanded=true, ref=e35]
+            - StaticText "v4-152-r01"
+          - treeitem "New Session" [level=1, ref=e36]
+            - StaticText "New Session"
+        - treeitem "workspace" [level=1, expanded=false, ref=e37]
+          - StaticText "workspace"
+    - button "Settings" [expanded=false, ref=e16]
+      - StaticText "Settings"
+    - main "A²D² 控制面板" [ref=e2]
+      - navigation "来源标签" [ref=e10]
+        - strong
+          - StaticText "A²D² 控制面板"
+        - button "a2d2-dev/dsh-plugin 仓库" [ref=e17]
+          - StaticText "a2d2-dev/dsh-plugin 仓库"
+        - button "DSH A²D² Project" [ref=e18]
+          - StaticText "DSH A²D² Project"
+        - button "项目管理 v3.0 Project" [ref=e19]
+          - StaticText "项目管理 v3.0 Project"
+        - button "添加来源" [ref=e20]
+          - StaticText "＋"
+      - button "关闭面板" [ref=e11]
+      - sectionheader
+        - button "← 返回 Issue 列表" [ref=e21]
+          - StaticText "← 返回 Issue 列表"
+        - paragraph
+          - StaticText "a2d2-dev/dsh-plugin · #157"
+        - heading "#157 [QA #152 v4 v4-152-6b252218-r01] P" [level=1, ref=e22]
+        - link "在 GitHub 查看来源" [ref=e23]
+        - StaticText "未开始"
+        - button "刷新详情" [ref=e24]
+      - tablist "Issue 详情标签"
+        - tab "概览" [selected, ref=e25]
+        - tab "需求与子 Issue" [ref=e26]
+        - tab "会话与执行" [ref=e27]
+        - tab "接续" [ref=e28]
+        - tab "活动" [ref=e29]
+      - tabpanel "概览"
+        - generic
+          - heading "当前进展" [level=2, ref=e30]
+          - paragraph
+            - StaticText "尚未开始处理"
+          - paragraph
+            - StaticText "下一步：确认要求后开始处理"
+        - generic
+          - heading "需求与子 Issue" [level=2, ref=e31]
+          - paragraph
+            - StaticText "尚未报告需求拆解。处理会话将围绕原始要求记录进展与证据。"
+          - list
+        - generic
+          - heading "处理会话" [level=2, ref=e32]
+          - paragraph
+            - StaticText "尚未开始处理。开始后会在所选执行目录创建会话。"
+          - button "开始处理" [ref=e33]
+        - generic
+          - heading "Issue 原始要求" [level=2, ref=e34]
+          - paragraph
+            - StaticText "远端状态：open · 负责人：imneov · 标签：qa:v4-152-6b252218-r01"
+            - LineBreak "\n"
+            - StaticText "远端更新时间：2026-10-22T02:10:27Z · 观察时间：2026-10-22T03:11:09.649Z"
+          - paragraph
+            - StaticText "缓存 / 最后已知内容"
+          - paragraph
+            - StaticText "A2D2 V4 ACCEPTANCE #152 / #150\nrun: v4-152-6b252218-r01\nfixture: P\n\n这是专用行为验收对象，不是开发任务。只允许在 /data/_dsh-dev/acceptance-workspaces/v4-152-r01 处理本run资料；禁止clone、修改业务代码或接入任何现有开发Issue。只允许写P.proof.json。\n\n先用work_control status读取真实Task/Execution/Session/owner/epoch，不编造身份或消费事实。把正文保存为当前规格的可核验验收项。已确认两项决定：镜像保留数量3，必须保留stable标签。proof保存run、fixture、真实执行身份、decisions:{retainCount:3,keepTags:[\"stable\"]}和实际checks，并以JSON解析及SHA256独立核验。\n\n必要原生子只有本run的C和E。读取完整来源子项后明确采纳必要范围。C必须由自己的canonical Task按当前规格验收；E必须读取测试器真实交付proof/checksum和当前updatedAt，明确记录外部验收依据，Closed本身不足。不为E自动创建Task/Session。\n\n在本Task创建一个真实native只读校验child和一个自有后台checksum job，范围只限本run proof；实际child使用已授权的codex/gpt-6.1-sol/medium，并以真实请求回执核对。结果未正式收取时过早done应被拒绝且仍允许owner继续收尾；由owner正式job_output收取、读取真实结论后重新负责验收，不手造consumed通知。\n\nepoch=1时保存in-progress与两项具体决定后结束轮次，不wait/pause、不手工请求接续。收到宿主材料请求时，保存决定、证据、未完成项与下一步。epoch>1时先实际复述“数量3”“必须保留stable标签”及未完成项，再继续。\n\n等待明确完成令 FINISH-P-v4-152-6b252218-r01。必要子结果、native/job收取和本Task验收全部成立且收到该令后，才可报告done并请求关闭专用Issue。模型自报不算路由证据；不能冒充LF或其他真人。\n"
+          - generic
+            - heading "原生 Issue 父子关系" [level=2, ref=e38]
+            - paragraph
+              - StaticText "GitHub 原始父子关系；打开来源链接仅查看原文。执行进展与验收在下方分别显示。"
+            - paragraph
+              - StaticText "子 Issue：已显示 2 / 2 项"
+            - list
+              - listitem [level=1]
+                - ListMarker "• "
+                - StaticText "a2d2-dev/dsh-plugin #158 · [QA #152 v4 v4-152-6b252218-r01] C · 远端 open "
+                - link "在 GitHub 查看来源" [ref=e39]
+                - StaticText " · 尚未读取完整要求 "
+                - button "读取独立工作要求" [ref=e40]
+              - listitem [level=1]
+                - ListMarker "• "
+                - StaticText "a2d2-dev/dsh-plugin #159 · [QA #152 v4 v4-152-6b252218-r01] E · 远端 closed "
+                - link "在 GitHub 查看来源" [ref=e41]
+                - StaticText " · 尚未读取完整要求 "
+                - button "读取独立工作要求" [ref=e42]

@@ -10,15 +10,116 @@
     "uiClicks": 1,
     "catalogHttpStatus": 200,
     "issuesHttpStatus": 200,
-    "requestIds": ["4036622.142", "4036622.143"],
-    "batchDurationsMs": [12988.3, 21910.3],
+    "requestIds": [
+      "4036622.142",
+      "4036622.143"
+    ],
+    "batchDurationsMs": [
+      12988.3,
+      21910.3
+    ],
     "timingLimitation": "Resource Timing 不含请求体，两项耗时不能分别归属；整批约21.9秒",
     "workRecordUnavailableVisible": false,
     "openIssues": 43,
     "prs": 62
   },
-  "taskId": null,
-  "sessionId": null,
-  "executionId": null,
-  "remaining": ["项目视图", "Issue筛选分页", "PR", "P真实模型会话", "接续入口", "重开持久性"]
+  "taskId": "9124c73c-3882-495d-803d-4b6d0e25bbe9",
+  "sessionId": "session-b36314e3-3c0e-4c4d-9247-928d6b4187af",
+  "executionId": "0ac555c0-125e-4ed2-9ad2-ded8c447b37a",
+  "remaining": [
+    "复杂Project视图筛选（无对应真实fixture）",
+    "全部负责人/Closed单独档",
+    "稳定Issue/PR第二页",
+    "PR关闭/空结果",
+    "真实接续及模型路由阻断根因",
+    "C/E验收、native child/job、完成关闭与持续（本轮未授权执行）"
+  ],
+  "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+  "owner": "657d73e9-40c5-4170-92fd-07ae0ada7367",
+  "epoch": 1,
+  "directory": {
+    "views": [
+      {
+        "name": "任务清单",
+        "layout": "TABLE_LAYOUT",
+        "filter": ""
+      },
+      {
+        "name": "全部任务",
+        "layout": "TABLE_LAYOUT",
+        "filter": ""
+      }
+    ],
+    "projectItems": 81,
+    "issueFiltersVerified": [
+      "@me/open",
+      "@me/all"
+    ],
+    "visibleFixtures": {
+      "open": [
+        157,
+        158,
+        160
+      ],
+      "all": [
+        157,
+        158,
+        159
+      ]
+    },
+    "issuePagination": "点击下一页后仍第1页，稳定第二页未验证",
+    "prFiltersVerified": [
+      "all",
+      "merged"
+    ],
+    "prPagination": "下一页行变化但页码仍第1页，待核实",
+    "errors503Observed": 0
+  },
+  "start": {
+    "importAt": "2026-10-22T03:12:07.388349184Z",
+    "importHttpStatus": 200,
+    "importDurationMs": 6186.645,
+    "startAt": "2026-10-22T03:12:57.641659904Z",
+    "httpStatus": 200,
+    "durationMs": 20625.477,
+    "commandId": "e8bd87e3-36e5-4b8d-82e7-4882209baafa",
+    "provider": "codex",
+    "model": "gpt-6.1-sol",
+    "reasoningEffortObserved": "High",
+    "workspaceName": "v4-152-r01",
+    "permissionPreset": "workspace-write",
+    "modelActuallyStarted": true,
+    "evidence": [
+      "shots/core-15-model-running.png",
+      "raw/core-model-first-turn.txt"
+    ],
+    "firstTool": "work_control status",
+    "specificationVersionAfterTurn": 2,
+    "criteriaTotal": 9,
+    "criteriaPassed": 2
+  },
+  "continuation": {
+    "visible": true,
+    "triggered": false,
+    "enabledPreexisting": true,
+    "targetTokens": 200000,
+    "reserveTokens": 16000,
+    "outputReservationTokens": 128000,
+    "observedBlocker": "Exact model route or capacity changed; explicitly reconfigure continuation before advancing"
+  },
+  "reopen": {
+    "at": "2026-10-22T03:17:13.256Z",
+    "httpStatus": 200,
+    "sameBrowserSession": true,
+    "tabCount": 1,
+    "sameTask": true,
+    "sameExecution": true,
+    "sameSession": true,
+    "taskCount": 6,
+    "runtime": "idle",
+    "state": "ready",
+    "processingState": "blocked",
+    "firstTurn": "completed",
+    "extraTaskCreated": false
+  }
 }

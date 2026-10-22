@@ -37,6 +37,49 @@
 ![PR 已合并](shots/core-08-pr-merged.png)
 ![PR 点击下一页后](shots/core-09-pr-next-page.png)
 
-## 后续阶段
+## 阶段三：P → 真实模型会话（已验证）
 
-P 真实模型启动、接续入口和重开验证进行中；未完成前不计作已验证。
+1. 从 Project1 来源 Issue 列表打开 P（#157）详情，页面显示 `a2d2-dev/dsh-plugin · #157`、GitHub open、负责人 imneov、run 标签、完整原始要求，以及 C #158 / E #159 两项原生子 Issue。详情加载有延迟；离屏鼠标点击现场保留在 core-11/core-12，最终详情成功加载，**不将初期未出现详情判为产品缺陷**。
+2. 「开始处理」导入真实 Task。03:12:07.388Z，`source.import`，HTTP200，耗时6186.645ms，commandId `73d8714c-c585-4fef-8697-cd265d9c8052`。
+3. 确认表单选择隔离目录 `v4-152-r01` 和 `codex/gpt-6.1-sol`，通过真实按钮确认。03:12:57.642Z，`task.start`，HTTP200，耗时20625.477ms，commandId `e8bd87e3-36e5-4b8d-82e7-4882209baafa`。没有创建其他 Task。
+4. 页面进入原生模型会话，出现 `Running Untitled` / `Stop generating`，模型显示 gpt-6.1-sol、High。首轮模型真实回复：“我先读取当前 Task 的真实执行身份、规格和来源引用，再保存本轮可核验的验收项与两项已确认决定；本轮按 epoch 的实际值推进。”并调用 `work_control status`。这证实模型已开始，而非仅创建空会话。
+5. 模型随后调用 `work_organize specification`，保留完整原文并形成规格v2、9条验收项；`work_report` 首次因自引用 child 被 `unlinked-child` 拒绝，模型移除错误引用后重新报告 in-progress。2/9项当前通过，尚未宣告业务验收完成，未生成 proof、未创建 C/E Task、原生child或后台job。
+
+| 身份 | 真实值 |
+| --- | --- |
+| TaskId | `9124c73c-3882-495d-803d-4b6d0e25bbe9` |
+| ExecutionId | `0ac555c0-125e-4ed2-9ad2-ded8c447b37a` |
+| SessionId | `session-b36314e3-3c0e-4c4d-9247-928d6b4187af` |
+| RuntimeId | `c01a3a7b-6deb-4820-9896-548d14220162` |
+| workspaceId | `b2c6edcf-bb21-4925-8ccd-6b0e503de5dc` |
+| owner | `657d73e9-40c5-4170-92fd-07ae0ada7367` |
+| epoch | `1` |
+| source nodeId | `I_kwDOUmfSE88AAAABY_Hq1A` |
+
+[启动请求体/状态/耗时](raw/core-start.har)、[启动前原文](raw/core-p-before-start.txt)、[确认参数](raw/core-p-start-config.txt)、[真实运行](raw/core-model-started.txt)、[首轮回复及工具](raw/core-model-first-turn.txt)、[03:13:48 原始工作响应](raw/core-work-project-response.json)。
+
+![P 详情](shots/core-13-p-detail.png)
+![确认目录和模型](shots/core-14-start-config.png)
+![模型真实运行](shots/core-15-model-running.png)
+![首轮回复与真实工具调用](shots/core-16-model-first-turn.png)
+
+## 阶段四：会话/接续与浏览器重开（已验证）
+
+- 同一P详情「会话与执行」可见协调负责人、Agent、代次1、当前协调会话完整 RuntimeId/SessionId、查看会话入口、原生子Issue观察、输入与结果事实。没有打开子Issue任务执行入口。
+- 「接续」真实参数：已开启（既有设置，未修改）、提前目标200,000 tokens、安全余量16,000、当前上下文0/1,050,000、输出预留128,000、执行结算等待；有「准备接续」入口，**未触发接续或修改参数**。[会话与执行](raw/core-p-sessions-executions.txt)、[接续原文](raw/core-p-continuation.txt)。
+- 关闭浏览器一次，以同一个 `qa152e` 重开，沿同一来源概览进入P，页面仍是「进入当前会话」，无重复创建。重开后「会话与执行」显示原 `session-b36314e3-3c0e-4c4d-9247-928d6b4187af`，第1次turn completed；03:17:13.256Z只读project.detail返回HTTP200，原Task/Execution/Session全部一致，项目Task总数6（既有5 + 本次P），无C/E/A/B/X新Task。[重开原会话](raw/core-reopen-model.txt)、[重开详情](raw/core-p-reopen-sessions.txt)、[原始响应](raw/core-work-reopen-response.json)、[重开业务HTTP记录](raw/core-reopen-network.json)。
+
+![会话与执行](shots/core-17-sessions-executions.png)
+![接续参数](shots/core-18-continuation.png)
+![重开原模型会话](shots/core-19-reopen-model.png)
+![重开同一当前会话](shots/core-20-reopen-same-session.png)
+
+## 产品现象、缺陷与未验证边界
+
+- **已验证**：真实UI来源刷新成功；真实视图/字段目录；Issue两档与P/C/E/A可见；PR真实开放/草稿/合并/关联Issue；P唯一Task与真实模型首轮；会话/接续入口参数；关闭重开仍指向同一会话。
+- **需后续核实的分页现象**：Issue全部档点击下一页后仍第1页；PR下一页内容变化但页码仍第1页。复现步骤与截图见阶段二；当前证据不足以排除离屏自动化点击/异步刷新影响，不冒称分页通过，也不直接认定后端分页缺陷。
+- **接续阻断（真实产品状态，根因未诊断）**：首轮完成后03:17:13工作响应中 runtime=idle/state=ready，processingState=blocked，blockers除等待FINISH令外还包含原文 `Exact model route or capacity changed; explicitly reconfigure continuation before advancing`。复现：P选择codex/gpt-6.1-sol启动→模型完成首轮→重开查看详情/API。未重配模型或接续，不推断具体根因。证据为[重开原始响应](raw/core-work-reopen-response.json)、[最终概览原文](raw/core-p-final-overview.txt)（包括完整阻断文本）及下图；这不否定本次模型真实启动，但后续接续仍待单独验收。
+
+![最终概览与接续阻断](shots/core-21-final-overview.png)
+- **未验证**：复杂Project筛选（来源两真实view均无筛选）；全部负责人档及Closed单独档；稳定分页至第二页；PR关闭档/空结果；真实接续、原生child/job、C的canonical验收、E外部proof验收、完成/关闭、持续规则。后几项超出本次核心链路范围，未改既有三份blocked报告或ledger。
+- 本次未观察到HTTP503；不重复刷新、不重试写请求。localhost连接拒绝和自动化定位错误均如实保留说明，不归为503。密码和认证状态未入证据。

@@ -1,0 +1,19 @@
+{
+  "description": "验收期间环境/自动化错误原文；非 HTTP 业务错误，不等于503。原命令工具输出未记录全部精确时间，不补造。",
+  "observations": [
+    {"order": 1, "at": "2026-10-22T03:00:21.617Z", "timeSource": "browser network initial navigation timestamp", "url": "http://127.0.0.1:18782/", "error": "Navigation failed: net::ERR_CONNECTION_REFUSED", "exitCode": 1, "requestBody": null, "resolution": "ss只读确认监听10.126.126.12:18782后，在同一浏览器session使用实际监听地址成功。无服务操作。"},
+    {"order": 2, "at": null, "error": "bash: line 1: python: command not found", "exitCode": 127, "requestBody": null, "resolution": "本地证据解析改用已安装python3。"},
+    {"order": 3, "at": null, "error": "Author identity unknown; fatal: unable to auto-detect email address", "exitCode": 128, "requestBody": null, "resolution": "读取最近提交作者imneov <i@imneov.im>，后续git commit使用单命令-c身份，不改全局配置。"},
+    {"order": 4, "at": null, "error": "Element not found. Verify the selector is correct and the element exists in the DOM.", "requestBody": null, "resolution": "PR Closed档定位失败，未计通过；保存现场。"},
+    {"order": 5, "at": null, "error": "Unknown subaction: scrollintoview", "exitCode": 1, "requestBody": null, "resolution": "改用文档支持的scrollintoview @ref。"},
+    {"order": 6, "at": null, "error": "Unknown subaction: focus", "exitCode": 1, "requestBody": null, "resolution": "改用文档支持的focus @ref + press Enter，在真实UI按钮确认一次task.start。"}
+  ],
+  "http503Observed": false,
+  "observedProductBlocker": {
+    "at": "2026-10-22T03:17:13.256Z",
+    "httpStatus": 200,
+    "request": {"kind": "query", "value": {"type": "project.detail", "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67"}},
+    "text": "Exact model route or capacity changed; explicitly reconfigure continuation before advancing",
+    "fullResponse": "core-work-reopen-response.json"
+  }
+}

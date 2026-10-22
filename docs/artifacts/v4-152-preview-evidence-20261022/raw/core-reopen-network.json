@@ -1,0 +1,601 @@
+{
+  "requests": [
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"resources.list\"}}",
+      "requestId": "4094715.179",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792638944300,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"resources.list\"}}",
+      "requestId": "4094715.180",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792638944300,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"session.work\",\"session\":{\"runtimeId\":\"c01a3a7b-6deb-4820-9896-548d14220162\",\"sessionId\":\"session-b36314e3-3c0e-4c4d-9247-928d6b4187af\"}}}",
+      "requestId": "4094715.183",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792638948199,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"session.work\",\"session\":{\"runtimeId\":\"c01a3a7b-6deb-4820-9896-548d14220162\",\"sessionId\":\"session-b36314e3-3c0e-4c4d-9247-928d6b4187af\"}}}",
+      "requestId": "4094715.184",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792638948199,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"resources.list\"}}",
+      "requestId": "4094715.185",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792638954199,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"resources.list\"}}",
+      "requestId": "4094715.186",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792638954199,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"session.work\",\"session\":{\"runtimeId\":\"c01a3a7b-6deb-4820-9896-548d14220162\",\"sessionId\":\"session-b36314e3-3c0e-4c4d-9247-928d6b4187af\"}}}",
+      "requestId": "4094715.187",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792638956100,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"session.work\",\"session\":{\"runtimeId\":\"c01a3a7b-6deb-4820-9896-548d14220162\",\"sessionId\":\"session-b36314e3-3c0e-4c4d-9247-928d6b4187af\"}}}",
+      "requestId": "4094715.188",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792638956100,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"resources.list\"}}",
+      "requestId": "4094715.189",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792638959199,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"resources.list\"}}",
+      "requestId": "4094715.190",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792638959300,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"session.work\",\"session\":{\"runtimeId\":\"c01a3a7b-6deb-4820-9896-548d14220162\",\"sessionId\":\"session-b36314e3-3c0e-4c4d-9247-928d6b4187af\"}}}",
+      "requestId": "4094715.191",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792638962400,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"session.work\",\"session\":{\"runtimeId\":\"c01a3a7b-6deb-4820-9896-548d14220162\",\"sessionId\":\"session-b36314e3-3c0e-4c4d-9247-928d6b4187af\"}}}",
+      "requestId": "4094715.192",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792638962400,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"resources.list\"}}",
+      "requestId": "4094715.193",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792638969199,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"resources.list\"}}",
+      "requestId": "4094715.194",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792638969199,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"session.work\",\"session\":{\"runtimeId\":\"c01a3a7b-6deb-4820-9896-548d14220162\",\"sessionId\":\"session-b36314e3-3c0e-4c4d-9247-928d6b4187af\"}}}",
+      "requestId": "4094715.195",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792638971699,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"session.work\",\"session\":{\"runtimeId\":\"c01a3a7b-6deb-4820-9896-548d14220162\",\"sessionId\":\"session-b36314e3-3c0e-4c4d-9247-928d6b4187af\"}}}",
+      "requestId": "4094715.196",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792638971699,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"resources.list\"}}",
+      "requestId": "4094715.197",
+      "resourceType": "Fetch",
+      "timestamp": 1792638979199,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"resources.list\"}}",
+      "requestId": "4094715.198",
+      "resourceType": "Fetch",
+      "timestamp": 1792638979199,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"projects.list\"}}",
+      "requestId": "4094715.199",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792638981499,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "4094715.200",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792638986565,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"1b3fd2f7-a492-4c1d-a965-7e7f8cc5cc58\"}}",
+      "requestId": "4094715.201",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792638986565,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"76002c89-59b6-48a4-8c06-eedb1b05cfa8\"}}",
+      "requestId": "4094715.202",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792638986565,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "4094715.203",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639001812,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "4094715.204",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639001812,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.catalog\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"refresh\":false}}",
+      "requestId": "4094715.205",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639001813,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "4094715.206",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639001813,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "4094715.207",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639006299,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "4094715.208",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639006499,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "4094715.209",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639006499,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "4094715.210",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639006499,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "4094715.211",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639011299,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "4094715.212",
+      "resourceType": "Fetch",
+      "timestamp": 1792639011499,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.list\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "4094715.213",
+      "resourceType": "Fetch",
+      "timestamp": 1792639011499,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"source.issues\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\",\"page\":1,\"perPage\":20,\"assignee\":\"@me\",\"state\":\"open\",\"refresh\":false}}",
+      "requestId": "4094715.214",
+      "resourceType": "Fetch",
+      "timestamp": 1792639011499,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"task.detail\",\"ref\":{\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"taskId\":\"9124c73c-3882-495d-803d-4b6d0e25bbe9\"}}}",
+      "requestId": "4094715.215",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639012899,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"continuous.status\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"sourceId\":\"c122502c-1632-4a96-acb5-8adbac61999d\"}}",
+      "requestId": "4094715.216",
+      "resourceType": "Fetch",
+      "timestamp": 1792639017974,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"task.detail\",\"ref\":{\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"taskId\":\"9124c73c-3882-495d-803d-4b6d0e25bbe9\"}}}",
+      "requestId": "4094715.217",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639021500,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "4094715.218",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639021500,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"task.detail\",\"ref\":{\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"taskId\":\"9124c73c-3882-495d-803d-4b6d0e25bbe9\"}}}",
+      "requestId": "4094715.219",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639026499,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "4094715.220",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639026499,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"task.detail\",\"ref\":{\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"taskId\":\"9124c73c-3882-495d-803d-4b6d0e25bbe9\"}}}",
+      "requestId": "4094715.221",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639031499,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "4094715.222",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639031499,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "4094715.223",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639036771,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"task.detail\",\"ref\":{\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"taskId\":\"9124c73c-3882-495d-803d-4b6d0e25bbe9\"}}}",
+      "requestId": "4094715.224",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639036771,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "4094715.225",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639036771,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"task.detail\",\"ref\":{\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"taskId\":\"9124c73c-3882-495d-803d-4b6d0e25bbe9\"}}}",
+      "requestId": "4094715.226",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639046499,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "4094715.227",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639046499,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"task.detail\",\"ref\":{\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"taskId\":\"9124c73c-3882-495d-803d-4b6d0e25bbe9\"}}}",
+      "requestId": "4094715.228",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639051499,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "4094715.229",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639051499,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"task.detail\",\"ref\":{\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"taskId\":\"9124c73c-3882-495d-803d-4b6d0e25bbe9\"}}}",
+      "requestId": "4094715.230",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639056499,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "4094715.231",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639056499,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"task.detail\",\"ref\":{\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"taskId\":\"9124c73c-3882-495d-803d-4b6d0e25bbe9\"}}}",
+      "requestId": "4094715.232",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639061499,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "4094715.233",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639061499,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"task.detail\",\"ref\":{\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"taskId\":\"9124c73c-3882-495d-803d-4b6d0e25bbe9\"}}}",
+      "requestId": "4094715.234",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639066499,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "4094715.235",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639066499,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"task.detail\",\"ref\":{\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"taskId\":\"9124c73c-3882-495d-803d-4b6d0e25bbe9\"}}}",
+      "requestId": "4094715.236",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639076500,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "4094715.237",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639076500,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"task.detail\",\"ref\":{\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"taskId\":\"9124c73c-3882-495d-803d-4b6d0e25bbe9\"}}}",
+      "requestId": "4094715.238",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639081499,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "4094715.239",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639081499,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"task.detail\",\"ref\":{\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\",\"taskId\":\"9124c73c-3882-495d-803d-4b6d0e25bbe9\"}}}",
+      "requestId": "4094715.240",
+      "resourceType": "Fetch",
+      "timestamp": 1792639086499,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    },
+    {
+      "method": "POST",
+      "mimeType": "application/json",
+      "postData": "{\"kind\":\"query\",\"value\":{\"type\":\"project.detail\",\"projectId\":\"ec480d94-c5e8-44a0-80a0-897945df1a67\"}}",
+      "requestId": "4094715.241",
+      "resourceType": "Fetch",
+      "status": 200,
+      "timestamp": 1792639086499,
+      "url": "http://10.126.126.12:18782/a2d2/api/work"
+    }
+  ],
+  "errors": []
+}
