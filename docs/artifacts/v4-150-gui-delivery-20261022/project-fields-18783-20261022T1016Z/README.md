@@ -69,3 +69,14 @@
 回归测试：`tests/client/work-panel.spec.ts` 新增「loads the target project sources before selecting a connected source from another project」；10/10 通过。
 
 实测（client `9eaeabbb`）：仓库 → Project → 仓库 → Project 往返切换，面板始终有来源、有内容；截图 `repro-source-switch-fixed.png`。
+
+## 布局：来源信息 + 目录标签 + 操作按钮合并成一行（2026-10-22 12:11Z）
+
+原来三层：来源摘要 / 目录标签 / 刷新与缓存按钮 + 缓存文字。现在一层：
+`DSH A²D² · Project · a2d2-dev / #1 · 组织 · 读取账号：imneov` + `概览 项目 Issue PR` + 右侧两个图标按钮（刷新 ⟳、读取缓存 🕐，`title` 里带缓存时间）+ `▶ 持续委托`。
+
+- 图标按钮取代「刷新来源 / 读取目录缓存」文字，`aria-label` 保留可访问名称；
+- 缓存/最后已知观察的时间不再占一行，只在按钮 tooltip 里；
+- 截图：`header-row.png`（概览）、`header-row-project.png`（项目表格）。
+
+构建：client `481900dfe1d59f481faced12f3608ff4b6288c378fe2523fb973a32049d7a6d5`，18783。
