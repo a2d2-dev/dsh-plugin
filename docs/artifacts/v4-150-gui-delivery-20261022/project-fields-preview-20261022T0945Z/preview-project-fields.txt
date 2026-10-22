@@ -1,0 +1,147 @@
+DSH Local Build
+New Session
+Plugins
+A²D² 控制面板
+Workspaces
+v4-152-r01
+Coordinate accepted work and its
+1h
+Untitled
+4h
+Untitled
+5h
+Coordinate accepted work and its
+6h
+workspace
+Settings
+A²D² 控制面板
+a2d2-dev/dsh-plugin 仓库
+DSH A²D² Project
+项目管理 v3.0 Project
+＋
+关闭面板
+DSH A²D²
+Project · a2d2-dev / #1 · 组织
+读取账号：imneov
+持续委托
+概览
+项目
+Issue
+PR
+刷新来源
+读取目录缓存
+缓存 / 最后已知观察 · 2026-10-22T03:02:06.942Z
+真实 Project 视图与字段
+视图
+任务清单
+全部任务
+
+视图与字段目录读取完整 · TABLE_LAYOUT
+
+筛选：（无筛选）
+
+可见匹配 82 项 · 2026-10-22T09:44:41.586Z · 0 项权限受限，无法参与精确筛选。
+
+条目	Assignees	Status	Labels	Linked pull requests	Milestone	Repository	Reviewers	Parent issue	Sub-issues progress	Created	Updated	Closed
+a2d2-dev/dsh-plugin #112 一期：插件托管任务长程运行、主会话接续与事件归属	imneov	已部署	a2d2:main	—	—	a2d2-dev/dsh-plugin	—	—	—	2026-10-15	2026-10-15	—
+a2d2-dev/dsh-plugin #8 Spec: 「下一步」按 Matt 公路图定位 + 按站选模型 + A2D2 配置页	—	Done	ready-for-agent	—	—	a2d2-dev/dsh-plugin	—	—	7/7 · 100%	2026-09-25	2026-09-25	2026-09-25
+a2d2-dev/dsh-plugin #9 T1 站点模型表 + 咨询自有模型与运行时回落	—	Done	ready-for-agent	
+#16
+	—	a2d2-dev/dsh-plugin	—	
+#8
+Spec: 「下一步」按 Matt 公路图定位 + 按站选模型 + A2D2 配置页	—	2026-09-25	2026-09-25	2026-09-25
+a2d2-dev/dsh-plugin #10 T2 公路图：咨询新协议 + 卡片迷你公路与下一站行	—	Done	ready-for-agent	
+#17
+	—	a2d2-dev/dsh-plugin	—	
+#8
+Spec: 「下一步」按 Matt 公路图定位 + 按站选模型 + A2D2 配置页	—	2026-09-25	2026-09-25	2026-09-25
+a2d2-dev/dsh-plugin #11 T3 A2D2 配置页：Matt 流程公路图 + 逐站模型候选 + 测试	—	Done	ready-for-agent	
+#21
+	—	a2d2-dev/dsh-plugin	—	
+#8
+Spec: 「下一步」按 Matt 公路图定位 + 按站选模型 + A2D2 配置页	—	2026-09-25	2026-09-25	2026-09-25
+a2d2-dev/dsh-plugin #12 T4 球只留「下一步」，交接移入「其他走法」	—	Done	ready-for-agent	
+#18
+	—	a2d2-dev/dsh-plugin	—	
+#8
+Spec: 「下一步」按 Matt 公路图定位 + 按站选模型 + A2D2 配置页	—	2026-09-25	2026-09-25	2026-09-25
+a2d2-dev/dsh-plugin #13 T5 前置条件路牌（/setup-matt-pocock-skills）	—	Done	ready-for-agent	
+#20
+	—	a2d2-dev/dsh-plugin	—	
+#8
+Spec: 「下一步」按 Matt 公路图定位 + 按站选模型 + A2D2 配置页	—	2026-09-25	2026-09-25	2026-09-25
+a2d2-dev/dsh-plugin #14 T6 本会话芯片自动切模型	—	Done	ready-for-agent	
+#19
+	—	a2d2-dev/dsh-plugin	—	
+#8
+Spec: 「下一步」按 Matt 公路图定位 + 按站选模型 + A2D2 配置页	—	2026-09-25	2026-09-25	2026-09-25
+a2d2-dev/dsh-plugin #15 T7 新会话走法在创建时选好模型（clear / compact / handoff）	—	Done	ready-for-agent	
+#22
+	—	a2d2-dev/dsh-plugin	—	
+#8
+Spec: 「下一步」按 Matt 公路图定位 + 按站选模型 + A2D2 配置页	—	2026-09-25	2026-09-25	2026-09-25
+a2d2-dev/dsh-plugin #25 加固：「下一步」咨询与配置页「测试」加客户端超时	—	Done	ready-for-agent	—	—	a2d2-dev/dsh-plugin	—	—	—	2026-09-25	2026-10-01	2026-10-01
+a2d2-dev/dsh-plugin #26 A2D2 配置页：code-review 与 implement 同首选的告警改为中文	—	Done	ready-for-agent	—	—	a2d2-dev/dsh-plugin	—	—	—	2026-09-25	2026-10-01	2026-10-01
+a2d2-dev/dsh-plugin #28 A²D² 面板：侧边栏 Tab 展示本项目任务、成员、交接边与本会话子代理模型	—	Done	ready-for-agent	
+#29
+	—	a2d2-dev/dsh-plugin	—	—	—	2026-09-25	2026-09-25	2026-09-25
+a2d2-dev/dsh-plugin #30 Harden task document reads: symlink and size bounds; dedupe session-list snapshot boilerplate	—	Done	ready-for-agent	—	—	a2d2-dev/dsh-plugin	—	—	—	2026-09-25	2026-10-01	2026-10-01
+a2d2-dev/dsh-plugin #33 A²D² panel: render handoff chains and the subagent topology as trees	—	Done	ready-for-agent	
+#34
+,
+#37
+	—	a2d2-dev/dsh-plugin	—	—	—	2026-09-25	2026-09-25	2026-09-25
+a2d2-dev/dsh-plugin #41 A²D²：每个任务由主会话里的 CEO 推进（插件作为载体）	imneov	—	a2d2:main	—	—	a2d2-dev/dsh-plugin	—	—	10/11 · 90%	2026-10-01	2026-10-22	—
+a2d2-dev/dsh-plugin #42 CEO 的 SOUL：提炼 LF 的原则	—	—	a2d2:sub	—	—	a2d2-dev/dsh-plugin	—	
+#41
+A²D²：每个任务由主会话里的 CEO 推进（插件作为载体）	—	2026-10-01	2026-10-01	—
+a2d2-dev/dsh-plugin #44 合并 DSH 0.2 移植	—	Done	ready-for-agent	
+#53
+	—	a2d2-dev/dsh-plugin	—	
+#41
+A²D²：每个任务由主会话里的 CEO 推进（插件作为载体）	—	2026-10-01	2026-10-01	2026-10-01
+a2d2-dev/dsh-plugin #45 绑定主会话：任务文档升级与面板显示	—	Done	ready-for-agent	
+#55
+	—	a2d2-dev/dsh-plugin	—	
+#41
+A²D²：每个任务由主会话里的 CEO 推进（插件作为载体）	—	2026-10-01	2026-10-01	2026-10-01
+a2d2-dev/dsh-plugin #46 CEO 提示段：主会话现读 AGENTS / WAKE / SOUL	—	Done	ready-for-agent	
+#61
+	—	a2d2-dev/dsh-plugin	—	
+#41
+A²D²：每个任务由主会话里的 CEO 推进（插件作为载体）	—	2026-10-01	2026-10-01	2026-10-01
+a2d2-dev/dsh-plugin #47 主会话交接：交接中与接任	—	Done	ready-for-agent	
+#59
+	—	a2d2-dev/dsh-plugin	—	
+#41
+A²D²：每个任务由主会话里的 CEO 推进（插件作为载体）	—	2026-10-01	2026-10-01	2026-10-01
+a2d2-dev/dsh-plugin #48 派子代理：按站选模型、按特殊 Agent 带 persona	imneov	Done	ready-for-agent	
+#60
+	—	a2d2-dev/dsh-plugin	—	
+#41
+A²D²：每个任务由主会话里的 CEO 推进（插件作为载体）	—	2026-10-01	2026-10-22	2026-10-01
+a2d2-dev/dsh-plugin #49 开子任务：为子任务新建根会话作为主会话	imneov	Done	ready-for-agent	
+#62
+	—	a2d2-dev/dsh-plugin	—	
+#41
+A²D²：每个任务由主会话里的 CEO 推进（插件作为载体）	—	2026-10-01	2026-10-22	2026-10-01
+a2d2-dev/dsh-plugin #50 宣告完成：子任务完成时叫醒父任务主会话	—	Done	ready-for-agent	
+#66
+	—	a2d2-dev/dsh-plugin	—	
+#41
+A²D²：每个任务由主会话里的 CEO 推进（插件作为载体）	—	2026-10-01	2026-10-01	2026-10-01
+a2d2-dev/dsh-plugin #51 CEO 的 AGENTS.md 与 WAKE.md 正式内容	—	Done	ready-for-agent	
+#67
+	—	a2d2-dev/dsh-plugin	—	
+#41
+A²D²：每个任务由主会话里的 CEO 推进（插件作为载体）	—	2026-10-01	2026-10-01	2026-10-01
+a2d2-dev/dsh-plugin #52 下一步咨询不再依赖 a2d2-orchestrator 技能	—	Done	ready-for-agent	
+#54
+	—	a2d2-dev/dsh-plugin	—	
+#41
+A²D²：每个任务由主会话里的 CEO 推进（插件作为载体）	—	2026-10-01	2026-10-01	2026-10-01
+上一页
+第 1 页
+下一页
+真实字段定义
+新执行默认自动接续
