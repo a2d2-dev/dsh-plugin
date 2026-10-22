@@ -1,0 +1,15 @@
+{
+  "run": "20261022T032900Z",
+  "program": "dsh-dev-web-server",
+  "origin": "http://127.0.0.1:18781/",
+  "productPluginSha256": "7faf3bce6d72cc2d098740d218f4ee9181256d05eb48151a79ded689232b49f5",
+  "clientSha256": "6e98f56fae9726453d8b2c0f3d347b5db8b6299cb17eeb955abce3a9e5171fbb",
+  "host": "8282d61299a04f60555f9ce473af174bbe161b02",
+  "cliBefore": "1423918",
+  "cliAfter": "4131866",
+  "http": "401",
+  "panelOk": "yes",
+  "retention": "loss",
+  "screenshots": ["gui-after.png", "gui-panel.png"],
+  "evidence": "/data/_dsh-dev/deployments/v4-gui-20261022T032900Z"
+}

@@ -1,0 +1,35 @@
+A²D² 控制面板
+Workspaces
+No matching sessions
+Settings
+A²D² 控制面板
+a2d2-dev/dsh-plugin 仓库
+＋
+关闭面板
+
+状态更新暂不可用，保留上次内容：source-page-unobserved: This page has not been retrieved; refresh explicitly
+
+a2d2-dev/dsh-plugin
+仓库 · a2d2-dev/dsh-plugin
+读取账号：imneov
+持续委托
+概览
+Issue
+PR
+刷新来源
+读取目录缓存
+本次读取 · 2026-10-22T03:35:03.911Z
+来源概览
+开放 Issue
+46
+
+GitHub 全仓库计数
+
+PR
+74
+
+当前范围完整观察
+
+处理中
+0
+

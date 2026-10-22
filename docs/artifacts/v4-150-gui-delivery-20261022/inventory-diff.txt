@@ -1,0 +1,26 @@
+--- /data/_dsh-dev/deployments/v4-gui-20261022T032900Z/pre-inventory.txt	2026-10-21 20:29:01.562059514 -0700
++++ /data/_dsh-dev/deployments/v4-gui-20261022T032900Z/post-inventory.txt	2026-10-21 20:29:35.628359317 -0700
+@@ -69,6 +69,8 @@
+ sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/fdd48811-d930-45d9-862e-bae607802b61/session.v4.jsonl.zstd
+ sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-0bf12b17-ffa2-4af6-abb6-b06bfdd8a30f/session.lock
+ sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-0bf12b17-ffa2-4af6-abb6-b06bfdd8a30f/session.v4.jsonl.zstd
++sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-109e2c38-f3fc-4b51-bd62-095cf3fc631a/session.lock
++sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-109e2c38-f3fc-4b51-bd62-095cf3fc631a/session.v4.jsonl.zstd
+ sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-1350b913-2434-4f1f-9d4b-1b7341b99ac5/session.lock
+ sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-1350b913-2434-4f1f-9d4b-1b7341b99ac5/session.v4.jsonl.zstd
+ sessions/--data-src-github.com-a2d2-dev-dsh-plugin.worktrees-task-interaction-v3--/session-13680870-542e-4703-98d3-61fefe02a491/session.lock
+@@ -198,10 +200,11 @@
+ sessions/--data-src-github.com-a2d2-dev--/session-a1573b1b-f1ce-43bb-8e8e-e270e1776fa2/session.lock
+ sessions/--data-src-github.com-a2d2-dev--/session-a1573b1b-f1ce-43bb-8e8e-e270e1776fa2/session.v4.jsonl.zstd
+ == storages
+-979555775c33427406c41a475d03733e63a71adc816c5d6d85f13065c50ca592  storages/workspace.json
++e9ab53de2c82e59250e4242b06eb0dfb78be54283c7a1c338fc76d79f5e126e0  storages/workspace.json
+ == a2d2
+-3c5a60ffe7e07a9d0fd987470eab2b9c530b5780163f731fff36c1df3f2ad03c  a2d2/task-runtime/07669f5fa8de25ee479fca345d007321d8261f90a97271e527ae67682325e0af.json
+-4bc7e0e532a88bb6f47eb7b9639ef1f39d22158a8015a4cebd5912486e472162  a2d2/task-runtime/07669f5fa8de25ee479fca345d007321d8261f90a97271e527ae67682325e0af.json.owner.lock
++6e6c44ff3f8b2b0753c28db0fb362acf75d7af3c8644878b42666bf3ab7b3b81  a2d2/task-runtime/07669f5fa8de25ee479fca345d007321d8261f90a97271e527ae67682325e0af.json
++cce061d58459ac1eacbedfef906c409bb30bccd7f4f685f0f2b314ce3cf93d66  a2d2/task-runtime/07669f5fa8de25ee479fca345d007321d8261f90a97271e527ae67682325e0af.json.owner.lock
++fb0fd0af1e6a0c118019832cadf6523e11efca87cf056292ed798fff25dc9792  a2d2/work-v3/runtime-v1.json
+ == projects
+ projects
+ projects/runtime-verification

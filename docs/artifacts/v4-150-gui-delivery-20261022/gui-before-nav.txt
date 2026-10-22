@@ -1,0 +1,35 @@
+DSH Local Build
+0.2.0-rc.2-4c24ce4
+New Session
+Plugins
+Workspaces
+task-interaction-v3
+New Session
+Running
+1 subagent running
+继续完成任务交互原型工作
+2h
+将所有议题加入项目看板
+2h
+Untitled
+3h
+基于原型完善任务交互
+9h
+阅读概念并讨论现有原型
+10h
+项目目标与领域关系梳理
+17h
+Show 5 more sessions
+plugin-only-compat
+a2d2-dev
+edge-platform
+runtime-verification
+Settings
+Into the Unknown
+Preview
+task-interaction-v3
+Standard mode
+Describe what you want to build, / commands, @ files or sessions
+Workspace Write
+DeepSeek-V41-Flash
+High
