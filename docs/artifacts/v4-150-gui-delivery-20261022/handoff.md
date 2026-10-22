@@ -9,12 +9,14 @@
 - **GUI 侧真实模型计划已跑通**：codex/gpt-6.1-sol、28.4s、plan v1（#152 `new` → #150 `wait` → #136 `wait`）；`requestCharacters=16386`（修前 350–400KB），#167 的载荷失败模式在 GUI 已消失。计划仅预览，规则 `enabled=false`。
 - **preview 18782**：组合构建（client `85abb961`）。
 - **产品缺陷**：#163 已修（PR #164 Draft）、#165 已修（`fix/planning-basis-stability` HEAD 4f359b8）、#167 已修（`fix/planner-payload` HEAD 9096e0d）；#166（390×844 横向裁切）只登记未修。均未合并，等维护者。
-- **#152 仍未完成**：B 完成 → 关闭 #161 → A RESUME、越界 node 拒绝、B 模型判断问题均未验证；本轮另见 deepseek-flash `max-tokens`（47 候选）与模型把 #160 判成 `existing`（工作库 0 Task/0 Execution）两个模型侧现象。
+- **串行链路已通过（08:08–08:35Z）**：B 完成 → #161 关闭（08:11:28Z）→ A RESUME → #160 关闭（08:34:58Z）。环境侧安装了 `bubblewrap 0.6.1` 让 workspace-write 可用（未放宽权限）。
+- **新缺陷 #168**：持续候选扫描覆盖 `binding.lastObserved`（无 `subIssues`、`<=` 覆盖），导致 `source-children` 采纳 superseded、`done` 被 native-child-scope-incomplete 拒绝；暂停接新可绕过，已登记未修。
+- **#152 仍未完成**：越界 node 拒绝（真实模型两次都拒绝输出候选外节点，守卫只有单元测试实证）、B 模型判断问题；另有 deepseek-flash `max-tokens`（47 候选）模型侧现象。
 
 ## 下一步（按顺序）
 
-1. 若继续产品验收：先在 preview 18782 复现 B 的模型判断问题（B 已取得宿主推进槽仍自判 blocked），需要修的是夹具/模型提示而不是调度器；再做 B 完成→#161 关闭→A RESUME。
-2. 越界 node 拒绝需要一个"模型输出计划外节点"的真实构造（例如把某个不在候选内的 nodeId 混入可用来源的候选集）。
+1. 修 #168（`lastObserved` 覆盖策略），否则持续模式下的父任务完成路径只能靠暂停接新绕过。
+2. 越界 node 拒绝仍需要能真实触发 `planning-outside-source` 的构造（本轮两次真实模型尝试均被模型自身拒绝）。
 3. 分页稳定、PR 关闭空结果、后台 job 收取分层、关闭冲突补偿仍未验证；#166 未修。
 4. PR 由维护者合并（#149、#164 与两个修复分支）；本分支只提交文档与证据。
 

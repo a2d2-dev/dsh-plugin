@@ -1,0 +1,70 @@
+{
+  "run": "v4-152-6b252218-r01",
+  "fixture": "B",
+  "sourceIssue": "https://github.com/a2d2-dev/dsh-plugin/issues/161",
+  "specificationVersion": 2,
+  "identity": {
+    "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+    "taskId": "d456f4bc-eeaf-4f6a-88e5-0d5c03f7e5c3",
+    "executionId": "f3f33cb2-5692-4372-808a-55ce5b90402b",
+    "sessionId": "session-d4ed190e-d014-4013-85cd-c467752e923a",
+    "owner": "c322c131-9b54-4992-a0df-99f2fbf8006d",
+    "epoch": 1,
+    "agentId": "a4b8b515-554a-4fe7-99c1-f0581a3da464",
+    "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+    "workspaceId": "b2c6edcf-bb21-4925-8ccd-6b0e503de5dc",
+    "cwd": "/data/_dsh-dev/acceptance-workspaces/v4-152-r01",
+    "provider": "codex",
+    "model": "gpt-6.1-sol",
+    "reasoningEffort": "medium",
+    "permissionPreset": "workspace-write",
+    "evidenceSource": "work_control status execution and execution.actual"
+  },
+  "slot": {
+    "rule": "373d1174",
+    "enabled": true,
+    "A": "waiting",
+    "B": "active",
+    "activeTaskId": "d456f4bc-eeaf-4f6a-88e5-0d5c03f7e5c3",
+    "evidenceSource": "User supplied formal host facts; work_control resume accepted"
+  },
+  "decisions": {
+    "retainCount": 3,
+    "keepTags": [
+      "stable"
+    ]
+  },
+  "checks": {
+    "identityObserved": {
+      "status": "passed",
+      "evidence": "Current work_control status returned Task/Execution/Session/owner/epoch"
+    },
+    "sourceScopeRecorded": {
+      "status": "passed",
+      "evidence": "Full accepted Issue body preserved in canonical specification version 2"
+    },
+    "jsonParse": {
+      "status": "passed",
+      "method": "Python json.loads of on-disk UTF-8 JSON"
+    },
+    "retainCount": {
+      "status": "passed",
+      "actual": 3,
+      "expected": 3
+    },
+    "stable": {
+      "status": "passed",
+      "actual": [
+        "stable"
+      ],
+      "expected": [
+        "stable"
+      ]
+    },
+    "sha256": {
+      "status": "passed",
+      "scope": "File bytes before recording checks; final file SHA256 reported separately in canonical acceptance evidence",
+      "value": "5eaf2d7b63c2af96ee0343abcce93c841d19bc290d9a6cb277d3bafbbc9df807"
+    }
+  }
+}

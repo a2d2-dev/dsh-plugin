@@ -1,0 +1,63 @@
+{
+  "run": "v4-152-6b252218-r01",
+  "fixture": "A",
+  "sourceIssue": "https://github.com/a2d2-dev/dsh-plugin/issues/160",
+  "status": "done",
+  "identity": {
+    "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+    "taskId": "b8d20566-011e-4011-b44d-5271d301e051",
+    "executionId": "f3cf7e6a-f7c7-454f-9014-2ddcf4102a5f",
+    "sessionId": "session-ab13791a-3382-471d-9d00-bf04dd926db2",
+    "owner": "94b0a304-89db-42a5-89cb-d9e09982f25a",
+    "epoch": 1,
+    "agentId": "a4b8b515-554a-4fe7-99c1-f0581a3da464",
+    "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+    "workspaceId": "b2c6edcf-bb21-4925-8ccd-6b0e503de5dc",
+    "cwd": "/data/_dsh-dev/acceptance-workspaces/v4-152-r01",
+    "provider": "codex",
+    "model": "gpt-6.1-sol",
+    "reasoningEffort": "medium",
+    "permissionPreset": "workspace-write",
+    "evidenceSource": "work_control status execution and execution.actual"
+  },
+  "decisions": {
+    "retainCount": 3,
+    "keepTags": [
+      "stable"
+    ]
+  },
+  "checks": {
+    "identityObserved": {
+      "status": "passed",
+      "evidence": "work_control status returned actual execution identity, owner, epoch, session and resources"
+    },
+    "sourceScopeRecorded": {
+      "status": "passed",
+      "evidence": "Accepted Issue #160 body preserved using work_organize; specification version 2"
+    },
+    "retainCount": {
+      "status": "passed",
+      "evidence": "Python assertion passed: retainCount is int and equals 3"
+    },
+    "stable": {
+      "status": "passed",
+      "evidence": "Python assertion passed: keepTags == [\"stable\"]"
+    },
+    "jsonParse": {
+      "status": "passed",
+      "evidence": "json.loads parsed original proof UTF-8 JSON successfully; final serialized JSON also parsed and checked before writing"
+    },
+    "sha256": {
+      "status": "passed",
+      "scope": "original proof bytes before acceptance results were added",
+      "algorithm": "SHA256",
+      "digest": "202aa5ab0aa1483f0e1bc725308a33bf285e329a1ca5208ca14a23a9762b8805",
+      "evidence": "hashlib.sha256 computed original proof digest; final file digest is emitted separately to avoid a self-referential hash"
+    }
+  },
+  "resume": {
+    "command": "RESUME-A-v4-152-6b252218-r01",
+    "evidence": "work_control status: event continuous-resume:ceo-152-resume:A:f3cf7e6a:1 delivered; control resume applied; original execution/session/owner/resources unchanged",
+    "epoch": 1
+  }
+}
