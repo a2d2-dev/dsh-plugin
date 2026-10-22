@@ -22,6 +22,7 @@ it.each(['error', 'aborted'] as const)('retains a safe provider failure summary 
   })
   const error = await planner.generate(basis, basis.executionStrategy.model).catch(error => error as Error)
   expect(error).toMatchObject({ code: 'planning-model-failed', message: expect.stringContaining('maximum context exceeded') })
+  if (!(error instanceof Error)) throw new Error('Expected a planner failure')
   expect(error.message).toContain('CONTEXT_WINDOW_EXCEEDED')
   expect(error.message).toContain('400')
   for (const secret of ['private-value', 'private-bearer', '/private/', 'model.example', 'private-query', 'MODEL_OUTPUT_MUST_NOT_LEAK']) expect(error.message).not.toContain(secret)

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { planningBasis, planningBasisFingerprint } from '../src/work-planning.ts'
+import { planningBasis, planningBasisFingerprint, planningBasisCharacterLimit, planningSchema } from '../src/work-planning.ts'
 import type { WorkSnapshot } from '../src/work-schema.ts'
 import type { ContinuousWorkRule } from '../src/work-types.ts'
 
@@ -35,6 +35,7 @@ it('bounds a 46-candidate request with 8KB Issue bodies and canonical specificat
   const json = JSON.stringify(basis)
   console.info(JSON.stringify({ observationsBytes: Buffer.byteLength(JSON.stringify(state.sources[0]!.observations)), basisCharacters: json.length, basisBytes: Buffer.byteLength(json), candidates: basis.candidates.length }))
   expect(json.length).toBeLessThanOrEqual(256 * 1024)
+  expect(json.length).toBeLessThanOrEqual(planningBasisCharacterLimit(46))
   expect(Buffer.byteLength(JSON.stringify(state.sources[0]!.observations))).toBeGreaterThan(300 * 1024)
   expect(basis.candidates.map(candidate => candidate.issue.nodeId)).toEqual(state.sources[0]!.observations.map(({ issue }) => issue.nodeId))
   for (const candidate of basis.candidates) {
@@ -71,4 +72,63 @@ it('bounds explanatory text deterministically without dropping candidate identit
   expect(planningBasisFingerprint(planningBasis(state, rule))).toBe(before)
   state.tasks[0]!.goal += 'Changed beyond the summary'
   expect(planningBasisFingerprint(planningBasis(state, rule))).not.toBe(before)
+})
+
+it('summarizes Project item catalogs without losing membership or relationship safety facts', () => {
+  const { state, rule } = fixture()
+  const source = state.sources[0]!
+  delete source.repository
+  delete source.repositorySnapshot
+  source.githubProject = { owner: 'acme', type: 'org', number: 1 }
+  source.projectSnapshot = { identity: source.identity!, project: { nodeId: 'PROJECT', title: 'Project', url: 'https://github.com/orgs/acme/projects/1', closed: false }, observedAt: now,
+    items: source.observations.map(({ issue }) => ({ id: `ITEM_${issue.nodeId}`, kind: 'issue', archived: false, issueNodeId: issue.nodeId, title: 'PROJECT_ITEM_TEXT'.repeat(1000), fields: [], fieldsPartial: false })),
+  }
+  const child = source.observations[1]!.issue
+  source.observations[0]!.issue.subIssues = { items: [child], totalCount: 2, hasNextPage: true }
+  child.parent = source.observations[0]!.issue
+  const basis = planningBasis(state, rule)
+  expect(basis.source.projectSnapshot).not.toHaveProperty('items')
+  expect(JSON.stringify(basis)).not.toContain('PROJECT_ITEM_TEXT')
+  expect(JSON.stringify(basis).length).toBeLessThanOrEqual(planningBasisCharacterLimit(46))
+  expect(basis.candidates.map(candidate => candidate.issue.nodeId)).toEqual(source.observations.map(({ issue }) => issue.nodeId))
+  expect(basis.candidates[0]!.issue.subIssues).toEqual({ items: [{ nodeId: 'ISSUE_2', state: 'open' }], totalCount: 2, hasNextPage: true })
+  expect(basis.candidates[1]!.issue.parent).toEqual({ nodeId: 'ISSUE_1', state: 'open' })
+})
+
+it('retains execution authority and tool control while excluding diagnostic and control prose', () => {
+  const { state, rule } = fixture(1)
+  const task = state.tasks[0]!
+  const authority = { id: 'execution', ref: { projectId: task.projectId, taskId: task.id }, agentId: task.agentId, owner: 'owner', epoch: 3,
+    resource: rule.resource, model: rule.model, agentPreset: rule.agentPreset, permissionPreset: rule.permissionPreset, session: { runtimeId: 'host', sessionId: 'session' }, state: 'paused' }
+  state.executions.push({ ...authority, control: { action: 'pause', status: 'accepted', commandId: 'command', reason: 'CONTROL_BODY'.repeat(10000) }, error: { code: 'failure', message: 'ERROR_BODY'.repeat(10000) } } as WorkSnapshot['executions'][number])
+  const basis = planningBasis(state, rule)
+  expect(basis.candidates[0]!.execution).toEqual({ ...authority, control: { action: 'pause', status: 'accepted' } })
+  expect(JSON.stringify(basis)).not.toContain('CONTROL_BODY')
+  expect(JSON.stringify(basis)).not.toContain('ERROR_BODY')
+})
+
+it('uses title truncation when the remaining explanatory goals are empty', () => {
+  const { state, rule } = fixture(1)
+  state.tasks[0]!.goal = ''
+  state.sources[0]!.observations[0]!.issue.title = '\u0001'.repeat(300)
+  rule.planning!.instruction = 'x'.repeat(67000)
+  const basis = planningBasis(state, rule)
+  expect(basis.candidates).toHaveLength(1)
+  expect(basis.candidates[0]!.issue).toMatchObject({ nodeId: 'ISSUE_1', title: '' })
+  expect(JSON.stringify(basis).length).toBeLessThanOrEqual(planningBasisCharacterLimit(1))
+})
+
+it('fails explicitly when mandatory scope cannot fit without dropping candidates', () => {
+  const { state, rule } = fixture()
+  rule.planning!.supplements = Array.from({ length: 4 }, () => 'Authorized instruction '.repeat(4000))
+  expect(() => planningBasis(state, rule)).toThrowError(/Planning identities and instructions exceed request limit: requestCharacters=\d+, candidates=46, limit=253952/)
+  expect(state.sources[0]!.observations).toHaveLength(46)
+})
+
+it('reads existing saved plans without rewriting their basis or persistent fields', () => {
+  const { state, rule } = fixture(1)
+  const compact = planningBasis(state, rule)
+  const legacy = { ...compact, source: state.sources[0], candidates: [{ issue: state.sources[0]!.observations[0]!.issue }] }
+  const planning = { ...rule.planning, draftVersion: 1, plans: [{ version: 1, draftVersion: 1, basis: legacy, steps: [], createdAt: now }] }
+  expect(planningSchema.parse(planning)).toEqual(planning)
 })
