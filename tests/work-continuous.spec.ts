@@ -461,7 +461,10 @@ it('validates the latest Issue scope after model generation despite stable ident
 
 it.each(['error', 'string', 'sensitive'] as const)('reports a distinct model failure with a safe summary (%s)', async kind => {
   let h!: Awaited<ReturnType<typeof setup>>
-  h = await setup(false, { generate: async () => {
+  let requestCharacters = 0, candidateCount = 0
+  h = await setup(false, { generate: async basis => {
+    requestCharacters = JSON.stringify(basis).length
+    candidateCount = basis.candidates.length
     // A concurrent canonical change must not hide the actual model failure.
     completed(await h.app.execute({ type: 'source.import', commandId: 'failure-import', ...h.scope, nodeId: 'ISSUE_1' }, operator))
     if (kind === 'string') throw 'upstream rate limit (429)'
@@ -473,6 +476,8 @@ it.each(['error', 'string', 'sensitive'] as const)('reports a distinct model fai
   const result = await h.app.execute({ type: 'continuous.preview', commandId: 'failure-preview', ...h.scope, expectedVersion: 2 }, operator)
   expect(result).toMatchObject({ status: 'failed', error: { code: 'planning-model-failed', message: expect.stringContaining('upstream rate limit (429)') } })
   if (result.status !== 'failed') throw new Error('Expected failure')
+  expect(result.error.message).toContain(`requestCharacters=${requestCharacters}`)
+  expect(result.error.message).toContain(`candidates=${candidateCount}`)
   for (const secret of ['private-value', 'private-bearer', 'sk-12345678901234567890', '/private/', 'C:\\private', 'password@', 'private-query']) expect(result.error.message).not.toContain(secret)
   expect(result.error.message.length).toBeLessThanOrEqual(550)
   const restored = new WorkApplication(h.directory, h.host, h.source)
