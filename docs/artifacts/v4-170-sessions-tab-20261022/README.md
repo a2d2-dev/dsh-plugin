@@ -35,7 +35,7 @@
 
 ## 构建
 
-- 源码：`feat/project-field-values` @ `0835e61`（PR #170，Draft）。
+- 源码：`feat/panel-ui-iteration` @ `0835e61`（PR #171，Draft）。
 - 构建：`/data/_dsh-builds/v4-170-ui`，client `cf5c0986bf4291bdbc4f3117cee055bad2ea881dec52277727b95ed444b5003b`；18783 已换装，client rev `0c0e1e02d63e`。
 
 ## 已知边界

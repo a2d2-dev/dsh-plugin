@@ -1,4 +1,4 @@
-# 会话列真实数据验收 + 列序调整（PR #170，2026-10-22 14:00Z）
+# 会话列真实数据验收 + 列序调整（后并入 PR #171，2026-10-22 14:00Z）
 
 上一会话的交接（`../v4-150-gui-delivery-20261022/handoff-20261022T1300Z.md`）把「会话列全是 —」列为未验证。本轮用 18783 上真实的 Task 数据复核，并修掉把 Assignees 挤成 `imneo…` 的列序问题。
 
@@ -6,7 +6,7 @@
 
 | 项目 | 值 |
 | --- | --- |
-| 源码分支 | `feat/project-field-values` @ `a8cbf12`（PR **#170**，Draft） |
+| 源码分支 | `feat/panel-ui-iteration` @ `a8cbf12`（PR **#171**，Draft） |
 | 构建产物 | `/data/_dsh-builds/v4-170-ui`（`dsh-a2d2-0.0.1.tgz` + `profile-new/`） |
 | client SHA256 | `53e1276802d44bc3726fa91e42333cc3eb511245e9c2ca6440fae17615d12642` |
 | 预览实例 | <http://10.126.126.12:18783/>，DSH_HOME=`/data/_dsh-dev-18783`，client rev `adc148e820d8` |

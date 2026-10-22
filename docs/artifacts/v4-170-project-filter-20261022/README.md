@@ -22,4 +22,4 @@
 - 选「全部任务」：**41 项 · 已隐藏 41 个已关闭**；勾选「含已关闭」后 82 项。
 - 截图：`project-isopen.png`。
 
-源码 `feat/project-field-values` @ `37bb7c0`；18783 client `36c258d7…`。
+源码 `feat/panel-ui-iteration` @ `37bb7c0`（PR #171）；18783 client `36c258d7…`。

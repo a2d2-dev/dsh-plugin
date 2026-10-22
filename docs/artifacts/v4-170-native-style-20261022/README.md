@@ -45,6 +45,6 @@
 
 ## 构建
 
-- 源码 `feat/project-field-values` @ `812f905`（PR #170，Draft）。
+- 源码 `feat/panel-ui-iteration` @ `812f905`（PR #171，Draft）。
 - 18783 已换装：client `2065ad6a3ce393c42fd1b3b2aea870412ed205268349ee71301c3309a5111a95`。
 - 18780/18781 仍是用上一轮的 `cf5c0986…`，没有跟进本轮样式；需要时说一声再切。
