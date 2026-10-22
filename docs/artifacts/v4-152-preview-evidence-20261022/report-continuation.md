@@ -16,7 +16,7 @@
 
 最初按“仍 blocked 停止”暂停后续步骤。主会话随后明确更正：FINISH-P 是完成等待，不作为接续阻断；授权继续正式准备/接任，并允许仅通过正规表单把目标调到真实计量以下以验证 automatic=true。继续执行中，后续结果待记录。
 
-证据：[保存前原始响应](raw/cont-01-before-project.json)、[保存 UI 请求 HAR](raw/cont-02-policy-save.har)、[保存后原始响应](raw/cont-03-after-project.json)、[完整任务响应](raw/cont-04-after-task.json)、[页面文字](raw/cont-05-after-page.json)、[参数展开1440×1000](shots/cont-02-policy-expanded-1440.png)、[保存后1440×1000](shots/cont-03-policy-after-1440.png)、[保存后390×844](shots/cont-04-policy-after-390.png)。
+证据：[保存前原始响应](raw/cont-01-before-project.json)、[保存 UI 请求 HAR](raw/cont-02-policy-save.har)、[v2真实保存完整请求响应](raw/cont-network-policy-v2.json)、[v3目标调整完整请求响应](raw/cont-network-policy-v3.json)、[保存后原始响应](raw/cont-03-after-project.json)、[完整任务响应](raw/cont-04-after-task.json)、[页面文字](raw/cont-05-after-page.json)、[参数展开1440×1000](shots/cont-02-policy-expanded-1440.png)、[保存后1440×1000](shots/cont-03-policy-after-1440.png)、[保存后390×844](shots/cont-04-policy-after-390.png)。通过 agent-browser --json network request 补导完整命令响应，认证头未入证据。
 
 ## 阶段二：真实自动准备（已验证）
 
@@ -71,5 +71,27 @@ owner ID 保留是主会话确认的规格行为，授权边界由当前 Session
 - 未验证真实后台 job 待收与 job_output 正式收取门槛；没有创建假job或手造 consumed。
 - 未捕获单独可接任中间 phase，只记录实际 material-requested→material-saved→delivered。不把缺少快照当产品缺陷。
 - 新段业务继续时，bash 因 `sandbox mode \"workspace-write\" is requested but no sandbox backend is usable on this host; refusing to run the command unconfined` 失败；write 首次因空 justification 失败后成功写 P proof。此为新段真实执行观察，未改 Host/profile/权限规避；本次接续不因此冒称全部业务验收完成。
-- 接任后按主会话要求没有再改 policy（仍v3，28000/16000）；新段继续运行的最终身份快照待收口补充。
+- 接任后按主会话要求没有再改 policy（仍v3，28000/16000）。04:00:18.643Z 最终正式 task.detail：epoch=2、currentSession 为后继 `session-1a48efa9-472c-495f-af04-ce499b931f48`、phase=delivered、runtime=idle；Task v6、specification v2、3/9。P proof 由新段真实写入，C/E 必要范围由新段正式采纳；业务完成仍不成立。证据：[最终原始响应](raw/cont-22-final-task.json)、[最终身份页面](raw/cont-23-final-identities-page.json)、[身份桌面](shots/cont-12-final-identities-1440.png)、[身份手机](shots/cont-13-final-identities-390.png)。
 - 自动策略重存消除 route blocker、真实 automatic operation、材料保存、当前入口切换、epoch+1、决定与未完成项复述、旧 fence 拒绝均有实证。本次不能宣称 #152 整体验收通过。
+
+## 收口清单与限制
+
+| 验收内容 | 结论 |
+|---|---|
+| P详情正规重存200000/16000、route blocker消除 | 已验证 |
+| 正规下调目标28000，以真实28185 usage自动准备 | 已验证，automatic=true |
+| 原段保持当前入口直至材料保存 | 已验证，epoch1 |
+| 真实模型work_continuation_material结果收齐 | 已验证，seq63/64，material-saved |
+| 后台job待收→job_output正式收取门槛 | 未验证；本轮没有后台job |
+| 正式接任、owner保留、epoch2、后继current/旧段retired | 已验证 |
+| 新段首条真实复述数量3/stable与未完成项 | 已验证 |
+| 新段额外问题逐字回答完整“镜像保留数量3” | 未验证；问题已排队进入会话，但截至收口未见额外模型回答，不拿旧段或prompt中的文字代替 |
+| 旧epoch普通推进拒绝 | 已验证，stale-execution-authority |
+| 1440×1000与390×844截图、原始请求响应 | 已保存，PNG尺寸与JSON解析已核对 |
+| #152整体、P业务完成/关闭、native child medium | 未验证/未完成 |
+
+本轮未确认新的接续产品缺陷。环境观察是workspace-write shell无可用sandbox backend；权限重试由本验收执行者通过页面Reject拒绝，未修改服务/Host/profile。手机Chat截图保留了真实横向裁切现场，不用裁剪图冒充完整移动排版。
+
+命令限制如实记录：旧段树项相对时间变化导致一次定位失败，重取引用后成功；非secure HTTP页面的crypto.randomUUID不可用，第一次旧fence探针在发请求前失败，改为固定唯一commandId后真实发出且被拒绝。未把这些自动化错误计为产品缺陷。所有后台浏览器等待命令均已正式收取，唯一bash-112结束exit0。既有旧报告/ledger未修改；未触碰A/B/X或现有开发Issue。旧段模型探针仅阻断未执行，正式服务端拒绝保留独立证据。
+
+分阶段提交：`6fd8a86`（正规重存）、`a879069`（自动准备）、`98245e6`（材料/接任/旧fence拒绝）；已推送同一分支，不合并。结构化结果见 [ledger-continuation.json](ledger-continuation.json)。

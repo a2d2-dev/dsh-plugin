@@ -1,0 +1,356 @@
+{
+  "schemaVersion": 1,
+  "issue": 152,
+  "run": "v4-152-6b252218-r01",
+  "fixture": "P",
+  "preview": "http://10.126.126.12:18782/",
+  "browserSession": "qa152f",
+  "result": "partial-pass",
+  "overall152Passed": false,
+  "identity": {
+    "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+    "taskId": "9124c73c-3882-495d-803d-4b6d0e25bbe9",
+    "executionId": "0ac555c0-125e-4ed2-9ad2-ded8c447b37a",
+    "ownerBefore": "657d73e9-40c5-4170-92fd-07ae0ada7367",
+    "ownerAfter": "657d73e9-40c5-4170-92fd-07ae0ada7367",
+    "ownerRetainedByDesign": true,
+    "epochBefore": 1,
+    "epochAfter": 2,
+    "sourceSession": {
+      "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+      "sessionId": "session-b36314e3-3c0e-4c4d-9247-928d6b4187af"
+    },
+    "currentSession": {
+      "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+      "sessionId": "session-1a48efa9-472c-495f-af04-ce499b931f48"
+    },
+    "resource": {
+      "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+      "workspaceId": "b2c6edcf-bb21-4925-8ccd-6b0e503de5dc"
+    }
+  },
+  "policy": {
+    "initialExplicitSave": {
+      "version": 2,
+      "enabled": true,
+      "targetTokens": 200000,
+      "reserveTokens": 16000
+    },
+    "authorizedAutomaticTriggerPolicy": {
+      "version": 3,
+      "enabled": true,
+      "targetTokens": 28000,
+      "reserveTokens": 16000
+    },
+    "realObservation": {
+      "totalTokens": 28185,
+      "logRevision": 46,
+      "baseline": "usage",
+      "capacity": 1050000,
+      "outputReserve": 128000,
+      "routeKey": "[\"codex\",\"gpt-6.1-sol\",\"high\",1050000,128000]",
+      "observedAt": "2026-10-22T03:43:32.907Z"
+    },
+    "meterInjected": false,
+    "changedAfterTakeover": false
+  },
+  "blockers": {
+    "before": [
+      "尚未收到明确完成令 FINISH-P-v4-152-6b252218-r01；所有完成门槛必须满足后才可 done。",
+      "Exact model route or capacity changed; explicitly reconfigure continuation before advancing"
+    ],
+    "after": [
+      "尚未收到明确完成令 FINISH-P-v4-152-6b252218-r01；所有完成门槛必须满足后才可 done。"
+    ],
+    "routeChangedRemoved": true,
+    "finishWaitIsNotContinuationBlocker": "主会话明确更正"
+  },
+  "operation": {
+    "operationId": "90c39ec5-5ca6-4327-af8e-23cfd0f35e6d",
+    "commandId": "auto:0ac555c0-125e-4ed2-9ad2-ded8c447b37a:1:3",
+    "automatic": true,
+    "phase": "delivered",
+    "source": {
+      "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+      "sessionId": "session-b36314e3-3c0e-4c4d-9247-928d6b4187af"
+    },
+    "successor": {
+      "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+      "sessionId": "session-1a48efa9-472c-495f-af04-ce499b931f48"
+    },
+    "sourceEpoch": 1,
+    "materialRequestId": "material-request:90c39ec5-5ca6-4327-af8e-23cfd0f35e6d",
+    "kickoffId": "continuation:90c39ec5-5ca6-4327-af8e-23cfd0f35e6d",
+    "profile": {
+      "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+      "cwd": "/data/_dsh-dev/acceptance-workspaces/v4-152-r01",
+      "agentPreset": "standard",
+      "provider": "codex",
+      "model": "gpt-6.1-sol",
+      "reasoningEffort": "high",
+      "permissionPreset": "workspace-write",
+      "sandbox": "workspace-write",
+      "approval": "ask"
+    },
+    "material": {
+      "body": "本次是同一 Task 的宿主请求接续材料保存，不是新建Task或宣告完成。Goal: [QA #152 v4 v4-152-6b252218-r01] P；run=v4-152-6b252218-r01；fixture=P；原始用户工作身份为 https://github.com/a2d2-dev/dsh-plugin/issues/157（repository a2d2-dev/dsh-plugin，nodeId I_kwDOUmfSE88AAAABY_Hq1A）。\n\n完整正文已由work_organize保留为specification version=2，保存9条验收项。最近成功work_report后Task version=4、stage=in-progress，未完成。限定只在 /data/_dsh-dev/acceptance-workspaces/v4-152-r01 处理本run资料，唯一允许写的本地文件为 /data/_dsh-dev/acceptance-workspaces/v4-152-r01/P.proof.json。禁止clone、修改业务代码或接入其他开发Issue。本轮未调用文件读写或shell操作，也未检查该目录或proof是否存在，不能推断文件不存在。\n\n已实际调用work_control status核实身份：Task=9124c73c-3882-495d-803d-4b6d0e25bbe9；projectId=ec480d94-c5e8-44a0-80a0-897945df1a67；Execution=0ac555c0-125e-4ed2-9ad2-ded8c447b37a；agentId=a4b8b515-554a-4fe7-99c1-f0581a3da464；owner=657d73e9-40c5-4170-92fd-07ae0ada7367；epoch=1；runtimeId=c01a3a7b-6deb-4820-9896-548d14220162；workspaceId=b2c6edcf-bb21-4925-8ccd-6b0e503de5dc；Session=session-b36314e3-3c0e-4c4d-9247-928d6b4187af。status的actual记录cwd为上述专用目录、provider=codex、model=gpt-6.1-sol、permissionPreset/sandbox=workspace-write、approval=ask。该actual只是当前父执行信息，不是未来native child的路由回执；没有medium档位证据。接续后必须重新status核对新owner/epoch，不能沿用旧身份冒充当前执行。\n\n父Issue来源观察列出必要原生子C #158（nodeId I_kwDOUmfSE88AAAABY_Ht3Q，https://github.com/a2d2-dev/dsh-plugin/issues/158，观察时open）与E #159（nodeId I_kwDOUmfSE88AAAABY_HxBA，https://github.com/a2d2-dev/dsh-plugin/issues/159，观察时closed）。父lastObserved.observedAt=2026-10-22T03:12:37.471Z，父updatedAt=2026-10-22T02:10:27Z；这些不是子E的updatedAt。尚未通过work_related_issue读取父或子完整当前来源，未采纳必要子范围，无canonical child关联，无外部子验收。E closed本身没有被认定为验收通过。\n\n两项决定已保存到规格和报告：镜像保留数量3；必须保留stable标签。proof必须包含run、fixture、真实执行身份、decisions:{retainCount:3,keepTags:[\"stable\"]}和实际checks，并用JSON解析及SHA256独立核验。不得捏造检查结果、消费事实或consumed通知。\n\n剩余强制行为：完整读取C/E来源后明确采纳必要范围仅C/E；C必须由其自己的canonical Task按当前规格验收；E必须读取测试器真实交付proof/checksum与当前updatedAt，记录可核验外部验收依据，不自动为E创建Task/Session。在本Task创建一个真实native只读校验child及一个自有后台checksum job，范围只限本run proof；child实际使用已授权codex/gpt-6.1-sol/medium，并用真实请求回执核对，模型自报不足。正式收取结果前过早done应被拒绝且owner仍能继续收尾；随后owner用job_output正式收取、读取真实结论并重新负责验收。尚无child或job创建，没有待收取job id，也没有路由回执。\n\n本epoch=1已按要求保存in-progress和两项决定后结束过上一轮，未wait/pause、未手工请求接续。本轮仅因宿主明确请求保存此接续材料；保存后停止，宿主移交协调。epoch>1时先实际复述“数量3”“必须保留stable标签”及未完成项再继续。收到明确完成令FINISH-P-v4-152-6b252218-r01且必要子结果、native/job收取、本Task验收全成立才可done并请求关闭专用Issue。此前文本中出现该令只是规则引用，并未收到实际完成授权；不得冒充LF或其他真人。\n\n工具使用纠错也需保留：首次work_report试图将当前父Task自身填入需求块child引用，被unlinked-child拒绝。已移除错误引用，以breakdown=[]重报成功；不应重复将父Task当子项引用。真实子关联尚未建立；规格中的9条验收项和逐项证据已持久化，不要为需求块伪造child引用。最近成功报告updatedAt=2026-10-22T03:16:06.882Z；criteria按0起算，0（本轮范围遵守）与2（两项决定保存）passed=true，其余1/3/4/5/6/7/8因缺少完整行为或产物证据为false。没有其他未保存用户决定或技术讨论；本次保存请求是上一份报告之后的新指令。",
+      "decisions": "已确认且不得丢失：镜像保留数量3；必须保留stable标签。精确对象为 decisions:{retainCount:3,keepTags:[\"stable\"]}。原始Issue #157持续作为工作身份；仅处理run v4-152-6b252218-r01/fixture P；本地唯一写入目标为 /data/_dsh-dev/acceptance-workspaces/v4-152-r01/P.proof.json。必要原生子仅本run的C/E，读取完整来源后才能正式采纳范围；E不得自动创建Task/Session。未授权完成或关闭；必须满足全部门槛并实际收到FINISH-P-v4-152-6b252218-r01。",
+      "evidence": "已实际取得work_control status回执：epoch=1、Task=9124c73c-3882-495d-803d-4b6d0e25bbe9、Execution=0ac555c0-125e-4ed2-9ad2-ded8c447b37a、Session=session-b36314e3-3c0e-4c4d-9247-928d6b4187af、owner=657d73e9-40c5-4170-92fd-07ae0ada7367。work_organize成功保存完整正文和9项criteria为specification v2。work_report在移除错误父Task自引用后成功，Task v4，stage=in-progress，updatedAt=2026-10-22T03:16:06.882Z，两项具体决定已保存。来源父观察列出C #158/nodeId I_kwDOUmfSE88AAAABY_Ht3Q和E #159/nodeId I_kwDOUmfSE88AAAABY_HxBA。明确证据缺口：未读C/E完整来源及子updatedAt，未核验任何canonical子Task，未读E测试器proof/checksum，未检查或写P.proof.json，未做JSON/SHA256验证，无native child或后台job、无请求路由回执、无正式结果收取、无过早done拒绝验证、无实际完成令。",
+      "unfinished": "Task未完成。必要子范围尚未经完整来源读取后正式采纳；C canonical Task验收未核验；E proof/checksum、当前updatedAt及外部验收依据缺失。P proof存在性和内容未知，真实身份、decisions和实际checks尚未写入并核验。尚未创建native只读child或后台checksum job，未核验授权路由真实回执，未测试过早done拒绝，未正式收取或读取结果。epoch>1恢复复述尚未发生；完成令尚未实际收到。本轮仅保存接续材料，不改变stage、不宣告完成、不请求关闭Issue、不wait/pause、不手工发起接续。",
+      "next": "保存后本会话停止，由宿主移交协调。接任者首先实际复述“数量3”“必须保留stable标签”，并说明尚待C/E验收、P proof与JSON/SHA256核验、native child路由核对及job正式收取、完成令；随后work_control status获取当前Task/spec/version和新的真实Execution/Session/owner/epoch。使用work_related_issue读取父项和C/E完整当前来源，依其精确观察回执通过work_organize source-children明确采纳仅C/E必要范围；核验C canonical Task与E真实proof/checksum及updatedAt。先用glob/read核实本run文件，遵守先读后改且仅写P.proof.json。继续按当前规格创建可核对codex/gpt-6.1-sol/medium真实请求回执的native只读child和自有后台checksum job，验证未正式收取时过早done被拒且owner仍可收尾，随后owner以job_output正式收取并读取实际结论；每次事实变化持久化work_report。所有验收和完成令齐备后才能done并closeExternal。",
+      "commandId": "material:dcf4894c63b3e5c5efbbba9886cb8d7810090a3dfb39b0b858ae308fd5389682",
+      "ref": {
+        "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+        "taskId": "9124c73c-3882-495d-803d-4b6d0e25bbe9"
+      },
+      "executionId": "0ac555c0-125e-4ed2-9ad2-ded8c447b37a",
+      "source": {
+        "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+        "sessionId": "session-b36314e3-3c0e-4c4d-9247-928d6b4187af"
+      },
+      "epoch": 1,
+      "taskVersion": 4,
+      "specificationVersion": 2
+    },
+    "goal": "[QA #152 v4 v4-152-6b252218-r01] P",
+    "specification": {
+      "version": 2,
+      "text": "A2D2 V4 ACCEPTANCE #152 / #150\nrun: v4-152-6b252218-r01\nfixture: P\n\n这是专用行为验收对象，不是开发任务。只允许在 /data/_dsh-dev/acceptance-workspaces/v4-152-r01 处理本run资料；禁止clone、修改业务代码或接入任何现有开发Issue。只允许写P.proof.json。\n\n先用work_control status读取真实Task/Execution/Session/owner/epoch，不编造身份或消费事实。把正文保存为当前规格的可核验验收项。已确认两项决定：镜像保留数量3，必须保留stable标签。proof保存run、fixture、真实执行身份、decisions:{retainCount:3,keepTags:[\"stable\"]}和实际checks，并以JSON解析及SHA256独立核验。\n\n必要原生子只有本run的C和E。读取完整来源子项后明确采纳必要范围。C必须由自己的canonical Task按当前规格验收；E必须读取测试器真实交付proof/checksum和当前updatedAt，明确记录外部验收依据，Closed本身不足。不为E自动创建Task/Session。\n\n在本Task创建一个真实native只读校验child和一个自有后台checksum job，范围只限本run proof；实际child使用已授权的codex/gpt-6.1-sol/medium，并以真实请求回执核对。结果未正式收取时过早done应被拒绝且仍允许owner继续收尾；由owner正式job_output收取、读取真实结论后重新负责验收，不手造consumed通知。\n\nepoch=1时保存in-progress与两项具体决定后结束轮次，不wait/pause、不手工请求接续。收到宿主材料请求时，保存决定、证据、未完成项与下一步。epoch>1时先实际复述“数量3”“必须保留stable标签”及未完成项，再继续。\n\n等待明确完成令 FINISH-P-v4-152-6b252218-r01。必要子结果、native/job收取和本Task验收全部成立且收到该令后，才可报告done并请求关闭专用Issue。模型自报不算路由证据；不能冒充LF或其他真人。",
+      "acceptance": [
+        "仅在 /data/_dsh-dev/acceptance-workspaces/v4-152-r01 处理 run v4-152-6b252218-r01 的验收资料；只允许写 P.proof.json；禁止 clone、修改业务代码或接入现有开发 Issue。",
+        "先以 work_control status 获取真实 Task、Execution、Session、owner、epoch；proof 保存 run、fixture、真实执行身份、decisions:{retainCount:3,keepTags:[\"stable\"]} 和实际 checks；以 JSON 解析及 SHA256 独立核验。",
+        "两项已确认决定必须保留：镜像保留数量3，必须保留stable标签。",
+        "必要原生子只有本 run 的 C 和 E；读取完整来源子项后明确采纳必要范围；C 必须由自己的 canonical Task 按当前规格验收。",
+        "E 必须读取测试器真实交付 proof/checksum 和当前 updatedAt，并明确记录外部验收依据；Closed 本身不足；不得为 E 自动创建 Task/Session。",
+        "在本 Task 创建一个真实 native 只读校验 child 和一个自有后台 checksum job，范围只限本 run proof；实际 child 使用已授权的 codex/gpt-6.1-sol/medium，并以真实请求回执核对；模型自报不算路由证据。",
+        "结果未正式收取时过早 done 应被拒绝且仍允许 owner 继续收尾；由 owner 正式 job_output 收取并读取真实结论后重新负责验收，不手造 consumed 通知。",
+        "epoch=1 时保存 in-progress 与两项具体决定后结束轮次，不 wait/pause、不手工请求接续；收到宿主材料请求时保存决定、证据、未完成项与下一步；epoch>1 时先实际复述“数量3”“必须保留stable标签”及未完成项，再继续。",
+        "仅在收到明确完成令 FINISH-P-v4-152-6b252218-r01、必要子结果、native/job 收取和本 Task 验收全部成立后，才可报告 done 并请求关闭专用 Issue；不得冒充 LF 或其他真人。"
+      ]
+    },
+    "title": "[QA #152 v4 v4-152-6b252218-r01] P",
+    "history": {
+      "ref": {
+        "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+        "taskId": "9124c73c-3882-495d-803d-4b6d0e25bbe9"
+      },
+      "session": {
+        "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+        "sessionId": "session-b36314e3-3c0e-4c4d-9247-928d6b4187af"
+      }
+    },
+    "inputSeal": 67,
+    "requestDelivery": "delivered",
+    "kickoffDelivery": "delivered"
+  },
+  "observedTimeline": [
+    {
+      "at": "2026-10-22T03:44:07.606Z",
+      "phase": "material-requested",
+      "epoch": 1,
+      "current": "source"
+    },
+    {
+      "at": "2026-10-22T03:46:35.636Z",
+      "phase": "material-saved",
+      "epoch": 1,
+      "settlement": "settled",
+      "current": "source"
+    },
+    {
+      "at": "2026-10-22T03:47:27.139Z",
+      "phase": "delivered",
+      "epoch": 2,
+      "current": "successor",
+      "sourceRole": "retired"
+    }
+  ],
+  "materialCollection": {
+    "verified": true,
+    "kind": "real work response and work_continuation_material tool result",
+    "sourceHistoryEvents": {
+      "requestHeader": 52,
+      "assistantMessage": 62,
+      "toolCall": 63,
+      "toolResult": 64,
+      "stepEnd": 65,
+      "turnEnd": 66,
+      "intakeSeal": 67
+    },
+    "backgroundJobs": [],
+    "jobOutputConsumptionVerified": false,
+    "pendingResultPhaseObserved": false,
+    "readyToTakeoverPhaseObserved": false,
+    "consumedInjected": false
+  },
+  "successorReply": {
+    "verified": true,
+    "exact": "已保留两项决定：数量3、必须保留stable标签。未完成项包括 C/E 验收、P proof 的 JSON/SHA256 核验、native 只读 child 的路由回执核对、后台 job 正式收取，以及等待明确完成令。我先读取当前 Task 和执行身份，再继续收集实际证据。",
+    "source": "raw/cont-12-successor-model-page.json",
+    "fullChineseNamesFollowup": "未验证：问题已进入会话，未看到额外模型回答；已有真实首条回复逐字为数量3/stable与未完成项"
+  },
+  "oldFenceRejection": {
+    "at": "2026-10-22T03:52:21.386Z",
+    "request": {
+      "kind": "command",
+      "value": {
+        "type": "task.control",
+        "action": "progress",
+        "text": "old segment progress probe",
+        "ref": {
+          "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+          "taskId": "9124c73c-3882-495d-803d-4b6d0e25bbe9"
+        },
+        "executionId": "0ac555c0-125e-4ed2-9ad2-ded8c447b37a",
+        "owner": "657d73e9-40c5-4170-92fd-07ae0ada7367",
+        "epoch": 1,
+        "commandId": "probe-old-epoch-qa152f-20261022-035200"
+      }
+    },
+    "httpStatus": 400,
+    "response": {
+      "status": "failed",
+      "error": {
+        "code": "stale-execution-authority",
+        "message": "Execution identity, owner or epoch is stale"
+      }
+    }
+  },
+  "modelRoute": {
+    "sourceRequestHeaderSeq": 52,
+    "provider": "codex",
+    "model": "gpt-6.1-sol",
+    "reasoningEffort": "high",
+    "maxTokens": 128000,
+    "successorRequest": {
+      "request": 1,
+      "inputTokens": 15358,
+      "outputTokens": 111,
+      "evidence": "raw/cont-19-successor-request-details.json"
+    },
+    "nativeChildMediumVerified": false,
+    "transportRetriesObserved": true
+  },
+  "criteria": [
+    {
+      "name": "正规200000/16000重存并消除route blocker",
+      "status": "verified"
+    },
+    {
+      "name": "真实automatic准备与旧入口保留",
+      "status": "verified"
+    },
+    {
+      "name": "原段真实模型材料保存/工作响应结果收齐",
+      "status": "verified"
+    },
+    {
+      "name": "后台job待收→job_output收取→可接任门槛",
+      "status": "unverified",
+      "reason": "本轮没有后台job"
+    },
+    {
+      "name": "正式接任epoch+1/currentSession更新/旧段retired",
+      "status": "verified"
+    },
+    {
+      "name": "新段真实复述数量3/stable与未完成项",
+      "status": "verified"
+    },
+    {
+      "name": "旧epoch普通推进拒绝",
+      "status": "verified"
+    },
+    {
+      "name": "独立ready-to-takeover中间phase快照",
+      "status": "unverified",
+      "reason": "实际捕获material-requested/material-saved/delivered"
+    },
+    {
+      "name": "双尺寸截图及原始请求响应",
+      "status": "verified"
+    },
+    {
+      "name": "额外问题逐字回答完整镜像保留数量3",
+      "status": "unverified",
+      "reason": "已提问但未见新回复；不以prompt材料冒充回答"
+    }
+  ],
+  "defects": [],
+  "environmentObservations": [
+    {
+      "code": "sandbox-backend-unavailable",
+      "message": "sandbox mode \"workspace-write\" is requested but no sandbox backend is usable on this host; refusing to run the command unconfined",
+      "impact": "新段业务shell/native job核验未完成；未改Host/profile。danger-full-access重试请求已通过正式页面Reject拒绝。"
+    }
+  ],
+  "lastObserved": {
+    "at": "2026-10-22T04:00:18.643Z",
+    "epoch": 2,
+    "session": {
+      "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162",
+      "sessionId": "session-1a48efa9-472c-495f-af04-ce499b931f48"
+    },
+    "operationPhase": "delivered",
+    "taskVersion": 6,
+    "specificationVersion": 2,
+    "settlement": "settled",
+    "runtime": "idle",
+    "criteria": {
+      "passed": 3,
+      "total": 9,
+      "assessed": 9,
+      "current": true
+    }
+  },
+  "stageCommits": [
+    "6fd8a86",
+    "a879069",
+    "98245e6"
+  ],
+  "evidence": {
+    "report": "report-continuation.md",
+    "raw": [
+      "raw/cont-01-before-project.json",
+      "raw/cont-02-policy-save.har",
+      "raw/cont-03-after-project.json",
+      "raw/cont-04-after-task.json",
+      "raw/cont-05-after-page.json",
+      "raw/cont-06-lowered-task.json",
+      "raw/cont-07-auto-observation.json",
+      "raw/cont-08-material-model-page.json",
+      "raw/cont-09-auto-prepare.har",
+      "raw/cont-10-material-result-task.json",
+      "raw/cont-11-takeover-task.json",
+      "raw/cont-12-successor-model-page.json",
+      "raw/cont-13-material-tool-result.json",
+      "raw/cont-14-retired-probe-page.json",
+      "raw/cont-15-source-history.json",
+      "raw/cont-16-old-fence-rejection.json",
+      "raw/cont-17-source-history-next.json",
+      "raw/cont-18-successor-history.json",
+      "raw/cont-19-successor-request-details.json",
+      "raw/cont-20-successor-approval-block.json",
+      "raw/cont-21-final-task.json",
+      "raw/cont-22-final-task.json",
+      "raw/cont-23-final-identities-page.json",
+      "raw/cont-network-policy-v2.json",
+      "raw/cont-network-policy-v3.json"
+    ],
+    "shots": [
+      "shots/cont-01-policy-before-1440.png",
+      "shots/cont-02-policy-expanded-1440.png",
+      "shots/cont-03-policy-after-1440.png",
+      "shots/cont-04-policy-after-390.png",
+      "shots/cont-05-preparing-1440.png",
+      "shots/cont-06-preparing-390.png",
+      "shots/cont-07-source-model-1440.png",
+      "shots/cont-08-takeover-1440.png",
+      "shots/cont-09-takeover-390.png",
+      "shots/cont-10-successor-reply-1440.png",
+      "shots/cont-11-successor-reply-390.png",
+      "shots/cont-12-final-identities-1440.png",
+      "shots/cont-13-final-identities-390.png"
+    ]
+  }
+}
