@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "part": 3,
+  "issue": 152,
+  "run": "v4-152-6b252218-r01",
+  "status": "blocked",
+  "blocker": {"issue": 163, "url": "https://github.com/a2d2-dev/dsh-plugin/issues/163", "observed": "HTTP503 work-record-unavailable prevents candidate refresh and real plan preview", "diagnosisSource": "parent session, not independently diagnosed here", "diagnosis": "Background discovery rewrites approximately 21MB every 5s; interactive writes wait only 2s for lock; same-process concurrency lacks spin retry"},
+  "preview": "http://10.126.126.12:18782/",
+  "browserSession": "qa152c",
+  "worktree": "/data/src/github.com/a2d2-dev/dsh-plugin.worktrees/v4-152-live-acceptance",
+  "branch": "test/152-preview-live",
+  "workspace": {"path": "/data/_dsh-dev/acceptance-workspaces/v4-152-r01", "runtimeId": "c01a3a7b-6deb-4820-9896-548d14220162", "workspaceId": "b2c6edcf-bb21-4925-8ccd-6b0e503de5dc"},
+  "rule": {
+    "id": "373d1174-fcb6-49e9-aed0-2ebdb98281aa",
+    "projectId": "ec480d94-c5e8-44a0-80a0-897945df1a67",
+    "sourceId": "9cea4378-0219-4f99-a237-80f51bd36291",
+    "lastSuccessfulReadVersion": 2,
+    "enabled": false,
+    "scope": {"assignee": "@me", "identity": {"login": "imneov", "nodeId": "MDQ6VXNlcjMxNjEyMDMz"}, "labels": ["qa:v4-152-6b252218-r01-serial"]},
+    "configuredModel": {"provider": "codex", "model": "gpt-6.1-sol", "reasoningEffort": "medium"},
+    "agentPreset": "standard",
+    "permissionPreset": "workspace-write",
+    "items": [],
+    "active": null,
+    "planning": {"draftVersion": 1, "scopeVersion": 1, "blocks": [], "plans": [], "supplements": [], "instructionEvidence": "02-instruct-network.har request postData.text and report-part3.md quotation"},
+    "error": {"code": "source-snapshot-unavailable", "message": "Continuous processing requires a complete version-matched repository candidate scan"}
+  },
+  "fixtures": {
+    "A": {"number": 160, "nodeId": "I_kwDOUmfSE88AAAABY_H0fQ", "url": "https://github.com/a2d2-dev/dsh-plugin/issues/160", "initialState": "open", "taskId": null, "executionId": null, "sessionId": null, "completionOpId": null, "started": false, "touchMutated": false},
+    "B": {"number": 161, "nodeId": "I_kwDOUmfSE88AAAABY_H3PQ", "url": "https://github.com/a2d2-dev/dsh-plugin/issues/161", "initialState": "open", "taskId": null, "executionId": null, "sessionId": null, "completionOpId": null, "started": false},
+    "X": {"number": 162, "nodeId": "I_kwDOUmfSE88AAAABY_H6TA", "url": "https://github.com/a2d2-dev/dsh-plugin/issues/162", "initialState": "open", "taskId": null, "executionId": null, "sessionId": null, "blockPersisted": false, "naturalLanguageExcluded": true}
+  },
+  "timeline": [
+    {"at": "2026-10-22T02:20:57.263Z", "action": "continuous.configure response", "commandId": "qa:v4-152-6b252218-r01:serial-configure", "http": 503, "error": "work-record-unavailable", "subsequentRead": "rule v1 persisted enabled=false"},
+    {"at": "2026-10-22T02:22:23.976Z", "action": "rule and project.detail baseline", "http": 200, "existingTaskCount": 5, "ABXTasks": [], "project1ContinuousRule": null},
+    {"at": "2026-10-22T02:24:31.411119104Z", "action": "UI continuous.instruct", "commandId": "continuous-ui:6cceff10-2fe1-468c-8991-7dac421e90e3", "http": 200, "expectedVersion": 1, "durationMs": 13362.219999950956},
+    {"at": "2026-10-22T02:25:08.849193984Z", "action": "UI continuous.preview", "commandId": "continuous-ui:8575b2a7-dab3-4d1b-992b-95a35b7f93cc", "http": 503, "expectedVersion": 2, "durationMs": 11632.468999986746},
+    {"at": "2026-10-22T02:25:53.28726912Z", "action": "UI continuous.preview retry", "commandId": "continuous-ui:30b30701-53bb-45dc-ba63-35fb0267df95", "http": 503, "expectedVersion": 2, "durationMs": 12322.728999977398},
+    {"at": "2026-10-22T02:28:11.423Z", "action": "source.list summary", "sourceVersion": 3, "sourceSequence": 17, "repositorySnapshot": null, "ABXObserved": false}
+  ],
+  "otherAttempts": [
+    {"action": "first UI instruct", "result": "503; draft retained; status still v1"},
+    {"action": "serial-label source.issues refresh", "result": "503 work-record-unavailable"},
+    {"action": "source.issue X refresh", "result": "503 work-record-unavailable"},
+    {"action": "continuous.block X", "commandId": "qa:v4-152-6b252218-r01:block-X", "expectedVersion": 2, "result": "503 work-record-unavailable; no persistence verified"}
+  ],
+  "modelEvidence": {"successfulPlan": false, "modelRequestObserved": false, "requestId": null, "usage": null, "actualRouteTrace": null, "note": "Configured model is not evidence of an actual model call. No fallback planner or fixed arrangement used."},
+  "zeroExecution": {"ruleNeverEnabled": true, "ruleItemsEmpty": true, "ABXTaskOrExecutionCreated": false, "proofObservation": "Only README.md and E.proof.json present at observed baseline; no A/B/X proof", "globalSessionDiffVerified": false, "note": "Navigation created an empty New Session before rule save; direct session.list used an invalid RPC envelope and returned result.ok/error, so no complete global session diff was obtained."},
+  "verified": ["locked directory/branch/pull", "real A/B/X node IDs and assignee/labels", "paused rule with server hard scope and isolated resource", "Chinese original instruction persisted at v2", "two actual UI preview requests fail HTTP503", "Block dropdown empty", "no rule enable or A/B start", "1440x1000 and 390x844 screenshots", "rule readback across panel component rebuild"],
+  "unverified": ["real model ordered plan/why/nextAction/mode/request/usage", "plan allow-list", "X persistent Block and supplement repreview", "A wait releases slot and B serial progress", "B completion and true GitHub close", "A resume with same owner/resource", "A label version conflict/local completion/remote open layering", "completion compensation retaining CompletionOp/Task/Execution/Session without new model execution", "in-flight pause semantics", "browser-close persistent progress and new-browser rule/plan/Block/Task/Session recovery"],
+  "evidence": ["part3/01-configure-response.json", "part3/02-instruct-network.har", "part3/03-preview-start-1440.png", "part3/04-preview-network.har", "part3/05-preview-error-1440.png", "part3/06-preview-error-390.png", "report-part3.md"],
+  "networkEvidenceLimit": "HAR contains real request bodies/status/timing but content.text was empty; response body strings are independently observed browser API/page records. Sensitive authorization/cookie headers removed.",
+  "commandExit": [
+    {"command": "pwd && git branch --show-current && git pull --ff-only", "exit": 0},
+    {"command": "python login wrapper", "subcommandExit": 127, "resolution": "python3 succeeded; no credential printed by wrapper"},
+    {"command": "gh api issues/160,161,162 with export HOME=/root", "exit": 0},
+    {"command": "agent-browser UI/HAR/screenshot/eval", "exit": 0, "note": "CLI exit0 does not mean HTTP business success; 503 explicitly recorded"},
+    {"command": "git commit first attempt", "exit": 128, "resolution": "command-scoped existing project author supplied; global config unchanged"},
+    {"command": "git commit stage1", "exit": 0, "commit": "2aa9d1f"},
+    {"command": "git pull --ff-only before closeout", "exit": 0, "output": "Already up to date."}
+  ],
+  "stopReason": "Parent closeout instruction: stop preview access, record blocked result, commit and push only own evidence; await repair deployment window",
+  "cleanup": {"ruleEnabled": false, "serviceRestarted": false, "businessCodeChanged": false, "ABXClosed": false, "PCEModified": false}
+}
