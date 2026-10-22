@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "agent-browser",
+    "--session",
+    "qa152",
+    "eval",
+    "(async()=>{const r=await fetch(\"/a2d2/api/work\",{method:\"POST\",headers:{\"content-type\":\"application/json\"},body:JSON.stringify({\"kind\": \"query\", \"value\": {\"type\": \"continuous.status\", \"projectId\": \"76002c89-59b6-48a4-8c06-eedb1b05cfa8\", \"sourceId\": \"6de5b019-9765-45dd-8596-1a02dbaa7cca\"}})});return {http:r.status,body:await r.json()}})()"
+  ],
+  "exit": 0,
+  "stdout": "{\n  \"body\": {\n    \"status\": \"completed\"\n  },\n  \"http\": 200\n}\n",
+  "stderr": ""
+}

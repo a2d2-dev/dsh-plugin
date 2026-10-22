@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "agent-browser",
+    "--session",
+    "qa152",
+    "eval",
+    "(async()=>{const r=await fetch(\"/api/session/list\",{method:\"POST\",headers:{\"content-type\":\"application/json\"},body:\"{}\"});return {http:r.status,body:await r.json()}})()"
+  ],
+  "exit": 0,
+  "stdout": "{\n  \"body\": {\n    \"result\": {\n      \"error\": {\n        \"code\": \"gateway/bad-request\",\n        \"details\": {\n          \"issues\": [\n            {\n              \"code\": \"invalid_value\",\n              \"message\": \"Invalid input: expected \\\"client-request\\\"\",\n              \"path\": [\n                \"type\"\n              ],\n              \"values\": [\n                \"client-request\"\n              ]\n            },\n            {\n              \"code\": \"invalid_type\",\n              \"expected\": \"string\",\n              \"message\": \"Invalid input: expected string, received undefined\",\n              \"path\": [\n                \"rpcId\"\n              ]\n            },\n            {\n              \"code\": \"invalid_type\",\n              \"expected\": \"string\",\n              \"message\": \"Invalid input: expected string, received undefined\",\n              \"path\": [\n                \"method\"\n              ]\n            },\n            {\n              \"code\": \"invalid_type\",\n              \"expected\": \"nonoptional\",\n              \"message\": \"Invalid input: expected nonoptional, received undefined\",\n              \"path\": [\n                \"payload\"\n              ]\n            }\n          ]\n        },\n        \"message\": \"invalid client-request message\"\n      },\n      \"ok\": false\n    },\n    \"rpcId\": \"invalid-request\",\n    \"type\": \"server-response\"\n  },\n  \"http\": 200\n}\n",
+  "stderr": ""
+}

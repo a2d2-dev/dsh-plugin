@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "agent-browser",
+    "--session",
+    "qa152",
+    "eval",
+    "(async()=>{const r=await fetch(\"/a2d2/api/work\",{method:\"POST\",headers:{\"content-type\":\"application/json\"},body:JSON.stringify({\"kind\": \"query\", \"value\": {\"type\": \"projects.list\"}})});return {http:r.status,body:await r.json()}})()"
+  ],
+  "exit": 0,
+  "stdout": "{\n  \"body\": {\n    \"projects\": [\n      {\n        \"continuationPolicy\": {\n          \"enabled\": true,\n          \"reserveTokens\": 16000,\n          \"targetTokens\": 200000,\n          \"version\": 1\n        },\n        \"defaultAgentId\": \"a4b8b515-554a-4fe7-99c1-f0581a3da464\",\n        \"id\": \"ec480d94-c5e8-44a0-80a0-897945df1a67\",\n        \"name\": \"演示项目 · 本地工作\",\n        \"resources\": [\n          {\n            \"runtimeId\": \"c01a3a7b-6deb-4820-9896-548d14220162\",\n            \"workspaceId\": \"56cdbb60-67bc-4f87-bca8-9dcaf46f2976\"\n          }\n        ],\n        \"version\": 2\n      },\n      {\n        \"defaultAgentId\": \"57954e6d-886c-435e-807a-ff61ee88987d\",\n        \"id\": \"1b3fd2f7-a492-4c1d-a965-7e7f8cc5cc58\",\n        \"name\": \"验收_HTTP132_20261020_独立项目\",\n        \"resources\": [],\n        \"version\": 1\n      },\n      {\n        \"defaultAgentId\": \"96d8bf6f-dd3f-4f15-8b6d-f2e7530f4716\",\n        \"id\": \"76002c89-59b6-48a4-8c06-eedb1b05cfa8\",\n        \"name\": \"项目管理 v3.0\",\n        \"resources\": [],\n        \"version\": 2\n      }\n    ],\n    \"status\": \"completed\"\n  },\n  \"http\": 200\n}\n",
+  "stderr": ""
+}
