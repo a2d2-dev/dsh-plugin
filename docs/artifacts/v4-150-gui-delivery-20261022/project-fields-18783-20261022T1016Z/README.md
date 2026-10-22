@@ -55,3 +55,17 @@
 截图：`gui-18783-github1to1.png`（左半，行密度/徽章/头像）、`gui-18783-github1to1-right.png`（右半，分段进度条、父项省略、日期）。
 
 线上构建：client `4c0fa0773f7545291d922b40da9ca5895841081b7035a99457f0719fb550b19d`，仍在 18783；18780 未部署。
+
+## 修复：点另一个项目的来源标签后面板空白（2026-10-22 12:07Z）
+
+复现（18783，两个项目各一个来源）：点顶部 `DSH A²D² Project` 标签 → 整个来源目录消失，只剩另一个项目的仓库标签。
+
+根因：`selectConnectedSource` 在跨项目时调用 `selectProject(projectId,false)`；`browse=false` 不走 `showSources()`，而 `selectProject` 在项目变化时把 `source` 置为 `emptySource()`。于是 `selectSource(sourceId)` 拿到的 `sources` 是空数组，`SourceDirectory` 的 `find` 返回 undefined → 整个目录返回 null（面板空白）。另外 `selectSource` 对 Project 来源也会先读仓库 Issue 页（它没有）。
+
+修复（`work-panel-controller.ts`）：
+- 跨项目选择时先 `source.list` 载入目标项目的来源并写入 `projectSources`/`sources`，再 `selectSource`；
+- Project 来源直接打开「概览」，跳过仓库 Issue 读取。
+
+回归测试：`tests/client/work-panel.spec.ts` 新增「loads the target project sources before selecting a connected source from another project」；10/10 通过。
+
+实测（client `9eaeabbb`）：仓库 → Project → 仓库 → Project 往返切换，面板始终有来源、有内容；截图 `repro-source-switch-fixed.png`。
