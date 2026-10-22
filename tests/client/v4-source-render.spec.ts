@@ -20,7 +20,7 @@ it('renders Repo source tabs and unknown aggregate counts without presenting one
   expect(html).toContain('尚未完整观察')
   expect(html).toContain('PR')
   expect(html).not.toContain('aria-label="Project 视图"')
-  expect(html).toContain('持续委托')
+  expect(html).toContain('来源操作')
   expect(html).not.toContain('需要关注 · 0')
   expect(html).not.toContain('正在处理 · 0')
   if (process.env.A2D2_INTEGRATED_ARTIFACTS === '1') {
