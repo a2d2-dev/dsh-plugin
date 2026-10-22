@@ -41,6 +41,7 @@ it('bounds a 46-candidate request with 8KB Issue bodies and canonical specificat
   for (const candidate of basis.candidates) {
     expect(candidate.issue.title.length).toBeLessThanOrEqual(300)
     expect(candidate.issue).not.toHaveProperty('body')
+    expect(candidate.issue).toHaveProperty('url', `https://github.com/acme/repo/issues/${candidate.issue.number}`)
     expect((candidate.task as { goal: string }).goal.length).toBeLessThanOrEqual(2000)
     expect(candidate.task).toMatchObject({ specification: { version: 1 } })
   }
@@ -65,6 +66,8 @@ it('bounds explanatory text deterministically without dropping candidate identit
   for (const task of state.tasks) task.goal = '\u0001'.repeat(5000)
   const basis = planningBasis(state, rule)
   expect(JSON.stringify(basis).length).toBeLessThanOrEqual(256 * 1024)
+  expect(basis.candidates[0]!.task).toMatchObject({ goal: '', goalTruncated: true })
+  expect(basis.candidates.every(candidate => candidate.issue.title.length === 300)).toBe(true)
   expect(basis.candidates.map(candidate => candidate.issue.nodeId)).toEqual(state.sources[0]!.observations.map(({ issue }) => issue.nodeId))
   expect(JSON.stringify(planningBasis(state, rule))).toBe(JSON.stringify(basis))
   const before = planningBasisFingerprint(basis)
@@ -80,7 +83,7 @@ it('summarizes Project item catalogs without losing membership or relationship s
   delete source.repository
   delete source.repositorySnapshot
   source.githubProject = { owner: 'acme', type: 'org', number: 1 }
-  source.projectSnapshot = { identity: source.identity!, project: { nodeId: 'PROJECT', title: 'Project', url: 'https://github.com/orgs/acme/projects/1', closed: false }, observedAt: now,
+  source.projectSnapshot = { identity: source.identity!, project: { nodeId: 'PROJECT', title: 'Project'.repeat(1000), url: 'https://github.com/orgs/acme/projects/1', closed: false }, observedAt: now,
     items: source.observations.map(({ issue }) => ({ id: `ITEM_${issue.nodeId}`, kind: 'issue', archived: false, issueNodeId: issue.nodeId, title: 'PROJECT_ITEM_TEXT'.repeat(1000), fields: [], fieldsPartial: false })),
   }
   const child = source.observations[1]!.issue
@@ -88,6 +91,7 @@ it('summarizes Project item catalogs without losing membership or relationship s
   child.parent = source.observations[0]!.issue
   const basis = planningBasis(state, rule)
   expect(basis.source.projectSnapshot).not.toHaveProperty('items')
+  expect(basis.source.projectSnapshot?.project).toMatchObject({ title: 'Project'.repeat(1000).slice(0, 300) })
   expect(JSON.stringify(basis)).not.toContain('PROJECT_ITEM_TEXT')
   expect(JSON.stringify(basis).length).toBeLessThanOrEqual(planningBasisCharacterLimit(46))
   expect(basis.candidates.map(candidate => candidate.issue.nodeId)).toEqual(source.observations.map(({ issue }) => issue.nodeId))

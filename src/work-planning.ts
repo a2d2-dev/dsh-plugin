@@ -14,11 +14,11 @@ const sourceSummarySchema = z.object({
   sourceVersion: z.number(), candidateCount: z.number().int().nonnegative(),
   repository: repositorySchema.optional(), githubProject: githubProjectSchema.optional(), nodeId: z.string().optional(), identity: identitySchema.optional(),
   repositorySnapshot: z.object({ sourceVersion: z.number(), identity: identitySchema }).strict().optional(),
-  projectSnapshot: z.object({ identity: identitySchema, project: z.object({ nodeId: z.string(), url: z.string(), closed: z.boolean() }).strict() }).strict().optional(),
+  projectSnapshot: z.object({ identity: identitySchema, project: z.object({ nodeId: z.string(), title: z.string().max(300), url: z.string(), closed: z.boolean() }).strict() }).strict().optional(),
 }).strict()
 const relationSchema = z.object({ nodeId: z.string(), state: z.enum(['open', 'closed']) }).strict()
 const candidateIssueSchema = z.object({
-  nodeId: z.string().max(256), number: z.number(), title: z.string().max(300), repository: repositorySchema, state: z.enum(['open', 'closed']),
+  nodeId: z.string().max(256), number: z.number(), title: z.string().max(300), url: z.string().max(2048), repository: repositorySchema, state: z.enum(['open', 'closed']),
   labels: z.array(z.string()), assignees: z.array(z.string()), updatedAt: z.string().optional(),
   parent: relationSchema.nullable().optional(), subIssues: z.object({ items: z.array(relationSchema), totalCount: z.number(), hasNextPage: z.boolean() }).strict().optional(),
 }).strict()
@@ -69,7 +69,7 @@ export function planningBasis(state: WorkSnapshot, rule: ContinuousWorkRule): Pl
     // Explanatory text is bounded independently of canonical identity and safety facts.
     const relation = ({ nodeId, state }: { nodeId: string; state: 'open' | 'closed' }) => ({ nodeId, state })
     const goal = task?.goal.slice(0, 2000)
-    return { issue: { nodeId: issue.nodeId, number: issue.number, title: issue.title.slice(0, 300), repository: issue.repository, state: issue.state, labels: issue.labels, assignees: issue.assignees, updatedAt: issue.updatedAt,
+    return { issue: { nodeId: issue.nodeId, number: issue.number, title: issue.title.slice(0, 300), url: `https://github.com/${issue.repository.owner}/${issue.repository.repository}/issues/${issue.number}`, repository: issue.repository, state: issue.state, labels: issue.labels, assignees: issue.assignees, updatedAt: issue.updatedAt,
       ...(issue.parent !== undefined ? { parent: issue.parent && relation(issue.parent) } : {}),
       ...(issue.subIssues ? { subIssues: { ...issue.subIssues, items: issue.subIssues.items.map(relation) } } : {}) },
       ...(task ? { task: JSON.parse(JSON.stringify({ ref: binding!.ref, agentId: task.agentId, goal,
@@ -83,7 +83,7 @@ export function planningBasis(state: WorkSnapshot, rule: ContinuousWorkRule): Pl
     sourceVersion: source!.repositorySnapshot?.sourceVersion ?? source!.version, candidateCount: candidates.length,
     repository: source!.repository, githubProject: source!.githubProject, nodeId: source!.nodeId, identity: identity(source!.identity),
     repositorySnapshot: source!.repositorySnapshot && { sourceVersion: source!.repositorySnapshot.sourceVersion, identity: identity(source!.repositorySnapshot.identity) },
-    projectSnapshot: source!.projectSnapshot && { identity: identity(source!.projectSnapshot.identity), project: { nodeId: source!.projectSnapshot.project.nodeId, url: source!.projectSnapshot.project.url, closed: source!.projectSnapshot.project.closed } },
+    projectSnapshot: source!.projectSnapshot && { identity: identity(source!.projectSnapshot.identity), project: { nodeId: source!.projectSnapshot.project.nodeId, title: source!.projectSnapshot.project.title.slice(0, 300), url: source!.projectSnapshot.project.url, closed: source!.projectSnapshot.project.closed } },
   }
   const basis = planningBasisSchema.parse({ instruction: rule.planning.instruction, supplements: rule.planning.supplements, blocks: rule.planning.blocks, scopeVersion: rule.planning.scopeVersion, scope: rule.scope, executionStrategy: { resource: rule.resource, model: rule.model, agentPreset: rule.agentPreset, permissionPreset: rule.permissionPreset }, relationshipAvailability: { nativeParentChildren: 'observed-when-present', nativeDependencies: 'unavailable-in-source-port' }, source: summary, candidates })
   const limit = planningBasisCharacterLimit(candidates.length)
