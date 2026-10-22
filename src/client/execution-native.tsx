@@ -75,8 +75,25 @@ function NativeTaskContinuation({ controller, sessionId, work }: { controller: W
     } catch (error) { if (!scope.signal.aborted) setError(error instanceof Error ? error.message : String(error)) }
     finally { if (!scope.signal.aborted) setBusy(false) }
   }
-  return <section className={styles.nativeView}><div className={styles.surface}><strong>{work.title}</strong><div className={styles.row}><button type="button" onClick={() => void controller.revealTask(work.ref)}>返回工作详情</button><button type="button" disabled={busy} onClick={() => setRevision(value => value + 1)}>刷新观察</button></div>{error && <p role="alert">{error}</p>}</div>
-    {detail ? <ExecutionContinuation graph={detail.executionGraph} execution={detail.execution} policy={policy} busy={busy} {...(work.purpose === 'control' && !detail.task?.completion && detail.progress?.processingState !== 'completed' && detail.execution?.session.sessionId === sessionId ? { onContinue: () => void continueWork() } : {})}/> : !error && <p role="status">正在读取接续事实…</p>}
+  const purpose = work.purpose === 'control' ? '当前协调' : work.purpose === 'history' ? '已退休 · 只读历史' : work.purpose === 'review' ? '评审关联' : '工作关联'
+  return <section className={styles.nativeView}>
+    <div className={styles.split}>
+      <aside className={styles.taskPanel}>
+        <div className={styles.taskCard}>
+          <small>{work.projectName}</small>
+          <strong>{work.title}</strong>
+          <p>{purpose}</p>
+        </div>
+        <div className={styles.taskActions}>
+          <button type="button" onClick={() => void controller.revealTask(work.ref)}>返回工作详情</button>
+          <button type="button" disabled={busy} onClick={() => setRevision(value => value + 1)}>刷新观察</button>
+        </div>
+        {error && <p role="alert">{error}</p>}
+      </aside>
+      <div className={styles.configPane}>
+        {detail ? <ExecutionContinuation graph={detail.executionGraph} execution={detail.execution} policy={policy} busy={busy} {...(work.purpose === 'control' && !detail.task?.completion && detail.progress?.processingState !== 'completed' && detail.execution?.session.sessionId === sessionId ? { onContinue: () => void continueWork() } : {})}/> : !error && <p role="status">正在读取接续事实…</p>}
+      </div>
+    </div>
   </section>
 }
 

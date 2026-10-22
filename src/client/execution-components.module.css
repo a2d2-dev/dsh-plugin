@@ -28,6 +28,17 @@
    typographic scale the trajectory table uses instead of inheriting it. */
 .nativeView { font: var(--dsw-font-xs-13, 13px/20px inherit); }
 .nativeView .surface { padding: 10px 16px; gap: 10px; }
+.nativeView .split { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: 16px; align-items: start; padding: 10px 16px; }
+.nativeView .split .surface { padding: 0; }
+.taskPanel { display: grid; gap: 10px; min-width: 0; }
+.taskCard { display: grid; gap: 6px; padding: 12px; border: 1px solid color-mix(in srgb, currentColor 14%, transparent); border-radius: 10px; }
+.taskCard small { opacity: .65; }
+.taskCard strong { font-weight: 600; overflow-wrap: anywhere; }
+.taskCard p { margin: 0; font-size: 12px; opacity: .75; }
+.taskActions { display: flex; flex-wrap: wrap; gap: 8px; }
+.taskActions button { font: var(--dsw-font-xs-13, 13px/20px inherit); color: inherit; background: transparent; border: 1px solid color-mix(in srgb, currentColor 22%, transparent); border-radius: 7px; padding: 5px 10px; cursor: pointer; }
+.taskActions button:disabled { opacity: .55; cursor: default; }
+@media (max-width: 760px) { .nativeView .split { grid-template-columns: minmax(0, 1fr); } }
 .nativeView .surface h2 { font-size: 15px; margin: 0 0 8px; }
 /* The panel's global `details` margin is scoped to another CSS module, so double the hook here. */
 .surface.surface details { margin: 0; }

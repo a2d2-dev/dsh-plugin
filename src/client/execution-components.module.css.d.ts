@@ -1,6 +1,11 @@
 declare const styles: {
   readonly surface: string
   readonly nativeView: string
+  readonly split: string
+  readonly taskPanel: string
+  readonly taskCard: string
+  readonly taskActions: string
+  readonly configPane: string
   readonly card: string
   readonly row: string
   readonly identity: string

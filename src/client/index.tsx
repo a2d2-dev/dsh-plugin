@@ -88,6 +88,6 @@ export function apply(ctx: A2d2ClientContext): void {
     name: 'conversation.session.header.actions', id: 'a2d2-session-work-header', order: 40,
   }, props => createElement(ExecutionSessionWorkEntry, { controller, sessionId: props.sessionId, blank: props.useSession(value => value.blank), placement: 'header' }))), 'a2d2 session work header')
   ctx.effect(() => ctx.slots.inject('conversation.view', () => ctx.slots.register({
-    name: 'conversation.view', id: 'a2d2-continuation', order: 60, label: () => '接续',
+    name: 'conversation.view', id: 'a2d2-continuation', order: 60, label: () => 'A²D² 接续',
   }, props => createElement(ExecutionConversationContinuation, { controller, sessionId: props.sessionId }))), 'a2d2 native continuation view')
 }
