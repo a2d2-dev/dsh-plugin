@@ -120,21 +120,23 @@
 .panel nav[aria-label="来源标签"] { margin: 0 0 10px; }
 @media (max-width: 700px) { .sourceToolbar { flex-wrap: wrap; } .delegation[open] { flex: 1 0 100%; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; } }
 
-.projectTable { table-layout: auto; }
-.projectTable td { vertical-align: middle; }
-.titleCell { min-width: 260px; }
-.hierarchy { display: flex; align-items: center; gap: 4px; min-width: 0; }
-.panel .chevron, .panel .chevronSpacer { width: 14px; flex: none; border: 0; background: transparent; padding: 0; font-size: 10px; line-height: 1; color: var(--work-muted); cursor: pointer; }
-.rowState { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; flex: none; border-radius: 50%; border: 1.5px solid #2da44e; box-sizing: border-box; }
-.rowState[data-closed=true] { background: #2da44e; border-color: #2da44e; }
-.rowState[data-closed=true]::after { content: '✓'; color: #fff; font-size: 8px; line-height: 1; font-weight: 700; }
-.panel .rowTitle { border: 0; background: transparent; padding: 0 !important; text-align: left; font: inherit; color: var(--dsw-alias-label-primary, #24292f); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.projectTable { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; }
+.projectTable th { height: 32px; padding: 0 8px; border-bottom: 1px solid #d1d9e0; background: var(--dsw-alias-bg-base, #fff); color: #59636e; font-size: 12px; font-weight: 600; white-space: nowrap; text-align: left; position: sticky; top: 0; z-index: 1; }
+.projectTable td { height: 40px; padding: 0 8px; border-bottom: 1px solid #d1d9e0; vertical-align: middle; }
+.projectTable tbody tr:hover { background: #f6f8fa; }
+.cellClip { display: block; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.titleCell { max-width: 620px; }
+.hierarchy { display: flex; align-items: center; gap: 4px; min-width: 0; height: 40px; }
+.panel .chevron, .panel .chevronSpacer { display: inline-flex; align-items: center; justify-content: center; width: 16px; flex: none; border: 0; background: transparent; padding: 0; font-size: 10px; line-height: 1; color: #59636e; cursor: pointer; }
+.panel .rowTitle { border: 0; background: transparent; padding: 0 !important; text-align: left; font: inherit; font-size: 14px; color: #1f2328; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 560px; }
 .rowTitle:hover { color: var(--dsw-alias-label-link, #565b96); }
-.avatar { display: inline-flex; width: 18px; height: 18px; flex: none; border-radius: 50%; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; color: #fff; margin-right: 5px; text-transform: uppercase; }
-.labelPill { display: inline-block; padding: 1px 8px; margin: 1px 3px 1px 0; border-radius: 999px; font-size: 11px; background: #eaeef2; color: #24292f; white-space: nowrap; }
-.chip { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 500; white-space: nowrap; }
-.chipGray { background: #eaeef2; color: #24292f; }
-.chip, .chipGray, .chipBlue, .chipGreen, .chipYellow, .chipOrange, .chipRed, .chipPink, .chipPurple { white-space: nowrap; }
+.rowState { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; border-radius: 50%; border: 1.5px solid #1a7f37; box-sizing: border-box; }
+.rowState[data-closed=true] { background: #1a7f37; border-color: #1a7f37; }
+.rowState[data-closed=true]::after { content: '✓'; color: #fff; font-size: 9px; line-height: 1; font-weight: 700; }
+.avatar { display: inline-flex; width: 20px; height: 20px; flex: none; border-radius: 50%; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; color: #fff; margin-right: 6px; text-transform: uppercase; }
+.labelPill { display: inline-block; height: 20px; line-height: 20px; padding: 0 8px; margin: 0 4px 0 0; border-radius: 999px; font-size: 12px; background: #eaeef2; color: #1f2328; white-space: nowrap; }
+.chip { display: inline-block; height: 20px; line-height: 20px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+.chipGray { background: #eaeef2; color: #1f2328; }
 .chipBlue { background: #ddf4ff; color: #0969da; }
 .chipGreen { background: #dafbe1; color: #1a7f37; }
 .chipYellow { background: #fff8c5; color: #7d4e00; }
@@ -142,7 +144,9 @@
 .chipRed { background: #ffebe9; color: #cf222e; }
 .chipPink { background: #ffeff7; color: #bf3989; }
 .chipPurple { background: #fbefff; color: #8250df; }
-.progress { display: flex; flex-direction: column; gap: 4px; min-width: 92px; }
-.progressBar { width: 92px; height: 6px; border-radius: 3px; background: #eaeef2; overflow: hidden; }
-.progressFill { height: 100%; background: #8250df; }
-.progressText { font-size: 11px; color: var(--work-muted); white-space: nowrap; }
+.progress { display: flex; flex-direction: row; align-items: center; gap: 8px; min-width: 0; }
+.progressSegments { display: flex; align-items: center; gap: 2px; flex: none; }
+.segmentOn, .segmentOff { display: block; width: 4px; height: 12px; border-radius: 1px; }
+.segmentOn { background: #8250df; }
+.segmentOff { background: #d1d9e0; }
+.progressText { font-size: 12px; color: #59636e; white-space: nowrap; }

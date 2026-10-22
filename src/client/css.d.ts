@@ -34,11 +34,15 @@ declare module '*.module.css' {
     readonly chipPink: string
     readonly chipPurple: string
     readonly progress: string
+    readonly progressSegments: string
+    readonly segmentOn: string
+    readonly segmentOff: string
     readonly progressBar: string
     readonly progressFill: string
     readonly progressText: string
     readonly titleCell: string
     readonly rowTitle: string
+    readonly cellClip: string
     readonly detailGrid: string
     readonly sourceSummary: string
     readonly requirementBranch: string
