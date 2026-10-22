@@ -455,6 +455,27 @@ it('validates the latest Issue scope after model generation despite stable ident
   expect((await h.status()).planning?.plans).toHaveLength(0)
 })
 
+it.each(['error', 'string', 'sensitive'] as const)('reports a distinct model failure with a safe summary (%s)', async kind => {
+  let h!: Awaited<ReturnType<typeof setup>>
+  h = await setup(false, { generate: async () => {
+    // A concurrent canonical change must not hide the actual model failure.
+    completed(await h.app.execute({ type: 'source.import', commandId: 'failure-import', ...h.scope, nodeId: 'ISSUE_1' }, operator))
+    if (kind === 'string') throw 'upstream rate limit (429)'
+    if (kind === 'sensitive') throw new Error('upstream rate limit (429) api_key=private-value Bearer private-bearer sk-12345678901234567890 at /private/config.json and C:\\private\\config.json https://user:password@model.example/api?token=private-query\nstack /private/stack.ts')
+    throw new Error('upstream rate limit (429)')
+  } })
+  completed(await h.app.execute(h.configure, operator))
+  completed(await h.app.execute({ type: 'continuous.instruct', commandId: 'failure-instruct', ...h.scope, expectedVersion: 1, text: '处理我的工作' }, operator))
+  const result = await h.app.execute({ type: 'continuous.preview', commandId: 'failure-preview', ...h.scope, expectedVersion: 2 }, operator)
+  expect(result).toMatchObject({ status: 'failed', error: { code: 'planning-model-failed', message: expect.stringContaining('upstream rate limit (429)') } })
+  if (result.status !== 'failed') throw new Error('Expected failure')
+  for (const secret of ['private-value', 'private-bearer', 'sk-12345678901234567890', '/private/', 'C:\\private', 'password@', 'private-query']) expect(result.error.message).not.toContain(secret)
+  expect(result.error.message.length).toBeLessThanOrEqual(550)
+  const restored = new WorkApplication(h.directory, h.host, h.source)
+  expect((await h.status(restored)).planning?.error).toEqual(result.error)
+  expect((await h.status()).planning?.plans).toHaveLength(0)
+})
+
 it('fences a model response when Block changes while generation is in flight', async () => {
   let release!: (output: unknown) => void
   let entered!: () => void
