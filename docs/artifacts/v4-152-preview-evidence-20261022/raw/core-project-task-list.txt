@@ -1,0 +1,501 @@
+- generic [ref=e1] clickable [onclick]
+  - generic
+    - button "New session" [ref=e3]
+    - button "Collapse sidebar" [ref=e4]
+    - button "New session" [ref=e5]
+      - StaticText "New Session"
+    - navigation "Global panels" [ref=e6]
+      - button "Plugins" [ref=e15]
+        - StaticText "Plugins"
+      - button "A²D² 控制面板" [ref=e16]
+        - StaticText "A²D² 控制面板"
+    - StaticText "Workspaces"
+    - generic [ref=e7] clickable [onclick]
+      - button "Search sessions" [expanded=false, ref=e17]
+      - textbox "Search session names" [ref=e18]
+    - button "View options" [ref=e8]
+    - button "Add workspace" [ref=e9]
+    - generic
+      - tree "Sessions"
+        - generic
+          - treeitem "v4-152-r01" [level=1, expanded=true, ref=e32]
+            - StaticText "v4-152-r01"
+          - treeitem "New Session" [level=1, ref=e33]
+            - StaticText "New Session"
+        - treeitem "workspace" [level=1, expanded=false, ref=e34]
+          - StaticText "workspace"
+    - button "Settings" [expanded=false, ref=e19]
+      - StaticText "Settings"
+    - main "A²D² 控制面板" [ref=e2]
+      - navigation "来源标签" [ref=e10]
+        - strong
+          - StaticText "A²D² 控制面板"
+        - button "a2d2-dev/dsh-plugin 仓库" [ref=e20]
+          - StaticText "a2d2-dev/dsh-plugin 仓库"
+        - button "DSH A²D² Project" [ref=e21]
+          - StaticText "DSH A²D² Project"
+        - button "项目管理 v3.0 Project" [ref=e22]
+          - StaticText "项目管理 v3.0 Project"
+        - button "添加来源" [ref=e23]
+          - StaticText "＋"
+      - button "关闭面板" [ref=e11]
+      - strong
+        - StaticText "DSH A²D²"
+      - StaticText "Project · a2d2-dev / #1 · 组织"
+      - StaticText "读取账号："
+      - StaticText "imneov"
+      - group
+        - DisclosureTriangle "持续委托" [expanded=false]
+          - StaticText "持续委托"
+      - navigation "来源目录" [ref=e12]
+        - button "概览" [ref=e24]
+        - button "项目" [ref=e25]
+        - button "Issue" [ref=e26]
+        - button "PR" [ref=e27]
+      - button "刷新来源" [ref=e13]
+      - button "读取目录缓存" [ref=e14]
+      - StaticText "缓存 / 最后已知观察"
+      - StaticText " · 2026-10-22T03:02:06.942Z"
+      - generic
+        - heading "真实 Project 视图与字段" [level=2, ref=e28]
+        - LabelText
+          - StaticText "视图"
+          - combobox "Project 视图" [expanded=false, ref=e31]: 任务清单
+            - MenuListPopup
+              - option "任务清单" [selected, ref=e360]
+              - option "全部任务" [ref=e361]
+        - paragraph
+          - StaticText "视图与字段目录读取完整 · TABLE_LAYOUT"
+        - paragraph
+          - StaticText "筛选："
+          - code
+            - StaticText "（无筛选）"
+        - paragraph
+          - StaticText "可见匹配 81 项 · 2026-10-22T03:04:02.963Z · 0 项权限受限，无法参与精确筛选。"
+        - table "真实 Project 条目"
+          - rowgroup
+            - row
+              - columnheader "条目" [ref=e362]
+              - columnheader "Assignees" [ref=e363]
+              - columnheader "Status" [ref=e364]
+              - columnheader "Labels" [ref=e365]
+              - columnheader "Linked pull requests" [ref=e366]
+              - columnheader "Milestone" [ref=e367]
+              - columnheader "Repository" [ref=e368]
+              - columnheader "Reviewers" [ref=e369]
+              - columnheader "Parent issue" [ref=e370]
+              - columnheader "Sub-issues progress" [ref=e371]
+              - columnheader "Created" [ref=e372]
+              - columnheader "Updated" [ref=e373]
+              - columnheader "Closed" [ref=e374]
+          - row
+            - cell "a2d2-dev/dsh-plugin #112 一期：插件托管任务长程运行、主会话接续与事件归属" [ref=e35]
+              - button "a2d2-dev/dsh-plugin #112 一期：插件托管任务长程运行、主会话接续与事件归属" [ref=e375]
+                - StaticText "a2d2-dev/dsh-plugin #112 一期：插件托管任务长程运行、主会话接续与事件归属"
+            - cell "imneov" [ref=e36]
+            - cell "已部署" [ref=e37]
+            - cell "a2d2:main" [ref=e38]
+            - cell "未读取此类字段值" [ref=e39]
+            - cell "—" [ref=e40]
+            - cell "a2d2-dev/dsh-plugin" [ref=e41]
+            - cell "未读取此类字段值" [ref=e42]
+            - cell "未读取此类字段值" [ref=e43]
+            - cell "未读取此类字段值" [ref=e44]
+            - cell "未读取此类字段值" [ref=e45]
+            - cell "未读取此类字段值" [ref=e46]
+            - cell "未读取此类字段值" [ref=e47]
+          - row
+            - cell "a2d2-dev/dsh-plugin #8 Spec: 「下一步」按 Matt 公路图定位 + 按站选模型 + A2D2 配置页" [ref=e48]
+              - button "a2d2-dev/dsh-plugin #8 Spec: 「下一步」按 Matt 公路图定位 + 按站选模型 + A2D2 配置页" [ref=e376]
+                - StaticText "a2d2-dev/dsh-plugin #8 Spec: 「下一步」按 Matt 公路图定位 + 按站选模型 + A2D2 配置页"
+            - cell "—" [ref=e49]
+            - cell "Done" [ref=e50]
+            - cell "ready-for-agent" [ref=e51]
+            - cell "未读取此类字段值" [ref=e52]
+            - cell "—" [ref=e53]
+            - cell "a2d2-dev/dsh-plugin" [ref=e54]
+            - cell "未读取此类字段值" [ref=e55]
+            - cell "未读取此类字段值" [ref=e56]
+            - cell "未读取此类字段值" [ref=e57]
+            - cell "未读取此类字段值" [ref=e58]
+            - cell "未读取此类字段值" [ref=e59]
+            - cell "未读取此类字段值" [ref=e60]
+          - row
+            - cell "a2d2-dev/dsh-plugin #9 T1 站点模型表 + 咨询自有模型与运行时回落" [ref=e61]
+              - button "a2d2-dev/dsh-plugin #9 T1 站点模型表 + 咨询自有模型与运行时回落" [ref=e377]
+                - StaticText "a2d2-dev/dsh-plugin #9 T1 站点模型表 + 咨询自有模型与运行时回落"
+            - cell "—" [ref=e62]
+            - cell "Done" [ref=e63]
+            - cell "ready-for-agent" [ref=e64]
+            - cell "未读取此类字段值" [ref=e65]
+            - cell "—" [ref=e66]
+            - cell "a2d2-dev/dsh-plugin" [ref=e67]
+            - cell "未读取此类字段值" [ref=e68]
+            - cell "未读取此类字段值" [ref=e69]
+            - cell "未读取此类字段值" [ref=e70]
+            - cell "未读取此类字段值" [ref=e71]
+            - cell "未读取此类字段值" [ref=e72]
+            - cell "未读取此类字段值" [ref=e73]
+          - row
+            - cell "a2d2-dev/dsh-plugin #10 T2 公路图：咨询新协议 + 卡片迷你公路与下一站行" [ref=e74]
+              - button "a2d2-dev/dsh-plugin #10 T2 公路图：咨询新协议 + 卡片迷你公路与下一站行" [ref=e378]
+                - StaticText "a2d2-dev/dsh-plugin #10 T2 公路图：咨询新协议 + 卡片迷你公路与下一站行"
+            - cell "—" [ref=e75]
+            - cell "Done" [ref=e76]
+            - cell "ready-for-agent" [ref=e77]
+            - cell "未读取此类字段值" [ref=e78]
+            - cell "—" [ref=e79]
+            - cell "a2d2-dev/dsh-plugin" [ref=e80]
+            - cell "未读取此类字段值" [ref=e81]
+            - cell "未读取此类字段值" [ref=e82]
+            - cell "未读取此类字段值" [ref=e83]
+            - cell "未读取此类字段值" [ref=e84]
+            - cell "未读取此类字段值" [ref=e85]
+            - cell "未读取此类字段值" [ref=e86]
+          - row
+            - cell "a2d2-dev/dsh-plugin #11 T3 A2D2 配置页：Matt 流程公路图 + 逐站模型候选 + 测试" [ref=e87]
+              - button "a2d2-dev/dsh-plugin #11 T3 A2D2 配置页：Matt 流程公路图 + 逐站模型候选 + 测试" [ref=e379]
+                - StaticText "a2d2-dev/dsh-plugin #11 T3 A2D2 配置页：Matt 流程公路图 + 逐站模型候选 + 测试"
+            - cell "—" [ref=e88]
+            - cell "Done" [ref=e89]
+            - cell "ready-for-agent" [ref=e90]
+            - cell "未读取此类字段值" [ref=e91]
+            - cell "—" [ref=e92]
+            - cell "a2d2-dev/dsh-plugin" [ref=e93]
+            - cell "未读取此类字段值" [ref=e94]
+            - cell "未读取此类字段值" [ref=e95]
+            - cell "未读取此类字段值" [ref=e96]
+            - cell "未读取此类字段值" [ref=e97]
+            - cell "未读取此类字段值" [ref=e98]
+            - cell "未读取此类字段值" [ref=e99]
+          - row
+            - cell "a2d2-dev/dsh-plugin #12 T4 球只留「下一步」，交接移入「其他走法」" [ref=e100]
+              - button "a2d2-dev/dsh-plugin #12 T4 球只留「下一步」，交接移入「其他走法」" [ref=e380]
+                - StaticText "a2d2-dev/dsh-plugin #12 T4 球只留「下一步」，交接移入「其他走法」"
+            - cell "—" [ref=e101]
+            - cell "Done" [ref=e102]
+            - cell "ready-for-agent" [ref=e103]
+            - cell "未读取此类字段值" [ref=e104]
+            - cell "—" [ref=e105]
+            - cell "a2d2-dev/dsh-plugin" [ref=e106]
+            - cell "未读取此类字段值" [ref=e107]
+            - cell "未读取此类字段值" [ref=e108]
+            - cell "未读取此类字段值" [ref=e109]
+            - cell "未读取此类字段值" [ref=e110]
+            - cell "未读取此类字段值" [ref=e111]
+            - cell "未读取此类字段值" [ref=e112]
+          - row
+            - cell "a2d2-dev/dsh-plugin #13 T5 前置条件路牌（/setup-matt-pocock-skills）" [ref=e113]
+              - button "a2d2-dev/dsh-plugin #13 T5 前置条件路牌（/setup-matt-pocock-skills）" [ref=e381]
+                - StaticText "a2d2-dev/dsh-plugin #13 T5 前置条件路牌（/setup-matt-pocock-skills）"
+            - cell "—" [ref=e114]
+            - cell "Done" [ref=e115]
+            - cell "ready-for-agent" [ref=e116]
+            - cell "未读取此类字段值" [ref=e117]
+            - cell "—" [ref=e118]
+            - cell "a2d2-dev/dsh-plugin" [ref=e119]
+            - cell "未读取此类字段值" [ref=e120]
+            - cell "未读取此类字段值" [ref=e121]
+            - cell "未读取此类字段值" [ref=e122]
+            - cell "未读取此类字段值" [ref=e123]
+            - cell "未读取此类字段值" [ref=e124]
+            - cell "未读取此类字段值" [ref=e125]
+          - row
+            - cell "a2d2-dev/dsh-plugin #14 T6 本会话芯片自动切模型" [ref=e126]
+              - button "a2d2-dev/dsh-plugin #14 T6 本会话芯片自动切模型" [ref=e382]
+                - StaticText "a2d2-dev/dsh-plugin #14 T6 本会话芯片自动切模型"
+            - cell "—" [ref=e127]
+            - cell "Done" [ref=e128]
+            - cell "ready-for-agent" [ref=e129]
+            - cell "未读取此类字段值" [ref=e130]
+            - cell "—" [ref=e131]
+            - cell "a2d2-dev/dsh-plugin" [ref=e132]
+            - cell "未读取此类字段值" [ref=e133]
+            - cell "未读取此类字段值" [ref=e134]
+            - cell "未读取此类字段值" [ref=e135]
+            - cell "未读取此类字段值" [ref=e136]
+            - cell "未读取此类字段值" [ref=e137]
+            - cell "未读取此类字段值" [ref=e138]
+          - row
+            - cell "a2d2-dev/dsh-plugin #15 T7 新会话走法在创建时选好模型（clear / compact / handoff）" [ref=e139]
+              - button "a2d2-dev/dsh-plugin #15 T7 新会话走法在创建时选好模型（clear / compact / handoff）" [ref=e383]
+                - StaticText "a2d2-dev/dsh-plugin #15 T7 新会话走法在创建时选好模型（clear / compact / handoff）"
+            - cell "—" [ref=e140]
+            - cell "Done" [ref=e141]
+            - cell "ready-for-agent" [ref=e142]
+            - cell "未读取此类字段值" [ref=e143]
+            - cell "—" [ref=e144]
+            - cell "a2d2-dev/dsh-plugin" [ref=e145]
+            - cell "未读取此类字段值" [ref=e146]
+            - cell "未读取此类字段值" [ref=e147]
+            - cell "未读取此类字段值" [ref=e148]
+            - cell "未读取此类字段值" [ref=e149]
+            - cell "未读取此类字段值" [ref=e150]
+            - cell "未读取此类字段值" [ref=e151]
+          - row
+            - cell "a2d2-dev/dsh-plugin #25 加固：「下一步」咨询与配置页「测试」加客户端超时" [ref=e152]
+              - button "a2d2-dev/dsh-plugin #25 加固：「下一步」咨询与配置页「测试」加客户端超时" [ref=e384]
+                - StaticText "a2d2-dev/dsh-plugin #25 加固：「下一步」咨询与配置页「测试」加客户端超时"
+            - cell "—" [ref=e153]
+            - cell "Done" [ref=e154]
+            - cell "ready-for-agent" [ref=e155]
+            - cell "未读取此类字段值" [ref=e156]
+            - cell "—" [ref=e157]
+            - cell "a2d2-dev/dsh-plugin" [ref=e158]
+            - cell "未读取此类字段值" [ref=e159]
+            - cell "未读取此类字段值" [ref=e160]
+            - cell "未读取此类字段值" [ref=e161]
+            - cell "未读取此类字段值" [ref=e162]
+            - cell "未读取此类字段值" [ref=e163]
+            - cell "未读取此类字段值" [ref=e164]
+          - row
+            - cell "a2d2-dev/dsh-plugin #26 A2D2 配置页：code-review 与 implement 同首选的告警改为中文" [ref=e165]
+              - button "a2d2-dev/dsh-plugin #26 A2D2 配置页：code-review 与 implement 同首选的告警改为中文" [ref=e385]
+                - StaticText "a2d2-dev/dsh-plugin #26 A2D2 配置页：code-review 与 implement 同首选的告警改为中文"
+            - cell "—" [ref=e166]
+            - cell "Done" [ref=e167]
+            - cell "ready-for-agent" [ref=e168]
+            - cell "未读取此类字段值" [ref=e169]
+            - cell "—" [ref=e170]
+            - cell "a2d2-dev/dsh-plugin" [ref=e171]
+            - cell "未读取此类字段值" [ref=e172]
+            - cell "未读取此类字段值" [ref=e173]
+            - cell "未读取此类字段值" [ref=e174]
+            - cell "未读取此类字段值" [ref=e175]
+            - cell "未读取此类字段值" [ref=e176]
+            - cell "未读取此类字段值" [ref=e177]
+          - row
+            - cell "a2d2-dev/dsh-plugin #28 A²D² 面板：侧边栏 Tab 展示本项目任务、成员、交接边与本会话子代理模型" [ref=e178]
+              - button "a2d2-dev/dsh-plugin #28 A²D² 面板：侧边栏 Tab 展示本项目任务、成员、交接边与本会话子代理模型" [ref=e386]
+                - StaticText "a2d2-dev/dsh-plugin #28 A²D² 面板：侧边栏 Tab 展示本项目任务、成员、交接边与本会话子代理模型"
+            - cell "—" [ref=e179]
+            - cell "Done" [ref=e180]
+            - cell "ready-for-agent" [ref=e181]
+            - cell "未读取此类字段值" [ref=e182]
+            - cell "—" [ref=e183]
+            - cell "a2d2-dev/dsh-plugin" [ref=e184]
+            - cell "未读取此类字段值" [ref=e185]
+            - cell "未读取此类字段值" [ref=e186]
+            - cell "未读取此类字段值" [ref=e187]
+            - cell "未读取此类字段值" [ref=e188]
+            - cell "未读取此类字段值" [ref=e189]
+            - cell "未读取此类字段值" [ref=e190]
+          - row
+            - cell "a2d2-dev/dsh-plugin #30 Harden task document reads: symlink and size bounds; dedupe session-list snapshot boilerplate" [ref=e191]
+              - button "a2d2-dev/dsh-plugin #30 Harden task document reads: symlink and size bounds; dedupe session-list snapshot boilerplate" [ref=e387]
+                - StaticText "a2d2-dev/dsh-plugin #30 Harden task document reads: symlink and size bounds; dedupe session-list snapshot boilerplate"
+            - cell "—" [ref=e192]
+            - cell "Done" [ref=e193]
+            - cell "ready-for-agent" [ref=e194]
+            - cell "未读取此类字段值" [ref=e195]
+            - cell "—" [ref=e196]
+            - cell "a2d2-dev/dsh-plugin" [ref=e197]
+            - cell "未读取此类字段值" [ref=e198]
+            - cell "未读取此类字段值" [ref=e199]
+            - cell "未读取此类字段值" [ref=e200]
+            - cell "未读取此类字段值" [ref=e201]
+            - cell "未读取此类字段值" [ref=e202]
+            - cell "未读取此类字段值" [ref=e203]
+          - row
+            - cell "a2d2-dev/dsh-plugin #33 A²D² panel: render handoff chains and the subagent topology as trees" [ref=e204]
+              - button "a2d2-dev/dsh-plugin #33 A²D² panel: render handoff chains and the subagent topology as trees" [ref=e388]
+                - StaticText "a2d2-dev/dsh-plugin #33 A²D² panel: render handoff chains and the subagent topology as trees"
+            - cell "—" [ref=e205]
+            - cell "Done" [ref=e206]
+            - cell "ready-for-agent" [ref=e207]
+            - cell "未读取此类字段值" [ref=e208]
+            - cell "—" [ref=e209]
+            - cell "a2d2-dev/dsh-plugin" [ref=e210]
+            - cell "未读取此类字段值" [ref=e211]
+            - cell "未读取此类字段值" [ref=e212]
+            - cell "未读取此类字段值" [ref=e213]
+            - cell "未读取此类字段值" [ref=e214]
+            - cell "未读取此类字段值" [ref=e215]
+            - cell "未读取此类字段值" [ref=e216]
+          - row
+            - cell "a2d2-dev/dsh-plugin #41 A²D²：每个任务由主会话里的 CEO 推进（插件作为载体）" [ref=e217]
+              - button "a2d2-dev/dsh-plugin #41 A²D²：每个任务由主会话里的 CEO 推进（插件作为载体）" [ref=e389]
+                - StaticText "a2d2-dev/dsh-plugin #41 A²D²：每个任务由主会话里的 CEO 推进（插件作为载体）"
+            - cell "—" [ref=e218]
+            - cell "—" [ref=e219]
+            - cell "a2d2:main" [ref=e220]
+            - cell "未读取此类字段值" [ref=e221]
+            - cell "—" [ref=e222]
+            - cell "a2d2-dev/dsh-plugin" [ref=e223]
+            - cell "未读取此类字段值" [ref=e224]
+            - cell "未读取此类字段值" [ref=e225]
+            - cell "未读取此类字段值" [ref=e226]
+            - cell "未读取此类字段值" [ref=e227]
+            - cell "未读取此类字段值" [ref=e228]
+            - cell "未读取此类字段值" [ref=e229]
+          - row
+            - cell "a2d2-dev/dsh-plugin #42 CEO 的 SOUL：提炼 LF 的原则" [ref=e230]
+              - button "a2d2-dev/dsh-plugin #42 CEO 的 SOUL：提炼 LF 的原则" [ref=e390]
+                - StaticText "a2d2-dev/dsh-plugin #42 CEO 的 SOUL：提炼 LF 的原则"
+            - cell "—" [ref=e231]
+            - cell "—" [ref=e232]
+            - cell "a2d2:sub" [ref=e233]
+            - cell "未读取此类字段值" [ref=e234]
+            - cell "—" [ref=e235]
+            - cell "a2d2-dev/dsh-plugin" [ref=e236]
+            - cell "未读取此类字段值" [ref=e237]
+            - cell "未读取此类字段值" [ref=e238]
+            - cell "未读取此类字段值" [ref=e239]
+            - cell "未读取此类字段值" [ref=e240]
+            - cell "未读取此类字段值" [ref=e241]
+            - cell "未读取此类字段值" [ref=e242]
+          - row
+            - cell "a2d2-dev/dsh-plugin #44 合并 DSH 0.2 移植" [ref=e243]
+              - button "a2d2-dev/dsh-plugin #44 合并 DSH 0.2 移植" [ref=e391]
+                - StaticText "a2d2-dev/dsh-plugin #44 合并 DSH 0.2 移植"
+            - cell "—" [ref=e244]
+            - cell "Done" [ref=e245]
+            - cell "ready-for-agent" [ref=e246]
+            - cell "未读取此类字段值" [ref=e247]
+            - cell "—" [ref=e248]
+            - cell "a2d2-dev/dsh-plugin" [ref=e249]
+            - cell "未读取此类字段值" [ref=e250]
+            - cell "未读取此类字段值" [ref=e251]
+            - cell "未读取此类字段值" [ref=e252]
+            - cell "未读取此类字段值" [ref=e253]
+            - cell "未读取此类字段值" [ref=e254]
+            - cell "未读取此类字段值" [ref=e255]
+          - row
+            - cell "a2d2-dev/dsh-plugin #45 绑定主会话：任务文档升级与面板显示" [ref=e256]
+              - button "a2d2-dev/dsh-plugin #45 绑定主会话：任务文档升级与面板显示" [ref=e392]
+                - StaticText "a2d2-dev/dsh-plugin #45 绑定主会话：任务文档升级与面板显示"
+            - cell "—" [ref=e257]
+            - cell "Done" [ref=e258]
+            - cell "ready-for-agent" [ref=e259]
+            - cell "未读取此类字段值" [ref=e260]
+            - cell "—" [ref=e261]
+            - cell "a2d2-dev/dsh-plugin" [ref=e262]
+            - cell "未读取此类字段值" [ref=e263]
+            - cell "未读取此类字段值" [ref=e264]
+            - cell "未读取此类字段值" [ref=e265]
+            - cell "未读取此类字段值" [ref=e266]
+            - cell "未读取此类字段值" [ref=e267]
+            - cell "未读取此类字段值" [ref=e268]
+          - row
+            - cell "a2d2-dev/dsh-plugin #46 CEO 提示段：主会话现读 AGENTS / WAKE / SOUL" [ref=e269]
+              - button "a2d2-dev/dsh-plugin #46 CEO 提示段：主会话现读 AGENTS / WAKE / SOUL" [ref=e393]
+                - StaticText "a2d2-dev/dsh-plugin #46 CEO 提示段：主会话现读 AGENTS / WAKE / SOUL"
+            - cell "—" [ref=e270]
+            - cell "Done" [ref=e271]
+            - cell "ready-for-agent" [ref=e272]
+            - cell "未读取此类字段值" [ref=e273]
+            - cell "—" [ref=e274]
+            - cell "a2d2-dev/dsh-plugin" [ref=e275]
+            - cell "未读取此类字段值" [ref=e276]
+            - cell "未读取此类字段值" [ref=e277]
+            - cell "未读取此类字段值" [ref=e278]
+            - cell "未读取此类字段值" [ref=e279]
+            - cell "未读取此类字段值" [ref=e280]
+            - cell "未读取此类字段值" [ref=e281]
+          - row
+            - cell "a2d2-dev/dsh-plugin #47 主会话交接：交接中与接任" [ref=e282]
+              - button "a2d2-dev/dsh-plugin #47 主会话交接：交接中与接任" [ref=e394]
+                - StaticText "a2d2-dev/dsh-plugin #47 主会话交接：交接中与接任"
+            - cell "—" [ref=e283]
+            - cell "Done" [ref=e284]
+            - cell "ready-for-agent" [ref=e285]
+            - cell "未读取此类字段值" [ref=e286]
+            - cell "—" [ref=e287]
+            - cell "a2d2-dev/dsh-plugin" [ref=e288]
+            - cell "未读取此类字段值" [ref=e289]
+            - cell "未读取此类字段值" [ref=e290]
+            - cell "未读取此类字段值" [ref=e291]
+            - cell "未读取此类字段值" [ref=e292]
+            - cell "未读取此类字段值" [ref=e293]
+            - cell "未读取此类字段值" [ref=e294]
+          - row
+            - cell "a2d2-dev/dsh-plugin #48 派子代理：按站选模型、按特殊 Agent 带 persona" [ref=e295]
+              - button "a2d2-dev/dsh-plugin #48 派子代理：按站选模型、按特殊 Agent 带 persona" [ref=e395]
+                - StaticText "a2d2-dev/dsh-plugin #48 派子代理：按站选模型、按特殊 Agent 带 persona"
+            - cell "—" [ref=e296]
+            - cell "Done" [ref=e297]
+            - cell "ready-for-agent" [ref=e298]
+            - cell "未读取此类字段值" [ref=e299]
+            - cell "—" [ref=e300]
+            - cell "a2d2-dev/dsh-plugin" [ref=e301]
+            - cell "未读取此类字段值" [ref=e302]
+            - cell "未读取此类字段值" [ref=e303]
+            - cell "未读取此类字段值" [ref=e304]
+            - cell "未读取此类字段值" [ref=e305]
+            - cell "未读取此类字段值" [ref=e306]
+            - cell "未读取此类字段值" [ref=e307]
+          - row
+            - cell "a2d2-dev/dsh-plugin #49 开子任务：为子任务新建根会话作为主会话" [ref=e308]
+              - button "a2d2-dev/dsh-plugin #49 开子任务：为子任务新建根会话作为主会话" [ref=e396]
+                - StaticText "a2d2-dev/dsh-plugin #49 开子任务：为子任务新建根会话作为主会话"
+            - cell "—" [ref=e309]
+            - cell "Done" [ref=e310]
+            - cell "ready-for-agent" [ref=e311]
+            - cell "未读取此类字段值" [ref=e312]
+            - cell "—" [ref=e313]
+            - cell "a2d2-dev/dsh-plugin" [ref=e314]
+            - cell "未读取此类字段值" [ref=e315]
+            - cell "未读取此类字段值" [ref=e316]
+            - cell "未读取此类字段值" [ref=e317]
+            - cell "未读取此类字段值" [ref=e318]
+            - cell "未读取此类字段值" [ref=e319]
+            - cell "未读取此类字段值" [ref=e320]
+          - row
+            - cell "a2d2-dev/dsh-plugin #50 宣告完成：子任务完成时叫醒父任务主会话" [ref=e321]
+              - button "a2d2-dev/dsh-plugin #50 宣告完成：子任务完成时叫醒父任务主会话" [ref=e397]
+                - StaticText "a2d2-dev/dsh-plugin #50 宣告完成：子任务完成时叫醒父任务主会话"
+            - cell "—" [ref=e322]
+            - cell "Done" [ref=e323]
+            - cell "ready-for-agent" [ref=e324]
+            - cell "未读取此类字段值" [ref=e325]
+            - cell "—" [ref=e326]
+            - cell "a2d2-dev/dsh-plugin" [ref=e327]
+            - cell "未读取此类字段值" [ref=e328]
+            - cell "未读取此类字段值" [ref=e329]
+            - cell "未读取此类字段值" [ref=e330]
+            - cell "未读取此类字段值" [ref=e331]
+            - cell "未读取此类字段值" [ref=e332]
+            - cell "未读取此类字段值" [ref=e333]
+          - row
+            - cell "a2d2-dev/dsh-plugin #51 CEO 的 AGENTS.md 与 WAKE.md 正式内容" [ref=e334]
+              - button "a2d2-dev/dsh-plugin #51 CEO 的 AGENTS.md 与 WAKE.md 正式内容" [ref=e398]
+                - StaticText "a2d2-dev/dsh-plugin #51 CEO 的 AGENTS.md 与 WAKE.md 正式内容"
+            - cell "—" [ref=e335]
+            - cell "Done" [ref=e336]
+            - cell "ready-for-agent" [ref=e337]
+            - cell "未读取此类字段值" [ref=e338]
+            - cell "—" [ref=e339]
+            - cell "a2d2-dev/dsh-plugin" [ref=e340]
+            - cell "未读取此类字段值" [ref=e341]
+            - cell "未读取此类字段值" [ref=e342]
+            - cell "未读取此类字段值" [ref=e343]
+            - cell "未读取此类字段值" [ref=e344]
+            - cell "未读取此类字段值" [ref=e345]
+            - cell "未读取此类字段值" [ref=e346]
+          - row
+            - cell "a2d2-dev/dsh-plugin #52 下一步咨询不再依赖 a2d2-orchestrator 技能" [ref=e347]
+              - button "a2d2-dev/dsh-plugin #52 下一步咨询不再依赖 a2d2-orchestrator 技能" [ref=e399]
+                - StaticText "a2d2-dev/dsh-plugin #52 下一步咨询不再依赖 a2d2-orchestrator 技能"
+            - cell "—" [ref=e348]
+            - cell "Done" [ref=e349]
+            - cell "ready-for-agent" [ref=e350]
+            - cell "未读取此类字段值" [ref=e351]
+            - cell "—" [ref=e352]
+            - cell "a2d2-dev/dsh-plugin" [ref=e353]
+            - cell "未读取此类字段值" [ref=e354]
+            - cell "未读取此类字段值" [ref=e355]
+            - cell "未读取此类字段值" [ref=e356]
+            - cell "未读取此类字段值" [ref=e357]
+            - cell "未读取此类字段值" [ref=e358]
+            - cell "未读取此类字段值" [ref=e359]
+        - button "上一页" [disabled, ref=e29]
+        - StaticText "第 "
+        - StaticText "1"
+        - StaticText " 页"
+        - button "下一页" [ref=e30]
+        - group
+          - DisclosureTriangle "真实字段定义" [expanded=false]
+            - StaticText "真实字段定义"
+      - group
+        - DisclosureTriangle "新执行默认自动接续" [expanded=false]
+          - StaticText "新执行默认自动接续"

@@ -1,0 +1,601 @@
+- generic [ref=e1] clickable [onclick]
+  - generic
+    - button "New session" [ref=e3]
+    - button "Collapse sidebar" [ref=e4]
+    - button "New session" [ref=e5]
+      - StaticText "New Session"
+    - navigation "Global panels" [ref=e6]
+      - button "Plugins" [ref=e15]
+        - StaticText "Plugins"
+      - button "A²D² 控制面板" [ref=e16]
+        - StaticText "A²D² 控制面板"
+    - StaticText "Workspaces"
+    - generic [ref=e7] clickable [onclick]
+      - button "Search sessions" [expanded=false, ref=e17]
+      - textbox "Search session names" [ref=e18]
+    - button "View options" [ref=e8]
+    - button "Add workspace" [ref=e9]
+    - generic
+      - tree "Sessions"
+        - generic
+          - treeitem "v4-152-r01" [level=1, expanded=true, ref=e33]
+            - StaticText "v4-152-r01"
+          - treeitem "New Session" [level=1, ref=e34]
+            - StaticText "New Session"
+        - treeitem "workspace" [level=1, expanded=false, ref=e35]
+          - StaticText "workspace"
+    - button "Settings" [expanded=false, ref=e19]
+      - StaticText "Settings"
+    - main "A²D² 控制面板" [ref=e2]
+      - navigation "来源标签" [ref=e10]
+        - strong
+          - StaticText "A²D² 控制面板"
+        - button "a2d2-dev/dsh-plugin 仓库" [ref=e20]
+          - StaticText "a2d2-dev/dsh-plugin 仓库"
+        - button "DSH A²D² Project" [ref=e21]
+          - StaticText "DSH A²D² Project"
+        - button "项目管理 v3.0 Project" [ref=e22]
+          - StaticText "项目管理 v3.0 Project"
+        - button "添加来源" [ref=e23]
+          - StaticText "＋"
+      - button "关闭面板" [ref=e11]
+      - strong
+        - StaticText "DSH A²D²"
+      - StaticText "Project · a2d2-dev / #1 · 组织"
+      - StaticText "读取账号："
+      - StaticText "imneov"
+      - group
+        - DisclosureTriangle "持续委托" [expanded=false]
+          - StaticText "持续委托"
+      - navigation "来源目录" [ref=e12]
+        - button "概览" [ref=e24]
+        - button "项目" [ref=e25]
+        - button "Issue" [ref=e26]
+        - button "PR" [ref=e27]
+      - button "刷新来源" [ref=e13]
+      - button "读取目录缓存" [ref=e14]
+      - StaticText "缓存 / 最后已知观察"
+      - StaticText " · 2026-10-22T03:02:06.942Z"
+      - generic
+        - heading "PR 只读目录" [level=2, ref=e28]
+        - LabelText
+          - StaticText "PR 状态"
+          - combobox "PR 状态" [expanded=false, ref=e31]: 已合并
+            - MenuListPopup
+              - option "全部" [ref=e136]
+              - option "开放" [ref=e137]
+              - option "已关闭" [ref=e138]
+              - option "已合并" [selected, ref=e139]
+        - LabelText
+          - StaticText "搜索 PR"
+          - textbox "搜索 PR" [ref=e32]
+        - paragraph
+          - StaticText "当前范围完整观察 · 43 项匹配 · 引用不等于验收。"
+        - table "PR 目录"
+          - rowgroup
+            - row
+              - columnheader "仓库 / PR" [ref=e140]
+              - columnheader "状态" [ref=e141]
+              - columnheader "相关 Issue" [ref=e142]
+              - columnheader "检查 / 评审" [ref=e143]
+          - row
+            - cell "a2d2-dev/dsh-plugin #134 feat(work): read and explicitly import GitHub issue sources (#124 stage 1) Issue 交叉引用" [ref=e36]
+              - link "a2d2-dev/dsh-plugin #134 feat(work): read and explicitly import GitHub issue sources (#124 stage 1)" [ref=e144]
+                - StaticText "a2d2-dev/dsh-plugin #134 feat(work): read and explicitly import GitHub issue sources (#124 stage 1)"
+              - paragraph
+                - StaticText "Issue 交叉引用"
+            - cell "已合并" [ref=e37]
+            - cell "#112 一期：插件托管任务长程运行、主会话接续与事件归属 #120 A²D² v3：DSH 内工作控制面板、会话连续性与持续接活 #124 [A²D² v3/04] GitHub Issue 来源、唯一接入与本地内容保留 #125 [A²D² v3/05] 当前项目的真实视图与对应内容 #132 [A²D² v3] 修复HTTP预览创建失败和资源占用提示" [ref=e38]
+              - list
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#112 一期：插件托管任务长程运行、主会话接续与事件归属" [ref=e169]
+                    - StaticText "#112 一期：插件托管任务长程运行、主会话接续与事件归属"
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#120 A²D² v3：DSH 内工作控制面板、会话连续性与持续接活" [ref=e170]
+                    - StaticText "#120 A²D² v3：DSH 内工作控制面板、会话连续性与持续接活"
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#124 [A²D² v3/04] GitHub Issue 来源、唯一接入与本地内容保留" [ref=e171]
+                    - StaticText "#124 [A²D² v3/04] GitHub Issue 来源、唯一接入与本地内容保留"
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#125 [A²D² v3/05] 当前项目的真实视图与对应内容" [ref=e172]
+                    - StaticText "#125 [A²D² v3/05] 当前项目的真实视图与对应内容"
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#132 [A²D² v3] 修复HTTP预览创建失败和资源占用提示" [ref=e173]
+                    - StaticText "#132 [A²D² v3] 修复HTTP预览创建失败和资源占用提示"
+            - cell "检查：未提供 评审：未提供" [ref=e39]
+              - StaticText "检查：未提供"
+              - paragraph
+                - StaticText "评审：未提供"
+          - row
+            - cell "a2d2-dev/dsh-plugin #133 fix: HTTP work creation and resource ownership hints (#132) Issue 交叉引用" [ref=e40]
+              - link "a2d2-dev/dsh-plugin #133 fix: HTTP work creation and resource ownership hints (#132)" [ref=e145]
+                - StaticText "a2d2-dev/dsh-plugin #133 fix: HTTP work creation and resource ownership hints (#132)"
+              - paragraph
+                - StaticText "Issue 交叉引用"
+            - cell "已合并" [ref=e41]
+            - cell "#120 A²D² v3：DSH 内工作控制面板、会话连续性与持续接活 #122 [A²D² v3/02] 单项工作启动、当前协调会话与执行资格 #124 [A²D² v3/04] GitHub Issue 来源、唯一接入与本地内容保留 #132 [A²D² v3] 修复HTTP预览创建失败和资源占用提示" [ref=e42]
+              - list
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#120 A²D² v3：DSH 内工作控制面板、会话连续性与持续接活" [ref=e174]
+                    - StaticText "#120 A²D² v3：DSH 内工作控制面板、会话连续性与持续接活"
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#122 [A²D² v3/02] 单项工作启动、当前协调会话与执行资格" [ref=e175]
+                    - StaticText "#122 [A²D² v3/02] 单项工作启动、当前协调会话与执行资格"
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#124 [A²D² v3/04] GitHub Issue 来源、唯一接入与本地内容保留" [ref=e176]
+                    - StaticText "#124 [A²D² v3/04] GitHub Issue 来源、唯一接入与本地内容保留"
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#132 [A²D² v3] 修复HTTP预览创建失败和资源占用提示" [ref=e177]
+                    - StaticText "#132 [A²D² v3] 修复HTTP预览创建失败和资源占用提示"
+            - cell "检查：未提供 评审：未提供" [ref=e43]
+              - StaticText "检查：未提供"
+              - paragraph
+                - StaticText "评审：未提供"
+          - row
+            - cell "a2d2-dev/dsh-plugin #135 [A²D² v3/04] 从 GitHub Issue 接入本地工作并关联已有会话 Issue 交叉引用" [ref=e44]
+              - link "a2d2-dev/dsh-plugin #135 [A²D² v3/04] 从 GitHub Issue 接入本地工作并关联已有会话" [ref=e146]
+                - StaticText "a2d2-dev/dsh-plugin #135 [A²D² v3/04] 从 GitHub Issue 接入本地工作并关联已有会话"
+              - paragraph
+                - StaticText "Issue 交叉引用"
+            - cell "已合并" [ref=e45]
+            - cell "#112 一期：插件托管任务长程运行、主会话接续与事件归属 #120 A²D² v3：DSH 内工作控制面板、会话连续性与持续接活 #122 [A²D² v3/02] 单项工作启动、当前协调会话与执行资格 #124 [A²D² v3/04] GitHub Issue 来源、唯一接入与本地内容保留 #125 [A²D² v3/05] 当前项目的真实视图与对应内容 #132 [A²D² v3] 修复HTTP预览创建失败和资源占用提示" [ref=e46]
+              - list
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#112 一期：插件托管任务长程运行、主会话接续与事件归属" [ref=e178]
+                    - StaticText "#112 一期：插件托管任务长程运行、主会话接续与事件归属"
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#120 A²D² v3：DSH 内工作控制面板、会话连续性与持续接活" [ref=e179]
+                    - StaticText "#120 A²D² v3：DSH 内工作控制面板、会话连续性与持续接活"
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#122 [A²D² v3/02] 单项工作启动、当前协调会话与执行资格" [ref=e180]
+                    - StaticText "#122 [A²D² v3/02] 单项工作启动、当前协调会话与执行资格"
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#124 [A²D² v3/04] GitHub Issue 来源、唯一接入与本地内容保留" [ref=e181]
+                    - StaticText "#124 [A²D² v3/04] GitHub Issue 来源、唯一接入与本地内容保留"
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#125 [A²D² v3/05] 当前项目的真实视图与对应内容" [ref=e182]
+                    - StaticText "#125 [A²D² v3/05] 当前项目的真实视图与对应内容"
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#132 [A²D² v3] 修复HTTP预览创建失败和资源占用提示" [ref=e183]
+                    - StaticText "#132 [A²D² v3] 修复HTTP预览创建失败和资源占用提示"
+            - cell "检查：未提供 评审：未提供" [ref=e47]
+              - StaticText "检查：未提供"
+              - paragraph
+                - StaticText "评审：未提供"
+          - row
+            - cell "a2d2-dev/dsh-plugin #130 [A²D² v3/01] DSH 控制面板与本地工作记录 Issue 交叉引用" [ref=e48]
+              - link "a2d2-dev/dsh-plugin #130 [A²D² v3/01] DSH 控制面板与本地工作记录" [ref=e147]
+                - StaticText "a2d2-dev/dsh-plugin #130 [A²D² v3/01] DSH 控制面板与本地工作记录"
+              - paragraph
+                - StaticText "Issue 交叉引用"
+            - cell "已合并" [ref=e49]
+            - cell "#120 A²D² v3：DSH 内工作控制面板、会话连续性与持续接活 #121 [A²D² v3/01] DSH 单入口、本地项目与工作详情" [ref=e50]
+              - list
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#120 A²D² v3：DSH 内工作控制面板、会话连续性与持续接活" [ref=e184]
+                    - StaticText "#120 A²D² v3：DSH 内工作控制面板、会话连续性与持续接活"
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#121 [A²D² v3/01] DSH 单入口、本地项目与工作详情" [ref=e185]
+                    - StaticText "#121 [A²D² v3/01] DSH 单入口、本地项目与工作详情"
+            - cell "检查：未提供 评审：未提供" [ref=e51]
+              - StaticText "检查：未提供"
+              - paragraph
+                - StaticText "评审：未提供"
+          - row
+            - cell "a2d2-dev/dsh-plugin #113 chore: deploy an isolated DSH development environment Issue 交叉引用" [ref=e52]
+              - link "a2d2-dev/dsh-plugin #113 chore: deploy an isolated DSH development environment" [ref=e148]
+                - StaticText "a2d2-dev/dsh-plugin #113 chore: deploy an isolated DSH development environment"
+              - paragraph
+                - StaticText "Issue 交叉引用"
+            - cell "已合并" [ref=e53]
+            - cell "#112 一期：插件托管任务长程运行、主会话接续与事件归属" [ref=e54]
+              - list
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#112 一期：插件托管任务长程运行、主会话接续与事件归属" [ref=e186]
+                    - StaticText "#112 一期：插件托管任务长程运行、主会话接续与事件归属"
+            - cell "检查：未提供 评审：未提供" [ref=e55]
+              - StaticText "检查：未提供"
+              - paragraph
+                - StaticText "评审：未提供"
+          - row
+            - cell "a2d2-dev/dsh-plugin #114 feat: run long-lived tasks through a host-managed A2D2 runtime Issue 交叉引用" [ref=e56]
+              - link "a2d2-dev/dsh-plugin #114 feat: run long-lived tasks through a host-managed A2D2 runtime" [ref=e149]
+                - StaticText "a2d2-dev/dsh-plugin #114 feat: run long-lived tasks through a host-managed A2D2 runtime"
+              - paragraph
+                - StaticText "Issue 交叉引用"
+            - cell "已合并" [ref=e57]
+            - cell "#112 一期：插件托管任务长程运行、主会话接续与事件归属" [ref=e58]
+              - list
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#112 一期：插件托管任务长程运行、主会话接续与事件归属" [ref=e187]
+                    - StaticText "#112 一期：插件托管任务长程运行、主会话接续与事件归属"
+            - cell "检查：未提供 评审：未提供" [ref=e59]
+              - StaticText "检查：未提供"
+              - paragraph
+                - StaticText "评审：未提供"
+          - row
+            - cell "a2d2-dev/dsh-feishu-connect #6 fix: security review rework — /bind takeover, helper lifecycle, config clobbering, ask_user cancel, GUI link (M1–M4, L7) Issue 交叉引用" [ref=e60]
+              - link "a2d2-dev/dsh-feishu-connect #6 fix: security review rework — /bind takeover, helper lifecycle, config clobbering, ask_user cancel, GUI link (M1–M4, L7)" [ref=e150]
+                - StaticText "a2d2-dev/dsh-feishu-connect #6 fix: security review rework — /bind takeover, helper lifecycle, config clobbering, ask_user cancel, GUI link (M1–M4, L7)"
+              - paragraph
+                - StaticText "Issue 交叉引用"
+            - cell "已合并" [ref=e61]
+            - cell "#85 [fork] dsh-feishu-connect：等人通知、/bind 与 notifier 服务 #89 [fork] dsh-feishu-connect：/feishu/admin/* 无认证，公网可改写机器人配置" [ref=e62]
+              - list
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#85 [fork] dsh-feishu-connect：等人通知、/bind 与 notifier 服务" [ref=e188]
+                    - StaticText "#85 [fork] dsh-feishu-connect：等人通知、/bind 与 notifier 服务"
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#89 [fork] dsh-feishu-connect：/feishu/admin/* 无认证，公网可改写机器人配置" [ref=e189]
+                    - StaticText "#89 [fork] dsh-feishu-connect：/feishu/admin/* 无认证，公网可改写机器人配置"
+            - cell "检查：未提供 评审：未提供" [ref=e63]
+              - StaticText "检查：未提供"
+              - paragraph
+                - StaticText "评审：未提供"
+          - row
+            - cell "a2d2-dev/dsh-feishu-connect #4 fix(admin): require DSH browser authentication on /feishu/admin/* Issue 交叉引用" [ref=e64]
+              - link "a2d2-dev/dsh-feishu-connect #4 fix(admin): require DSH browser authentication on /feishu/admin/*" [ref=e151]
+                - StaticText "a2d2-dev/dsh-feishu-connect #4 fix(admin): require DSH browser authentication on /feishu/admin/*"
+              - paragraph
+                - StaticText "Issue 交叉引用"
+            - cell "已合并" [ref=e65]
+            - cell "#89 [fork] dsh-feishu-connect：/feishu/admin/* 无认证，公网可改写机器人配置" [ref=e66]
+              - list
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#89 [fork] dsh-feishu-connect：/feishu/admin/* 无认证，公网可改写机器人配置" [ref=e190]
+                    - StaticText "#89 [fork] dsh-feishu-connect：/feishu/admin/* 无认证，公网可改写机器人配置"
+            - cell "检查：未提供 评审：未提供" [ref=e67]
+              - StaticText "检查：未提供"
+              - paragraph
+                - StaticText "评审：未提供"
+          - row
+            - cell "a2d2-dev/dsh-feishu-connect #3 feat: wait notifications, /bind and a dsh-notifier 0.7 compatible notifier service Issue 交叉引用" [ref=e68]
+              - link "a2d2-dev/dsh-feishu-connect #3 feat: wait notifications, /bind and a dsh-notifier 0.7 compatible notifier service" [ref=e152]
+                - StaticText "a2d2-dev/dsh-feishu-connect #3 feat: wait notifications, /bind and a dsh-notifier 0.7 compatible notifier service"
+              - paragraph
+                - StaticText "Issue 交叉引用"
+            - cell "已合并" [ref=e69]
+            - cell "#85 [fork] dsh-feishu-connect：等人通知、/bind 与 notifier 服务" [ref=e70]
+              - list
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#85 [fork] dsh-feishu-connect：等人通知、/bind 与 notifier 服务" [ref=e191]
+                    - StaticText "#85 [fork] dsh-feishu-connect：等人通知、/bind 与 notifier 服务"
+            - cell "检查：未提供 评审：未提供" [ref=e71]
+              - StaticText "检查：未提供"
+              - paragraph
+                - StaticText "评审：未提供"
+          - row
+            - cell "a2d2-dev/dsh-feishu-connect #1 DSH 0.2 port: shell.execute helper, 0.2 peers, @a2d2-dev/dsh-feishu-connect 1.8.0 Issue 交叉引用" [ref=e72]
+              - link "a2d2-dev/dsh-feishu-connect #1 DSH 0.2 port: shell.execute helper, 0.2 peers, @a2d2-dev/dsh-feishu-connect 1.8.0" [ref=e153]
+                - StaticText "a2d2-dev/dsh-feishu-connect #1 DSH 0.2 port: shell.execute helper, 0.2 peers, @a2d2-dev/dsh-feishu-connect 1.8.0"
+              - paragraph
+                - StaticText "Issue 交叉引用"
+            - cell "已合并" [ref=e73]
+            - cell "#84 [fork] dsh-feishu-connect：DSH 0.2 适配与包身份" [ref=e74]
+              - list
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#84 [fork] dsh-feishu-connect：DSH 0.2 适配与包身份" [ref=e192]
+                    - StaticText "#84 [fork] dsh-feishu-connect：DSH 0.2 适配与包身份"
+            - cell "检查：未提供 评审：未提供" [ref=e75]
+              - StaticText "检查：未提供"
+              - paragraph
+                - StaticText "评审：未提供"
+          - row
+            - cell "a2d2-dev/dsh-plugin #91 fix: A2D2 routes require DSH browser authentication (#88) Issue 交叉引用" [ref=e76]
+              - link "a2d2-dev/dsh-plugin #91 fix: A2D2 routes require DSH browser authentication (#88)" [ref=e154]
+                - StaticText "a2d2-dev/dsh-plugin #91 fix: A2D2 routes require DSH browser authentication (#88)"
+              - paragraph
+                - StaticText "Issue 交叉引用"
+            - cell "已合并" [ref=e77]
+            - cell "#88 A²D² 路由只比对 Host/Origin，公网可伪造调用" [ref=e78]
+              - list
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#88 A²D² 路由只比对 Host/Origin，公网可伪造调用" [ref=e193]
+                    - StaticText "#88 A²D² 路由只比对 Host/Origin，公网可伪造调用"
+            - cell "检查：未提供 评审：未提供" [ref=e79]
+              - StaticText "检查：未提供"
+              - paragraph
+                - StaticText "评审：未提供"
+          - row
+            - cell "a2d2-dev/dsh-plugin #87 A²D² main session pushes wait notices through optional notifier (#86) Issue 交叉引用" [ref=e80]
+              - link "a2d2-dev/dsh-plugin #87 A²D² main session pushes wait notices through optional notifier (#86)" [ref=e155]
+                - StaticText "a2d2-dev/dsh-plugin #87 A²D² main session pushes wait notices through optional notifier (#86)"
+              - paragraph
+                - StaticText "Issue 交叉引用"
+            - cell "已合并" [ref=e81]
+            - cell "#86 A²D²：主会话等人时经可选 notifier 推送语义消息 #81 等人时通知 LF：A²D² 语义 + dsh-notifier 投递" [ref=e82]
+              - list
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#86 A²D²：主会话等人时经可选 notifier 推送语义消息" [ref=e194]
+                    - StaticText "#86 A²D²：主会话等人时经可选 notifier 推送语义消息"
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#81 等人时通知 LF：A²D² 语义 + dsh-notifier 投递" [ref=e195]
+                    - StaticText "#81 等人时通知 LF：A²D² 语义 + dsh-notifier 投递"
+            - cell "检查：未提供 评审：未提供" [ref=e83]
+              - StaticText "检查：未提供"
+              - paragraph
+                - StaticText "评审：未提供"
+          - row
+            - cell "a2d2-dev/dsh-plugin #82 docs(adr): 0010 等人通知由 A²D² 判断、notifier 服务投递 Issue 交叉引用" [ref=e84]
+              - link "a2d2-dev/dsh-plugin #82 docs(adr): 0010 等人通知由 A²D² 判断、notifier 服务投递" [ref=e156]
+                - StaticText "a2d2-dev/dsh-plugin #82 docs(adr): 0010 等人通知由 A²D² 判断、notifier 服务投递"
+              - paragraph
+                - StaticText "Issue 交叉引用"
+            - cell "已合并" [ref=e85]
+            - cell "#81 等人时通知 LF：A²D² 语义 + dsh-notifier 投递" [ref=e86]
+              - list
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#81 等人时通知 LF：A²D² 语义 + dsh-notifier 投递" [ref=e196]
+                    - StaticText "#81 等人时通知 LF：A²D² 语义 + dsh-notifier 投递"
+            - cell "检查：未提供 评审：未提供" [ref=e87]
+              - StaticText "检查：未提供"
+              - paragraph
+                - StaticText "评审：未提供"
+          - row
+            - cell "a2d2-dev/dsh-plugin #83 D 芯片按 Agent 准备：continue 不切、新会话以下一阶段的 Agent 启动 (#75) Issue 交叉引用" [ref=e88]
+              - link "a2d2-dev/dsh-plugin #83 D 芯片按 Agent 准备：continue 不切、新会话以下一阶段的 Agent 启动 (#75)" [ref=e157]
+                - StaticText "a2d2-dev/dsh-plugin #83 D 芯片按 Agent 准备：continue 不切、新会话以下一阶段的 Agent 启动 (#75)"
+              - paragraph
+                - StaticText "Issue 交叉引用"
+            - cell "已合并" [ref=e89]
+            - cell "#75 D 芯片按 Agent 准备：continue 不切、新会话以下一阶段的 Agent 启动（浏览器） #72 A2 配置页按阶段选 Agent + 公路图挂 Agent 标签（浏览器）" [ref=e90]
+              - list
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#75 D 芯片按 Agent 准备：continue 不切、新会话以下一阶段的 Agent 启动（浏览器）" [ref=e197]
+                    - StaticText "#75 D 芯片按 Agent 准备：continue 不切、新会话以下一阶段的 Agent 启动（浏览器）"
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#72 A2 配置页按阶段选 Agent + 公路图挂 Agent 标签（浏览器）" [ref=e198]
+                    - StaticText "#72 A2 配置页按阶段选 Agent + 公路图挂 Agent 标签（浏览器）"
+            - cell "检查：未提供 评审：未提供" [ref=e91]
+              - StaticText "检查：未提供"
+              - paragraph
+                - StaticText "评审：未提供"
+          - row
+            - cell "a2d2-dev/dsh-plugin #80 Validate consult continue by session Agent Issue 交叉引用" [ref=e92]
+              - link "a2d2-dev/dsh-plugin #80 Validate consult continue by session Agent" [ref=e158]
+                - StaticText "a2d2-dev/dsh-plugin #80 Validate consult continue by session Agent"
+              - paragraph
+                - StaticText "Issue 交叉引用"
+            - cell "已合并" [ref=e93]
+            - cell "#74 C 咨询带上本会话的 Agent，拒绝跨 Agent 的 continue" [ref=e94]
+              - list
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#74 C 咨询带上本会话的 Agent，拒绝跨 Agent 的 continue" [ref=e199]
+                    - StaticText "#74 C 咨询带上本会话的 Agent，拒绝跨 Agent 的 continue"
+            - cell "检查：未提供 评审：未提供" [ref=e95]
+              - StaticText "检查：未提供"
+              - paragraph
+                - StaticText "评审：未提供"
+          - row
+            - cell "a2d2-dev/dsh-plugin #78 Record and assemble session Agents Issue 交叉引用" [ref=e96]
+              - link "a2d2-dev/dsh-plugin #78 Record and assemble session Agents" [ref=e159]
+                - StaticText "a2d2-dev/dsh-plugin #78 Record and assemble session Agents"
+              - paragraph
+                - StaticText "Issue 交叉引用"
+            - cell "已合并" [ref=e97]
+            - cell "#73 B 会话的 Agent：记录、两级配置装配、去掉特殊 Agent（宿主）" [ref=e98]
+              - list
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#73 B 会话的 Agent：记录、两级配置装配、去掉特殊 Agent（宿主）" [ref=e200]
+                    - StaticText "#73 B 会话的 Agent：记录、两级配置装配、去掉特殊 Agent（宿主）"
+            - cell "检查：未提供 评审：未提供" [ref=e99]
+              - StaticText "检查：未提供"
+              - paragraph
+                - StaticText "评审：未提供"
+          - row
+            - cell "a2d2-dev/dsh-plugin #77 A2 config page stage agents and highway labels Issue 交叉引用" [ref=e100]
+              - link "a2d2-dev/dsh-plugin #77 A2 config page stage agents and highway labels" [ref=e160]
+                - StaticText "a2d2-dev/dsh-plugin #77 A2 config page stage agents and highway labels"
+              - paragraph
+                - StaticText "Issue 交叉引用"
+            - cell "已合并" [ref=e101]
+            - cell "#72 A2 配置页按阶段选 Agent + 公路图挂 Agent 标签（浏览器）" [ref=e102]
+              - list
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#72 A2 配置页按阶段选 Agent + 公路图挂 Agent 标签（浏览器）" [ref=e201]
+                    - StaticText "#72 A2 配置页按阶段选 Agent + 公路图挂 Agent 标签（浏览器）"
+            - cell "检查：未提供 评审：未提供" [ref=e103]
+              - StaticText "检查：未提供"
+              - paragraph
+                - StaticText "评审：未提供"
+          - row
+            - cell "a2d2-dev/dsh-plugin #76 Replace station model table with stage Agent settings Issue 交叉引用" [ref=e104]
+              - link "a2d2-dev/dsh-plugin #76 Replace station model table with stage Agent settings" [ref=e161]
+                - StaticText "a2d2-dev/dsh-plugin #76 Replace station model table with stage Agent settings"
+              - paragraph
+                - StaticText "Issue 交叉引用"
+            - cell "已合并" [ref=e105]
+            - cell "#71 A1 阶段 Agent 表替换站点模型表（宿主：settings、派发、开子任务、咨询、配置路由） #72 A2 配置页按阶段选 Agent + 公路图挂 Agent 标签（浏览器）" [ref=e106]
+              - list
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#71 A1 阶段 Agent 表替换站点模型表（宿主：settings、派发、开子任务、咨询、配置路由）" [ref=e202]
+                    - StaticText "#71 A1 阶段 Agent 表替换站点模型表（宿主：settings、派发、开子任务、咨询、配置路由）"
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#72 A2 配置页按阶段选 Agent + 公路图挂 Agent 标签（浏览器）" [ref=e203]
+                    - StaticText "#72 A2 配置页按阶段选 Agent + 公路图挂 Agent 标签（浏览器）"
+            - cell "检查：未提供 评审：未提供" [ref=e107]
+              - StaticText "检查：未提供"
+              - paragraph
+                - StaticText "评审：未提供"
+          - row
+            - cell "a2d2-dev/dsh-plugin #63 feat(github-watch): wake a session when its PR merges, closes, or finishes CI Issue 交叉引用" [ref=e108]
+              - link "a2d2-dev/dsh-plugin #63 feat(github-watch): wake a session when its PR merges, closes, or finishes CI" [ref=e162]
+                - StaticText "a2d2-dev/dsh-plugin #63 feat(github-watch): wake a session when its PR merges, closes, or finishes CI"
+              - paragraph
+                - StaticText "Issue 交叉引用"
+            - cell "已合并" [ref=e109]
+            - cell "#58 GitHub watch: wake the session when its PR merges or CI finishes" [ref=e110]
+              - list
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#58 GitHub watch: wake the session when its PR merges or CI finishes" [ref=e204]
+                    - StaticText "#58 GitHub watch: wake the session when its PR merges or CI finishes"
+            - cell "检查：未提供 评审：未提供" [ref=e111]
+              - StaticText "检查：未提供"
+              - paragraph
+                - StaticText "评审：未提供"
+          - row
+            - cell "a2d2-dev/dsh-plugin #67 Define CEO method files Issue 交叉引用" [ref=e112]
+              - link "a2d2-dev/dsh-plugin #67 Define CEO method files" [ref=e163]
+                - StaticText "a2d2-dev/dsh-plugin #67 Define CEO method files"
+              - paragraph
+                - StaticText "Issue 交叉引用"
+            - cell "已合并" [ref=e113]
+            - cell "#51 CEO 的 AGENTS.md 与 WAKE.md 正式内容 #42 CEO 的 SOUL：提炼 LF 的原则" [ref=e114]
+              - list
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#51 CEO 的 AGENTS.md 与 WAKE.md 正式内容" [ref=e205]
+                    - StaticText "#51 CEO 的 AGENTS.md 与 WAKE.md 正式内容"
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#42 CEO 的 SOUL：提炼 LF 的原则" [ref=e206]
+                    - StaticText "#42 CEO 的 SOUL：提炼 LF 的原则"
+            - cell "检查：未提供 评审：未提供" [ref=e115]
+              - StaticText "检查：未提供"
+              - paragraph
+                - StaticText "评审：未提供"
+          - row
+            - cell "a2d2-dev/dsh-plugin #66 Complete task and notify parent main session Issue 交叉引用" [ref=e116]
+              - link "a2d2-dev/dsh-plugin #66 Complete task and notify parent main session" [ref=e164]
+                - StaticText "a2d2-dev/dsh-plugin #66 Complete task and notify parent main session"
+              - paragraph
+                - StaticText "Issue 交叉引用"
+            - cell "已合并" [ref=e117]
+            - cell "#50 宣告完成：子任务完成时叫醒父任务主会话" [ref=e118]
+              - list
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#50 宣告完成：子任务完成时叫醒父任务主会话" [ref=e207]
+                    - StaticText "#50 宣告完成：子任务完成时叫醒父任务主会话"
+            - cell "检查：未提供 评审：未提供" [ref=e119]
+              - StaticText "检查：未提供"
+              - paragraph
+                - StaticText "评审：未提供"
+          - row
+            - cell "a2d2-dev/dsh-plugin #64 Fix packed build chunks Issue 交叉引用" [ref=e120]
+              - link "a2d2-dev/dsh-plugin #64 Fix packed build chunks" [ref=e165]
+                - StaticText "a2d2-dev/dsh-plugin #64 Fix packed build chunks"
+              - paragraph
+                - StaticText "Issue 交叉引用"
+            - cell "已合并" [ref=e121]
+            - cell "#57 发布包漏了构建产物 lib/handoff-*.js" [ref=e122]
+              - list
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#57 发布包漏了构建产物 lib/handoff-*.js" [ref=e208]
+                    - StaticText "#57 发布包漏了构建产物 lib/handoff-*.js"
+            - cell "检查：未提供 评审：未提供" [ref=e123]
+              - StaticText "检查：未提供"
+              - paragraph
+                - StaticText "评审：未提供"
+          - row
+            - cell "a2d2-dev/dsh-plugin #65 Fix main-session binding hardening Issue 交叉引用" [ref=e124]
+              - link "a2d2-dev/dsh-plugin #65 Fix main-session binding hardening" [ref=e166]
+                - StaticText "a2d2-dev/dsh-plugin #65 Fix main-session binding hardening"
+              - paragraph
+                - StaticText "Issue 交叉引用"
+            - cell "已合并" [ref=e125]
+            - cell "#56 绑定主会话的两处加固：并发绑定与 issue-<n> 身份冲突" [ref=e126]
+              - list
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#56 绑定主会话的两处加固：并发绑定与 issue-<n> 身份冲突" [ref=e209]
+                    - StaticText "#56 绑定主会话的两处加固：并发绑定与 issue-<n> 身份冲突"
+            - cell "检查：未提供 评审：未提供" [ref=e127]
+              - StaticText "检查：未提供"
+              - paragraph
+                - StaticText "评审：未提供"
+          - row
+            - cell "a2d2-dev/dsh-plugin #62 feat: open subtask main sessions Issue 交叉引用" [ref=e128]
+              - link "a2d2-dev/dsh-plugin #62 feat: open subtask main sessions" [ref=e167]
+                - StaticText "a2d2-dev/dsh-plugin #62 feat: open subtask main sessions"
+              - paragraph
+                - StaticText "Issue 交叉引用"
+            - cell "已合并" [ref=e129]
+            - cell "#49 开子任务：为子任务新建根会话作为主会话 #41 A²D²：每个任务由主会话里的 CEO 推进（插件作为载体） #50 宣告完成：子任务完成时叫醒父任务主会话" [ref=e130]
+              - list
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#49 开子任务：为子任务新建根会话作为主会话" [ref=e210]
+                    - StaticText "#49 开子任务：为子任务新建根会话作为主会话"
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#41 A²D²：每个任务由主会话里的 CEO 推进（插件作为载体）" [ref=e211]
+                    - StaticText "#41 A²D²：每个任务由主会话里的 CEO 推进（插件作为载体）"
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#50 宣告完成：子任务完成时叫醒父任务主会话" [ref=e212]
+                    - StaticText "#50 宣告完成：子任务完成时叫醒父任务主会话"
+            - cell "检查：未提供 评审：未提供" [ref=e131]
+              - StaticText "检查：未提供"
+              - paragraph
+                - StaticText "评审：未提供"
+          - row
+            - cell "a2d2-dev/dsh-plugin #61 feat: add CEO prompt section for main sessions Issue 交叉引用" [ref=e132]
+              - link "a2d2-dev/dsh-plugin #61 feat: add CEO prompt section for main sessions" [ref=e168]
+                - StaticText "a2d2-dev/dsh-plugin #61 feat: add CEO prompt section for main sessions"
+              - paragraph
+                - StaticText "Issue 交叉引用"
+            - cell "已合并" [ref=e133]
+            - cell "#46 CEO 提示段：主会话现读 AGENTS / WAKE / SOUL #47 主会话交接：交接中与接任 #51 CEO 的 AGENTS.md 与 WAKE.md 正式内容" [ref=e134]
+              - list
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#46 CEO 提示段：主会话现读 AGENTS / WAKE / SOUL" [ref=e213]
+                    - StaticText "#46 CEO 提示段：主会话现读 AGENTS / WAKE / SOUL"
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#47 主会话交接：交接中与接任" [ref=e214]
+                    - StaticText "#47 主会话交接：交接中与接任"
+                - listitem [level=1]
+                  - ListMarker "• "
+                  - link "#51 CEO 的 AGENTS.md 与 WAKE.md 正式内容" [ref=e215]
+                    - StaticText "#51 CEO 的 AGENTS.md 与 WAKE.md 正式内容"
+            - cell "检查：未提供 评审：未提供" [ref=e135]
+              - StaticText "检查：未提供"
+              - paragraph
+                - StaticText "评审：未提供"
+        - button "上一页" [disabled, ref=e29]
+        - StaticText "第 "
+        - StaticText "1"
+        - StaticText " 页"
+        - button "下一页" [ref=e30]
+      - group
+        - DisclosureTriangle "新执行默认自动接续" [expanded=false]
+          - StaticText "新执行默认自动接续"

@@ -1,0 +1,337 @@
+- generic [ref=e1] clickable [onclick]
+  - generic
+    - button "New session" [ref=e3]
+    - button "Collapse sidebar" [ref=e4]
+    - button "New session" [ref=e5]
+      - StaticText "New Session"
+    - navigation "Global panels" [ref=e6]
+      - button "Plugins" [ref=e13]
+        - StaticText "Plugins"
+      - button "A²D² 控制面板" [ref=e14]
+        - StaticText "A²D² 控制面板"
+    - StaticText "Workspaces"
+    - generic [ref=e7] clickable [onclick]
+      - button "Search sessions" [expanded=false, ref=e15]
+      - textbox "Search session names" [ref=e16]
+    - button "View options" [ref=e8]
+    - button "Add workspace" [ref=e9]
+    - generic
+      - tree "Sessions"
+        - generic
+          - treeitem "v4-152-r01" [level=1, expanded=true, ref=e42]
+            - StaticText "v4-152-r01"
+          - treeitem "New Session" [level=1, ref=e43]
+            - StaticText "New Session"
+        - treeitem "workspace" [level=1, expanded=false, ref=e44]
+          - StaticText "workspace"
+    - button "Settings" [expanded=false, ref=e17]
+      - StaticText "Settings"
+    - main "A²D² 控制面板" [ref=e2]
+      - navigation "来源标签" [ref=e10]
+        - strong
+          - StaticText "A²D² 控制面板"
+        - button "a2d2-dev/dsh-plugin 仓库" [ref=e18]
+          - StaticText "a2d2-dev/dsh-plugin 仓库"
+        - button "DSH A²D² Project" [ref=e19]
+          - StaticText "DSH A²D² Project"
+        - button "项目管理 v3.0 Project" [ref=e20]
+          - StaticText "项目管理 v3.0 Project"
+        - button "添加来源" [ref=e21]
+          - StaticText "＋"
+      - button "关闭面板" [ref=e11]
+      - strong
+        - StaticText "DSH A²D²"
+      - StaticText "Project · a2d2-dev / #1 · 组织"
+      - StaticText "读取账号："
+      - StaticText "imneov"
+      - group
+        - DisclosureTriangle "持续委托" [expanded=false]
+          - StaticText "持续委托"
+      - navigation "来源目录" [ref=e12]
+        - button "概览" [ref=e22]
+        - button "项目" [ref=e23]
+        - button "Issue" [ref=e24]
+        - button "PR" [ref=e25]
+      - generic
+        - heading "Issues" [level=2, ref=e26]
+        - LabelText
+          - StaticText "来源"
+          - combobox "来源" [expanded=false, ref=e32]: DSH A²D²
+            - MenuListPopup
+              - option "a2d2-dev/dsh-plugin" [ref=e107]
+              - option "DSH A²D²" [selected, ref=e108]
+        - form
+          - LabelText
+            - StaticText "搜索当前来源"
+            - textbox "搜索来源 Issues" [ref=e45]
+          - LabelText
+            - StaticText "必须包含的标签"
+            - textbox "Issue 标签" [ref=e46]
+          - button "应用搜索与标签" [ref=e33]
+        - LabelText
+          - StaticText "负责人 "
+          - combobox "Issue 负责人" [expanded=false, ref=e34]: 分配给我
+            - MenuListPopup
+              - option "分配给我" [disabled, ref=e109]
+              - option "全部负责人" [disabled, ref=e110]
+        - LabelText
+          - StaticText "GitHub 状态 "
+          - combobox "Issue 远端状态" [expanded=false, ref=e35]: 全部
+            - MenuListPopup
+              - option "Open" [disabled, ref=e111]
+              - option "Closed" [disabled, ref=e112]
+              - option "全部" [disabled, ref=e113]
+        - textbox "搜索当前页 Issues" [ref=e27]
+        - button "刷新 Issues" [ref=e28]
+        - navigation "Issue 处理状态" [ref=e29]
+          - button "全部" [ref=e36]
+          - button "未开始" [ref=e37]
+          - button "处理中" [ref=e38]
+          - button "等待" [ref=e39]
+          - button "阻塞" [ref=e40]
+          - button "已完成" [ref=e41]
+        - paragraph
+          - StaticText "缓存 / 最后已知列表 · 第 1 页 · 搜索与处理状态筛选仅作用于当前已载入页（20 / 20 项） · 观察时间：2026-10-22T03:06:37.810Z"
+        - table "GitHub Issue 列表"
+          - rowgroup
+            - row
+              - columnheader "Issue / 原始要求" [ref=e114]
+              - columnheader "进展与下一步" [ref=e115]
+              - columnheader "负责人 / 标签" [ref=e116]
+          - row
+            - cell "#112 一期：插件托管任务长程运行、主会话接续与事件归属 a2d2-dev/dsh-plugin · GitHub open" [ref=e47]
+              - button "#112 一期：插件托管任务长程运行、主会话接续与事件归属" [ref=e117]
+                - StaticText "#112 一期：插件托管任务长程运行、主会话接续与事件归属"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub open"
+            - cell "未开始 尚未开始处理" [ref=e48]
+              - StaticText "未开始"
+              - paragraph
+                - StaticText "尚未开始处理"
+            - cell "imneov a2d2:main" [ref=e49]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "a2d2:main"
+          - row
+            - cell "#121 [A²D² v3/01] DSH 单入口、本地项目与工作详情 a2d2-dev/dsh-plugin · GitHub closed" [ref=e50]
+              - button "#121 [A²D² v3/01] DSH 单入口、本地项目与工作详情" [ref=e118]
+                - StaticText "#121 [A²D² v3/01] DSH 单入口、本地项目与工作详情"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub closed"
+            - cell "未开始" [ref=e51]
+            - cell "imneov ready-for-agent" [ref=e52]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "ready-for-agent"
+          - row
+            - cell "#122 [A²D² v3/02] 单项工作启动、当前协调会话与执行资格 a2d2-dev/dsh-plugin · GitHub open" [ref=e53]
+              - button "#122 [A²D² v3/02] 单项工作启动、当前协调会话与执行资格" [ref=e119]
+                - StaticText "#122 [A²D² v3/02] 单项工作启动、当前协调会话与执行资格"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub open"
+            - cell "未开始" [ref=e54]
+            - cell "imneov a2d2:sub" [ref=e55]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "a2d2:sub"
+          - row
+            - cell "#124 [A²D² v3/04] GitHub Issue 来源、唯一接入与本地内容保留 a2d2-dev/dsh-plugin · GitHub closed" [ref=e56]
+              - button "#124 [A²D² v3/04] GitHub Issue 来源、唯一接入与本地内容保留" [ref=e120]
+                - StaticText "#124 [A²D² v3/04] GitHub Issue 来源、唯一接入与本地内容保留"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub closed"
+            - cell "未开始 尚未开始处理" [ref=e57]
+              - StaticText "未开始"
+              - paragraph
+                - StaticText "尚未开始处理"
+            - cell "imneov a2d2:sub" [ref=e58]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "a2d2:sub"
+          - row
+            - cell "#132 [A²D² v3] 修复HTTP预览创建失败和资源占用提示 a2d2-dev/dsh-plugin · GitHub closed" [ref=e59]
+              - button "#132 [A²D² v3] 修复HTTP预览创建失败和资源占用提示" [ref=e121]
+                - StaticText "#132 [A²D² v3] 修复HTTP预览创建失败和资源占用提示"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub closed"
+            - cell "未开始" [ref=e60]
+            - cell "imneov ready-for-agent" [ref=e61]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "ready-for-agent"
+          - row
+            - cell "#136 参考 v4 原型完成 Issue 驱动、统一执行与持续处理整体交付 a2d2-dev/dsh-plugin · GitHub open" [ref=e62]
+              - button "#136 参考 v4 原型完成 Issue 驱动、统一执行与持续处理整体交付" [ref=e122]
+                - StaticText "#136 参考 v4 原型完成 Issue 驱动、统一执行与持续处理整体交付"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub open"
+            - cell "未开始" [ref=e63]
+            - cell "imneov enhancement · a2d2:sub" [ref=e64]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "enhancement · a2d2:sub"
+          - row
+            - cell "#137 [v4/01] Project／仓库链接接入、真实视图与 PR 目录 a2d2-dev/dsh-plugin · GitHub open" [ref=e65]
+              - button "#137 [v4/01] Project／仓库链接接入、真实视图与 PR 目录" [ref=e123]
+                - StaticText "#137 [v4/01] Project／仓库链接接入、真实视图与 PR 目录"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub open"
+            - cell "未开始" [ref=e66]
+            - cell "imneov ready-for-agent" [ref=e67]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "ready-for-agent"
+          - row
+            - cell "#138 [v4/02] 统一真实执行状态、子 Issue 入口与接续页面 a2d2-dev/dsh-plugin · GitHub open" [ref=e68]
+              - button "#138 [v4/02] 统一真实执行状态、子 Issue 入口与接续页面" [ref=e124]
+                - StaticText "#138 [v4/02] 统一真实执行状态、子 Issue 入口与接续页面"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub open"
+            - cell "未开始" [ref=e69]
+            - cell "imneov ready-for-agent" [ref=e70]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "ready-for-agent"
+          - row
+            - cell "#139 [v4/03] 验收完成、父通知与可恢复 GitHub 关闭补偿 a2d2-dev/dsh-plugin · GitHub open" [ref=e71]
+              - button "#139 [v4/03] 验收完成、父通知与可恢复 GitHub 关闭补偿" [ref=e125]
+                - StaticText "#139 [v4/03] 验收完成、父通知与可恢复 GitHub 关闭补偿"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub open"
+            - cell "未开始" [ref=e72]
+            - cell "imneov ready-for-agent" [ref=e73]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "ready-for-agent"
+          - row
+            - cell "#140 [v4/04] 自然语言持续委托、真实计划与 Block 约束 a2d2-dev/dsh-plugin · GitHub open" [ref=e74]
+              - button "#140 [v4/04] 自然语言持续委托、真实计划与 Block 约束" [ref=e126]
+                - StaticText "#140 [v4/04] 自然语言持续委托、真实计划与 Block 约束"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub open"
+            - cell "未开始" [ref=e75]
+            - cell "imneov ready-for-agent" [ref=e76]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "ready-for-agent"
+          - row
+            - cell "#141 [v4/05] 现有 DSH 实例集成、真实模型与全流程页面验收 a2d2-dev/dsh-plugin · GitHub open" [ref=e77]
+              - button "#141 [v4/05] 现有 DSH 实例集成、真实模型与全流程页面验收" [ref=e127]
+                - StaticText "#141 [v4/05] 现有 DSH 实例集成、真实模型与全流程页面验收"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub open"
+            - cell "未开始" [ref=e78]
+            - cell "imneov ready-for-agent" [ref=e79]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "ready-for-agent"
+          - row
+            - cell "#142 [v4/Host] 公开非消费作业观察与持久终态收取回执 a2d2-dev/dsh-plugin · GitHub open" [ref=e80]
+              - button "#142 [v4/Host] 公开非消费作业观察与持久终态收取回执" [ref=e128]
+                - StaticText "#142 [v4/Host] 公开非消费作业观察与持久终态收取回执"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub open"
+            - cell "未开始" [ref=e81]
+            - cell "imneov ready-for-agent" [ref=e82]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "ready-for-agent"
+          - row
+            - cell "#150 [v4/06] 现有DSH实例交付与真实模型验收（preview → GUI） a2d2-dev/dsh-plugin · GitHub open" [ref=e83]
+              - button "#150 [v4/06] 现有DSH实例交付与真实模型验收（preview → GUI）" [ref=e129]
+                - StaticText "#150 [v4/06] 现有DSH实例交付与真实模型验收（preview → GUI）"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub open"
+            - cell "未开始" [ref=e84]
+            - cell "imneov a2d2:sub" [ref=e85]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "a2d2:sub"
+          - row
+            - cell "#151 [v4/150-01] 冻结运维工具与 18782 切换计划风险审查 a2d2-dev/dsh-plugin · GitHub closed" [ref=e86]
+              - button "#151 [v4/150-01] 冻结运维工具与 18782 切换计划风险审查" [ref=e130]
+                - StaticText "#151 [v4/150-01] 冻结运维工具与 18782 切换计划风险审查"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub closed"
+            - cell "未开始" [ref=e87]
+            - cell "imneov ready-for-agent" [ref=e88]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "ready-for-agent"
+          - row
+            - cell "#152 [v4/150-02] 原 18782 真实模型与全流程验收 a2d2-dev/dsh-plugin · GitHub open" [ref=e89]
+              - button "#152 [v4/150-02] 原 18782 真实模型与全流程验收" [ref=e131]
+                - StaticText "#152 [v4/150-02] 原 18782 真实模型与全流程验收"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub open"
+            - cell "未开始" [ref=e90]
+            - cell "imneov ready-for-agent" [ref=e91]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "ready-for-agent"
+          - row
+            - cell "#154 [v4/150-03] 闭合运维风险并安全切换原 18782 a2d2-dev/dsh-plugin · GitHub open" [ref=e92]
+              - button "#154 [v4/150-03] 闭合运维风险并安全切换原 18782" [ref=e132]
+                - StaticText "#154 [v4/150-03] 闭合运维风险并安全切换原 18782"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub open"
+            - cell "未开始" [ref=e93]
+            - cell "imneov ready-for-agent" [ref=e94]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "ready-for-agent"
+          - row
+            - cell "#155 [v4/150-04] 原 GUI 18781 服务外更新、恢复与同 URL 验收 a2d2-dev/dsh-plugin · GitHub open" [ref=e95]
+              - button "#155 [v4/150-04] 原 GUI 18781 服务外更新、恢复与同 URL 验收" [ref=e133]
+                - StaticText "#155 [v4/150-04] 原 GUI 18781 服务外更新、恢复与同 URL 验收"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub open"
+            - cell "未开始" [ref=e96]
+            - cell "imneov ready-for-agent" [ref=e97]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "ready-for-agent"
+          - row
+            - cell "#157 [QA #152 v4 v4-152-6b252218-r01] P a2d2-dev/dsh-plugin · GitHub open" [ref=e98]
+              - button "#157 [QA #152 v4 v4-152-6b252218-r01] P" [ref=e134]
+                - StaticText "#157 [QA #152 v4 v4-152-6b252218-r01] P"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub open"
+            - cell "未开始" [ref=e99]
+            - cell "imneov qa:v4-152-6b252218-r01" [ref=e100]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "qa:v4-152-6b252218-r01"
+          - row
+            - cell "#158 [QA #152 v4 v4-152-6b252218-r01] C a2d2-dev/dsh-plugin · GitHub open" [ref=e101]
+              - button "#158 [QA #152 v4 v4-152-6b252218-r01] C" [ref=e135]
+                - StaticText "#158 [QA #152 v4 v4-152-6b252218-r01] C"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub open"
+            - cell "未开始" [ref=e102]
+            - cell "imneov qa:v4-152-6b252218-r01" [ref=e103]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "qa:v4-152-6b252218-r01"
+          - row
+            - cell "#159 [QA #152 v4 v4-152-6b252218-r01] E a2d2-dev/dsh-plugin · GitHub closed" [ref=e104]
+              - button "#159 [QA #152 v4 v4-152-6b252218-r01] E" [ref=e136]
+                - StaticText "#159 [QA #152 v4 v4-152-6b252218-r01] E"
+              - paragraph
+                - StaticText "a2d2-dev/dsh-plugin · GitHub closed"
+            - cell "未开始" [ref=e105]
+            - cell "imneov qa:v4-152-6b252218-r01" [ref=e106]
+              - StaticText "imneov"
+              - paragraph
+                - StaticText "qa:v4-152-6b252218-r01"
+        - button "上一页" [disabled, ref=e30]
+        - StaticText "第 "
+        - StaticText "1"
+        - StaticText " 页"
+        - button "下一页" [ref=e31]
+        - group
+          - DisclosureTriangle "来源状态与缓存" [expanded=false]
+            - StaticText "来源状态与缓存"
+      - group
+        - DisclosureTriangle "新执行默认自动接续" [expanded=false]
+          - StaticText "新执行默认自动接续"
