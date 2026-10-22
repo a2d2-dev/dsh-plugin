@@ -45,6 +45,39 @@ export function planningBasis(state: WorkSnapshot, rule: ContinuousWorkRule): Pl
   return planningBasisSchema.parse({ instruction: rule.planning.instruction, supplements: rule.planning.supplements, blocks: rule.planning.blocks, scopeVersion: rule.planning.scopeVersion, scope: rule.scope, executionStrategy: { resource: rule.resource, model: rule.model, agentPreset: rule.agentPreset, permissionPreset: rule.permissionPreset }, relationshipAvailability: { nativeParentChildren: 'observed-when-present', nativeDependencies: 'unavailable-in-source-port' }, source, candidates })
 }
 
+/** Compare planning authority, not discovery bookkeeping or live execution progress.
+ * The full basis remains available to the model and to fresh safety validation.
+ */
+export function planningBasisFingerprint(basis: PlanningBasis): string {
+  const pick = (value: unknown, keys: string[]) => {
+    const record = value as Record<string, unknown> | undefined
+    return record && Object.fromEntries(keys.map(key => [key, record[key]]))
+  }
+  const identity = (value: unknown) => pick(value, ['login', 'nodeId'])
+  const source = basis.source
+  const stable = {
+    instruction: basis.instruction, supplements: basis.supplements, blocks: [...basis.blocks].sort(),
+    scopeVersion: basis.scopeVersion, scope: { ...basis.scope, labels: [...basis.scope.labels].sort() }, executionStrategy: basis.executionStrategy,
+    source: {
+      id: source.id, projectId: source.projectId, provider: source.provider, version: source.version, enabled: source.enabled,
+      repository: source.repository, githubProject: source.githubProject, nodeId: source.nodeId, identity: identity(source.identity),
+      repositorySnapshot: source.repositorySnapshot && { sourceVersion: source.repositorySnapshot.sourceVersion, identity: identity(source.repositorySnapshot.identity) },
+      projectSnapshot: source.projectSnapshot && { identity: identity(source.projectSnapshot.identity), project: pick(source.projectSnapshot.project, ['nodeId', 'url', 'closed']) },
+    },
+    candidates: basis.candidates.map(candidate => {
+      const task = candidate.task as { specification?: { version?: number } } | undefined
+      return {
+        nodeId: candidate.issue.nodeId, ownerRuleId: candidate.ownerRuleId,
+        task: task && { ...pick(task, ['ref', 'agentId', 'goal', 'children', 'parent']), specificationVersion: task.specification?.version },
+        execution: pick(candidate.execution, ['id', 'ref', 'agentId', 'owner', 'epoch', 'resource', 'model', 'agentPreset', 'permissionPreset', 'session']),
+      }
+    }).sort((a, b) => a.nodeId.localeCompare(b.nodeId)),
+  }
+  // Object insertion order is not an identity change (including JSON-valued canonical facts).
+  return JSON.stringify(stable, (_key, value) => value && typeof value === 'object' && !Array.isArray(value)
+    ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b))) : value)
+}
+
 export function samePlannedExecution(saved: unknown, current: unknown): boolean {
   const pick = (value: unknown) => {
     const execution = value as Record<string, unknown> | undefined
