@@ -113,3 +113,10 @@
 
 - **#165** 计划 basis 校验过严（产品能力阻断，修复中）。
 - **#166** 390×844 持续委托面板横向裁切（textarea width=514 vs documentWidth=390，按钮右侧超出视口；有 DOM 坐标与截图）。
+
+## 十、组合修复与 planner 负载（2026-10-22 04:20Z）
+
+- 已构建并部署 `#163 + #165` 组合产物到 preview：tgz `5269d65b`、client `f68f8181`、host 8282d612；sessions/storages 保留（redeploy 日志与 inventory 见 preview `artifacts/redeploy-20261022T041459Z/`）。
+- **#165 生效验证**：连续两次 `continuous.preview` 不再出现 `planning-basis-changed`，而是直达模型调用；新的失败消息 `Model planning failed: Model stopped with error` 说明模型失败与 basis 抖动已被区分（R3）。
+- **新缺陷 #167**：planner 仍失败，测量显示请求体约 350–400KB——`planningBasis` 把整个 source（实测 source 328,892 bytes，其中 observations 285,493 bytes / 49 条）与无关 Issue 全部发给模型；实际只需要候选身份与指令/Block/策略。已在独立 worktree `fix/planner-payload`（base 4f359b8）修复中：收窄来源摘要、候选有界字段、请求体上限与失败诊断。
+- 决策：GUI 暂不再次重启换装组合产物，等 #167 一并修好后再做一次最终同 URL 更新，避免为中间版本多付一次重启成本；当前 GUI 仍是已验收的 v4 + #163 修复版本。
