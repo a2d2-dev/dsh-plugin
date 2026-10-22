@@ -1,7 +1,7 @@
 import { BlockAssembler, createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { A2D2_MESSAGE_SOURCE } from '../message-source.ts'
-import { PlanningError } from '../work-planning.ts'
+import { PlanningError, planningModelErrorSummary } from '../work-planning.ts'
 import type { WorkPlanner } from '../work-planning.ts'
 
 /** Auxiliary call with no Session history, tools or host settings mutations. */
@@ -16,7 +16,12 @@ export function createLlmPlanner(stream: (options: GenerateOptions) => AsyncIter
       maxTokens: 8192,
     }
     for await (const chunk of stream(options)) assembler.push(chunk)
-    if (assembler.finish.kind !== 'stop') throw new PlanningError('planning-model-failed', `Model stopped with ${assembler.finish.kind}`)
+    const finish = assembler.finish
+    if (finish.kind !== 'stop') {
+      const failure = 'failure' in finish ? finish.failure : undefined
+      const detail = failure ? `: ${failure.code}${failure.status !== undefined ? ` (${failure.status})` : ''}: ${failure.message}` : ''
+      throw new PlanningError('planning-model-failed', planningModelErrorSummary(`Model stopped with ${finish.kind}${detail}`))
+    }
     const blocks = assembler.blocks()
     if (blocks.some(block => block.type === 'tool-call')) throw new PlanningError('planning-model-failed', 'Planning cannot call tools')
     const text = blocks.flatMap(block => block.type === 'text' ? [block.text] : []).join('')

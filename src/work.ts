@@ -1,7 +1,7 @@
 import { refreshRepositoryCandidates } from './work-sources/repository-candidates.ts'
 import { buildExecutionGraph, type ExecutionObservation } from './work-execution/observation.ts'
 import { refreshCatalog } from './work-sources/catalog-application.ts'
-import { PlanningError, planningBasis, planningBasisFingerprint, validatePlan, samePlannedExecution } from './work-planning.ts'
+import { PlanningError, planningBasis, planningBasisFingerprint, validatePlan, samePlannedExecution, planningModelErrorSummary } from './work-planning.ts'
 import type { WorkPlanner } from './work-planning.ts'
 import { issueSchema } from './work-sources/schema.ts'
 import { SourceError } from './work-sources/errors.ts'
@@ -360,18 +360,12 @@ export class WorkApplication {
         if (!this.planner) throw new PlanningError('planning-model-unavailable', 'Host LLM planning capability is unavailable')
         const basis = planningBasis(snapshot, rule)
         const fingerprint = planningBasisFingerprint(basis)
+        const requestCharacters = JSON.stringify(basis).length, candidateCount = basis.candidates.length
         let output: unknown
         try { output = await this.planner.generate(basis, rule.model) }
         catch (error) {
-          // Only summarize the model message: never expose its stack or local paths.
-          const message = error instanceof Error ? error.message : typeof error === 'string' ? error : 'Unknown model error'
-          const summary = message.split(/[\r\n]/, 1)[0]!
-            .replace(/\b[a-z][a-z0-9+.-]*:\/\/\S+/gi, '[redacted URL]')
-            .replace(/\b[A-Za-z0-9_-]*(?:key|token|secret|password|passwd|credentials?)\s*[=:]\s*(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi, '[redacted credential]')
-            .replace(/\bBearer\s+\S+|\b(?:sk-|gh[pousr]_|github_pat_|xox[baprs]-)[A-Za-z0-9_-]+/gi, '[redacted credential]')
-            .replace(/(?:[A-Za-z]:[\\/]|\.{1,2}\/|~\/|\/)[^\s,;"'<>]+/g, '[redacted path]')
-            .slice(0, 500).trim()
-          throw new PlanningError('planning-model-failed', `Model planning failed: ${summary || 'Unknown model error'}`)
+          const summary = planningModelErrorSummary(error)
+          throw new PlanningError('planning-model-failed', `Model planning failed: ${summary}; requestCharacters=${requestCharacters}, candidates=${candidateCount}`)
         }
         return await this.sourceTransaction(async state => {
           const current = state.continuousRules!.find(item => item.id === rule.id)!

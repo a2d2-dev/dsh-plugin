@@ -44,6 +44,17 @@ export type PlanOutput = z.infer<typeof planOutputSchema>
 export interface WorkPlanner { generate(basis: PlanningBasis, model: ContinuousWorkRule['model']): Promise<unknown> }
 export class PlanningError extends Error { constructor(readonly code: string, message: string) { super(message) } }
 
+/** Summarize only error messages, never stacks, generated blocks or request bodies. */
+export function planningModelErrorSummary(error: unknown): string {
+  const message = error instanceof Error ? error.message : typeof error === 'string' ? error : 'Unknown model error'
+  return message.split(/[\r\n]/, 1)[0]!
+    .replace(/\b[a-z][a-z0-9+.-]*:\/\/\S+/gi, '[redacted URL]')
+    .replace(/\b[A-Za-z0-9_-]*(?:key|token|secret|password|passwd|credentials?)\s*[=:]\s*(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi, '[redacted credential]')
+    .replace(/\bBearer\s+\S+|\b(?:sk-|gh[pousr]_|github_pat_|xox[baprs]-)[A-Za-z0-9_-]+/gi, '[redacted credential]')
+    .replace(/(?:[A-Za-z]:[\\/]|\.{1,2}\/|~\/|\/)[^\s,;"'<>]+/g, '[redacted path]')
+    .slice(0, 400).trim() || 'Unknown model error'
+}
+
 export function planningBasis(state: WorkSnapshot, rule: ContinuousWorkRule): PlanningBasis {
   const source = state.sources.find(source => source.id === rule.sourceId)
   const error = sourceScopeError(rule, source)
