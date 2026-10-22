@@ -43,3 +43,12 @@
 - 作业的 `label` 就是完整命令，summary 只取首行 96 字符；完整命令在展开后的等宽块里。
 - 分组是纯展示折叠，不改变任何事实或动作；「查看会话 / 只读历史 / 查看子工作」等动作仍在。
 - 390px 下宿主面板本身有最小宽度，右侧仍会横向滚动（本轮未改宿主布局）。
+
+## 18781 / 18780 用户实例切换
+
+用户同意后，通过受管 runner `/data/_dsh-dev/deployments/v4-170-runner.sh --apply` 把同一构建换到用户实例：
+
+- 目标：supervisor `dsh-dev-web-server`，`http://10.126.126.12:18780/` → `127.0.0.1:18781`；
+- 新 client `cf5c0986bf4291…`，宿主仍是 `v4-141-release-8282d612`；
+- 切换前整包备份 profile（含 `.plugin-manager`）与 supervisor conf，健康检查/浏览器核对/数据保留任一失败会自动回滚；
+- 本轮由 systemd 瞬时单元运行，重启会中断当时正在进行的会话；结果与备份见 `/data/_dsh-dev/deployments/v4-170-<时间戳>/`。
