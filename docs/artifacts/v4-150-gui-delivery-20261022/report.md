@@ -93,3 +93,23 @@
 - **接续 blocker 的根因是陈旧 policy**：P 详情里用正规入口显式重存自动接续策略（target 200,000 / reserve 16,000，HTTP 200，policy v2）后，`Exact model route or capacity changed` blocker 消失，只剩 fixture 自身要求的 FINISH 等待；说明该 blocker 是“策略与当前路由不匹配，需显式重配”的设计路径，不是接续功能损坏。
 - **持续委托的 `source-snapshot-unavailable` 属实现细节**：repo 来源需要 `repositorySnapshot.sourceVersion === source.version`；该版本匹配扫描由 `continuous.preview` 自身在规划前执行（1 页 100 条、最多 10 页），后台 reconcile 只在规则 `enabled=true && planning` 时补扫。对 disabled 的规则直接查 status 会看到该错误，属预期，不代表功能不可用。
 - GUI 侧 `invalid-request` 假警报：用 DOM 直接改筛选值导致 React 状态带上非法枚举（`assignee='all'`），恢复为 `@me` 后真实刷新成功（16 项，观察时间 2026-10-22T03:38:16Z）。不是产品缺陷。
+
+## 九、接续与持续委托（#152 收口状态，2026-10-22 04:00Z）
+
+### 已通过：真实自动接续
+
+- policy v3（target 28,000 / reserve 16,000）按“真实计量之下”正规重存，未注入 meter；自动触发，真实 observation 28,185。
+- `material-saved` → `delivered` → 正式接任：execution epoch 1→2，当前 Session 变为 successor `session-1a48efa9…`，旧段 role=retired；owner 身份保留（符合规格）。
+- 新段真实模型首条回复复述「数量3、必须保留stable标签」与未完成项；usage：codex/gpt-6.1-sol/high、maxTokens 128,000、input 15,358 / output 111。
+- 旧段推进被拒：`task.control progress`（epoch=1）→ HTTP400 `stale-execution-authority`。
+
+### 部分通过：持续委托
+
+- 真实模型计划 v1（HTTP200 / 68.4s）给出 A→B 有序步骤、理由/nextAction/新建或复用判断，X 被排除；`continuous.block` 使 Block 正式持久化，纠偏后保留；Task/Session/proof 零执行证据成立。
+- 计划启用被新缺陷 **#165** 阻断：planning basis 含全部易变字段，60–90s 模型窗口内必然被 30s 发现 tick 或其它会话进展破坏（`planning-basis-changed`）；另有 3 次 `planning-model-failed`。修复分支 `fix/planning-basis-stability`（base dd44958）进行中。
+- 未完成：启用后的 A 让槽 / B 串行 / B 真实关闭 / A 恢复、暂停在途边界、越界 node 拒绝。
+
+### 新缺陷
+
+- **#165** 计划 basis 校验过严（产品能力阻断，修复中）。
+- **#166** 390×844 持续委托面板横向裁切（textarea width=514 vs documentWidth=390，按钮右侧超出视口；有 DOM 坐标与截图）。
