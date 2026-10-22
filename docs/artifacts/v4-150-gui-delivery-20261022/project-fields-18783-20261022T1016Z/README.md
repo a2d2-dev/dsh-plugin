@@ -94,3 +94,15 @@
 实测：表格宽度 901px = 容器 901px，`scrollWidth` 无溢出，列数 7。截图 `table-final2.png`。
 
 构建：client `27e9e89a58daab0d8e31d150937cfc125ec90c09f0c51acf5840c59d6ca47998`，仍在 18783。
+
+## 深色主题下链接/正文看不清（2026-10-22 12:27Z）
+
+根因：`--dsw-alias-label-link` 在宿主主题里**不存在**（`design-platform.css` 只有 label-primary/secondary/tertiary/caption 等）。插件所有 `var(--dsw-alias-label-link, #565b96)` 都落到深紫 `#565b96`，深色背景上几乎不可见。另外本轮表格里我硬编码了 `#1f2328/#59636e/#d1d9e0/#f6f8fa` 等浅色主题值。
+
+修复：
+- 新增 `--work-link`：浅色 `--dsw-static-blue-600`（rgb 37,99,235），深色在 `body[data-ds-dark-theme] .panel` 下改为 `--dsw-static-blue-400`（rgb 96,165,250）；
+- `.panel a` / `.link` 改用 `--work-link`；
+- 项目表格里的引用链接改为**继承正文颜色**（GitHub 的 issue 引用就是这样），hover 才变蓝加下划线；
+- 表格其余硬编码颜色换成面板 token：标题 `inherit`、表头 `--work-muted`、分隔线 `--work-line`、hover `--dsw-alias-interactive-bg-hover`、label 药丸同 hover 背景、进度条底 `--work-line`。
+
+实测（`document.body.setAttribute('data-ds-dark-theme','')` 模拟宿主深色）：表格标题/链接 `rgb(249,250,251)`，面板外链 `rgb(96,165,250)`；浅色下外链 `rgb(37,99,235)`、表格链接继承正文 `rgb(15,17,21)`。截图 `theme-light.png`、`theme-dark.png`。
