@@ -411,6 +411,50 @@ it('adopts canonical existing execution without changing owner epoch resource or
   expect(h.host.sessionsCreated.size).toBe(1); expect(h.host.sends).toHaveLength(1)
 })
 
+it('completes preview across a discovery tick while the model is generating', async () => {
+  let h!: Awaited<ReturnType<typeof setup>>
+  const generate = vi.fn(async (basis: import('../src/work-planning.ts').PlanningBasis) => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 60_000)
+    await h.app.reconcileSources()
+    const fresh = completed(await h.app.query({ type: 'source.list', projectId: h.scope.projectId }, operator)).sources![0]!
+    expect(fresh.sequence).toBeGreaterThan(basis.source.sequence)
+    expect(fresh.discovery!.nextAttemptAt).not.toBe(basis.source.discovery!.nextAttemptAt)
+    return { steps: [{ nodeId: 'ISSUE_1', why: 'Within scope', nextAction: 'Work', mode: 'new' }] }
+  })
+  h = await setup(false, { generate })
+  completed(await h.app.execute(h.configure, operator))
+  completed(await h.app.execute({ type: 'continuous.instruct', commandId: 'tick-instruct', ...h.scope, expectedVersion: 1, text: '处理我的工作' }, operator))
+  completed(await h.app.execute({ type: 'continuous.preview', commandId: 'tick-preview', ...h.scope, expectedVersion: 2 }, operator))
+  expect((await h.status()).planning?.plans).toHaveLength(1)
+  expect(generate).toHaveBeenCalledTimes(1)
+  expect(h.host.sessionsCreated.size).toBe(0)
+})
+
+it('discards preview when a candidate gains a canonical Task identity during generation', async () => {
+  let h!: Awaited<ReturnType<typeof setup>>
+  h = await setup(false, { generate: async () => {
+    completed(await h.app.execute({ type: 'source.import', commandId: 'import-during-preview', ...h.scope, nodeId: 'ISSUE_1' }, operator))
+    return { steps: [{ nodeId: 'ISSUE_1', why: 'Observe', nextAction: 'Wait', mode: 'wait' }] }
+  } })
+  completed(await h.app.execute(h.configure, operator))
+  completed(await h.app.execute({ type: 'continuous.instruct', commandId: 'identity-instruct', ...h.scope, expectedVersion: 1, text: '处理我的工作' }, operator))
+  expect(await h.app.execute({ type: 'continuous.preview', commandId: 'identity-preview', ...h.scope, expectedVersion: 2 }, operator)).toMatchObject({ status: 'failed', error: { code: 'planning-basis-changed' } })
+  expect((await h.status()).planning?.plans).toHaveLength(0)
+})
+
+it('validates the latest Issue scope after model generation despite stable identities', async () => {
+  let h!: Awaited<ReturnType<typeof setup>>
+  h = await setup(false, { generate: async () => {
+    h.remote.issues[0]!.labels = ['other']
+    completed(await h.refresh())
+    return { steps: [{ nodeId: 'ISSUE_1', why: 'Was in scope', nextAction: 'Work', mode: 'new' }] }
+  } })
+  completed(await h.app.execute(h.configure, operator))
+  completed(await h.app.execute({ type: 'continuous.instruct', commandId: 'scope-instruct', ...h.scope, expectedVersion: 1, text: '处理我的工作' }, operator))
+  expect(await h.app.execute({ type: 'continuous.preview', commandId: 'scope-preview', ...h.scope, expectedVersion: 2 }, operator)).toMatchObject({ status: 'failed', error: { code: 'planning-outside-scope' } })
+  expect((await h.status()).planning?.plans).toHaveLength(0)
+})
+
 it('fences a model response when Block changes while generation is in flight', async () => {
   let release!: (output: unknown) => void
   let entered!: () => void
