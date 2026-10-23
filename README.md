@@ -4,11 +4,19 @@ English | [中文](README.zh.md)
 
 This repository holds the **A²D² DeepSeek Harness plugin**: the components that land A²D² inside [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) as one installable plugin.
 
+## Install the v0.0.22 prerelease
+
+Download `a2d2-dsh-a2d2-0.0.22.tgz` from [GitHub Release v0.0.22](https://github.com/a2d2-dev/dsh-plugin/releases/tag/v0.0.22). Keep it compressed and install its absolute path through the desktop plugin manager, or use the app-provided CLI: `dsh plugin --profile desktop add /absolute/path/a2d2-dsh-a2d2-0.0.22.tgz`. Fully quit and reopen DSH after upgrading: a page refresh alone cannot remove interceptors already attached to live Sessions.
+
+This package retains the deployed name `@a2d2/dsh-a2d2` and includes the complete work panel plus built host and browser modules. The earlier GitHub v0.0.1 package was named `dsh-a2d2`; do not activate both names as separate A²D² instances. The version follows the internally deployed 0.0.21. Node.js 22 or newer is required. This release was verified on the matching DSH 0.2.1-rc.2 development host, not every official desktop version. The Release includes checksums.
+
+Native human conversations remain available while a Task waits, pauses, completes, or transfers to another Session. Old Sessions show the current Session entry. Conversation does not reopen completed work or regain coordination. Previously buffered, unconsumed human input is recovered with its original content and attachments on the next human input in that Session, without duplicate delivery.
+
 ## GitHub Project and Issue workflow
 
 Open **A²D² Control Panel** in DSH and connect a GitHub Project. Browse assigned Issues, open their original requirements and progress, and start or revisit the current processing Session. Browsing never starts a model. The execution directory can be chosen when connecting or at the first explicit start.
 
-Enable continuous processing with an explicit assignee, required labels, directory, model and presets. Each rule advances one Issue at a time. Waiting work retains its Session and yields to other eligible Issues; incoming replies rejoin the same serial scheduler. Pausing new intake preserves active work, while an explicitly paused Issue needs an explicit resume.
+Enable continuous processing with an explicit assignee, required labels, directory, model and presets. Each rule advances one Issue at a time. Waiting work retains its Session and yields to other eligible Issues; automatic inputs rejoin the same serial scheduler. Pausing new intake preserves active work, while an explicitly paused Issue needs an explicit resume for automation. Native human input always receives a response and does not itself resume the Task.
 
 Configure a 200K, 300K or custom token target for automatic continuation. The successor retains the Issue's decisions, evidence and remaining work. These are early handoff targets checked against the actual model capacity, not hard limits on a long turn. The original Issue overview connects requirement blocks, nested child work, known sub-Issues, blockers and acceptance evidence.
 
