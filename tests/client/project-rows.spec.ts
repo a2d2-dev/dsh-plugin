@@ -35,6 +35,9 @@ it('hides only fully empty columns and keeps unread field types visible', () => 
   const wide = [{ id: 'F_repository', name: 'Repository', dataType: 'REPOSITORY' }, { id: 'F_created', name: 'Created', dataType: 'CREATED' }]
   expect(projectColumns(wide, rows).map(field => field.name)).toEqual([])
   expect(projectColumns(wide, rows, true).map(field => field.name)).toEqual(['Repository', 'Created'])
+  // A Milestone view field is a real column, not an optional extra: show it when it has values.
+  const mile = orderProjectRows([{ ...item('I_1'), fields: [{ id: 'F_milestone', name: 'Milestone', type: 'text', value: '3.0' }] }], [issue('I_1', 1)], new Set())
+  expect(projectColumns([{ id: 'F_milestone', name: 'Milestone', dataType: 'MILESTONE' }], mile).map(field => field.name)).toEqual(['Milestone'])
 })
 
 it('places the shared session column right after Status, and first when Status is absent', () => {
