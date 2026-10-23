@@ -350,8 +350,11 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
         if (!alive) return
         setSnapshot(config)
         setDraft(cloneSettings(config.settings))
-        if (config.catalog !== undefined) setCatalog(config.catalog)
-        setCatalog(routes)
+        // Offer everything the host can name, not just one catalog: the
+        // plugin's model routes, the session catalog, and any candidate the
+        // configuration already carries (a stale route must stay re-addable).
+        const configured = [...Object.values(config.settings.agents).flat(), ...config.settings.consult].map(candidateRoute)
+        setCatalog([...new Set([...(config.catalog ?? []), ...routes, ...configured])])
         setStatus('已加载')
       } catch (error) {
         if (!alive) return
