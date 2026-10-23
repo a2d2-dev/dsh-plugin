@@ -2,12 +2,13 @@ import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { WorkApplication } from './work.ts'
 import { taskReportSchema } from './work-progress.ts'
+import { modelWorkResult } from './work-model-details.ts'
 
 /** Progress is recorded by the real current coordinator, never by a copied Task id in a prompt. */
 export function installWorkProgressTools(ctx: Context, app: WorkApplication, runtimeId: string): void {
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'work_report',
-    description: 'Record the current managed task work status, requirements, blockers, next step and criterion evidence. Use work_control status to read the current Task specification and version. Report concrete facts when progress changes so the Project view stays current. done requires all necessary native results collected and verified, a complete accepted native-child scope, and required children accepted. For an unimported external child, first read work_related_issue and record externalChildren with that nodeId, exact updatedAt, acceptance basis and verifiable evidence; a canonical Task must pass its own acceptance. closeExternal optionally queues recoverable closure of the accepted canonical GitHub binding; synchronization never reruns the Task.',
+    description: 'Record the current managed task work status, requirements, blockers, next step and criterion evidence. Use startup material for the specification; work_control status checks ownership and versions only. If material is changed or missing, read every work_read specification page before reporting. Report concrete facts when progress changes so the Project view stays current. done requires all necessary native results collected and verified, a complete accepted native-child scope, and required children accepted. For an unimported external child, first read work_related_issue and record externalChildren with that nodeId, exact updatedAt, acceptance basis and verifiable evidence; a canonical Task must pass its own acceptance. Long diagnostics return bounded previews and counts/byte lengths, with explicit truncation and a full-detail reference; audit-only completion files do not authorize more work. closeExternal optionally queues recoverable closure of the accepted canonical GitHub binding; synchronization never reruns the Task.',
     parameters: {
       report: { type: 'object', additionalProperties: false, required: true, description: 'Progress report against the current specification.', properties: {
         externalChildren:{type:'array',description:'Accountable external acceptance only for already necessary unimported native children; never substitutes an unfinished canonical Task.',items:{type:'object',additionalProperties:false,properties:{nodeId:{type:'string',required:true},updatedAt:{type:'string',required:true},basis:{type:'string',required:true},evidence:{type:'array',required:true,items:{type:'string'}}}}},
@@ -25,7 +26,8 @@ export function installWorkProgressTools(ctx: Context, app: WorkApplication, run
     async execute(args,exec) {
       if(!exec.agent || exec.agent.session.id!==exec.agent.id) throw Error('work_report requires a real current Agent Session')
       const report=taskReportSchema.parse(args.report)
-      return {result:JSON.stringify(await app.sessionReport({runtimeId,sessionId:exec.agent.id},exec.callId,report,args.expected_epoch,exec.token))}
+      const session={runtimeId,sessionId:exec.agent.id}
+      return {result:JSON.stringify(await modelWorkResult(app,session,await app.sessionReport(session,exec.callId,report,args.expected_epoch,exec.token),'report'))}
     },
     presentCall:()=>({card:'generic',title:'更新工作进展',kind:'other'}),
   })), 'managed work progress reporting')
