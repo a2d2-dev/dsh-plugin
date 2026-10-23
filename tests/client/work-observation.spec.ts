@@ -5,6 +5,7 @@ import { WorkPanelController } from '../../src/client/work-panel-controller.ts'
 import { WorkPanel } from '../../src/client/work-panel.tsx'
 import type { WorkClient } from '../../src/client/work-api.ts'
 import type { WorkCompleted, WorkExecution, WorkTask } from '../../src/work-types.ts'
+import { buildExecutionGraph } from '../../src/work-execution/observation.ts'
 
 const ref = { projectId: 'p1', taskId: 't1' }
 const task: WorkTask = { id: 't1', projectId: 'p1', title: '持续工作', goal: '观察变化', version: 1, agentId: 'a1', specification: { version: 1, text: '保存目标', acceptance: ['可观察'] }, specificationHistory: [], breakdown: [], children: [], sessions: [], activity: [] }
@@ -20,7 +21,7 @@ function setup() {
     query: vi.fn(async (query): Promise<WorkCompleted> => {
       if (query.type === 'projects.list') return { status: 'completed', projects: ['p1', 'p2'].map(id => ({ id, name: id, version: 1, defaultAgentId: 'a1', resources: [] })) }
       if (query.type === 'project.detail') return { status: 'completed', tasks: query.projectId === 'p1' ? [saved] : [] }
-      if (query.type === 'task.detail') return { status: 'completed', task: saved, execution }
+      if (query.type === 'task.detail') return { status: 'completed', task: saved, execution, executionGraph: buildExecutionGraph({ task: saved, execution }) }
       if (query.type === 'task.history') return { status: 'completed', transcript: { session: historySession, events: ['已加载的旧上下文'], nextCursor: 10 } }
       if (query.type === 'source.list') return { status: 'completed', sources: [source] }
       if (query.type === 'source.issues') return { status: 'completed', source, page: { identity: { login: 'viewer', nodeId: 'U1', name: null }, items: [issue], observedAt: issue.observedAt } }
@@ -37,11 +38,17 @@ describe('visible panel local observation', () => {
   it('updates task progress while preserving tab, filters and already loaded history without writes/navigation', async () => {
     const h = setup(); await h.panel.load(); await h.panel.openTask(ref); h.panel.setDetailTab('sessions'); h.panel.setSearch('持续'); h.panel.setView('associated'); await h.panel.openHistory(historySession)
     const priorHistory = h.panel.getSnapshot().history
-    vi.mocked(h.client.query).mockResolvedValueOnce({ status: 'completed', task: { ...task, version: 2 }, execution: { ...execution, progress: '后端新进展', state: 'waiting' }, executionRuntime: 'idle' })
+    expect(html(h.panel)).not.toContain('等待人类确认')
+    const updatedTask = { ...task, version: 2 }
+    const updatedExecution = { ...execution, progress: '后端新进展', state: 'waiting' as const }
+    const executionGraph = buildExecutionGraph({ task: updatedTask, execution: updatedExecution, observation: { settlement: 'pending', sessions: [{ session: execution.session, role: 'current', status: 'idle', waitingHuman: true, children: [], jobs: [] }], blockers: [], reminders: [], limitations: [] } })
+    vi.mocked(h.client.query).mockResolvedValueOnce({ status: 'completed', task: updatedTask, execution: updatedExecution, executionRuntime: 'idle', executionGraph })
     await h.panel.observeCurrent()
     expect(h.panel.getSnapshot()).toMatchObject({ detailTab: 'sessions', search: '持续', view: 'associated', detail: { task: { version: 2 }, execution: { progress: '后端新进展' } } })
     expect(h.panel.getSnapshot().history).toBe(priorHistory)
-    expect(html(h.panel)).toContain('后端新进展')
+    expect(h.panel.getSnapshot().detail?.executionGraph).toBe(executionGraph)
+    expect(html(h.panel)).toContain('等待人类确认')
+    expect(html(h.panel)).toContain('已加载的旧上下文')
     expect(h.client.command).not.toHaveBeenCalled()
     expect(h.navigation.openSession).not.toHaveBeenCalled()
     expect(h.navigation.selectPanel).not.toHaveBeenCalled()
@@ -102,14 +109,20 @@ describe('visible panel local observation', () => {
     expect(h.client.command).not.toHaveBeenCalled()
   })
   it('refreshes Issue-row local progress without imports and never matches another repository by number', async () => {
-    const h = setup(); await h.panel.load(); await h.panel.showSources()
+    const h = setup(); await h.panel.load(); await h.panel.showSources(); await h.panel.selectSourceTab('issues')
+    expect(h.panel.getSnapshot().source.tab).toBe('issues')
     expect(html(h.panel)).toContain('未开始')
     const progress = { processingState:'waiting' as const, ref, title: task.title, children: [], stage: 'in-progress' as const, summary: '正在实现已确认需求', next: '', blockers: ['等待评审'], criteria: { passed: 0, total: 1, assessed: 0, current: false }, breakdown: [], execution: { id: 'e1', session: execution.session, state: 'waiting' as const, runtime: 'idle' as const, reason: '请确认设计' }, source: { number: 1, url: 'https://github.com/ACME/REPO/issues/1/', state: 'closed' as const, observedAt: issue.observedAt } }
     const original = h.client.query
     h.client.query = async query => query.type === 'project.detail' ? { status: 'completed', tasks: [task], progressItems: [progress] } : query.type === 'source.issues' ? { status: 'completed', source, page: { identity: { login: 'viewer', nodeId: 'U1', name: null }, items: [{ ...issue, state: 'closed' }, { ...issue, nodeId: 'foreign', title: '另一个仓库', repository: { owner: 'acme', repository: 'other' }, url: 'https://github.com/acme/other/issues/1' }], observedAt: issue.observedAt } } : original(query)
     await h.panel.observeCurrent()
     const rendered = html(h.panel)
-    for (const text of ['进展与下一步', '正在实现已确认需求', '等待回复', '等待', '未开始']) expect(rendered).toContain(text)
+    const rows = rendered.match(/<tr>[\s\S]*?<\/tr>/g) ?? []
+    const ownRow = rows.find(row => row.includes('#1 来源工作'))
+    const foreignRow = rows.find(row => row.includes('#1 另一个仓库'))
+    for (const text of ['正在实现已确认需求', '等待评审', '等待', 'session-current']) expect(ownRow).toContain(text)
+    expect(foreignRow).toContain('未开始')
+    for (const text of ['正在实现已确认需求', '等待评审', 'session-current']) expect(foreignRow).not.toContain(text)
     expect(rendered).not.toContain('已验收完成')
     expect(h.panel.progressForIssue({ ...issue, url: 'https://github.com/acme/other/issues/1' })).toBeUndefined()
     expect(h.client.command).not.toHaveBeenCalled()
