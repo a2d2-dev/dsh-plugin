@@ -818,7 +818,7 @@ export class WorkPanelController {
   setSearch(search: string): void { this.update({ search }) }
   setView(view: LocalView): void { this.update({ view }) }
   setDetailTab(detailTab: DetailTab): void { this.update({ detailTab }) }
-  progressForIssue(issue: Pick<GitHubIssue,'nodeId'|'url'>): TaskProgressView | undefined {
+  progressForIssue(issue: Pick<GitHubIssue,'url'> & Partial<Pick<GitHubIssue,'nodeId'>>): TaskProgressView | undefined {
     const key = (value: string): string | undefined => {
       try {
         const url = new URL(value)
@@ -828,7 +828,7 @@ export class WorkPanelController {
       } catch { return undefined }
     }
     const canonical = key(issue.url)
-    return this.state.progressItems.find(item => item.source?.nodeId === issue.nodeId || (canonical && item.source && key(item.source.url) === canonical))
+    return this.state.progressItems.find(item => (issue.nodeId && item.source?.nodeId === issue.nodeId) || (canonical && item.source && key(item.source.url) === canonical))
   }
   /** Each mounted native entry owns its timer and request lifetime. Polling only observes. */
   watchSessionWork(sessionId: string, receive: (work: import('../work-types.ts').AssociatedWork[]) => void, reportError: (error: string | null) => void): () => void {
