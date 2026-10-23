@@ -14,7 +14,7 @@ pnpm test
 pnpm verify:pack-exports
 ```
 
-CI 在 Node.js 22、24 上执行上述检查，另运行固定版本 Gitleaks 扫描 Git 历史。发布包验证覆盖所有显式导出目标、类型入口、Node 模块导入及浏览器 bundle 注册。源码内部路径不是公共导出接口。构建产物不提交 Git；本地验收报告和截图也不随源码或 npm 包发布。
+CI 在 Node.js 22、24 上执行上述检查，另运行固定版本 Gitleaks 扫描 Git 历史。`.gitleaksignore` 仅列出逐项核实的历史摘要、脱敏测试常量和已遮罩/占位授权头的精确 fingerprint，不豁免目录或整类规则。发布包验证覆盖所有显式导出目标、类型入口、Node 模块导入及浏览器 bundle 注册。源码内部路径不是公共导出接口。构建产物不提交 Git；本地验收报告和截图也不随源码或 npm 包发布。
 
 ## 宿主与外部依赖
 

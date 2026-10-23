@@ -1,0 +1,10 @@
+# Reviewed false positives: SHA-256 evidence digests and deliberate redaction test fixtures.
+09079fd34e4ac5e0d9b3d43db2d2558bc069c4c9:docs/artifacts/a2d2-v3-121-2026-10-19/product-first-pass/evidence-sha256.json:generic-api-key:4
+09079fd34e4ac5e0d9b3d43db2d2558bc069c4c9:docs/artifacts/a2d2-v3-121-2026-10-19/product-first-pass/evidence-sha256.json:generic-api-key:10
+7ff27a45a60b67f4a649191b5efc848b85a9bd2f:tests/handoff-service.spec.ts:generic-api-key:315
+7ff27a45a60b67f4a649191b5efc848b85a9bd2f:tests/handoff.spec.ts:generic-api-key:114
+
+# Reviewed historical curl samples: partially masked credentials and placeholder values.
+# Exact fingerprints only; do not ignore artifact directories or auth-header rules.
+de0a57e2eb44b59e9123259dff46d34cc605b796:docs/artifacts/v4-152-preview-evidence-20261022/raw/part2-fresh-runtime-observation.json:curl-auth-header:26
+dd0df38a798ff02f9238fc8c619f8d998e909f15:docs/artifacts/v4-152-preview-evidence-20261022/raw/baseline-sources-76002c89-59b6-48a4-8c06-eedb1b05cfa8.json:curl-auth-header:10
