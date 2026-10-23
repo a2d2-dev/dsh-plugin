@@ -1,7 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { WorkApplication } from '../work.ts'
-import { compactWorkResult } from '../work-model-results.ts'
+import { modelWorkResult, readModelWorkDetails } from '../work-model-details.ts'
 import { workMaterialPage } from '../work-model-read.ts'
 
 /** Production tools are optional; local work queries never require a live Agent. */
@@ -30,9 +30,10 @@ export function installWorkControlRecovery(ctx: Context, app: WorkApplication): 
 export function installWorkTools(ctx: Context, app: WorkApplication, runtimeId: string): void {
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'work_read',
-    description: 'Explicitly read current managed Task material when startup material is missing or status flags a different specification version. Choose specification (goal, all criteria and necessary child scope), progress, sources or continuation. Returns bounded JSON fragments; concatenate content from every page until complete before interpreting it. Continue with nextCursor, revision and the same expected_version; on conflict or material-changed restart. This does not grant execution authority. For fresh accepted GitHub source observations use work_related_issue.',
+    description: 'Explicitly read current managed Task material when startup material is missing or status flags a different specification version. Choose specification (goal, all criteria and necessary child scope), progress, sources, continuation, or result with the exact detail_id from a truncated diagnostic. Result IDs are bound to the current Task execution; terminal audit-only file references do not permit further tools. Returns bounded JSON fragments; concatenate content from every page until complete before interpreting it. Continue with nextCursor, revision and the same expected_version; on conflict or material-changed restart. This does not grant execution authority. For fresh accepted GitHub source observations use work_related_issue.',
     parameters: {
-      section: { type: 'string', required: true, enum: ['specification', 'progress', 'sources', 'continuation'] },
+      section: { type: 'string', required: true, enum: ['specification', 'progress', 'sources', 'continuation', 'result'] },
+      detail_id: { type: 'string', description: 'For section result: exact content ID from a truncated tool response; bound to the Task execution.' },
       expected_version: { type: 'integer', required: true, description: 'Task version returned by work_control status.' },
       expected_epoch: { type: 'integer' },
       cursor: { type: 'integer', description: 'Zero initially, then the exact nextCursor.' },
@@ -41,7 +42,13 @@ export function installWorkTools(ctx: Context, app: WorkApplication, runtimeId: 
     output: { schema: { type: 'object', additionalProperties: false, properties: { result: { type: 'string', required: true } } }, render: (_args, value) => [{ type: 'text', text: value.result }] },
     async execute(args, exec) {
       if (!exec.agent || exec.agent.session.id !== exec.agent.id) throw new Error('work_read requires a real calling Agent Session')
-      const full = await app.sessionControl({ runtimeId, sessionId: exec.agent.id }, exec.callId, 'status')
+      const session = { runtimeId, sessionId: exec.agent.id }
+      const full = await app.sessionControl(session, exec.callId, 'status')
+      if (args.section === 'result') {
+        const details = await readModelWorkDetails(app, session, args.detail_id)
+        if (details.status !== 'completed') return { result: JSON.stringify(details) }
+        return { result: JSON.stringify(workMaterialPage(full, args, details.diagnostics)) }
+      }
       return { result: JSON.stringify(workMaterialPage(full, args)) }
     },
     presentCall: args => ({ card: 'generic', title: `Read work: ${args.section}`, kind: 'other' }),
@@ -79,7 +86,8 @@ export function installWorkTools(ctx: Context, app: WorkApplication, runtimeId: 
       render: (_args, value) => [{ type: 'text', text: value.result }] },
     async execute(args, exec) {
       if (!exec.agent || exec.agent.session.id !== exec.agent.id) throw new Error('work_control requires a real calling Agent Session')
-      return { result: JSON.stringify(compactWorkResult(await app.sessionControl({ runtimeId, sessionId: exec.agent.id }, exec.callId, args.action, args.text, args.expected_epoch), args.action === 'status' ? 'status' : 'control', args.known_specification_version)) }
+      const session = { runtimeId, sessionId: exec.agent.id }
+      return { result: JSON.stringify(await modelWorkResult(app, session, await app.sessionControl(session, exec.callId, args.action, args.text, args.expected_epoch), args.action === 'status' ? 'status' : 'control', args.known_specification_version)) }
     },
     presentCall: args => ({ card: 'generic', title: `Work: ${args.action}`, kind: 'other', rawInput: args }),
   })), 'managed work model tool')

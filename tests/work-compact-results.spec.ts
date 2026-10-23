@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, expect, it } from 'vitest'
+import { readFile, writeFile, stat } from 'node:fs/promises'
+import { join } from 'node:path'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { ExecutionFixtures } from './work-execution-fixture.ts'
@@ -133,6 +135,9 @@ it('keeps receipts bounded through large specification and handoff histories on 
     expect(old.isError).toBe(true)
     expect(JSON.stringify(old)).toContain('Task')
     expect(await h.app.sessionControl(execution.session, 'retired-status', 'status')).toMatchObject({ status: 'failed', error: { code: 'forbidden' } })
+    const oldRead = await fixtures.run(() => h.ctx.tools.execute({ callId: ToolCallId(crypto.randomUUID()), name: 'work_read', arguments: { section: 'result', detail_id: 'a'.repeat(64), expected_version: 1 }, agent: h.ctx.agents.get(SessionId(execution.session.sessionId))!, signal: new AbortController().signal }))
+    expect(oldRead.isError).toBe(true)
+    expect(JSON.stringify(oldRead)).toContain('Task execution has not authorized this Session')
     execution = current
     await fixtures.run(() => h.ctx.agents.get(SessionId(execution.session.sessionId))!.whenIdle())
   }
@@ -179,31 +184,31 @@ it('flags missing imported criteria, accepts native scope compactly and denies f
   expect((await h.invoke('work_read', { section: 'specification', expected_version: result.value.taskVersion }, crypto.randomUUID(), foreignAgent)).value.error.code).toBe('forbidden')
 })
 
-it('bounds lost-job reminders while preserving accepted completion and complete explicit details', async () => {
+it.each([1, 100, 1000])('bounds lost-job reminders for %i jobs while preserving accepted completion and complete audit details', async count => {
   const h = await setup()
-  for (let index = 0; index < 200; index++) {
+  for (let index = 0; index < count; index++) {
     Reflect.apply(h.agent.session.append, h.agent.session, ['jobs/settled', { job: { id: `lost-job-${index}`, owner: h.agent.id, kind: 'bash', label: 'Historical verification '.repeat(20), status: 'completed' }, registryEpoch: 'previous-process', instanceId: `old-instance-${index}`, terminalResult: 'pending' }])
   }
   const facts = await h.host.execution.observation!(h.execution)
   expect(facts.settlement).toBe('settled')
-  expect(facts.reminders).toHaveLength(200)
+  expect(facts.reminders).toHaveLength(count)
   const report = { specificationVersion: 1, stage: 'done', summary: 'Accepted with unreachable historical jobs', next: '', blockers: [], criteria: [0, 1].map(index => ({ index, passed: true, evidence: ['Verified result'] })) }
   const result = await h.invoke('work_report', { report })
-  expect(result.value).toMatchObject({ status: 'completed', saved: true, stage: 'done', reminderCount: 200, remindersTruncated: true, details: { tool: 'work_read', section: 'result' } })
+  expect(result.value).toMatchObject({ status: 'completed', saved: true, stage: 'done', reminderCount: count, remindersTruncated: true, details: { access: 'audit-only', file: expect.any(String), relativeTo: 'work-store' } })
   expect(Buffer.byteLength(result.text)).toBeLessThanOrEqual(2048)
   expect((await h.detail()).task!.completion).toBeDefined()
-  const args = { section: 'result', detail_id: result.value.details.detail_id, expected_version: result.value.taskVersion }
-  let content = '', cursor = 0, revision: string | undefined
-  for (let page = 0; page < 200; page++) {
-    const detail = await h.invoke('work_read', { ...args, cursor, ...(revision ? { revision } : {}) })
-    expect(detail.value.status).toBe('completed')
-    expect(Buffer.byteLength(detail.text)).toBeLessThanOrEqual(16384)
-    content += detail.value.content
-    if (detail.value.complete) break
-    cursor = detail.value.nextCursor
-    revision = detail.value.revision
+  const file = join(h.app.directory, 'work-model-details', `${result.value.details.detail_id}.json`)
+  expect(result.value.details.file).toBe(`work-model-details/${result.value.details.detail_id}.json`)
+  const record = JSON.parse(await readFile(file, 'utf8'))
+  expect(record).toMatchObject({ ref: h.ref, executionId: h.execution.id, source: h.execution.session })
+  expect(record.diagnostics.reminders).toEqual(facts.reminders)
+  expect((await stat(file)).mode & 0o777).toBe(0o600)
+  expect((await stat(join(h.app.directory, 'work-model-details'))).mode & 0o777).toBe(0o700)
+  for (const [name, args] of [['work_read', { section: 'result', detail_id: result.value.details.detail_id, expected_version: result.value.taskVersion }], ['work_control', { action: 'status' }], ['work_report', { report }]] as const) {
+    const rejected = await fixtures.run(() => h.ctx.tools.execute({ callId: ToolCallId(crypto.randomUUID()), name, arguments: args, agent: h.agent, signal: new AbortController().signal }))
+    expect(rejected.isError).toBe(true)
+    expect(JSON.stringify(rejected)).toContain('Task execution has not authorized this Session')
   }
-  expect(JSON.parse(content).reminders).toEqual(facts.reminders)
   console.log(JSON.stringify({ fixture: 'lost-job-reminders', count: facts.reminders!.length, beforeBytes: Buffer.byteLength(JSON.stringify(facts.reminders)), afterBytes: Buffer.byteLength(result.text) }))
 }, 30_000)
 
@@ -235,6 +240,29 @@ it('bounds aggregate completion errors and preserves their full actionable diagn
     revision = detail.value.revision
   }
   expect(JSON.parse(content).error).toEqual(raw.error)
+  const args = { section: 'result', detail_id: result.value.details.detail_id, expected_version: status.value.taskVersion }
+  for (const detail_id of ['../../work-v3', `${'a'.repeat(64)}/../work-v3`, 'not-a-content-id']) {
+    expect((await h.invoke('work_read', { ...args, detail_id })).value.error.code).toBe('invalid-detail-id')
+  }
+  const file = join(h.app.directory, 'work-model-details', `${args.detail_id}.json`)
+  const saved = await readFile(file, 'utf8')
+  await writeFile(file, `${saved} `)
+  expect((await h.invoke('work_read', args)).value.error.code).toBe('detail-integrity-failed')
+  await writeFile(file, saved)
+  const other = completed(await h.app.execute({ type: 'task.create', commandId: 'other-diagnostic-task', projectId: h.ref.projectId, title: 'Other task', goal: 'Separate authority', specification: 'Separate details', acceptance: ['Separate result'] }, operator)).task!
+  const otherExecution = completed(await h.app.execute({ type: 'task.start', commandId: 'other-diagnostic-start', ref: { projectId: other.projectId, taskId: other.id }, expectedVersion: other.version, agentId: other.agentId, resource: h.execution.resource, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }, operator)).execution!
+  const otherAgent = h.ctx.agents.get(SessionId(otherExecution.session.sessionId))!
+  await fixtures.run(() => otherAgent.whenIdle())
+  expect((await h.invoke('work_read', args, crypto.randomUUID(), otherAgent)).value).toMatchObject({ status: 'failed', error: { code: 'forbidden' } })
+  await fixtures.dispose(h.ctx)
+  const restored = await fixtures.mount(h.workspace.path)
+  installWorkTools(restored.ctx, restored.app, 'runtime')
+  const resolved = await fixtures.run(() => restored.ctx.sessionController.resolveAgent(SessionId(h.execution.session.sessionId)))
+  if ('error' in resolved) throw Error(JSON.stringify(resolved))
+  const restoredResult = await fixtures.run(() => restored.ctx.tools.execute({ callId: ToolCallId('restored-details'), name: 'work_read', arguments: args, agent: resolved.agent, signal: new AbortController().signal }))
+  expect(restoredResult.isError).toBe(false)
+  const restoredPage = JSON.parse(restoredResult.content.map(part => part.type === 'text' ? part.text : '').join(''))
+  expect(restoredPage).toMatchObject({ status: 'completed', cursor: 0, content: content.slice(0, 2000) })
   console.log(JSON.stringify({ fixture: 'aggregate-blockers', beforeBytes: Buffer.byteLength(JSON.stringify(raw)), afterBytes: Buffer.byteLength(result.text) }))
 }, 30_000)
 

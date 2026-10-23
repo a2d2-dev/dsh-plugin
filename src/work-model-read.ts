@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto'
 import type { WorkResult } from './work-types.ts'
 
-export type WorkMaterialSection = 'specification' | 'progress' | 'sources' | 'continuation'
+export type WorkMaterialSection = 'specification' | 'progress' | 'sources' | 'continuation' | 'result'
 export interface WorkReadRequest { section: WorkMaterialSection; expected_version: number; expected_epoch?: number; cursor?: number; revision?: string }
 const pageCharacters = 2000
 /** Explicit detail reads are JSON fragments: concatenate all pages before interpreting requirements. */
-export function workMaterialPage(result: WorkResult, request: WorkReadRequest) {
+export function workMaterialPage(result: WorkResult, request: WorkReadRequest, resultDetails?: unknown) {
   if (result.status !== 'completed') return { status: result.status, error: result.error }
   const { task, execution } = result
   const fail = (code: string, message: string) => ({ status: 'failed', error: { code, message } })
@@ -15,7 +15,9 @@ export function workMaterialPage(result: WorkResult, request: WorkReadRequest) {
   const cursor = request.cursor ?? 0
   if (!Number.isSafeInteger(cursor) || cursor < 0) return fail('invalid-material-cursor', 'Cursor must be a non-negative safe integer')
   if (cursor > 0 && !request.revision) return fail('material-revision-required', 'Continue reading with the revision from the first page')
+  if (request.section === 'result' && resultDetails === undefined) return fail('detail-required', 'Read result details using the exact detail_id from the work tool')
   const sections = {
+    result: () => resultDetails,
     specification: () => ({ goal: task.goal, specification: task.specification, children: task.children,
       requiredNativeChildren: (result.bindings ?? []).map(binding => ({ nodeId: binding.nodeId, children: binding.acceptedChildren ?? binding.accepted.subIssues })) }),
     progress: () => ({ progress: task.progress, breakdown: task.breakdown, completion: task.completion }),
