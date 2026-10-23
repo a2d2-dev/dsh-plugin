@@ -2,6 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { WorkApplication } from './work.ts'
 import { taskReportSchema } from './work-progress.ts'
+import { compactWorkResult } from './work-model-results.ts'
 
 /** Progress is recorded by the real current coordinator, never by a copied Task id in a prompt. */
 export function installWorkProgressTools(ctx: Context, app: WorkApplication, runtimeId: string): void {
@@ -25,7 +26,7 @@ export function installWorkProgressTools(ctx: Context, app: WorkApplication, run
     async execute(args,exec) {
       if(!exec.agent || exec.agent.session.id!==exec.agent.id) throw Error('work_report requires a real current Agent Session')
       const report=taskReportSchema.parse(args.report)
-      return {result:JSON.stringify(await app.sessionReport({runtimeId,sessionId:exec.agent.id},exec.callId,report,args.expected_epoch,exec.token))}
+      return {result:JSON.stringify(compactWorkResult(await app.sessionReport({runtimeId,sessionId:exec.agent.id},exec.callId,report,args.expected_epoch,exec.token),'report'))}
     },
     presentCall:()=>({card:'generic',title:'更新工作进展',kind:'other'}),
   })), 'managed work progress reporting')

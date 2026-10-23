@@ -47,3 +47,17 @@ it('keeps status available after startup with ownership and versions but no task
   expect(Buffer.byteLength(result.text)).toBeLessThanOrEqual(2048)
   expect(full.task!.specification.text).toContain('完整规格')
 })
+
+it('saves progress without echoing the submitted report or historical Task and preserves errors', async () => {
+  const h = await setup()
+  const report = { specificationVersion: 1, stage: 'in-progress', summary: 'PRIVATE REPORT ' + '正文'.repeat(2000), next: 'Next action', blockers: [], criteria: [] }
+  const result = await h.invoke('work_report', { report })
+  expect(result.value).toMatchObject({ status: 'completed', saved: true, stage: 'in-progress', specificationVersion: 1 })
+  expect(result.text).not.toContain('PRIVATE REPORT')
+  expect(result.value).not.toHaveProperty('task')
+  expect(Buffer.byteLength(result.text)).toBeLessThanOrEqual(2048)
+  expect((await h.detail()).task!.progress!.summary).toBe(report.summary)
+  const rejected = await h.invoke('work_report', { report: { ...report, criteria: [{ index: 0, passed: true, evidence: [] }] } })
+  expect(rejected.value).toEqual({ status: 'failed', error: { code: 'missing-evidence', message: '通过的验收项必须附带可核验的证据' } })
+  expect((await h.detail()).task!.progress!.stage).toBe('in-progress')
+})
