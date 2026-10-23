@@ -1,3 +1,4 @@
+import { workSessionTitles } from './work-session-titles.ts'
 import { refreshRepositoryCandidates } from './work-sources/repository-candidates.ts'
 import { buildExecutionGraph, type ExecutionObservation } from './work-execution/observation.ts'
 import { refreshCatalog } from './work-sources/catalog-application.ts'
@@ -36,6 +37,8 @@ export interface WorkHost {
   execution?: WorkExecutionHost & { connectObservation?(scope: (execution: import('./work-types.ts').WorkExecution) => Promise<readonly import('./work-types.ts').SessionAssociation[]>): void; observation?(execution: import('./work-types.ts').WorkExecution, associations?: readonly import('./work-types.ts').SessionAssociation[], reporter?: import('@deepseek-ai/dsh-tools').ToolExecutionToken): Promise<import('./work-execution/observation.ts').ExecutionObservation> }
   resources(): Promise<readonly HostResource[]>
   sessions(resource: HostResource): Promise<readonly SessionCandidate[]>
+  /** Title-only metadata maintenance; must never resume or wake an Agent. */
+  nameSession?(session: import('./work-types.ts').SessionRef, title: string): Promise<void>
 }
 function failed(code: string, message: string): WorkResult { return { status: 'failed', error: { code, message } } }
 function conflict(currentVersion: number): WorkResult {
@@ -850,6 +853,7 @@ export class WorkApplication {
       return result
       } finally { this.mutationDepth--; this.snapshotCache = undefined }
     })
+    if (receipt.status === 'completed' && ['task.associate-session', 'task.link-child', 'source.link', 'source.import'].includes(command.type)) await this.refreshSessionTitles()
     if ((command.type === 'continuous.configure' || command.type === 'continuous.set-enabled') && receipt.status === 'completed') {
       await this.reconcileContinuous()
       return this.query({ type: 'continuous.status', projectId: command.projectId, sourceId: command.sourceId }, actor)
@@ -924,12 +928,25 @@ export class WorkApplication {
       }
     }
   }
-  /** Host lifecycle recovery includes starts, handoffs and controls. */
+  private titleUpdates: Promise<void> = Promise.resolve()
+  private async refreshSessionTitles(session?: import('./work-types.ts').SessionRef, pending?: import('./work-types.ts').WorkExecution): Promise<void> {
+    if (!this.host.nameSession) return
+    // Read after preceding writes finish so concurrent bindings cannot restore stale names.
+    const operation = this.titleUpdates.catch(() => {}).then(async () => {
+      for (const item of workSessionTitles(await this.load(), pending)) {
+        if (!session || sameSession(item.session, session)) await this.host.nameSession!(item.session, item.title)
+      }
+    })
+    this.titleUpdates = operation
+    await operation
+  }
+  /** Host lifecycle recovery includes starts, handoffs, controls and task-owned titles. */
   async reconcileControls(): Promise<void> {
     const before = await this.load()
     if (before.executions.some(execution => execution.events.some(event => pendingEvent(event) && goalOwned(event.nativeMessage)))) {
       await this.sourceTransaction(async state => { for (const execution of state.executions) discardGoalEvents(execution) })
     }
+    await this.refreshSessionTitles()
     await this.reconcileCompletions()
     if (!this.host.execution) return
     await this.reconcileContinuous()
@@ -1052,6 +1069,7 @@ export class WorkApplication {
             const current = (await this.load()).executions.find(item => item.id === execution.id)!
             return sameSession(current.session, successor.session) && current.epoch === successor.epoch
           })
+          await this.refreshSessionTitles(successor.session, successor)
           if (JSON.stringify(created) !== JSON.stringify(profile)) throw new WorkExecutionError('continuation-profile-mismatch', 'Successor did not inherit the saved source execution context')
           execution = await save(current => { current.continuation!.phase = 'successor-created' })
           // Read source consumption before transferring outstanding events to the successor.
@@ -1140,6 +1158,7 @@ export class WorkApplication {
             && !['paused', 'waiting', 'failed', 'creating', 'accepted'].includes(current.state)
             && !(current.control?.status === 'accepted' && current.control.action !== 'resume')
         })
+        await this.refreshSessionTitles(execution.session)
         execution = await save(item => {
           item.actual = actual
           if (item.state === 'creating') { item.state = 'ready'; item.history.push({ state: 'ready', commandId }) }

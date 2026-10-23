@@ -26,6 +26,8 @@
 
 DSH Goal 自动续跑消息由 Goal 驱动管理，A²D² 不把它们保存为 Task 待投递输入，也不跨会话转移。旧版本误存而尚未消费的 Goal 消息会在执行恢复时标记为“已废弃”，保留原消息供查看，并停止重放；废弃不表示已被模型消费或已通过任务验收。Goal 的暂停与 Task 的恢复分别生效。
 
+任务处理与接续会话自动使用任务名称和真实编号，例如 `#200/#211 · 会话 2 · 修复会话名称`。完整名称按宿主80字节上限保留编号、接续序列与可读短标题；规则和历史名称修复范围见[任务会话名称](docs/session-naming.md)。
+
 以下章节还保留既有会话工具与兼容记录格式的说明；控制面板中的受管会话使用 `work_control`、`work_report` 和 `work_organize` 保存进展，不要求手工绑定 Issue。
 
 子代理派发优先使用宿主的 `startActivation`，显式指定 `delivery: 'parent'`；仅在该方法不存在时使用旧宿主的 `startContinuable`。模型与 reasoningEffort 在派发请求的 `agentOptions` 中指定，不需要为派发新增 `selectLocalModel` 或修改 DSH 源码。新接口报错直接返回，不重试旧接口。两种契约的类型来自各自已发布的 DSH 包，别名依赖只用于开发时类型检查。会话 ID 原样兼容旧式 `session-…` 与 UUID，仍拒绝路径输入。

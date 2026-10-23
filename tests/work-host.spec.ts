@@ -114,7 +114,11 @@ it('exposes real local commands and trusted persisted host Sessions through the 
   expect(candidates).toMatchObject([{ ref: { runtimeId: resources[0]!.ref.runtimeId, sessionId }, resource: resources[0]!.ref }])
   expect((await call(server, { kind: 'command', value: { type: 'task.associate-session', commandId: 'associate', ref, expectedVersion: 1,
     session: candidates[0]!.ref, purpose: 'related' } })).body).toMatchObject({ status: 'completed', task: { version: 2 } })
-  expect(await ctx.sessionPersistence.stat(sessionId)).toEqual(before)
+  expect((await ctx.sessionPersistence.stat(sessionId))?.header).toEqual(before?.header)
+  const named = await ctx.sessionPersistence.open(sessionId, 'read')
+  try {
+    expect((await named.read()).events).toMatchObject([{ type: 'session/title', data: { title: `T:${task.id.replaceAll('-', '').slice(0, 8)} · 关联 1 · Accepted local work`, source: { kind: 'user' } } }])
+  } finally { await named.close() }
   expect(ctx.sessions.list()).toHaveLength(0)
   expect(ctx.get('agents')).toBeUndefined()
   expect(ctx.get('llm')).toBeUndefined()

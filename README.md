@@ -24,6 +24,8 @@ Continuous intake currently supports GitHub Project sources. Search and processi
 
 The DSH Goal driver owns its continuation messages. A²D² neither retains them as pending Task input nor transfers them to successor Sessions. Execution recovery marks previously retained, unconsumed Goal messages as discarded and stops replaying them, while keeping the original records for inspection. Discarding is separate from model consumption and Task acceptance. Resuming a Task does not resume a paused Goal.
 
+Task and continuation Sessions receive a task-based name such as `#200/#211 · 会话 2 · 修复会话名称`. The complete title fits the host's 80-byte limit while retaining task identity, continuation order and readable task text. See [Session naming rules](docs/session-naming.md) for numbering, fallbacks and existing-title repair.
+
 The component reference below also documents retained legacy tools and record formats. Managed control-panel Sessions use `work_control`, `work_report` and `work_organize`; manual Issue binding is not part of the user flow.
 
 Subagent dispatch prefers the host's `startActivation` with `delivery: 'parent'`, using `startContinuable` only when the newer method is absent. The request sets the model and reasoning effort through `agentOptions`; dispatch requires no additional `selectLocalModel` API or DSH source patch. Activation errors propagate without retrying the older method. Published DSH types cover both contracts; the aliased package is a development-only type dependency. Session IDs preserve both legacy `session-…` values and UUIDs while rejecting path syntax.
