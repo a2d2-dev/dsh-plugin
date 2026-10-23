@@ -131,6 +131,21 @@ it('keeps native Issue children separate and resolves each canonical child execu
   const partial = completed(await h.app.query({ type: 'task.detail', ref: parent.ref! }, operator)).executionGraph!
   expect(partial.nativeIssues?.map(item => item.issue.nodeId)).toEqual(['ISSUE_2', 'ISSUE_99'])
   expect(partial.limitations).toContainEqual(expect.stringContaining('最后已知'))
+  const retained = h.remote.issues[0]!
+  retained.updatedAt = '2026-01-02T00:00:00.000Z'
+  retained.observedAt = '2026-01-02T00:00:00.000Z'
+  completed(await h.refresh())
+  const newer = completed(await h.app.query({ type: 'task.detail', ref: parent.ref! }, operator)).executionGraph!
+  expect(newer.nativeIssues?.map(item => item.issue.nodeId)).toEqual(['ISSUE_2', 'ISSUE_99'])
+  expect(newer.limitations).toContainEqual(expect.stringContaining('最后已知'))
+
+  retained.subIssues = { items: [], totalCount: 0, hasNextPage: false }
+  retained.updatedAt = '2026-01-03T00:00:00.000Z'
+  retained.observedAt = '2026-01-03T00:00:00.000Z'
+  completed(await h.refresh())
+  const fresh = completed(await h.app.query({ type: 'task.detail', ref: parent.ref! }, operator)).executionGraph!
+  expect(fresh.nativeIssues).toEqual([])
+  expect(fresh.limitations).not.toContainEqual(expect.stringContaining('最后已知'))
 })
 
 it('browses without execution and atomically reuses source connection, exact settings, duplicate discovery and command retries', async () => {
