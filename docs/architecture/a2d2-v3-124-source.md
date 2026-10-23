@@ -4,7 +4,7 @@
 
 ## 背景
 
-[#124](https://github.com/a2d2-dev/dsh-plugin/issues/124) 在固定基线 `1f562b107ad9adc046b1f0bb01929185b5c7d234` 上实现“GitHub 已有工作 → 本地 Task”。遵循 [ADR 0003](../adr/0003-local-work-records-and-optional-collaboration.md)：来源观察和已接受业务事实分别保存。本阶段没有部署或重启 18782。
+[#124](https://github.com/a2d2-dev/dsh-plugin/issues/124) 在固定基线 `1f562b107ad9adc046b1f0bb01929185b5c7d234` 上实现“GitHub 已有工作 → 本地 Task”。遵循 [ADR 0003](../adr/0003-work-facts-follow-the-primary-store.md)：主存记录与本地缓存分别保存。本阶段没有部署或重启 18782。
 
 ## 目标
 

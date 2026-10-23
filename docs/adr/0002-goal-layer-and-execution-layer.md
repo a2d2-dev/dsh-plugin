@@ -5,7 +5,7 @@
 ## 决定
 
 - Project、Task、Project Agent 使用平台无关的稳定 ID。项目是工作与职责的组织单位，不等于 Repository、cwd、DSH Workspace 或 GitHub Project。
-- Task 保存目标、规格、验收与完成事实，可以没有 Issue。Issue 编号、URL 和远端节点 ID 只出现在外部关联中。
+- Task 保存目标、规格、验收与完成事实。现阶段每个 Task 的主存记录是一个 Issue，Issue 编号、URL 和远端节点 ID 是主存身份而不是 TaskId；纯本地主存启用前，Task 不能没有主存记录（见 ADR 0003）。
 - Project 可以组织多个资源与任务；同一 Task 被多个视图收录仍是同一个 Task。在同一协调域内，执行资格按 TaskId 仲裁，不按视图、项目副本或 Issue 评论各自授予。
 - 项目视图是查询规则和字段布局；“v3.0”“待处理”等视图标签不是新的 Task 身份，也不等于业务阶段。
 - 工作流 Stage 表示工作进展，Generation 表示主会话的接续段次。交接或模型执行重试不自行推进业务阶段。

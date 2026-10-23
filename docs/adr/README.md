@@ -6,7 +6,7 @@
 | --- | --- |
 | 0001 | [依托 DSH，以单入口连接工作与会话](0001-a2d2-plugin-is-the-single-carrier-on-dsh.md) |
 | 0002 | [业务身份独立于平台、目录和会话](0002-goal-layer-and-execution-layer.md) |
-| 0003 | [本地领域记录与可选外部协同](0003-local-work-records-and-optional-collaboration.md) |
+| 0003 | [工作事实以主存为准，现阶段 GitHub 为主存、本地为缓存](0003-work-facts-follow-the-primary-store.md) |
 | 0004 | [项目 Agent 与角色模板](0004-project-agents-and-role-templates.md) |
 | 0005 | [工作要求、执行资源与后端能力](0005-execution-context-and-provider-capabilities.md) |
 | 0006 | [领域规则、方法和观察各有来源](0006-each-piece-of-knowledge-lives-in-one-place.md) |
