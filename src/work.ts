@@ -22,6 +22,7 @@ import { applyTaskOrganization, taskStructureBlocker } from './work-organization
 import { applyTaskReport, projectProgress, taskProgressView } from './work-progress.ts'
 import { continuousDependenciesReady, continuousOwner, continuousMayAdvance, continuousCompleted, discoverContinuous, sourceScopeError, sameTask, continuousRetry, MAX_CONTINUOUS_ATTEMPTS } from './work-continuous.ts'
 import { reconcileProjectSources } from './work-sources/discovery.ts'
+import { attachBulk, bulkFingerprint, bulkKeySync, bulkOf, bulkPath, controlSource, hasInlineBulk, readBulkSync, writeBulk, type SourceBulk } from './work-store/source-bulk.ts'
 import type { WorkExecutionHost } from './work-execution/host.ts'
 export type { WorkExecutionHost } from './work-execution/host.ts'
 import type { HostResource, Project, ResourceRef, SessionCandidate, TaskRef, WorkCommand, WorkResult, WorkTask } from './work-types.ts'
@@ -87,6 +88,10 @@ export class WorkApplication {
   private snapshotCache?: { key: string; state: WorkSnapshot }
   /** Mutation blocks stop cache reuse: they edit the state they read. */
   private mutationDepth = 0
+  /** Sidecars already read, keyed by the file identity they were parsed from. */
+  private readonly bulkCache = new Map<string, { key: string; bulk: SourceBulk }>()
+  /** Sources whose bulk still lives in the control file and must move to a sidecar on the next write. */
+  private inlineSources = new Set<string>()
   constructor(readonly directory: string, readonly host: WorkHost, readonly source?: GitHubSourcePort, readonly planner?: WorkPlanner) {
     if (!isAbsolute(directory)) throw new Error('Work record directory must be absolute')
     this.file = join(directory, 'work-v3.json')
@@ -124,6 +129,7 @@ export class WorkApplication {
         this.mutationDepth++
         try {
         const current = await this.load()
+        const before = { bulk: this.bulkFingerprints(current), control: this.comparableJson(current) }
         const owner = current.executions.find(item => item.session.sessionId === sessionId)
         if (current.executions.some(item => item.retired?.some(old => old.session.sessionId === sessionId))) return false
         state = current
@@ -135,7 +141,7 @@ export class WorkApplication {
           if (managed && managed.item.state !== 'completed' && !continuousCompleted(current, owner!) && owner!.state !== 'paused' && !(owner!.control?.action === 'pause' && owner!.control.status === 'accepted')) { managed.item.resumeRequested = true; managed.item.attempts = 0; delete managed.item.retryAt; if (owner!.runtimeFailure) owner!.runtimeFailure.acknowledged = true }
           owner!.events.push({ id: message.id, text: text.trim() ? text.slice(0, 100_000) : 'Native Session input', kind: 'input', delivery: 'accepted', acceptance: 'unassessed', nativeMessage: structuredClone(message) })
         }
-        await writeFileAtomic(this.file, `${JSON.stringify(current)}\n`, { mode: 0o600, dirMode: 0o700 })
+        await this.persist(current, before)
         return false
         } finally { this.mutationDepth--; this.snapshotCache = undefined }
       })
@@ -201,12 +207,87 @@ export class WorkApplication {
           sources[index] = { ...source, discovery: { ...source.discovery, nextAttemptAt: schedule.next } }
         } else this.discoverySchedule.delete(source.id)
       }
-      return sources === state.sources ? state : { ...state, sources }
+      return this.attachSourceBulk(sources === state.sources ? state : { ...state, sources })
     }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { schemaVersion: 3, projects: [], agents: [], tasks: [], commands: [], legacyMappings: [], sources: [], externalBindings: [], externalIndex: {}, executions: [] }
       throw error
     }
+  }
+  /**
+   * Attach each source's bulk from its sidecar. A source whose bulk is only in
+   * the control file is remembered for migration on the next write.
+   */
+  private attachSourceBulk(state: WorkSnapshot): WorkSnapshot {
+    const sources = state.sources.map(source => {
+      // Work on a copy so the cached control state never accumulates bulk.
+      const copy: WorkSource = { ...source, ...(source.discovery ? { discovery: { ...source.discovery } } : {}) }
+      // A control file that still carries bulk is a pre-split store (or a
+      // compatible writer); use it and migrate on the next persist.
+      if (hasInlineBulk(copy)) { this.inlineSources.add(copy.id); return copy }
+      const path = bulkPath(this.directory, copy.id)
+      const key = bulkKeySync(path)
+      if (key === undefined) return copy
+      const cached = this.bulkCache.get(copy.id)
+      if (cached?.key === key) return attachBulk(copy, cached.bulk)
+      const read = readBulkSync(path)
+      if (!read) return copy
+      this.bulkCache.set(copy.id, read)
+      return attachBulk(copy, read.bulk)
+    })
+    return { ...state, sources }
+  }
+  /** Control-plane JSON: the only shape that may land in `work-v3.json`. */
+  private controlJson(state: WorkSnapshot): string {
+    return JSON.stringify({ ...state, sources: state.sources.map(controlSource) })
+  }
+  /**
+   * The control plane without the ephemeral scheduling overlay: a tick that only
+   * moves nextAttemptAt must not rewrite the store.
+   */
+  private comparableJson(state: WorkSnapshot): string {
+    return JSON.stringify({ ...state, sources: state.sources.map(source => {
+      const control = controlSource(source)
+      if (control.discovery) control.discovery = { ...control.discovery, nextAttemptAt: undefined as unknown as string }
+      return control
+    }) })
+  }
+  private bulkFingerprints(state: WorkSnapshot): Map<string, string> {
+    return new Map(state.sources.map(source => [source.id, bulkFingerprint(source)]))
+  }
+  /**
+   * Write the changed sidecars, then the control file when it changed. Every
+   * writer goes through here so a Project's items never enter `work-v3.json`.
+   */
+  private async persist(state: WorkSnapshot, before: { bulk: Map<string, string>; control: string }, forceControl = false): Promise<void> {
+    let wrote = false
+    for (const source of state.sources) {
+      const inline = this.inlineSources.has(source.id)
+      if (!inline && bulkFingerprint(source) === before.bulk.get(source.id)) continue
+      await writeBulk(bulkPath(this.directory, source.id), bulkOf(source))
+      this.inlineSources.delete(source.id)
+      this.bulkCache.delete(source.id)
+      wrote = true
+    }
+    if (forceControl || this.comparableJson(state) !== before.control) {
+      await writeFileAtomic(this.file, `${this.controlJson(state)}\n`, { mode: 0o600, dirMode: 0o700 })
+      this.discoverySchedule.clear()
+      wrote = true
+    }
+    if (wrote) this.snapshotCache = undefined
+  }
+  /** Move any inline bulk from an older store into sidecars. Safe to call repeatedly. */
+  async ensureSourceSplit(): Promise<void> {
+    if (this.inlineSources.size === 0) return
+    await mkdir(this.directory, { recursive: true, mode: 0o700 })
+    return withWorkFileLock(this.file, async () => {
+      this.mutationDepth++
+      try {
+        const state = await this.attachSourceBulk(await this.load())
+        if (this.inlineSources.size === 0) return
+        await this.persist(state, { bulk: this.bulkFingerprints(state), control: this.controlJson(state) }, true)
+      } finally { this.mutationDepth--; this.snapshotCache = undefined }
+    })
   }
   private async sourceTransaction<T>(apply: (state: WorkSnapshot) => Promise<T>): Promise<T> {
     await mkdir(this.directory, { recursive: true, mode: 0o700 })
@@ -214,20 +295,15 @@ export class WorkApplication {
       this.mutationDepth++
       try {
       const state = await this.load()
-      // Only nextAttemptAt may remain ephemeral; checkpoints and reader leases
-      // still commit atomically with source observations for restart recovery.
-      const comparable = (value: WorkSnapshot) => JSON.stringify({ ...value, sources: value.sources.map(source => ({
-        ...source, ...(source.discovery ? { discovery: { ...source.discovery, nextAttemptAt: undefined } } : {}),
-      })) })
-      const before = comparable(state)
+      // Only the control plane decides whether the store changed; bulk changes
+      // are detected per source and written to their sidecars.
+      const before = { bulk: this.bulkFingerprints(state), control: this.comparableJson(state) }
       const schedules = new Map(state.sources.map(source => [source.id, this.discoverySchedule.get(source.id)?.persisted ?? source.discovery?.nextAttemptAt]))
       const result = await apply(state)
-      snapshotSchema.parse(state)
-      if (comparable(state) !== before) {
-        await writeFileAtomic(this.file, `${JSON.stringify(state)}\n`, { mode: 0o600, dirMode: 0o700 })
-        this.discoverySchedule.clear()
-        this.snapshotCache = undefined
-      } else {
+      snapshotSchema.parse({ ...state, sources: state.sources.map(controlSource) })
+      const controlChanged = this.comparableJson(state) !== before.control
+      await this.persist(state, before)
+      if (!controlChanged) {
         for (const source of state.sources) {
           const persisted = schedules.get(source.id)
           if (persisted && source.discovery && source.discovery.nextAttemptAt !== persisted) {
@@ -679,6 +755,7 @@ export class WorkApplication {
       this.mutationDepth++
       try {
       const state = await this.load()
+      const before = { bulk: this.bulkFingerprints(state), control: this.comparableJson(state) }
       if (!actor.operator) {
         const execution = 'executionId' in command ? state.executions.find(item => item.id === command.executionId) : undefined
         if (!execution || actor.agentId !== execution.agentId || !actor.session || !sameSession(actor.session, execution.session)) return failed('forbidden', 'Caller is not the responsible current Session and Project Agent')
@@ -696,8 +773,8 @@ export class WorkApplication {
       if (result.status !== 'completed') return result
       // Receipt owns a detached snapshot: subsequent commands must not alter retry results.
       state.commands.push({ commandId: command.commandId, fingerprint, result: structuredClone(result) })
-      snapshotSchema.parse(state)
-      await writeFileAtomic(this.file, `${JSON.stringify(state)}\n`, { mode: 0o600, dirMode: 0o700 })
+      snapshotSchema.parse({ ...state, sources: state.sources.map(controlSource) })
+      await this.persist(state, before)
       return result
       } finally { this.mutationDepth--; this.snapshotCache = undefined }
     })
@@ -957,9 +1034,10 @@ export class WorkApplication {
         this.mutationDepth++
         try {
         const state = await this.load()
+        const before = { bulk: this.bulkFingerprints(state), control: this.comparableJson(state) }
         const execution = state.executions.find(item => item.id === id)!
         change(execution)
-        await writeFileAtomic(this.file, `${JSON.stringify(state)}\n`, { mode: 0o600, dirMode: 0o700 })
+        await this.persist(state, before)
         return execution
         } finally { this.mutationDepth--; this.snapshotCache = undefined }
       })

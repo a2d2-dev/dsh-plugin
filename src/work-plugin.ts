@@ -51,6 +51,8 @@ export async function apply(ctx: Context, config: Config = {}): Promise<void> {
     return llm.stream(options)
   })
   const app = new WorkApplication(directory, new DshWorkHost(ctx, runtimeId), source, planner)
+  // Move a store written before the per-source sidecar split into the new shape.
+  void app.ensureSourceSplit().catch(error => ctx.logger.warn(`Work store split: ${String(error)}`))
   ctx.provide('a2d2Work', app)
   ctx.inject(['tools'], toolsCtx => { installWorkTools(toolsCtx, app, runtimeId); installWorkProgressTools(toolsCtx, app, runtimeId); installWorkOrganizationTools(toolsCtx, app, runtimeId) })
   ctx.inject(['agents'], executionCtx => { installWorkControlRecovery(executionCtx, app) })
