@@ -65,7 +65,7 @@ it('resolves real tool identity on the server and refuses foreign or absent call
   expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { progress: 'Concrete accepted work' } })
   const stale = await execute('stale-progress', { action: 'progress', text: 'Stale progress', expected_epoch: 2 }, agent)
   expect(JSON.stringify(stale)).toContain('stale-execution-authority')
-  expect(await execute('own-status', { action: 'status' }, agent)).toMatchObject({ isError: false, content: [expect.objectContaining({ text: expect.stringContaining('Concrete accepted work') })] })
+  expect(await execute('own-status', { action: 'status' }, agent)).toMatchObject({ isError: false, content: [expect.objectContaining({ text: expect.stringContaining('"coordinator":true') })] })
   const foreign = await fixtures.run(() => h.ctx.sessionController.create({ workspaceId: h.workspace.id, agentPreset: 'contract' }))
   const other = h.ctx.agents.get(foreign.sessionId)!
   const denied = await execute('foreign-progress', { action: 'progress', text: 'Forged work' }, other)
