@@ -11,3 +11,15 @@ Model responses are projections of application results. Persistence, GUI queries
 Startup/continuation material includes specification version and explicit missing-material markers. Status accepts `known_specification_version`; `changed` and `missing` require an explicit specification read. Missing criteria must be resolved from accepted source/user decisions, never invented. This protocol does not add a storage flag or change completion gates.
 
 Normal status responses have a 2,048 UTF-8 byte regression budget. Errors retain their exact code, message and conflict version. A status receipt is not lasting authority: every write rechecks the real calling Session and epoch.
+
+## Regression evidence
+
+`tests/work-compact-results.spec.ts` constructs a fixed multilingual/escaped payload via public commands, adds nine large specification revisions, and performs three real DSH Session handoffs (four Sessions). It measures the same full application results that the old tools serialized and the new public tool responses. No host-output truncation is used. The actual host lifecycle, persistence, tool runtime, authority fencing and completion gates run; the model transport uses the existing deterministic `contract/selected` adapter, so this is not a live external-provider/deployment acceptance.
+
+| Tool | Initial full chars / UTF-8 bytes | Large-history full chars / UTF-8 bytes | Initial compact chars / bytes | Large-history compact chars / bytes |
+| --- | ---: | ---: | ---: | ---: |
+| status | 20,305 / 52,325 | 506,946 / 890,976 | 123 / 123 | 125 / 125 |
+| report | 20,590 / 52,610 | 507,011 / 891,041 | 164 / 164 | 167 / 167 |
+| organize | 28,800 / 76,830 | 524,019 / 920,049 | 189 / 189 | 192 / 192 |
+
+For the incident mix (3 status + 4 report + 1 organize), the large fixture totals 4,072,901 chars / 7,157,141 UTF-8 bytes before projection and 1,235 chars / bytes after projection. These are exact serialized sizes for the regression fixture, distinct from the incident's observed 399,445 characters. There is no token estimate. Budgets assert at most 2,048 bytes per ordinary response and at most 10 bytes of metadata growth between initial and large history; all current specification content can be reconstructed through explicit paginated reads. Runtime timing/UUIDs may change metadata lengths slightly.

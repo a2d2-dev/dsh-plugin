@@ -5,6 +5,8 @@ import { ExecutionFixtures } from './work-execution-fixture.ts'
 import { installWorkTools } from '../src/work-execution/tools.ts'
 import { installWorkProgressTools } from '../src/work-progress-tools.ts'
 import { installWorkOrganizationTools } from '../src/work-organization-tools.ts'
+import { WorkApplication } from '../src/work.ts'
+import type { GitHubIssue } from '../src/work-sources/types.ts'
 import type { WorkCompleted, WorkResult } from '../src/work-types.ts'
 
 let fixtures: ExecutionFixtures
@@ -85,6 +87,96 @@ it('reads all current requirements explicitly in bounded revision-checked pages'
   expect(organized.value.saved).toBe(true)
   expect((await h.invoke('work_read', { ...args, cursor, revision })).value).toMatchObject({ status: 'conflict', error: { code: 'version-conflict', currentVersion: task.version + 1 } })
   expect((await h.invoke('work_read', { ...args, expected_version: task.version + 1, cursor, revision })).value.error.code).toBe('material-changed')
+})
+
+it('keeps receipts bounded through large specification and handoff histories on real Sessions', async () => {
+  const h = await setup()
+  let execution = h.execution
+  const payload = '历史材料😀\\n\\t"'.repeat(1200)
+  const material = { body: payload, decisions: payload, evidence: payload, unfinished: payload, next: 'Continue verification' }
+  const measurements: Array<Record<string, unknown>> = []
+  const measure = async (label: string) => {
+    const agent = h.ctx.agents.get(SessionId(execution.session.sessionId))!
+    const rawStatus = completed(await h.app.sessionControl(execution.session, 'status', 'status'))
+    const status = await h.invoke('work_control', { action: 'status', known_specification_version: rawStatus.task!.specification.version }, crypto.randomUUID(), agent)
+    const report = { specificationVersion: rawStatus.task!.specification.version, stage: 'in-progress' as const, summary: 'Verified partial progress', next: 'Continue', blockers: [], criteria: [] }
+    const reportId = crypto.randomUUID()
+    const rawReport = completed(await h.app.sessionReport(execution.session, reportId, report))
+    const reportResult = await h.invoke('work_report', { report }, reportId, agent)
+    const organization = { kind: 'specification' as const, expectedVersion: rawReport.task!.version, goal: rawReport.task!.goal, specification: rawReport.task!.specification.text, acceptance: rawReport.task!.specification.acceptance }
+    const organizeId = crypto.randomUUID()
+    const rawOrganize = completed(await h.app.sessionOrganize(execution.session, organizeId, organization))
+    const organize = await h.invoke('work_organize', { action: organization.kind, expected_version: organization.expectedVersion, goal: organization.goal, specification: organization.specification, acceptance: organization.acceptance }, organizeId, agent)
+    for (const [tool, raw, model] of [['status', rawStatus, status], ['report', rawReport, reportResult], ['organize', rawOrganize, organize]] as const) {
+      const before = JSON.stringify(raw)
+      expect(model.value.status).toBe('completed')
+      expect(model.text).not.toContain('历史材料')
+      expect(model.text).not.toContain('specificationHistory')
+      expect(Buffer.byteLength(model.text)).toBeLessThanOrEqual(2048)
+      measurements.push({ label, tool, beforeCharacters: before.length, beforeBytes: Buffer.byteLength(before), afterCharacters: model.text.length, afterBytes: Buffer.byteLength(model.text) })
+    }
+  }
+  await measure('initial')
+  for (let generation = 0; generation < 3; generation++) {
+    for (let index = 0; index < 3; index++) {
+      const task = (await h.detail()).task!
+      completed(await h.app.sessionOrganize(execution.session, `history:${generation}:${index}`, { kind: 'specification', expectedVersion: task.version, goal: task.goal, specification: payload, acceptance: task.specification.acceptance }))
+    }
+    h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+    completed(await h.app.execute({ type: 'task.continue', commandId: `rotate:${generation}`, ref: h.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch }, operator))
+    await fixtures.run(() => h.ctx.agents.get(SessionId(execution.session.sessionId))!.whenIdle())
+    await fixtures.run(() => h.app.reconcileControls())
+    const current = completed(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).execution!
+    expect(current.epoch).toBe(execution.epoch + 1)
+    expect(current.continuation!.phase).toBe('delivered')
+    const old = await fixtures.run(() => h.ctx.tools.execute({ callId: ToolCallId(crypto.randomUUID()), name: 'work_control', arguments: { action: 'status' }, agent: h.ctx.agents.get(SessionId(execution.session.sessionId))!, signal: new AbortController().signal }))
+    expect(old.isError).toBe(true)
+    expect(JSON.stringify(old)).toContain('Task')
+    expect(await h.app.sessionControl(execution.session, 'retired-status', 'status')).toMatchObject({ status: 'failed', error: { code: 'forbidden' } })
+    execution = current
+    await fixtures.run(() => h.ctx.agents.get(SessionId(execution.session.sessionId))!.whenIdle())
+  }
+  await measure('large-history')
+  const final = await h.detail()
+  expect(final.task!.specificationHistory.length).toBeGreaterThanOrEqual(10)
+  expect(final.execution!.continuationHistory).toHaveLength(2)
+  expect(JSON.stringify(final).length).toBeGreaterThan(300_000)
+  for (const tool of ['status', 'report', 'organize']) {
+    const initial = measurements.find(row => row.label === 'initial' && row.tool === tool)!
+    const large = measurements.find(row => row.label === 'large-history' && row.tool === tool)!
+    expect(Number(large.afterBytes) - Number(initial.afterBytes)).toBeLessThanOrEqual(10)
+  }
+  const large = measurements.filter(row => row.label === 'large-history')
+  // The observed incident had 3 status + 4 reports + 1 organization response.
+  const repeated = (field: string) => [3, 4, 1].reduce((sum, count, index) => sum + count * Number(large[index]![field]), 0)
+  console.log(JSON.stringify({ fixture: 'issue-209-large-history', measurements, repeatedEight: { beforeCharacters: repeated('beforeCharacters'), beforeBytes: repeated('beforeBytes'), afterCharacters: repeated('afterCharacters'), afterBytes: repeated('afterBytes') } }))
+}, 30_000)
+
+it('flags missing imported criteria, accepts native scope compactly and denies foreign readers', async () => {
+  const h = await setup()
+  const identity = { login: 'fixture', nodeId: 'U_fixture', name: null }
+  const issue: GitHubIssue = { nodeId: 'I_fixture', number: 209, url: 'https://github.com/example/repo/issues/209', repository: { owner: 'example', repository: 'repo' }, title: 'Source material', body: null, state: 'open', labels: [], assignees: [], updatedAt: '2026-10-21T00:00:00Z', observedAt: '2026-10-21T00:01:00Z', subIssues: { items: [], totalCount: 0, hasNextPage: false } }
+  const app = new WorkApplication(h.app.directory, h.host, { list: async () => ({ identity, items: [issue], observedAt: issue.observedAt }), detail: async () => ({ identity, issue }) })
+  const source = completed(await app.execute({ type: 'source.configure', commandId: 'source', projectId: h.ref.projectId, repository: issue.repository }, operator)).source!
+  completed(await app.query({ type: 'source.issue', projectId: h.ref.projectId, sourceId: source.id, number: issue.number, refresh: true }, operator))
+  const imported = completed(await app.execute({ type: 'source.import', commandId: 'import', projectId: h.ref.projectId, sourceId: source.id, nodeId: issue.nodeId }, operator))
+  const execution = completed(await app.execute({ type: 'task.start', commandId: 'start-import', ref: imported.ref!, expectedVersion: imported.task!.version, agentId: imported.task!.agentId, resource: h.execution.resource, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }, operator)).execution!
+  const agent = h.ctx.agents.get(SessionId(execution.session.sessionId))!
+  await fixtures.run(() => agent.whenIdle())
+  const status = await h.invoke('work_control', { action: 'status', known_specification_version: 1 }, crypto.randomUUID(), agent)
+  expect(status.value).toMatchObject({ coordinator: true, specificationState: 'missing' })
+  const read = await h.invoke('work_read', { section: 'specification', expected_version: status.value.taskVersion }, crypto.randomUUID(), agent)
+  expect(read.value.complete).toBe(true)
+  expect(JSON.parse(read.value.content).specification).toMatchObject({ missing: ['body', 'acceptance'], acceptance: [] })
+  const result = await h.invoke('work_organize', { action: 'source-children', expected_version: status.value.taskVersion, observed_at: issue.observedAt }, crypto.randomUUID(), agent)
+  expect(result.value).toMatchObject({ status: 'completed', action: 'source-children', saved: true, taskVersion: status.value.taskVersion + 1 })
+  expect(result.value).not.toHaveProperty('task')
+  expect(Buffer.byteLength(result.text)).toBeLessThanOrEqual(2048)
+  expect(completed(await app.query({ type: 'task.detail', ref: imported.ref! }, operator)).bindings![0]!.acceptedChildren).toMatchObject({ totalCount: 0, hasNextPage: false })
+  const foreign = await fixtures.run(() => h.ctx.sessionController.create({ workspaceId: h.workspace.id, agentPreset: 'contract' }))
+  const foreignAgent = h.ctx.agents.get(foreign.sessionId)!
+  expect((await h.invoke('work_control', { action: 'status' }, crypto.randomUUID(), foreignAgent)).value).toMatchObject({ status: 'failed', coordinator: false, error: { code: 'forbidden' } })
+  expect((await h.invoke('work_read', { section: 'specification', expected_version: result.value.taskVersion }, crypto.randomUUID(), foreignAgent)).value.error.code).toBe('forbidden')
 })
 
 it('saves progress without echoing the submitted report or historical Task and preserves errors', async () => {
