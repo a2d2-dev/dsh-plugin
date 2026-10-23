@@ -11,8 +11,9 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
+import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 import A2d2Service from '../src/index.ts'
-import type { StageAgent, StageAgentsSettings } from '../src/stage-agents.ts'
+import type { ModelCandidate, StageAgent, StageAgentsSettings } from '../src/stage-agents.ts'
 import { DEFAULT_STAGE_AGENTS } from '../src/stage-agents.ts'
 import * as toolsPlugin from '../src/tools.ts'
 import { StubLlm, StubSubagents, StubTools, stubAgent, toolRunContext } from './stubs.ts'
@@ -30,7 +31,7 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })))
 })
 
-function stageAgents(agent: StageAgent, routes: readonly string[]): StageAgentsSettings {
+function stageAgents(agent: StageAgent, routes: readonly ModelCandidate[]): StageAgentsSettings {
   return {
     stages: { ...DEFAULT_STAGE_AGENTS.stages },
     consult: [...DEFAULT_STAGE_AGENTS.consult],
@@ -70,6 +71,29 @@ async function mount(root: string, settings: StageAgentsSettings, catalog: reado
 }
 
 describe('dispatchSubagent', () => {
+  it('dispatches explicit effort independently and reads changed effort on the next call', async () => {
+    const root = await tempRoot()
+    const route = 'claude-bray/claude-opus-5-5'
+    const { service, subagents } = await mount(root,
+      stageAgents('engineer', [{ route, reasoningEffort: 'medium' }]), [route])
+    const parent = stubAgent(root, mainSession)
+    await service.bindMainSession({ cwd: root, issue: 41, mainSession, now: new Date() })
+    const request = { cwd: root, stage: 'implement' as const, issue: 48,
+      prompt: 'Implement.', parent, signal: new AbortController().signal }
+    await expect(service.dispatchSubagent(request)).resolves.toMatchObject({
+      model: route, reasoningEffort: 'medium', agent: 'engineer',
+    })
+    expect(subagents.startContinuable.mock.calls[0]?.[0].request.agentOptions).toEqual({
+      provider: 'claude-bray', model: 'claude-opus-5-5', reasoningEffort: 'medium',
+    })
+    replaceStageAgents(service, stageAgents('engineer', [{ route, reasoningEffort: 'low' }]))
+    await service.dispatchSubagent(request)
+    expect(subagents.startContinuable.mock.calls[1]?.[0].request.agentOptions).toHaveProperty('reasoningEffort', 'low')
+    replaceStageAgents(service, stageAgents('engineer', [{ route, reasoningEffort: 'invalid' }]))
+    await expect(service.dispatchSubagent(request)).rejects.toThrow(/does not support reasoning effort/)
+    expect(subagents.startContinuable).toHaveBeenCalledTimes(2)
+  })
+
   it('starts a child with the stage Agent first model candidate present in the model catalog', async () => {
     const root = await tempRoot()
     const { service, subagents } = await mount(
@@ -206,6 +230,34 @@ describe('dispatchSubagent', () => {
 })
 
 describe('dispatch_subagent tool', () => {
+  it.each(['medium', 'high'])('validates and renders explicit %s reasoning effort in the tool output', async (reasoningEffort) => {
+    const root = await tempRoot()
+    const route = 'codex/gpt-5.5'
+    const { ctx, service } = await mount(root,
+      stageAgents('engineer', [{ route, reasoningEffort }]), [route])
+    await ctx.plugin(StubTools)
+    await ctx.plugin(toolsPlugin)
+    const parent = stubAgent(root, mainSession)
+    await service.bindMainSession({ cwd: root, issue: 41, mainSession, now: new Date() })
+    const tool = (ctx.get('tools') as unknown as StubTools).find('dispatch_subagent')
+    if (tool === undefined) throw new Error('the tool did not register')
+    const args = { stage: 'implement', issue: 48, prompt: 'Implement issue #48.' }
+
+    const value = await tool.execute(args, toolRunContext(parent, tool.name, args)) as {
+      session: string; model: string; agent: string; reasoningEffort: string
+    }
+
+    expect(value).toMatchObject({ model: route, agent: 'engineer', reasoningEffort })
+    expect(validateJsonSchemaValue(tool.output.schema, value, 'value')).toEqual([])
+    expect(validateJsonSchemaValue(tool.output.schema, { ...value, unexpected: 'extra' }, 'value')).toEqual([
+      '"value.unexpected" is not a declared property (additionalProperties: false)',
+    ])
+    expect(tool.output.render(args, value)).toEqual([{
+      type: 'text',
+      text: `Dispatched subagent ${value.session} with ${route} as engineer; reasoning effort: ${reasoningEffort}`,
+    }])
+  })
+
   it('hands stage, issue, and prompt to the service with the calling session as parent', async () => {
     const root = await tempRoot()
     const ctx = new Context()
@@ -225,5 +277,11 @@ describe('dispatch_subagent tool', () => {
 
     expect(value).toMatchObject({ model: 'codex/gpt-5.5', agent: 'engineer' })
     expect(value.session).toMatch(/^session-/u)
+    expect(value).not.toHaveProperty('reasoningEffort')
+    expect(validateJsonSchemaValue(tool.output.schema, value, 'value')).toEqual([])
+    expect(tool.output.render(args, value)).toEqual([{
+      type: 'text',
+      text: `Dispatched subagent ${value.session} with codex/gpt-5.5 as engineer`,
+    }])
   })
 })

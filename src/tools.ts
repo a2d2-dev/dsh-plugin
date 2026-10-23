@@ -107,11 +107,13 @@ export function apply(ctx: Context): void {
           session: { type: 'string', required: true },
           model: { type: 'string', required: true },
           agent: { type: 'string', required: true },
+          reasoningEffort: { type: 'string', description: 'Explicit reasoning effort selected for the child model; omitted when the candidate does not specify one.' },
         },
       },
       render: (_args, value) => [{
         type: 'text',
-        text: `Dispatched subagent ${value.session} with ${value.model} as ${value.agent}`,
+        text: `Dispatched subagent ${value.session} with ${value.model} as ${value.agent}`
+          + (value.reasoningEffort === undefined ? '' : `; reasoning effort: ${value.reasoningEffort}`),
       }],
     },
     async execute(args, exec) {

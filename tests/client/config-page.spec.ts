@@ -17,6 +17,7 @@ import {
   probeResultText,
   removeConfigCandidate,
   setConfigStageAgent,
+  setConfigCandidateEffort,
 } from '../../src/client/config-page.tsx'
 import { DEFAULT_STAGE_AGENTS } from '../../src/stage-agent-data.ts'
 
@@ -153,6 +154,24 @@ describe('A2D2 config client registration', () => {
 })
 
 describe('A2D2 config page view model', () => {
+  it('edits and preserves per-candidate effort while keeping other Agents unchanged', () => {
+    const route = 'claude-bray/claude-opus-5-5'
+    const settings = { ...DEFAULT_STAGE_AGENTS, agents: {
+      ...DEFAULT_STAGE_AGENTS.agents, engineer: [{ route, reasoningEffort: 'medium' }],
+    } }
+    const efforts = { [route]: [{ id: 'medium', name: 'Medium' }, { id: 'high', name: 'High' }] }
+    const edited = setConfigCandidateEffort(settings, 'engineer', route, 'high', efforts)
+    expect(edited.agents.engineer).toEqual([{ route, reasoningEffort: 'high' }])
+    expect(edited.agents.ceo).toEqual(settings.agents.ceo)
+    expect(settings.agents.engineer).toEqual([{ route, reasoningEffort: 'medium' }])
+    expect(addConfigCandidate(edited, 'engineer', route, [route])).toBe(edited)
+    const added = addConfigCandidate(edited, 'engineer', 'codex/model', ['codex/model'])
+    expect(moveConfigCandidate(added, 'engineer', 0, 1).agents.engineer).toEqual(['codex/model', { route, reasoningEffort: 'high' }])
+    expect(removeConfigCandidate(added, 'engineer', route).agents.engineer).toEqual(['codex/model'])
+    expect(setConfigCandidateEffort(edited, 'engineer', route, '', efforts).agents.engineer).toEqual([route])
+    expect(() => setConfigCandidateEffort(edited, 'engineer', route, 'max', efforts)).toThrow(/不支持/)
+  })
+
   it('draws the whole Matt highway with stage Agent labels and a fixed standalone Agent', () => {
     const view = configHighwayView(DEFAULT_STAGE_AGENTS, ['claude-bray/claude-fable-5-1', 'codex/gpt-5.5'])
 

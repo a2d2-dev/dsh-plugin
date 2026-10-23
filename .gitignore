@@ -3,3 +3,12 @@ lib/
 coverage/
 *.tsbuildinfo
 *.log
+tmp/
+
+# Local agent sessions, worktrees, and machine state
+/.claude/
+/.dsh/
+/.local/
+
+# Local acceptance reports and screenshots
+/docs/artifacts/

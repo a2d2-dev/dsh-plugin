@@ -17,8 +17,9 @@ import {
   modelCandidatesForStage,
   shortModelRoute,
   stageAgentLabel,
+  candidateRoute,
 } from '../stage-agent-data.ts'
-import type { Stage, StageAgentRouteSettings } from '../stage-agent-data.ts'
+import type { ModelCandidate, Stage, StageAgentRouteSettings } from '../stage-agent-data.ts'
 import type { MainStation, Move } from '../highway.ts'
 import { chipAgentTarget } from './consult-actions.ts'
 import type { ConsultLocation, ConsultNext, ConsultPhase } from './consult-actions.ts'
@@ -145,10 +146,10 @@ function agentField(
 }
 
 function modelLabel(
-  routes: readonly string[],
+  routes: readonly ModelCandidate[],
   catalog: readonly string[] | undefined,
 ): string {
-  if (catalog === undefined) return shortModelRoute(routes[0] ?? '') || '无可用模型'
-  const selected = routes.find(route => catalog.includes(route))
-  return selected === undefined ? '无可用模型' : shortModelRoute(selected)
+  if (catalog === undefined) return shortModelRoute(candidateRoute(routes[0] ?? '')) || '无可用模型'
+  const selected = routes.find(route => catalog.includes(candidateRoute(route)))
+  return selected === undefined ? '无可用模型' : shortModelRoute(candidateRoute(selected))
 }

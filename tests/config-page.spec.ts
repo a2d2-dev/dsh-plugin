@@ -120,6 +120,7 @@ function handler(options: {
   revision?: number
   update?: (value: StageAgentsSettings, expectedRevision: number | undefined) => Promise<{ value: StageAgentsSettings; revision: number }>
   modelRoutes?: readonly string[]
+  modelEfforts?: Readonly<Record<string, readonly { id: string; name: string }[]>>
   stream?: (options: GenerateOptions) => AsyncIterable<StreamChunk>
   requestRejection?: () => 401 | 403 | undefined
 } = {}) {
@@ -137,11 +138,100 @@ function handler(options: {
       return { value, revision }
     }),
     modelRoutes: async () => options.modelRoutes ?? ['claude-bray/claude-fable-5-1', 'codex/gpt-6', 'codex/gpt-5.5'],
+    ...(options.modelEfforts === undefined ? {} : { modelEfforts: async () => options.modelEfforts! }),
     stream: options.stream ?? (() => output('OK')),
   })
 }
 
 describe('A2D2 config settings route', () => {
+  it('returns model-specific efforts, saves explicit effort, and rejects unsupported efforts', async () => {
+    const route = 'codex/gpt-5.5'
+    const api = handler({ modelEfforts: { [route]: [{ id: 'medium', name: 'Medium' }] } })
+    const get = await send(api, { method: 'settings.get' })
+    expect(get.json).toMatchObject({ value: { efforts: { [route]: [{ id: 'medium', name: 'Medium' }] } } })
+    const settings = { ...DEFAULT_STAGE_AGENTS, agents: {
+      ...DEFAULT_STAGE_AGENTS.agents, engineer: [{ route, reasoningEffort: 'medium' }],
+    } }
+    const saved = await send(api, { method: 'settings.update', payload: { settings, expectedRevision: 7 } })
+    expect(saved).toMatchObject({ status: 200, json: { value: { settings, revision: 8 } } })
+    const rejected = await send(api, { method: 'settings.update', payload: {
+      settings: { ...settings, agents: { ...settings.agents, engineer: [{ route, reasoningEffort: 'max' }] } }, expectedRevision: 8,
+    } })
+    expect(rejected).toMatchObject({ status: 400, json: { error: { code: 'schema-rejected' } } })
+    const probe = await send(api, { method: 'probe', payload: { route, reasoningEffort: 'max' } })
+    expect(probe).toMatchObject({ status: 400, json: { error: { code: 'unsupported-effort' } } })
+  })
+
+  it('rejects explicit effort when the route exists but metadata resolution returned no entry', async () => {
+    const route = 'codex/gpt-5.5'
+    let writes = 0
+    const api = handler({ modelRoutes: [route], modelEfforts: {}, update: async value => {
+      writes += 1
+      return { value, revision: 8 }
+    } })
+    const settings = { ...DEFAULT_STAGE_AGENTS, consult: [{ route, reasoningEffort: 'medium' }] }
+    const rejected = await send(api, { method: 'settings.update', payload: { settings, expectedRevision: 7 } })
+    expect(rejected).toMatchObject({ status: 400, json: { ok: false, error: {
+      code: 'schema-rejected', message: expect.stringContaining('reasoning effort metadata is unavailable'),
+    } } })
+    expect(writes).toBe(0)
+    expect(await send(api, { method: 'settings.get' })).toMatchObject({ json: { value: { revision: 7, settings: DEFAULT_STAGE_AGENTS } } })
+  })
+
+  it.each<{ route: string; modelEfforts: Readonly<Record<string, readonly { id: string; name: string }[]>> | undefined; message: string }>([
+    { route: 'missing/model', modelEfforts: {}, message: 'metadata is unavailable' },
+    { route: 'codex/gpt-5.5', modelEfforts: undefined, message: 'metadata is unavailable' },
+    { route: 'codex/gpt-5.5', modelEfforts: { 'codex/gpt-5.5': [] }, message: 'does not support reasoning effort' },
+  ])('rejects unverifiable explicit effort for $route without updating, but permits legacy strings', async ({ route, modelEfforts, message }) => {
+    let writes = 0
+    const api = handler({ modelRoutes: ['codex/gpt-5.5'], modelEfforts, update: async value => {
+      writes += 1
+      return { value, revision: 8 }
+    } })
+    const settings = { ...DEFAULT_STAGE_AGENTS, agents: {
+      ...DEFAULT_STAGE_AGENTS.agents, engineer: [{ route, reasoningEffort: 'medium' }],
+    } }
+    expect(await send(api, { method: 'settings.update', payload: { settings, expectedRevision: 7 } })).toMatchObject({
+      status: 400, json: { ok: false, error: { code: 'schema-rejected', message: expect.stringContaining(message) } },
+    })
+    expect(writes).toBe(0)
+    expect(await send(api, { method: 'settings.update', payload: {
+      settings: { ...settings, agents: { ...settings.agents, engineer: [route] } }, expectedRevision: 7,
+    } })).toMatchObject({ status: 200, json: { ok: true } })
+    expect(writes).toBe(1)
+  })
+
+  it('rejects metadata resolver failures before calling updateSettings', async () => {
+    let writes = 0
+    const api = createConfigHandler({
+      requestRejection: () => undefined,
+      getSettings: () => ({ value: DEFAULT_STAGE_AGENTS, revision: 7 }),
+      updateSettings: async value => { writes += 1; return { value, revision: 8 } },
+      modelRoutes: async () => ['codex/gpt-5.5'],
+      modelEfforts: async () => { throw new Error('reasoning effort metadata is unavailable') },
+      stream: () => output('OK'),
+    })
+    expect(await send(api, { method: 'settings.update', payload: {
+      settings: { ...DEFAULT_STAGE_AGENTS, consult: [{ route: 'codex/gpt-5.5', reasoningEffort: 'medium' }] }, expectedRevision: 7,
+    } })).toMatchObject({ status: 400, json: { ok: false, error: { message: expect.stringContaining('metadata is unavailable') } } })
+    expect(writes).toBe(0)
+    expect(await send(api, { method: 'settings.update', payload: { settings: DEFAULT_STAGE_AGENTS, expectedRevision: 7 } }))
+      .toMatchObject({ status: 200, json: { ok: true } })
+    expect(writes).toBe(1)
+  })
+
+  it.each([undefined, {}])('refuses explicit-effort probes without metadata and never calls the provider', async modelEfforts => {
+    let calls = 0
+    const api = handler({ modelRoutes: ['codex/gpt-5.5'], modelEfforts, stream: () => {
+      calls += 1
+      return output('OK')
+    } })
+    expect(await send(api, { method: 'probe', payload: { route: 'codex/gpt-5.5', reasoningEffort: 'medium' } })).toMatchObject({
+      status: 400, json: { ok: false, error: { code: 'unsupported-effort', message: expect.stringContaining('metadata is unavailable') } },
+    })
+    expect(calls).toBe(0)
+  })
+
   it('rejects a request DSH refuses before reading settings', async () => {
     const result = await send(handler({ requestRejection: () => 403 }), { method: 'settings.get', payload: {} }, { host: 'evil.example' })
     expect(result).toMatchObject({

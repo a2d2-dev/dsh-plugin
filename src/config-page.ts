@@ -21,11 +21,15 @@ import type { RequestRejection } from './route-auth.ts'
 import { A2D2_MESSAGE_SOURCE } from './message-source.ts'
 import { classifyFailureKind } from './refusal.ts'
 import {
-  splitModelRoute,
+  candidateRoute,
+  candidateSelection,
   stageAgentWarnings,
   validateCompleteStageAgentsSettings,
 } from './stage-agents.ts'
 import type { StageAgentsSettings } from './stage-agents.ts'
+import type { ModelCandidate, ModelEffortCatalog } from './stage-agent-data.ts'
+import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { isModelCandidate } from './stage-agent-data.ts'
 
 /** Exact HTTP pathname owned by the configuration page. */
 export const CONFIG_ROUTE_PATH = '/a2d2/api/config'
@@ -63,6 +67,7 @@ export interface ConfigDependencies {
     expectedRevision: number | undefined,
   ) => Promise<{ readonly value: StageAgentsSettings; readonly revision: number | undefined }>
   readonly modelRoutes: () => Promise<readonly string[]>
+  readonly modelEfforts?: () => Promise<ModelEffortCatalog>
   readonly stream: (options: GenerateOptions) => AsyncIterable<StreamChunk>
 }
 
@@ -85,7 +90,19 @@ function flattenConfiguredRoutes(settings: StageAgentsSettings): Set<string> {
   return new Set([
     ...settings.consult,
     ...Object.values(settings.agents).flat(),
-  ])
+  ].map(candidateRoute))
+}
+
+function validateCandidateEffort(candidate: ModelCandidate, efforts: ModelEffortCatalog | undefined): void {
+  const selection = candidateSelection(candidate)
+  if (selection.reasoningEffort === undefined) return
+  const route = candidateRoute(candidate)
+  if (efforts === undefined || !Object.hasOwn(efforts, route)) {
+    throw new Error(`${route} reasoning effort metadata is unavailable; cannot validate explicit effort "${selection.reasoningEffort}"`)
+  }
+  if (!efforts[route]?.some(option => option.id === selection.reasoningEffort)) {
+    throw new Error(`${route} does not support reasoning effort "${selection.reasoningEffort}"`)
+  }
 }
 
 function reasonOf(error: unknown): string {
@@ -106,14 +123,15 @@ class PayloadTooLargeError extends Error {
  * quality evaluation, and callers invoke it only after the user clicks Test.
  */
 export async function classifyModelProbe(options: {
-  readonly route: string
+  readonly route: ModelCandidate
   readonly stream: (options: GenerateOptions) => AsyncIterable<StreamChunk>
   readonly signal?: AbortSignal
 }): Promise<ModelProbeResult> {
-  const route = splitModelRoute(options.route)
+  const route = candidateSelection(options.route)
   const generateOptions: GenerateOptions = deepFreeze({
     provider: route.provider,
     model: route.model,
+    ...(route.reasoningEffort === undefined ? {} : { reasoningEffort: ReasoningEffortId(route.reasoningEffort) }),
     messages: [createUserMessage({
       content: [{ type: 'text', text: 'reply OK' }],
       source: A2D2_MESSAGE_SOURCE,
@@ -228,7 +246,10 @@ export function createConfigHandler(
     try {
       switch (body.method as ConfigMethod) {
         case 'settings.get': {
-          respond(response, 200, { ok: true, value: settingsView(dependencies.getSettings()) })
+          respond(response, 200, { ok: true, value: {
+            ...settingsView(dependencies.getSettings()),
+            efforts: await dependencies.modelEfforts?.() ?? {},
+          } })
           return
         }
         case 'settings.update': {
@@ -240,6 +261,12 @@ export function createConfigHandler(
           let next: StageAgentsSettings
           try {
             next = validateCompleteStageAgentsSettings(payload.settings)
+            const candidates = [...Object.values(next.agents).flat(), ...next.consult]
+            const efforts = candidates.some(candidate => candidateSelection(candidate).reasoningEffort !== undefined)
+              ? await dependencies.modelEfforts?.() : undefined
+            for (const candidate of candidates) {
+              validateCandidateEffort(candidate, efforts)
+            }
           } catch (error) {
             fail(response, 400, 'schema-rejected', reasonOf(error))
             return
@@ -271,10 +298,24 @@ export function createConfigHandler(
               return
             }
           }
+          const candidate = payload.reasoningEffort === undefined ? payload.route
+            : { route: payload.route, reasoningEffort: payload.reasoningEffort }
+          if (!isModelCandidate(candidate)) {
+            fail(response, 400, 'bad-effort', 'reasoningEffort must be a non-empty effort id')
+            return
+          }
+          const efforts = candidateSelection(candidate).reasoningEffort === undefined
+            ? undefined : await dependencies.modelEfforts?.()
+          try {
+            validateCandidateEffort(candidate, efforts)
+          } catch (error) {
+            fail(response, 400, 'unsupported-effort', reasonOf(error))
+            return
+          }
           const controller = new AbortController()
           request.once('aborted', () => { controller.abort() })
           const result = await classifyModelProbe({
-            route: payload.route,
+            route: candidate,
             stream: dependencies.stream,
             signal: controller.signal,
           })

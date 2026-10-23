@@ -103,11 +103,11 @@ class StubLlm extends Service {
   }
 
   listProviders(): readonly { readonly id: string }[] {
-    return []
+    return [{ id: 'codex' }]
   }
 
   async listModels(): Promise<readonly { readonly id: string }[]> {
-    return []
+    return [{ id: 'gpt-5.5' }]
   }
 }
 
@@ -119,6 +119,9 @@ async function mount(options: { readonly connection: boolean }) {
   const ctx = new Context()
   await ctx.plugin(StubSessions)
   await ctx.plugin(StubLlm)
+  ctx.provide('sessionController', {
+    selectLocalModel: vi.fn(async () => ({ selected: { provider: 'codex', model: 'gpt-5.5' } })),
+  } as never)
   await ctx.plugin(StubWebServer)
   await ctx.plugin(StubWebRuntime)
   if (options.connection) await ctx.plugin(StubConnection)
@@ -234,6 +237,42 @@ describe('A2D2 route authentication', () => {
 
     expect(answer.captured.status).toBe(200)
     expect(await service.agentOfSession(root, sessionA)).toBe('engineer')
+  })
+
+  it('reads and writes the public settings id when the loader entry id is include:a2d2', async () => {
+    const ctx = new Context()
+    let value = { stageAgents: A2d2Service.Config({}).stageAgents!.get() }
+    const replace = vi.fn(async (ns: string, next: typeof value) => {
+      expect(ns).toBe('a2d2')
+      value = next
+    })
+    ctx.provide('settings', {
+      configure: () => () => {},
+      describe: () => [{ ns: 'a2d2', value, revision: 7 }],
+      replace,
+    } as never)
+    await ctx.plugin(StubWebServer)
+    await ctx.plugin(StubConnection)
+    await ctx.plugin({
+      Config: A2d2Service.Config,
+      apply(ctx: Context, config: ConstructorParameters<typeof A2d2Service>[1]) {
+        Object.defineProperty(ctx.fiber, 'entry', { value: { id: 'include:a2d2', options: { id: 'a2d2' } } })
+        new A2d2Service(ctx, config)
+      },
+    }, {})
+    await settle()
+    const server = ctx.get('webServer') as unknown as StubWebServer
+    const get = request('POST', CONFIG_ROUTE_PATH, loggedInHeaders, { method: 'settings.get' })
+    const answer = response()
+    await server.routes.get(CONFIG_ROUTE_PATH)?.(get.request, answer.response)
+    expect(JSON.parse(answer.captured.body!)).toMatchObject({ value: { revision: 7 } })
+    const update = request('POST', CONFIG_ROUTE_PATH, loggedInHeaders, {
+      method: 'settings.update', payload: { settings: value.stageAgents, expectedRevision: 7 },
+    })
+    const saved = response()
+    await server.routes.get(CONFIG_ROUTE_PATH)?.(update.request, saved.response)
+    expect(saved.captured.status).toBe(200)
+    expect(replace).toHaveBeenCalledWith('a2d2', value, 7)
   })
 
   it('answers settings.get for a logged-in browser', async () => {

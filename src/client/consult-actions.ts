@@ -17,12 +17,14 @@ import {
   isServiceStation,
 } from '../highway.ts'
 import type { HighwayZone, MainStation, Move } from '../highway.ts'
-import type { StageAgent, StageAgentRouteSettings } from '../stage-agent-data.ts'
+import type { ModelCandidate, StageAgent, StageAgentRouteSettings } from '../stage-agent-data.ts'
 import {
   STAGE_AGENTS,
   STAGE_AGENT_STAGES,
   agentForStage,
   stageAgentLabel,
+  candidateRoute,
+  isModelCandidate,
 } from '../stage-agent-data.ts'
 import type { FailureKind } from '../refusal.ts'
 import type { ClientSessionsService, ClientWorkspaceNavigation, ClientWorkspacesService } from './context.ts'
@@ -369,10 +371,9 @@ function isStageAgent(value: unknown): value is StageAgent {
   return typeof value === 'string' && STAGE_AGENT_SET.has(value)
 }
 
-function parseRouteList(value: unknown): readonly string[] | undefined {
-  if (!Array.isArray(value)) return undefined
-  if (value.some(route => typeof route !== 'string' || route.trim() === '')) return undefined
-  return value.map(route => route.trim())
+function parseRouteList(value: unknown): readonly ModelCandidate[] | undefined {
+  if (!Array.isArray(value) || value.some(route => !isModelCandidate(route))) return undefined
+  return value as ModelCandidate[]
 }
 
 function parseStageAgents(value: unknown): StageAgentRouteSettings | undefined {
@@ -388,13 +389,13 @@ function parseStageAgents(value: unknown): StageAgentRouteSettings | undefined {
     stages[stage] = agent
   }
 
-  const agents: Partial<Record<StageAgent, readonly string[]>> = {}
+  const agents: Partial<Record<StageAgent, readonly ModelCandidate[]>> = {}
   for (const agent of STAGE_AGENTS) {
     const routes = parseRouteList(value.agents[agent])
     if (routes === undefined) return undefined
     agents[agent] = routes
   }
-  return { stages: stages as Record<(typeof STAGE_AGENT_STAGES)[number], StageAgent>, agents: agents as Record<StageAgent, readonly string[]> }
+  return { stages: stages as Record<(typeof STAGE_AGENT_STAGES)[number], StageAgent>, agents: agents as Record<StageAgent, readonly ModelCandidate[]> }
 }
 
 function parsePreconditionMissing(value: unknown): ConsultPreconditionMissing | undefined {
@@ -528,18 +529,13 @@ function shortRoute(route: string): string {
   return slash < 0 ? route : route.slice(slash + 1)
 }
 
-function splitRoute(route: string): ClientModelSelection {
-  const slash = route.indexOf('/')
-  return { provider: route.slice(0, slash), model: route.slice(slash + 1) }
-}
-
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
 /** An Agent's usable model: its first candidate present in the session catalog. */
-function firstAvailableRoute(routes: readonly string[], catalog: readonly string[]): string | undefined {
-  return routes.find(route => catalog.includes(route))
+function firstAvailableRoute(routes: readonly ModelCandidate[], catalog: readonly string[]): ModelCandidate | undefined {
+  return routes.find(route => catalog.includes(candidateRoute(route)))
 }
 
 function displayReason(reason: string, kind?: FailureKind): string {
@@ -575,7 +571,7 @@ export interface ChipAgentTarget {
   readonly agent: StageAgent
   /** The Agent's display name, e.g. 工程师. */
   readonly label: string
-  readonly routes: readonly string[]
+  readonly routes: readonly ModelCandidate[]
 }
 
 /**
@@ -622,7 +618,7 @@ function newSessionEffectLabel(
   if (agent === undefined) return '新会话 · 默认模型'
   if (directory === undefined) return `新会话 · ${agent.label}`
   const route = firstAvailableRoute(agent.routes, modelCatalogRoutes(directory))
-  return route === undefined ? noModelLabel(agent) : `新会话 · ${agent.label}（${shortRoute(route)}）`
+  return route === undefined ? noModelLabel(agent) : `新会话 · ${agent.label}（${shortRoute(candidateRoute(route))}）`
 }
 
 export function candidateModelEffect(
@@ -654,8 +650,8 @@ export type SessionAgentStartDeps = Pick<ConsultSelectionDeps, 'registerSessionA
 
 /**
  * Start a freshly created session as an Agent: record the Agent through the
- * host route, then select the Agent's first candidate in that session's own
- * model directory. Neither failure stops the caller; each is reported.
+ * host route, which installs the Agent's model and effort locally without
+ * changing the host's default. Registration failure is reported to the caller.
  * @param subject - how messages name the session, e.g. 新会话 or 后继会话.
  */
 export async function startSessionAsAgent(
@@ -664,20 +660,13 @@ export async function startSessionAsAgent(
   agent: ChipAgentTarget,
   subject: string,
 ): Promise<void> {
+  // The host installs this Agent's candidate locally; DSH's picker would also
+  // save a new global default, which Agent creation must not do.
   try {
     if (deps.registerSessionAgent === undefined) throw new Error('登记能力不可用')
     await deps.registerSessionAgent(sessionId, agent.agent)
   } catch (error) {
     deps.notify?.(`登记${subject} Agent 失败：${errorMessage(error)}`)
-  }
-  try {
-    if (deps.modelDirectories === undefined) throw new Error('模型目录服务不可用')
-    const face = deps.modelDirectories.directoryFor(sessionId)
-    const route = firstAvailableRoute(agent.routes, modelCatalogRoutes(await face.load()))
-    if (route === undefined) throw new Error(noModelLabel(agent))
-    await selectModel(face, splitRoute(route))
-  } catch (error) {
-    deps.notify?.(`选择${subject}模型失败：${errorMessage(error)}`)
   }
 }
 

@@ -16,8 +16,9 @@ import {
   THINKING_MODEL_ROUTES,
   stageAgentDefaultAgents,
   stageAgentDefaultStages,
+  isModelCandidate,
 } from './stage-agent-data.ts'
-import type { StageAgent, StageAgentsSettings } from './stage-agent-data.ts'
+import type { ModelCandidate, StageAgent, StageAgentsSettings } from './stage-agent-data.ts'
 
 export {
   CODING_MODEL_ROUTES,
@@ -30,18 +31,23 @@ export {
   shortModelRoute,
   splitModelRoute,
   stageAgentWarnings,
+  candidateRoute,
+  candidateEffort,
+  candidateSelection,
 } from './stage-agent-data.ts'
-export type { Stage, StageAgent, StageAgentsSettings } from './stage-agent-data.ts'
+export type { ModelCandidate, Stage, StageAgent, StageAgentsSettings } from './stage-agent-data.ts'
 
-const ROUTE_PATTERN = /^[^/\s]+\/[^/\s]+$/u
 const STAGE_SET = new Set<string>(STAGE_AGENT_STAGES)
 const AGENT_SET = new Set<string>(STAGE_AGENTS)
 const SETTINGS_KEYS = new Set(['stages', 'agents', 'consult'])
 const defaultStages = stageAgentDefaultStages()
 const defaultAgents = stageAgentDefaultAgents()
 
-const routeSchema = z.string().pattern(ROUTE_PATTERN)
-const routeListSchema = z.array(routeSchema).min(1)
+const candidateSchema = z.transform(z.any(), value => {
+  if (!isModelCandidate(value)) throw new Error('a2d2: candidate must match provider/model regexp or { route, reasoningEffort }')
+  return value
+})
+const routeListSchema = z.array(candidateSchema).min(1)
 
 const stagesSchema = z.transform(
   z.dict(z.string()),
@@ -60,11 +66,11 @@ const agentsSchema = z.transform(
     for (const agent of Object.keys(value)) {
       if (!AGENT_SET.has(agent)) throw new Error(`a2d2: unknown Agent "${agent}"`)
     }
-    return { ...defaultAgents, ...(value as Partial<Record<StageAgent, string[]>>) }
+    return { ...defaultAgents, ...(value as Partial<Record<StageAgent, ModelCandidate[]>>) }
   },
 )
 
-export const StageAgentsSettingsSchema: z<StageAgentsSettings> = z.object({
+const InternalStageAgentsSettingsSchema: z<StageAgentsSettings> = z.object({
   stages: stagesSchema.default(defaultStages),
   agents: agentsSchema.default(defaultAgents),
   consult: routeListSchema.default([...THINKING_MODEL_ROUTES]),
@@ -74,10 +80,14 @@ export const StageAgentsSettingsSchema: z<StageAgentsSettings> = z.object({
   consult: [...THINKING_MODEL_ROUTES],
 }) as z<StageAgentsSettings>
 
+export const StageAgentsSettingsSchema = z.transform(z.any(), value =>
+  InternalStageAgentsSettingsSchema(structuredClone(value) as never),
+).default({}) as z<StageAgentsSettings>
+
 function assertRouteList(path: string, routes: readonly unknown[]): void {
   for (const [index, route] of routes.entries()) {
-    if (typeof route !== 'string' || !ROUTE_PATTERN.test(route)) {
-      throw new Error(`a2d2: ${path}[${index}] must be provider/model`)
+    if (!isModelCandidate(route)) {
+      throw new Error(`a2d2: ${path}[${index}] must be provider/model or { route, reasoningEffort } with a non-empty effort id`)
     }
   }
 }
@@ -135,13 +145,21 @@ export function validateCompleteStageAgentsSettings(value: unknown): StageAgents
       STAGE_AGENT_STAGES.map(stage => [stage, stages[stage] as StageAgent]),
     ) as Record<keyof typeof defaultStages, StageAgent>,
     agents: Object.fromEntries(
-      STAGE_AGENTS.map(agent => [agent, [...(agents[agent] as string[])]]),
-    ) as Record<StageAgent, string[]>,
-    consult: [...(consult as string[])],
+      STAGE_AGENTS.map(agent => [agent, structuredClone(agents[agent] as ModelCandidate[])]),
+    ) as Record<StageAgent, ModelCandidate[]>,
+    consult: structuredClone(consult as ModelCandidate[]),
   }
 }
 
 export function validateStageAgentsSettings(value: unknown): StageAgentsSettings {
+  if (isRecord(value)) {
+    if (Array.isArray(value.consult)) assertRouteList('consult', value.consult)
+    if (isRecord(value.agents)) {
+      for (const [agent, routes] of Object.entries(value.agents)) {
+        if (Array.isArray(routes)) assertRouteList(`agents.${agent}`, routes)
+      }
+    }
+  }
   const settings = StageAgentsSettingsSchema(structuredClone(value) as never)
   if (settings.consult.length === 0) {
     throw new Error('a2d2: consult must name at least one model route')
