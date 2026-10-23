@@ -41,6 +41,37 @@ Install the tarball by its absolute path. Whether the packed artifact is complet
 
 The rest of this document is the plugin's behavior contract and known limits, kept per component below.
 
+## Installation and development
+
+Requires Node.js 22 or later, pnpm 10.26.2, and a DSH host using the 0.2.0-rc.2 API family. Session creation and handoff additionally require the host's public `sessionController.selectLocalModel` capability. A version string alone does not prove that capability is installed; hosts without it are rejected. The minimum released DSH version providing it has not yet been verified, so end-to-end compatibility with an unmodified public host is a release gate.
+
+The checked upstream [session-controller source at `687f282e`](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/api/session-controller/src/index.ts) does not define `selectLocalModel`. Session initialization compatibility is therefore an unresolved upstream release blocker, not a verified stock-host feature.
+
+Build from source:
+
+```sh
+git clone https://github.com/a2d2-dev/dsh-plugin.git
+cd dsh-plugin
+corepack enable
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm test
+pnpm verify:pack-exports
+pnpm pack --out /absolute/path/to/output
+```
+
+Install the generated tarball in an existing DSH web profile:
+
+```sh
+dsh plugin --profile web add /absolute/path/to/output/dsh-a2d2-0.0.1.tgz
+```
+
+The package and browser bundle are named `dsh-a2d2`; this project does not publish under the `@deepseek-ai` scope. Registry publication and a clean-host end-to-end install are not yet verified. Configure Agent candidates using provider/model routes actually available in your host; the example defaults are not bundled model providers. Optional workflow skills (`ask-matt`, `handoff`) must be installed separately; see `skillsRoot` below. GitHub features also need the `gh` CLI and authentication.
+
+## License
+
+Licensed under the [Apache License, Version 2.0](LICENSE). Third-party dependencies retain their own licenses; see [release requirements](docs/releasing.md).
+
 ## Plugin (namespace: `a2d2`)
 
 The package contributes eight mount rows. `ctx.a2d2` is the task store and declares no service, so it loads in any profile; the command row declares `commands` and `a2d2`, so only a profile that composes both gets `/handoff`; the base tools row declares `tools` and `a2d2`, so only a profile that composes both gets `bind_main_session` and `dispatch_subagent`; the open-subtask tools row additionally declares `agents` and `llm`, because `open_subtask` creates a root session and selects the model from the Agent assigned to the `grill` stage; the complete-task tools row declares `agents`, because `complete_task` may resume a parent task's main session before sending the notification; the CEO prompt row declares `agents`, `systemPrompt`, and `a2d2`, so only a profile that composes live Agents and system prompt assembly gets scoped main-session guidance; the Agent prompt row uses the same services to assemble engineer/reviewer configuration for recorded Agent sessions; the GitHub watch row declares `tools`, `agents`, `sessions`, and `sessionController`, so only a profile that can wake sessions gets `github_watch`. The dispatch tool looks up `subagents` only when it runs, so profiles without the subagent service still load the base tools row and keep `bind_main_session` available. Cordis refuses to load a plugin whose declared services are absent, which is why the rows are split rather than registered conditionally from one row. The floating orb needs no row of its own: it drives that same command through the session it already sits on.

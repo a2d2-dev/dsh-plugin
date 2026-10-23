@@ -41,6 +41,37 @@ dsh plugin --profile web add "$(pwd)/dsh-a2d2-0.0.1.tgz"
 
 本文余下部分是插件的行为契约与已知限制，按各组件分列于下。
 
+## 安装与开发
+
+需要 Node.js 22 或更高版本、pnpm 10.26.2，以及使用 DSH 0.2.0-rc.2 API 系列的宿主。会话创建和交接还要求宿主提供公开的 `sessionController.selectLocalModel` 能力。版本号不能证明该能力存在，缺少它的宿主会被明确拒绝。目前尚未验证哪个公开发布的 DSH 版本首次提供该能力，因此未经修改的公开宿主上的端到端兼容性仍是发布门槛。
+
+已核对的上游 [session-controller 源码 `687f282e`](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/api/session-controller/src/index.ts) 未定义 `selectLocalModel`。会话初始化兼容性因此仍是待解决的上游发布阻塞，不能宣称原生宿主已支持。
+
+从源码构建：
+
+```sh
+git clone https://github.com/a2d2-dev/dsh-plugin.git
+cd dsh-plugin
+corepack enable
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm test
+pnpm verify:pack-exports
+pnpm pack --out /absolute/path/to/output
+```
+
+将生成的 tarball 安装到已有的 DSH web profile：
+
+```sh
+dsh plugin --profile web add /absolute/path/to/output/dsh-a2d2-0.0.1.tgz
+```
+
+包名和浏览器 bundle 名称统一为 `dsh-a2d2`；本项目不在 `@deepseek-ai` scope 下发布。npm registry 发布及干净宿主上的端到端安装尚未验证。Agent 候选应配置为宿主实际可用的 provider/model 路由；示例默认值不代表插件提供这些模型。可选工作流 skill（`ask-matt`、`handoff`）需单独安装，路径见下方 `skillsRoot`。GitHub 功能还需要安装并认证 `gh` CLI。
+
+## 许可证
+
+采用 [Apache License, Version 2.0](LICENSE)。第三方依赖保留各自许可证；参见[发布要求](docs/releasing.md)。
+
 ## 插件（namespace：`a2d2`）
 
 本包贡献八个挂载行。`ctx.a2d2` 是任务存储，不声明任何服务，因此在任何 profile 中都会加载；命令行声明了 `commands` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `/handoff`；基础工具行声明了 `tools` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `bind_main_session` 与 `dispatch_subagent`；开子任务工具行额外声明 `agents` 与 `llm`，因为 `open_subtask` 要创建根会话，并从 `grill` 阶段指定的 Agent 选择模型；完成任务工具行声明 `agents`，因为 `complete_task` 可能需要先恢复父任务主会话再发送通知；CEO 提示段行声明了 `agents`、`systemPrompt` 与 `a2d2`，所以只有同时组合 live Agents 与系统提示词组装的 profile 才得到主会话作用域指导；Agent 提示段行使用同一组服务，为已记录 Agent 的工程师/评审会话装配配置；GitHub 关注行声明了 `tools`、`agents`、`sessions` 与 `sessionController`，所以只有能唤醒会话的 profile 才得到 `github_watch`。`dispatch_subagent` 只在实际运行时查找 `subagents`，因此没有子代理服务的 profile 仍能加载基础工具行，`bind_main_session` 照常可用。Cordis 对"声明了却缺失的服务"是拒绝加载，这正是把它们拆成多行、而不是从一行里条件式注册的原因。悬浮球不需要自己的一行：它通过自己已经身处的那个会话驱动同一条命令。
