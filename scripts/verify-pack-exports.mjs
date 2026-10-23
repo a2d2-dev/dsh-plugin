@@ -1,8 +1,9 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { runInNewContext } from 'node:vm'
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
@@ -57,20 +58,35 @@ try {
     .map(([name, range]) => `${name}@${pkg.devDependencies?.[name] ?? range}`)
   await run('pnpm', ['install', '--ignore-scripts', tarballPath, ...peerInstallSpecs], { cwd: installRoot })
 
+  const installedRoot = join(installRoot, 'node_modules', pkg.name)
+  const installed = JSON.parse(await readFile(join(installedRoot, 'package.json'), 'utf8'))
+  for (const [specifier, target] of Object.entries(installed.exports)) {
+    if (specifier.includes('*')) throw new Error(`Unverified wildcard export: ${specifier}`)
+    for (const path of typeof target === 'string' ? [target] : Object.values(target)) {
+      if (typeof path !== 'string' || !path.startsWith('./')) throw new Error(`Invalid export target: ${specifier}`)
+      await access(join(installedRoot, path))
+    }
+  }
+  if (installed.license !== 'Apache-2.0') throw new Error('Package license must be Apache-2.0')
+  const license = await readFile(join(installedRoot, 'LICENSE'), 'utf8')
+  if (!license.includes('Apache License') || !license.includes('Version 2.0')) throw new Error('Missing Apache license text')
+
+  // The client is a host-loader script, not a Node module. Check the shipped
+  // wrapper registers the expected factory without executing browser UI code.
+  let registered
+  runInNewContext(await readFile(join(installedRoot, 'lib/client.js'), 'utf8'), {
+    window: { __ModuleLoader__: { load: entry => { registered = entry } } },
+  })
+  if (registered?.id !== pkg.name || typeof registered.factory !== 'function') {
+    throw new Error('Client bundle must register a factory under the package name')
+  }
+
   const importLines = exportedNodeEntrypoints(pkg.exports)
     .map(specifier => `await import(${JSON.stringify(specifier)});`)
     .join('\n')
 
   await writeFile(join(installRoot, 'verify.mjs'), `${importLines}\n`)
-  await run(process.execPath, ['verify.mjs'], {
-    cwd: installRoot,
-    env: {
-      NODE_PATH: [
-        join(installRoot, 'node_modules'),
-        join(root, 'node_modules'),
-      ].join(':'),
-    },
-  })
+  await run(process.execPath, ['verify.mjs'], { cwd: installRoot })
   console.log(`verified ${exportedNodeEntrypoints(pkg.exports).join(', ')}`)
 }
 finally {

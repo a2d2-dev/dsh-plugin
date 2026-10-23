@@ -15,9 +15,38 @@
 - **GitHub 关注**——`github_watch` 让会话不用轮询就能等一个 PR：PR 合并、关闭、CI 出结果或有了 review 结论时，会话会收到一条消息，空闲中的会话也会被唤醒。
 - **通知**——任务 issue 的主会话停下来等 LF 时，经已装的 `notifier` 提供者往 LF 手机推一条带 A²D² 语义的消息。
 
-> `A²D²` 是品牌与展示写法；`a2d2` 是技术标识——包名、目录、服务名都用它，因为 `²` 不能进 npm 包名。包名为 `@deepseek-ai/dsh-a2d2`。
+> `A²D²` 是品牌与展示写法；`a2d2` 是技术标识——包名、目录、服务名都用它，因为 `²` 不能进 npm 包名。包名为 `dsh-a2d2`。
 
 本文余下部分是插件的行为契约与已知限制，按各组件分列于下。
+
+## 安装与开发
+
+需要 Node.js 22 或更高版本、pnpm 10.26.2，以及使用 DSH 0.2.0-rc.2 API 系列的宿主。会话创建和交接还要求宿主提供公开的 `sessionController.selectLocalModel` 能力。版本号不能证明该能力存在，缺少它的宿主会被明确拒绝。目前尚未验证哪个公开发布的 DSH 版本首次提供该能力，因此未经修改的公开宿主上的端到端兼容性仍是发布门槛。
+
+从源码构建：
+
+```sh
+git clone https://github.com/a2d2-dev/dsh-plugin.git
+cd dsh-plugin
+corepack enable
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm test
+pnpm verify:pack-exports
+pnpm pack --out /absolute/path/to/output
+```
+
+将生成的 tarball 安装到已有的 DSH web profile：
+
+```sh
+dsh plugin --profile web add /absolute/path/to/output/dsh-a2d2-0.0.1.tgz
+```
+
+包名和浏览器 bundle 名称统一为 `dsh-a2d2`；本项目不在 `@deepseek-ai` scope 下发布。npm registry 发布及干净宿主上的端到端安装尚未验证。Agent 候选应配置为宿主实际可用的 provider/model 路由；示例默认值不代表插件提供这些模型。可选工作流 skill（`ask-matt`、`handoff`）需单独安装，路径见下方 `skillsRoot`。GitHub 功能还需要安装并认证 `gh` CLI。
+
+## 许可证
+
+采用 [Apache License, Version 2.0](LICENSE)。第三方依赖保留各自许可证；参见[发布要求](docs/releasing.md)。
 
 ## 插件（namespace：`a2d2`）
 
@@ -27,21 +56,21 @@
 
 ```yaml
 - id: a2d2
-  name: '@deepseek-ai/dsh-a2d2'
+  name: 'dsh-a2d2'
 - id: a2d2-command
-  name: '@deepseek-ai/dsh-a2d2/command'
+  name: 'dsh-a2d2/command'
 - id: a2d2-tools
-  name: '@deepseek-ai/dsh-a2d2/tools'
+  name: 'dsh-a2d2/tools'
 - id: a2d2-open-subtask-tools
-  name: '@deepseek-ai/dsh-a2d2/open-subtask-tools'
+  name: 'dsh-a2d2/open-subtask-tools'
 - id: a2d2-complete-task-tools
-  name: '@deepseek-ai/dsh-a2d2/complete-task-tools'
+  name: 'dsh-a2d2/complete-task-tools'
 - id: a2d2-ceo-prompt
-  name: '@deepseek-ai/dsh-a2d2/ceo-prompt'
+  name: 'dsh-a2d2/ceo-prompt'
 - id: a2d2-agent-prompt
-  name: '@deepseek-ai/dsh-a2d2/agent-prompt'
+  name: 'dsh-a2d2/agent-prompt'
 - id: a2d2-github-watch
-  name: '@deepseek-ai/dsh-a2d2/github-watch'
+  name: 'dsh-a2d2/github-watch'
 ```
 
 | 键 | 默认值 | 约定 |

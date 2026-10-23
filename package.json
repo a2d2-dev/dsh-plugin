@@ -42,7 +42,6 @@
       "types": "./lib/types/invariant.d.ts",
       "default": "./lib/invariant.js"
     },
-    "./src/*": "./src/*",
     "./package.json": "./package.json",
     "./client": {
       "types": "./lib/types/client/index.d.ts",
@@ -72,7 +71,8 @@
     "README.md",
     "README.zh.md",
     "lib/client.js",
-    "lib/client.js.map"
+    "lib/client.js.map",
+    "LICENSE"
   ],
   "scripts": {
     "build": "node -e \"require('node:fs').rmSync('lib',{recursive:true,force:true})\" && tsc -p tsconfig.build.json && tsc -p tsconfig.build.client.json && tsdown",
@@ -81,9 +81,9 @@
     "verify:pack-exports": "pnpm build && node scripts/verify-pack-exports.mjs",
     "prepublishOnly": "pnpm build"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
@@ -133,5 +133,14 @@
     "typescript": "^5.6.0",
     "vitest": "^4.1.8",
     "zod": "^4.6.5"
-  }
+  },
+  "packageManager": "pnpm@10.26.2",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/a2d2-dev/dsh-plugin.git"
+  },
+  "bugs": {
+    "url": "https://github.com/a2d2-dev/dsh-plugin/issues"
+  },
+  "homepage": "https://github.com/a2d2-dev/dsh-plugin#readme"
 }

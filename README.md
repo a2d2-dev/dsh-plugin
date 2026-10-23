@@ -15,9 +15,38 @@ What the plugin gives DSH today:
 - **GitHub watch** — `github_watch` lets a session wait on a pull request without polling: when the PR merges, closes, finishes CI, or gets a review decision, the session receives a message, even if it was idle.
 - **Notifications** — when a task issue's main session stops for LF, one A²D²-worded message reaches LF's phone through an installed `notifier` provider.
 
-> `A²D²` is the brand and display form; `a2d2` is the technical identifier — package name, directories, and service names all use it, because `²` cannot appear in an npm package name. The package is `@deepseek-ai/dsh-a2d2`.
+> `A²D²` is the brand and display form; `a2d2` is the technical identifier — package name, directories, and service names all use it, because `²` cannot appear in an npm package name. The package is `dsh-a2d2`.
 
 The rest of this document is the plugin's behavior contract and known limits, kept per component below.
+
+## Installation and development
+
+Requires Node.js 22 or later, pnpm 10.26.2, and a DSH host using the 0.2.0-rc.2 API family. Session creation and handoff additionally require the host's public `sessionController.selectLocalModel` capability. A version string alone does not prove that capability is installed; hosts without it are rejected. The minimum released DSH version providing it has not yet been verified, so end-to-end compatibility with an unmodified public host is a release gate.
+
+Build from source:
+
+```sh
+git clone https://github.com/a2d2-dev/dsh-plugin.git
+cd dsh-plugin
+corepack enable
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm test
+pnpm verify:pack-exports
+pnpm pack --out /absolute/path/to/output
+```
+
+Install the generated tarball in an existing DSH web profile:
+
+```sh
+dsh plugin --profile web add /absolute/path/to/output/dsh-a2d2-0.0.1.tgz
+```
+
+The package and browser bundle are named `dsh-a2d2`; this project does not publish under the `@deepseek-ai` scope. Registry publication and a clean-host end-to-end install are not yet verified. Configure Agent candidates using provider/model routes actually available in your host; the example defaults are not bundled model providers. Optional workflow skills (`ask-matt`, `handoff`) must be installed separately; see `skillsRoot` below. GitHub features also need the `gh` CLI and authentication.
+
+## License
+
+Licensed under the [Apache License, Version 2.0](LICENSE). Third-party dependencies retain their own licenses; see [release requirements](docs/releasing.md).
 
 ## Plugin (namespace: `a2d2`)
 
@@ -27,21 +56,21 @@ Before publishing, run `pnpm verify:pack-exports`. It builds the package, packs 
 
 ```yaml
 - id: a2d2
-  name: '@deepseek-ai/dsh-a2d2'
+  name: 'dsh-a2d2'
 - id: a2d2-command
-  name: '@deepseek-ai/dsh-a2d2/command'
+  name: 'dsh-a2d2/command'
 - id: a2d2-tools
-  name: '@deepseek-ai/dsh-a2d2/tools'
+  name: 'dsh-a2d2/tools'
 - id: a2d2-open-subtask-tools
-  name: '@deepseek-ai/dsh-a2d2/open-subtask-tools'
+  name: 'dsh-a2d2/open-subtask-tools'
 - id: a2d2-complete-task-tools
-  name: '@deepseek-ai/dsh-a2d2/complete-task-tools'
+  name: 'dsh-a2d2/complete-task-tools'
 - id: a2d2-ceo-prompt
-  name: '@deepseek-ai/dsh-a2d2/ceo-prompt'
+  name: 'dsh-a2d2/ceo-prompt'
 - id: a2d2-agent-prompt
-  name: '@deepseek-ai/dsh-a2d2/agent-prompt'
+  name: 'dsh-a2d2/agent-prompt'
 - id: a2d2-github-watch
-  name: '@deepseek-ai/dsh-a2d2/github-watch'
+  name: 'dsh-a2d2/github-watch'
 ```
 
 | Key | Default | Contract |
