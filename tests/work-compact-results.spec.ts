@@ -179,6 +179,65 @@ it('flags missing imported criteria, accepts native scope compactly and denies f
   expect((await h.invoke('work_read', { section: 'specification', expected_version: result.value.taskVersion }, crypto.randomUUID(), foreignAgent)).value.error.code).toBe('forbidden')
 })
 
+it('bounds lost-job reminders while preserving accepted completion and complete explicit details', async () => {
+  const h = await setup()
+  for (let index = 0; index < 200; index++) {
+    Reflect.apply(h.agent.session.append, h.agent.session, ['jobs/settled', { job: { id: `lost-job-${index}`, owner: h.agent.id, kind: 'bash', label: 'Historical verification '.repeat(20), status: 'completed' }, registryEpoch: 'previous-process', instanceId: `old-instance-${index}`, terminalResult: 'pending' }])
+  }
+  const facts = await h.host.execution.observation!(h.execution)
+  expect(facts.settlement).toBe('settled')
+  expect(facts.reminders).toHaveLength(200)
+  const report = { specificationVersion: 1, stage: 'done', summary: 'Accepted with unreachable historical jobs', next: '', blockers: [], criteria: [0, 1].map(index => ({ index, passed: true, evidence: ['Verified result'] })) }
+  const result = await h.invoke('work_report', { report })
+  expect(result.value).toMatchObject({ status: 'completed', saved: true, stage: 'done', reminderCount: 200, remindersTruncated: true, details: { tool: 'work_read', section: 'result' } })
+  expect(Buffer.byteLength(result.text)).toBeLessThanOrEqual(2048)
+  expect((await h.detail()).task!.completion).toBeDefined()
+  const args = { section: 'result', detail_id: result.value.details.detail_id, expected_version: result.value.taskVersion }
+  let content = '', cursor = 0, revision: string | undefined
+  for (let page = 0; page < 200; page++) {
+    const detail = await h.invoke('work_read', { ...args, cursor, ...(revision ? { revision } : {}) })
+    expect(detail.value.status).toBe('completed')
+    expect(Buffer.byteLength(detail.text)).toBeLessThanOrEqual(16384)
+    content += detail.value.content
+    if (detail.value.complete) break
+    cursor = detail.value.nextCursor
+    revision = detail.value.revision
+  }
+  expect(JSON.parse(content).reminders).toEqual(facts.reminders)
+  console.log(JSON.stringify({ fixture: 'lost-job-reminders', count: facts.reminders!.length, beforeBytes: Buffer.byteLength(JSON.stringify(facts.reminders)), afterBytes: Buffer.byteLength(result.text) }))
+}, 30_000)
+
+it('bounds aggregate completion errors and preserves their full actionable diagnostics', async () => {
+  const h = await setup()
+  for (let index = 0; index < 40; index++) {
+    const child = await fixtures.run(() => h.ctx.sessionController.create({ workspaceId: h.workspace.id, agentPreset: 'contract' }))
+    Reflect.apply(h.agent.session.append, h.agent.session, ['subagent/catalog', { version: 1, childId: child.sessionId, childCreatedAt: 1, mode: 'continuable', label: `Unsettled requirement ${index}` }])
+  }
+  const report = { specificationVersion: 1, stage: 'done' as const, summary: 'Attempt acceptance', next: '', blockers: [], criteria: [0, 1].map(index => ({ index, passed: true, evidence: ['Verified result'] })) }
+  const raw = await h.app.sessionReport(h.execution.session, 'raw-blocker-error', report)
+  expect(raw.status).toBe('failed')
+  if (raw.status === 'completed') throw Error('Expected completion gate failure')
+  expect(Buffer.byteLength(JSON.stringify(raw))).toBeGreaterThan(2048)
+  const result = await h.invoke('work_report', { report })
+  expect(result.value).toMatchObject({ status: 'failed', error: { code: 'completion-results-unsettled', messageTruncated: true, originalBytes: Buffer.byteLength(raw.error.message) }, details: { tool: 'work_read', section: 'result' } })
+  expect(result.value.error.message).toContain('完成前须收取并核验必要执行结果')
+  expect(Buffer.byteLength(result.text)).toBeLessThanOrEqual(2048)
+  expect((await h.detail()).task!.completion).toBeUndefined()
+  const status = await h.invoke('work_control', { action: 'status' })
+  let cursor = 0, content = '', revision: string | undefined
+  for (let page = 0; page < 100; page++) {
+    const detail = await h.invoke('work_read', { section: 'result', detail_id: result.value.details.detail_id, expected_version: status.value.taskVersion, cursor, ...(revision ? { revision } : {}) })
+    expect(detail.value.status).toBe('completed')
+    expect(Buffer.byteLength(detail.text)).toBeLessThanOrEqual(16384)
+    content += detail.value.content
+    if (detail.value.complete) break
+    cursor = detail.value.nextCursor
+    revision = detail.value.revision
+  }
+  expect(JSON.parse(content).error).toEqual(raw.error)
+  console.log(JSON.stringify({ fixture: 'aggregate-blockers', beforeBytes: Buffer.byteLength(JSON.stringify(raw)), afterBytes: Buffer.byteLength(result.text) }))
+}, 30_000)
+
 it('saves progress without echoing the submitted report or historical Task and preserves errors', async () => {
   const h = await setup()
   const report = { specificationVersion: 1, stage: 'in-progress', summary: 'PRIVATE REPORT ' + '正文'.repeat(2000), next: 'Next action', blockers: [], criteria: [] }
