@@ -166,7 +166,7 @@ function ProjectViews({controller,source}:{controller:WorkPanelController;source
   </section>
 }
 type ProjectFieldDefinition = { id: string; name: string; dataType: string; options?: { id: string; name: string; color: string }[] }
-const columnWeights: Record<string, number> = { ASSIGNEES: 16, STATUS: 8, LABELS: 11, LINKED_PULL_REQUESTS: 8, PARENT_ISSUE: 11, SUB_ISSUES_PROGRESS: 15, REPOSITORY: 11, MILESTONE: 9, REVIEWERS: 9, CREATED: 7, UPDATED: 7, CLOSED: 7 }
+const columnWeights: Record<string, number> = { ASSIGNEES: 16, STATUS: 8, LABELS: 11, LINKED_PULL_REQUESTS: 8, PARENT_ISSUE: 11, SUB_ISSUES_PROGRESS: 15, REPOSITORY: 11, MILESTONE: 13, REVIEWERS: 9, CREATED: 7, UPDATED: 7, CLOSED: 7 }
 const columnWeight = (dataType: string) => columnWeights[dataType] ?? 10
 const chipClasses: Record<string,string> = { GRAY: styles.chipGray, BLUE: styles.chipBlue, GREEN: styles.chipGreen, YELLOW: styles.chipYellow, ORANGE: styles.chipOrange, RED: styles.chipRed, PINK: styles.chipPink, PURPLE: styles.chipPurple }
 const avatarPalette = ['#1f6feb','#8250df','#1a7f37','#bc4c00','#cf222e','#0969da','#bf3989','#57606a']
