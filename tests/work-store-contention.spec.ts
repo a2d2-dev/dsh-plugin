@@ -193,14 +193,14 @@ it.each(['bad-json', 'bad-schema', 'lock-timeout', 'EACCES'] as const)('reports 
   } finally { await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())) }
 })
 
-it('polls discovery every thirty seconds by default instead of rewriting pressure every five seconds', async () => {
+it('polls discovery every five minutes by default instead of rewriting pressure every five seconds', async () => {
   vi.useFakeTimers()
   const reconcile = vi.fn(async () => {})
   const stop = startProjectDiscovery({ reconcile })
   try {
     await vi.advanceTimersByTimeAsync(0)
     expect(reconcile).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(29_999)
+    await vi.advanceTimersByTimeAsync(299_999)
     expect(reconcile).toHaveBeenCalledTimes(1)
     await vi.advanceTimersByTimeAsync(1)
     expect(reconcile).toHaveBeenCalledTimes(2)

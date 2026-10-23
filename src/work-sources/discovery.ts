@@ -24,7 +24,7 @@ function merge<T>(previous: T[], values: T[], key: (value: T) => string): T[] {
 }
 /** Deterministic observation only: never imports Tasks, sends prompts, or claims execution. */
 export async function reconcileProjectSources(transaction: SourceTransaction, port: GitHubSourcePort | undefined, options: DiscoveryOptions = {}): Promise<void> {
-  const now = options.now ?? Date.now, maxPages = options.maxPagesPerSource ?? 2, maxSources = options.maxSources ?? 10, perPage = options.perPage ?? 50, interval = options.intervalMs ?? 60_000
+  const now = options.now ?? Date.now, maxPages = options.maxPagesPerSource ?? 2, maxSources = options.maxSources ?? 10, perPage = options.perPage ?? 50, interval = options.intervalMs ?? 300_000
   for (const value of [maxPages, maxSources, perPage, interval]) if (!Number.isSafeInteger(value) || value < 1) throw new Error('Discovery limits must be positive integers')
   if (maxPages > 20 || maxSources > 100 || perPage > 100) throw new Error('Discovery read limits are too large')
   const sources = await transaction(async state => state.sources.filter(source => source.enabled && source.githubProject
@@ -122,7 +122,7 @@ export async function reconcileProjectSources(transaction: SourceTransaction, po
 
 /** Lifecycle owns the timer and joins its current read; browser presence is irrelevant. */
 export function startProjectDiscovery(options: { reconcile: () => Promise<void>; pollMs?: number; onError?: (error: unknown) => void }): () => Promise<void> {
-  const pollMs = options.pollMs ?? 30_000
+  const pollMs = options.pollMs ?? 300_000
   if (!Number.isSafeInteger(pollMs) || pollMs < 1) throw new Error('Discovery poll interval must be a positive integer')
   let closed = false, running: Promise<void> | undefined
   const tick = () => {
