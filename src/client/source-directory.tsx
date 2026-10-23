@@ -99,7 +99,10 @@ function ProjectViews({controller,source}:{controller:WorkPanelController;source
   const entryView=Number(/\/views\/(\d+)/.exec(url?.pathname??'')?.[1])||null
   const viewNumber=state.viewNumber??entryView??catalog.views[0]?.number??null
   const view=catalog.views.find(view=>view.number===viewNumber)
-  const slice=state.viewNumber===null&&!!url&&[...url.searchParams.keys()].some(key=>/slice/i.test(key))
+  // A slice is a GitHub view UI state (sliceBy[...]) with no matching API
+  // field here, so it is shown as read-only context instead of applied.
+  const entrySlice=state.viewNumber===null&&url?[...url.searchParams.entries()].filter(([key])=>/slice/i.test(key)):[]
+  const sliceLabel=entrySlice.length?entrySlice.map(([key,value])=>`${key}=${value}`).join('&'):''
   // The saved entry may carry an ad-hoc filterQuery for its view (GitHub keeps
   // it in the URL, not in the view record). Rebuilding must not drop it when
   // that same view is selected.
@@ -133,7 +136,8 @@ function ProjectViews({controller,source}:{controller:WorkPanelController;source
       <label className={styles.projectToggle}><input type="checkbox" checked={extraColumns} onChange={event=>setExtraColumns(event.target.checked)}/> 时间与仓库列</label>
       {entry&&<span className={styles.projectLink}><TrustedLink url={entry}>原始视图</TrustedLink></span>}
     </div>
-    {slice?<p role="alert">已保留原始切片入口；当前未支持此 slice 参数，无法准确呈现该切片，请在 GitHub 查看。</p>:!view?<p role="alert">保存的 view 不在当前可读取目录中，请选择真实视图。</p>:!snapshot?<p role="status">完整 Project 成员扫描尚未完成，请刷新继续；没有用全列表冒充视图。</p>:filtered&&!filtered.supported?<p role="alert">{filtered.reason}</p>:<>
+    {sliceLabel&&<p role="status" className={styles.sliceNote}>该视图带 slice 参数：<code>{sliceLabel}</code> · 仅展示视图过滤后的条目，未按切片再分组。</p>}
+    {!view?<p role="alert">保存的 view 不在当前可读取目录中，请选择真实视图。</p>:!snapshot?<p role="status">完整 Project 成员扫描尚未完成，请刷新继续；没有用全列表冒充视图。</p>:filtered&&!filtered.supported?<p role="alert">{filtered.reason}</p>:<>
       {rows.length?<div className={styles.tableScroll}><table className={styles.projectTable} aria-label="真实 Project 条目"><colgroup><col style={{width:'25%'}}/>{slots.map(slot=>slot===SESSION_SLOT?<col key={SESSION_SLOT} style={{width:'15%'}}/>:<col key={slot.id} style={{width:fieldWidth(slot)}}/>)}</colgroup><thead><tr><th>条目</th>{slots.map(slot=>slot===SESSION_SLOT?<th key={SESSION_SLOT}>会话</th>:<th key={slot.id}>{slot.name}</th>)}</tr></thead><tbody>{rows.map(row=><tr key={row.item.id}>
         <td className={styles.titleCell}><div className={styles.hierarchy} style={{paddingLeft:row.depth*22}}>
           {row.item.issueNodeId&&parents.has(row.item.issueNodeId)?<button className={styles.chevron} aria-label={collapsed.has(row.item.issueNodeId)?'展开子项':'收起子项'} aria-expanded={!collapsed.has(row.item.issueNodeId)} onClick={()=>toggle(row.item.issueNodeId!)}>{collapsed.has(row.item.issueNodeId)?'▸':'▾'}</button>:<span className={styles.chevronSpacer}/>}
