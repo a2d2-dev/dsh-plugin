@@ -90,6 +90,8 @@ export class WorkApplication {
   private mutationDepth = 0
   /** Sidecars already read, keyed by the file identity they were parsed from. */
   private readonly bulkCache = new Map<string, { key: string; bulk: SourceBulk }>()
+  /** User-triggered source reads currently running; the scheduled pass yields to them. */
+  private refreshCount = 0
   /** Sources whose bulk still lives in the control file and must move to a sidecar on the next write. */
   private inlineSources = new Set<string>()
   constructor(readonly directory: string, readonly host: WorkHost, readonly source?: GitHubSourcePort, readonly planner?: WorkPlanner) {
@@ -381,7 +383,11 @@ export class WorkApplication {
     return this.execute({ type: 'task.organize', commandId, ref: execution.ref, executionId: execution.id, owner: execution.owner, epoch: expectedEpoch ?? execution.epoch, organization }, { operator: false, session, agentId: execution.agentId })
   }
   async reconcileSources(): Promise<void> {
-    if (this.source) await reconcileProjectSources(apply => this.sourceTransaction(apply), this.source)
+    // One scan per source at a time: a user refresh in flight owns the pass.
+    if (this.refreshCount > 0) return
+    // A large Project needs a meaningful slice per scheduled pass; the two-page
+    // default would never finish before the next five-minute tick.
+    if (this.source) await reconcileProjectSources(apply => this.sourceTransaction(apply), this.source, { maxPagesPerSource: 20 })
     const snapshot = await this.load()
     const repositories = snapshot.sources.filter(source => source.enabled && source.repository && snapshot.continuousRules?.some(rule => rule.sourceId === source.id && rule.enabled && rule.planning))
     if (repositories.length) {
@@ -1412,7 +1418,11 @@ export class WorkApplication {
       const local = await this.query({ ...query, refresh: false }, actor)
       return { ...result, ...(local.status === 'completed' ? { progressItems: local.progressItems } : {}) }
     }
-    if ((query.type === 'source.issues' || query.type === 'source.issue') && query.refresh) return refreshSource(apply => this.sourceTransaction(apply), query, this.source)
+    if ((query.type === 'source.issues' || query.type === 'source.issue') && query.refresh) {
+      this.refreshCount++
+      try { return await refreshSource(apply => this.sourceTransaction(apply), query, this.source) }
+      finally { this.refreshCount-- }
+    }
     const state = await this.load()
     if (query.type === 'source.catalog') {
       const source = state.sources.find(source => source.id === query.sourceId && source.projectId === query.projectId)
