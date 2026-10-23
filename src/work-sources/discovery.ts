@@ -26,7 +26,7 @@ function merge<T>(previous: T[], values: T[], key: (value: T) => string): T[] {
 export async function reconcileProjectSources(transaction: SourceTransaction, port: GitHubSourcePort | undefined, options: DiscoveryOptions = {}): Promise<void> {
   const now = options.now ?? Date.now, maxPages = options.maxPagesPerSource ?? 2, maxSources = options.maxSources ?? 10, perPage = options.perPage ?? 50, interval = options.intervalMs ?? 300_000
   for (const value of [maxPages, maxSources, perPage, interval]) if (!Number.isSafeInteger(value) || value < 1) throw new Error('Discovery limits must be positive integers')
-  if (maxPages > 20 || maxSources > 100 || perPage > 100) throw new Error('Discovery read limits are too large')
+  if (maxPages > 200 || maxSources > 100 || perPage > 100) throw new Error('Discovery read limits are too large')
   const sources = await transaction(async state => state.sources.filter(source => source.enabled && source.githubProject
     && (!options.sourceId || source.id === options.sourceId) && (!options.projectId || source.projectId === options.projectId)
     && (options.force || due(source.discovery?.nextAttemptAt) <= now()) && due(source.lastError?.retryAt) <= now())

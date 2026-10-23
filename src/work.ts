@@ -397,9 +397,9 @@ export class WorkApplication {
   async reconcileSources(): Promise<void> {
     // One scan per source at a time: a user refresh in flight owns the pass.
     if (this.refreshCount > 0) return
-    // A large Project needs a meaningful slice per scheduled pass; the two-page
-    // default would never finish before the next five-minute tick.
-    if (this.source) await reconcileProjectSources(apply => this.sourceTransaction(apply), this.source, { maxPagesPerSource: 20 })
+    // The scheduled pull is a full refresh: one tick drains the Project so a
+    // five-minute cadence never leaves a half-scanned view behind.
+    if (this.source) await reconcileProjectSources(apply => this.sourceTransaction(apply), this.source, { maxPagesPerSource: 200 })
     const snapshot = await this.load()
     const repositories = snapshot.sources.filter(source => source.enabled && source.repository && snapshot.continuousRules?.some(rule => rule.sourceId === source.id && rule.enabled && rule.planning))
     if (repositories.length) {
