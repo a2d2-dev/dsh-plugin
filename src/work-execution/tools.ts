@@ -14,7 +14,11 @@ export function installWorkControlRecovery(ctx: Context, app: WorkApplication): 
     // agent/status is emitted after the real loop changes to idle. The recovery
     // read yields out of the event callback; it never waits on its emitting turn.
     const off = ctx.on('agent/status', ({ status }) => { if (status === 'idle') tick() })
-    const timer = setInterval(tick, 250)
+    // This fallback reconciles the whole work snapshot; with a Project of
+    // thousands of items a 250ms cadence re-parsed megabytes several times a
+    // second and starved the server event loop. The idle event above is the
+    // responsive path, so the timer only needs to be a slow safety net.
+    const timer = setInterval(tick, 2_000)
     timer.unref()
     tick()
     return async () => { closed = true; clearInterval(timer); off(); await running }
