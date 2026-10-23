@@ -5,11 +5,11 @@ import { PlanningError, planningBasis, planningBasisFingerprint, validatePlan, s
 import type { WorkPlanner } from './work-planning.ts'
 import { issueSchema } from './work-sources/schema.ts'
 import { SourceError } from './work-sources/errors.ts'
-import type { SourceCandidate } from './work-sources/types.ts'
+import type { SourceCandidate, WorkSource } from './work-sources/types.ts'
 import { synchronizeClose } from './work-completion/recovery.ts'
 import { isTaskCompleted, queueParentResults } from './work-completion/index.ts'
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdir, readFile } from 'node:fs/promises'
+import { mkdir, readFile, stat } from 'node:fs/promises'
 import { isAbsolute, join, normalize } from 'node:path'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { commandSchema, querySchema, snapshotSchema } from './work-schema.ts'
@@ -76,9 +76,17 @@ async function withWorkFileLock<T>(file: string, apply: () => Promise<T>): Promi
 }
 
 /** Public local work commands and queries. One v3 snapshot is the only writer authority. */
+/** The source tab list needs identity, never the observation payload a thousands-item Project carries. */
+function slimSource(source: WorkSource): WorkSource {
+  return { ...source, observations: [], pages: [], ...(source.projectSnapshot ? { projectSnapshot: { ...source.projectSnapshot, items: [] } } : {}) }
+}
 export class WorkApplication {
   private readonly file: string
   private readonly discoverySchedule = new Map<string, { version: number; persisted: string; next: string }>()
+  /** Parsed snapshot reused across the read-heavy pollers; every writer invalidates it. */
+  private snapshotCache?: { key: string; state: WorkSnapshot }
+  /** Mutation blocks stop cache reuse: they edit the state they read. */
+  private mutationDepth = 0
   constructor(readonly directory: string, readonly host: WorkHost, readonly source?: GitHubSourcePort, readonly planner?: WorkPlanner) {
     if (!isAbsolute(directory)) throw new Error('Work record directory must be absolute')
     this.file = join(directory, 'work-v3.json')
@@ -113,6 +121,8 @@ export class WorkApplication {
       const execution = state.executions.find(item => item.session.sessionId === sessionId)
       if (mayAdvance(execution) || messages.length === 0) return mayAdvance(execution)
       return withWorkFileLock(this.file, async () => {
+        this.mutationDepth++
+        try {
         const current = await this.load()
         const owner = current.executions.find(item => item.session.sessionId === sessionId)
         if (current.executions.some(item => item.retired?.some(old => old.session.sessionId === sessionId))) return false
@@ -127,6 +137,7 @@ export class WorkApplication {
         }
         await writeFileAtomic(this.file, `${JSON.stringify(current)}\n`, { mode: 0o600, dirMode: 0o700 })
         return false
+        } finally { this.mutationDepth--; this.snapshotCache = undefined }
       })
     })
   }
@@ -169,14 +180,28 @@ export class WorkApplication {
   }
   private async load(): Promise<WorkSnapshot> {
     try {
-      const state = snapshotSchema.parse(JSON.parse(await readFile(this.file, 'utf8')))
-      for (const source of state.sources) {
+      // A large Project turns a thousands-item snapshot into megabytes; the
+      // panel polls several reads a second, so reuse the parsed state until a
+      // write replaces the file (the atomic rename changes inode, size or mtime).
+      const info = await stat(this.file)
+      const key = `${info.ino}:${info.size}:${info.mtimeMs}`
+      const cacheable = this.mutationDepth === 0
+      if (!cacheable) this.snapshotCache = undefined
+      else if (this.snapshotCache?.key !== key) this.snapshotCache = { key, state: snapshotSchema.parse(JSON.parse(await readFile(this.file, 'utf8'))) }
+      const state = cacheable ? this.snapshotCache!.state : snapshotSchema.parse(JSON.parse(await readFile(this.file, 'utf8')))
+      // The scheduling overlay is in-memory only; never mutate the cached copy,
+      // or a second load would compare against the overlaid value and drop it.
+      let sources = state.sources
+      for (let index = 0; index < sources.length; index++) {
+        const source = sources[index]!
         const schedule = this.discoverySchedule.get(source.id)
         if (!schedule) continue
-        if (source.version === schedule.version && source.discovery?.nextAttemptAt === schedule.persisted) source.discovery.nextAttemptAt = schedule.next
-        else this.discoverySchedule.delete(source.id)
+        if (source.version === schedule.version && source.discovery?.nextAttemptAt === schedule.persisted) {
+          if (sources === state.sources) sources = [...state.sources]
+          sources[index] = { ...source, discovery: { ...source.discovery, nextAttemptAt: schedule.next } }
+        } else this.discoverySchedule.delete(source.id)
       }
-      return state
+      return sources === state.sources ? state : { ...state, sources }
     }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { schemaVersion: 3, projects: [], agents: [], tasks: [], commands: [], legacyMappings: [], sources: [], externalBindings: [], externalIndex: {}, executions: [] }
@@ -186,6 +211,8 @@ export class WorkApplication {
   private async sourceTransaction<T>(apply: (state: WorkSnapshot) => Promise<T>): Promise<T> {
     await mkdir(this.directory, { recursive: true, mode: 0o700 })
     return withWorkFileLock(this.file, async () => {
+      this.mutationDepth++
+      try {
       const state = await this.load()
       // Only nextAttemptAt may remain ephemeral; checkpoints and reader leases
       // still commit atomically with source observations for restart recovery.
@@ -199,6 +226,7 @@ export class WorkApplication {
       if (comparable(state) !== before) {
         await writeFileAtomic(this.file, `${JSON.stringify(state)}\n`, { mode: 0o600, dirMode: 0o700 })
         this.discoverySchedule.clear()
+        this.snapshotCache = undefined
       } else {
         for (const source of state.sources) {
           const persisted = schedules.get(source.id)
@@ -208,6 +236,7 @@ export class WorkApplication {
         }
       }
       return result
+      } finally { this.mutationDepth--; this.snapshotCache = undefined }
     })
   }
   /** Trusted ToolRunContext adapter supplies only its real Session and call identity. */
@@ -647,6 +676,8 @@ export class WorkApplication {
     }
     await mkdir(this.directory, { recursive: true, mode: 0o700 })
     const receipt = await withWorkFileLock<WorkResult>(this.file, async () => {
+      this.mutationDepth++
+      try {
       const state = await this.load()
       if (!actor.operator) {
         const execution = 'executionId' in command ? state.executions.find(item => item.id === command.executionId) : undefined
@@ -668,6 +699,7 @@ export class WorkApplication {
       snapshotSchema.parse(state)
       await writeFileAtomic(this.file, `${JSON.stringify(state)}\n`, { mode: 0o600, dirMode: 0o700 })
       return result
+      } finally { this.mutationDepth--; this.snapshotCache = undefined }
     })
     if ((command.type === 'continuous.configure' || command.type === 'continuous.set-enabled') && receipt.status === 'completed') {
       await this.reconcileContinuous()
@@ -922,11 +954,14 @@ export class WorkApplication {
     const lease = join(this.directory, `${id}.execution`)
     return withFileLock<WorkResult>(lease, async () => {
       const save = async (change: (execution: import('./work-types.ts').WorkExecution) => void) => withWorkFileLock(this.file, async () => {
+        this.mutationDepth++
+        try {
         const state = await this.load()
         const execution = state.executions.find(item => item.id === id)!
         change(execution)
         await writeFileAtomic(this.file, `${JSON.stringify(state)}\n`, { mode: 0o600, dirMode: 0o700 })
         return execution
+        } finally { this.mutationDepth--; this.snapshotCache = undefined }
       })
       const state = await this.load()
       let execution = state.executions.find(item => item.id === id)!
@@ -1310,7 +1345,7 @@ export class WorkApplication {
       return source.catalog ? { status: 'completed', source, catalog: source.catalog, progressItems } : { ...failed('source-catalog-unobserved', '目录尚无可读缓存，请刷新来源'), source }
     }
     if (query.type === 'source.list') return state.projects.some(item => item.id === query.projectId)
-      ? { status: 'completed', sources: state.sources.filter(item => item.projectId === query.projectId) } : failed('unknown-project', 'Project does not exist')
+      ? { status: 'completed', sources: state.sources.filter(item => item.projectId === query.projectId).map(slimSource) } : failed('unknown-project', 'Project does not exist')
     if (query.type === 'source.progress') {
       const selected = state.sources.find(item => item.id === query.sourceId && item.projectId === query.projectId)
       if (!selected) return failed('unknown-source', 'Source does not belong to this project')
