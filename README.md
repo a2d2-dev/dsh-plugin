@@ -15,7 +15,29 @@ What the plugin gives DSH today:
 - **GitHub watch** — `github_watch` lets a session wait on a pull request without polling: when the PR merges, closes, finishes CI, or gets a review decision, the session receives a message, even if it was idle.
 - **Notifications** — when a task issue's main session stops for LF, one A²D²-worded message reaches LF's phone through an installed `notifier` provider.
 
-> `A²D²` is the brand and display form; `a2d2` is the technical identifier — package name, directories, and service names all use it, because `²` cannot appear in an npm package name. The package is `@deepseek-ai/dsh-a2d2`.
+> `A²D²` is the brand and display form; `a2d2` is the technical identifier — package name, directories, and service names all use it, because `²` cannot appear in an npm package name. The package is `dsh-a2d2`.
+
+## Install
+
+`lib/` is build output and git-ignored, so a checkout contains no runnable plugin until it is built. `pnpm pack` runs the `prepack` hook (build plus the entrypoint assertion), so packing always produces a complete tarball:
+
+```console
+git clone https://github.com/a2d2-dev/dsh-plugin.git dsh-a2d2
+cd dsh-a2d2
+pnpm install
+pnpm build                       # optional: pnpm pack's prepack builds too
+pnpm pack                        # -> dsh-a2d2-0.0.1.tgz
+dsh plugin --profile web add "$(pwd)/dsh-a2d2-0.0.1.tgz"
+```
+
+Install the tarball by its absolute path. Whether the packed artifact is complete is what `pnpm verify:pack-exports` (below) checks.
+
+> **Warning — install the built tarball, never a source tree.** Installing a local directory (`dsh plugin --profile web add ./dsh-a2d2`) or a git URL (`… add git+https://…`) does **not** run `pnpm build`; the package lands as an empty shell with no `lib/`. All eight A²D² rows then fail to import (`ERR_MODULE_NOT_FOUND …/lib/*.js`), and the profile boots with a single warning and A²D² silently inactive. After changing the source, rebuild the tarball and install that:
+>
+> ```console
+> pnpm build && pnpm pack
+> dsh plugin --profile web add "$(pwd)/dsh-a2d2-0.0.1.tgz"
+> ```
 
 The rest of this document is the plugin's behavior contract and known limits, kept per component below.
 
@@ -23,25 +45,25 @@ The rest of this document is the plugin's behavior contract and known limits, ke
 
 The package contributes eight mount rows. `ctx.a2d2` is the task store and declares no service, so it loads in any profile; the command row declares `commands` and `a2d2`, so only a profile that composes both gets `/handoff`; the base tools row declares `tools` and `a2d2`, so only a profile that composes both gets `bind_main_session` and `dispatch_subagent`; the open-subtask tools row additionally declares `agents` and `llm`, because `open_subtask` creates a root session and selects the model from the Agent assigned to the `grill` stage; the complete-task tools row declares `agents`, because `complete_task` may resume a parent task's main session before sending the notification; the CEO prompt row declares `agents`, `systemPrompt`, and `a2d2`, so only a profile that composes live Agents and system prompt assembly gets scoped main-session guidance; the Agent prompt row uses the same services to assemble engineer/reviewer configuration for recorded Agent sessions; the GitHub watch row declares `tools`, `agents`, `sessions`, and `sessionController`, so only a profile that can wake sessions gets `github_watch`. The dispatch tool looks up `subagents` only when it runs, so profiles without the subagent service still load the base tools row and keep `bind_main_session` available. Cordis refuses to load a plugin whose declared services are absent, which is why the rows are split rather than registered conditionally from one row. The floating orb needs no row of its own: it drives that same command through the session it already sits on.
 
-Before publishing, run `pnpm verify:pack-exports`. It builds the package, packs the tarball, installs that tarball into an empty temporary project, and imports every Node entry declared in `package.json` exports. The check catches missing hashed build chunks such as the shared handoff chunk before a release is cut.
+Before publishing, run `pnpm verify:pack-exports`. It exports only git-tracked files with `git archive HEAD` into a temporary clean tree (asserting `lib/` is absent), then runs `pnpm pack` inside that tree so `prepack` builds from scratch. It asserts the tarball's file list carries every explicit `exports` target — types and the client bundle included — plus `dsh.plugin.json` and `cordis.patch.yml`, then installs that same tarball into an empty temporary project and imports every Node entry declared in `package.json` exports. The check therefore covers the empty-shell tarball (a checkout packed without a build) as well as missing hashed build chunks such as the shared handoff chunk before a release is cut.
 
 ```yaml
 - id: a2d2
-  name: '@deepseek-ai/dsh-a2d2'
+  name: 'dsh-a2d2'
 - id: a2d2-command
-  name: '@deepseek-ai/dsh-a2d2/command'
+  name: 'dsh-a2d2/command'
 - id: a2d2-tools
-  name: '@deepseek-ai/dsh-a2d2/tools'
+  name: 'dsh-a2d2/tools'
 - id: a2d2-open-subtask-tools
-  name: '@deepseek-ai/dsh-a2d2/open-subtask-tools'
+  name: 'dsh-a2d2/open-subtask-tools'
 - id: a2d2-complete-task-tools
-  name: '@deepseek-ai/dsh-a2d2/complete-task-tools'
+  name: 'dsh-a2d2/complete-task-tools'
 - id: a2d2-ceo-prompt
-  name: '@deepseek-ai/dsh-a2d2/ceo-prompt'
+  name: 'dsh-a2d2/ceo-prompt'
 - id: a2d2-agent-prompt
-  name: '@deepseek-ai/dsh-a2d2/agent-prompt'
+  name: 'dsh-a2d2/agent-prompt'
 - id: a2d2-github-watch
-  name: '@deepseek-ai/dsh-a2d2/github-watch'
+  name: 'dsh-a2d2/github-watch'
 ```
 
 | Key | Default | Contract |

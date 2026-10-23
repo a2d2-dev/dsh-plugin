@@ -1,10 +1,13 @@
 # dsh-a2d2 bundle patch: the mount row this plugin contributes to a profile.
 #
-# Installed through the official CLI —
+# Installed through the official CLI, from the built tarball —
 #
-#   dsh plugin --profile web add dsh-a2d2
+#   dsh plugin --profile web add /absolute/path/to/dsh-a2d2-0.0.1.tgz
 #
-# — the command reconciles `dsh.profile.bundles` against installed packages and,
+# `pnpm pack` builds through `prepack`; a source-directory install has no built
+# `lib/`, so every row below would fail to import.
+#
+# The command reconciles `dsh.profile.bundles` against installed packages and,
 # seeing the `dsh.bundle.patch` declaration in package.json, appends `dsh-a2d2`
 # to the bundle stack. The profile boot then merges THIS patch, which inserts
 # the plugin row.
