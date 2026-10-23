@@ -4,7 +4,7 @@
  * Network, composer, and card capabilities are injected so this module stays
  * independent of React and cannot send a session command when a chip is picked.
  *
- * @module @a2d2-dev/dsh-a2d2/client/consult-actions
+ * @module @a2d2/dsh-a2d2/client/consult-actions
  */
 
 import {

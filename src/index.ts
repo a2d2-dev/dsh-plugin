@@ -10,7 +10,7 @@
  * The [A²D² design note](../../../../.agents/notes/implemented/feature/2026-09-20-a2d2-task-aggregation.md)
  * owns why membership and edges are stored here rather than on `SessionHeader`,
  * and why handing off is not a terminal state.
- * @module @a2d2-dev/dsh-a2d2
+ * @module @a2d2/dsh-a2d2
  */
 
 import { randomUUID } from 'node:crypto'

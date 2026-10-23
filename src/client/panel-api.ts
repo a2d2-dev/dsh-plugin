@@ -3,7 +3,7 @@
  *
  * The browser supplies only the session id. Project paths stay host-side.
  *
- * @module @a2d2-dev/dsh-a2d2/client/panel-api
+ * @module @a2d2/dsh-a2d2/client/panel-api
  */
 
 import { PANEL_ROUTE_PATH } from '../panel-types.ts'

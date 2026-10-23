@@ -3,7 +3,7 @@
  * `handoffFrom`), so both the outgoing link and the "this session was handed off"
  * marker are computed here rather than kept as a second copy that could
  * disagree.
- * @module @a2d2-dev/dsh-a2d2/src/derive
+ * @module @a2d2/dsh-a2d2/src/derive
  */
 
 import type { SessionId } from '@deepseek-ai/dsh-session/types'

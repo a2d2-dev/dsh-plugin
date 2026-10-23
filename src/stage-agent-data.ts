@@ -4,7 +4,7 @@
  * Keep schema code out of this module: the browser bundle imports it directly,
  * and the client purity guard rejects host-only validation dependencies.
  *
- * @module @a2d2-dev/dsh-a2d2/src/stage-agent-data
+ * @module @a2d2/dsh-a2d2/src/stage-agent-data
  */
 
 import { CLOSED_HIGHWAY_STATIONS } from './highway.ts'

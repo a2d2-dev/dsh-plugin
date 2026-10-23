@@ -5,7 +5,7 @@
  * provider/model candidates. Standalone skills are intentionally not listed;
  * they use CEO by policy when a caller needs an Agent outside the closed highway.
  *
- * @module @a2d2-dev/dsh-a2d2/src/stage-agents
+ * @module @a2d2/dsh-a2d2/src/stage-agents
  */
 
 import z from '@deepseek-ai/schemastery'

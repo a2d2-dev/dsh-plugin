@@ -6,7 +6,7 @@
  * so it declares `agents` while keeping `bind_main_session` available in smaller
  * profiles.
  *
- * @module @a2d2-dev/dsh-a2d2/src/complete-task-tools
+ * @module @a2d2/dsh-a2d2/src/complete-task-tools
  */
 
 import type { Context } from '@deepseek-ai/cordis'

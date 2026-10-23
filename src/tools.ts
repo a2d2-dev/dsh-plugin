@@ -9,7 +9,7 @@
  * Every tool is a thin shell: it reads the calling session from the execution
  * context and hands its arguments to `ctx.a2d2`, which owns the rules.
  *
- * @module @a2d2-dev/dsh-a2d2/src/tools
+ * @module @a2d2/dsh-a2d2/src/tools
  */
 
 import type { Context } from '@deepseek-ai/cordis'

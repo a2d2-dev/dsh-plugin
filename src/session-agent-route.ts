@@ -4,7 +4,7 @@
  * Browser chips create sessions outside the model tool path, so they call this
  * route immediately after creation to persist the session's A2D2 Agent.
  *
- * @module @a2d2-dev/dsh-a2d2/src/session-agent-route
+ * @module @a2d2/dsh-a2d2/src/session-agent-route
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http'

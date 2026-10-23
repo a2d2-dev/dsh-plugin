@@ -6,7 +6,7 @@
  * and never appends an event. The resulting candidates enter history only if a
  * person later submits one through the ordinary composer.
  *
- * @module @a2d2-dev/dsh-a2d2/src/consult
+ * @module @a2d2/dsh-a2d2/src/consult
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http'

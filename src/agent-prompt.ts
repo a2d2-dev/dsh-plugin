@@ -6,7 +6,7 @@
  * or reviewer, rereading the global and project Agent configuration files on
  * every system prompt assembly.
  *
- * @module @a2d2-dev/dsh-a2d2/src/agent-prompt
+ * @module @a2d2/dsh-a2d2/src/agent-prompt
  */
 
 import { existsSync, readFileSync } from 'node:fs'

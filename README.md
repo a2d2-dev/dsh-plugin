@@ -29,7 +29,7 @@ What the plugin gives DSH today:
 - **GitHub watch** — `github_watch` lets a session wait on a pull request without polling: when the PR merges, closes, finishes CI, or gets a review decision, the session receives a message, even if it was idle.
 - **Notifications** — when a task issue's main session stops for LF, one A²D²-worded message reaches LF's phone through an installed `notifier` provider.
 
-> `A²D²` is the brand and display form; `a2d2` is the technical identifier — package name, directories, and service names all use it, because `²` cannot appear in an npm package name. The package is `@a2d2-dev/dsh-a2d2`.
+> `A²D²` is the brand and display form; `a2d2` is the technical identifier — package name, directories, and service names all use it, because `²` cannot appear in an npm package name. The package is `@a2d2/dsh-a2d2`.
 
 The rest of this document is the plugin's behavior contract and known limits, kept per component below.
 
@@ -41,21 +41,21 @@ Before publishing, run `pnpm verify:pack-exports`. It builds the package, packs 
 
 ```yaml
 - id: a2d2
-  name: '@a2d2-dev/dsh-a2d2'
+  name: '@a2d2/dsh-a2d2'
 - id: a2d2-command
-  name: '@a2d2-dev/dsh-a2d2/command'
+  name: '@a2d2/dsh-a2d2/command'
 - id: a2d2-tools
-  name: '@a2d2-dev/dsh-a2d2/tools'
+  name: '@a2d2/dsh-a2d2/tools'
 - id: a2d2-open-subtask-tools
-  name: '@a2d2-dev/dsh-a2d2/open-subtask-tools'
+  name: '@a2d2/dsh-a2d2/open-subtask-tools'
 - id: a2d2-complete-task-tools
-  name: '@a2d2-dev/dsh-a2d2/complete-task-tools'
+  name: '@a2d2/dsh-a2d2/complete-task-tools'
 - id: a2d2-ceo-prompt
-  name: '@a2d2-dev/dsh-a2d2/ceo-prompt'
+  name: '@a2d2/dsh-a2d2/ceo-prompt'
 - id: a2d2-agent-prompt
-  name: '@a2d2-dev/dsh-a2d2/agent-prompt'
+  name: '@a2d2/dsh-a2d2/agent-prompt'
 - id: a2d2-github-watch
-  name: '@a2d2-dev/dsh-a2d2/github-watch'
+  name: '@a2d2/dsh-a2d2/github-watch'
 ```
 
 | Key | Default | Contract |
@@ -285,7 +285,7 @@ Only one direction of a handoff edge is stored: a member's `handoffFrom`, naming
 
 ## The indicator orb
 
-The package also ships a browser bundle (`exports["./client"]`, `dsh.client.platform: 'web'`) mounted on the bare `@a2d2-dev/dsh-a2d2` row — a subpath row can never be a client row, and the bundle's registered id must equal the entry name, which is why the id is the package name.
+The package also ships a browser bundle (`exports["./client"]`, `dsh.client.platform: 'web'`) mounted on the bare `@a2d2/dsh-a2d2` row — a subpath row can never be a client row, and the bundle's registered id must equal the entry name, which is why the id is the package name.
 
 It renders one fixed circle beside the composer showing the session's context length (`453K`, `1.2M`) and, when the route has a configured rate, its estimated input cost. The **background** carries the reading: green below the warn length, amber at it, red at critical. The default warn length is 150K tokens. Amber means the session is approaching the smart zone: at the next phase boundary, choose among the five workflow outcomes; handoff is only one of them. Hovering gives the full figures — exact tokens, capacity, percent, and the cost with the currency it is quoted in — and reveals one boundary action above the circle: **下一步**. Handoff is no longer a peer orb action.
 
@@ -503,7 +503,7 @@ None. No session's request content changes.
 
 ## Host task runtime (phase one)
 
-The separate `@a2d2-dev/dsh-a2d2/task-runtime` mount (`a2d2-task-runtime`) defaults to `enabled: false`. Enable it only in the intended isolated profile; ordinary task binding never opts a task in. Use `/task-runtime start [issue-number] [title]`, `status`, `stop`, `resume`, and `rotate [focus]` from the bound main session. `run` aliases `start`. The session must belong to a workspace.
+The separate `@a2d2/dsh-a2d2/task-runtime` mount (`a2d2-task-runtime`) defaults to `enabled: false`. Enable it only in the intended isolated profile; ordinary task binding never opts a task in. Use `/task-runtime start [issue-number] [title]`, `status`, `stop`, `resume`, and `rotate [focus]` from the bound main session. `run` aliases `start`. The session must belong to a workspace.
 
 The host continues active tasks without a browser. Completion, human questions, unsettled children, external dependencies, and explicit `task_runtime` waits stop automatic turns. Healthy turns rotate at the context threshold or per-generation turn limit. Repeated progress fingerprints and operation failures become observable blocked state. Restart recovery discovers only explicitly started records under `homeDir` (default `$DSH_HOME/a2d2/task-runtime`, with `~/.dsh` as the home fallback).
 
