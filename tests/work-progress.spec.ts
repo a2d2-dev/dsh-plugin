@@ -38,24 +38,25 @@ it('keeps a remotely closed Issue unstarted until local work is actually handled
   const imported=completed(await app.execute({type:'source.import',commandId:'import',projectId:project.id,sourceId:source.id,nodeId:issue.nodeId},operator))
   expect(completed(await app.query({type:'task.detail',ref:imported.ref!},operator))).toMatchObject({progress:{stage:'planned',source:{state:'closed'},criteria:{passed:0,assessed:0}}})
 })
-it('lets the real coordinator preserve specifications and create one linked child on repeated tool calls',async()=>{
+it('lets the real coordinator preserve specifications and refuses local child creation',async()=>{
   const h=await setup()
   const invoke=(callId:string,args:Record<string,unknown>,agent=h.agent)=>fixtures.run(()=>h.ctx.tools.execute({callId:ToolCallId(callId),name:'work_organize',arguments:args,agent,signal:new AbortController().signal}))
   const before=completed(await h.app.query({type:'task.detail',ref:h.ref},operator)).task!
   expect(await invoke('specification',{action:'specification',expected_version:before.version,goal:before.goal,specification:'已接受要求：镜像推送、清理策略和签名',acceptance:[...before.specification.acceptance,'镜像签名通过']})).toMatchObject({isError:false})
   const updated=completed(await h.app.query({type:'task.detail',ref:h.ref},operator)).task!
   expect(updated).toMatchObject({id:before.id,specification:{version:2},specificationHistory:[before.specification]})
+  const childIntent={kind:'child' as const,expectedVersion:updated.version,title:'镜像签名',goal:'验证签名',specification:'使用已确认的签名机制',acceptance:['签名验证通过']}
+  expect(await h.app.sessionOrganize(h.execution.session,'local-child',childIntent)).toMatchObject({status:'failed',error:{code:'local-subtask-not-supported'}})
   const childArgs={action:'child',expected_version:updated.version,title:'镜像签名',goal:'验证签名',specification:'使用已确认的签名机制',acceptance:['签名验证通过']}
-  expect(await invoke('child-once',childArgs)).toMatchObject({isError:false})
-  expect(await invoke('child-once',childArgs)).toMatchObject({isError:false})
+  expect(await invoke('child-once',childArgs)).toMatchObject({isError:true})
   const detail=completed(await h.app.query({type:'task.detail',ref:h.ref},operator))
-  expect(detail.children).toHaveLength(1)
-  expect(detail.children![0]).toMatchObject({title:'镜像签名',parent:h.ref,agentId:h.execution.agentId})
-  expect(detail.task!.children).toEqual([{projectId:h.project.id,taskId:detail.children![0]!.id}])
-  expect(completed(await h.app.query({type:'project.detail',projectId:h.project.id},operator)).progressItems).toHaveLength(2)
+  expect(detail.children).toHaveLength(0)
+  expect(detail.task!.children).toEqual([])
+  expect(completed(await h.app.query({type:'project.detail',projectId:h.project.id},operator)).progressItems).toHaveLength(1)
   const foreign=await fixtures.run(()=>h.ctx.sessionController.create({workspaceId:h.workspace.id,agentPreset:'contract'}))
-  expect(JSON.stringify(await invoke('foreign',childArgs,h.ctx.agents.get(foreign.sessionId)!))).toContain('forbidden')
-  expect(completed(await h.app.query({type:'task.detail',ref:h.ref},operator)).children).toHaveLength(1)
+  const specArgs={action:'specification',expected_version:detail.task!.version,goal:detail.task!.goal,specification:'越权修改',acceptance:['越权']}
+  expect(JSON.stringify(await invoke('foreign',specArgs,h.ctx.agents.get(foreign.sessionId)!))).toContain('forbidden')
+  expect(completed(await h.app.query({type:'task.detail',ref:h.ref},operator)).children).toHaveLength(0)
 })
 const initial:TaskReport={specificationVersion:1,stage:'in-progress',summary:'镜像推送已实现，清理策略待确认',next:'确认清理保留数量',blockers:['需要确定保留数量'],criteria:[{index:0,passed:true,evidence:['测试：push.integration 通过']}],breakdown:[{id:'push',title:'镜像推送',description:'推送并校验',status:'done',evidence:['测试：push.integration 通过']},{id:'cleanup',title:'清理策略',description:'按保留数量清理',status:'blocked',evidence:[]}]}
 it('records real coordinator reports and projects requirements, evidence and blockers without model status calls',async()=>{
@@ -69,18 +70,18 @@ it('records real coordinator reports and projects requirements, evidence and blo
   expect(h.model.requests).toHaveLength(before)
   expect((await h.app.sessionControl(h.execution.session,'status','status'))).toMatchObject({task:{specification:{version:1,acceptance:['镜像推送验证通过','清理策略验证通过']}}})
 })
-it('rejects evidence-free completion and completion while necessary child work is unfinished',async()=>{
+it('rejects evidence-free completion and local child creation',async()=>{
   const h=await setup()
   const done:TaskReport={specificationVersion:1,stage:'done',summary:'全部完成',next:'',blockers:[],criteria:[{index:0,passed:true,evidence:[]},{index:1,passed:true,evidence:['清理测试通过']}]}
   expect(JSON.stringify(await h.report('no-evidence',done))).toContain('missing-evidence')
   const detail=completed(await h.app.query({type:'task.detail',ref:h.ref},operator))
-  completed(await h.app.execute({type:'task.create-child',commandId:'child',ref:h.ref,expectedVersion:detail.task!.version,title:'清理实现',goal:'验证清理',specification:'保留数量为三',acceptance:['清理测试通过']},operator))
+  expect(await h.app.execute({type:'task.create-child',commandId:'child',ref:h.ref,expectedVersion:detail.task!.version,title:'清理实现',goal:'验证清理',specification:'保留数量为三',acceptance:['清理测试通过']},operator))
+    .toMatchObject({status:'failed',error:{code:'local-subtask-not-supported'}})
   done.criteria[0]!.evidence=['推送测试通过']
-  expect(JSON.stringify(await h.report('unfinished-child',done))).toContain('unfinished-child')
-  expect(completed(await h.app.query({type:'task.detail',ref:h.ref},operator)).progress?.stage).not.toBe('done')
+  expect(await h.report('complete',done)).toMatchObject({isError:false})
+  expect(completed(await h.app.query({type:'task.detail',ref:h.ref},operator)).progress?.stage).toBe('done')
   const rows=completed(await h.app.query({type:'project.detail',projectId:h.project.id},operator)).progressItems!
-  expect(rows).toHaveLength(2)
-  expect(rows.find(item=>item.ref.taskId!==h.ref.taskId)).toMatchObject({parent:h.ref,stage:'planned'})
+  expect(rows).toHaveLength(1)
 })
 it('invalidates old criterion results after a specification change and rejects stale model reports',async()=>{
   const h=await setup()

@@ -32,14 +32,29 @@ async function setup(source?:GitHubSourcePort){
  const detail=async(task:WorkTask)=>ok(await app.query({type:'task.detail',ref:{projectId:task.projectId,taskId:task.id}},operator))
  return {app,host,project,create,start,done,detail,calls,guard:(...args:Parameters<typeof guard>)=>guard(...args),setSettlement:(value:typeof settlement)=>{settlement=value}}
 }
+/** A subtask is a native sub-issue in this stage: import it through the source route, then link it. */
+async function canonicalChild(h:Awaited<ReturnType<typeof setup>>,parent:WorkTask,parentExecution:WorkExecution){
+ const number=700+h.app.directory.length
+ const childIssue={subIssues:{items:[],totalCount:0,hasNextPage:false},nodeId:`I_child_${number}`,url:`https://github.com/example/repo/issues/${number}`,number,title:'child issue',body:'verify',repository:{owner:'example',repository:'repo'},assignees:[],labels:[],state:'open' as const,updatedAt:'2026-10-21T00:00:00Z',observedAt:'2026-10-21T00:01:00Z'}
+ const source:GitHubSourcePort={list:async()=>({identity,items:[childIssue],observedAt:childIssue.observedAt}),detail:async()=>({identity,issue:structuredClone(childIssue)})}
+ const importer=new WorkApplication(h.app.directory,h.host,source)
+ const sourceId=ok(await importer.execute({type:'source.configure',commandId:`child-source-${number}`,projectId:parent.projectId,repository:childIssue.repository},operator)).source!.id
+ ok(await importer.query({type:'source.issue',projectId:parent.projectId,sourceId,number:childIssue.number,refresh:true},operator))
+ const imported=ok(await importer.execute({type:'source.import',commandId:`child-import-${number}`,projectId:parent.projectId,sourceId,nodeId:childIssue.nodeId},operator))
+ ok(await h.app.execute({type:'task.update-spec',commandId:`child-spec-${number}`,ref:imported.ref!,expectedVersion:imported.task!.version,goal:'verify',specification:'verify',acceptance:['verified']},operator))
+ const childCurrent=ok(await h.app.query({type:'task.detail',ref:imported.ref!},operator)).task!
+ const current=ok(await h.app.query({type:'task.detail',ref:parentExecution.ref},operator)).task!
+ ok(await h.app.execute({type:'task.link-child',commandId:`child-link-${number}`,ref:parentExecution.ref,expectedVersion:current.version,child:imported.ref!,childExpectedVersion:childCurrent.version},operator))
+ return ok(await h.app.query({type:'task.detail',ref:imported.ref!},operator)).task!
+}
 it('commits child acceptance and exactly one parent result before any delivery, preserving terminal native input fences',async()=>{
  const h=await setup(),parent=await h.create('parent'),parentExecution=await h.start(parent)
- const current=(await h.detail(parent)).task!
- const child=ok(await h.app.execute({type:'task.create-child',commandId:'child',ref:parentExecution.ref,expectedVersion:current.version,title:'child',goal:'verify',specification:'verify',acceptance:['verified']},operator)).task!
+ const child=await canonicalChild(h,parent,parentExecution)
  const childExecution=await h.start(child)
- await h.done(childExecution)
+ const childReport={specificationVersion:child.specification.version,stage:'done' as const,summary:'verified',next:'',blockers:[],criteria:[{index:0,passed:true,evidence:['contract passed']}],closeExternal:false}
+ ok(await h.app.sessionReport(childExecution.session,'done-child',childReport))
  const recovered=new WorkApplication(h.app.directory,h.host)
- await recovered.sessionReport(childExecution.session,`done:${childExecution.id}`,{specificationVersion:1,stage:'done',summary:'verified',next:'',blockers:[],criteria:[{index:0,passed:true,evidence:['contract passed']}],closeExternal:false})
+ await recovered.sessionReport(childExecution.session,`done:${childExecution.id}`,childReport)
  const parentState=ok(await recovered.query({type:'task.detail',ref:parentExecution.ref},operator))
  expect(parentState.task!.childCompletions).toHaveLength(1)
  expect(parentState.execution!.events.filter(event=>event.kind==='result')).toHaveLength(1)

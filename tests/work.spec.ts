@@ -80,28 +80,26 @@ it('updates specifications with versioned acceptance while concurrent stale edit
     specificationHistory: [{ version: 1, text: 'Original specification', acceptance: ['Original criterion'] }] } })
 })
 
-it('creates local children through parent TaskRef and rejects foreign links and cycles before changing work', async () => {
-  const { directory, app } = await open()
+it('rejects local child creation and non-native links while keeping cycle and foreign diagnostics', async () => {
+  const { app } = await open()
   const { ref } = await createWork(app)
-  const created = await app.execute({ type: 'task.create-child', commandId: 'create-child', ref, expectedVersion: 1,
-    title: 'Independent child', goal: 'Child goal', specification: 'Child specification', acceptance: ['Child accepted'] }, operator)
-  expect(created).toMatchObject({ status: 'completed', task: { parent: ref, title: 'Independent child' } })
-  if (created.status !== 'completed' || !created.task) throw new Error('Expected child')
-  const childRef = { projectId: ref.projectId, taskId: created.task.id }
-  const reload = new WorkApplication(directory, noHost)
-  expect(await reload.query({ type: 'task.detail', ref }, operator)).toMatchObject({ status: 'completed', task: { version: 2, children: [childRef] }, children: [{ id: childRef.taskId }] })
-  const foreign = await createWork(app, 'foreign')
-  expect(await app.execute({ type: 'task.link-child', commandId: 'foreign-child', ref, expectedVersion: 2, child: foreign.ref, childExpectedVersion: 1 }, operator))
-    .toMatchObject({ status: 'failed', error: { code: 'cross-project-reference' } })
-  expect(await app.execute({ type: 'task.link-child', commandId: 'cycle', ref: childRef, expectedVersion: 1, child: ref, childExpectedVersion: 2 }, operator))
+  expect(await app.execute({ type: 'task.create-child', commandId: 'create-child', ref, expectedVersion: 1,
+    title: 'Independent child', goal: 'Child goal', specification: 'Child specification', acceptance: ['Child accepted'] }, operator))
+    .toMatchObject({ status: 'failed', error: { code: 'local-subtask-not-supported' } })
+  expect(await app.execute({ type: 'task.link-child', commandId: 'cycle', ref, expectedVersion: 1, child: ref, childExpectedVersion: 1 }, operator))
     .toMatchObject({ status: 'failed', error: { code: 'task-cycle' } })
+  const foreign = await createWork(app, 'foreign')
+  expect(await app.execute({ type: 'task.link-child', commandId: 'foreign-child', ref, expectedVersion: 1, child: foreign.ref, childExpectedVersion: 1 }, operator))
+    .toMatchObject({ status: 'failed', error: { code: 'cross-project-reference' } })
   expect(await app.query({ type: 'task.detail', ref: { ...ref, taskId: foreign.task.id } }, operator))
     .toMatchObject({ status: 'failed', error: { code: 'unknown-task' } })
   const spare = await app.execute({ type: 'task.create', commandId: 'spare-task', projectId: ref.projectId,
     title: 'Existing child', goal: 'Existing goal', specification: 'Existing spec', acceptance: ['Accepted'] }, operator)
   if (spare.status !== 'completed' || !spare.task) throw new Error('Expected task')
-  expect(await app.execute({ type: 'task.link-child', commandId: 'link-existing', ref, expectedVersion: 2,
-    child: { projectId: ref.projectId, taskId: spare.task.id }, childExpectedVersion: 1 }, operator)).toMatchObject({ status: 'completed', task: { version: 3 } })
+  expect(await app.execute({ type: 'task.link-child', commandId: 'link-existing', ref, expectedVersion: 1,
+    child: { projectId: ref.projectId, taskId: spare.task.id }, childExpectedVersion: 1 }, operator))
+    .toMatchObject({ status: 'failed', error: { code: 'subtask-not-in-primary-store' } })
+  expect(await app.query({ type: 'task.detail', ref }, operator)).toMatchObject({ status: 'completed', task: { version: 1, children: [] }, children: [] })
 })
 
 it('persists requirement breakdown independently of child Tasks and rejects duplicate block identities', async () => {

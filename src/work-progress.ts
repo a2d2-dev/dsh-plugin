@@ -37,6 +37,8 @@ export interface TaskProgressView {
 }
 const sameRef = (a: TaskRef, b: TaskRef) => a.projectId === b.projectId && a.taskId === b.taskId
 const refOf = (task: WorkTask): TaskRef => ({projectId:task.projectId,taskId:task.id})
+/** Only a native sub-issue record can be a necessary child; a local-only Task is invalid cache. */
+const canonicalChild = (state: WorkSnapshot, ref: TaskRef): boolean => state.externalBindings.some(binding => sameRef(binding.ref, ref))
 
 /** Reports are accountable task facts. Runtime or external closed state cannot assert completion. */
 export function applyTaskReport(state: WorkSnapshot, execution: WorkExecution, report: TaskReport, commandId: string): WorkResult {
@@ -49,8 +51,9 @@ export function applyTaskReport(state: WorkSnapshot, execution: WorkExecution, r
   if (new Set(blocks.map(item=>item.id)).size !== blocks.length) return fail('duplicate-block', '需求块标识不能重复')
   for (const block of blocks) {
     if (block.child && !task.children.some(child=>sameRef(child,block.child!))) return fail('unlinked-child', '需求块只能引用已关联的子任务')
-    if (block.status === 'done' && !block.evidence?.length && !block.child) return fail('missing-evidence', '完成的需求块必须有证据或关联的已完成子任务')
-    if (block.status === 'done' && block.child) {
+    const linked = block.child !== undefined && canonicalChild(state, block.child)
+    if (block.status === 'done' && !block.evidence?.length && !linked) return fail('missing-evidence', '完成的需求块必须有证据或关联的已完成子任务')
+    if (block.status === 'done' && linked) {
       const child = state.tasks.find(item=>sameRef(refOf(item),block.child!))
       if (child?.progress?.stage !== 'done' || child.progress.specificationVersion !== child.specification.version) return fail('unfinished-child', '关联子任务尚未按当前规格验收完成')
     }
@@ -80,7 +83,7 @@ export function applyTaskReport(state: WorkSnapshot, execution: WorkExecution, r
       }
     }
     if (blocks.some(item=>item.status !== 'done')) return fail('unfinished-breakdown', '仍有需求块未完成')
-    for (const childRef of task.children) {
+    for (const childRef of task.children.filter(ref => canonicalChild(state, ref))) {
       const child = state.tasks.find(item=>sameRef(refOf(item),childRef))
       if (child?.progress?.stage !== 'done' || child.progress.specificationVersion !== child.specification.version) return fail('unfinished-child', '仍有子任务未验收完成')
     }
