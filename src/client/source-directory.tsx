@@ -117,19 +117,20 @@ function ProjectViews({controller,source}:{controller:WorkPanelController;source
   const filtered=snapshot?filterProjectItems(expression,snapshot.items,source.observations.map(item=>item.issue),snapshot.identity.login,catalog.fields.filter(field=>['SINGLE_SELECT','ITERATION','TEXT','NUMBER','DATE','MILESTONE'].includes(field.dataType)).map(field=>field.name)):null
   const page=state.viewPage,perPage=25,issues=source.observations.map(item=>item.issue)
   const matched=filtered?.supported?filtered.items:[]
-  const sliceValues=state.viewNumber===null&&url?url.searchParams.getAll('sliceBy[value]'):[]
-  const sliceFieldOptions=sliceCandidates(catalog.fields,matched,sliceValues)
-  const sliceField=sliceFieldOptions.find(field=>field.id===sliceFieldId)??sliceFieldOptions[0]
-  const sliceAgg=sliceField?sliceAggregate(sliceField.id,matched):null
-  const sliced=sliceField?applySlice(matched,sliceField.id,sliceSelected,showEmpty):matched
   const issuesByNode=new Map(issues.map(issue=>[issue.nodeId,issue]))
   // The Project view's own filter is upstream truth; this local switch only
   // hides items the view would otherwise include because GitHub shows closed
   // issues when its filter is empty. A view that explicitly asks for closed
-  // items keeps them even with the switch off.
+  // items keeps them even with the switch off. Slice counts follow the same
+  // upstream filter, so a closed row is not counted in GitHub's slice totals.
   const closedRequested=/(^|\s)is:closed(\s|$)/i.test(expression)
-  const visible=includeClosed||closedRequested?sliced:sliced.filter(item=>issuesByNode.get(item.issueNodeId??'')?.state!=='closed')
-  const hiddenClosed=sliced.length-visible.length
+  const base=includeClosed||closedRequested?matched:matched.filter(item=>issuesByNode.get(item.issueNodeId??'')?.state!=='closed')
+  const hiddenClosed=matched.length-base.length
+  const sliceValues=state.viewNumber===null&&url?url.searchParams.getAll('sliceBy[value]'):[]
+  const sliceFieldOptions=sliceCandidates(catalog.fields,base,sliceValues)
+  const sliceField=sliceFieldOptions.find(field=>field.id===sliceFieldId)??sliceFieldOptions[0]
+  const sliceAgg=sliceField?sliceAggregate(sliceField.id,base):null
+  const visible=sliceField?applySlice(base,sliceField.id,sliceSelected,showEmpty):base
   const rows=orderProjectRows(visible.slice((page-1)*perPage,page*perPage),issues,collapsed)
   const columns=projectColumns(catalog.fields,orderProjectRows(visible,issues,new Set()),extraColumns),slots=projectColumnSlots(columns)
   const weightTotal=Math.max(1,columns.reduce((total,field)=>total+columnWeight(field.dataType),0))
@@ -140,18 +141,13 @@ function ProjectViews({controller,source}:{controller:WorkPanelController;source
   return <section>
     <div className={styles.projectToolbar}>
       <label>视图<select aria-label="Project 视图" value={viewNumber??''} onChange={event=>controller.setProjectView(Number(event.target.value))}>{catalog.views.map(view=><option key={view.id} value={view.number}>{view.name}</option>)}</select></label>
+      {sliceField&&sliceAgg&&<label>切片{sliceFieldOptions.length>1&&<select aria-label="切片字段" value={sliceField.id} onChange={event=>{setSliceFieldId(event.target.value);setSliceSelected(new Set())}}>{sliceFieldOptions.map(field=><option key={field.id} value={field.id}>{field.name}</option>)}</select>}<select aria-label="切片值" value={[...sliceSelected][0]??''} onChange={event=>setSliceSelected(event.target.value?new Set([event.target.value]):new Set())}><option value="">全部</option>{sliceAgg.values.map(option=><option key={option.value} value={option.value}>{option.value}（{option.count}）</option>)}</select></label>}
+      {sliceField&&sliceAgg&&<label className={styles.projectToggle}><input type="checkbox" checked={showEmpty} onChange={event=>setShowEmpty(event.target.checked)}/> 显示空值{sliceAgg.emptyCount?` ${sliceAgg.emptyCount}`:''}</label>}
       <span className={styles.projectCount}>{filtered?.supported?visible.length:0} 项{hiddenClosed?` · 已隐藏 ${hiddenClosed} 个已关闭`:''}{snapshot&&snapshot.items.some(item=>item.kind==='restricted')?` · ${snapshot.items.filter(item=>item.kind==='restricted').length} 项权限受限`:''}</span>
       <label className={styles.projectToggle}><input type="checkbox" checked={includeClosed} onChange={event=>setIncludeClosed(event.target.checked)}/> 含已关闭</label>
       <label className={styles.projectToggle}><input type="checkbox" checked={extraColumns} onChange={event=>setExtraColumns(event.target.checked)}/> 时间与仓库列</label>
       {entry&&<span className={styles.projectLink}><TrustedLink url={entry}>原始视图</TrustedLink></span>}
     </div>
-    {sliceField&&sliceAgg&&<div className={styles.sliceBar} role="group" aria-label="切片">
-      <strong>切片 · {sliceField.name}</strong>
-      {sliceAgg.values.map(option=><button key={option.value} aria-pressed={sliceSelected.has(option.value)} onClick={()=>setSliceSelected(current=>{const next=new Set(current);if(next.has(option.value))next.delete(option.value);else next.add(option.value);return next})}>{sliceSelected.has(option.value)?'✓ ':''}{option.value} <small>{option.count}</small></button>)}
-      {sliceSelected.size>0&&<button onClick={()=>setSliceSelected(new Set())}>取消选择</button>}
-      <label className={styles.projectToggle}><input type="checkbox" checked={showEmpty} onChange={event=>setShowEmpty(event.target.checked)}/> 显示空值{sliceAgg.emptyCount?` ${sliceAgg.emptyCount}`:''}</label>
-      {sliceFieldOptions.length>1&&<select aria-label="切片字段" value={sliceField.id} onChange={event=>{setSliceFieldId(event.target.value);setSliceSelected(new Set())}}>{sliceFieldOptions.map(field=><option key={field.id} value={field.id}>{field.name}</option>)}</select>}
-    </div>}
     {!view?<p role="alert">保存的 view 不在当前可读取目录中，请选择真实视图。</p>:!snapshot?<p role="status">完整 Project 成员扫描尚未完成，请刷新继续；没有用全列表冒充视图。</p>:filtered&&!filtered.supported?<p role="alert">{filtered.reason}</p>:<>
       {rows.length?<div className={styles.tableScroll}><table className={styles.projectTable} aria-label="真实 Project 条目"><colgroup><col style={{width:'25%'}}/>{slots.map(slot=>slot===SESSION_SLOT?<col key={SESSION_SLOT} style={{width:'15%'}}/>:<col key={slot.id} style={{width:fieldWidth(slot)}}/>)}</colgroup><thead><tr><th>条目</th>{slots.map(slot=>slot===SESSION_SLOT?<th key={SESSION_SLOT}>会话</th>:<th key={slot.id}>{slot.name}</th>)}</tr></thead><tbody>{rows.map(row=><tr key={row.item.id}>
         <td className={styles.titleCell}><div className={styles.hierarchy} style={{paddingLeft:row.depth*22}}>
