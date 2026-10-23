@@ -188,7 +188,18 @@ export class WorkApplication {
     const native = issue?.subIssues ? issue : [binding?.accepted, ...state.sources.flatMap(source => source.observations.map(row => row.issue))]
       .filter((item): item is import('./work-sources/types.ts').GitHubIssue => !!item && item.nodeId === binding?.nodeId && !!item.subIssues)
       .sort((a, b) => b.observedAt.localeCompare(a.observedAt))[0]
-    if (native && native !== issue) graph.limitations.push(`原生子 Issue 关系来自最后已知观察 ${native.observedAt}；当前来源未返回此字段。`)
+    // List scans preserve richer binding details, so object identity alone no
+    // longer tells us whether the current source actually returned child data.
+    const latestSourceIssue = state.sources
+      .filter(source => binding?.sourceIds.includes(source.id))
+      .flatMap(source => source.observations.map(row => row.issue))
+      .filter(item => item.nodeId === binding?.nodeId)
+      .sort((a, b) => b.observedAt.localeCompare(a.observedAt) || b.updatedAt.localeCompare(a.updatedAt))[0]
+    const retainedChildren = native && latestSourceIssue
+      && latestSourceIssue.observedAt >= native.observedAt
+      && latestSourceIssue.updatedAt >= native.updatedAt
+      && latestSourceIssue.subIssues === undefined
+    if (native && (native !== issue || retainedChildren)) graph.limitations.push('原生子 Issue 关系来自最后已知观察；当前来源未返回此字段。')
     else if (issue && !native) graph.limitations.push('原生子 Issue 关系尚未读取；不能据此断言没有子工作。')
     graph.nativeIssues = (native?.subIssues?.items ?? []).map(issue => {
       const binding = state.externalBindings.find(binding => binding.nodeId === issue.nodeId)
