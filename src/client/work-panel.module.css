@@ -94,7 +94,7 @@ body[data-ds-dark-theme] .panel { --work-link: var(--dsw-static-blue-400, #60a5f
 .sessionDot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--dsw-alias-label-tertiary, #8c959f); }
 .sessionDot[data-runtime=running] { background: #1a7f37; }
 .sessionDot[data-runtime=idle] { background: #bf8700; }
-.panel .sessionLink { border: 0; background: transparent; padding: 0 !important; font: inherit; font-size: 12px; color: var(--work-link); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel .sessionLink { border: 0; background: transparent; padding: 0 !important; font: inherit; font-size: 11px; color: var(--work-link); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sessionEmpty { color: var(--work-muted); }
 .projectToolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 12px; }
 .projectToolbar label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--work-muted); }

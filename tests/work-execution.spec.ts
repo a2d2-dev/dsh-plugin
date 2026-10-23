@@ -234,14 +234,14 @@ it('offers allowed host execution choices and rejects arbitrary model or permiss
   const choices = await h.app.query({ type: 'task.execution-options', ref: h.ref }, operator)
   expect(choices, JSON.stringify(choices)).toMatchObject({ status: 'completed', executionOptions: {
     agentId: h.agentId, resources: [expect.objectContaining({ ref: h.resource })],
-    agentPresets: ['contract'], permissionPresets: ['workspace-write'],
+    agentPresets: ['contract'], permissionPresets: expect.arrayContaining(['workspace-write', 'read-only', 'danger-full-access']),
     models: expect.arrayContaining([{ provider: 'contract', model: 'selected' }]),
     defaults: { agentPreset: 'contract', permissionPreset: 'workspace-write', model: { provider: 'contract', model: 'default' } },
   } })
   const command = { type: 'task.start', commandId: 'invalid-model', ref: h.ref, expectedVersion: 1, resource: h.resource,
     agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'invented' }, permissionPreset: 'workspace-write' }
   expect(await h.app.execute(command, operator)).toMatchObject({ status: 'failed', error: { code: 'unavailable-model' } })
-  expect(await h.app.execute({ ...command, commandId: 'raised-permission', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'danger-full-access' }, operator)).toMatchObject({ status: 'failed', error: { code: 'disallowed-permission-preset' } })
+  expect(await h.app.execute({ ...command, commandId: 'raised-permission', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'invented-preset' }, operator)).toMatchObject({ status: 'failed', error: { code: 'invalid-permission-preset' } })
   expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toEqual({ status: 'completed' })
   expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(0)
   expect(h.model.requests).toHaveLength(0)

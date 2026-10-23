@@ -111,7 +111,7 @@ function IssueSourcePanel({controller}:{controller:WorkPanelController}) {
       {!source.enabled&&<p role="status">来源已停用，显示已保存的内容。</p>}
       {listing&&<><div className={styles.tableScroll}><table className={styles.projectTable} aria-label="GitHub Issue 列表"><colgroup><col style={{width:'42%'}}/><col style={{width:'12%'}}/><col style={{width:'16%'}}/><col style={{width:'14%'}}/><col style={{width:'16%'}}/></colgroup><thead><tr><th>Issue</th><th>状态</th><th>会话</th><th>负责人</th><th>标签</th></tr></thead><tbody>{rows.map(issue=>{const progress=controller.progressForIssue(issue),detail=[progress?.summary,progress?.next?`下一步：${progress.next}`:'',...(progress?.blockers??[]).map(blocker=>`阻塞：${blocker}`)].filter(Boolean).join(' / ');return <tr key={issue.nodeId}>
   <td><div className={styles.cellClip}><button className={styles.rowTitle} title={`#${issue.number} ${issue.title} · ${issue.repository.owner}/${issue.repository.repository}`} onClick={()=>void controller.openIssue(issue.number,source.enabled,issue.nodeId)}>#{issue.number} {issue.title}</button></div></td>
-  <td><div className={styles.cellClip} title={detail||undefined}><span className={styles.badge}>{processingLabel(progress)}</span>{progress?.blockers.length?<span className={styles.failure}> · 阻塞</span>:null}</div></td>
+  <td><div className={styles.cellClip} title={detail||undefined}><span className={styles.badge}>{processingLabel(progress)}</span>{progress?.blockers.length&&processingLabel(progress)!=='阻塞'?<span className={styles.failure}> · 阻塞</span>:null}</div></td>
   <td><div className={styles.cellClip}><SessionCell entry={sessionOf(progress)} onOpen={session=>controller.openSession(session)}/></div></td>
   <td><div className={styles.cellClip}>{issue.assignees.join(', ')||'—'}</div></td>
   <td><div className={styles.cellClip}>{issue.labels.length?issue.labels.map(label=><span key={label} className={styles.labelPill}>{label}</span>):'—'}</div></td>
@@ -175,9 +175,6 @@ function ContinuousProcessing({controller,onClose}:{controller:WorkPanelControll
     </form>}
     </section>
 }
-function Sessions({controller,task}:{controller:WorkPanelController;task:WorkTask}) {
-  return <Section title="相关会话"><p>关联记录仅用于查看；当前处理会话与接续历史分别列出。</p>{task.sessions.length?<ul>{task.sessions.map(item=><li key={`${item.session.runtimeId}/${item.session.sessionId}`}>{item.purpose==='review'?'评审':'相关'} · {item.session.sessionId} <button onClick={()=>controller.openSession(item.session)}>打开会话</button></li>)}</ul>:<p>尚无其他关联会话。</p>}</Section>
-}
 function stageLabel(stage: import('../work-progress.ts').WorkStage): string { return ({planned:'待处理','in-progress':'处理中',review:'待验收',blocked:'受阻',done:'已验收完成'})[stage] }
 function CriteriaCount({criteria}:{criteria:import('../work-progress.ts').TaskProgressView['criteria']}) {
   return <p>验收通过 {criteria.passed} / {criteria.total} 项 · 已核验 {criteria.assessed} 项{!criteria.current?' · 尚无当前规格的有效验收结果':''}</p>
@@ -213,11 +210,11 @@ function CurrentExecution({controller}:{controller:WorkPanelController}) {
     </> : completed ? <p>本地已验收；执行观察尚未取得，请刷新详情读取收口状态。</p> : <>
       <p>尚未开始处理。开始后会在所选执行目录创建会话。</p>
       {options && selection ? <form className={styles.form} onSubmit={event=>{event.preventDefault();void controller.startPrepared()}}>
-        <p>请确认执行目录和模型；优先使用项目与规则默认配置。</p>
-        <label>工作目录{options.resources.length>1 ? <select disabled={busy} value={selection.resourceIndex} onChange={event=>controller.selectStart({resourceIndex:Number(event.target.value)})}>{options.resources.map((resource,index)=><option key={`${resource.ref.runtimeId}/${resource.ref.workspaceId}`} value={index}>{resource.title}</option>)}</select> : <span>{options.resources[0]?.title}</span>}</label>
-        <label>模型{options.models.length>1 ? <select disabled={busy} value={selection.modelIndex} onChange={event=>controller.selectStart({modelIndex:Number(event.target.value)})}>{options.models.map((model,index)=><option key={`${model.provider}/${model.model}`} value={index}>{model.provider}/{model.model}</option>)}</select> : <span>{options.models[0]?.provider}/{options.models[0]?.model}</span>}</label>
-        <label>Agent 预设{options.agentPresets.length>1 ? <select disabled={busy} value={selection.agentPreset} onChange={event=>controller.selectStart({agentPreset:event.target.value})}>{options.agentPresets.map(preset=><option key={preset}>{preset}</option>)}</select> : <span>{selection.agentPreset}</span>}</label>
-        <label>权限{options.permissionPresets.length>1 ? <select disabled={busy} value={selection.permissionPreset} onChange={event=>controller.selectStart({permissionPreset:event.target.value})}>{options.permissionPresets.map(preset=><option key={preset}>{preset}</option>)}</select> : <span>{selection.permissionPreset}</span>}</label>
+        <p>请确认执行目录、模型、Agent 预设与权限；未修改时使用宿主与项目的默认配置。</p>
+        <label>工作目录{options.resources.length>1 ? <select disabled={busy} value={selection.resourceIndex} onChange={event=>controller.selectStart({resourceIndex:Number(event.target.value)})}>{options.resources.map((resource,index)=><option key={`${resource.ref.runtimeId}/${resource.ref.workspaceId}`} value={index}>{resource.title}</option>)}</select> : <span title="宿主或项目规则只提供这一个执行目录">{options.resources[0]?.title}</span>}</label>
+        <label>模型{options.models.length>1 ? <select disabled={busy} value={selection.modelIndex} onChange={event=>controller.selectStart({modelIndex:Number(event.target.value)})}>{options.models.map((model,index)=><option key={`${model.provider}/${model.model}`} value={index}>{model.provider}/{model.model}</option>)}</select> : <span title="宿主或项目 Agent 只允许这一个模型">{options.models[0]?.provider}/{options.models[0]?.model}</span>}</label>
+        <label>Agent 预设{options.agentPresets.length>1 ? <select disabled={busy} value={selection.agentPreset} onChange={event=>controller.selectStart({agentPreset:event.target.value})}>{options.agentPresets.map(preset=><option key={preset}>{preset}</option>)}</select> : <span title="宿主只暴露默认 Agent 预设">{selection.agentPreset}</span>}</label>
+        <label>权限{options.permissionPresets.length>1 ? <select disabled={busy} value={selection.permissionPreset} onChange={event=>controller.selectStart({permissionPreset:event.target.value})}>{options.permissionPresets.map(preset=><option key={preset}>{preset}</option>)}</select> : <span title="宿主只暴露默认权限预设">{selection.permissionPreset}</span>}</label>
         <div className={styles.toolbar}><button type="submit" disabled={busy}>{busy?'正在启动…':'确认开始处理'}</button><button type="button" disabled={busy} onClick={()=>controller.cancelStart()}>取消</button></div>
       </form> : <button className={styles.primary} disabled={busy||state.loading||state.source.loading} onClick={()=>void controller.prepareStart(!state.detail?.task)}>开始处理</button>}
     </>}

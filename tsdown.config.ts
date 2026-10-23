@@ -138,7 +138,11 @@ function cssPlugin(): BuildPlugin {
           minify: true,
         })
         const classMap: Record<string, string> = {}
-        for (const [local, exp] of Object.entries(cssExports ?? {})) classMap[local] = exp.name
+        const exported = cssExports ?? {}
+        // lightningcss returns a plain record, so its iteration order is an
+        // implementation detail: sort the locals or one commit builds to a
+        // different client.js byte stream on another run.
+        for (const local of Object.keys(exported).sort()) classMap[local] = exported[local]!.name
         return [
           injectTag(fileId, code.toString()),
           `export default ${JSON.stringify(classMap)};`,

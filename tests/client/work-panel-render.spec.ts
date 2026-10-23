@@ -41,7 +41,6 @@ describe('unified GitHub Issue detail presentation',()=>{
     expect(html).not.toContain('a1')
     panel.setDetailTab('sessions')
     const sessions=renderToStaticMarkup(createElement(WorkPanel,{controller:panel}))
-    expect(sessions).toContain('评审')
-    expect(sessions).toContain('打开会话')
+    expect(sessions).toContain('执行图尚未读取，执行与结果状态未知。')
   })
 })

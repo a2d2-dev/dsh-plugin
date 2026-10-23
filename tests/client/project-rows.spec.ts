@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { isEmptyColumn, orderProjectRows, projectColumns } from '../../src/client/project-rows.ts'
+import { SESSION_SLOT, isEmptyColumn, orderProjectRows, projectColumnSlots, projectColumns } from '../../src/client/project-rows.ts'
 import type { GitHubIssue, GitHubProjectItem } from '../../src/work-sources/types.ts'
 
 const reference = (nodeId: string, number: number, title: string) => ({ nodeId, number, title, state: 'open' as const, repository: { owner: 'a2d2-dev', repository: 'dsh-plugin' }, url: `https://github.com/a2d2-dev/dsh-plugin/issues/${number}` })
@@ -35,4 +35,18 @@ it('hides only fully empty columns and keeps unread field types visible', () => 
   const wide = [{ id: 'F_repository', name: 'Repository', dataType: 'REPOSITORY' }, { id: 'F_created', name: 'Created', dataType: 'CREATED' }]
   expect(projectColumns(wide, rows).map(field => field.name)).toEqual([])
   expect(projectColumns(wide, rows, true).map(field => field.name)).toEqual(['Repository', 'Created'])
+})
+
+it('places the shared session column right after Status, and first when Status is absent', () => {
+  const fields = [
+    { id: 'F_assignees', name: 'Assignees', dataType: 'ASSIGNEES' },
+    { id: 'F_status', name: 'Status', dataType: 'STATUS' },
+    { id: 'F_labels', name: 'Labels', dataType: 'LABELS' },
+  ]
+  expect(projectColumnSlots(fields).map(slot => typeof slot === 'string' ? slot : slot.name)).toEqual(['Assignees', 'Status', SESSION_SLOT, 'Labels'])
+  // GitHub's built-in Status is a single select named Status, not the STATUS fixture type.
+  const live = fields.map(field => field.id === 'F_status' ? { ...field, dataType: 'SINGLE_SELECT' } : field)
+  expect(projectColumnSlots(live).map(slot => typeof slot === 'string' ? slot : slot.name)).toEqual(['Assignees', 'Status', SESSION_SLOT, 'Labels'])
+  expect(projectColumnSlots(fields.filter(field => field.dataType !== 'STATUS')).map(slot => typeof slot === 'string' ? slot : slot.name)).toEqual([SESSION_SLOT, 'Assignees', 'Labels'])
+  expect(projectColumnSlots([])).toEqual([SESSION_SLOT])
 })
