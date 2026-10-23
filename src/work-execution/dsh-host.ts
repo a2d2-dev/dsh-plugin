@@ -245,7 +245,10 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
   async choices(): Promise<import('../work-types.ts').HostExecutionChoices> {
     if (!this.ctx.get('sessionController') || !this.ctx.get('agentPresets') || !this.ctx.get('permissionPresets')) throw new WorkExecutionError('host-capability-unavailable', 'Host execution catalogs are unavailable')
     const manifest = createRequire(import.meta.url)('@deepseek-ai/dsh-api-session-controller/package.json') as { version: string }
-    if (manifest.version !== '0.2.0-rc.2') throw new WorkExecutionError('unsupported-host-controller', 'This adapter is certified for the fixed-identity SessionController 0.2.0-rc.2 contract; other create semantics require a separately verified adapter')
+    // 0.2.1 keeps the contract this adapter relies on: create() accepts the
+    // Agent preset and returns the effective identity, and the identity check
+    // below still fails loudly if a Host substitutes a different Session.
+    if (manifest.version !== '0.2.0-rc.2' && manifest.version !== '0.2.1-rc.2') throw new WorkExecutionError('unsupported-host-controller', `This adapter supports the SessionController 0.2.0-rc.2 and 0.2.1-rc.2 contracts; ${manifest.version} requires a separately verified adapter`)
     const catalog = await this.service('sessionController', 'modelCatalog').modelCatalog()
     // The host's own catalogs are the authority, like a normal new Session: a
     // managed execution may use any activated Agent preset and any configured

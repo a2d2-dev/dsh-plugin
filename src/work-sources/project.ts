@@ -68,17 +68,23 @@ function response(output: string): { headers: string; body: unknown } {
 const graphql: ProjectGraphQL = async (query, variables) => {
   const args = ['api', '--hostname', 'github.com', 'graphql', '--include', '-f', `query=${query}`, '-f', `owner=${variables.owner}`, '-F', `number=${variables.number}`, '-F', `first=${variables.first}`]
   if (variables.cursor) args.push('-f', `cursor=${variables.cursor}`)
-  try {
-    const result = await exec('gh', args, { timeout: 20_000, maxBuffer: 8_000_000, env: process.env })
-    return response(result.stdout).body
-  } catch (error) {
-    if (error instanceof SourceError) throw error
-    const caught = error as { stdout?: string; stderr?: string; code?: string }
-    const output = caught.stdout ?? ''
-    if (/HTTP\/[^ ]+\s+200\b/.test(output)) return response(output).body // GraphQL errors are classified below, never accepted as partial success.
-    if (caught.code === 'ENOENT') throw new SourceError('github-credentials-unavailable', 'GitHub CLI is unavailable to this server')
-    throw failure(output.slice(0, output.indexOf('{') < 0 ? output.length : output.indexOf('{')), caught.stderr)
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const result = await exec('gh', args, { timeout: 45_000, maxBuffer: 16_000_000, env: process.env })
+      return response(result.stdout).body
+    } catch (error) {
+      if (error instanceof SourceError) throw error
+      const caught = error as { stdout?: string; stderr?: string; code?: string }
+      const output = caught.stdout ?? ''
+      if (/HTTP\/[^ ]+\s+200\b/.test(output)) return response(output).body // GraphQL errors are classified below, never accepted as partial success.
+      if (caught.code === 'ENOENT') throw new SourceError('github-credentials-unavailable', 'GitHub CLI is unavailable to this server')
+      // Transient read failures (timeout, reset connection) are retried; the
+      // discovery checkpoint keeps every page that already merged.
+      if (attempt < 3) { await new Promise(resolve => setTimeout(resolve, 1_000 * attempt)); continue }
+      throw failure(output.slice(0, output.indexOf('{') < 0 ? output.length : output.indexOf('{')), caught.stderr)
+    }
   }
+  throw new SourceError('github-unavailable', 'GitHub Project could not be read within the request timeout')
 }
 const refSchema = z.object({ id: z.string().min(1), number: z.number().int().positive(), title: z.string().min(1), url: z.string(), state: z.enum(['OPEN', 'CLOSED']), repository: z.object({ name: z.string(), owner: z.object({ login: z.string() }) }) })
 const linkedPullRequest = z.object({ number: z.number().int().positive(), title: z.string().min(1), url: z.string(), state: z.enum(['OPEN', 'CLOSED', 'MERGED']), isDraft: z.boolean() })

@@ -1,7 +1,7 @@
 {
   "name": "@a2d2/dsh-a2d2",
-  "version": "0.0.20",
-  "description": "A\u00b2D\u00b2 (Agentic Agile Driven Development) for DSH: task aggregation and /handoff \u2014 session membership, handoff edges, and handoff documents in project-local .dsh/a2d2 files",
+  "version": "0.0.21",
+  "description": "A²D² (Agentic Agile Driven Development) for DSH: task aggregation and /handoff — session membership, handoff edges, and handoff documents in project-local .dsh/a2d2 files",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",

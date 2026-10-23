@@ -7,20 +7,30 @@ import type { GitHubPullRequest, GitHubProjectRef, GitHubRepository, SourceCatal
 
 export type CatalogGraphQL = (query: string, variables: Record<string, string | number>) => Promise<unknown>
 const exec = promisify(execFile)
+const READ_TIMEOUT_MS = 45_000
+const READ_ATTEMPTS = 3
 const read: CatalogGraphQL = async (query, variables) => {
   const args = ['api', '--hostname', 'github.com', 'graphql', '-f', `query=${query}`]
   for (const [name, value] of Object.entries(variables)) args.push(typeof value === 'number' ? '-F' : '-f', `${name}=${value}`)
-  try { return JSON.parse((await exec('gh', args, { timeout: 20_000, maxBuffer: 8_000_000, env: process.env })).stdout) as unknown }
-  catch (error) {
-    const caught=error as {stderr?:string;stdout?:string}
-    if(caught.stdout){try{const body=JSON.parse(caught.stdout) as {errors?:unknown[]};if(body.errors?.length)return body}catch{}}
-    const stderr = caught.stderr ?? ''
-    if (/403|FORBIDDEN/.test(stderr)) throw new SourceError('github-forbidden', 'GitHub 目录读取权限不足')
-    if (/401|auth login|GH_TOKEN/i.test(stderr)) throw new SourceError('github-unauthorized', 'GitHub 凭据不可用')
-    if (/404|NOT_FOUND/.test(stderr)) throw new SourceError('github-not-found', 'GitHub 来源不存在或当前账号不可见')
-    if (/rate limit|RATE_LIMITED/i.test(stderr)) throw new SourceError('github-rate-limited', 'GitHub 目录读取达到速率限制')
-    throw new SourceError('github-unavailable', 'GitHub 目录未能在请求期限内返回')
+  let lastStderr = ''
+  for (let attempt = 1; attempt <= READ_ATTEMPTS; attempt++) {
+    try { return JSON.parse((await exec('gh', args, { timeout: READ_TIMEOUT_MS, maxBuffer: 16_000_000, env: process.env })).stdout) as unknown }
+    catch (error) {
+      const caught=error as {stderr?:string;stdout?:string;code?:string}
+      if(caught.stdout){try{const body=JSON.parse(caught.stdout) as {errors?:unknown[]};if(body.errors?.length)return body}catch{}}
+      const stderr = caught.stderr ?? ''
+      lastStderr = stderr
+      if (/403|FORBIDDEN/.test(stderr)) throw new SourceError('github-forbidden', 'GitHub 目录读取权限不足')
+      if (/401|auth login|GH_TOKEN/i.test(stderr)) throw new SourceError('github-unauthorized', 'GitHub 凭据不可用')
+      if (/404|NOT_FOUND/.test(stderr)) throw new SourceError('github-not-found', 'GitHub 来源不存在或当前账号不可见')
+      if (/rate limit|RATE_LIMITED/i.test(stderr)) throw new SourceError('github-rate-limited', 'GitHub 目录读取达到速率限制')
+      if (caught.code === 'ENOENT') throw new SourceError('github-credentials-unavailable', 'GitHub CLI 不可用于当前服务')
+      // A slow or reset connection under a long scan is retryable; the
+      // checkpoint keeps the pages already merged, so one attempt is cheap.
+      if (attempt < READ_ATTEMPTS) await new Promise(resolve => setTimeout(resolve, 1_000 * attempt))
+    }
   }
+  throw new SourceError('github-unavailable', `GitHub 目录未能在请求期限内返回${lastStderr.trim() ? `：${lastStderr.trim().slice(0, 200)}` : ''}`)
 }
 const viewerSchema=z.object({id:z.string(),login:z.string(),name:z.string().nullable()})
 const pageInfo = z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable() })
