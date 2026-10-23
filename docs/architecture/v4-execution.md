@@ -42,7 +42,8 @@ WorkApplication 提供 Task 和其显式会话关联，DshWorkExecutionHost 经 
 - 原生 continuable 结果沿用已有维护规则：明确 senderSessionId 的 `subagent-settled` 已进入父 user/message，并覆盖最近 turn/end。这里时间只比较已知同一 child 的结算事件，不推断归属。one-shot 返回不声称 consumed；其父工具必须在真实维护边界已收口，后台结果另由 job 交付围栏保护。
 - 历史 turn failure 是 attempt/result 事实，不仅因失败文本持续阻塞当前。未结算子执行与应交付输出才构成安全阻塞。
 - 可达性只看 `availability`：`live`、`history` 或旧宿主未标注为可达；`lost`（registry 实例已不存在且终态未收取）为不可达。可达作业未交付仍产生 `job-unsettled`／`job-result-unknown`；不可达作业只写入有界 `reminders`，不产生 blocker、不影响 `settlement`，也不阻塞接续。
-- `job-observation-unavailable` 表示宿主缺少正式 `jobs.observe` 能力，是宿主能力契约缺口，仍为 blocker，不属于作业不可达。
+- `job-observation-unavailable` 表示宿主缺少正式 `jobs.observe` 能力，是宿主能力契约缺口，仍为 blocker，不属于作业不可达。此时不再并列发出「注册表实例已不可达」提醒：能力缺口已经说明交付无法证明，两者并列会自相矛盾。
+- 宿主**完全没有** jobs 服务（`disabled`）时，作业事实只能来自会话 journal，没有 `jobs.list` 可用于证明可达性；这类作业仍写入有界提醒（仍然只提醒、不阻断），并在 `limitations` 记录「宿主未提供 jobs 服务」这一限定。
 
 ### 宿主研究与公开缺口
 
@@ -96,9 +97,9 @@ observe(id, caller): {
 
 ### 作业返回与收取
 
-用户或执行者通过原生 job_output 读取真实终态输出，宿主 pending → collected。graph 仅下次观察该状态，消费仍 unknown、验收仍 unassessed。图没有“标记消费”按钮。旧宿主无 observe 时显示能力缺失；最终切匹配 #142 产物后验证这一解除路径。
+用户或执行者通过原生 job_output 读取真实终态输出，宿主 pending → collected。graph 仅下次观察该状态，消费仍 unknown、验收仍 unassessed。图没有“标记消费”按钮。旧宿主无 observe 时显示能力缺失；完全没有 jobs 服务时额外显示 `limitations`。最终切匹配 #142 产物后验证这一解除路径。
 
-完成门禁只对可达作业强制结算（#201）。评审子会话结束、registry 实例释放后，其作业既不能 `job_output` 也不能 `job_kill`，此时 `availability: lost`：门禁降级为提醒，`work_report(stage=done)` 的成功结果带 `reminders`，graph 与 `limitations` 并列展示，接续 `maintain` 也不再等待它。这兑现 #142「真实收取后能解除等待，不能形成不可解除的永久阻塞」；提醒仍说明结果无法收取，不以提醒代替取证或业务验收。
+完成门禁只对可达作业强制结算（#201）。评审子会话结束、registry 实例释放后，其作业既不能 `job_output` 也不能 `job_kill`，此时 `availability: lost`：门禁降级为提醒，`work_report(stage=done)` 的成功结果带 `reminders`，graph 与 `limitations` 并列展示，接续 `maintain` 也不再等待它。这兑现 #142「真实收取后能解除等待，不能形成不可解除的永久阻塞」；提醒仍说明结果无法收取，不以提醒代替取证或业务验收。提醒是一条清洗过、总长不超过 320 码点的单行文本：label 取首个可见行（去除 ANSI 与 C0/C1 控制字符、按码点截断），并带上执行者会话 id；journal 记录停留在运行中的作业会明确说“记录停留在运行中”，不谎称已有终态结果。
 
 ## #141 源码整合检查点
 

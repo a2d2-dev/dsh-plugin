@@ -140,12 +140,18 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
           if (!roots.has(sessionKey(child.session))) roots.set(sessionKey(child.session), { session: child.session, role: 'native-child', parent: row.session })
         }
         if (row.jobObservation === 'unavailable') { blockers.push({ code: 'job-observation-unavailable', session: row.session }); limitations.add('当前宿主缺少正式 jobs.observe 非消费接口，无法证明终态结果已交付。') }
+        // A host without any jobs service has no registry to prove reachability:
+        // job facts come from the journal alone, which is a bounded limitation.
+        if (row.jobObservation === 'disabled' && row.jobs.length) limitations.add('宿主未提供 jobs 服务：作业结果只能依据会话日志判断，不可达作业只提醒不阻断。')
         for (const job of row.jobs) {
           // A reachable result must be collected before completion; a job whose
           // registry instance is gone only leaves a bounded reminder (#201).
           const settled = settleUncollectedJob(job)
           if (settled.blocker) blockers.push({ code: settled.blocker, session: row.session, jobId: job.id })
-          if (settled.reminder) reminders.add(settled.reminder)
+          // A list-only host cannot prove delivery and already raises
+          // job-observation-unavailable; a parallel "registry unreachable"
+          // reminder for the same job would contradict that blocker.
+          if (settled.reminder && row.jobObservation !== 'unavailable') reminders.add(settled.reminder)
           if (job.result === 'unknown') limitations.add('作业输出交付与模型消费、业务验收分别呈现；公开观察不会调用 jobs.read。')
         }
       } catch {

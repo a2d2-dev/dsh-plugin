@@ -160,6 +160,15 @@ it('accepts completion when only an unreachable job remains and returns its boun
   expect(accepted.reminders).toEqual([reminder])
   expect((await h.detail()).task!.completion).toBeDefined()
 })
+it('accepts completion when an older host observation omits the public reminders field', async () => {
+  // reminders is a public optional capability: a third-party or older adapter may
+  // omit it, and a missing field must not throw inside the completion gate.
+  const h = await setup(parent => { parent.subIssues = { items: [], totalCount: 0, hasNextPage: false } },
+    async () => ({ settlement: 'settled', sessions: [], blockers: [], limitations: [] } as unknown as ExecutionObservation))
+  const accepted = ok(await h.app.sessionReport(h.execution.session, 'legacy-observation', report))
+  expect(accepted.reminders).toBeUndefined()
+  expect((await h.detail()).task!.completion).toBeDefined()
+})
 it('still refuses completion while a reachable job result remains uncollected', async () => {
   const h = await setup(parent => { parent.subIssues = { items: [], totalCount: 0, hasNextPage: false } }, async () => ({ settlement: 'pending', sessions: [],
     blockers: [{ code: 'job-unsettled', session: { runtimeId: 'runtime', sessionId: 'current' }, jobId: 'bash-1' }], reminders: [], limitations: [] }))
