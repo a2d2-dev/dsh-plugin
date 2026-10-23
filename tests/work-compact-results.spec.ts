@@ -48,6 +48,20 @@ it('keeps status available after startup with ownership and versions but no task
   expect(full.task!.specification.text).toContain('完整规格')
 })
 
+it('organizes the accepted specification with a minimal result and exact version conflicts', async () => {
+  const h = await setup()
+  const before = (await h.detail()).task!
+  const args = { action: 'specification', expected_version: before.version, goal: before.goal, specification: 'NEW SPEC ' + '约束'.repeat(4000), acceptance: before.specification.acceptance }
+  const result = await h.invoke('work_organize', args)
+  expect(result.value).toMatchObject({ status: 'completed', saved: true, action: 'specification', taskVersion: before.version + 1, specificationVersion: 2 })
+  expect(result.value).not.toHaveProperty('task')
+  expect(result.text).not.toContain('NEW SPEC')
+  expect(Buffer.byteLength(result.text)).toBeLessThanOrEqual(2048)
+  expect((await h.detail()).task!.specification.text).toBe(args.specification)
+  expect((await h.invoke('work_organize', args)).value).toMatchObject({ status: 'conflict', error: { code: 'version-conflict', currentVersion: before.version + 1 } })
+  expect((await h.invoke('work_control', { action: 'status', known_specification_version: 1 })).value).toMatchObject({ coordinator: true, specificationState: 'changed', specificationVersion: 2 })
+})
+
 it('saves progress without echoing the submitted report or historical Task and preserves errors', async () => {
   const h = await setup()
   const report = { specificationVersion: 1, stage: 'in-progress', summary: 'PRIVATE REPORT ' + '正文'.repeat(2000), next: 'Next action', blockers: [], criteria: [] }
