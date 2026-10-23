@@ -6,7 +6,7 @@
  * method files and SOUL files on every assembly, so changed principles are used
  * by the next model request without restarting the session.
  *
- * @module @deepseek-ai/dsh-a2d2/src/ceo-prompt
+ * @module @a2d2-dev/dsh-a2d2/src/ceo-prompt
  */
 
 import { existsSync, readFileSync } from 'node:fs'

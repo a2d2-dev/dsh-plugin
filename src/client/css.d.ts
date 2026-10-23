@@ -6,7 +6,7 @@
  * resolves to `undefined` and renders no class. Declaring the map's keys here
  * makes that a compile error instead.
  *
- * @module @deepseek-ai/dsh-a2d2/client/css
+ * @module @a2d2-dev/dsh-a2d2/client/css
  */
 
 declare module '*.module.css' {

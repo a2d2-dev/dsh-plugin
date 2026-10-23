@@ -4,7 +4,7 @@
  * It is a pure function so the boundary card and the future settings page can
  * reuse the same highway semantics without sharing React state.
  *
- * @module @deepseek-ai/dsh-a2d2/client/highway-view
+ * @module @a2d2-dev/dsh-a2d2/client/highway-view
  */
 
 import {

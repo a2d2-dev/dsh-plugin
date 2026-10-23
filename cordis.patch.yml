@@ -1,11 +1,11 @@
-# dsh-a2d2 bundle patch: the mount row this plugin contributes to a profile.
+# @a2d2-dev/dsh-a2d2 bundle patch: the mount row this plugin contributes to a profile.
 #
 # Installed through the official CLI —
 #
-#   dsh plugin --profile web add dsh-a2d2
+#   dsh plugin --profile web add @a2d2-dev/dsh-a2d2
 #
 # — the command reconciles `dsh.profile.bundles` against installed packages and,
-# seeing the `dsh.bundle.patch` declaration in package.json, appends `dsh-a2d2`
+# seeing the `dsh.bundle.patch` declaration in package.json, appends `@a2d2-dev/dsh-a2d2`
 # to the bundle stack. The profile boot then merges THIS patch, which inserts
 # the plugin row.
 #
@@ -34,24 +34,24 @@
 # drives that same command through the session it already sits on.
 - insert:
     - id: a2d2
-      name: 'dsh-a2d2'
+      name: '@a2d2-dev/dsh-a2d2'
     - id: a2d2-work
-      name: 'dsh-a2d2/work-plugin'
+      name: '@a2d2-dev/dsh-a2d2/work-plugin'
     - id: a2d2-command
-      name: 'dsh-a2d2/command'
+      name: '@a2d2-dev/dsh-a2d2/command'
     - id: a2d2-tools
-      name: 'dsh-a2d2/tools'
+      name: '@a2d2-dev/dsh-a2d2/tools'
     - id: a2d2-open-subtask-tools
-      name: 'dsh-a2d2/open-subtask-tools'
+      name: '@a2d2-dev/dsh-a2d2/open-subtask-tools'
     - id: a2d2-complete-task-tools
-      name: 'dsh-a2d2/complete-task-tools'
+      name: '@a2d2-dev/dsh-a2d2/complete-task-tools'
     - id: a2d2-ceo-prompt
-      name: 'dsh-a2d2/ceo-prompt'
+      name: '@a2d2-dev/dsh-a2d2/ceo-prompt'
     - id: a2d2-agent-prompt
-      name: 'dsh-a2d2/agent-prompt'
+      name: '@a2d2-dev/dsh-a2d2/agent-prompt'
     - id: a2d2-github-watch
-      name: 'dsh-a2d2/github-watch'
+      name: '@a2d2-dev/dsh-a2d2/github-watch'
     - id: a2d2-task-runtime
-      name: 'dsh-a2d2/task-runtime'
+      name: '@a2d2-dev/dsh-a2d2/task-runtime'
       config:
         enabled: false

@@ -5,7 +5,7 @@
  * prefer `projectedTokens` over the raw provider sample because the projection
  * carries the last sample forward across surface changes.
  *
- * @module @deepseek-ai/dsh-a2d2/src/context-occupancy
+ * @module @a2d2-dev/dsh-a2d2/src/context-occupancy
  */
 
 /** The subset of the host `contextPressure` projection this plugin consumes. */

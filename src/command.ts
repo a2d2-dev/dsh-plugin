@@ -12,7 +12,7 @@
  * summary is about. Preparing therefore ends by queueing one ordinary turn of
  * that session, and the document stays unreadable until the turn finishes.
  *
- * @module @deepseek-ai/dsh-a2d2/src/command
+ * @module @a2d2-dev/dsh-a2d2/src/command
  */
 
 import type { Context } from '@deepseek-ai/cordis'

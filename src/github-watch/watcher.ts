@@ -6,7 +6,7 @@
  * state of a watch answers the `github_watch` call itself; a watch ends once a
  * terminal state (merged, closed, not found) has been told.
  *
- * @module @deepseek-ai/dsh-a2d2/src/github-watch/watcher
+ * @module @a2d2-dev/dsh-a2d2/src/github-watch/watcher
  */
 
 import { createHash } from 'node:crypto'

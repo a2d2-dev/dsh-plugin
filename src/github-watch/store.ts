@@ -7,7 +7,7 @@
  * last-told state is what makes "changes while DSH was down are reported
  * exactly once" hold: the snapshot after reconnecting is compared with it.
  *
- * @module @deepseek-ai/dsh-a2d2/src/github-watch/store
+ * @module @a2d2-dev/dsh-a2d2/src/github-watch/store
  */
 
 import { mkdir, readFile } from 'node:fs/promises'

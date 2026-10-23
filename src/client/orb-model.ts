@@ -7,7 +7,7 @@
  * browser and the threshold that drives the color is data rather than a
  * constant embedded in a component.
  *
- * @module @deepseek-ai/dsh-a2d2/client/orb-model
+ * @module @a2d2-dev/dsh-a2d2/client/orb-model
  */
 
 export {
