@@ -121,6 +121,7 @@ export function ExecutionSessions({ graph, ...navigation }: { graph: ExecutionGr
     {history.length > 0 && <details className={styles.group}><summary>历史会话与尝试 · {history.length}</summary>{history.map(row => <SessionFacts key={sessionId(row.session)} row={row} navigation={navigation} showJobs/>)}</details>}
     {graph.history.length > 0 && <details className={styles.group}><summary>执行尝试记录 · 只读 · {graph.history.length}</summary><ol>{graph.history.map((attempt, index) => <li key={`${attempt.commandId}/${index}`}>{attempt.state} · {attempt.commandId}</li>)}</ol></details>}
     {graph.limitations.map((text, index) => <p className={styles.limit} role="status" key={index}>{text}</p>)}
+    {graph.reminders.map((text, index) => <p className={styles.limit} role="status" key={`reminder:${index}`}>{text}</p>)}
   </section>
 }
 

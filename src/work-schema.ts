@@ -135,7 +135,7 @@ export const querySchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('session.work'), session: sessionRefSchema }).strict(),
   z.object({ type: z.literal('legacy.resolve'), address: legacyAddressSchema }).strict(),
 ])
-const receiptSchema = z.object({ continuousRule: continuousRuleSchema.optional(), status: z.literal('completed'), execution: executionSchema.optional(), project: projectSchema.optional(), task: taskSchema.optional(), ref: taskRefSchema.optional(), source: sourceSchema.optional(), binding: bindingSchema.optional() }).strict()
+const receiptSchema = z.object({ continuousRule: continuousRuleSchema.optional(), status: z.literal('completed'), execution: executionSchema.optional(), project: projectSchema.optional(), task: taskSchema.optional(), ref: taskRefSchema.optional(), source: sourceSchema.optional(), binding: bindingSchema.optional(), reminders: z.array(z.string()).optional() }).strict()
 export const snapshotSchema = z.object({
   schemaVersion: z.literal(3), projects: z.array(projectSchema), agents: z.array(agentSchema), tasks: z.array(taskSchema),
   sources: z.array(sourceSchema).default([]), externalBindings: z.array(bindingSchema).default([]),

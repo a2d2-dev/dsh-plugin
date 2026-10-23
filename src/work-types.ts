@@ -159,6 +159,8 @@ export interface SourceResultFields {
 export interface WorkCompleted extends SourceResultFields {
   continuousRule?: ContinuousWorkRule
   status: 'completed'
+  /** Non-blocking completion notices, e.g. an unreachable job whose result can no longer be collected. */
+  reminders?: string[]
   progress?: TaskProgressView
   scan?: SourceScanProgress
   progressItems?: TaskProgressView[]

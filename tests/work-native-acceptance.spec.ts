@@ -6,6 +6,7 @@ import { GitHubSource } from '../src/work-sources/github.ts'
 import { WorkApplication, type WorkHost } from '../src/work.ts'
 import type { WorkResult, WorkTask } from '../src/work-types.ts'
 import type { GitHubIssue, GitHubSourcePort } from '../src/work-sources/types.ts'
+import type { ExecutionObservation } from '../src/work-execution/observation.ts'
 const operator = { operator: true }
 const roots: string[] = []
 afterEach(async () => { for (const root of roots.splice(0)) { if (dirname(root) !== tmpdir() || !basename(root).startsWith('native-acceptance-') || await realpath(root) !== root) throw Error('Unsafe cleanup'); await rm(root, { recursive: true, force: true }) } })
@@ -14,13 +15,13 @@ const identity = { login: 'developer', nodeId: 'U_developer', name: null }
 const repository = { owner: 'example', repository: 'repo' }
 const issue = (number: number): GitHubIssue => ({ nodeId: `I_${number}`, number, url: `https://github.com/example/repo/issues/${number}`, repository, title: `Work ${number}`, body: 'Verify the specified result', labels: [], assignees: ['developer'], state: 'open', observedAt: '2026-10-21T00:01:00Z', updatedAt: '2026-10-21T00:00:00Z', subIssues: { items: [], totalCount: 0, hasNextPage: false } })
 const report = { specificationVersion: 1, stage: 'done' as const, summary: 'verified', next: '', blockers: [], criteria: [{ index: 0, passed: true, evidence: ['verification result'] }], closeExternal: true }
-async function setup(change: (parent: GitHubIssue, child: GitHubIssue) => void = () => {}) {
+async function setup(change: (parent: GitHubIssue, child: GitHubIssue) => void = () => {}, observation: () => Promise<ExecutionObservation> = async () => ({ settlement: 'settled', sessions: [], blockers: [], reminders: [], limitations: [] })) {
   const root = await mkdtemp(join(tmpdir(), 'native-acceptance-')); roots.push(root)
   const resource = { runtimeId: 'runtime', workspaceId: 'workspace' }
   const choices = { models: [{ provider: 'contract', model: 'default' }], agentPresets: ['contract'], permissionPresets: ['read-only'], defaults: { model: { provider: 'contract', model: 'default' }, agentPreset: 'contract', permissionPreset: 'read-only' } }
   const host: WorkHost = { resources: async () => [{ ref: resource, title: 'local' }, { ref: { ...resource, workspaceId: 'foreign' }, title: 'foreign' }], sessions: async () => [], execution: {
     connect() {}, status: () => 'idle', check: async () => choices, choices: async () => choices, ensure: async () => ({ runtimeId: 'runtime', cwd: root, provider: 'contract', model: 'default', agentPreset: 'contract', permissionPreset: 'read-only', sandbox: 'read-only', approval: 'never' }),
-    settle: async () => {}, maintain: async (_, body) => body(), wake: async () => {}, deliver: async () => 'consumed', observe: async () => 'consumed', observation: async () => ({ settlement: 'settled', sessions: [], blockers: [], limitations: [] }),
+    settle: async () => {}, maintain: async (_, body) => body(), wake: async () => {}, deliver: async () => 'consumed', observe: async () => 'consumed', observation,
   } }
   const parent = issue(1), child = issue(2)
   parent.subIssues = { items: [{ nodeId: child.nodeId, number: child.number, url: child.url, title: child.title, repository: child.repository, state: child.state }], totalCount: 1, hasNextPage: false }
@@ -151,6 +152,28 @@ it('refuses invented external child evidence on a pure local Task', async () => 
   const execution = await h.start(task)
   expect(await h.app.sessionReport(execution.session, 'unrelated-external', { ...report, closeExternal: false, externalChildren: [{ nodeId: 'I_invented', updatedAt: h.child.updatedAt, basis: 'unrelated', evidence: [h.child.url] }] })).toMatchObject({ status: 'failed', error: { code: 'native-child-evidence-out-of-scope' } })
   expect(ok(await h.app.query({ type: 'task.detail', ref: execution.ref }, operator)).task!.completion).toBeUndefined()
+})
+it('accepts completion when only an unreachable job remains and returns its bounded reminder', async () => {
+  const reminder = '作业 bash-641（bash：cd /data && pnpm test）的注册表实例已不可达，终态结果无法再收取；按「不可达只提醒」约定不阻断完成，如需取证请查看该作业所属会话历史。'
+  const h = await setup(parent => { parent.subIssues = { items: [], totalCount: 0, hasNextPage: false } }, async () => ({ settlement: 'settled', sessions: [], blockers: [], reminders: [reminder], limitations: [] }))
+  const accepted = ok(await h.app.sessionReport(h.execution.session, 'lost-job-only', report))
+  expect(accepted.reminders).toEqual([reminder])
+  expect((await h.detail()).task!.completion).toBeDefined()
+})
+it('accepts completion when an older host observation omits the public reminders field', async () => {
+  // reminders is a public optional capability: a third-party or older adapter may
+  // omit it, and a missing field must not throw inside the completion gate.
+  const h = await setup(parent => { parent.subIssues = { items: [], totalCount: 0, hasNextPage: false } },
+    async () => ({ settlement: 'settled', sessions: [], blockers: [], limitations: [] } as unknown as ExecutionObservation))
+  const accepted = ok(await h.app.sessionReport(h.execution.session, 'legacy-observation', report))
+  expect(accepted.reminders).toBeUndefined()
+  expect((await h.detail()).task!.completion).toBeDefined()
+})
+it('still refuses completion while a reachable job result remains uncollected', async () => {
+  const h = await setup(parent => { parent.subIssues = { items: [], totalCount: 0, hasNextPage: false } }, async () => ({ settlement: 'pending', sessions: [],
+    blockers: [{ code: 'job-unsettled', session: { runtimeId: 'runtime', sessionId: 'current' }, jobId: 'bash-1' }], reminders: [], limitations: [] }))
+  expect(await h.app.sessionReport(h.execution.session, 'live-job-pending', report)).toMatchObject({ status: 'failed', error: { code: 'completion-results-unsettled' } })
+  expect((await h.detail()).task!.completion).toBeUndefined()
 })
 it('requires current externally observed material after the necessary child changes', async () => {
   const h = await setup()

@@ -22,7 +22,7 @@ async function setup(source?:GitHubSourcePort){
   ensure:async()=>{calls.ensure++;return {runtimeId:'runtime',cwd:root,agentPreset:'contract',provider:'contract',model:'selected',permissionPreset:'workspace-write',sandbox:'workspace-write',approval:'never'}},
   wake:async()=>{calls.wake++},settle:async()=>{calls.settle++;if(inMaintenance)throw Error('Nested maintenance would deadlock')},deliver:async()=> 'consumed',observe:async()=> 'consumed',
   maintain:async(_execution,body)=>{calls.maintain++;inMaintenance=true;try{return await body()}finally{inMaintenance=false}},
-  observation:async()=>({settlement,blockers:[],limitations:[],sessions:[]}),
+  observation:async()=>({settlement,blockers:[],reminders:[],limitations:[],sessions:[]}),
  }}
  const app=new WorkApplication(join(root,'work'),host,source)
  const project=ok(await app.execute({type:'project.create',commandId:'project',name:'local',resource},operator)).project!

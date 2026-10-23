@@ -10,11 +10,12 @@ import type { ExecutionGraph } from '../../src/work-execution/observation.ts'
 
 it('renders independent child entry, real job owner and distinct delivery/consumption with visible continuation parameters', async () => {
   const session = { runtimeId: 'runtime', sessionId: 'current' }
-  const graph: ExecutionGraph = { settlement: 'pending', ref: { projectId: 'p', taskId: 't' }, executionId: 'execution', owner: { id: 'owner', epoch: 2, agentId: 'agent' }, currentSession: session, childTasks: [{ ref: { projectId: 'p', taskId: 'child' }, title: 'Independent issue', agentId: 'child-agent', owner: 'child-owner', currentSession: { ...session, sessionId: 'child-current' } }], sessions: [{ session, role: 'current', status: 'idle', children: [], jobs: [{ id: 'bash-1', owner: session, label: 'checks', kind: 'bash', status: 'completed', delivery: 'delivered', result: 'unknown', acceptance: 'unassessed', persistence: 'process-local' }] }], events: [], history: [], blockers: [], limitations: [] }
+  const graph: ExecutionGraph = { settlement: 'pending', ref: { projectId: 'p', taskId: 't' }, executionId: 'execution', owner: { id: 'owner', epoch: 2, agentId: 'agent' }, currentSession: session, childTasks: [{ ref: { projectId: 'p', taskId: 'child' }, title: 'Independent issue', agentId: 'child-agent', owner: 'child-owner', currentSession: { ...session, sessionId: 'child-current' } }], sessions: [{ session, role: 'current', status: 'idle', children: [], jobs: [{ id: 'bash-1', owner: session, label: 'checks', kind: 'bash', status: 'completed', delivery: 'delivered', result: 'unknown', acceptance: 'unassessed', persistence: 'process-local' }] }], events: [], history: [], blockers: [], reminders: ['作业 bash-641 的注册表实例已不可达，只提醒不阻断完成。'], limitations: [] }
   const html = renderToStaticMarkup(createElement(ExecutionSessions, { graph, onOpenTask: () => {}, onOpenSession: () => {} }))
   for (const text of ['会话与执行', 'Independent issue', 'child-owner', 'current', '输出已交付', '消费未知', '未验收']) expect(html).toContain(text)
   // Evidence stays reachable but folded: counts on the summary, details on demand.
   for (const text of ['独立子 Issue / Task · 1', '后台作业 · 1']) expect(html).toContain(text)
+  expect(html).toContain('注册表实例已不可达')
   expect(html).not.toContain('标记已消费')
   const continuation = renderToStaticMarkup(createElement(ExecutionContinuation, { graph, policy: { version: 1, enabled: true, targetTokens: 200000, reserveTokens: 12000 } }))
   expect(continuation).toContain('200,000')

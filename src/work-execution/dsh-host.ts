@@ -17,6 +17,7 @@ import { RuntimeHost } from '../task-runtime/host.ts'
 import { rootSessionProfile } from '../root-session.ts'
 import { WorkExecutionError } from './host.ts'
 import type { WorkExecutionHost } from './host.ts'
+import { settleUncollectedJob } from './job-observation.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap { 'a2d2-work-input-seal': { kind: 'a2d2-work-input-seal'; operationId: string } }
@@ -102,6 +103,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     const { sessionKey } = await import('./observation.ts')
     const roots = new Map<string, { session: import('../work-types.ts').SessionRef; role: import('./observation.ts').ObservedSession['role']; parent?: import('../work-types.ts').SessionRef }>()
     const blockers: import('./observation.ts').ExecutionBlocker[] = []
+    const reminders = new Set<string>()
     const limitations = new Set<string>()
     let bindings: readonly import('../work-types.ts').SessionAssociation[] = associations ?? []
     if (associations === undefined) {
@@ -138,8 +140,18 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
           if (!roots.has(sessionKey(child.session))) roots.set(sessionKey(child.session), { session: child.session, role: 'native-child', parent: row.session })
         }
         if (row.jobObservation === 'unavailable') { blockers.push({ code: 'job-observation-unavailable', session: row.session }); limitations.add('当前宿主缺少正式 jobs.observe 非消费接口，无法证明终态结果已交付。') }
+        // A host without any jobs service has no registry to prove reachability:
+        // job facts come from the journal alone, which is a bounded limitation.
+        if (row.jobObservation === 'disabled' && row.jobs.length) limitations.add('宿主未提供 jobs 服务：作业结果只能依据会话日志判断，不可达作业只提醒不阻断。')
         for (const job of row.jobs) {
-          if (job.delivery !== 'delivered') blockers.push({ code: job.availability === 'lost' ? 'job-registry-unavailable' : job.delivery === 'unknown' ? 'job-result-unknown' : 'job-unsettled', session: row.session, jobId: job.id })
+          // A reachable result must be collected before completion; a job whose
+          // registry instance is gone only leaves a bounded reminder (#201).
+          const settled = settleUncollectedJob(job)
+          if (settled.blocker) blockers.push({ code: settled.blocker, session: row.session, jobId: job.id })
+          // A list-only host cannot prove delivery and already raises
+          // job-observation-unavailable; a parallel "registry unreachable"
+          // reminder for the same job would contradict that blocker.
+          if (settled.reminder && row.jobObservation !== 'unavailable') reminders.add(settled.reminder)
           if (job.result === 'unknown') limitations.add('作业输出交付与模型消费、业务验收分别呈现；公开观察不会调用 jobs.read。')
         }
       } catch {
@@ -147,7 +159,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       }
     }
     const unknown = blockers.some(blocker => /unknown|unavailable/.test(blocker.code))
-    return { settlement: unknown ? 'unknown' : blockers.length ? 'pending' : 'settled', sessions, blockers, limitations: [...limitations] }
+    return { settlement: unknown ? 'unknown' : blockers.length ? 'pending' : 'settled', sessions, blockers, reminders: [...reminders], limitations: [...limitations] }
   }
   async maintain<T>(execution: WorkExecution, body: () => Promise<T>): Promise<T> {
     if (!this.observationScope) throw new WorkExecutionError('execution-scope-unavailable', 'Safe maintenance requires the authority-owned Task observation scope resolver')
