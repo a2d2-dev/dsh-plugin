@@ -5,10 +5,7 @@
     "noEmit": false,
     "declaration": true,
     "emitDeclarationOnly": true,
-    "outDir": "lib/types",
-    "rootDir": "src"
+    "outDir": "lib/types/client"
   },
-  "include": [
-    "src/client"
-  ]
+  "include": ["src/client"]
 }
