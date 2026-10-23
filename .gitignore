@@ -3,6 +3,7 @@ lib/
 coverage/
 *.tsbuildinfo
 *.log
+*.tgz
 tmp/
 
 # Local agent sessions, worktrees, and machine state
