@@ -78,7 +78,8 @@ it.each(['material-request', 'successor-create', 'source-take', 'source-seal', '
     cutoverInput = createUserMessage({ content: [{ type: 'text', text: 'Input at the durable cutover boundary' }], source: { kind: 'user' } })
     source.agent.followup(cutoverInput)
     await fixtures.run(() => source.agent.whenIdle())
-    expect(restored.model.requests).toHaveLength(0)
+    expect(restored.model.requests).toHaveLength(1)
+    expect(JSON.stringify(restored.model.requests[0]!.messages)).toContain(operation.successor.sessionId)
   }
   await fixtures.run(() => restored.app.reconcileControls())
   const recovered = await restored.app.execute(command, operator)
@@ -90,7 +91,10 @@ it.each(['material-request', 'successor-create', 'source-take', 'source-seal', '
   expect(sourceLog.events.filter(event => event.type === 'user/message' && event.data.id === operation.materialRequestId)).toHaveLength(1)
   expect(successorLog.events.filter(event => event.type === 'user/message' && event.data.id === operation.kickoffId)).toHaveLength(1)
   expect(sourceLog.events.filter(event => event.type === 'agent/inbox/spliced' && event.data.inserted.some(message => message.id === `intake-seal:${operation.operationId}`))).toHaveLength(1)
-  if (cutoverInput) expect(successorLog.events.filter(event => event.type === 'user/message' && event.data.id === cutoverInput!.id)).toHaveLength(checkpoint === 'source-take' ? 1 : 0)
+  if (cutoverInput) {
+    expect(sourceLog.events.filter(event => event.type === 'user/message' && event.data.id === cutoverInput!.id)).toHaveLength(1)
+    expect(successorLog.events.filter(event => event.type === 'user/message' && event.data.id === cutoverInput!.id)).toHaveLength(0)
+  }
 })
 
 it.each(['cancelled', 'completed-without-material'] as const)('retries a consumed %s material request without replacing the operation or successor', async outcome => {
@@ -260,7 +264,7 @@ it('inherits the actual Session-local reasoning effort and Project Agent instruc
   expect(defaultSaves).not.toHaveBeenCalled()
 })
 
-it('keeps retired native input and tools fenced after cold restore while history stays read-only', async () => {
+it('keeps retired conversations usable after cold restore without restoring Task coordination', async () => {
   const h = await setup()
   const task = await h.app.query({ type: 'task.detail', ref: h.ref }, operator)
   if (task.status !== 'completed' || !task.task) throw new Error('Missing task')
@@ -280,8 +284,11 @@ it('keeps retired native input and tools fenced after cold restore while history
   resolved.agent.followup(native)
   await fixtures.run(() => resolved.agent.whenIdle())
   const denied = await fixtures.run(() => restored.ctx.tools.execute({ callId: ToolCallId('retired-progress'), name: 'work_control', arguments: { action: 'progress', text: 'Late tool write' }, agent: resolved.agent, signal: new AbortController().signal }))
-  expect(denied.isError).toBe(true)
-  expect(restored.model.requests).toHaveLength(0)
+  expect(JSON.stringify(denied.content)).toContain('forbidden')
+  expect(restored.model.requests).toHaveLength(1)
+  expect(restored.model.requests[0]!.messages).toEqual(expect.arrayContaining([expect.objectContaining({ id: native.id, content: native.content })]))
+  expect(JSON.stringify(restored.model.requests[0]!.messages)).toContain(`任务已转到会话 ${current.session.sessionId}`)
+  expect(await restored.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { session: current.session, epoch: current.epoch, owner: current.owner } })
   expect(await restored.app.query({ type: 'session.work', session: h.execution.session }, operator)).toMatchObject({ work: [{ purpose: 'history', executionId: current.id, epoch: 1, currentSession: current.session }] })
 })
 
@@ -338,9 +345,9 @@ it.each(['unknown', 'invalid', 'changed', 'stale'] as const)('blocks automatic a
   const code = { unknown: 'continuation-metadata-unknown', invalid: 'continuation-policy-invalid', changed: 'continuation-route-changed', stale: 'continuation-meter-stale' }[mode]
   expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { epoch: 1, continuationBlocked: { code } } })
   const agent = h.ctx.agents.get(SessionId(h.execution.session.sessionId))!
-  agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Do not advance with unsafe metadata' }], source: { kind: 'user' } }))
+  agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Explain the blocked automatic continuation' }], source: { kind: 'user' } }))
   await fixtures.run(() => agent.whenIdle())
-  expect(h.model.requests).toHaveLength(1)
+  expect(h.model.requests).toHaveLength(2)
   expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(1)
 })
 

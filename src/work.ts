@@ -160,7 +160,35 @@ export class WorkApplication {
         return false
         } finally { this.mutationDepth--; this.snapshotCache = undefined }
       })
+    }, sessionId => this.conversationContext(sessionId), async sessionId => {
+      const execution = (await this.load()).executions.find(item => item.session.sessionId === sessionId)
+      return (execution?.events ?? []).flatMap(event => {
+        const message = event.nativeMessage
+        const source = message?.source
+        return event.delivery !== 'consumed' && message && typeof source === 'object' && source !== null && 'kind' in source && source.kind === 'user' ? [message] : []
+      })
     })
+  }
+  /** Inform native conversations without changing Task state or coordinator identity. */
+  private async conversationContext(sessionId: string): Promise<string | undefined> {
+    const state = await this.load()
+    const execution = state.executions.find(item => item.session.sessionId === sessionId
+      || item.retired?.some(old => old.session.sessionId === sessionId)
+      || item.continuation?.successor.sessionId === sessionId)
+    if (!execution) return undefined
+    const task = taskAt(state, execution.ref)
+    const current = execution.session.sessionId === sessionId
+    const status = isTaskCompleted(task) ? '已完成' : execution.control?.status === 'accepted' && execution.control.action !== 'resume'
+      ? execution.control.action === 'pause' ? '暂停中' : '等待中'
+      : execution.state === 'waiting' ? '等待中' : execution.state === 'paused' ? '已暂停' : execution.state
+    return [
+      current ? `关联任务：${task?.title ?? execution.ref.taskId}；状态：${status}。你可以继续在此对话。`
+        : `任务已转到会话 ${execution.session.sessionId}；此会话仍可继续对话。`,
+      `当前任务处理会话：${execution.session.sessionId}。可从“关联任务 → 进入当前处理会话”打开。`,
+      `Task ${execution.ref.taskId}；协调代次 ${execution.epoch}。${current ? '此会话仍是当前协调会话。' : '此会话不再负责该 Task；不要继续自动推进原任务或冒充当前协调者写入 Task 记录。'}`,
+      ...(execution.control?.reason ? [`最近控制说明：${execution.control.reason.slice(0, 1200)}`] : []),
+      '这是当前协调事实，优先于历史启动消息的过期身份说明。正常接收并回答人工消息，可按用户请求使用宿主已有工具和权限；不需要先恢复 Task 才能对话。人工对话本身不解除暂停、不重开已完成任务、不恢复自动调度或改变协调归属。等待或完成工具返回后，向用户交代结果再结束本轮。Task 写操作按各自规则检查当前身份和状态。',
+    ].join('\n')
   }
   /** Reads authoritative execution facts without collecting jobs or starting any executor. */
   private async executionGraph(state: WorkSnapshot, task: WorkTask) {
@@ -341,11 +369,17 @@ export class WorkApplication {
       } finally { this.mutationDepth--; this.snapshotCache = undefined }
     })
   }
+  private async coordinatorUnavailable(session: import('./work-types.ts').SessionRef): Promise<WorkResult> {
+    const execution = (await this.load()).executions.find(item => item.retired?.some(old => sameSession(old.session, session)))
+    return failed('forbidden', execution
+      ? `This Task is now coordinated by Session ${execution.session.sessionId} (epoch ${execution.epoch}). Conversation here remains available; use the current Session for Task changes.`
+      : 'Calling Session is not a current Task coordinator')
+  }
   /** Trusted ToolRunContext adapter supplies only its real Session and call identity. */
   async sessionControl(session: import('./work-types.ts').SessionRef, callId: string, action: string, text?: string, expectedEpoch?: number): Promise<WorkResult> {
     const state = await this.load()
     const execution = state.executions.find(item => sameSession(item.session, session))
-    if (!execution) return failed('forbidden', 'Calling Session is not a current Task coordinator')
+    if (!execution) return this.coordinatorUnavailable(session)
     if (action === 'status') return { status: 'completed', task: taskAt(state, execution.ref), bindings: state.externalBindings.filter(item => sameTask(item.ref, execution.ref)), sourceIssues: sourceIssuesAt(state, execution.ref), execution, executionRuntime: this.host.execution?.status(execution) ?? 'inactive' }
     const commandId = `tool:${createHash('sha256').update(JSON.stringify([session.runtimeId, session.sessionId, callId])).digest('hex')}`
     return this.execute({ type: 'task.control', commandId, ref: execution.ref,
@@ -356,7 +390,7 @@ export class WorkApplication {
   async sessionContinuationMaterial(session: import('./work-types.ts').SessionRef, callId: string,
     content: import('./work-types.ts').ContinuationContent, expectedEpoch?: number): Promise<WorkResult> {
     const execution = (await this.load()).executions.find(item => sameSession(item.session, session))
-    if (!execution) return failed('forbidden', 'Calling Session is not a current Task coordinator')
+    if (!execution) return this.coordinatorUnavailable(session)
     const commandId = `material:${createHash('sha256').update(JSON.stringify([session.runtimeId, session.sessionId, callId])).digest('hex')}`
     return this.execute({ type: 'task.continuation-material', commandId, ref: execution.ref,
       executionId: execution.id, owner: execution.owner, epoch: expectedEpoch ?? execution.epoch, content },
@@ -364,7 +398,7 @@ export class WorkApplication {
   }
   async sessionReport(session: import('./work-types.ts').SessionRef, callId: string, report: import('./work-progress.ts').TaskReport, expectedEpoch?: number, reporter?: import('@deepseek-ai/dsh-tools').ToolExecutionToken): Promise<WorkResult> {
     const execution = (await this.load()).executions.find(item => sameSession(item.session, session))
-    if (!execution) return failed('forbidden', 'Calling Session is not a current Task coordinator')
+    if (!execution) return this.coordinatorUnavailable(session)
     const commandId = `report:${createHash('sha256').update(JSON.stringify([session.runtimeId, session.sessionId, callId])).digest('hex')}`
     return this.execute({ type: 'task.report', commandId, ref: execution.ref, executionId: execution.id, owner: execution.owner, epoch: expectedEpoch ?? execution.epoch, report }, { operator: false, session, agentId: execution.agentId, reporter })
   }
@@ -402,7 +436,7 @@ export class WorkApplication {
   }
   async sessionOrganize(session: import('./work-types.ts').SessionRef, callId: string, organization: import('./work-organization.ts').TaskOrganization, expectedEpoch?: number): Promise<WorkResult> {
     const execution = (await this.load()).executions.find(item => sameSession(item.session, session))
-    if (!execution) return failed('forbidden', 'Calling Session is not a current Task coordinator')
+    if (!execution) return this.coordinatorUnavailable(session)
     const commandId = `organize:${createHash('sha256').update(JSON.stringify([session.runtimeId, session.sessionId, callId])).digest('hex')}`
     return this.execute({ type: 'task.organize', commandId, ref: execution.ref, executionId: execution.id, owner: execution.owner, epoch: expectedEpoch ?? execution.epoch, organization }, { operator: false, session, agentId: execution.agentId })
   }

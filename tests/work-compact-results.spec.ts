@@ -132,12 +132,13 @@ it('keeps receipts bounded through large specification and handoff histories on 
     expect(current.epoch).toBe(execution.epoch + 1)
     expect(current.continuation!.phase).toBe('delivered')
     const old = await fixtures.run(() => h.ctx.tools.execute({ callId: ToolCallId(crypto.randomUUID()), name: 'work_control', arguments: { action: 'status' }, agent: h.ctx.agents.get(SessionId(execution.session.sessionId))!, signal: new AbortController().signal }))
-    expect(old.isError).toBe(true)
-    expect(JSON.stringify(old)).toContain('Task')
+    expect(old.isError).toBe(false)
+    expect(JSON.stringify(old)).toContain('forbidden')
+    expect(JSON.stringify(old)).toContain(current.session.sessionId)
     expect(await h.app.sessionControl(execution.session, 'retired-status', 'status')).toMatchObject({ status: 'failed', error: { code: 'forbidden' } })
     const oldRead = await fixtures.run(() => h.ctx.tools.execute({ callId: ToolCallId(crypto.randomUUID()), name: 'work_read', arguments: { section: 'result', detail_id: 'a'.repeat(64), expected_version: 1 }, agent: h.ctx.agents.get(SessionId(execution.session.sessionId))!, signal: new AbortController().signal }))
-    expect(oldRead.isError).toBe(true)
-    expect(JSON.stringify(oldRead)).toContain('Task execution has not authorized this Session')
+    expect(oldRead.isError).toBe(false)
+    expect(JSON.stringify(oldRead)).toContain('forbidden')
     execution = current
     await fixtures.run(() => h.ctx.agents.get(SessionId(execution.session.sessionId))!.whenIdle())
   }
@@ -204,11 +205,10 @@ it.each([1, 100, 1000])('bounds lost-job reminders for %i jobs while preserving 
   expect(record.diagnostics.reminders).toEqual(facts.reminders)
   expect((await stat(file)).mode & 0o777).toBe(0o600)
   expect((await stat(join(h.app.directory, 'work-model-details'))).mode & 0o777).toBe(0o700)
-  for (const [name, args] of [['work_read', { section: 'result', detail_id: result.value.details.detail_id, expected_version: result.value.taskVersion }], ['work_control', { action: 'status' }], ['work_report', { report }]] as const) {
-    const rejected = await fixtures.run(() => h.ctx.tools.execute({ callId: ToolCallId(crypto.randomUUID()), name, arguments: args, agent: h.agent, signal: new AbortController().signal }))
-    expect(rejected.isError).toBe(true)
-    expect(JSON.stringify(rejected)).toContain('Task execution has not authorized this Session')
-  }
+  const details = await h.invoke('work_read', { section: 'result', detail_id: result.value.details.detail_id, expected_version: result.value.taskVersion })
+  expect(details.value.status).toBe('completed')
+  expect((await h.invoke('work_control', { action: 'status' })).value).toMatchObject({ status: 'completed', coordinator: true })
+  expect((await h.invoke('work_control', { action: 'resume', text: 'Try to resume completed work' })).value).toMatchObject({ status: 'failed', error: { code: 'task-completed' } })
   console.log(JSON.stringify({ fixture: 'lost-job-reminders', count: facts.reminders!.length, beforeBytes: Buffer.byteLength(JSON.stringify(facts.reminders)), afterBytes: Buffer.byteLength(result.text) }))
 }, 30_000)
 

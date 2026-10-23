@@ -10,7 +10,7 @@ import type {} from '@deepseek-ai/dsh-fs-local'
 import type {} from '@deepseek-ai/dsh-bash-local'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
-import { MessageId, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, MessageId, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import type { WorkEvent, WorkExecution } from '../work-types.ts'
 import { RuntimeHost } from '../task-runtime/host.ts'
@@ -20,10 +20,14 @@ import type { WorkExecutionHost } from './host.ts'
 import { settleUncollectedJob } from './job-observation.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
-  interface MessageSourceMap { 'a2d2-work-input-seal': { kind: 'a2d2-work-input-seal'; operationId: string } }
+  interface MessageSourceMap {
+    'a2d2-work-input-seal': { kind: 'a2d2-work-input-seal'; operationId: string }
+    'a2d2-work-dispatch': { kind: 'a2d2-work-dispatch' }
+    'a2d2-work-context': { kind: 'a2d2-work-context'; form: 'notice'; summary: string }
+  }
 }
 
-const installed = new WeakMap<Agent, { executionId: string; dispose: () => void }>()
+const installed = new WeakMap<Agent, { executionId: string }>()
 /** Public DSH create, preset, local model, maintenance and persisted delivery APIs. */
 export class DshWorkExecutionHost implements WorkExecutionHost {
   readonly runtime: RuntimeHost
@@ -38,19 +42,51 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     return service as NonNullable<Context[K]>
   }
   private authorize?: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<boolean>
+  private conversation?: (sessionId: string) => Promise<string | undefined>
+  private pendingHumanInput?: (sessionId: string) => Promise<readonly import('../work-types.ts').NativeWorkMessage[]>
+  private readonly admittedTurns = new WeakMap<Agent, number>()
+  private readonly conversationSnapshots = new WeakMap<Agent, string>()
   private readonly activeTools = new Map<import('@deepseek-ai/dsh-tools').ToolExecutionToken, import('@deepseek-ai/dsh-tools').ToolExecution>()
   private connected = false
-  connect(authorize: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<boolean>): void {
+  connect(authorize: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<boolean>, conversation?: (sessionId: string) => Promise<string | undefined>, pendingHumanInput?: (sessionId: string) => Promise<readonly import('../work-types.ts').NativeWorkMessage[]>): void {
     this.authorize = authorize
+    this.conversation = conversation
+    this.pendingHumanInput = pendingHumanInput
     if (this.connected) return
     this.connected = true
-    this.ctx.on('agent/pre-step', async ({ agent, messages }, next) => await this.authorize!(agent.id, messages) ? next() : { kind: 'reject', reason: 'Task execution has not authorized advancement' }, { prepend: true })
+    this.ctx.on('agent/pre-step', async ({ agent, messages, turn }, next) => {
+      // Task scheduling controls automatic turns, never the native human conversation.
+      // An admitted turn can finish its tool results and final answer after wait/done.
+      const human = messages.some(message => message.source?.kind === 'user')
+      if (!human && this.admittedTurns.get(agent) !== turn && !await this.authorize!(agent.id, messages)) return { kind: 'reject' }
+      const decision = await next()
+      if (decision.kind === 'reject') return decision
+      this.admittedTurns.set(agent, turn)
+      if (human && this.pendingHumanInput) {
+        const pending = await this.pendingHumanInput(agent.id)
+        if (pending.length) {
+          const seen = new Set<string>(decision.messages.map(message => message.id))
+          for (const event of await this.runtime.events(agent.id)) if (event.type === 'user/message') seen.add(event.data.id)
+          const recovered = pending.filter(message => !seen.has(message.id)) as UserMessage[]
+          decision.messages.unshift(...structuredClone(recovered))
+        }
+      }
+      const context = await this.conversation?.(agent.id)
+      if (context && context !== this.conversationSnapshots.get(agent)) {
+        this.conversationSnapshots.set(agent, context)
+        decision.messages.push(createUserMessage({
+          content: [{ type: 'text', text: context }],
+          source: { kind: 'a2d2-work-context', form: 'notice', summary: context.split('\n')[0]! },
+        }))
+      }
+      return decision
+    }, { prepend: true })
+    this.ctx.on('agent/status', ({ agent, status }) => { if (status === 'idle') this.admittedTurns.delete(agent) })
     this.ctx.on('tools/result', exec => { this.activeTools.delete(exec.token) })
     this.ctx.on('tools/pre-execute', async (exec, next) => {
-      // Include admission still in flight, not only bodies already entered.
+      // Observation includes admission still in flight. Task writes authorize in WorkApplication.
       this.activeTools.set(exec.token, exec)
-      const decision = await next()
-      return exec.agent && !await this.authorize!(exec.agent.id) ? { kind: 'deny', reason: 'Task execution has not authorized this Session to execute tools' } : decision
+      return next()
     }, { prepend: true })
   }
   async failure(execution: WorkExecution): Promise<{ id: string; message: string; userCancelled: boolean } | undefined> {
@@ -318,7 +354,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     return choices
   }
   private delivery(event: WorkEvent) {
-    const message: UserMessage = event.nativeMessage ? event.nativeMessage as UserMessage : { id: MessageId(event.id), role: 'user', content: [{ type: 'text', text: event.text }], source: { kind: 'user' } }
+    const message: UserMessage = event.nativeMessage ? event.nativeMessage as UserMessage : { id: MessageId(event.id), role: 'user', content: [{ type: 'text', text: event.text }], source: { kind: 'a2d2-work-dispatch' } }
     if (message.id !== event.id || message.role !== 'user') throw new WorkExecutionError('invalid-native-message', 'Stored native input identity is inconsistent')
     return { id: event.id, message }
   }
@@ -337,7 +373,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     await this.runtime.deliver(id, delivery, inMaintenance)
     return await this.runtime.deliveryState(id, delivery) === 'consumed' ? 'consumed' : 'delivered'
   }
-  async ensure(execution: WorkExecution, allowed: () => Promise<boolean>): Promise<NonNullable<WorkExecution['actual']>> {
+  async ensure(execution: WorkExecution, _allowed?: () => Promise<boolean>): Promise<NonNullable<WorkExecution['actual']>> {
     await this.check(execution)
     const id = SessionId(execution.session.sessionId)
     if (!await this.service('sessionPersistence').stat(id) && !this.service('agents').get(id)) {
@@ -366,12 +402,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       if (!started && profile.permission?.preset !== execution.permissionPreset) this.service('permissionPresets').set(agent.session, execution.permissionPreset)
       const prior = installed.get(agent)
       if (prior && prior.executionId !== execution.id) throw new WorkExecutionError('session-in-use', 'Agent already belongs to another execution')
-      if (!prior) {
-        // Controller restores the durable model/selection through its public Agent-scoped selector.
-        const dispose = agent.ctx.on('agent/pre-step', async ({ messages }, next) => await this.authorize!(agent.id, messages) && await allowed() ? next() : { kind: 'reject', reason: 'Task execution is waiting, paused or no longer owns coordination' }, { prepend: true })
-        installed.set(agent, { executionId: execution.id, dispose })
-        agent.ctx.effect(() => dispose, 'a2d2 execution authority fence')
-      }
+      if (!prior) installed.set(agent, { executionId: execution.id })
       await this.runtime.flush(agent)
     })
     const profile = await rootSessionProfile(this.ctx, id)

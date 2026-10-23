@@ -27,8 +27,26 @@ it('accepts a real model work_report without waiting for its own running tool', 
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Verify the collected results and report acceptance.' }], source: { kind: 'user' } }))
     await fixtures.run(() => agent.whenIdle())
     expect(ok(await h.app.query({ type: 'task.detail', ref }, operator)).task!.completion).toBeDefined()
+    expect(h.model.requests).toHaveLength(3)
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'turn/end').at(-1)).toMatchObject({ data: { reason: { kind: 'completed' } } })
     await h.app.reconcileCompletions()
-    expect(ok(await h.app.query({ type: 'task.detail', ref }, operator)).task!.completion!.closeout.status).toBe('settled')
+    const completed = ok(await h.app.query({ type: 'task.detail', ref }, operator)).task!.completion!
+    expect(completed.closeout.status).toBe('settled')
+    let toolCalls = 0
+    h.ctx.tools.register(defineTool({ name: 'conversation_lookup', description: 'Read a fact during a conversation', parameters: {},
+      output: { schema: { type: 'object', additionalProperties: false, properties: { result: { type: 'string', required: true } } }, render: (_, value) => [{ type: 'text', text: value.result }] },
+      async execute() { toolCalls++; return { result: 'Still available after completion' } },
+    }))
+    h.model.nextTool = { name: 'conversation_lookup', arguments: {} }
+    const followup = createUserMessage({ content: [{ type: 'text', text: 'What was completed? Look up the relevant fact.' }], source: { kind: 'user' } })
+    agent.followup(followup)
+    await fixtures.run(() => agent.whenIdle())
+    expect(h.model.requests).toHaveLength(5)
+    expect(toolCalls).toBe(1)
+    expect(h.model.requests[3]!.messages).toEqual(expect.arrayContaining([expect.objectContaining({ id: followup.id, content: followup.content })]))
+    expect(JSON.stringify(h.model.requests[3]!.messages)).toContain('已完成')
+    await h.app.reconcileCompletions()
+    expect(ok(await h.app.query({ type: 'task.detail', ref }, operator)).task!.completion).toEqual(completed)
     expect(await h.app.sessionControl(execution.session, 'late', 'resume', 'more')).toMatchObject({ status: 'failed', error: { code: 'task-completed' } })
   } finally { await fixtures.close() }
 })

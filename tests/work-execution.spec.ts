@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { join } from 'node:path'
@@ -34,20 +34,22 @@ it.each(['wait', 'pause'] as const)('accepts a real model self-%s before applyin
   await vi.waitFor(async () => expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({
     status: 'completed', execution: { state: action === 'wait' ? 'waiting' : 'paused', control: { action, status: 'applied', reason: 'Which acceptance decision should I use?' } },
   }), { timeout: 5000 })
-  expect(h.model.requests).toHaveLength(1)
+  expect(h.model.requests).toHaveLength(2)
   const inspection = await fixtures.run(() => h.ctx.sessionController.inspect(agent.id))
   expect(JSON.stringify(inspection.events.filter(item => item.type === 'tool/result'))).toContain('accepted')
   expect(inspection.events.filter(item => item.type === 'tool/result')).toEqual([expect.objectContaining({ data: expect.objectContaining({ message: expect.objectContaining({ isError: false }) }) })])
-  expect(inspection.events.filter(item => item.type === 'turn/end')).toEqual([expect.objectContaining({ data: { turn: 1, reason: { kind: 'blocked' } } })])
-  const native = createUserMessage({ content: [{ type: 'text', text: 'Native answer remains queued until explicit resume' }], source: { kind: 'user' } })
+  expect(inspection.events.filter(item => item.type === 'turn/end')).toEqual([expect.objectContaining({ data: { turn: 1, reason: { kind: 'completed' } } })])
+  const native = createUserMessage({ content: [{ type: 'text', text: 'Explain the current state without resuming automatic work' }], source: { kind: 'user' } })
   agent.followup(native)
   await fixtures.run(() => agent.whenIdle())
-  expect(h.model.requests).toHaveLength(1)
+  expect(h.model.requests).toHaveLength(3)
+  expect(h.model.requests[2]!.messages).toEqual(expect.arrayContaining([expect.objectContaining({ id: native.id, content: native.content })]))
+  expect(agent.session.snapshotEvents()).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'user/message', data: expect.objectContaining({ id: native.id }) })]))
   const fence = { ref: h.ref, executionId: started.execution.id, owner: started.execution.owner, epoch: started.execution.epoch }
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { state: action === 'wait' ? 'waiting' : 'paused', epoch: 1 } })
   expect(await h.app.execute({ type: 'task.control', commandId: 'resume-tool-wait', ...fence, action: 'resume', text: 'Use the accepted answer' }, operator)).toMatchObject({ status: 'completed', execution: { state: 'ready' } })
-  await vi.waitFor(async () => expect(h.model.requests, JSON.stringify(await h.app.query({ type: 'task.execution', ref: h.ref }, operator))).toHaveLength(2))
   await fixtures.run(() => agent.whenIdle())
-  expect(h.model.requests[1]!.messages).toEqual(expect.arrayContaining([expect.objectContaining({ id: native.id })]))
+  expect(h.model.requests).toHaveLength(3)
 })
 
 it('resolves real tool identity on the server and refuses foreign or absent calling Sessions', async () => {
@@ -99,7 +101,7 @@ it('recovers a real tool accepted intent after Context loss before the settled r
     state: 'paused', control: { commandId, action: 'pause', status: 'applied' },
   } }))
   expect(await fixtures.run(() => restored.ctx.sessionPersistence.list())).toHaveLength(1)
-  expect(h.model.requests).toHaveLength(1)
+  expect(h.model.requests).toHaveLength(2)
   expect(restored.model.requests).toHaveLength(0)
 })
 
@@ -305,7 +307,7 @@ it('enforces read-only through the real filesystem tool without claiming OS shel
   expect(h.ctx.approval.overrideOf(agent.session)).toBe('never')
 })
 
-it('keeps paused Task fenced after cold ordinary Session activation and explicitly resumes existing native inbox', async () => {
+it('keeps a paused Task paused after cold restore while native conversations remain usable', async () => {
   const h = await setup()
   const started = await h.app.execute({ type: 'task.start', commandId: 'cold-control', ref: h.ref, expectedVersion: 1, resource: h.resource,
     agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }, operator)
@@ -320,12 +322,41 @@ it('keeps paused Task fenced after cold ordinary Session activation and explicit
   if ('error' in resolved) throw new Error('No restored Agent')
   resolved.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Native input while paused' }], source: { kind: 'user' } }))
   await fixtures.run(() => resolved.agent.whenIdle())
-  expect(cold.model.requests).toHaveLength(0)
+  expect(cold.model.requests).toHaveLength(1)
   expect(await cold.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ status: 'completed', execution: { state: 'paused' }, executionRuntime: 'idle' })
   const resumed = await cold.app.execute({ type: 'task.control', commandId: 'cold-resume', ...fence, action: 'resume', text: 'Explicitly process pending native input' }, operator)
   expect(resumed, JSON.stringify(resumed)).toMatchObject({ status: 'completed', execution: { state: 'ready' } })
   await fixtures.run(() => resolved.agent.whenIdle())
   expect(cold.model.requests, JSON.stringify({ inbox: { nextTurn: resolved.agent.inbox.nextTurn, nextStep: resolved.agent.inbox.nextStep }, events: (await fixtures.run(() => cold.ctx.sessionController.inspect(resolved.agent.id))).events.slice(-8) })).toHaveLength(1)
+})
+
+it('recovers legacy buffered human content once on the next human turn without resuming the Task', async () => {
+  const h = await setup()
+  const started = await h.app.execute({ type: 'task.start', commandId: 'legacy-buffer', ref: h.ref, expectedVersion: 1, resource: h.resource,
+    agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }, operator)
+  if (started.status !== 'completed' || !started.execution) throw new Error('No execution')
+  const execution = started.execution
+  await fixtures.run(() => h.ctx.agents.get(SessionId(execution.session.sessionId))!.whenIdle())
+  await h.app.execute({ type: 'task.control', commandId: 'legacy-wait', ref: h.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch, action: 'wait', text: 'External dependency' }, operator)
+  await fixtures.dispose(h.ctx)
+  const original = createUserMessage({ content: [{ type: 'text', text: 'Saved question\nwith original whitespace' }, { type: 'image', attachment: { attachmentId: 'a'.repeat(64) as import('@deepseek-ai/dsh-llm').ImageBlock['attachment']['attachmentId'], mediaType: 'image/png', bytes: 8, width: 1, height: 1, name: 'fixture.png' } }], source: { kind: 'user' } })
+  // Seed the released legacy representation reproduced in the affected Sessions.
+  const file = join(h.directory, 'work-v3.json')
+  const stored = JSON.parse(await readFile(file, 'utf8'))
+  stored.executions[0].events.push({ id: original.id, text: 'Saved question', kind: 'input', delivery: 'accepted', acceptance: 'unassessed', nativeMessage: original })
+  await writeFile(file, JSON.stringify(stored))
+  const cold = await fixtures.mount(h.workspace.path)
+  const resolved = await fixtures.run(() => cold.ctx.sessionController.resolveAgent(SessionId(execution.session.sessionId)))
+  if ('error' in resolved) throw new Error('No restored Agent')
+  expect(cold.model.requests).toHaveLength(0)
+  for (const text of ['Please answer my saved question', 'Thanks']) {
+    resolved.agent.followup(createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } }))
+    await fixtures.run(() => resolved.agent.whenIdle())
+  }
+  expect(cold.model.requests).toHaveLength(2)
+  expect(cold.model.requests[0]!.messages).toEqual(expect.arrayContaining([expect.objectContaining({ id: original.id, content: original.content })]))
+  expect(resolved.agent.session.snapshotEvents().filter(event => event.type === 'user/message' && event.data.id === original.id)).toHaveLength(1)
+  expect(await cold.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { state: 'waiting', owner: execution.owner, epoch: execution.epoch, session: execution.session } })
 })
 
 it('explicitly reuses a compatible nonempty related Session while review association never grants coordination', async () => {

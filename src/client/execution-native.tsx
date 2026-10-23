@@ -23,7 +23,9 @@ export function ExecutionSessionWorkEntry({ controller, sessionId, blank, placem
   const [opening, setOpening] = useState(false)
   const scope = useRef<AbortController>()
   useEffect(() => { const abort = new AbortController(); scope.current = abort; setNavigationError(null); setOpening(false); return () => abort.abort() }, [sessionId])
-  if ((placement === 'dock') !== blank || (!work.length && !error)) return null
+  if (!work.length && !error) return null
+  if (placement === 'header' && blank) return null
+  if (placement === 'dock' && !blank && !work.some(item => item.purpose === 'history')) return null
   const enter = async (item: AssociatedWork) => {
     const abort = scope.current
     if (!abort || abort.signal.aborted || opening) return
@@ -32,9 +34,16 @@ export function ExecutionSessionWorkEntry({ controller, sessionId, blank, placem
     catch (error) { if (!abort.signal.aborted) setNavigationError(error instanceof Error ? error.message : String(error)) }
     finally { if (!abort.signal.aborted) setOpening(false) }
   }
+  if (placement === 'dock' && work.some(item => item.purpose === 'history')) return <div className={`${styles.entry} ${styles.card}`} role="status">
+    {work.filter(item => item.purpose === 'history').map(item => <div key={`${item.ref.projectId}/${item.ref.taskId}`}>
+      <p>“{item.title}”已转到新会话，你仍可在这里继续对话。</p>
+      <button type="button" disabled={opening} onClick={() => void enter(item)}>进入当前处理会话</button>
+    </div>)}
+    {navigationError && <p role="alert">{navigationError}</p>}
+  </div>
   return <details className={`${styles.entry} ${placement === 'dock' ? styles.dock : ''}`}><summary>关联任务{work.length ? ` · ${work.length}` : ''}</summary><div className={styles.popover}>
     {error && <p role="status">关联读取失败：{error}</p>}
-    {work.map(item => <article key={`${item.ref.projectId}/${item.ref.taskId}`}><p>{item.projectName} / {item.title}</p><p>{item.purpose === 'control' ? '当前协调' : item.purpose === 'history' ? '已退休 · 只读历史' : item.purpose === 'review' ? '评审关联' : '工作关联'}</p><div className={styles.row}><button type="button" onClick={() => void controller.revealTask(item.ref)}>查看工作与执行</button>{item.purpose === 'history' && <button type="button" disabled={opening} onClick={() => void enter(item)}>进入当前处理会话</button>}</div></article>)}
+    {work.map(item => <article key={`${item.ref.projectId}/${item.ref.taskId}`}><p>{item.projectName} / {item.title}</p><p>{item.purpose === 'control' ? '当前协调' : item.purpose === 'history' ? '已交接 · 可继续对话' : item.purpose === 'review' ? '评审关联' : '工作关联'}</p><div className={styles.row}><button type="button" onClick={() => void controller.revealTask(item.ref)}>查看工作与执行</button>{item.purpose === 'history' && <button type="button" disabled={opening} onClick={() => void enter(item)}>进入当前处理会话</button>}</div></article>)}
     {navigationError && <p role="alert">{navigationError}</p>}
   </div></details>
 }
@@ -75,7 +84,7 @@ function NativeTaskContinuation({ controller, sessionId, work }: { controller: W
     } catch (error) { if (!scope.signal.aborted) setError(error instanceof Error ? error.message : String(error)) }
     finally { if (!scope.signal.aborted) setBusy(false) }
   }
-  const purpose = work.purpose === 'control' ? '当前协调' : work.purpose === 'history' ? '已退休 · 只读历史' : work.purpose === 'review' ? '评审关联' : '工作关联'
+  const purpose = work.purpose === 'control' ? '当前协调' : work.purpose === 'history' ? '已交接 · 可继续对话' : work.purpose === 'review' ? '评审关联' : '工作关联'
   return <section className={styles.nativeView}>
     <div className={styles.split}>
       <aside className={styles.taskPanel}>

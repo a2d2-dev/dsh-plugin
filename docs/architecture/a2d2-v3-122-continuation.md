@@ -67,7 +67,7 @@ await work_control({ action: 'wait', text: '需要确认下一项验收决定' }
 await work_control({ action: 'pause', text: '等待明确恢复授权' })
 ```
 
-工具先返回包含 accepted 的真实 tool/result；下一个普通 pre-step 受既有权威 gate 阻止，turn/end.reason.kind=blocked，表示受控阻止推进。消费者在 idle 后通过真实 runMaintenance 保存 applied。新原生输入以完整 UserMessage 和原 ID 保留在 Task inbox，不触发新模型请求。
+工具先返回包含 accepted 的真实 tool/result；已经开始的本轮继续处理工具结果并向用户给出最终交代，再由消费者在 idle 后通过真实 runMaintenance 保存 applied。waiting/paused 只停止自动推进；原生人工输入保留原 ID、完整内容和附件，经实际模型请求进入 user/message 并获得回应，不要求先 resume，也不因对话自动改变 Task 状态。具体 Task 写操作仍校验负责者与 owner/epoch。此规则依据 #120 及 2026-10-23 更新后的 #122/#139，取代此前 pre-step 全会话拒绝的实现。
 
 ### 显式恢复并消费保留输入
 

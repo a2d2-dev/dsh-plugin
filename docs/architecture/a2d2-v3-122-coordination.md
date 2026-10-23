@@ -96,7 +96,7 @@ await app.execute({ type: 'task.input', commandId: inputId, ...fence,
 await app.execute({ type: 'task.reconcile', commandId: recoveryId, ...fence }, operator)
 ```
 
-控制版本使用 executionId/owner/epoch，规格编辑仍用 Task.expectedVersion。reconcile 恢复已接受的同一个操作/消息，不另建执行。waiting/paused 输入只接受；显式 resume 投递。错误查看 execution.error，accepted 控制与 applied 控制分别查看 execution.control.status/history。
+控制版本使用 executionId/owner/epoch，规格编辑仍用 Task.expectedVersion。reconcile 恢复已接受的同一个操作/消息，不另建执行。通过 task.input 投递的自动工作在 waiting/paused 时只接受，显式 resume 后按原调度投递；原生人工对话始终可用，不要求恢复 Task。错误查看 execution.error，accepted 控制与 applied 控制分别查看 execution.control.status/history。旧版门禁保存在 Task inbox 的人工消息，在该会话下一次人工输入时按原 ID 恢复；实际 user/message 日志用于去重，不伪造消费，不主动重放 Goal 或恢复业务任务。
 
 ## 验证与证据边界
 

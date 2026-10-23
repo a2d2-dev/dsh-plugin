@@ -75,7 +75,7 @@ export function installWorkTools(ctx: Context, app: WorkApplication, runtimeId: 
   })), 'managed work continuation material tool')
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'work_control',
-    description: 'Check current-session ownership and Task/specification versions with status (no Task material); use work_read for explicit paginated details when supplied material is missing or changed. Status remains available after startup. Report progress, ask/wait, pause or explicitly resume your current managed Task. Waiting and pausing are durably accepted now and applied after this turn. They preserve queued input until an explicit resume. Task identity and execution authority come from your calling Session.',
+    description: 'Check current-session ownership and Task/specification versions with status (no Task material); use work_read for explicit paginated details when supplied material is missing or changed. Status remains available after startup. Report progress, ask/wait, pause or explicitly resume your current managed Task. Waiting and pausing are durably accepted now and applied after this turn, which may still finish its reply. Automatic task input waits for explicit resume; native human conversation remains available and does not itself resume the task. Task identity and execution authority come from your calling Session.',
     parameters: {
       known_specification_version: { type: 'integer', description: 'Specification version supplied at startup or fully read with work_read; status flags changed or missing material.' },
       action: { type: 'string', required: true, enum: ['status', 'progress', 'wait', 'pause', 'resume'] },
