@@ -1,0 +1,49 @@
+import { afterEach, beforeEach, expect, it } from 'vitest'
+import { SessionId } from '@deepseek-ai/dsh-session'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { ExecutionFixtures } from './work-execution-fixture.ts'
+import { installWorkTools } from '../src/work-execution/tools.ts'
+import { installWorkProgressTools } from '../src/work-progress-tools.ts'
+import { installWorkOrganizationTools } from '../src/work-organization-tools.ts'
+import type { WorkCompleted, WorkResult } from '../src/work-types.ts'
+
+let fixtures: ExecutionFixtures
+beforeEach(({ signal }) => { fixtures = new ExecutionFixtures(signal) })
+afterEach(() => fixtures.close())
+const operator = { operator: true }
+function completed(result: WorkResult): WorkCompleted {
+  if (result.status !== 'completed') throw Error(JSON.stringify(result))
+  return result
+}
+async function setup() {
+  const h = await fixtures.mount(await fixtures.root())
+  const resource = { runtimeId: 'runtime', workspaceId: h.workspace.id }
+  const project = completed(await h.app.execute({ type: 'project.create', commandId: 'project', name: 'Compact results', resource }, operator)).project!
+  const task = completed(await h.app.execute({ type: 'task.create', commandId: 'task', projectId: project.id, title: 'Task', goal: 'Preserve requirements', specification: '完整规格：' + '要求'.repeat(4000), acceptance: ['Criterion A', 'Criterion B'] }, operator)).task!
+  const ref = { projectId: project.id, taskId: task.id }
+  installWorkTools(h.ctx, h.app, 'runtime')
+  installWorkProgressTools(h.ctx, h.app, 'runtime')
+  installWorkOrganizationTools(h.ctx, h.app, 'runtime')
+  const execution = completed(await h.app.execute({ type: 'task.start', commandId: 'start', ref, expectedVersion: task.version, agentId: project.defaultAgentId, resource, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }, operator)).execution!
+  const agent = h.ctx.agents.get(SessionId(execution.session.sessionId))!
+  await fixtures.run(() => agent.whenIdle())
+  const invoke = async (name: string, args: Record<string, unknown>, id = crypto.randomUUID(), caller = agent) => {
+    const result = await fixtures.run(() => h.ctx.tools.execute({ callId: ToolCallId(id), name, arguments: args, agent: caller, signal: new AbortController().signal }))
+    const text = result.content.map(part => part.type === 'text' ? part.text : '').join('')
+    return { value: JSON.parse(text), text }
+  }
+  const detail = async () => completed(await h.app.query({ type: 'task.detail', ref }, operator))
+  return { ...h, task, execution, ref, agent, invoke, detail }
+}
+
+it('keeps status available after startup with ownership and versions but no task material', async () => {
+  const h = await setup()
+  const full = completed(await h.app.sessionControl(h.execution.session, 'full', 'status'))
+  const result = await h.invoke('work_control', { action: 'status', known_specification_version: 1 })
+  expect(result.value).toMatchObject({ status: 'completed', coordinator: true, epoch: 1, taskVersion: full.task!.version, specificationVersion: 1, specificationState: 'current' })
+  expect(result.value).not.toHaveProperty('task')
+  expect(result.value).not.toHaveProperty('execution')
+  expect(result.text).not.toContain('完整规格')
+  expect(Buffer.byteLength(result.text)).toBeLessThanOrEqual(2048)
+  expect(full.task!.specification.text).toContain('完整规格')
+})
