@@ -193,7 +193,9 @@ export async function refreshSource(transaction: SourceTransaction, query: Sourc
   const selected = await transaction(async state => sourceAt(state, query.projectId, query.sourceId))
   if (selected?.githubProject) {
     if (!selected.enabled) return transaction(async state => ({ ...sourceResult(state, query), status: 'failed' as const, error: { code: 'source-disabled', message: 'Source is disabled' } }))
-    await reconcileProjectSources(transaction, port, { sourceId: query.sourceId, projectId: query.projectId, force: true, maxPagesPerSource: 20 })
+    // A user refresh is a bounded HTTP request: a few pages per call keeps it
+    // under proxy timeouts; the panel calls again while progress is partial.
+    await reconcileProjectSources(transaction, port, { sourceId: query.sourceId, projectId: query.projectId, force: true, maxPagesPerSource: 4 })
     return transaction(async state => {
       const result = sourceResult(state, query), source = sourceAt(state, query.projectId, query.sourceId)
       if (source && (!source.enabled || source.version !== selected.version)) return { ...result, status: 'conflict' as const, error: { code: 'source-observation-superseded', message: 'Observation was discarded after source configuration changed' } }
