@@ -14,6 +14,8 @@ Configure a 200K, 300K or custom token target for automatic continuation. The su
 
 Continuous intake currently supports GitHub Project sources. Search and processing-state filters cover the loaded page; dispatch uses the complete observed Project membership and the persisted rule. GitHub state is shown separately from processing and acceptance; this flow does not automatically close remote Issues.
 
+Task and continuation Sessions receive a task-based name such as `#200/#211 · 会话 2 · 修复会话名称`. The complete title fits the host's 80-byte limit while retaining task identity, continuation order and readable task text. See [Session naming rules](docs/session-naming.md) for numbering, fallbacks and existing-title repair.
+
 The component reference below also documents retained legacy tools and record formats. Managed control-panel Sessions use `work_control`, `work_report` and `work_organize`; manual Issue binding is not part of the user flow.
 
 Subagent dispatch prefers the host's `startActivation` with `delivery: 'parent'`, using `startContinuable` only when the newer method is absent. The request sets the model and reasoning effort through `agentOptions`; dispatch requires no additional `selectLocalModel` API or DSH source patch. Activation errors propagate without retrying the older method. Published DSH types cover both contracts; the aliased package is a development-only type dependency. Session IDs preserve both legacy `session-…` values and UUIDs while rejecting path syntax.

@@ -16,6 +16,8 @@
 
 持续处理当前支持 GitHub Project 来源。搜索和处理状态筛选作用于当前已载入页；自动领取按完整 Project 观察与已保存规则执行。来源读取、处理进展和 GitHub 远端状态分别显示，此流程不自动关闭远端 Issue。
 
+任务处理与接续会话自动使用任务名称和真实编号，例如 `#200/#211 · 会话 2 · 修复会话名称`。完整名称按宿主80字节上限保留编号、接续序列与可读短标题；规则和历史名称修复范围见[任务会话名称](docs/session-naming.md)。
+
 以下章节还保留既有会话工具与兼容记录格式的说明；控制面板中的受管会话使用 `work_control`、`work_report` 和 `work_organize` 保存进展，不要求手工绑定 Issue。
 
 子代理派发优先使用宿主的 `startActivation`，显式指定 `delivery: 'parent'`；仅在该方法不存在时使用旧宿主的 `startContinuable`。模型与 reasoningEffort 在派发请求的 `agentOptions` 中指定，不需要为派发新增 `selectLocalModel` 或修改 DSH 源码。新接口报错直接返回，不重试旧接口。两种契约的类型来自各自已发布的 DSH 包，别名依赖只用于开发时类型检查。会话 ID 原样兼容旧式 `session-…` 与 UUID，仍拒绝路径输入。

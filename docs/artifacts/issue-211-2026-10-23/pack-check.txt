@@ -1,0 +1,53 @@
+
+> @a2d2/dsh-a2d2@0.0.21 verify:pack-exports /data/src/github.com/a2d2-dev/dsh-plugin.worktrees/issue-211-session-titles
+> pnpm build && node scripts/verify-pack-exports.mjs
+
+
+> @a2d2/dsh-a2d2@0.0.21 build /data/src/github.com/a2d2-dev/dsh-plugin.worktrees/issue-211-session-titles
+> node -e "require('node:fs').rmSync('lib',{recursive:true,force:true})" && tsc -p tsconfig.build.json && tsc -p tsconfig.build.client.json && tsdown
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.9
+ℹ config file: /data/src/github.com/a2d2-dev/dsh-plugin.worktrees/issue-211-session-titles/tsdown.config.ts 
+ℹ entry: src/work-sources.ts, src/work.ts, src/work-types.ts, src/work-plugin.ts, src/task-runtime.ts, src/index.ts, src/command.ts, src/tools.ts, src/open-subtask-tools.ts, src/complete-task-tools.ts, src/ceo-prompt.ts, src/agent-prompt.ts, src/github-watch.ts, src/invariant.ts
+ℹ target: es2024
+ℹ tsconfig: tsconfig.json
+ℹ entry: src/client/index.tsx
+ℹ target: node20.0.0
+ℹ tsconfig: tsconfig.json
+
+ WARN  `external` is deprecated. Use `deps.neverBundle` instead.
+
+
+ WARN  `noExternal` is deprecated. Use `deps.alwaysBundle` instead.
+
+ℹ Build start
+ℹ [ESM] lib/index.js                     125.75 kB │ gzip: 33.53 kB
+ℹ [ESM] lib/work-plugin.js                70.62 kB │ gzip: 18.70 kB
+ℹ [ESM] lib/task-runtime.js               31.20 kB │ gzip:  8.19 kB
+ℹ [ESM] lib/github-watch.js               26.04 kB │ gzip:  8.40 kB
+ℹ [ESM] lib/tools.js                       5.05 kB │ gzip:  1.64 kB
+ℹ [ESM] lib/ceo-prompt.js                  4.54 kB │ gzip:  1.69 kB
+ℹ [ESM] lib/command.js                     4.52 kB │ gzip:  1.74 kB
+ℹ [ESM] lib/agent-prompt.js                4.33 kB │ gzip:  1.54 kB
+ℹ [ESM] lib/open-subtask-tools.js          2.91 kB │ gzip:  1.19 kB
+ℹ [ESM] lib/complete-task-tools.js         2.85 kB │ gzip:  1.17 kB
+ℹ [ESM] lib/invariant.js                   0.97 kB │ gzip:  0.56 kB
+ℹ [ESM] lib/work-sources.js                0.22 kB │ gzip:  0.15 kB
+ℹ [ESM] lib/work-types.js                  0.11 kB │ gzip:  0.11 kB
+ℹ [ESM] lib/work.js                        0.09 kB │ gzip:  0.09 kB
+ℹ [ESM] lib/work-C9dobPsI.js             233.13 kB │ gzip: 52.38 kB
+ℹ [ESM] lib/discovery-Cq03TPks.js         62.18 kB │ gzip: 15.40 kB
+ℹ [ESM] lib/store-B7xWzR9J.js             26.89 kB │ gzip:  7.96 kB
+ℹ [ESM] lib/host-Ck2QS22d.js              15.78 kB │ gzip:  5.14 kB
+ℹ [ESM] lib/handoff-p7N302P_.js            8.92 kB │ gzip:  3.63 kB
+ℹ [ESM] lib/root-session-6CqSnH4M.js       8.83 kB │ gzip:  2.87 kB
+ℹ [ESM] lib/work-completion-BrCUekH_.js    5.09 kB │ gzip:  1.73 kB
+ℹ [ESM] lib/github-remote-Cd_OrFOj.js      1.05 kB │ gzip:  0.61 kB
+ℹ [ESM] lib/route-auth-sLEZTfdd.js         0.58 kB │ gzip:  0.36 kB
+ℹ [ESM] 23 files, total: 641.65 kB
+✔ Build complete in 216ms
+ℹ [CJS] lib/client.js      412.72 kB │ gzip:  94.21 kB
+ℹ [CJS] lib/client.js.map  584.69 kB │ gzip: 143.16 kB
+ℹ [CJS] 2 files, total: 997.41 kB
+✔ Build complete in 225ms
+verified @a2d2/dsh-a2d2/work-sources, @a2d2/dsh-a2d2/work, @a2d2/dsh-a2d2/work-types, @a2d2/dsh-a2d2/work-plugin, @a2d2/dsh-a2d2/task-runtime, @a2d2/dsh-a2d2, @a2d2/dsh-a2d2/command, @a2d2/dsh-a2d2/tools, @a2d2/dsh-a2d2/open-subtask-tools, @a2d2/dsh-a2d2/complete-task-tools, @a2d2/dsh-a2d2/ceo-prompt, @a2d2/dsh-a2d2/agent-prompt, @a2d2/dsh-a2d2/github-watch, @a2d2/dsh-a2d2/invariant

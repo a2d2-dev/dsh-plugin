@@ -1,0 +1,448 @@
+
+ RUN  v4.1.11 /data/src/github.com/a2d2-dev/dsh-plugin.worktrees/issue-211-session-titles
+
+ ❯ tests/work-continuous.spec.ts (39 tests | 1 failed) 2418ms
+   ✓ returns the authoritative execution graph through detail and execution without advancing work 107ms
+   ✓ keeps native Issue children separate and resolves each canonical child execution authority 133ms
+   ✓ browses without execution and atomically reuses source connection, exact settings, duplicate discovery and command retries 55ms
+   ✓ pauses only new intake, retains active work, completes only at actual host idle and never restarts completed issues 146ms
+   ✓ waiting yields after the safe boundary, and public/native input plus resume cannot bypass the occupied slot 166ms
+   ✓ recovers an unknown create outcome using the same persisted execution and Session after restart 70ms
+   ✓ bounds host failures with visible blocked state and proceeds to another candidate without empty model turns 73ms
+   ✓ blocks changed credential identity and disabled sources without losing existing queue or task owners 86ms
+   ✓ gives one bounded followup to new semantic progress then blocks repeated idle progress without spinning 97ms
+   ✓ keeps version-three snapshots backward compatible and never starts unconfigured observations 24ms
+   ✓ retains an explicit pause despite native and public replies until a serialized explicit resume 167ms
+   ✓ rechecks Project membership and labels atomically after asynchronous host admission 33ms
+   ✓ holds a completed slot while host settling fails and never admits the next issue early 81ms
+   ✓ replays committed configuration without repeating host admission when catalogs become unavailable 27ms
+   ✓ recovers a lost delivery receipt without sending a second kickoff or creating a second Session 33ms
+   ✓ freezes completed managed acceptance against later specification or report mutations 39ms
+   ✓ persists a natural language model plan without dispatching on preview or restart 52ms
+   ✓ rejects blocked, foreign, malformed and assignee-violating model plans with named errors 54ms
+   ✓ enables only a reviewed plan and dispatches its order while Block fences future intake 111ms
+   ✓ adopts canonical existing execution without changing owner epoch resource or Session 58ms
+   × completes preview across a discovery tick while the model is generating 40ms
+   ✓ discards preview when a candidate gains a canonical Task identity during generation 26ms
+   ✓ validates the latest Issue scope after model generation despite stable identities 38ms
+   ✓ reports a distinct model failure with a safe summary (error) 33ms
+   ✓ reports a distinct model failure with a safe summary (string) 31ms
+   ✓ reports a distinct model failure with a safe summary (sensitive) 34ms
+   ✓ fences a model response when Block changes while generation is in flight 31ms
+   ✓ observes a canonical Task already claimed by another source rule without taking its owner 81ms
+   ✓ adopts cross-project source work using the explicitly previewed original execution context 114ms
+   ✓ bounds failed safe settlement, keeps the slot fenced, and allows explicit recovery without model restart 117ms
+   ✓ retains an accepted slot when formal settlement is missing even at runtime idle 45ms
+   ✓ retains an accepted slot when formal settlement is unknown even at runtime idle 39ms
+   ✓ previews complete Repo candidates without execution and dispatches only after explicit plan enable 69ms
+   ✓ rejects incomplete Repo candidate scopes (pagination) before model generation or execution 18ms
+   ✓ rejects incomplete Repo candidate scopes (identity) before model generation or execution 17ms
+   ✓ rejects incomplete Repo candidate scopes (foreign) before model generation or execution 19ms
+   ✓ rejects incomplete Repo candidate scopes (limit) before model generation or execution 15ms
+   ✓ rejects incomplete Repo candidate scopes (permission) before model generation or execution 16ms
+   ✓ discards a Repo scan when its source is disabled during pagination 18ms
+ ❯ tests/work-panel-form.spec.ts (7 tests | 7 failed) 1161ms
+     × keeps an accepted import saved without changing navigation after the production panel unmounts 446ms
+     × imports an observed null body only after explicit start and preserves missing acceptance indicators 171ms
+     × returns linked blank/nonblank session references to the correct task and renders nothing for an unassociated session 141ms
+     × submits owner, account type and number in one form with an optional execution directory 96ms
+     × retries an uncertain connection with the same command ID and no extra local-create command 88ms
+     × configures explicit scope and real defaults, then pauses only new work with the saved version 114ms
+     × renders persisted queue reasons and opens its active Issue without starting or pausing it 101ms
+ ❯ tests/client/work-github-first.spec.ts (10 tests | 2 failed) 229ms
+     × selects a GitHub Project by default and excludes internal records and local entrances from the surface 33ms
+     × shows only GitHub onboarding when all existing records have no GitHub Project 5ms
+     ✓ uses processing facts for page-scoped filters and keeps search together with status 4ms
+     ✓ loads existing progress on Issue view without import or execution option queries and shows descendants with evidence 8ms
+     ✓ refreshes nested requirement state and evidence while the original Issue stays open 4ms
+     ✓ returns from child detail to root requirements then to the exact scoped Issue list 5ms
+     ✓ reveals current Session work in the same Issue detail and returns to its Project list 55ms
+     ✓ does not let an older existing-task read replace a newly selected Issue 52ms
+     ✓ ignores a late connect success after panel exit while retaining the single authorized command 8ms
+     ✓ does not browse a stale connection after navigation away and back during project loading 52ms
+ ❯ tests/client/work-observation.spec.ts (8 tests | 2 failed) 54ms
+     × updates task progress while preserving tab, filters and already loaded history without writes/navigation 30ms
+     ✓ updates project task rows without changing the selected local filter 2ms
+     ✓ reads only cached source data and keeps selected Issue and listing filters 2ms
+     ✓ coalesces in-flight observations and ignores a response after navigation 2ms
+     ✓ skips an active editor and discards its earlier response if editing starts mid-read 1ms
+     ✓ does not observe during history loading and retains content after a passive read failure 1ms
+     × refreshes Issue-row local progress without imports and never matches another repository by number 6ms
+     ✓ displays native source parent/sub-Issue links and partial results without importing them 8ms
+ ❯ tests/client/work-completed-status.spec.ts (3 tests | 2 failed) 59ms
+     ✓ counts current and retired Sessions distinctly and includes managed executions in association filters 21ms
+     × shows completion closeout instead of human waiting and hides execution controls until the specification changes 28ms
+     × uses the same closeout mapping in Project and Issue rows while remote closed alone remains separate 8ms
+ ❯ tests/client/work-history.spec.ts (6 tests | 2 failed) 46ms
+     × reads Task-scoped pages, uses the returned cursor and escapes transcript markup without native navigation 29ms
+     ✓ aborts and discards a page when changing Tasks 5ms
+     ✓ fences out-of-order history reads and clears history on panel exit 2ms
+     × retains the prior page on failure and retries the same cursor once 6ms
+     ✓ rejects mismatched transcript identity and non-advancing cursors without appending content 1ms
+     ✓ does not query arbitrary or current Sessions as retired history 1ms
+ ✓ tests/work-execution.spec.ts (21 tests) 8908ms
+   ✓ accepts a real model self-wait before applying it at the settled maintenance boundary  2343ms
+   ✓ accepts a real model self-pause before applying it at the settled maintenance boundary  2192ms
+   ✓ runs on the selected local model, waits without empty turns, and separates consumption from acceptance  321ms
+   ✓ recovers fixed execution after the real kickoff checkpoint receipt is lost  326ms
+   ✓ keeps paused Task fenced after cold ordinary Session activation and explicitly resumes existing native inbox  345ms
+ ❯ tests/task-runtime.spec.ts (33 tests | 1 failed) 10904ms
+     ✓ handles initial permissions on a cold started preset-less successor without widening silently  963ms
+     × handles changed permissions on a cold started preset-less successor without widening silently 334ms
+     ✓ handles ambiguous permissions on a cold started preset-less successor without widening silently  348ms
+     ✓ recovers a legacy blank successor at create (cold=false) through public preset selection 265ms
+     ✓ recovers a legacy blank successor at take (cold=false) through public preset selection 235ms
+     ✓ recovers a legacy blank successor at deliver (cold=false) through public preset selection 261ms
+     ✓ recovers a legacy blank successor at create (cold=true) through public preset selection  461ms
+     ✓ recovers a legacy blank successor at take (cold=true) through public preset selection  358ms
+     ✓ recovers a legacy blank successor at deliver (cold=true) through public preset selection  370ms
+     ✓ preserves a started conflicting successor and provides an explicit fresh-session recovery  302ms
+     ✓ creates successors and subtasks through real preset setup with workspace-write permissions  783ms
+     ✓ creates successors and subtasks through real preset setup with custom permissions  316ms
+     ✓ wakes a persisted unconsumed handoff after reconstruction without adding a second model message  300ms
+     ✓ waits only for an active registration: watching 133ms
+     ✓ waits only for an active registration: pending 138ms
+     ✓ waits only for an active registration: ended 125ms
+     ✓ waits only for an active registration: denied 123ms
+     ✓ waits only for an active registration: not_installed 115ms
+     ✓ waits only for an active registration: failed 143ms
+     ✓ durably accepts an event while successor creation holds the transition lock longer than its timeout  2535ms
+     ✓ retries an interrupted active turn once with a durable recovery message after host restart 170ms
+     ✓ keeps the execution fence after scheduler shutdown and rotates healthy generations automatically 124ms
+     ✓ accepts the disabled default configuration without requiring a runtime directory 2ms
+     ✓ observes a real in-flight question and resumes the same turn after its answer 124ms
+     ✓ holds rotation until the native child settles and its notification reaches the parent 163ms
+     ✓ lets the human command bind and start an issue without a model bookkeeping prompt 99ms
+     ✓ requires explicit enable/start and continues active tasks without a model intent report 135ms
+     ✓ performs two handoffs, preserves workspace/model initialization, routes an in-handoff event and fences both old sessions  311ms
+     ✓ recovers the same successor after process-level host reconstruction following create failure 250ms
+     ✓ recovers a committed take and a delivered event without repeating their messages 241ms
+     ✓ bounds no-progress continuations, pauses execution, and completes without another round 239ms
+     ✓ does not admit a second runtime owner or concurrent duplicate tick 206ms
+   ✓ uses an actual cross-process lock and recovers ownership after the holder exits 229ms
+stdout | tests/work-compact-results.spec.ts > keeps receipts bounded through large specification and handoff histories on real Sessions
+{"fixture":"issue-209-large-history","measurements":[{"label":"initial","tool":"status","beforeCharacters":20305,"beforeBytes":52325,"afterCharacters":123,"afterBytes":123},{"label":"initial","tool":"report","beforeCharacters":20590,"beforeBytes":52610,"afterCharacters":164,"afterBytes":164},{"label":"initial","tool":"organize","beforeCharacters":28800,"beforeBytes":76830,"afterCharacters":189,"afterBytes":189},{"label":"large-history","tool":"status","beforeCharacters":506946,"beforeBytes":890976,"afterCharacters":125,"afterBytes":125},{"label":"large-history","tool":"report","beforeCharacters":507011,"beforeBytes":891041,"afterCharacters":167,"afterBytes":167},{"label":"large-history","tool":"organize","beforeCharacters":524019,"beforeBytes":920049,"afterCharacters":192,"afterBytes":192}],"repeatedEight":{"beforeCharacters":4072901,"beforeBytes":7157141,"afterCharacters":1235,"afterBytes":1235}}
+
+stdout | tests/work-compact-results.spec.ts > bounds lost-job reminders for 1 jobs while preserving accepted completion and complete audit details
+{"fixture":"lost-job-reminders","count":1,"beforeBytes":361,"afterBytes":786}
+
+stdout | tests/work-compact-results.spec.ts > bounds lost-job reminders for 100 jobs while preserving accepted completion and complete audit details
+{"fixture":"lost-job-reminders","count":100,"beforeBytes":36091,"afterBytes":1047}
+
+stdout | tests/work-compact-results.spec.ts > bounds lost-job reminders for 1000 jobs while preserving accepted completion and complete audit details
+{"fixture":"lost-job-reminders","count":1000,"beforeBytes":361891,"afterBytes":1049}
+
+stdout | tests/work-compact-results.spec.ts > bounds aggregate completion errors and preserves their full actionable diagnostics
+{"fixture":"aggregate-blockers","beforeBytes":2846,"afterBytes":852}
+
+ ✓ tests/work-compact-results.spec.ts (10 tests) 10209ms
+   ✓ keeps status available after startup with ownership and versions but no task material  680ms
+   ✓ keeps receipts bounded through large specification and handoff histories on real Sessions  6259ms
+   ✓ flags missing imported criteria, accepts native scope compactly and denies foreign readers  442ms
+   ✓ bounds lost-job reminders for 1000 jobs while preserving accepted completion and complete audit details  375ms
+   ✓ bounds aggregate completion errors and preserves their full actionable diagnostics  1335ms
+ ✓ tests/work-process.spec.ts (5 tests) 32893ms
+   ✓ serializes independent process writers with one durable command identity and no same-name overwrites  1213ms
+   ✓ enforces resource ownership uniqueness atomically across independent process writers  617ms
+   ✓ replays the same committed command after receiving its response and killing the writer  489ms
+   ✓ refuses a live foreign writer and recovers its dead PID lock without losing accepted records  30562ms
+ ✓ tests/work-store-contention.spec.ts (11 tests) 13143ms
+   ✓ lets an interactive write wait for a live same-PID writer holding the file lock for five seconds  5598ms
+   ✓ round-trips all 3000 observations and the large checkpoint within the write budget  926ms
+   ✓ completes an interactive large-store write while background discovery holds the writer for five seconds  6383ms
+ ✓ tests/work-continuation.spec.ts (17 tests) 6882ms
+   ✓ recovers the same operation and successor after the real material-request receipt is lost  807ms
+   ✓ recovers the same operation and successor after the real successor-create receipt is lost  466ms
+   ✓ recovers the same operation and successor after the real source-take receipt is lost  471ms
+   ✓ recovers the same operation and successor after the real source-seal receipt is lost  427ms
+   ✓ recovers the same operation and successor after the real successor-kickoff receipt is lost  407ms
+   ✓ preserves queued Task and full native input while successor creation is parked  438ms
+   ✓ hands the same Task to two real successor Sessions with source-authored decisions and stable identity  606ms
+   ✓ inherits the actual Session-local reasoning effort and Project Agent instructions  538ms
+   ✓ keeps retired native input and tools fenced after cold restore while history stays read-only  477ms
+   ✓ automatically continues at a 200K soft target and observes successor context of 100 tokens  434ms
+   ✓ automatically continues at a 200K soft target and observes successor context of 200001 tokens  360ms
+ ✓ tests/work-source-freeze.spec.ts (6 tests) 2252ms
+   ✓ imports a real native child after parent acceptance without changing either frozen business edge  684ms
+   ✓ preserves both relation endpoints while the parent is handing off and still imports the other canonical Task  433ms
+   ✓ preserves both relation endpoints while the child is handing off and still imports the other canonical Task  436ms
+   ✓ applies the same child handoff guard to an explicit local link command  319ms
+ ✓ tests/work-session-titles.spec.ts (12 tests) 2129ms
+   ✓ gives a newly created task Session its readable Task title and a real sequence before any automatic naming  730ms
+ ✓ tests/work-progress.spec.ts (7 tests) 1852ms
+   ✓ lets the real coordinator preserve specifications and refuses local child creation  682ms
+ ✓ tests/work-continuous-integration.spec.ts (2 tests) 1478ms
+   ✓ dispatches assigned Project Issues through real DSH sessions, preserves pause-new semantics and continues after acceptance  1026ms
+   ✓ automatically hands a queued Issue to its successor without giving its slot to another Issue  450ms
+ ✓ tests/work-native-acceptance.spec.ts (17 tests) 771ms
+ ✓ tests/github-watch.spec.ts (22 tests) 1985ms
+     ✓ tells each watching session separately  1064ms
+ ✓ tests/work-execution-boundary.spec.ts (3 tests) 810ms
+   ✓ flushes and holds associated executors before entering a settled maintenance body  319ms
+   ✓ observes explicitly associated and retired roots without activating them and fences unresolved descendants  302ms
+ ✓ tests/work-completion-native.spec.ts (2 tests) 994ms
+   ✓ accepts a real model work_report without waiting for its own running tool  543ms
+   ✓ keeps native continuable result intake authorized until the settled notice reaches the real parent log  449ms
+ ✓ tests/work-sources.spec.ts (29 tests) 640ms
+ ✓ tests/work-host.spec.ts (5 tests) 862ms
+   ✓ exposes real local commands and trusted persisted host Sessions through the production plugin without a live Session or model  371ms
+   ✓ starts through the production plugin Context with real execution services and one deterministic kickoff  353ms
+ ✓ tests/work-completion.spec.ts (11 tests) 838ms
+ ✓ tests/work-startup-integration.spec.ts (2 tests) 921ms
+   ✓ starts through the panel and real execution application, preserves one Session and model request across return  658ms
+ ✓ tests/work-source-navigation.spec.ts (15 tests) 576ms
+ ✓ tests/project-discovery.spec.ts (18 tests) 575ms
+ ✓ tests/wait-notice.spec.ts (11 tests) 815ms
+ ✓ tests/work-execution-lifecycle.spec.ts (2 tests) 428ms
+   ✓ settles a real lost-receipt command before cleanup and blocks recovery after cancellation  340ms
+ ✓ tests/task-session-title-writer.spec.ts (3 tests) 823ms
+   ✓ does not cache a competing cold title written after the writer lease is released  565ms
+ ✓ tests/work-model-results.spec.ts (3 tests) 468ms
+   ✓ bounds encoded JSON diagnostics for 1000 long reminders and aggregate errors  412ms
+ ✓ tests/handoff-service.spec.ts (27 tests) 369ms
+ ✓ tests/dispatch-subagent.spec.ts (14 tests) 253ms
+ ✓ tests/main-session.spec.ts (18 tests) 233ms
+stdout | tests/work-planning-payload.spec.ts > bounds a 46-candidate request with 8KB Issue bodies and canonical specifications
+{"observationsBytes":414737,"basisCharacters":129247,"basisBytes":129247,"candidates":46}
+
+ ✓ tests/work-source-client.spec.ts (1 test) 293ms
+ ✓ tests/work-planning-payload.spec.ts (10 tests) 246ms
+ ✓ tests/work-client.spec.ts (1 test) 192ms
+ ✓ tests/consult.spec.ts (65 tests) 254ms
+ ✓ tests/route-auth.spec.ts (13 tests) 172ms
+ ✓ tests/work.spec.ts (9 tests) 143ms
+ ✓ tests/a2d2.spec.ts (44 tests) 159ms
+ ✓ tests/complete-task.spec.ts (6 tests) 118ms
+ ✓ tests/agent-prompt.spec.ts (5 tests) 247ms
+ ✓ tests/agent-effort.spec.ts (22 tests) 201ms
+ ✓ tests/v4-sources.spec.ts (11 tests) 157ms
+ ✓ tests/session-agents.spec.ts (12 tests) 147ms
+ ✓ tests/config-page.spec.ts (17 tests) 102ms
+ ✓ tests/handoff-command.spec.ts (15 tests) 167ms
+ ✓ tests/client/orb-actions.spec.ts (36 tests) 130ms
+ ✓ tests/ceo-prompt.spec.ts (8 tests) 203ms
+ ✓ tests/github-source.spec.ts (24 tests) 106ms
+ ✓ tests/work-completion-source.spec.ts (2 tests) 79ms
+ ✓ tests/open-subtask.spec.ts (5 tests) 121ms
+ ✓ tests/work-observation-refresh.spec.ts (2 tests) 89ms
+ ✓ tests/client/work-source.spec.ts (11 tests) 99ms
+ ✓ tests/panel-route.spec.ts (6 tests) 124ms
+ ✓ tests/client/work-startup.spec.ts (14 tests) 65ms
+ ✓ tests/client/work-api.spec.ts (4 tests) 70ms
+ ✓ tests/work-progress-projection.spec.ts (10 tests) 50ms
+ ✓ tests/work-local-children.spec.ts (3 tests) 66ms
+ ✓ tests/github-project-source.spec.ts (8 tests) 44ms
+ ✓ tests/handoff-document.spec.ts (20 tests) 41ms
+ ✓ tests/v4-source-catalog.spec.ts (3 tests) 46ms
+ ✓ tests/client/consult-actions.spec.ts (56 tests) 46ms
+ ✓ tests/skill-source.spec.ts (10 tests) 23ms
+ ✓ tests/client/execution-components.spec.ts (1 test) 47ms
+ ✓ tests/work-conversation-slot.spec.ts (4 tests) 48ms
+ ✓ tests/client/config-page.spec.ts (11 tests) 27ms
+ ✓ tests/client/work-panel.spec.ts (10 tests) 27ms
+ ✓ tests/work-planning.spec.ts (26 tests) 40ms
+ ✓ tests/client/panel-registration.spec.ts (3 tests) 29ms
+ ✓ tests/continuous-client.spec.ts (3 tests) 16ms
+ ✓ tests/handoff.spec.ts (32 tests) 16ms
+ ✓ tests/client/subagent-tab.spec.ts (2 tests) 14ms
+ ✓ tests/client/session-handoff-entry.spec.ts (4 tests) 27ms
+ ✓ tests/client/v4-source-render.spec.ts (1 test) 16ms
+ ✓ tests/client/work-panel-render.spec.ts (3 tests) 25ms
+ ✓ tests/client/subagent-model.spec.ts (28 tests) 23ms
+ ✓ tests/client/completion-status.spec.ts (6 tests) 14ms
+ ✓ tests/client/composer.spec.ts (7 tests) 9ms
+ ✓ tests/client/panel-model.spec.ts (23 tests) 22ms
+ ✓ tests/client/v4-integrated-render.spec.ts (1 test) 33ms
+ ✓ tests/work-execution-lost-job.spec.ts (12 tests) 25ms
+ ✓ tests/panel.spec.ts (16 tests) 20ms
+ ✓ tests/handoff-instruction.spec.ts (3 tests) 17ms
+ ✓ tests/v4-integrated-client.spec.ts (2 tests) 16ms
+ ✓ tests/work-planning-llm.spec.ts (2 tests) 17ms
+ ✓ tests/stage-agents.spec.ts (5 tests) 14ms
+ ✓ tests/client/status-model.spec.ts (13 tests) 12ms
+ ✓ tests/client/orb-position.spec.ts (25 tests) 13ms
+ ✓ tests/client/panel-api.spec.ts (6 tests) 13ms
+ ✓ tests/v4-source-navigation.spec.ts (2 tests) 9ms
+ ✓ tests/client/orb-model.spec.ts (13 tests) 14ms
+ ✓ tests/work-execution-observation.spec.ts (1 test) 7ms
+ ✓ tests/client/highway-view.spec.ts (7 tests) 10ms
+ ✓ tests/client/project-rows.spec.ts (3 tests) 9ms
+ ✓ tests/client/orb-status.spec.ts (2 tests) 7ms
+ ✓ tests/client/project-slice.spec.ts (2 tests) 6ms
+ ✓ tests/refusal.spec.ts (2 tests) 6ms
+ ✓ tests/client/project-fields.spec.ts (2 tests) 9ms
+ ✓ tests/work-execution-jobs.spec.ts (1 test) 6ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 17 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/task-runtime.spec.ts > task runtime over real DSH loop, JSONL persistence, query and workspace services > handles changed permissions on a cold started preset-less successor without widening silently
+Error: ENOTEMPTY: directory not empty, rmdir '/data/_ssd2t/dsh/tmp/a2d2-runtime-PUc9K9/runtime'
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/17]⎯
+
+ FAIL  tests/work-continuous.spec.ts > completes preview across a discovery tick while the model is generating
+AssertionError: {"status":"failed","error":{"code":"planning-model-failed","message":"Model planning failed: expected 1 to be greater than 1; requestCharacters=2213, candidates=4"}}: expected { status: 'failed', error: { …(2) } } to have property "status" with value 'completed'
+
+Expected: "completed"
+Received: "failed"
+
+ ❯ completed tests/work-continuous.spec.ts:21:96
+     19| const model = { provider: 'fake', model: 'exact', reasoningEffort: 'hi…
+     20| const choices = { agentPresets: ['agent'], permissionPresets: ['safe']…
+     21| function completed(result: WorkResult): WorkCompleted { expect(result,…
+       |                                                                                                ^
+     22| class Host implements WorkHost {
+     23|   authorize!: (session: string, messages?: readonly NativeWorkMessage[…
+ ❯ tests/work-continuous.spec.ts:446:3
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/17]⎯
+
+ FAIL  tests/work-panel-form.spec.ts > production Issue source acceptance controls > keeps an accepted import saved without changing navigation after the production panel unmounts
+ FAIL  tests/work-panel-form.spec.ts > production Issue source acceptance controls > imports an observed null body only after explicit start and preserves missing acceptance indicators
+ FAIL  tests/work-panel-form.spec.ts > production session work entry > returns linked blank/nonblank session references to the correct task and renders nothing for an unassociated session
+ FAIL  tests/work-panel-form.spec.ts > GitHub Project onboarding production controls > submits owner, account type and number in one form with an optional execution directory
+ FAIL  tests/work-panel-form.spec.ts > GitHub Project onboarding production controls > retries an uncertain connection with the same command ID and no extra local-create command
+ FAIL  tests/work-panel-form.spec.ts > continuous processing production scope controls > configures explicit scope and real defaults, then pauses only new work with the saved version
+ FAIL  tests/work-panel-form.spec.ts > continuous processing production scope controls > renders persisted queue reasons and opens its active Issue without starting or pausing it
+Error: Cannot find module './execution-components.tsx'
+Require stack:
+- /data/src/github.com/a2d2-dev/dsh-plugin.worktrees/issue-211-session-titles/tests/work-panel-form.spec.ts
+ ❯ require tests/work-panel-form.spec.ts:44:148
+     42|         return [state[index], (value: unknown) => { state[index] = typ…
+     43|       },
+     44|     } : id.endsWith('.css') ? { default: {} } : id === './work-panel-c…
+       |                                                                                                                                                    ^
+     45|   })
+     46|   const render = () => {
+ ❯ evalmachine.<anonymous>:12:36
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/17]⎯
+
+ FAIL  tests/client/work-completed-status.spec.ts > completed execution presentation > shows completion closeout instead of human waiting and hides execution controls until the specification changes
+AssertionError: expected '<main class="_panel_4653fe" aria-labe…' to contain '查看记录'
+
+Expected: "查看记录"
+Received: "<main class="_panel_4653fe" aria-label="A²D² 控制面板"><div class="_navigation_4653fe"><nav class="_tabs_4653fe" aria-label="来源标签"><strong>A²D² 控制面板</strong><button aria-pressed="true">acme / Project #9 <small>Project</small></button><button aria-label="添加来源">＋</button></nav><button>关闭面板</button></div><header class="_issueHeader_4653fe"><button class="_link_4653fe">← 返回 Issue 列表</button><p class="_eyebrow_4653fe"></p><h1>已完成的工作</h1><div class="_toolbar_4653fe"><span class="_badge_4653fe">已完成</span><button>刷新详情</button></div></header><details class="_continuation_4653fe"><summary>编辑自动接续设置</summary><div class="_continuation_4653fe"><h3>当前执行自动接续</h3><p>自动接续未启用</p><form class="_form_4653fe"><label>自动接续<select><option value="off" selected="">关闭</option><option value="on">启用</option></select></label><div class="_toolbar_4653fe"><button type="button">200K</button><button type="button">300K</button></div><label>提前接续目标（token）<input type="number" min="1" step="1" required="" value="200000"/></label><details><summary>高级接续设置</summary><label>接续预留（token）<input type="number" min="1024" step="1" required="" value="16000"/></label></details><p>这是安全边界上的提前接续目标。宿主会按实际模型窗口和输出预留检查；长轮次可能超过目标。保存后适用于当前执行。</p><button type="submit">保存接续策略</button></form></div></details><nav class="_tabs_4653fe" role="tablist" aria-label="Issue 详情标签"><button role="tab" aria-selected="true">概览</button><button role="tab" aria-selected="false">需求与子 Issue</button><button role="tab" aria-selected="false">会话与执行</button><button role="tab" aria-selected="false">接续</button><button role="tab" aria-selected="false">活动</button></nav><div role="tabpanel" aria-label="概览"><section aria-label="任务验收与外部同步" style="display:grid;gap:6px"><strong>尚未本地验收</strong></section><div class="_detailGrid_4653fe"><div><section><h2>当前进展</h2><p>验收记录已保存</p><p>验收通过 1 / 1 项 · 已核验 1 项</p><p>下一步：等待当前会话报告下一步</p></section><section><h2>需求与子 Issue</h2><p>尚未报告需求拆解。处理会话将围绕原始要求记录进展与证据。</p><ul></ul></section></div><section><h2>处理会话</h2><p>2 个会话 · 当前 1 · 历史 1 · 其他关联 0</p><p>执行状态：正在收口 · 会话：空闲</p><div class="_toolbar_4653fe"><button>进入当前会话</button><button>刷新执行状态</button></div><details><summary>实际执行环境</summary><p>工作目录：/workspace<br/>模型：real/model<br/>Agent 预设：standard<br/>权限：read-only · 沙箱：read-only · 审批：ask</p></details></section></div><section><h2>已接受要求与验收</h2><p>保留完成事实</p><details><summary>已接受规格 · 第 1 版</summary><p class="_sourceBody_4653fe">规格</p></details><ul><li>已验证 · 待核验</li></ul></section></div></main>"
+
+ ❯ tests/client/work-completed-status.spec.ts:47:67
+     45|     expect(html(h.panel)).toContain('正在收口')
+     46|     for (const label of ['暂停处理', '恢复处理', '接续到新会话', '等待回复', '等待请求']) ex…
+     47|     for (const label of ['进入当前会话', '查看记录']) expect(html(h.panel)).toCo…
+       |                                                                   ^
+     48|     await h.panel.controlExecution('pause'); await h.panel.controlExec…
+     49|     expect(h.command).not.toHaveBeenCalled()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/17]⎯
+
+ FAIL  tests/client/work-completed-status.spec.ts > completed execution presentation > uses the same closeout mapping in Project and Issue rows while remote closed alone remains separate
+AssertionError: expected '<main class="_panel_4653fe" aria-labe…' to contain '正在收口'
+
+Expected: "正在收口"
+Received: "<main class="_panel_4653fe" aria-label="A²D² 控制面板"><div class="_navigation_4653fe"><nav class="_tabs_4653fe" aria-label="来源标签"><strong>A²D² 控制面板</strong><button aria-pressed="true">acme / Project #9 <small>Project</small></button><button aria-label="添加来源">＋</button></nav><button>关闭面板</button></div><div class="_sourceHeader_4653fe"><div class="_sourceIdentity_4653fe"><span class="_sourceIcon_4653fe" aria-hidden="true"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v12.5A1.75 1.75 0 0 1 14.25 16H1.75A1.75 1.75 0 0 1 0 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25H5.5v-13Zm5.25 0v13h7.25a.25.25 0 0 0 .25-.25V1.75a.25.25 0 0 0-.25-.25Z"></path></svg></span><div class="_sourceTitles_4653fe"><strong>acme / Project #9</strong><span class="_sourceMeta_4653fe">Project · acme / #9 · 组织<span class="_metaDot_4653fe">·</span>读取账号：尚未确认</span></div></div><nav class="_tabs_4653fe" aria-label="来源目录"><button aria-pressed="true">概览</button><button aria-pressed="false">项目</button><button aria-pressed="false">Issue</button><button aria-pressed="false">PR</button></nav><div class="_sourceActions_4653fe"><div class="_menuWrap_4653fe"><button class="_iconButton_4653fe" aria-label="来源操作" aria-expanded="false" title="来源操作：刷新来源 / 读取目录缓存 / 持续委托 / 新执行默认自动接续"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM1.5 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm13 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"></path></svg></button></div></div></div><section aria-label="来源概览"><h2>来源概览</h2><div class="_metrics_4653fe"><article><span>开放 Issue</span><strong>—</strong><p>尚未完整观察</p></article><article><span>PR</span><strong>—</strong><p>尚未完整观察</p></article><article><span>处理中</span><strong>—</strong><p>本地工作聚合尚未读取</p></article><article><span>需要关注</span><strong>—</strong><p>本地工作聚合尚未读取</p></article></div><div class="_detailGrid_4653fe"><details><summary>需要关注 · —</summary><p>本地工作聚合尚未读取。</p></details><details><summary>正在处理 · —</summary><p>本地工作聚合尚未读取。</p></details></div><h3>最近进展</h3><p>当前来源尚无已关联的工作进展。</p><p>PR 引用、检查或合并是外部观察，不能替代任务验收。分页 Issue 列表不作为全量统计。</p></section></main>"
+
+ ❯ tests/client/work-completed-status.spec.ts:61:27
+     59|   it('uses the same closeout mapping in Project and Issue rows while r…
+     60|     const h = setup(); await h.panel.load()
+     61|     expect(html(h.panel)).toContain('正在收口')
+       |                           ^
+     62|     h.setExecution({ ...execution, state: 'waiting', control: { ...exe…
+     63|     await h.panel.observeCurrent()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/17]⎯
+
+ FAIL  tests/client/work-github-first.spec.ts > GitHub-first navigation and evidence > selects a GitHub Project by default and excludes internal records and local entrances from the surface
+AssertionError: expected '<main class="_panel_4653fe" aria-labe…' to contain 'Roadmap'
+
+Expected: "Roadmap"
+Received: "<main class="_panel_4653fe" aria-label="A²D² 控制面板"><div class="_navigation_4653fe"><nav class="_tabs_4653fe" aria-label="来源标签"><strong>A²D² 控制面板</strong><button aria-pressed="true">acme / Project #7 <small>Project</small></button><button aria-label="添加来源">＋</button></nav><button>关闭面板</button></div><div class="_sourceHeader_4653fe"><div class="_sourceIdentity_4653fe"><span class="_sourceIcon_4653fe" aria-hidden="true"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v12.5A1.75 1.75 0 0 1 14.25 16H1.75A1.75 1.75 0 0 1 0 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25H5.5v-13Zm5.25 0v13h7.25a.25.25 0 0 0 .25-.25V1.75a.25.25 0 0 0-.25-.25Z"></path></svg></span><div class="_sourceTitles_4653fe"><strong>acme / Project #7</strong><span class="_sourceMeta_4653fe">Project · acme / #7 · 组织<span class="_metaDot_4653fe">·</span>读取账号：developer</span></div></div><nav class="_tabs_4653fe" aria-label="来源目录"><button aria-pressed="true">概览</button><button aria-pressed="false">项目</button><button aria-pressed="false">Issue</button><button aria-pressed="false">PR</button></nav><div class="_sourceActions_4653fe"><div class="_menuWrap_4653fe"><button class="_iconButton_4653fe" aria-label="来源操作" aria-expanded="false" title="来源操作：刷新来源 / 读取目录缓存 / 持续委托 / 新执行默认自动接续"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM1.5 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm13 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"></path></svg></button></div></div></div><section aria-label="来源概览"><h2>来源概览</h2><div class="_metrics_4653fe"><article><span>开放 Issue</span><strong>—</strong><p>尚未完整观察</p></article><article><span>PR</span><strong>—</strong><p>尚未完整观察</p></article><article><span>处理中</span><strong>—</strong><p>本地工作聚合尚未读取</p></article><article><span>需要关注</span><strong>—</strong><p>本地工作聚合尚未读取</p></article></div><div class="_detailGrid_4653fe"><details><summary>需要关注 · —</summary><p>本地工作聚合尚未读取。</p></details><details><summary>正在处理 · —</summary><p>本地工作聚合尚未读取。</p></details></div><h3>最近进展</h3><p>当前来源尚无已关联的工作进展。</p><p>PR 引用、检查或合并是外部观察，不能替代任务验收。分页 Issue 列表不作为全量统计。</p></section></main>"
+
+ ❯ tests/client/work-github-first.spec.ts:47:117
+     45|     expect(h.panel.getSnapshot()).toMatchObject({projectId:'p1',object…
+     46|     const rendered=html(h.panel)
+     47|     for(const text of ['Roadmap','acme / Project #7','Requirement 1','…
+       |                                                                                                                     ^
+     48|     for(const text of ['Archived internal records','创建本地项目','接入已有资源','…
+     49|     expect(h.command).not.toHaveBeenCalled()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/17]⎯
+
+ FAIL  tests/client/work-github-first.spec.ts > GitHub-first navigation and evidence > shows only GitHub onboarding when all existing records have no GitHub Project
+AssertionError: expected '<main class="_panel_4653fe" aria-labe…' to contain '连接并查看 Issues'
+
+Expected: "连接并查看 Issues"
+Received: "<main class="_panel_4653fe" aria-label="A²D² 控制面板"><div class="_navigation_4653fe"><nav class="_tabs_4653fe" aria-label="来源标签"><strong>A²D² 控制面板</strong><button aria-label="添加来源">＋</button></nav><button>关闭面板</button></div><section aria-label="添加来源"><h2>添加 GitHub 来源</h2><p>粘贴 Project 或仓库链接，使用此宿主已连接的 GitHub 账号识别，确认后添加。</p><form class="_form_4653fe"><label>GitHub Project / 仓库链接<input type="url" required="" placeholder="https://github.com/owner/repository" value=""/></label><button type="submit">识别来源</button></form></section></main>"
+
+ ❯ tests/client/work-github-first.spec.ts:57:27
+     55|     await h.panel.load()
+     56|     expect(h.panel.getSnapshot().projectId).toBeNull()
+     57|     expect(html(h.panel)).toContain('连接并查看 Issues')
+       |                           ^
+     58|     expect(html(h.panel)).not.toContain('Archived internal records')
+     59|     expect(html(h.panel)).not.toContain('GitHub Issue 列表')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/17]⎯
+
+ FAIL  tests/client/work-history.spec.ts > read-only retired Session history > reads Task-scoped pages, uses the returned cursor and escapes transcript markup without native navigation
+AssertionError: expected '<main class="_panel_4653fe" aria-labe…' to contain '查看记录'
+
+Expected: "查看记录"
+Received: "<main class="_panel_4653fe" aria-label="A²D² 控制面板"><div class="_navigation_4653fe"><nav class="_tabs_4653fe" aria-label="来源标签"><strong>A²D² 控制面板</strong><button aria-label="添加来源">＋</button></nav><button>关闭面板</button></div><header class="_issueHeader_4653fe"><button class="_link_4653fe">← 返回 Issue 列表</button><p class="_eyebrow_4653fe"></p><h1>查看历史上下文</h1><div class="_toolbar_4653fe"><span class="_badge_4653fe">未开始</span><button>刷新详情</button></div></header><details class="_continuation_4653fe"><summary>编辑自动接续设置</summary><div class="_continuation_4653fe"><h3>当前执行自动接续</h3><p>自动接续未启用</p><form class="_form_4653fe"><label>自动接续<select><option value="off" selected="">关闭</option><option value="on">启用</option></select></label><div class="_toolbar_4653fe"><button type="button">200K</button><button type="button">300K</button></div><label>提前接续目标（token）<input type="number" min="1" step="1" required="" value="200000"/></label><details><summary>高级接续设置</summary><label>接续预留（token）<input type="number" min="1024" step="1" required="" value="16000"/></label></details><p>这是安全边界上的提前接续目标。宿主会按实际模型窗口和输出预留检查；长轮次可能超过目标。保存后适用于当前执行。</p><button type="submit">保存接续策略</button></form></div></details><nav class="_tabs_4653fe" role="tablist" aria-label="Issue 详情标签"><button role="tab" aria-selected="true">概览</button><button role="tab" aria-selected="false">需求与子 Issue</button><button role="tab" aria-selected="false">会话与执行</button><button role="tab" aria-selected="false">接续</button><button role="tab" aria-selected="false">活动</button></nav><div role="tabpanel" aria-label="概览"><section aria-label="任务验收与外部同步" style="display:grid;gap:6px"><strong>尚未本地验收</strong></section><div class="_detailGrid_4653fe"><div><section><h2>当前进展</h2><p>尚未开始处理</p><p>下一步：等待当前会话报告下一步</p></section><section><h2>需求与子 Issue</h2><p>尚未报告需求拆解。处理会话将围绕原始要求记录进展与证据。</p><ul></ul></section></div><section><h2>处理会话</h2><p>3 个会话 · 当前 1 · 历史 2 · 其他关联 0</p><p>执行状态：已就绪</p><div class="_toolbar_4653fe"><button>暂停处理</button><button>刷新执行状态</button></div><p>当前会话暂不可进入；刷新可查看创建或恢复结果。</p></section></div><section><h2>已接受要求与验收</h2><p>连续处理</p><details><summary>已接受规格 · 第 1 版</summary><p class="_sourceBody_4653fe">保存决定</p></details><ul><li>可只读查看历史 · 待核验</li></ul></section></div></main>"
+
+ ❯ tests/client/work-history.spec.ts:42:136
+     40|     expect(h.panel.getSnapshot().history.nextCursor).toBeUndefined()
+     41|     const rendered = html(h.panel)
+     42|     for (const text of ['查看记录', '历史记录 · 只读', 'accepted decision', 'nex…
+       |                                                                                                                                        ^
+     43|     expect(rendered).not.toContain('<script>')
+     44|     expect(h.client.command).not.toHaveBeenCalled()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/17]⎯
+
+ FAIL  tests/client/work-history.spec.ts > read-only retired Session history > retains the prior page on failure and retries the same cursor once
+AssertionError: expected '<main class="_panel_4653fe" aria-labe…' to contain '重试读取'
+
+Expected: "重试读取"
+Received: "<main class="_panel_4653fe" aria-label="A²D² 控制面板"><div class="_navigation_4653fe"><nav class="_tabs_4653fe" aria-label="来源标签"><strong>A²D² 控制面板</strong><button aria-label="添加来源">＋</button></nav><button>关闭面板</button></div><header class="_issueHeader_4653fe"><button class="_link_4653fe">← 返回 Issue 列表</button><p class="_eyebrow_4653fe"></p><h1>查看历史上下文</h1><div class="_toolbar_4653fe"><span class="_badge_4653fe">未开始</span><button>刷新详情</button></div></header><details class="_continuation_4653fe"><summary>编辑自动接续设置</summary><div class="_continuation_4653fe"><h3>当前执行自动接续</h3><p>自动接续未启用</p><form class="_form_4653fe"><label>自动接续<select><option value="off" selected="">关闭</option><option value="on">启用</option></select></label><div class="_toolbar_4653fe"><button type="button">200K</button><button type="button">300K</button></div><label>提前接续目标（token）<input type="number" min="1" step="1" required="" value="200000"/></label><details><summary>高级接续设置</summary><label>接续预留（token）<input type="number" min="1024" step="1" required="" value="16000"/></label></details><p>这是安全边界上的提前接续目标。宿主会按实际模型窗口和输出预留检查；长轮次可能超过目标。保存后适用于当前执行。</p><button type="submit">保存接续策略</button></form></div></details><nav class="_tabs_4653fe" role="tablist" aria-label="Issue 详情标签"><button role="tab" aria-selected="true">概览</button><button role="tab" aria-selected="false">需求与子 Issue</button><button role="tab" aria-selected="false">会话与执行</button><button role="tab" aria-selected="false">接续</button><button role="tab" aria-selected="false">活动</button></nav><div role="tabpanel" aria-label="概览"><section aria-label="任务验收与外部同步" style="display:grid;gap:6px"><strong>尚未本地验收</strong></section><div class="_detailGrid_4653fe"><div><section><h2>当前进展</h2><p>尚未开始处理</p><p>下一步：等待当前会话报告下一步</p></section><section><h2>需求与子 Issue</h2><p>尚未报告需求拆解。处理会话将围绕原始要求记录进展与证据。</p><ul></ul></section></div><section><h2>处理会话</h2><p>3 个会话 · 当前 1 · 历史 2 · 其他关联 0</p><p>执行状态：已就绪</p><div class="_toolbar_4653fe"><button>暂停处理</button><button>刷新执行状态</button></div><p>当前会话暂不可进入；刷新可查看创建或恢复结果。</p></section></div><section><h2>已接受要求与验收</h2><p>连续处理</p><details><summary>已接受规格 · 第 1 版</summary><p class="_sourceBody_4653fe">保存决定</p></details><ul><li>可只读查看历史 · 待核验</li></ul></section></div></main>"
+
+ ❯ tests/client/work-history.spec.ts:79:27
+     77|     await h.panel.openHistory(old); await h.panel.moreHistory()
+     78|     expect(h.panel.getSnapshot().history).toMatchObject({ events: ['fi…
+     79|     expect(html(h.panel)).toContain('重试读取')
+       |                           ^
+     80|     await h.panel.retryHistory()
+     81|     expect(query.mock.calls.slice(-2).map(([value]) => value)).toEqual…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/17]⎯
+
+ FAIL  tests/client/work-observation.spec.ts > visible panel local observation > updates task progress while preserving tab, filters and already loaded history without writes/navigation
+AssertionError: expected '<main class="_panel_4653fe" aria-labe…' to contain '后端新进展'
+
+Expected: "后端新进展"
+Received: "<main class="_panel_4653fe" aria-label="A²D² 控制面板"><div class="_navigation_4653fe"><nav class="_tabs_4653fe" aria-label="来源标签"><strong>A²D² 控制面板</strong><button aria-pressed="true">acme / Project #9 <small>Project</small></button><button aria-pressed="false">acme / Project #9 <small>Project</small></button><button aria-label="添加来源">＋</button></nav><button>关闭面板</button></div><header class="_issueHeader_4653fe"><button class="_link_4653fe">← 返回 Issue 列表</button><p class="_eyebrow_4653fe">p1</p><h1>持续工作</h1><div class="_toolbar_4653fe"><span class="_badge_4653fe">未开始</span><button>刷新详情</button></div></header><details class="_continuation_4653fe"><summary>编辑自动接续设置</summary><div class="_continuation_4653fe"><h3>当前执行自动接续</h3><p>自动接续未启用</p><form class="_form_4653fe"><label>自动接续<select><option value="off" selected="">关闭</option><option value="on">启用</option></select></label><div class="_toolbar_4653fe"><button type="button">200K</button><button type="button">300K</button></div><label>提前接续目标（token）<input type="number" min="1" step="1" required="" value="200000"/></label><details><summary>高级接续设置</summary><label>接续预留（token）<input type="number" min="1024" step="1" required="" value="16000"/></label></details><p>这是安全边界上的提前接续目标。宿主会按实际模型窗口和输出预留检查；长轮次可能超过目标。保存后适用于当前执行。</p><button type="submit">保存接续策略</button></form></div></details><nav class="_tabs_4653fe" role="tablist" aria-label="Issue 详情标签"><button role="tab" aria-selected="false">概览</button><button role="tab" aria-selected="false">需求与子 Issue</button><button role="tab" aria-selected="true">会话与执行</button><button role="tab" aria-selected="false">接续</button><button role="tab" aria-selected="false">活动</button></nav><div role="tabpanel" aria-label="会话与执行"><p role="status">执行图尚未读取，执行与结果状态未知。</p><section aria-label="只读历史记录"><div class="_header_4653fe"><h3>历史记录 · 只读</h3><button>关闭记录</button></div><p>会话：retired · 查看记录不会启动旧会话。</p><pre>已加载的旧上下文</pre><button>加载更多记录</button></section></div></main>"
+
+ ❯ tests/client/work-observation.spec.ts:44:27
+     42|     expect(h.panel.getSnapshot()).toMatchObject({ detailTab: 'sessions…
+     43|     expect(h.panel.getSnapshot().history).toBe(priorHistory)
+     44|     expect(html(h.panel)).toContain('后端新进展')
+       |                           ^
+     45|     expect(h.client.command).not.toHaveBeenCalled()
+     46|     expect(h.navigation.openSession).not.toHaveBeenCalled()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/17]⎯
+
+ FAIL  tests/client/work-observation.spec.ts > visible panel local observation > refreshes Issue-row local progress without imports and never matches another repository by number
+AssertionError: expected '<main class="_panel_4653fe" aria-labe…' to contain '未开始'
+
+Expected: "未开始"
+Received: "<main class="_panel_4653fe" aria-label="A²D² 控制面板"><div class="_navigation_4653fe"><nav class="_tabs_4653fe" aria-label="来源标签"><strong>A²D² 控制面板</strong><button aria-pressed="true">acme / Project #9 <small>Project</small></button><button aria-pressed="false">acme / Project #9 <small>Project</small></button><button aria-label="添加来源">＋</button></nav><button>关闭面板</button></div><div class="_sourceHeader_4653fe"><div class="_sourceIdentity_4653fe"><span class="_sourceIcon_4653fe" aria-hidden="true"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v12.5A1.75 1.75 0 0 1 14.25 16H1.75A1.75 1.75 0 0 1 0 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25H5.5v-13Zm5.25 0v13h7.25a.25.25 0 0 0 .25-.25V1.75a.25.25 0 0 0-.25-.25Z"></path></svg></span><div class="_sourceTitles_4653fe"><strong>acme / Project #9</strong><span class="_sourceMeta_4653fe">Project · acme / #9 · 组织<span class="_metaDot_4653fe">·</span>读取账号：尚未确认</span></div></div><nav class="_tabs_4653fe" aria-label="来源目录"><button aria-pressed="true">概览</button><button aria-pressed="false">项目</button><button aria-pressed="false">Issue</button><button aria-pressed="false">PR</button></nav><div class="_sourceActions_4653fe"><div class="_menuWrap_4653fe"><button class="_iconButton_4653fe" aria-label="来源操作" aria-expanded="false" title="来源操作：刷新来源 / 读取目录缓存 / 持续委托 / 新执行默认自动接续"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM1.5 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm13 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"></path></svg></button></div></div></div><section aria-label="来源概览"><h2>来源概览</h2><div class="_metrics_4653fe"><article><span>开放 Issue</span><strong>—</strong><p>尚未完整观察</p></article><article><span>PR</span><strong>—</strong><p>尚未完整观察</p></article><article><span>处理中</span><strong>—</strong><p>本地工作聚合尚未读取</p></article><article><span>需要关注</span><strong>—</strong><p>本地工作聚合尚未读取</p></article></div><div class="_detailGrid_4653fe"><details><summary>需要关注 · —</summary><p>本地工作聚合尚未读取。</p></details><details><summary>正在处理 · —</summary><p>本地工作聚合尚未读取。</p></details></div><h3>最近进展</h3><p>当前来源尚无已关联的工作进展。</p><p>PR 引用、检查或合并是外部观察，不能替代任务验收。分页 Issue 列表不作为全量统计。</p></section></main>"
+
+ ❯ tests/client/work-observation.spec.ts:106:27
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/17]⎯
+
+
+ Test Files  7 failed | 93 passed (100)
+      Tests  17 failed | 1119 passed (1136)
+   Start at  08:42:33
+   Duration  76.74s (transform 3.12s, setup 0ms, import 21.42s, tests 111.65s, environment 17ms)
+

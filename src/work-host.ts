@@ -6,14 +6,23 @@ import type { WorkspaceRegistry } from '@deepseek-ai/dsh-workspace'
 import type { WorkHost } from './work.ts'
 import { DshWorkExecutionHost } from './work-execution/dsh-host.ts'
 import type { WorkExecutionHost } from './work-execution/host.ts'
-import type { HostResource, SessionCandidate } from './work-types.ts'
+import { TaskSessionTitleWriter } from './task-session-title-writer.ts'
+import type { HostResource, SessionCandidate, SessionRef } from './work-types.ts'
 
 export class WorkHostUnavailable extends Error {}
 
 /** Resource/candidate queries stay read-only; execution uses a separate explicit capability. */
 export class DshWorkHost implements WorkHost {
   execution: WorkExecutionHost
-  constructor(private readonly ctx: Context, readonly runtimeId: string) { this.execution = new DshWorkExecutionHost(ctx, runtimeId) }
+  private readonly titles: TaskSessionTitleWriter
+  constructor(private readonly ctx: Context, readonly runtimeId: string) {
+    this.execution = new DshWorkExecutionHost(ctx, runtimeId)
+    this.titles = new TaskSessionTitleWriter(ctx, runtimeId)
+  }
+  async nameSession(session: SessionRef, title: string): Promise<void> {
+    try { await this.titles.set(session, title) }
+    catch (error) { this.ctx.logger.warn(`Task Session title update failed for ${session.sessionId}; will retry: ${String(error)}`) }
+  }
   private registry(): WorkspaceRegistry {
     const registry = this.ctx.get('workspaceRegistry') as unknown as WorkspaceRegistry | undefined
     if (!registry) throw new WorkHostUnavailable('DSH workspaceRegistry is required for host resources')
