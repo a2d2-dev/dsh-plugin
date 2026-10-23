@@ -389,7 +389,10 @@
 .highwayStation {
   position: relative;
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) auto;
+  /* marker, label, station control, model label; the editable settings page
+     renders both trailing cells, so the fourth column must exist or the model
+     label wraps into the 20px marker column and stacks one character per line. */
+  grid-template-columns: 20px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 8px;
   min-height: 34px;
