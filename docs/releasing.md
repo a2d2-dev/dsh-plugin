@@ -34,3 +34,15 @@ CI 在 Node.js 22、24 上执行上述检查，另运行固定版本 Gitleaks �
 5. 显式授权公开仓库后，启用 `main` ruleset：PR 合并、至少一人批准、新提交撤销旧批准、解决所有 review 对话、禁止删除和强推、要求 `checks (Node 22)`、`checks (Node 24)`、`secrets` 成功。不要把尚未产生过的检查名误配为门禁。
 
 GitHub 当前私有仓库套餐拒绝分支保护 API（HTTP 403）；新增 CI 不会自动启用分支保护，也不会改变仓库可见性。
+
+## main 保护规则配置
+
+[可审阅的 ruleset 配置](../.github/main-ruleset.json) 匹配 `main`，不配置绕过者；要求 PR、至少一人批准、最后推送由其他人批准、新提交撤销旧批准、解决 review 对话，以及来自 GitHub Actions 的三项 CI 检查成功。禁止删除和强推，并要求分支与目标主干保持最新。
+
+待套餐允许且这些 CI 检查已实际运行后，可更新现有规则（不会更改仓库可见性）：
+
+```sh
+gh api --method PUT repos/a2d2-dev/dsh-plugin/rulesets/25704910 --input .github/main-ruleset.json
+```
+
+这是待应用配置；文件进入 Git 不代表 GitHub 已启用保护。
