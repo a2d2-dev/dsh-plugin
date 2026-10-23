@@ -383,7 +383,7 @@
   bottom: 14px;
   left: 9px;
   width: 2px;
-  background: rgba(255, 255, 255, 0.16);
+  background: color-mix(in srgb, currentColor 20%, transparent);
 }
 
 .highwayStation {
@@ -396,7 +396,7 @@
   align-items: center;
   gap: 8px;
   min-height: 34px;
-  color: rgba(242, 245, 248, 0.72);
+  color: inherit;
 }
 
 .highwayMarker {
@@ -406,10 +406,10 @@
   width: 20px;
   height: 20px;
   box-sizing: border-box;
-  border: 2px solid rgba(255, 255, 255, 0.24);
+  border: 2px solid color-mix(in srgb, currentColor 32%, transparent);
   border-radius: 50%;
-  background: #1b2430;
-  color: #ffffff;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  color: inherit;
   font-size: 12px;
   font-weight: 800;
   line-height: 1;
@@ -439,10 +439,10 @@
 .highwayModel {
   max-width: 96px;
   padding: 3px 6px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
   border-radius: 7px;
-  background: #101823;
-  color: rgba(242, 245, 248, 0.9);
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  color: inherit;
   font-size: 10px;
   line-height: 1.2;
   overflow-wrap: anywhere;
