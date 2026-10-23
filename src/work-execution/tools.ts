@@ -2,6 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { WorkApplication } from '../work.ts'
 import { compactWorkResult } from '../work-model-results.ts'
+import { workMaterialPage } from '../work-model-read.ts'
 
 /** Production tools are optional; local work queries never require a live Agent. */
 export function installWorkControlRecovery(ctx: Context, app: WorkApplication): void {
@@ -28,6 +29,24 @@ export function installWorkControlRecovery(ctx: Context, app: WorkApplication): 
 
 export function installWorkTools(ctx: Context, app: WorkApplication, runtimeId: string): void {
   ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'work_read',
+    description: 'Explicitly read current managed Task material when startup material is missing or status flags a different specification version. Choose specification (goal, all criteria and necessary child scope), progress, sources or continuation. Returns bounded JSON fragments; concatenate content from every page until complete before interpreting it. Continue with nextCursor, revision and the same expected_version; on conflict or material-changed restart. This does not grant execution authority. For fresh accepted GitHub source observations use work_related_issue.',
+    parameters: {
+      section: { type: 'string', required: true, enum: ['specification', 'progress', 'sources', 'continuation'] },
+      expected_version: { type: 'integer', required: true, description: 'Task version returned by work_control status.' },
+      expected_epoch: { type: 'integer' },
+      cursor: { type: 'integer', description: 'Zero initially, then the exact nextCursor.' },
+      revision: { type: 'string', description: 'Required after the first page; detects changed material.' },
+    },
+    output: { schema: { type: 'object', additionalProperties: false, properties: { result: { type: 'string', required: true } } }, render: (_args, value) => [{ type: 'text', text: value.result }] },
+    async execute(args, exec) {
+      if (!exec.agent || exec.agent.session.id !== exec.agent.id) throw new Error('work_read requires a real calling Agent Session')
+      const full = await app.sessionControl({ runtimeId, sessionId: exec.agent.id }, exec.callId, 'status')
+      return { result: JSON.stringify(workMaterialPage(full, args)) }
+    },
+    presentCall: args => ({ card: 'generic', title: `Read work: ${args.section}`, kind: 'other' }),
+  })), 'explicit managed work material reading')
+  ctx.effect(() => ctx.tools.register(defineTool({
     name: 'work_continuation_material',
     description: 'Save your current managed Task continuation material: the original discussion, concrete accepted decisions, evidence, unfinished work and next step. Task and source Session references are resolved by the server. This saves material only; it does not transfer coordination or start a successor.',
     parameters: {
@@ -49,7 +68,7 @@ export function installWorkTools(ctx: Context, app: WorkApplication, runtimeId: 
   })), 'managed work continuation material tool')
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'work_control',
-    description: 'Read status or report progress, ask/wait, pause or explicitly resume your current managed Task. Waiting and pausing are durably accepted now and applied after this turn. They preserve queued input until an explicit resume. Task identity and execution authority come from your calling Session.',
+    description: 'Check current-session ownership and Task/specification versions with status (no Task material); use work_read for explicit paginated details when supplied material is missing or changed. Status remains available after startup. Report progress, ask/wait, pause or explicitly resume your current managed Task. Waiting and pausing are durably accepted now and applied after this turn. They preserve queued input until an explicit resume. Task identity and execution authority come from your calling Session.',
     parameters: {
       known_specification_version: { type: 'integer', description: 'Specification version supplied at startup or fully read with work_read; status flags changed or missing material.' },
       action: { type: 'string', required: true, enum: ['status', 'progress', 'wait', 'pause', 'resume'] },

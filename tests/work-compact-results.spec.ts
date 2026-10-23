@@ -62,6 +62,31 @@ it('organizes the accepted specification with a minimal result and exact version
   expect((await h.invoke('work_control', { action: 'status', known_specification_version: 1 })).value).toMatchObject({ coordinator: true, specificationState: 'changed', specificationVersion: 2 })
 })
 
+it('reads all current requirements explicitly in bounded revision-checked pages', async () => {
+  const h = await setup()
+  const task = (await h.detail()).task!
+  const args = { section: 'specification', expected_version: task.version, expected_epoch: 1 }
+  let cursor = 0, revision: string | undefined, content = '', pages = 0
+  do {
+    const result = await h.invoke('work_read', { ...args, cursor, ...(revision ? { revision } : {}) })
+    expect(result.value).toMatchObject({ status: 'completed', format: 'json-fragment', taskVersion: task.version, specificationVersion: 1, cursor })
+    expect(Buffer.byteLength(result.text)).toBeLessThanOrEqual(16384)
+    revision = result.value.revision
+    content += result.value.content
+    pages++
+    if (result.value.complete) { expect(result.value.nextCursor).toBeUndefined(); break }
+    expect(result.value.nextCursor).toBeGreaterThan(cursor)
+    cursor = result.value.nextCursor
+  } while (pages < 100)
+  expect(pages).toBeGreaterThan(1)
+  expect(JSON.parse(content)).toMatchObject({ goal: task.goal, specification: task.specification, children: [] })
+  expect((await h.invoke('work_read', { ...args, cursor: 10 })).value.error.code).toBe('material-revision-required')
+  const organized = await h.invoke('work_organize', { action: 'specification', expected_version: task.version, goal: task.goal, specification: 'Changed requirements', acceptance: ['Changed criterion'] })
+  expect(organized.value.saved).toBe(true)
+  expect((await h.invoke('work_read', { ...args, cursor, revision })).value).toMatchObject({ status: 'conflict', error: { code: 'version-conflict', currentVersion: task.version + 1 } })
+  expect((await h.invoke('work_read', { ...args, expected_version: task.version + 1, cursor, revision })).value.error.code).toBe('material-changed')
+})
+
 it('saves progress without echoing the submitted report or historical Task and preserves errors', async () => {
   const h = await setup()
   const report = { specificationVersion: 1, stage: 'in-progress', summary: 'PRIVATE REPORT ' + '正文'.repeat(2000), next: 'Next action', blockers: [], criteria: [] }

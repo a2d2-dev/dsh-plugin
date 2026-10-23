@@ -18,7 +18,7 @@ export function installWorkOrganizationTools(ctx:Context,app:WorkApplication,run
   })),'managed work related source reading')
   ctx.effect(()=>ctx.tools.register(defineTool({
     name:'work_organize',
-    description:'Preserve your managed Task specification or accept a completely read parent native-child scope. Subtasks must be created as GitHub sub-issues and imported through the source route; this tool never creates a GitHub Issue or a local child Task. Short-lived work that one session can finish belongs in this Task or a DSH subagent delegation, not in a subtask. Read work_control status first for the current Task version. Extract acceptance criteria from the accepted Issue or user decisions without inventing, removing or weakening requirements; ask when unclear.',
+    description:'Preserve your managed Task specification or accept a completely read parent native-child scope. Subtasks must be created as GitHub sub-issues and imported through the source route; this tool never creates a GitHub Issue or a local child Task. Short-lived work that one session can finish belongs in this Task or a DSH subagent delegation, not in a subtask. Use work_control status for ownership and the current Task version only. Use supplied startup material, or read all work_read specification pages if changed or missing. Extract acceptance criteria from the accepted Issue or user decisions without inventing, removing or weakening requirements; ask when unclear.',
     parameters:{
       action:{type:'string',required:true,enum:['specification','source-children']},
       expected_version:{type:'integer',required:true,description:'Current Task version from work_control status.'},
