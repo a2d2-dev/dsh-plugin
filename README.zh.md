@@ -15,7 +15,29 @@
 - **GitHub 关注**——`github_watch` 让会话不用轮询就能等一个 PR：PR 合并、关闭、CI 出结果或有了 review 结论时，会话会收到一条消息，空闲中的会话也会被唤醒。
 - **通知**——任务 issue 的主会话停下来等 LF 时，经已装的 `notifier` 提供者往 LF 手机推一条带 A²D² 语义的消息。
 
-> `A²D²` 是品牌与展示写法；`a2d2` 是技术标识——包名、目录、服务名都用它，因为 `²` 不能进 npm 包名。包名为 `@deepseek-ai/dsh-a2d2`。
+> `A²D²` 是品牌与展示写法；`a2d2` 是技术标识——包名、目录、服务名都用它，因为 `²` 不能进 npm 包名。包名为 `dsh-a2d2`。
+
+## 安装
+
+`lib/` 是构建产物且在 `.gitignore` 中，因此刚 clone 的源码树里没有可运行的插件。`pnpm pack` 会运行 `prepack` 钩子（构建 + 入口断言），所以打出的 tarball 总是完整的：
+
+```console
+git clone https://github.com/a2d2-dev/dsh-plugin.git dsh-a2d2
+cd dsh-a2d2
+pnpm install
+pnpm build                       # 可选：pnpm pack 的 prepack 也会构建
+pnpm pack                        # -> dsh-a2d2-0.0.1.tgz
+dsh plugin --profile web add "$(pwd)/dsh-a2d2-0.0.1.tgz"
+```
+
+安装时使用 tarball 的绝对路径。打包产物是否完整由 `pnpm verify:pack-exports`（见下）检查。
+
+> **警告——请安装构建后的 tarball，不要安装源码树。** 安装本地目录（`dsh plugin --profile web add ./dsh-a2d2`）或 git URL（`… add git+https://…`）**不会**运行 `pnpm build`，包会以没有 `lib/` 的空壳形态落地；随后 8 个 A²D² 行全部 import 失败（`ERR_MODULE_NOT_FOUND …/lib/*.js`），profile 启动时只留一行 warning，A²D² 静默失效。改动源码后，重新构建 tarball 并安装它：
+>
+> ```console
+> pnpm build && pnpm pack
+> dsh plugin --profile web add "$(pwd)/dsh-a2d2-0.0.1.tgz"
+> ```
 
 本文余下部分是插件的行为契约与已知限制，按各组件分列于下。
 
@@ -23,25 +45,25 @@
 
 本包贡献八个挂载行。`ctx.a2d2` 是任务存储，不声明任何服务，因此在任何 profile 中都会加载；命令行声明了 `commands` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `/handoff`；基础工具行声明了 `tools` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `bind_main_session` 与 `dispatch_subagent`；开子任务工具行额外声明 `agents` 与 `llm`，因为 `open_subtask` 要创建根会话，并从 `grill` 阶段指定的 Agent 选择模型；完成任务工具行声明 `agents`，因为 `complete_task` 可能需要先恢复父任务主会话再发送通知；CEO 提示段行声明了 `agents`、`systemPrompt` 与 `a2d2`，所以只有同时组合 live Agents 与系统提示词组装的 profile 才得到主会话作用域指导；Agent 提示段行使用同一组服务，为已记录 Agent 的工程师/评审会话装配配置；GitHub 关注行声明了 `tools`、`agents`、`sessions` 与 `sessionController`，所以只有能唤醒会话的 profile 才得到 `github_watch`。`dispatch_subagent` 只在实际运行时查找 `subagents`，因此没有子代理服务的 profile 仍能加载基础工具行，`bind_main_session` 照常可用。Cordis 对"声明了却缺失的服务"是拒绝加载，这正是把它们拆成多行、而不是从一行里条件式注册的原因。悬浮球不需要自己的一行：它通过自己已经身处的那个会话驱动同一条命令。
 
-发布前运行 `pnpm verify:pack-exports`。它会构建包、打出 tarball、把 tarball 安装到一个空的临时项目里，并逐个导入 `package.json` exports 声明的每个 Node 入口。这个检查会在发版前发现遗漏的 hash 构建分块，例如共享的交接分块。
+发布前运行 `pnpm verify:pack-exports`。它先用 `git archive HEAD` 只把 git 跟踪的文件导出到临时干净树（并断言其中没有 `lib/`），在该树里运行 `pnpm pack`，让 `prepack` 从零构建；随后断言 tarball 文件清单包含全部显式 `exports` 目标（含类型声明与 client 产物）、`dsh.plugin.json` 与 `cordis.patch.yml`，再把同一个 tarball 安装到空的临时项目并逐个导入 `package.json` exports 声明的每个 Node 入口。因此这个检查既覆盖空壳 tarball（未构建就打包的失败形态），也会在发版前发现遗漏的 hash 构建分块，例如共享的交接分块。由于校验对象是已提交的 `HEAD`，工作区有未提交改动时该检查会直接失败：先 commit 或 stash。
 
 ```yaml
 - id: a2d2
-  name: '@deepseek-ai/dsh-a2d2'
+  name: 'dsh-a2d2'
 - id: a2d2-command
-  name: '@deepseek-ai/dsh-a2d2/command'
+  name: 'dsh-a2d2/command'
 - id: a2d2-tools
-  name: '@deepseek-ai/dsh-a2d2/tools'
+  name: 'dsh-a2d2/tools'
 - id: a2d2-open-subtask-tools
-  name: '@deepseek-ai/dsh-a2d2/open-subtask-tools'
+  name: 'dsh-a2d2/open-subtask-tools'
 - id: a2d2-complete-task-tools
-  name: '@deepseek-ai/dsh-a2d2/complete-task-tools'
+  name: 'dsh-a2d2/complete-task-tools'
 - id: a2d2-ceo-prompt
-  name: '@deepseek-ai/dsh-a2d2/ceo-prompt'
+  name: 'dsh-a2d2/ceo-prompt'
 - id: a2d2-agent-prompt
-  name: '@deepseek-ai/dsh-a2d2/agent-prompt'
+  name: 'dsh-a2d2/agent-prompt'
 - id: a2d2-github-watch
-  name: '@deepseek-ai/dsh-a2d2/github-watch'
+  name: 'dsh-a2d2/github-watch'
 ```
 
 | 键 | 默认值 | 约定 |
