@@ -248,6 +248,10 @@ export function createConfigHandler(
         case 'settings.get': {
           respond(response, 200, { ok: true, value: {
             ...settingsView(dependencies.getSettings()),
+            // The A2D2 candidate list is the plugin's routable catalog
+            // (`llm.listModels`), which can be wider than the session
+            // controller's Host-generation catalog.
+            catalog: await dependencies.modelRoutes?.() ?? [],
             efforts: await dependencies.modelEfforts?.() ?? {},
           } })
           return

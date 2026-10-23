@@ -46,6 +46,7 @@ interface ConfigSnapshot {
   readonly settings: StageAgentsSettings
   readonly revision?: number
   readonly warnings: readonly string[]
+  readonly catalog?: readonly string[]
   readonly efforts?: ModelEffortCatalog
 }
 
@@ -290,9 +291,12 @@ function configStationAgentField(
 }
 
 function candidateModelLabel(routes: readonly ModelCandidate[], catalog: readonly string[] | undefined): string {
-  if (catalog === undefined) return shortModelRoute(candidateRoute(routes[0] ?? '')) || '无可用模型'
-  const selected = routes.find(route => catalog.includes(candidateRoute(route)))
-  return selected === undefined ? '无可用模型' : shortModelRoute(candidateRoute(selected))
+  if (routes.length === 0) return '未配置'
+  const route = candidateRoute(routes[0]!)
+  const label = shortModelRoute(route)
+  // A configured candidate may predate the current catalog; show it and say so
+  // instead of replacing the user's choice with "无可用模型".
+  return catalog !== undefined && !catalog.includes(route) ? `${label}（目录外）` : label
 }
 
 function stationRole(station: ConfigStationId): string {
@@ -346,6 +350,7 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
         if (!alive) return
         setSnapshot(config)
         setDraft(cloneSettings(config.settings))
+        if (config.catalog !== undefined) setCatalog(config.catalog)
         setCatalog(routes)
         setStatus('已加载')
       } catch (error) {
