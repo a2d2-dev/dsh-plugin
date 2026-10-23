@@ -12,7 +12,8 @@ it.each([1, 100, 1000])('bounds encoded JSON diagnostics for %i long reminders a
     const error = compactWorkResult({ status: 'conflict', error: { code: 'completion-results-unsettled', message, currentVersion: 42 } }, kind)
     expect(Buffer.byteLength(JSON.stringify(error))).toBeLessThanOrEqual(2048)
     expect(error).toMatchObject({ status: 'conflict', error: { code: 'completion-results-unsettled', currentVersion: 42, originalBytes: Buffer.byteLength(message), messageTruncated: true } })
-    expect(error.error!.message).toContain('Collect required results:')
-    expect(error.error!.message).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u)
+    if (!('error' in error)) throw Error('Expected a projected error')
+    expect(error.error.message).toContain('Collect required results:')
+    expect(error.error.message).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u)
   }
 })
