@@ -8,6 +8,10 @@
  * `pnpm pack` build it through `prepack`, asserts every explicit export target
  * plus the bundle sidecars are inside the tarball, and only then installs that
  * tarball into an empty project and imports every Node entrypoint.
+ *
+ * Because the archive step verifies the committed `HEAD`, a dirty working tree
+ * is rejected: an uncommitted manifest or build-script edit must never pass a
+ * release gate and then be packed or published as-is.
  */
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -50,6 +54,16 @@ async function verifyCheckout(shipped) {
   const checkout = join(shipped, 'checkout')
   const archive = join(shipped, 'HEAD.tar')
   const packDestination = join(shipped, 'packed')
+
+  const dirty = (await run('git', ['status', '--porcelain'])).stdout.trim()
+  if (dirty.length > 0) {
+    throw new Error(
+      'working tree has uncommitted changes; commit or stash them first — '
+      + `this check verifies the committed HEAD that would be packed:\n${dirty}`,
+    )
+  }
+  const head = (await run('git', ['rev-parse', '--short', 'HEAD'])).stdout.trim()
+
   await mkdir(checkout, { recursive: true })
   await mkdir(packDestination, { recursive: true })
 
@@ -71,7 +85,7 @@ async function verifyCheckout(shipped) {
   // The build needs devDependencies; link this checkout's installed tree instead
   // of reinstalling. The clean tree stays free of build output until prepack runs.
   await symlink(join(root, 'node_modules'), join(checkout, 'node_modules'), 'dir')
-  console.log('clean tree: exported HEAD (no lib/), node_modules linked for the build')
+  console.log(`clean tree: exported HEAD ${head} (no lib/), node_modules linked for the build`)
 
   await run('pnpm', ['pack', '--pack-destination', packDestination], { cwd: checkout })
   const tarballs = (await readdir(packDestination)).filter(file => file.endsWith('.tgz'))

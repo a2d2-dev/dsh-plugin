@@ -79,8 +79,7 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.client.json",
     "test": "vitest run",
     "verify:pack-exports": "node scripts/verify-pack-exports.mjs",
-    "prepack": "pnpm build && node scripts/assert-pack-entrypoints.mjs",
-    "prepublishOnly": "pnpm run prepack"
+    "prepack": "pnpm build && node scripts/assert-pack-entrypoints.mjs"
   },
   "license": "MIT",
   "engines": {
