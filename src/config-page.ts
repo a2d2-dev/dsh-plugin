@@ -5,7 +5,7 @@
  * only the plugin-owned stage Agent settings, and only to a browser DSH has
  * authenticated (see `route-auth.ts`), like every other A2D2 route.
  *
- * @module @a2d2-dev/dsh-a2d2/src/config-page
+ * @module @a2d2/dsh-a2d2/src/config-page
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http'

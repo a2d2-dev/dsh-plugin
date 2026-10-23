@@ -3,7 +3,7 @@
  *
  * This module has no Node dependency so it can be imported from client code.
  *
- * @module @a2d2-dev/dsh-a2d2/src/highway
+ * @module @a2d2/dsh-a2d2/src/highway
  */
 
 export const HIGHWAY_ZONES = [

@@ -8,7 +8,7 @@
  * in context. A skeleton is written first, so the file exists — and fails
  * validation — until that agent fills the summary in.
  *
- * @module @a2d2-dev/dsh-a2d2/src/handoff-document
+ * @module @a2d2/dsh-a2d2/src/handoff-document
  */
 
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'

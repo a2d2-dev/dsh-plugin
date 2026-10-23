@@ -5,7 +5,7 @@
  * guidance. Local markdown resources explicitly linked by the skill body follow
  * the main file in declaration order, so the skill remains the only source of rules.
  *
- * @module @a2d2-dev/dsh-a2d2/src/skill-source
+ * @module @a2d2/dsh-a2d2/src/skill-source
  */
 
 import { existsSync } from 'node:fs'

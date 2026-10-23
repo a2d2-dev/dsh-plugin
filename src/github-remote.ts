@@ -3,7 +3,7 @@
  * its `origin` remote. Shared by the GitHub watch (default `repo`) and wait
  * notices (task issue links).
  *
- * @module @a2d2-dev/dsh-a2d2/src/github-remote
+ * @module @a2d2/dsh-a2d2/src/github-remote
  */
 
 import { execFile } from 'node:child_process'

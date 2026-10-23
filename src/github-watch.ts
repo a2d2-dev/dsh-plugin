@@ -13,7 +13,7 @@
  * service it declares exists, and this row needs live sessions and the session
  * controller.
  *
- * @module @a2d2-dev/dsh-a2d2/src/github-watch
+ * @module @a2d2/dsh-a2d2/src/github-watch
  */
 
 import { execFile } from 'node:child_process'

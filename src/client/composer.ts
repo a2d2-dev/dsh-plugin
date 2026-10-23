@@ -6,7 +6,7 @@
  * indicator's whole purpose is to spare the user from remembering the command,
  * so a write that cannot happen must be reported rather than silently swallowed.
  *
- * @module @a2d2-dev/dsh-a2d2/client/composer
+ * @module @a2d2/dsh-a2d2/client/composer
  */
 
 import type {

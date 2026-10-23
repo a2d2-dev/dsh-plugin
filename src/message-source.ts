@@ -6,7 +6,7 @@
  * merge-extensible and every producer declares its own `kind` in its own
  * module, which this file does for dsh-a2d2.
  *
- * @module @a2d2-dev/dsh-a2d2/src/message-source
+ * @module @a2d2/dsh-a2d2/src/message-source
  */
 
 import type {} from '@deepseek-ai/dsh-llm'

@@ -31,7 +31,7 @@
 - **GitHub 关注**——`github_watch` 让会话不用轮询就能等一个 PR：PR 合并、关闭、CI 出结果或有了 review 结论时，会话会收到一条消息，空闲中的会话也会被唤醒。
 - **通知**——任务 issue 的主会话停下来等 LF 时，经已装的 `notifier` 提供者往 LF 手机推一条带 A²D² 语义的消息。
 
-> `A²D²` 是品牌与展示写法；`a2d2` 是技术标识——包名、目录、服务名都用它，因为 `²` 不能进 npm 包名。包名为 `@a2d2-dev/dsh-a2d2`。
+> `A²D²` 是品牌与展示写法；`a2d2` 是技术标识——包名、目录、服务名都用它，因为 `²` 不能进 npm 包名。包名为 `@a2d2/dsh-a2d2`。
 
 本文余下部分是插件的行为契约与已知限制，按各组件分列于下。
 
@@ -43,21 +43,21 @@
 
 ```yaml
 - id: a2d2
-  name: '@a2d2-dev/dsh-a2d2'
+  name: '@a2d2/dsh-a2d2'
 - id: a2d2-command
-  name: '@a2d2-dev/dsh-a2d2/command'
+  name: '@a2d2/dsh-a2d2/command'
 - id: a2d2-tools
-  name: '@a2d2-dev/dsh-a2d2/tools'
+  name: '@a2d2/dsh-a2d2/tools'
 - id: a2d2-open-subtask-tools
-  name: '@a2d2-dev/dsh-a2d2/open-subtask-tools'
+  name: '@a2d2/dsh-a2d2/open-subtask-tools'
 - id: a2d2-complete-task-tools
-  name: '@a2d2-dev/dsh-a2d2/complete-task-tools'
+  name: '@a2d2/dsh-a2d2/complete-task-tools'
 - id: a2d2-ceo-prompt
-  name: '@a2d2-dev/dsh-a2d2/ceo-prompt'
+  name: '@a2d2/dsh-a2d2/ceo-prompt'
 - id: a2d2-agent-prompt
-  name: '@a2d2-dev/dsh-a2d2/agent-prompt'
+  name: '@a2d2/dsh-a2d2/agent-prompt'
 - id: a2d2-github-watch
-  name: '@a2d2-dev/dsh-a2d2/github-watch'
+  name: '@a2d2/dsh-a2d2/github-watch'
 ```
 
 | 键 | 默认值 | 约定 |
@@ -287,7 +287,7 @@ sessions:
 
 ## 指示球
 
-本包还带一个浏览器 bundle（`exports["./client"]`、`dsh.client.platform: 'web'`），挂在**裸 `@a2d2-dev/dsh-a2d2` 行**上——子路径行永远不能承载客户端半边，而且 bundle 自己注册的 id 必须等于入口名，这就是为什么它的 id 就是包名。
+本包还带一个浏览器 bundle（`exports["./client"]`、`dsh.client.platform: 'web'`），挂在**裸 `@a2d2/dsh-a2d2` 行**上——子路径行永远不能承载客户端半边，而且 bundle 自己注册的 id 必须等于入口名，这就是为什么它的 id 就是包名。
 
 它在输入框旁渲染一个圆形指示球：显示当前会话的**上下文长度**（`453K`、`1.2M`），该路由配了费率时再显示估算的输入花费。**背景色承载读数**：低于告警长度为绿，达阈值为琥珀，危急为红；默认告警长度为 150K token。琥珀色表示会话接近 smart zone：到下个相位边界该做五选一，交接只是其一。悬停给出完整数字——精确 token、容量、百分比、以及带货币符号的花费——并在圆球上方只露出一个边界入口：**下一步**。交接不再是球上的平级动作。
 
@@ -505,7 +505,7 @@ sessions:
 
 ## 宿主后台任务运行器（一期）
 
-新增 `@a2d2-dev/dsh-a2d2/task-runtime` mount（id `a2d2-task-runtime`），默认 `enabled: false`。仅在独立开发 profile 启用 `enabled: true`；`homeDir` 默认是 `$DSH_HOME/a2d2/task-runtime`（未设置 DSH_HOME 时使用 `~/.dsh`）。开发与生产的 DSH home、会话、存储和项目 `.dsh/a2d2` 必须隔离。
+新增 `@a2d2/dsh-a2d2/task-runtime` mount（id `a2d2-task-runtime`），默认 `enabled: false`。仅在独立开发 profile 启用 `enabled: true`；`homeDir` 默认是 `$DSH_HOME/a2d2/task-runtime`（未设置 DSH_HOME 时使用 `~/.dsh`）。开发与生产的 DSH home、会话、存储和项目 `.dsh/a2d2` 必须隔离。
 
 已绑定 issue 且属于 workspace 的主会话可运行：
 

@@ -7,7 +7,7 @@
  * owns PR state and answers every `watch` with a snapshot, which is how a
  * reconnect catches up.
  *
- * @module @a2d2-dev/dsh-a2d2/src/github-watch/relay
+ * @module @a2d2/dsh-a2d2/src/github-watch/relay
  */
 
 import { isPrState } from './state.ts'

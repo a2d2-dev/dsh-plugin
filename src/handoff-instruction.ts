@@ -6,7 +6,7 @@
  * context. The host injects the writable handoff skill source verbatim, then
  * supplies only invocation parameters owned by the plugin.
  *
- * @module @a2d2-dev/dsh-a2d2/src/handoff-instruction
+ * @module @a2d2/dsh-a2d2/src/handoff-instruction
  */
 
 import { createHash } from 'node:crypto'

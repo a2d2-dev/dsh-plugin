@@ -6,7 +6,7 @@
  * the task service. Keeping the row separate lets `bind_main_session` continue
  * to load in smaller profiles.
  *
- * @module @a2d2-dev/dsh-a2d2/src/open-subtask-tools
+ * @module @a2d2/dsh-a2d2/src/open-subtask-tools
  */
 
 import type { Context } from '@deepseek-ai/cordis'
