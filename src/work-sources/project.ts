@@ -15,7 +15,7 @@ export function projectQuery(type: GitHubProjectRef['type']): string {
     viewer { id login name }
     ${owner}(login:$owner) { projectV2(number:$number) {
       id title url closed
-      items(first:$first,after:$cursor) { pageInfo { hasNextPage endCursor } nodes {
+      items(first:$first,after:$cursor) { totalCount pageInfo { hasNextPage endCursor } nodes {
         id type isArchived
         fieldValues(first:50) { pageInfo { hasNextPage } nodes {
           __typename
@@ -93,6 +93,7 @@ const content = z.discriminatedUnion('__typename', [issue, z.object({ __typename
   reviewRequests: z.object({ nodes: z.array(z.object({ requestedReviewer: z.object({ login: z.string().optional() }).passthrough().nullable().optional() })) }).optional() }), z.object({ __typename: z.literal('DraftIssue'), title: z.string() })])
 const rawField = z.object({ __typename: z.string(), milestone: z.object({ title: z.string() }).nullable().optional(), field: z.object({ id: z.string(), name: z.string() }).optional(), name: z.string().nullable().optional(), title: z.string().nullable().optional(), text: z.string().nullable().optional(), number: z.number().nullable().optional(), date: z.string().nullable().optional() })
 const rawProject = z.object({ id: z.string().min(1), title: z.string(), url: z.string(), closed: z.boolean(), items: z.object({
+  totalCount: z.number().int().nonnegative().optional(),
   pageInfo: z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable() }),
   nodes: z.array(z.object({ id: z.string().min(1), type: z.string(), isArchived: z.boolean(), content: content.nullable(), fieldValues: z.object({ pageInfo: z.object({ hasNextPage: z.boolean() }), nodes: z.array(rawField) }) })),
 }) })
@@ -148,7 +149,7 @@ export async function readGitHubProject(project: GitHubProjectRef, request: Proj
       ...(content.createdAt===undefined?{}:{ createdAt: content.createdAt }), ...(content.updatedAt===undefined?{}:{ updatedAt: content.updatedAt }), ...(content.closedAt===undefined?{}:{ closedAt: content.closedAt }),
       ...(content.reviewRequests===undefined?{}:{ reviewers: content.reviewRequests.nodes.flatMap(node => node.requestedReviewer?.login ? [node.requestedReviewer.login] : []) }) } } : {}) } : { ...shared, kind: 'draft' as const, title: content.title }
   })
-  const result = projectPageSchema.safeParse({ identity: { nodeId: data.viewer.id, login: data.viewer.login, name: data.viewer.name }, project: { nodeId: value.id, title: value.title, url: value.url, closed: value.closed }, items, issues, observedAt, ...(value.items.pageInfo.hasNextPage ? { nextCursor: value.items.pageInfo.endCursor! } : {}) })
+  const result = projectPageSchema.safeParse({ identity: { nodeId: data.viewer.id, login: data.viewer.login, name: data.viewer.name }, project: { nodeId: value.id, title: value.title, url: value.url, closed: value.closed }, items, issues, observedAt, ...(value.items.totalCount === undefined ? {} : { total: value.items.totalCount }), ...(value.items.pageInfo.hasNextPage ? { nextCursor: value.items.pageInfo.endCursor! } : {}) })
   if (!result.success) throw new SourceError('github-invalid-response', 'GitHub returned invalid Project observations')
   return result.data
 }

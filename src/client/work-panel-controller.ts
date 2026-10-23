@@ -2,7 +2,7 @@ import type { TaskProgressView } from '../work-progress.ts'
 import { browserUUID } from './browser-uuid.ts'
 import { WorkClientError, type WorkClient } from './work-api.ts'
 import type { ExternalBinding, GitHubIssue, IssuePage, IssuePageRequest, WorkSource, SourceCandidate, SourceCatalog } from '../work-sources/types.ts'
-import type { Project, SessionRef, TaskRef, WorkCommand, WorkCompleted, WorkExecutionOptions, WorkTask } from '../work-types.ts'
+import type { Project, SessionRef, TaskRef, WorkCommand, WorkCompleted, WorkExecutionOptions, WorkTask, SourceScanProgress } from '../work-types.ts'
 type WithoutCommandId<T> = T extends unknown ? Omit<T, 'commandId'> : never
 export type WorkIntent = WithoutCommandId<WorkCommand>
 
@@ -14,8 +14,21 @@ export interface SourcePanelState extends IssuePageRequest {
   sources: WorkSource[]; sourceId: string | null; listing: IssuePage | null; issue: GitHubIssue | null
   bindings: ExternalBinding[]; loading: boolean; error: string | null; cached: boolean
   canonical: TaskRef | null
+  /** Live Project scan progress while the directory load is in flight. */
+  scan: SourceScanProgress | null
 }
-const emptySource = (): SourcePanelState => ({tab:'overview',catalog:null,viewNumber:null,viewPage:1,sources:[],sourceId:null,listing:null,issue:null,bindings:[],page:1,perPage:20,assignee:'@me',state:'open',loading:false,error:null,cached:true,canonical:null})
+const emptySource = (): SourcePanelState => ({tab:'overview',catalog:null,viewNumber:null,viewPage:1,sources:[],sourceId:null,listing:null,issue:null,bindings:[],page:1,perPage:20,assignee:'@me',state:'open',loading:false,error:null,cached:true,canonical:null,scan:null})
+/** One bounded refresh scans a couple of Project pages; cap the automatic continuation rounds. */
+const MAX_SCAN_ROUNDS=120
+/** Fold one source's discovery checkpoint into the small progress shape the panel renders. */
+function scanProgressOf(discovery?: WorkSource['discovery']): SourceScanProgress | null {
+  const checkpoint=discovery?.checkpoint
+  if(!discovery||!checkpoint)return null
+  return { state:discovery.state, pages:checkpoint.pages, fetched:checkpoint.items.length,
+    ...(checkpoint.total===undefined?{}:{total:checkpoint.total}),
+    ...(checkpoint.startedAt===undefined?{}:{startedAt:checkpoint.startedAt}),
+    ...(discovery.lastSuccessAt===undefined?{}:{lastSuccessAt:discovery.lastSuccessAt}) }
+}
 export interface StartSelection {
   resourceIndex: number; modelIndex: number; agentPreset: string; permissionPreset: string
 }
@@ -632,28 +645,72 @@ export class WorkPanelController {
     const {projectId}=this.state,{sourceId}=this.state.source
     if(!projectId||!sourceId)return
     const revision=this.advanceSourceRevision()
-    this.updateSource({loading:true,error:null,issue:null})
+    this.updateSource({loading:true,error:null,issue:null,scan:null})
+    const timer=setInterval(()=>{void this.readSourceScan(projectId,sourceId,revision)},800)
     try {
       const selected=this.state.source.sources.find(item=>item.id===sourceId)
-      const reads=await Promise.allSettled([
-        this.client.query({type:'source.catalog',projectId,sourceId,refresh}),
-        selected?.githubProject&&refresh?this.client.query({type:'source.issues',projectId,sourceId,page:1,perPage:100,assignee:'*',state:'all',refresh:true}):Promise.resolve(null),
-      ])
+      const catalogRead=this.client.query({type:'source.catalog',projectId,sourceId,refresh})
+      const scanError=selected?.githubProject&&refresh?await this.scanProjectSource(projectId,sourceId,revision):null
       if(revision!==this.sourceRevision)return
-      let source=selected, catalog=this.state.source.catalog, cached=!refresh
+      const reads=await Promise.allSettled([catalogRead,
+        !selected?.githubProject&&refresh?this.client.query({type:'source.issues',projectId,sourceId,page:1,perPage:100,assignee:'*',state:'all',refresh:true}):Promise.resolve(null)])
+      if(revision!==this.sourceRevision)return
+      let source=this.state.source.sources.find(item=>item.id===sourceId), catalog=this.state.source.catalog, cached=!refresh
       const errors:string[]=[]
+      if(scanError)errors.push(message(scanError))
       for(const read of reads) {
         const value=read.status==='fulfilled'?read.value:read.reason instanceof WorkClientError?read.reason.result:null
         if(read.status==='rejected'){errors.push(message(read.reason));cached=true}
-        if(value?.status==='completed'&&value.progressItems)this.update({progressItems:[...this.state.progressItems.filter(item=>!value.progressItems!.some(progress=>progress.ref.projectId===item.ref.projectId&&progress.ref.taskId===item.ref.taskId)),...value.progressItems]})
+        if(value?.status==='completed'&&value.progressItems)this.mergeProgressItems(value.progressItems)
         if(value?.source)source={...source,...value.source,...(catalog?{catalog}: {})} as WorkSource
         if(value?.catalog){catalog=value.catalog;if(source)source={...source,catalog}}
         if(value?.source?.catalogError&&read.status==='fulfilled'){errors.push(`${value.source.catalogError.code}: ${value.source.catalogError.message}`);cached=true}
       }
+      const scan=scanProgressOf(source?.discovery)
       const sources=source?this.state.source.sources.map(item=>item.id===sourceId?source!:item):this.state.source.sources
       if(source)this.update({projectSources:{...this.state.projectSources,[projectId]:sources}})
-      this.updateSource({sources,catalog,loading:false,cached,error:errors.join('；')||(!catalog?'目录尚无可读缓存，请刷新来源':null)})
+      this.updateSource({sources,catalog,loading:false,cached,scan,error:errors.join('；')||(!catalog?'目录尚无可读缓存，请刷新来源':null)})
     }catch(error){if(revision===this.sourceRevision)this.updateSource({loading:false,cached:true,error:message(error)})}
+    finally { clearInterval(timer) }
+  }
+  /** Read the durable scan checkpoint so a long Project discovery reports fetched/total while it runs. */
+  private async readSourceScan(projectId:string,sourceId:string,revision:number):Promise<void> {
+    try {
+      const result=await this.client.query({type:'source.progress',projectId,sourceId})
+      if(revision===this.sourceRevision&&result.scan)this.updateSource({scan:result.scan})
+    } catch {}
+  }
+  private mergeProgressItems(items:TaskProgressView[]):void {
+    this.update({progressItems:[...this.state.progressItems.filter(item=>!items.some(progress=>progress.ref.projectId===item.ref.projectId&&progress.ref.taskId===item.ref.taskId)),...items]})
+  }
+  /**
+   * One refresh request scans only a couple of Project pages, so a large Project
+   * stops at a partial checkpoint and reports the page as unobserved. Keep
+   * asking until the full snapshot is published instead of surfacing that
+   * intermediate state as an error.
+   */
+  private async scanProjectSource(projectId:string,sourceId:string,revision:number):Promise<Error|null> {
+    for(let round=0;round<MAX_SCAN_ROUNDS;round++) {
+      try {
+        const value=await this.client.query({type:'source.issues',projectId,sourceId,page:1,perPage:100,assignee:'*',state:'all',refresh:true})
+        if(revision!==this.sourceRevision)return null
+        if(value.source)this.updateSource({sources:this.state.source.sources.map(item=>item.id===sourceId?{...item,...value.source} as WorkSource:item)})
+        if(value.progressItems)this.mergeProgressItems(value.progressItems)
+        if(!value.source?.discovery?.checkpoint)return null
+      } catch(error) {
+        if(revision!==this.sourceRevision)return null
+        if(error instanceof WorkClientError&&error.result.error.code==='source-page-unobserved'){
+          const pending=error.result.source
+          if(pending)this.updateSource({sources:this.state.source.sources.map(item=>item.id===sourceId?{...item,...pending} as WorkSource:item)})
+          const scan=scanProgressOf(pending?.discovery)
+          if(scan)this.updateSource({scan})
+          if(!pending?.discovery?.checkpoint)return error
+          continue
+        }
+        return error instanceof Error?error:new Error(String(error))
+      }
+    }
+    return new Error(`Project 扫描超过 ${MAX_SCAN_ROUNDS} 轮仍未完成，请稍后刷新来源继续`)
   }
   async connectProject(githubProject: {owner:string;type:'org'|'user';number:number}, resource?: import('../work-types.ts').ResourceRef): Promise<void> {
     const revision = ++this.revision

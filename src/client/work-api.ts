@@ -32,6 +32,7 @@ export function createWorkClient(fetcher: typeof fetch = globalThis.fetch.bind(g
         : query === 'session.candidates' ? Array.isArray(result.candidates)
         : query === 'session.work' ? Array.isArray(result.work)
         : query === 'source.list' ? Array.isArray(result.sources)
+        : query === 'source.progress' ? result.scan !== undefined && Number.isSafeInteger(result.scan.fetched) && Number.isSafeInteger(result.scan.pages)
         : query === 'source.issues' ? result.source !== undefined && result.page !== undefined && Array.isArray(result.page.items) && result.page.identity !== undefined
         : query === 'source.issue' ? result.source !== undefined && result.issue !== undefined
         : true

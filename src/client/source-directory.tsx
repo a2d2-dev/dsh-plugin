@@ -7,9 +7,19 @@ import { projectFieldCell } from './project-fields.ts'
 import { SESSION_SLOT, fieldOption, orderProjectRows, projectColumnSlots, projectColumns } from './project-rows.ts'
 import { SessionCell, sessionOf } from './session-cell.tsx'
 import type { ProjectRow } from './project-rows.ts'
+import type { SourceScanProgress } from '../work-types.ts'
 import styles from './work-panel.module.css'
 
 const sourceName = (source: WorkSource) => source.title ?? source.projectSnapshot?.project.title ?? (source.repository ? `${source.repository.owner}/${source.repository.repository}` : `${source.githubProject?.owner} / Project #${source.githubProject?.number}`)
+/** One line of scan progress: fetched/total items and the page being read, with a bar when the total is known. */
+export function ScanProgressLine({scan}:{scan:SourceScanProgress|null}) {
+  if(!scan||(!scan.pages&&!scan.fetched))return <p role="status">正在读取来源目录…</p>
+  const total=scan.total, fetched=scan.fetched
+  return <div role="status" className={styles.scanProgress}>
+    <p>正在读取来源目录… 已取 {fetched}{total===undefined?'':`/${total}`} 项 · 第 {Math.max(1,scan.pages)} 页</p>
+    {total!==undefined&&total>0?<progress value={Math.min(fetched,total)} max={total} aria-label="来源扫描进度"/>:<progress aria-label="来源扫描进度"/>}
+  </div>
+}
 export function SourceTabs({controller,onAdd}:{controller:WorkPanelController;onAdd:()=>void}) {
   const state=useSyncExternalStore(controller.subscribe,controller.getSnapshot,controller.getSnapshot)
   return <nav className={styles.tabs} aria-label="来源标签"><strong>A²D² 控制面板</strong>{Object.entries(state.projectSources).flatMap(([projectId,sources])=>sources.map(source=><button key={source.id} aria-pressed={state.projectId===projectId&&state.source.sourceId===source.id} onClick={()=>void controller.selectConnectedSource(projectId,source.id)}>{sourceName(source)} <small>{source.repository?'仓库':'Project'}</small></button>))}<button aria-label="添加来源" onClick={onAdd}>＋</button></nav>
@@ -46,7 +56,7 @@ export function SourceDirectory({controller,issues,panelContent,panel,onPanel}:{
     </div>
     {panelContent}
     {sourceState.tab==='issues'?issues:<>
-      {sourceState.loading&&<p role="status">正在读取来源目录…</p>}{sourceState.error&&<p role="alert" className={styles.failure}>{sourceState.error}</p>}{!source.enabled&&<p role="status">来源已停用，保留已保存内容。</p>}
+      {sourceState.loading&&<ScanProgressLine scan={sourceState.scan}/>}{!sourceState.loading&&sourceState.scan&&sourceState.scan.total!==undefined&&sourceState.scan.fetched<sourceState.scan.total&&<p role="status">Project 扫描未完成：已取 {sourceState.scan.fetched}/{sourceState.scan.total} 项，刷新来源可继续。</p>}{sourceState.error&&<p role="alert" className={styles.failure}>{sourceState.error}</p>}{!source.enabled&&<p role="status">来源已停用，保留已保存内容。</p>}
       {sourceState.catalog?.limitations.map(reason=><p role="status" key={reason}>{reason}</p>)}
       {sourceState.tab==='overview'&&<SourceOverview controller={controller} source={source}/>}
       {sourceState.tab==='project'&&<ProjectViews controller={controller} source={source}/>}

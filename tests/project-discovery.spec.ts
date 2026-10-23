@@ -75,6 +75,19 @@ it('publishes only complete scans, persists partial cursors across restart, hono
   expect(complete(await state.app.query({ type: 'project.detail', projectId: state.project.id }, actor)).tasks).toEqual([])
 })
 
+it('reports fetched items, pages and the GitHub total while a scan is incomplete', async () => {
+  const second = { ...issue, nodeId: 'I_2', number: 2, url: 'https://github.com/a2d2-dev/one/issues/2' }
+  const partial: GitHubSourcePort = { ...port, project: async () => ({ ...page([issue, second], 'next'), total: 120 }) }
+  const state = await setup(partial)
+  await reconcileProjectSources(state.transaction, partial, { force: true, maxPagesPerSource: 1 })
+  const running = complete(await state.app.query({ type: 'source.progress', projectId: state.project.id, sourceId: state.source.id }, actor))
+  expect(running.scan).toMatchObject({ state: 'syncing', pages: 1, fetched: 2, total: 120 })
+  const completePort: GitHubSourcePort = { ...port, project: async () => page([issue, second]) }
+  await reconcileProjectSources(state.transaction, completePort, { force: true, maxPagesPerSource: 2 })
+  const idle = complete(await state.app.query({ type: 'source.progress', projectId: state.project.id, sourceId: state.source.id }, actor))
+  expect(idle.scan).toMatchObject({ state: 'idle', pages: 0, fetched: 0 })
+})
+
 it('recovers an expired persisted reader lease and rejects the old reader after the new scan commits', async () => {
   let time = Date.now(), slow = false
   const started = deferred<void>(), remote = deferred<GitHubProjectPage>()
