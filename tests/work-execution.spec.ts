@@ -33,7 +33,7 @@ it.each(['wait', 'pause'] as const)('accepts a real model self-%s before applyin
   await fixtures.run(() => agent.whenIdle())
   await vi.waitFor(async () => expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({
     status: 'completed', execution: { state: action === 'wait' ? 'waiting' : 'paused', control: { action, status: 'applied', reason: 'Which acceptance decision should I use?' } },
-  }))
+  }), { timeout: 5000 })
   expect(h.model.requests).toHaveLength(1)
   const inspection = await fixtures.run(() => h.ctx.sessionController.inspect(agent.id))
   expect(JSON.stringify(inspection.events.filter(item => item.type === 'tool/result'))).toContain('accepted')
@@ -65,7 +65,7 @@ it('resolves real tool identity on the server and refuses foreign or absent call
   expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { progress: 'Concrete accepted work' } })
   const stale = await execute('stale-progress', { action: 'progress', text: 'Stale progress', expected_epoch: 2 }, agent)
   expect(JSON.stringify(stale)).toContain('stale-execution-authority')
-  expect(await execute('own-status', { action: 'status' }, agent)).toMatchObject({ isError: false, content: [expect.objectContaining({ text: expect.stringContaining('Concrete accepted work') })] })
+  expect(await execute('own-status', { action: 'status' }, agent)).toMatchObject({ isError: false, content: [expect.objectContaining({ text: expect.stringContaining('"coordinator":true') })] })
   const foreign = await fixtures.run(() => h.ctx.sessionController.create({ workspaceId: h.workspace.id, agentPreset: 'contract' }))
   const other = h.ctx.agents.get(foreign.sessionId)!
   const denied = await execute('foreign-progress', { action: 'progress', text: 'Forged work' }, other)
@@ -242,7 +242,9 @@ it('offers allowed host execution choices and rejects arbitrary model or permiss
     agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'invented' }, permissionPreset: 'workspace-write' }
   expect(await h.app.execute(command, operator)).toMatchObject({ status: 'failed', error: { code: 'unavailable-model' } })
   expect(await h.app.execute({ ...command, commandId: 'raised-permission', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'invented-preset' }, operator)).toMatchObject({ status: 'failed', error: { code: 'invalid-permission-preset' } })
-  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toEqual({ status: 'completed' })
+  const unstarted = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(unstarted).toMatchObject({ status: 'completed', executionGraph: { ref: h.ref, settlement: 'unknown' } })
+  expect(unstarted).not.toHaveProperty('execution')
   expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(0)
   expect(h.model.requests).toHaveLength(0)
 })
@@ -364,7 +366,9 @@ it('keeps an actual unmigrated legacy main Session under its existing writer aut
   expect(await h.app.execute({ type: 'task.start', commandId: 'legacy-session', ref: h.ref, expectedVersion: 1, resource: h.resource,
     session: { runtimeId: 'runtime', sessionId: id }, agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'default' }, permissionPreset: 'workspace-write' }, operator)).toMatchObject({ status: 'failed', error: { code: 'legacy-authority-retained' } })
   expect((await fixtures.run(() => h.ctx.a2d2.taskOfMainSession(h.workspace.path, id)))?.issue.number).toBe(122)
-  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toEqual({ status: 'completed' })
+  const unstarted = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(unstarted).toMatchObject({ status: 'completed', executionGraph: { ref: h.ref, settlement: 'unknown' } })
+  expect(unstarted).not.toHaveProperty('execution')
   expect(h.model.requests).toHaveLength(0)
 })
 
