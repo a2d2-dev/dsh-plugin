@@ -3,7 +3,7 @@
  * basename under `<projectRoot>/.dsh/a2d2/tasks/`, so the factory is also the
  * path-safety boundary: only ids that form a plain, non-traversing filename are
  * accepted.
- * @module @deepseek-ai/dsh-a2d2/src/brand
+ * @module @a2d2-dev/dsh-a2d2/src/brand
  */
 
 import type { Branded } from '@deepseek-ai/dsh-brand'

@@ -7,7 +7,7 @@
  * `take` can validate the file, and reading it back to the model would only
  * spend the successor's context on fields it cannot act on.
  *
- * @module @deepseek-ai/dsh-a2d2/src/handoff-prompt
+ * @module @a2d2-dev/dsh-a2d2/src/handoff-prompt
  */
 
 import type { HandoffDocument } from './handoff-document.ts'

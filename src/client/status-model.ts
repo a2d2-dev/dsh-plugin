@@ -9,7 +9,7 @@
  * guesses. "Where the work stands" is the next-step consult's job, not this
  * module's.
  *
- * @module @deepseek-ai/dsh-a2d2/client/status-model
+ * @module @a2d2-dev/dsh-a2d2/client/status-model
  */
 
 /**

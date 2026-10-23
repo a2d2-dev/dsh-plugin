@@ -7,7 +7,7 @@
  * this grammar only: text this parser does not recognize as an option or a
  * sub-command is the focus, exactly as `/goal` treats unrecognized input.
  *
- * @module @deepseek-ai/dsh-a2d2/src/handoff
+ * @module @a2d2-dev/dsh-a2d2/src/handoff
  */
 
 import { SessionId } from '@deepseek-ai/dsh-session/types'

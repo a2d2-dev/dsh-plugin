@@ -13,7 +13,7 @@
  * derive either — a browser bundle holds no adapter registry, and a child's
  * `request/header` lives in the child's log, never in its parent's.
  *
- * @module @deepseek-ai/dsh-a2d2/client/subagent-model
+ * @module @a2d2-dev/dsh-a2d2/client/subagent-model
  */
 
 /** The `a2d2Indicator` fields this reading uses. */

@@ -5,7 +5,7 @@
  * The service owns reading GitHub (a2d2-services ADR 0002); this side only
  * compares what it receives with what it last told the session.
  *
- * @module @deepseek-ai/dsh-a2d2/src/github-watch/state
+ * @module @a2d2-dev/dsh-a2d2/src/github-watch/state
  */
 
 /** Mirror of the service's `PrState` (a2d2-services `services/hooks/src/pr-state.ts`). */

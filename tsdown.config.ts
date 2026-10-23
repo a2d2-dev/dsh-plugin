@@ -1,5 +1,5 @@
 /**
- * tsdown build for dsh-a2d2: the node halves of the plugin plus the browser
+ * tsdown build for @a2d2-dev/dsh-a2d2: the node halves of the plugin plus the browser
  * bundle that draws the floating handoff indicator.
  *
  * - `lib/index.js` is the plugin and its `ctx.a2d2` service.
@@ -33,7 +33,7 @@ import { transform } from 'lightningcss'
 const require = createRequire(import.meta.url)
 
 /** The bundle id: the shell's row id is the Loader entry name, which is the package name. */
-export const CLIENT_BUNDLE_ID = 'dsh-a2d2'
+export const CLIENT_BUNDLE_ID = '@a2d2-dev/dsh-a2d2'
 
 /** Node builtins must never survive into the browser module-loader factory. */
 const NODE_BUILTINS = new Set([

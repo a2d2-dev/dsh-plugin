@@ -12,7 +12,7 @@
  * no model identity to look up, and because the per-million rates are deployment
  * data that must not be compiled into a bundle.
  *
- * @module @deepseek-ai/dsh-a2d2/src/indicator-projection
+ * @module @a2d2-dev/dsh-a2d2/src/indicator-projection
  */
 
 import { z } from 'zod'
