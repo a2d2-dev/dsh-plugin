@@ -126,7 +126,9 @@ function ProjectViews({controller,source}:{controller:WorkPanelController;source
   const closedRequested=/(^|\s)is:closed(\s|$)/i.test(expression)
   const base=includeClosed||closedRequested?matched:matched.filter(item=>issuesByNode.get(item.issueNodeId??'')?.state!=='closed')
   const hiddenClosed=matched.length-base.length
-  const sliceValues=state.viewNumber===null&&url?url.searchParams.getAll('sliceBy[value]'):[]
+  // The slice belongs to the entry view; it stays available whenever that view
+  // is selected, including after switching away and back.
+  const sliceValues=entryView!==null&&viewNumber===entryView&&url?url.searchParams.getAll('sliceBy[value]'):[]
   const sliceFieldOptions=sliceCandidates(catalog.fields,base,sliceValues)
   const sliceField=sliceFieldOptions.find(field=>field.id===sliceFieldId)??sliceFieldOptions[0]
   const sliceAgg=sliceField?sliceAggregate(sliceField.id,base):null
