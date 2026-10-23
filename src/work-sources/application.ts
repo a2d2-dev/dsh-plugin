@@ -5,6 +5,7 @@ import type { WorkCommand, WorkQuery, WorkResult, WorkTask } from '../work-types
 import type { ExternalBinding, GitHubIssue, GitHubSourcePort, WorkSource } from './types.ts'
 import { SourceError } from './github.ts'
 import { issueSchema } from './schema.ts'
+import { applyObservedIssue } from './observations.ts'
 import { reconcileProjectSources } from './discovery.ts'
 type SourceCommand = Exclude<Extract<WorkCommand, { type: `source.${string}` }>, { type: 'source.connect' }>
 type SourceRead = Extract<WorkQuery, { type: 'source.issue' | 'source.issues' }>
@@ -241,7 +242,8 @@ export async function refreshSource(transaction: SourceTransaction, query: Sourc
       if (existing && (existing.issue.updatedAt > issue.updatedAt || (existing.issue.updatedAt === issue.updatedAt && existing.sequence > sequence))) continue
       if (existing) { existing.issue = issue; existing.sequence = sequence } else source.observations.push({ issue, sequence })
       const binding = state.externalBindings.find(item => item.nodeId === issue.nodeId)
-      if (binding && issue.updatedAt >= binding.lastObserved.updatedAt) binding.lastObserved = issue
+      const observed = binding && applyObservedIssue(binding.lastObserved, issue)
+      if (binding && observed) binding.lastObserved = observed
     }
     if ('items' in observation) {
       const page = { key, nodeIds: [...new Set(observation.items.map(item => item.nodeId))], identity: observation.identity, observedAt: observation.observedAt, ...(observation.nextPage ? { nextPage: observation.nextPage } : {}) }

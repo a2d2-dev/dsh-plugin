@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { SourceTransaction } from './application.ts'
 import { issueSchema } from './schema.ts'
 import { SourceError } from './errors.ts'
+import { applyObservedIssue } from './observations.ts'
 import type { GitHubIssue, GitHubSourcePort } from './types.ts'
 import type { WorkResult } from '../work-types.ts'
 
@@ -60,7 +61,8 @@ export async function refreshRepositoryCandidates(transaction: SourceTransaction
       if (observation && (observation.sequence > sequence || observation.issue.updatedAt > issue.updatedAt)) continue
       if (observation) { observation.issue = issue; observation.sequence = sequence } else source.observations.push({ issue, sequence })
       const binding = state.externalBindings.find(binding => binding.nodeId === issue.nodeId)
-      if (binding && binding.lastObserved.updatedAt <= issue.updatedAt) binding.lastObserved = issue
+      const observed = binding && applyObservedIssue(binding.lastObserved, issue)
+      if (binding && observed) binding.lastObserved = observed
     }
     return { status: 'completed', source }
   })
