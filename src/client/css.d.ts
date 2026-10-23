@@ -45,8 +45,6 @@ declare module '*.module.css' {
     readonly progressFill: string
     readonly progressText: string
     readonly scanProgress: string
-    readonly sliceNote: string
-    readonly sliceBar: string
     readonly titleCell: string
     readonly rowTitle: string
     readonly cellClip: string
