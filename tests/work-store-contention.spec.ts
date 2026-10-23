@@ -70,9 +70,13 @@ it('round-trips all 3000 observations and the large checkpoint within the write 
     .resolves.toMatchObject({ status: 'completed' })
   const after = JSON.parse(await readFile(join(directory, 'work-v3.json'), 'utf8'))
   expect(after.schemaVersion).toBe(3)
-  expect(after.sources).toEqual(before.sources)
-  expect(after.sources[0].observations).toHaveLength(3000)
-  expect(after.sources[0].discovery.checkpoint.issues).toHaveLength(3000)
+  // The control plane stays small; the 3000 observations and the checkpoint
+  // move to the source's sidecar on the first write after the split.
+  expect(after.sources[0].observations).toEqual([])
+  expect(after.sources[0].discovery.checkpoint).toBeUndefined()
+  const sidecar = JSON.parse(await readFile(join(directory, 'work-v3.sources', `${before.sources[0].id}.json`), 'utf8'))
+  expect(sidecar.observations).toHaveLength(3000)
+  expect(sidecar.checkpoint.issues).toHaveLength(3000)
 }, 30_000)
 
 it('completes an interactive large-store write while background discovery holds the writer for five seconds', async () => {
