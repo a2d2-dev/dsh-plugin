@@ -77,6 +77,18 @@ async function withWorkFileLock<T>(file: string, apply: () => Promise<T>): Promi
 }
 
 /** Public local work commands and queries. One v3 snapshot is the only writer authority. */
+/**
+ * The Project table reads a row's state, labels and assignees, never the issue
+ * body; the detail query returns the body separately. Dropping it keeps the
+ * source payload small enough for ordinary HTTP limits.
+ */
+function tableSource(source: WorkSource): WorkSource {
+  return { ...source, observations: source.observations.map(row => ({ ...row, issue: { ...row.issue, body: null } })) }
+}
+function tableResult(result: WorkResult): WorkResult {
+  return result.source === undefined ? result : { ...result, source: tableSource(result.source) }
+}
+
 /** The source tab list needs identity, never the observation payload a thousands-item Project carries. */
 function slimSource(source: WorkSource): WorkSource {
   return { ...source, observations: [], pages: [], ...(source.projectSnapshot ? { projectSnapshot: { ...source.projectSnapshot, items: [] } } : {}) }
@@ -1416,11 +1428,11 @@ export class WorkApplication {
     if (query.type === 'source.catalog' && query.refresh) {
       const result = await refreshCatalog(apply => this.sourceTransaction(apply), query, this.source)
       const local = await this.query({ ...query, refresh: false }, actor)
-      return { ...result, ...(local.status === 'completed' ? { progressItems: local.progressItems } : {}) }
+      return tableResult({ ...result, ...(local.status === 'completed' ? { progressItems: local.progressItems } : {}) })
     }
     if ((query.type === 'source.issues' || query.type === 'source.issue') && query.refresh) {
       this.refreshCount++
-      try { return await refreshSource(apply => this.sourceTransaction(apply), query, this.source) }
+      try { return tableResult(await refreshSource(apply => this.sourceTransaction(apply), query, this.source)) }
       finally { this.refreshCount-- }
     }
     const state = await this.load()
@@ -1430,7 +1442,7 @@ export class WorkApplication {
       const members = new Set(source.projectSnapshot?.items.filter(item => !item.archived && item.kind === 'issue').map(item => item.issueNodeId) ?? [])
       const bindings = state.externalBindings.filter(binding => source.repository ? binding.lastObserved.repository.owner.toLowerCase() === source.repository.owner.toLowerCase() && binding.lastObserved.repository.repository.toLowerCase() === source.repository.repository.toLowerCase() : members.has(binding.nodeId))
       const progressItems = bindings.flatMap(binding => { const progress = taskProgressView(state, binding.ref, this.host.execution); return progress ? [progress] : [] })
-      return source.catalog ? { status: 'completed', source, catalog: source.catalog, progressItems } : { ...failed('source-catalog-unobserved', '目录尚无可读缓存，请刷新来源'), source }
+      return source.catalog ? tableResult({ status: 'completed', source, catalog: source.catalog, progressItems }) : tableResult({ ...failed('source-catalog-unobserved', '目录尚无可读缓存，请刷新来源'), source })
     }
     if (query.type === 'source.list') return state.projects.some(item => item.id === query.projectId)
       ? { status: 'completed', sources: state.sources.filter(item => item.projectId === query.projectId).map(slimSource) } : failed('unknown-project', 'Project does not exist')
@@ -1445,7 +1457,7 @@ export class WorkApplication {
         ...(discovery?.lastSuccessAt === undefined ? {} : { lastSuccessAt: discovery.lastSuccessAt }),
       } }
     }
-    if (query.type === 'source.issues' || query.type === 'source.issue') return sourceResult(state, query)
+    if (query.type === 'source.issues' || query.type === 'source.issue') return tableResult(sourceResult(state, query))
     if (query.type === 'continuous.status') {
       const source = state.sources.find(source => source.id === query.sourceId && source.projectId === query.projectId)
       if (!source) return failed('unknown-source', 'Source does not belong to this project')
