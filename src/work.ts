@@ -168,7 +168,7 @@ export class WorkApplication {
     const observe = async (execution?: import('./work-types.ts').WorkExecution): Promise<ExecutionObservation | undefined> => {
       if (!execution || !this.host.execution?.observation) return undefined
       try { return await this.host.execution.observation(execution) }
-      catch (error) { return { settlement: 'unknown', sessions: [], blockers: [], limitations: [error instanceof Error ? error.message : '执行观察失败'] } }
+      catch (error) { return { settlement: 'unknown', sessions: [], blockers: [], reminders: [], limitations: [error instanceof Error ? error.message : '执行观察失败'] } }
     }
     const execution = executionAt({ projectId: task.projectId, taskId: task.id })
     const children = await Promise.all(task.children.flatMap(ref => {
@@ -1253,6 +1253,7 @@ export class WorkApplication {
       if (managed && command.type === 'task.reconcile') { managed.item.attempts = 0; delete managed.item.retryAt; delete managed.item.recoveryBlocked }
       if (managed && continuousCompleted(state, execution) && (command.type === 'task.input' || command.type === 'task.continue' || (command.type === 'task.control' && command.action === 'resume'))) return failed('continuous-completed', 'Completed continuous work cannot restart')
       if (command.type === 'task.report') {
+        let reminders: string[] | undefined
         if (command.report.stage === 'done') {
           // Read only: work_report may itself be executing on this Agent. Never
           // enter maintenance/whenIdle before accepting its business conclusion.
@@ -1260,10 +1261,12 @@ export class WorkApplication {
           try { facts = await this.host.execution?.observation?.(execution, task.sessions, reporter) }
           catch { return failed('completion-results-unsettled', '完成前须收取并核验必要执行结果：execution-observation-unavailable') }
           if (facts?.settlement !== 'settled') return failed('completion-results-unsettled', `完成前须收取并核验必要执行结果：${facts?.blockers.map(item => `${item.code}:${item.session.sessionId}${item.jobId ? `:${item.jobId}` : ''}`).join(', ') || facts?.settlement || 'execution-observation-unavailable'}`)
+          // Unreachable jobs cannot be collected; they return as non-blocking reminders.
+          if (facts.reminders.length) reminders = [...facts.reminders]
         }
         const result = applyTaskReport(state, execution, command.report, command.commandId)
         if (result.status === 'completed' && managed && command.report.stage === 'done') managed.item.state = 'completed'
-        return result
+        return result.status === 'completed' && reminders ? { ...result, reminders } : result
       }
       if (command.type === 'task.configure-continuation') {
         if (command.policy.version !== (execution.continuationPolicy?.version ?? 0) + 1) return failed('continuation-policy-version', 'Policy version must advance by one')

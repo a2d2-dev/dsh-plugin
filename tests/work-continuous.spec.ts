@@ -37,7 +37,7 @@ class Host implements WorkHost {
   sessions = async () => []
   execution: NonNullable<WorkHost['execution']> = {
     // An explicit deterministic host receipt, independent of runtime idle.
-    observation: async execution => ({ settlement: this.settlements.get(execution.id) ?? 'unknown', sessions: [], blockers: [], limitations: [] }),
+    observation: async execution => ({ settlement: this.settlements.get(execution.id) ?? 'unknown', sessions: [], blockers: [], reminders: [], limitations: [] }),
     maintain: async (execution, body) => { if (this.settlements.get(execution.id) !== 'settled') throw new Error('Related work is not settled'); return body() },
     connect: authorize => { this.authorize = authorize },
     choices: async () => choices,

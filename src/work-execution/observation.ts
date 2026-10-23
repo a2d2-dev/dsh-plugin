@@ -44,6 +44,8 @@ export interface ExecutionObservation {
   settlement: 'settled' | 'pending' | 'unknown'
   sessions: ObservedSession[]
   blockers: ExecutionBlocker[]
+  /** Non-blocking facts: jobs whose registry instance is gone, so their result can never be collected. */
+  reminders: string[]
   limitations: string[]
 }
 export interface ChildTaskExecution {
@@ -64,6 +66,7 @@ export interface ExecutionGraph {
   events: WorkExecution['events']
   history: WorkExecution['history']
   blockers: ExecutionBlocker[]
+  reminders: string[]
   limitations: string[]
 }
 export const sessionKey = (session: SessionRef): string => JSON.stringify([session.runtimeId, session.sessionId])
@@ -104,6 +107,7 @@ export function buildExecutionGraph(input: { task: WorkTask; execution?: WorkExe
     }),
     sessions: [...bound.values()], events: execution?.events ?? [], history: execution?.history ?? [],
     blockers: observation?.blockers.filter(row => admitted.has(sessionKey(row.session))) ?? [],
+    reminders: observation?.reminders ?? [],
     limitations: observation?.limitations ?? ['宿主执行观察尚未取得；运行和结果消费状态未知。'],
   }
 }

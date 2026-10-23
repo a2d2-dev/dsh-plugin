@@ -12,13 +12,14 @@ it('keeps independent Task entry, native lineage, real owner and retired pending
   const graph = buildExecutionGraph({ task, execution, children: [{ task: child, execution: { ...execution, id: 'child-execution', ref: task.children[0]!, session: { ...session, sessionId: 'child-control' }, retired: [] } }], observation: {
     settlement: 'unknown',
     sessions: [{ session, role: 'current', status: 'idle', children: [{ session: { ...session, sessionId: 'native-child' }, mode: 'continuable', status: 'idle', result: 'consumed' }], jobs: [] },
-      { session: { ...session, sessionId: 'old' }, role: 'retired', status: 'inactive', children: [], jobs: [{ id: 'bash-1', owner: { ...session, sessionId: 'old' }, kind: 'bash', label: 'checks', status: 'completed', result: 'unknown', delivery: 'unknown', acceptance: 'unassessed', persistence: 'process-local' }] }], blockers: [{ code: 'job-result-unknown', session: { ...session, sessionId: 'old' }, jobId: 'bash-1' }], limitations: [] },
+      { session: { ...session, sessionId: 'old' }, role: 'retired', status: 'inactive', children: [], jobs: [{ id: 'bash-1', owner: { ...session, sessionId: 'old' }, kind: 'bash', label: 'checks', status: 'completed', result: 'unknown', delivery: 'unknown', acceptance: 'unassessed', persistence: 'process-local' }] }], blockers: [{ code: 'job-result-unknown', session: { ...session, sessionId: 'old' }, jobId: 'bash-1' }], reminders: ['作业 bash-1 的注册表实例已不可达。'], limitations: [] },
   })
   expect(graph.owner).toEqual({ id: 'real-owner', epoch: 2, agentId: 'agent' })
   expect(graph.childTasks[0]).toMatchObject({ ref: { projectId: 'project', taskId: 'child' }, executionId: 'child-execution', currentSession: { sessionId: 'child-control' } })
   expect(graph.sessions.find(row => row.role === 'current')?.children[0]?.session.sessionId).toBe('native-child')
   expect(graph.sessions.find(row => row.role === 'retired')?.jobs[0]).toMatchObject({ owner: { sessionId: 'old' }, result: 'unknown' })
   expect(graph.blockers).toHaveLength(1)
+  expect(graph.reminders).toEqual(['作业 bash-1 的注册表实例已不可达。'])
 })
 
 export { execution, task }

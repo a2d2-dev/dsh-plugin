@@ -17,6 +17,26 @@ export interface PublicJobRegistry {
   observe?(id: string, owner: SessionId): PublicJobObservation
 }
 const key = (record: PublicJobObservation) => JSON.stringify([record.registryEpoch, record.instanceId, record.job.id])
+const firstLine = (text: string, length = 96) => {
+  const line = text.trim().split('\n')[0] ?? ''
+  return line.length > length ? `${line.slice(0, length)}…` : line
+}
+/** One bounded, human-readable notice; raw job output never enters a reminder. */
+function lostJobReminder(job: ExecutionJob): string {
+  return `作业 ${job.id}（${job.kind}：${firstLine(job.label || job.kind)}）的注册表实例已不可达，终态结果无法再收取；按「不可达只提醒」约定不阻断完成，如需取证请查看该作业所属会话历史。`
+}
+/**
+ * Completion gate for one terminal job whose result was not delivered. A
+ * reachable job (the host registry can still observe it) must be settled by a
+ * real collection. A job whose registry instance is gone can never be
+ * collected, so it only leaves a reminder: #142 forbids an unresolvable
+ * permanent block, and #201 makes that ruling explicit.
+ */
+export function settleUncollectedJob(job: ExecutionJob): { blocker?: 'job-unsettled' | 'job-result-unknown'; reminder?: string } {
+  if (job.delivery === 'delivered') return {}
+  if (job.availability === 'lost') return { reminder: lostJobReminder(job) }
+  return { blocker: job.delivery === 'unknown' ? 'job-result-unknown' : 'job-unsettled' }
+}
 function project(record: PublicJobObservation, owner: SessionId, runtimeId: string, live: boolean): ExecutionJob {
   const running = record.job.status === 'running' || record.job.status === 'stopping'
   if (record.job.owner !== owner || !record.registryEpoch || !record.instanceId
