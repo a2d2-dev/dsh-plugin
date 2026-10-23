@@ -30,7 +30,8 @@ describe('client to production work HTTP integration',()=>{
       const ref={projectId:project.id,taskId:task.id}
       const updated=(await panel.submit({type:'task.update-spec',ref,expectedVersion:1,goal:'保留修订目标',specification:'第二版规格',acceptance:['刷新保留修订','不要求GitHub']})).task!
       const broken=(await panel.submit({type:'task.replace-breakdown',ref,expectedVersion:updated.version,blocks:[{id:randomUUID(),title:'数据保存',description:'从真实记录回读'}]})).task!
-      const child=(await panel.submit({type:'task.create-child',ref,expectedVersion:broken.version,title:'本地子工作',goal:'独立验收',specification:'子工作规格',acceptance:['父子均可读']})).task!
+      await expect(panel.submit({type:'task.create-child',ref,expectedVersion:broken.version,title:'本地子工作',goal:'独立验收',specification:'子工作规格',acceptance:['父子均可读']}))
+        .rejects.toMatchObject({result:{error:{code:'local-subtask-not-supported'}}})
       let detail=await client.query({type:'task.detail',ref})
       const candidates=await client.query({type:'session.candidates',projectId:project.id})
       expect(candidates.candidates?.map(item=>item.title)).toEqual(['已有原生会话'])
@@ -42,7 +43,7 @@ describe('client to production work HTTP integration',()=>{
       await reloaded.initialize();await reloaded.openTask(ref)
       const saved=reloaded.getSnapshot().detail!
       expect(saved.task).toMatchObject({id:task.id,goal:'保留修订目标',specification:{version:2,text:'第二版规格',acceptance:['刷新保留修订','不要求GitHub']},breakdown:[{title:'数据保存',description:'从真实记录回读'}],sessions:[{session:{runtimeId,sessionId},purpose:'related'}]})
-      expect(saved.children?.map(item=>item.id)).toEqual([child.id])
+      expect(saved.children).toEqual([])
       expect((await client.query({type:'session.work',session:{runtimeId,sessionId}})).work).toEqual([{ref,title:'无Issue本地工作',projectName:'离线项目',purpose:'related'}])
       expect((await client.query({type:'session.work',session:{runtimeId,sessionId:randomUUID()}})).work).toEqual([])
     } finally {

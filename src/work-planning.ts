@@ -182,11 +182,15 @@ export function validatePlan(output: unknown, basis: PlanningBasis, rule: Contin
       return child?.progress?.stage === 'done' && child.progress.specificationVersion === child.specification?.version
     }
     const nativeChildren = [...(issue.subIssues?.items ?? []), ...basis.candidates.filter(candidate => candidate.issue.parent?.nodeId === issue.nodeId).map(candidate => candidate.issue)]
-    const localChildren = ((candidate.task as { children?: { projectId: string; taskId: string }[] } | undefined)?.children ?? []).map(ref => basis.candidates.find(candidate => {
-      const task = candidate.task as { ref?: { projectId: string; taskId: string } } | undefined
-      return task?.ref?.projectId === ref.projectId && task.ref.taskId === ref.taskId
-    }))
-    if (step.mode !== 'wait' && (issue.subIssues?.hasNextPage || nativeChildren.some(child => child.state === 'open' && !seen.has(child.nodeId) && !childDone(child.nodeId)) || localChildren.some(child => !child || !seen.has(child.issue.nodeId) && !childDone(child.issue.nodeId)))) throw new PlanningError('planning-child-coverage', `Issue ${step.nodeId} requires complete child coverage before parent advancement`)
+    const localChildren = ((candidate.task as { children?: { projectId: string; taskId: string }[] } | undefined)?.children ?? []).flatMap(ref => {
+      const child = basis.candidates.find(candidate => {
+        const task = candidate.task as { ref?: { projectId: string; taskId: string } } | undefined
+        return task?.ref?.projectId === ref.projectId && task.ref.taskId === ref.taskId
+      })
+      // A child with no primary-store observation is invalid local cache, not necessary work.
+      return child ? [child] : []
+    })
+    if (step.mode !== 'wait' && (issue.subIssues?.hasNextPage || nativeChildren.some(child => child.state === 'open' && !seen.has(child.nodeId) && !childDone(child.nodeId)) || localChildren.some(child => !seen.has(child.issue.nodeId) && !childDone(child.issue.nodeId)))) throw new PlanningError('planning-child-coverage', `Issue ${step.nodeId} requires complete child coverage before parent advancement`)
     const execution = candidate.execution as { state?: string; control?: { action?: string }; resource?: { runtimeId: string; workspaceId: string } } | undefined
     if (step.mode === 'existing' && (execution?.state === 'paused' || execution?.control?.action === 'pause')) throw new PlanningError('planning-explicit-resume-required', `Issue ${step.nodeId} was explicitly paused; resume it explicitly`)
     const task = candidate.task as { agentId?: string; progress?: { stage?: string } } | undefined

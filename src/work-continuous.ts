@@ -70,10 +70,12 @@ export function continuousDependenciesReady(state: WorkSnapshot, rule: Continuou
   }
   const binding = state.externalBindings.find(binding => binding.nodeId === nodeId)
   const task = binding && state.tasks.find(task => task.id === binding.ref.taskId && task.projectId === binding.ref.projectId)
+  // Necessary children come from the primary store; a local-only child is invalid cache.
+  const canonicalChildren = (task?.children ?? []).filter(ref => state.externalBindings.some(binding => sameTask(binding.ref, ref)))
   const ready = !issue?.subIssues?.hasNextPage && (issue?.subIssues?.items ?? []).every(child => {
     const childBinding = state.externalBindings.find(binding => binding.nodeId === child.nodeId)
     return child.state === 'closed' || !!childBinding && done(childBinding.ref)
-  }) && (task?.children ?? []).every(done)
+  }) && canonicalChildren.every(done)
   if (!ready && item) item.reason = `Issue ${nodeId} is waiting for complete child/dependency acceptance`
   return ready
 }

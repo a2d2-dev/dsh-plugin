@@ -19,6 +19,7 @@ import type { WorkSnapshot } from './work-schema.ts'
 import { WorkExecutionError } from './work-execution/host.ts'
 import { continuationInFlight, MANAGED_WORK_INSTRUCTIONS, materialRequest, reserveContinuation, successorMessage } from './work-execution/continuation.ts'
 import { applyTaskOrganization, taskStructureBlocker } from './work-organization.ts'
+import { isCanonicalChild, normalizeLegacyLocalChildren } from './work-migrate.ts'
 import { applyTaskReport, projectProgress, taskProgressView } from './work-progress.ts'
 import { continuousDependenciesReady, continuousOwner, continuousMayAdvance, continuousCompleted, discoverContinuous, sourceScopeError, sameTask, continuousRetry, MAX_CONTINUOUS_ATTEMPTS } from './work-continuous.ts'
 import { reconcileProjectSources } from './work-sources/discovery.ts'
@@ -221,7 +222,7 @@ export class WorkApplication {
           sources[index] = { ...source, discovery: { ...source.discovery, nextAttemptAt: schedule.next } }
         } else this.discoverySchedule.delete(source.id)
       }
-      return this.attachSourceBulk(sources === state.sources ? state : { ...state, sources })
+      return normalizeLegacyLocalChildren(this.attachSourceBulk(sources === state.sources ? state : { ...state, sources }))
     }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { schemaVersion: 3, projects: [], agents: [], tasks: [], commands: [], legacyMappings: [], sources: [], externalBindings: [], externalIndex: {}, executions: [] }
@@ -1376,11 +1377,9 @@ export class WorkApplication {
       return { status: 'completed', task }
     }
     if (command.type === 'task.create-child') {
-      const child = this.newTask(state, command, project)
-      child.parent = command.ref
-      task.children.push({ projectId, taskId: child.id })
-      this.changed(task, command)
-      return { status: 'completed', task: child }
+      // GitHub is the only primary store in this stage: a subtask is a native
+      // sub-issue, never a local-only Task. Legacy local children are invalid cache.
+      return failed('local-subtask-not-supported', '现阶段 GitHub 是主存：子任务必须创建为原生 sub-issue 并通过来源导入；本地子 Task 记录无效')
     }
     if (command.type === 'task.link-child') {
       if (command.child.projectId !== projectId) return failed('cross-project-reference', 'Parent and child must belong to the same project')
@@ -1394,6 +1393,7 @@ export class WorkApplication {
       }
       const blocked = taskStructureBlocker(state, child)
       if (blocked && !task.children.some(ref => sameTask(ref, command.child))) return failed(blocked.code, blocked.message)
+      if (!isCanonicalChild(state, command.child)) return failed('subtask-not-in-primary-store', '只能关联已有主存 sub-issue 记录的子任务；本地 Task 不是业务子任务')
       if (child.parent && child.parent.taskId !== task.id) return failed('child-already-linked', 'Child already has another parent')
       if (task.children.some(ref => ref.taskId === child.id)) return { status: 'completed', task }
       child.parent = command.ref

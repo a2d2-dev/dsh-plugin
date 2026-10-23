@@ -17,12 +17,16 @@ export function taskStructureBlocker(state: WorkSnapshot, task: WorkTask): { cod
   const execution = state.executions.find(item => item.ref.projectId === task.projectId && item.ref.taskId === task.id)
   if (execution && continuationInFlight(execution)) return { code: 'continuation-in-progress', message: '交接期间保留 Task 业务结构，接任后再更新' }
 }
-/** Current coordinator can preserve accepted specifications and split real child work atomically. */
+/** Current coordinator can preserve accepted specifications and accept native child scope. */
 export function applyTaskOrganization(state:WorkSnapshot,execution:WorkExecution,intent:TaskOrganization,commandId:string,createId:()=>string):WorkResult {
   const task=state.tasks.find(item=>item.id===execution.ref.taskId&&item.projectId===execution.ref.projectId)!
   if(task.version!==intent.expectedVersion)return {status:'conflict',error:{code:'version-conflict',message:'工作已更新，请重新读取当前任务后再整理',currentVersion:task.version}}
   const blocked=taskStructureBlocker(state,task)
   if(blocked)return {status:'failed',error:blocked}
+  // GitHub is the only primary store in this stage: a subtask is a native
+  // sub-issue, and a local-only child Task is invalid cache. Creating one here
+  // would mint a work item the coordinator can never start or accept.
+  if(intent.kind==='child')return {status:'failed',error:{code:'local-subtask-not-supported',message:'现阶段 GitHub 是主存：子任务必须创建为原生 sub-issue 并通过来源导入；本地子 Task 记录无效，不参与完成门'}}
   let result:WorkTask=task
   if(intent.kind==='source-children') {
     const bindings=state.externalBindings.filter(item=>item.ref.projectId===task.projectId&&item.ref.taskId===task.id)
@@ -33,16 +37,10 @@ export function applyTaskOrganization(state:WorkSnapshot,execution:WorkExecution
     const previous=binding.acceptedChildren??binding.accepted.subIssues
     if(previous?.items.some(item=>!children.items.some(child=>child.nodeId===item.nodeId)))return {status:'failed',error:{code:'native-child-scope-shrunk',message:'新观察不能移除已接受的必要子项'}}
     binding.acceptedChildren={...structuredClone(children),observedAt:observed.observedAt}
-  } else if(intent.kind==='specification') {
+  } else {
     task.specificationHistory.push(structuredClone(task.specification))
     task.specification={version:task.specification.version+1,text:intent.specification,acceptance:intent.acceptance}
     task.goal=intent.goal
-  } else {
-    result={id:createId(),projectId:task.projectId,title:intent.title,goal:intent.goal,version:1,agentId:task.agentId,
-      specification:{version:1,text:intent.specification,acceptance:intent.acceptance},specificationHistory:[],breakdown:[],parent:execution.ref,children:[],sessions:[],
-      activity:[{commandId,type:'task.organize-child',version:1}]}
-    state.tasks.push(result)
-    task.children.push({projectId:result.projectId,taskId:result.id})
   }
   task.version++
   task.activity.push({commandId,type:`task.organize-${intent.kind}`,version:task.version})
