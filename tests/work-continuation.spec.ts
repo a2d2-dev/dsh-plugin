@@ -93,6 +93,74 @@ it.each(['material-request', 'successor-create', 'source-take', 'source-seal', '
   if (cutoverInput) expect(successorLog.events.filter(event => event.type === 'user/message' && event.data.id === cutoverInput!.id)).toHaveLength(checkpoint === 'source-take' ? 1 : 0)
 })
 
+it.each(['cancelled', 'completed-without-material'] as const)('retries a consumed %s material request without replacing the operation or successor', async outcome => {
+  const h = await setup()
+  const source = h.ctx.agents.get(SessionId(h.execution.session.sessionId))!
+  if (outcome === 'cancelled') {
+    vi.spyOn(h.model, 'stream').mockImplementationOnce(async function* () {
+      yield { type: 'block-start', index: 0, blockType: 'tool-call' }
+      yield { type: 'tool-call-delta', index: 0, id: ToolCallId('interrupted-material'), name: 'work_continuation_material', argumentsDelta: '{"body":"unfinished' }
+      source.cancel({ kind: 'user' })
+    })
+  }
+  const command = { type: 'task.continue', commandId: 'interrupted-material', ...fence(h.execution) }
+  await h.app.execute(command, operator)
+  await fixtures.run(() => source.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  const failed = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(failed).toMatchObject({ execution: { epoch: 1, continuation: { phase: 'material-requested', requestDelivery: 'consumed', error: { code: 'continuation-material-missing' } } } })
+  if (failed.status !== 'completed' || !failed.execution?.continuation) throw new Error('Missing interrupted operation')
+  const operation = failed.execution.continuation
+  const sourceLog = await fixtures.run(() => h.ctx.sessionController.inspect(source.id))
+  if (outcome === 'cancelled') expect(sourceLog.events).toContainEqual(expect.objectContaining({ type: 'turn/end', data: { turn: 2, reason: { kind: 'aborted', reason: { kind: 'user' } } } }))
+
+  // Neither recovery nor replay of the original intent authorizes another model turn.
+  await fixtures.run(() => h.app.reconcileControls())
+  await h.app.execute(command, operator)
+  const beforeRetry = await fixtures.run(() => h.ctx.sessionController.inspect(source.id))
+  expect(beforeRetry.events.filter(event => event.type === 'user/message' && event.data.id.startsWith('material-request:'))).toHaveLength(1)
+
+  // A new explicit retry is allowed to request material, but still cannot take without it.
+  const retry = { ...command, commandId: 'retry-missing-material' }
+  const retried = await h.app.execute(retry, operator)
+  expect(retried).toMatchObject({ execution: { epoch: 1, continuation: { operationId: operation.operationId, successor: operation.successor, kickoffId: operation.kickoffId } } })
+  if (retried.status !== 'completed' || !retried.execution?.continuation) throw new Error('Missing retried operation')
+  const retryId = retried.execution.continuation.materialRequestId
+  expect(retryId).not.toBe(operation.materialRequestId)
+  await fixtures.run(() => source.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  await h.app.execute(retry, operator)
+  const afterReplay = await fixtures.run(() => h.ctx.sessionController.inspect(source.id))
+  expect(afterReplay.events.filter(event => event.type === 'user/message' && event.data.id === retryId)).toHaveLength(1)
+  expect(afterReplay.events.filter(event => event.type === 'user/message' && event.data.id.startsWith('material-request:'))).toHaveLength(2)
+  expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(1)
+
+  // Lose the receipt of a later successful retry, then recover from real persisted logs.
+  h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+  const deliver = h.host.execution.deliver.bind(h.host.execution)
+  let lost = false
+  vi.spyOn(h.host.execution, 'deliver').mockImplementation(async (execution, event, maintenance) => {
+    const receipt = await deliver(execution, event, maintenance)
+    if (!lost && event.id.startsWith('material-request:')) { lost = true; throw new Error('Retry delivery receipt lost') }
+    return receipt
+  })
+  const successfulRetry = { ...command, commandId: 'retry-save-material' }
+  await h.app.execute(successfulRetry, operator)
+  await fixtures.run(() => source.whenIdle())
+  expect(lost).toBe(true)
+  await fixtures.dispose(h.ctx)
+  const restored = await fixtures.mount(h.workspace.path)
+  installWorkTools(restored.ctx, restored.app, 'runtime')
+  const recovered = await restored.app.execute(successfulRetry, operator)
+  expect(recovered).toMatchObject({ execution: { id: h.execution.id, ref: h.ref, epoch: 2, session: operation.successor, continuation: { operationId: operation.operationId, kickoffId: operation.kickoffId, phase: 'delivered', material } } })
+  await fixtures.run(() => restored.ctx.agents.get(SessionId(operation.successor.sessionId))!.whenIdle())
+  const finalSource = await fixtures.run(() => restored.ctx.sessionController.inspect(source.id))
+  expect(finalSource.events.filter(event => event.type === 'user/message' && event.data.id.startsWith('material-request:'))).toHaveLength(3)
+  const successorLog = await fixtures.run(() => restored.ctx.sessionController.inspect(SessionId(operation.successor.sessionId)))
+  expect(successorLog.events.filter(event => event.type === 'user/message' && event.data.id === operation.kickoffId)).toHaveLength(1)
+  expect(await fixtures.run(() => restored.ctx.sessionPersistence.list())).toHaveLength(2)
+})
+
 it('preserves queued Task and full native input while successor creation is parked', async () => {
   const h = await setup()
   h.model.nextTool = { name: 'work_continuation_material', arguments: material }

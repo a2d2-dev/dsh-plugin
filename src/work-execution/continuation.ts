@@ -8,7 +8,17 @@ export const MANAGED_WORK_INSTRUCTIONS = 'You are the current coordinator of an 
 
 /** Reserve every identity in the authority transaction, before any host effect. */
 export function reserveContinuation(execution: WorkExecution, task: WorkTask, commandId: string, automatic: boolean): void {
-  if (continuationInFlight(execution)) return
+  if (continuationInFlight(execution)) {
+    const operation = execution.continuation!
+    if (!automatic && operation.phase === 'material-requested' && operation.requestDelivery === 'consumed' && !operation.material) {
+      // A consumed prompt cannot run again. A new explicit intent reserves a new
+      // request, while command receipts deduplicate replay and keep the successor fixed.
+      operation.materialRequestId = `material-request:${operation.operationId}:${randomUUID()}`
+      operation.requestDelivery = 'accepted'
+      delete operation.error
+    }
+    return
+  }
   if (execution.continuation) (execution.continuationHistory ??= []).push(execution.continuation)
   const operationId = randomUUID()
   execution.continuation = { operationId, commandId, automatic, phase: 'reserved', source: { ...execution.session },
