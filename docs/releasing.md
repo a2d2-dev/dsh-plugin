@@ -16,6 +16,18 @@ pnpm verify:pack-exports
 
 CI 在 Node.js 22、24 上执行上述检查，另运行固定版本 Gitleaks 扫描 Git 历史。`.gitleaksignore` 仅列出逐项核实的历史摘要、脱敏测试常量和已遮罩/占位授权头的精确 fingerprint，不豁免目录或整类规则。发布包验证覆盖所有显式导出目标、类型入口、Node 模块导入及浏览器 bundle 注册。源码内部路径不是公共导出接口。构建产物不提交 Git；本地验收报告和截图也不随源码或 npm 包发布。
 
+## Git 安装授权检查
+
+官方桌面端 `0.2.1-rc.2` 的安装器使用 pnpm `11.28.5`。涉及 Git 安装或打包钩子的改动，另运行以下网络集成检查（传入可从 GitHub 获取的完整 commit）：
+
+```sh
+npm exec --yes --package=pnpm@11.28.5 -- node scripts/verify-git-install.mjs dc944315c3d4a4d21e32b4f81fbb5d6521b2d141
+```
+
+检查使用全新临时项目和独立 pnpm store：先断言缺少授权时出现 `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`，再添加精确的 Git commit `allowBuilds` 条目，确认安装成功、导出文件和 sidecar 齐全，并导入所有 Node 入口。不会修改实际 DSH profile；成功后删除临时目录，失败时保留日志。首次运行需要下载 pnpm、Git 源码及依赖，适合作为手动发布检查。此检查验证指定远端提交的包管理器安装，不替代原生桌面端 UI 与插件功能验收。
+
+Git prepare 阶段包含本插件的 `prepack` 构建。目标 profile 的授权不能由插件自己的配置代替。用户操作见 [中文安装说明](../README.zh.md#官方桌面端git-构建授权) / [English installation guide](../README.md#official-desktop-authorize-git-builds)。
+
 ## 宿主与外部依赖
 
 - 当前 peerDependencies 基于 DSH 0.2.0-rc.2 API 系列；这不是所有功能在任意同版本宿主上可用的保证。

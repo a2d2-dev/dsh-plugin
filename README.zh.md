@@ -19,6 +19,16 @@
 
 ## 安装
 
+### 桌面用户：安装已构建的插件包
+
+桌面用户无需编译官方桌面应用或安装 Node.js、pnpm。插件维护者应先构建并提供 `dsh-a2d2-0.0.1.tgz`；用户下载后，在桌面端的插件管理器中打开安装入口，输入这个本地文件的**绝对路径**进行安装。安装后按界面提示重启或重新加载，再到 **设置 → A2D2 配置** 选择宿主实际可用的模型。构建产物已在包内，这条路径不需要 Git 构建授权。
+
+插件包下载：[v0.0.1](https://github.com/a2d2-dev/dsh-plugin/releases/tag/v0.0.1)，选择附件 `dsh-a2d2-0.0.1.tgz`，不要选择 GitHub 自动生成的 Source code。插件包仍需满足下方的宿主能力要求；此预发布版本尚未通过官方桌面端的全部功能验收。
+
+### 维护者：构建交付包
+
+以下命令供插件维护者构建安装包：
+
 `lib/` 是构建产物且在 `.gitignore` 中，因此刚 clone 的源码树里没有可运行的插件。`pnpm pack` 会运行 `prepack` 钩子（构建 + 入口断言），所以打出的 tarball 总是完整的：
 
 ```console
@@ -32,12 +42,38 @@ dsh plugin --profile web add "$(pwd)/dsh-a2d2-0.0.1.tgz"
 
 安装时使用 tarball 的绝对路径。打包产物是否完整由 `pnpm verify:pack-exports`（见下）检查。
 
-> **警告——请安装构建后的 tarball，不要安装源码树。** 安装本地目录（`dsh plugin --profile web add ./dsh-a2d2`）或 git URL（`… add git+https://…`）**不会**运行 `pnpm build`，包会以没有 `lib/` 的空壳形态落地；随后 8 个 A²D² 行全部 import 失败（`ERR_MODULE_NOT_FOUND …/lib/*.js`），profile 启动时只留一行 warning，A²D² 静默失效。改动源码后，重新构建 tarball 并安装它：
->
-> ```console
-> pnpm build && pnpm pack
-> dsh plugin --profile web add "$(pwd)/dsh-a2d2-0.0.1.tgz"
-> ```
+> **本地目录需要先构建。** 直接安装未构建的源码目录会缺少 `lib/`，导致 `ERR_MODULE_NOT_FOUND`。从 Git URL 安装时，pnpm 会在打包准备阶段运行本包的 `prepack` 构建钩子，但需要安装目标允许执行构建脚本；操作见下文。改动本地源码后，请重新 `pnpm pack` 并安装新 tarball。
+
+### 官方桌面端：Git 构建授权
+
+如果从 Git URL 安装时出现 `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`，说明 pnpm 在执行插件构建前等待授权。`Lockfile passes supply-chain policies` 与构建授权是两项检查。插件的 `prepack` 会生成 `lib/`，不能通过删除钩子或跳过脚本解决。
+
+[Issue #205](https://github.com/a2d2-dev/dsh-plugin/issues/205) 的报告环境为官方桌面端 `0.2.1-rc.2`；[该发布版本声明 pnpm 11.28.5](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.1-rc.2/apps/desktop/package.json)。源码开发使用的 pnpm 10.26.2 与桌面端安装器使用的版本可以不同。
+
+1. 等待本次安装失败结束，记录错误输出中的完整 Git 授权键和目标目录；不要在安装运行中编辑配置。
+2. 打开**安装目标 profile** 的 `pnpm-workspace.yaml`。默认桌面 profile 为 `~/.dsh/profiles/desktop/pnpm-workspace.yaml`；#205 中是 `/Users/pengwu/.dsh/profiles/desktop/pnpm-workspace.yaml`。不要改插件源码仓库中的配置。
+3. 保留文件中的其他设置和已有授权，把错误输出中的条目合并到现有 `allowBuilds` 下。没有 `allowBuilds` 时才新增该节，不要添加两个同名顶层键。确认信任这个仓库及提交后，授权它执行构建脚本。以下是 #205 所报提交的精确条目：
+
+   ```yaml
+   allowBuilds:
+     dsh-a2d2@git+https://github.com/a2d2-dev/dsh-plugin.git#dc944315c3d4a4d21e32b4f81fbb5d6521b2d141: true
+   ```
+
+4. 保存后回到桌面端的失败安装窗口点击「重试」；若已关闭该窗口，从插件安装入口重新安装。若要安装上述提交，可使用固定的 URL：
+
+   ```text
+   git+https://github.com/a2d2-dev/dsh-plugin.git#dc944315c3d4a4d21e32b4f81fbb5d6521b2d141
+   ```
+
+   可选 CLI 路径：先通过桌面应用菜单 **Manage dsh Command… → Install** 安装桌面端提供的命令，再完全退出应用（macOS 用 ⌘Q），执行下述命令并重新打开应用。通过 npm 安装的独立 `dsh` 不能管理此 desktop profile。使用上面的桌面 UI 重试无需安装 CLI。
+
+   ```sh
+   dsh plugin --profile desktop add 'git+https://github.com/a2d2-dev/dsh-plugin.git#dc944315c3d4a4d21e32b4f81fbb5d6521b2d141'
+   ```
+
+授权键绑定仓库和提交。若新的安装错误给出另一个 commit，应核对并使用**那次错误打印的完整键**；不要用通配授权替代。撤销时仅移除对应条目。构建授权并不证明所有插件功能与宿主兼容，宿主能力要求仍见下方「安装与开发」。
+
+若不希望在 profile 安装时从 Git 构建，可按上方步骤先在源码目录构建 tarball，再通过桌面端原安装入口安装 tarball 的绝对路径；CLI 对应 `dsh plugin --profile desktop add /absolute/path/dsh-a2d2-0.0.1.tgz`。tarball 已包含构建产物，不需要此 Git prepare 授权。
 
 本文余下部分是插件的行为契约与已知限制，按各组件分列于下。
 

@@ -19,6 +19,16 @@ What the plugin gives DSH today:
 
 ## Install
 
+### Desktop users: install a built plugin package
+
+Desktop users do not need to compile the official desktop application or install Node.js or pnpm. The plugin maintainer should build and provide `dsh-a2d2-0.0.1.tgz`. After downloading it, open the installation entry in Desktop's plugin manager and enter the local file's **absolute path**. Follow any restart or reload prompt, then select models available in your host under **Settings → A2D2 配置**. This package already contains the build output and needs no Git build approval.
+
+Download from [v0.0.1](https://github.com/a2d2-dev/dsh-plugin/releases/tag/v0.0.1): choose the `dsh-a2d2-0.0.1.tgz` asset, not GitHub's automatic Source code archives. The host capability requirements below still apply; this prerelease has not passed full functionality acceptance on official Desktop.
+
+### Maintainers: build the distributable
+
+The following commands are for the plugin maintainer:
+
 `lib/` is build output and git-ignored, so a checkout contains no runnable plugin until it is built. `pnpm pack` runs the `prepack` hook (build plus the entrypoint assertion), so packing always produces a complete tarball:
 
 ```console
@@ -32,12 +42,38 @@ dsh plugin --profile web add "$(pwd)/dsh-a2d2-0.0.1.tgz"
 
 Install the tarball by its absolute path. Whether the packed artifact is complete is what `pnpm verify:pack-exports` (below) checks.
 
-> **Warning — install the built tarball, never a source tree.** Installing a local directory (`dsh plugin --profile web add ./dsh-a2d2`) or a git URL (`… add git+https://…`) does **not** run `pnpm build`; the package lands as an empty shell with no `lib/`. All eight A²D² rows then fail to import (`ERR_MODULE_NOT_FOUND …/lib/*.js`), and the profile boots with a single warning and A²D² silently inactive. After changing the source, rebuild the tarball and install that:
->
-> ```console
-> pnpm build && pnpm pack
-> dsh plugin --profile web add "$(pwd)/dsh-a2d2-0.0.1.tgz"
-> ```
+> **Build local directories before installing them.** An unbuilt source directory has no `lib/` and fails with `ERR_MODULE_NOT_FOUND`. For a Git URL, pnpm runs this package's `prepack` build hook while preparing the package, subject to the consuming project's build authorization; see below. After changing local sources, run `pnpm pack` again and install the new tarball.
+
+### Official Desktop: authorize Git builds
+
+`ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED` means pnpm requires authorization before running the plugin's build. `Lockfile passes supply-chain policies` is a separate check. The `prepack` hook generates `lib/`; deleting it or skipping scripts does not produce a working plugin.
+
+[Issue #205](https://github.com/a2d2-dev/dsh-plugin/issues/205) was reported on official Desktop `0.2.1-rc.2`, whose [release manifest specifies pnpm 11.28.5](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.1-rc.2/apps/desktop/package.json). The source checkout's development pnpm version, 10.26.2, can differ from Desktop's installer version.
+
+1. Wait for the failed installation to finish and record the complete Git approval key and target directory from the error; do not edit configuration during an active installation.
+2. Open the **target profile's** `pnpm-workspace.yaml`: normally `~/.dsh/profiles/desktop/pnpm-workspace.yaml`; in #205 it is `/Users/pengwu/.dsh/profiles/desktop/pnpm-workspace.yaml`. Do not edit the plugin source repository's configuration instead.
+3. Preserve existing settings and approvals. Merge the printed entry into the existing `allowBuilds` mapping, or add that section if absent; do not create duplicate top-level keys. Only approve the repository and commit after deciding to trust its build scripts. The exact entry for the commit reported in #205 is:
+
+   ```yaml
+   allowBuilds:
+     dsh-a2d2@git+https://github.com/a2d2-dev/dsh-plugin.git#dc944315c3d4a4d21e32b4f81fbb5d6521b2d141: true
+   ```
+
+4. Save and click **Retry** in Desktop's failed-install dialog, or reopen plugin installation if the dialog was dismissed. To install that exact commit, use this pinned URL:
+
+   ```text
+   git+https://github.com/a2d2-dev/dsh-plugin.git#dc944315c3d4a4d21e32b4f81fbb5d6521b2d141
+   ```
+
+   Optional CLI route: register Desktop's command through the application menu **Manage dsh Command… → Install**, fully quit the application (⌘Q on macOS), run the command below, then reopen Desktop. A separately npm-installed `dsh` cannot manage this desktop profile. The UI retry above needs no CLI registration.
+
+   ```sh
+   dsh plugin --profile desktop add 'git+https://github.com/a2d2-dev/dsh-plugin.git#dc944315c3d4a4d21e32b4f81fbb5d6521b2d141'
+   ```
+
+The approval identifies a repository and commit. If a later install reports another commit, review and use the **complete key from that error** instead of a wildcard. To revoke it, remove only the corresponding entry. Build authorization does not establish compatibility of every plugin feature; host capability requirements still apply as described under “Installation and development”.
+
+To avoid building from Git during profile installation, build a tarball in the source checkout as shown above and install its absolute path through Desktop's original installation entry. The CLI equivalent is `dsh plugin --profile desktop add /absolute/path/dsh-a2d2-0.0.1.tgz`. A built tarball already contains the output and needs no Git prepare approval.
 
 The rest of this document is the plugin's behavior contract and known limits, kept per component below.
 
