@@ -23,6 +23,8 @@
 
 需要 Node.js 22 或更高版本、pnpm 10.26.2，以及使用 DSH 0.2.0-rc.2 API 系列的宿主。会话创建和交接还要求宿主提供公开的 `sessionController.selectLocalModel` 能力。版本号不能证明该能力存在，缺少它的宿主会被明确拒绝。目前尚未验证哪个公开发布的 DSH 版本首次提供该能力，因此未经修改的公开宿主上的端到端兼容性仍是发布门槛。
 
+已核对的上游 [session-controller 源码 `687f282e`](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/api/session-controller/src/index.ts) 未定义 `selectLocalModel`。会话初始化兼容性因此仍是待解决的上游发布阻塞，不能宣称原生宿主已支持。
+
 从源码构建：
 
 ```sh

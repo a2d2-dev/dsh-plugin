@@ -20,6 +20,7 @@ CI 在 Node.js 22、24 上执行上述检查，另运行固定版本 Gitleaks �
 
 - 当前 peerDependencies 基于 DSH 0.2.0-rc.2 API 系列；这不是所有功能在任意同版本宿主上可用的保证。
 - 会话 Agent 初始化要求 `sessionController.selectLocalModel`，缺少时明确拒绝。首次提供此 API 的公开 DSH release 尚未验证；必须在公开发布前确认并记录该宿主版本及安装验收结果，不能用本地补丁宿主替代。
+- 上游源码核对：DSH `master` 提交 [`687f282e`](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/api/session-controller/src/index.ts) 的公开 session-controller 定义包含 `selectModel`，没有 `selectLocalModel` 方法定义；对应包版本为 `0.2.1-rc.2`。因此不能宣称升级到这个版本即可满足会话本地模型选择。需先补齐上游公开能力，再完成原生宿主验收；禁止回退到会修改默认值的 `selectModel`。
 - Node.js 22 是运行下限；GitHub watch 使用原生 WebSocket。
 - `gh` 认证、宿主可用模型、`ask-matt` / `handoff` skill 及可选通知服务由使用者配置，插件不提供模型账号或捆绑这些服务。
 - GitHub watch 默认连接 `https://hooks.a2d2.dev`，通过 Authorization header 发送用户 GitHub token 申请订阅票据。启用前须信任服务运营方；自托管时可配置 `relayUrl`。禁止把凭据写进报告、日志或仓库。

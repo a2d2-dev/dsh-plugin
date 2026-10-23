@@ -23,6 +23,8 @@ The rest of this document is the plugin's behavior contract and known limits, ke
 
 Requires Node.js 22 or later, pnpm 10.26.2, and a DSH host using the 0.2.0-rc.2 API family. Session creation and handoff additionally require the host's public `sessionController.selectLocalModel` capability. A version string alone does not prove that capability is installed; hosts without it are rejected. The minimum released DSH version providing it has not yet been verified, so end-to-end compatibility with an unmodified public host is a release gate.
 
+The checked upstream [session-controller source at `687f282e`](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/api/session-controller/src/index.ts) does not define `selectLocalModel`. Session initialization compatibility is therefore an unresolved upstream release blocker, not a verified stock-host feature.
+
 Build from source:
 
 ```sh
