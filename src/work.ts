@@ -278,14 +278,14 @@ export class WorkApplication {
   }
   /** Move any inline bulk from an older store into sidecars. Safe to call repeatedly. */
   async ensureSourceSplit(): Promise<void> {
-    if (this.inlineSources.size === 0) return
+    if (!await stat(this.file).then(() => true, () => false)) return
     await mkdir(this.directory, { recursive: true, mode: 0o700 })
     return withWorkFileLock(this.file, async () => {
       this.mutationDepth++
       try {
         const state = await this.attachSourceBulk(await this.load())
         if (this.inlineSources.size === 0) return
-        await this.persist(state, { bulk: this.bulkFingerprints(state), control: this.controlJson(state) }, true)
+        await this.persist(state, { bulk: this.bulkFingerprints(state), control: this.comparableJson(state) }, true)
       } finally { this.mutationDepth--; this.snapshotCache = undefined }
     })
   }
