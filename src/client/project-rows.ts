@@ -51,7 +51,7 @@ export function isEmptyColumn(field: Field, rows: ProjectRow[]): boolean {
 }
 
 /** Columns hidden by default because they duplicate the header or only add width. */
-const optionalTypes = new Set(['REPOSITORY', 'CREATED', 'UPDATED', 'CLOSED', 'MILESTONE', 'REVIEWERS'])
+const optionalTypes = new Set(['REPOSITORY', 'CREATED', 'UPDATED', 'CLOSED', 'REVIEWERS'])
 /** Catalogue columns in GitHub order, without the title column (rendered as the row header). */
 export function projectColumns(fields: Field[], rows: ProjectRow[], extras = false): Field[] {
   return fields.filter(field => field.dataType !== 'TITLE' && (extras || !optionalTypes.has(field.dataType)) && !isEmptyColumn(field, rows))
