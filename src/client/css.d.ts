@@ -44,6 +44,7 @@ declare module '*.module.css' {
     readonly progressBar: string
     readonly progressFill: string
     readonly progressText: string
+    readonly scanProgress: string
     readonly titleCell: string
     readonly rowTitle: string
     readonly cellClip: string

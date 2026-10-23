@@ -69,6 +69,7 @@ export async function reconcileProjectSources(transaction: SourceTransaction, po
           pending.items = merge(pending.items, page.items, item => item.id)
           pending.issues = merge(pending.issues, page.issues, issue => issue.nodeId)
           pending.pages++
+          if (page.total !== undefined) pending.total = page.total
           pending.cursor = page.nextCursor
           discovery.inFlight!.expiresAt = iso(now() + 90_000)
           if (pending.items.length > 10_000 || pending.pages > 1000) throw new SourceError('github-project-too-large', 'Project discovery exceeded the supported scan size')

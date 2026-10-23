@@ -132,6 +132,7 @@ export type WorkQuery =
   | { type: 'source.execution-options'; projectId: string; sourceId: string }
   | { type: 'continuous.status'; projectId: string; sourceId: string }
   | { type: 'source.list'; projectId: string }
+  | { type: 'source.progress'; projectId: string; sourceId: string }
   | { type: 'source.issues'; projectId: string; sourceId: string; page: number; perPage: number; assignee: '@me' | '*'; state: 'open' | 'closed' | 'all'; labels?: string[]; search?: string; refresh?: boolean }
   | { type: 'source.issue'; projectId: string; sourceId: string; number: number; nodeId?: string; refresh?: boolean }
   | { type: 'work.capabilities' }
@@ -159,6 +160,7 @@ export interface WorkCompleted extends SourceResultFields {
   continuousRule?: ContinuousWorkRule
   status: 'completed'
   progress?: TaskProgressView
+  scan?: SourceScanProgress
   progressItems?: TaskProgressView[]
   sourceIssues?: GitHubIssueReference[]
   transcript?: { session: SessionRef; events: unknown[]; nextCursor?: number }
@@ -177,6 +179,17 @@ export interface WorkCompleted extends SourceResultFields {
   candidates?: SessionCandidate[]
   work?: AssociatedWork[]
   ref?: TaskRef
+}
+export interface SourceScanProgress {
+  state: 'idle' | 'syncing' | 'error'
+  /** Pages fetched so far in the current (possibly incomplete) full scan. */
+  pages: number
+  /** Items fetched so far; the numerator of the progress report. */
+  fetched: number
+  /** GitHub's total item count, when the scan has read its first page. */
+  total?: number
+  startedAt?: string
+  lastSuccessAt?: string
 }
 export interface WorkFailure extends SourceResultFields { status: 'failed' | 'conflict'; error: { code: string; message: string; currentVersion?: number } }
 export type WorkResult = WorkCompleted | WorkFailure

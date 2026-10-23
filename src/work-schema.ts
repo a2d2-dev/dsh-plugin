@@ -121,6 +121,7 @@ export const querySchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('continuous.status'), projectId: id, sourceId: id }).strict(),
   z.object({ type: z.literal('work.capabilities') }).strict(),
   z.object({ type: z.literal('source.list'), projectId: id }).strict(),
+  z.object({ type: z.literal('source.progress'), projectId: id, sourceId: id }).strict(),
   z.object({ type: z.literal('source.issues'), projectId: id, sourceId: id, refresh: z.boolean().optional(), page: z.number().int().min(1).max(100_000), perPage: z.number().int().min(1).max(100), assignee: z.enum(['@me', '*']), state: z.enum(['open', 'closed', 'all']), labels: z.array(z.string().min(1).max(256)).max(100).optional(), search: z.string().max(500).optional() }).strict(),
   z.object({ type: z.literal('source.issue'), projectId: id, sourceId: id, refresh: z.boolean().optional(), number: z.number().int().positive(), nodeId: referenceId.optional() }).strict(),
   z.object({ type: z.literal('projects.list') }).strict(),

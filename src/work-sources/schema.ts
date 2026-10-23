@@ -20,10 +20,10 @@ const projectItem = z.object({ id: nodeId, kind: z.enum(['issue', 'pull-request'
     reviewers: z.array(z.string()).optional(), createdAt: z.iso.datetime().optional(), updatedAt: z.iso.datetime().optional(), closedAt: z.iso.datetime().nullable().optional() }).strict().optional(),
   fields: z.array(z.object({ id: nodeId, name: z.string(), type: z.enum(['single-select', 'iteration', 'text', 'number', 'date']), value: z.string() }).strict()), fieldsPartial: z.boolean(),
 }).strict()
-export const projectPageSchema = z.object({ identity, project: projectMetadata, items: z.array(projectItem), issues: z.array(issueSchema), observedAt: z.iso.datetime(), nextCursor: z.string().min(1).max(2048).optional() }).strict()
+export const projectPageSchema = z.object({ identity, project: projectMetadata, items: z.array(projectItem), issues: z.array(issueSchema), observedAt: z.iso.datetime(), total: z.number().int().nonnegative().optional(), nextCursor: z.string().min(1).max(2048).optional() }).strict()
 const discovery = z.object({ state: z.enum(['idle', 'syncing', 'error']), nextAttemptAt: z.iso.datetime(), lastAttemptAt: z.iso.datetime().optional(), lastSuccessAt: z.iso.datetime().optional(), failures: z.number().int().nonnegative(),
   inFlight: z.object({ id: z.string().uuid(), expiresAt: z.iso.datetime() }).strict().optional(),
-  checkpoint: z.object({ sourceVersion: z.number().int().positive(), startedAt: z.iso.datetime(), cursor: z.string().min(1).max(2048).optional(), pages: z.number().int().nonnegative(), identity: identity.optional(), project: projectMetadata.optional(), items: z.array(projectItem), issues: z.array(issueSchema) }).strict().optional(),
+  checkpoint: z.object({ sourceVersion: z.number().int().positive(), startedAt: z.iso.datetime(), cursor: z.string().min(1).max(2048).optional(), pages: z.number().int().nonnegative(), total: z.number().int().nonnegative().optional(), identity: identity.optional(), project: projectMetadata.optional(), items: z.array(projectItem), issues: z.array(issueSchema) }).strict().optional(),
 }).strict()
 export const sourceSchema = z.object({ id: z.string().uuid(), projectId: z.string().uuid(), provider: z.literal('github'), repository: repositorySchema.optional(), githubProject: githubProjectSchema.optional(),
   enabled: z.boolean(), version: z.number().int().positive(), sequence: z.number().int().nonnegative(), requests: z.record(z.string(), z.number().int().positive()),

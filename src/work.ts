@@ -1311,6 +1311,17 @@ export class WorkApplication {
     }
     if (query.type === 'source.list') return state.projects.some(item => item.id === query.projectId)
       ? { status: 'completed', sources: state.sources.filter(item => item.projectId === query.projectId) } : failed('unknown-project', 'Project does not exist')
+    if (query.type === 'source.progress') {
+      const selected = state.sources.find(item => item.id === query.sourceId && item.projectId === query.projectId)
+      if (!selected) return failed('unknown-source', 'Source does not belong to this project')
+      const discovery = selected.discovery, checkpoint = discovery?.checkpoint
+      return { status: 'completed', scan: {
+        state: discovery?.state ?? 'idle', pages: checkpoint?.pages ?? 0, fetched: checkpoint?.items.length ?? 0,
+        ...(checkpoint?.total === undefined ? {} : { total: checkpoint.total }),
+        ...(checkpoint?.startedAt === undefined ? {} : { startedAt: checkpoint.startedAt }),
+        ...(discovery?.lastSuccessAt === undefined ? {} : { lastSuccessAt: discovery.lastSuccessAt }),
+      } }
+    }
     if (query.type === 'source.issues' || query.type === 'source.issue') return sourceResult(state, query)
     if (query.type === 'continuous.status') {
       const source = state.sources.find(source => source.id === query.sourceId && source.projectId === query.projectId)

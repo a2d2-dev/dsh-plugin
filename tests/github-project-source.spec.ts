@@ -14,7 +14,7 @@ function item(content: unknown, id = 'PVTI_1') { return { id, type: 'ISSUE', isA
   { __typename: 'ProjectV2ItemFieldIterationValue', title: 'Iteration 2', field: { id: 'F_iteration', name: 'Iteration' } },
   { __typename: 'ProjectV2ItemFieldUserValue' },
 ] } } }
-function response(items: unknown[] = [item(issue())]) { return { data: { viewer: { id: 'U_1', login: 'imneov', name: 'LiuFeng' }, organization: { projectV2: { id: 'PVT_1', title: 'Actual Project', url: 'https://github.com/orgs/a2d2-dev/projects/1', closed: false, items: { nodes: items, pageInfo: { hasNextPage: true, endCursor: 'cursor-next' } } } } } } }
+function response(items: unknown[] = [item(issue())]) { return { data: { viewer: { id: 'U_1', login: 'imneov', name: 'LiuFeng' }, organization: { projectV2: { id: 'PVT_1', title: 'Actual Project', url: 'https://github.com/orgs/a2d2-dev/projects/1', closed: false, items: { totalCount: 12, nodes: items, pageInfo: { hasNextPage: true, endCursor: 'cursor-next' } } } } } } }
 
 describe('GitHub Project source', () => {
   it('reads a fixed query with variables, authenticated identity, fields, and explicitly partial subissues', async () => {
@@ -27,6 +27,7 @@ describe('GitHub Project source', () => {
     const page = await source.project(target, { perPage: 20, cursor: 'cursor-before' })
     expect(page.identity).toEqual({ nodeId: 'U_1', login: 'imneov', name: 'LiuFeng' })
     expect(page.nextCursor).toBe('cursor-next')
+    expect(page.total).toBe(12)
     expect(page.issues).toHaveLength(2)
     expect(page.issues[0]).toMatchObject({ nodeId: 'I_1', body: 'Original\n  source', createdAt: '2026-10-01T00:00:00Z', closedAt: null, parent: { nodeId: 'I_parent', repository: { repository: 'parent' } }, subIssues: { totalCount: 60, hasNextPage: true, items: [{ nodeId: 'I_child' }] }, subIssuesSummary: { total: 11, completed: 10 }, linkedPullRequests: [{ number: 143, state: 'merged', draft: false, url: 'https://github.com/a2d2-dev/one/pull/143' }] })
     expect(page.issues[1]).toMatchObject({ nodeId: 'I_other', number: 1, repository: { repository: 'two' } })

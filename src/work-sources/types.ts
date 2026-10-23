@@ -26,11 +26,15 @@ export interface GitHubProjectMetadata { nodeId: string; title: string; url: str
 export interface GitHubProjectPage {
   identity: GitHubIdentity; project: GitHubProjectMetadata; items: GitHubProjectItem[]; issues: GitHubIssue[]
   observedAt: string; nextCursor?: string
+  /** GitHub's total item count for this Project, the denominator of a scan progress report. */
+  total?: number
 }
 export interface ProjectPageRequest { cursor?: string; perPage: number }
 export interface ProjectSnapshot { identity: GitHubIdentity; project: GitHubProjectMetadata; items: GitHubProjectItem[]; observedAt: string }
 export interface ProjectCheckpoint {
   sourceVersion: number; startedAt: string; cursor?: string; pages: number
+  /** GitHub's total item count for the Project being scanned, when the page reported it. */
+  total?: number
   identity?: GitHubIdentity; project?: GitHubProjectMetadata; items: GitHubProjectItem[]; issues: GitHubIssue[]
 }
 export interface SourceDiscovery {
