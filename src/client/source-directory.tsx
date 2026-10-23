@@ -8,6 +8,7 @@ import { SESSION_SLOT, fieldOption, orderProjectRows, projectColumnSlots, projec
 import { SessionCell, sessionOf } from './session-cell.tsx'
 import type { ProjectRow } from './project-rows.ts'
 import type { SourceScanProgress } from '../work-types.ts'
+import { applySlice, sliceAggregate, sliceCandidates } from './project-slice.ts'
 import styles from './work-panel.module.css'
 
 const sourceName = (source: WorkSource) => source.title ?? source.projectSnapshot?.project.title ?? (source.repository ? `${source.repository.owner}/${source.repository.repository}` : `${source.githubProject?.owner} / Project #${source.githubProject?.number}`)
@@ -94,18 +95,21 @@ function ProjectViews({controller,source}:{controller:WorkPanelController;source
   const [collapsed,setCollapsed]=useState<ReadonlySet<string>>(()=>new Set())
   const [extraColumns,setExtraColumns]=useState(false)
   const [includeClosed,setIncludeClosed]=useState(false)
+  const [sliceFieldId,setSliceFieldId]=useState<string|null>(null)
+  // GitHub keeps the selected slice value in the entry URL, not in the view.
+  const [sliceSelected,setSliceSelected]=useState<ReadonlySet<string>>(()=>{
+    const entry=source.entryUrls?.at(-1)
+    if(!entry||controller.getSnapshot().source.viewNumber!==null)return new Set<string>()
+    return new Set(new URL(entry).searchParams.getAll('sliceBy[value]'))
+  })
+  const [showEmpty,setShowEmpty]=useState(false)
   if(!catalog)return <p>尚无真实 Project 视图缓存，请刷新来源。</p>
   const entry=source.entryUrls?.at(-1),url=entry?new URL(entry):undefined
   const entryView=Number(/\/views\/(\d+)/.exec(url?.pathname??'')?.[1])||null
   const viewNumber=state.viewNumber??entryView??catalog.views[0]?.number??null
   const view=catalog.views.find(view=>view.number===viewNumber)
-  // A slice is a GitHub view UI state (sliceBy[...]) with no matching API
-  // field here, so it is shown as read-only context instead of applied.
-  const entrySlice=state.viewNumber===null&&url?[...url.searchParams.entries()].filter(([key])=>/slice/i.test(key)):[]
-  const sliceLabel=entrySlice.length?entrySlice.map(([key,value])=>`${key}=${value}`).join('&'):''
-  // The saved entry may carry an ad-hoc filterQuery for its view (GitHub keeps
-  // it in the URL, not in the view record). Rebuilding must not drop it when
-  // that same view is selected.
+  // A slice is a view UI state (sliceBy[value]); the view record does not name
+  // its field, so the field is resolved from the value against the held items.
   const entryFilter=url?.searchParams.get('filterQuery')??''
   const expression=state.viewNumber===null
     ? entryFilter||view?.filter||''
@@ -113,14 +117,19 @@ function ProjectViews({controller,source}:{controller:WorkPanelController;source
   const filtered=snapshot?filterProjectItems(expression,snapshot.items,source.observations.map(item=>item.issue),snapshot.identity.login,catalog.fields.filter(field=>['SINGLE_SELECT','ITERATION','TEXT','NUMBER','DATE','MILESTONE'].includes(field.dataType)).map(field=>field.name)):null
   const page=state.viewPage,perPage=25,issues=source.observations.map(item=>item.issue)
   const matched=filtered?.supported?filtered.items:[]
+  const sliceValues=state.viewNumber===null&&url?url.searchParams.getAll('sliceBy[value]'):[]
+  const sliceFieldOptions=sliceCandidates(catalog.fields,matched,sliceValues)
+  const sliceField=sliceFieldOptions.find(field=>field.id===sliceFieldId)??sliceFieldOptions[0]
+  const sliceAgg=sliceField?sliceAggregate(sliceField.id,matched):null
+  const sliced=sliceField?applySlice(matched,sliceField.id,sliceSelected,showEmpty):matched
   const issuesByNode=new Map(issues.map(issue=>[issue.nodeId,issue]))
   // The Project view's own filter is upstream truth; this local switch only
   // hides items the view would otherwise include because GitHub shows closed
   // issues when its filter is empty. A view that explicitly asks for closed
   // items keeps them even with the switch off.
   const closedRequested=/(^|\s)is:closed(\s|$)/i.test(expression)
-  const visible=includeClosed||closedRequested?matched:matched.filter(item=>issuesByNode.get(item.issueNodeId??'')?.state!=='closed')
-  const hiddenClosed=matched.length-visible.length
+  const visible=includeClosed||closedRequested?sliced:sliced.filter(item=>issuesByNode.get(item.issueNodeId??'')?.state!=='closed')
+  const hiddenClosed=sliced.length-visible.length
   const rows=orderProjectRows(visible.slice((page-1)*perPage,page*perPage),issues,collapsed)
   const columns=projectColumns(catalog.fields,orderProjectRows(visible,issues,new Set()),extraColumns),slots=projectColumnSlots(columns)
   const weightTotal=Math.max(1,columns.reduce((total,field)=>total+columnWeight(field.dataType),0))
@@ -136,7 +145,13 @@ function ProjectViews({controller,source}:{controller:WorkPanelController;source
       <label className={styles.projectToggle}><input type="checkbox" checked={extraColumns} onChange={event=>setExtraColumns(event.target.checked)}/> 时间与仓库列</label>
       {entry&&<span className={styles.projectLink}><TrustedLink url={entry}>原始视图</TrustedLink></span>}
     </div>
-    {sliceLabel&&<p role="status" className={styles.sliceNote}>该视图带 slice 参数：<code>{sliceLabel}</code> · 仅展示视图过滤后的条目，未按切片再分组。</p>}
+    {sliceField&&sliceAgg&&<div className={styles.sliceBar} role="group" aria-label="切片">
+      <strong>切片 · {sliceField.name}</strong>
+      {sliceAgg.values.map(option=><button key={option.value} aria-pressed={sliceSelected.has(option.value)} onClick={()=>setSliceSelected(current=>{const next=new Set(current);if(next.has(option.value))next.delete(option.value);else next.add(option.value);return next})}>{sliceSelected.has(option.value)?'✓ ':''}{option.value} <small>{option.count}</small></button>)}
+      {sliceSelected.size>0&&<button onClick={()=>setSliceSelected(new Set())}>取消选择</button>}
+      <label className={styles.projectToggle}><input type="checkbox" checked={showEmpty} onChange={event=>setShowEmpty(event.target.checked)}/> 显示空值{sliceAgg.emptyCount?` ${sliceAgg.emptyCount}`:''}</label>
+      {sliceFieldOptions.length>1&&<select aria-label="切片字段" value={sliceField.id} onChange={event=>{setSliceFieldId(event.target.value);setSliceSelected(new Set())}}>{sliceFieldOptions.map(field=><option key={field.id} value={field.id}>{field.name}</option>)}</select>}
+    </div>}
     {!view?<p role="alert">保存的 view 不在当前可读取目录中，请选择真实视图。</p>:!snapshot?<p role="status">完整 Project 成员扫描尚未完成，请刷新继续；没有用全列表冒充视图。</p>:filtered&&!filtered.supported?<p role="alert">{filtered.reason}</p>:<>
       {rows.length?<div className={styles.tableScroll}><table className={styles.projectTable} aria-label="真实 Project 条目"><colgroup><col style={{width:'25%'}}/>{slots.map(slot=>slot===SESSION_SLOT?<col key={SESSION_SLOT} style={{width:'15%'}}/>:<col key={slot.id} style={{width:fieldWidth(slot)}}/>)}</colgroup><thead><tr><th>条目</th>{slots.map(slot=>slot===SESSION_SLOT?<th key={SESSION_SLOT}>会话</th>:<th key={slot.id}>{slot.name}</th>)}</tr></thead><tbody>{rows.map(row=><tr key={row.item.id}>
         <td className={styles.titleCell}><div className={styles.hierarchy} style={{paddingLeft:row.depth*22}}>
