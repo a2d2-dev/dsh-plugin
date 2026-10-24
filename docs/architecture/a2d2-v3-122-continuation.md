@@ -124,7 +124,7 @@ await app.query({ type: 'task.execution', ref }, operator)
 
 本轮红测退出1（1失败、0未选）：取消后的 `project.create` 返回 completed；绿测退出0（2通过、0未选），包含公开 disposal effect 读取到 failed/host-create-unknown 回执后才删除目录，以及不能结算时保留宿主与目录。首次迁入19项用例后组合退出0（21通过、0未选）；随后将B1新增直接宿主等待全部纳入拥有者。闭包类型检查发现一处 execution 收窄丢失（退出2），已在原存在性断言后修正引用。
 
-原始超时首因仍未知；原5000ms测试预算和断言不变。历史诊断与负向注入证据原样保留于 [diagnosis](a2d2-v3-122-diagnosis.md) 和 [evidence](evidence/a2d2-v3-122-fixture-cleanup.json)，这些是独立分支的历史结果，不冒充本轮命令。
+原始超时首因仍未知；原5000ms测试预算和断言不变。历史诊断与负向注入证据原样保留于 [diagnosis](a2d2-v3-122-diagnosis.md) 和 [evidence](https://github.com/a2d2-dev/project/blob/0846577d79a1a894cf9621810f522fd102cd3667/dsh-plugin/docs/architecture/evidence/a2d2-v3-122-fixture-cleanup.json)，这些是独立分支的历史结果，不冒充本轮命令。
 
 生命周期整合最终串行验证：backend/client typecheck 与 diff 检查退出0；五个 work 文件（含两条生命周期回归）38/38通过、0未选、退出0。没有并行运行build或其他I/O测试。B2五步接续、B3退休围栏和只读历史仍未实现，不能据此标记整票完成。
 

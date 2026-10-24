@@ -96,7 +96,7 @@ GH_CONFIG_DIR=/root/.config/gh XDG_STATE_HOME=/tmp/a2d2-v3-gh-state node scripts
 
 这是本次已知凭据配置的验收命令；生产适配器不会硬编码这些路径。[smoke 脚本](../../scripts/github-source-smoke.mjs) 只读确切 Project 1，并从其真实 Issue 推导来源仓库；没有可用 Issue 时失败，不替换 demo。外部全程只读，显式 import 仅发生在新建临时本地记录中，结束只清理该自建目录。
 
-[实测 JSON](./a2d2-v3-124-smoke.json) 记录 2026-10-20 的 exit 0：imneov／LiuFeng；私有 Project `PVT_kwDODqZowM4BnNzF`（DSH A²D²），`viewerCanUpdate:true`；唯一条目 #112 来自 `a2d2-dev/dsh-plugin`，仓库 `viewerPermission:ADMIN`。`items(first:1)` 返回 totalCount 1、hasNextPage false，带真实游标再读为空。真实 metadata 仅一个 View 1／TABLE_LAYOUT，13 个字段，无后页。Project view 应用接口和 UI 尚未实现。
+[实测 JSON](https://github.com/a2d2-dev/project/blob/0846577d79a1a894cf9621810f522fd102cd3667/dsh-plugin/docs/architecture/a2d2-v3-124-smoke.json) 记录 2026-10-20 的 exit 0：imneov／LiuFeng；私有 Project `PVT_kwDODqZowM4BnNzF`（DSH A²D²），`viewerCanUpdate:true`；唯一条目 #112 来自 `a2d2-dev/dsh-plugin`，仓库 `viewerPermission:ADMIN`。`items(first:1)` 返回 totalCount 1、hasNextPage false，带真实游标再读为空。真实 metadata 仅一个 View 1／TABLE_LAYOUT，13 个字段，无后页。Project view 应用接口和 UI 尚未实现。
 
 打包后的生产适配器用 `@me,perPage:1` 读取来源仓库第 1、2 页，分别得到 #124、#132（均无写入），nextPage 2／3；随后取得 Project 条目 #112 的 4950 字节正文，与 GraphQL 原文逐字一致。隔离本地 import 后关闭来源端口重新读取，稳定 TaskId 和完整正文均通过。
 

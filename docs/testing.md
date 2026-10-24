@@ -9,7 +9,7 @@
 - 提交后 `pnpm verify:pack-exports`：从已提交源码构建、安装并导入真实 tarball。
 - `scripts/verify-git-install.mjs`：按需的 Git 安装授权回归，见[安装说明](git-installation.md)。
 
-Node 22 与 24 的 CI 都执行适用检查。测试临时目录应位于源码 Git 根之外；把 `TMPDIR` 指到 checkout 内部会改变向上解析项目标记的结果，造成无效的测试环境。并发测试应限制 worker 数量，避免磁盘锁和宿主 fixture 在高核数机器上互相挤压。
+Node 22 与 24 的 CI 都执行适用检查。Vitest 的 `unit` 项目保留默认 5 秒用例预算；使用真实 Agent/JSONL 的 `host` 项目串行运行，完整场景预算为 15 秒。恢复测试会主动停住宿主操作 2.3 秒，并独立断言 1.5 秒的事件接收期限；分组预算不修改这些内部截止时间。总 worker 数上限为 2。测试临时目录应位于源码 Git 根之外；把 `TMPDIR` 指到 checkout 内部会改变向上解析项目标记的结果，造成无效的测试环境。
 
 ## 页面和宿主验收
 

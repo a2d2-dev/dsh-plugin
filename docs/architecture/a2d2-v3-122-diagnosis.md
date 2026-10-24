@@ -78,6 +78,6 @@ node node_modules/vitest/vitest.mjs run tests/work.spec.ts tests/work-execution.
 
 ## 证据与未解决项
 
-[最小脱敏证据](evidence/a2d2-v3-122-fixture-cleanup.json) 分列命令、退出、通过/失败/未选及负向时序。原始 stdout 与 preload/trace 保留在本地 `/tmp/a2d2-122-cleanup-1gsrixn1`，不把随机工作身份或宿主路径提交入库。
+[最小脱敏证据](https://github.com/a2d2-dev/project/blob/0846577d79a1a894cf9621810f522fd102cd3667/dsh-plugin/docs/architecture/evidence/a2d2-v3-122-fixture-cleanup.json) 分列命令、退出、通过/失败/未选及负向时序。原始 stdout 与 preload/trace 保留在本地 `/tmp/a2d2-122-cleanup-1gsrixn1`，不把随机工作身份或宿主路径提交入库。
 
 历史诊断的自然样本须继续分环境记账：`/tmp`（device 64768）4 单跑/4 组合，共 88 通过、20 未选；`/data`（device 64769）1 组合 21 通过。它们均不能定位 CEO 首因。历史人工延迟产生 timeout+ENOTEMPTY；本分支人工延迟只剩 timeout。自然 header 超时与两个环境的绿样本共同说明性能首因仍需失败当时的独立证据，本分支止于 fixture 生命周期修复。
