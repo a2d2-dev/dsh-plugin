@@ -195,7 +195,9 @@ const REDACTION_PATTERNS: readonly RedactionPattern[] = [
   },
   {
     label: 'high-entropy token',
-    pattern: /(sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,})/gu,
+    // Every rule captures (preserved prefix, secret). A single capture would
+    // pass replace's numeric offset as `secret`. Do not match inside identifiers.
+    pattern: /(?<![A-Za-z0-9_-])()(sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,})/gu,
   },
 ]
 

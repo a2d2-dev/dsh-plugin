@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { ExecutionFixtures } from './work-execution-fixture.ts'
 import { installWorkTools } from '../src/work-execution/tools.ts'
 import type { WorkExecution } from '../src/work-types.ts'
+import * as continuation from '../src/work-execution/continuation.ts'
 
 let fixtures: ExecutionFixtures
 const operator = { operator: true }
@@ -24,7 +25,9 @@ async function setup() {
   await fixtures.run(() => h.ctx.agents.get(SessionId(started.execution!.session.sessionId))!.whenIdle())
   return { ...h, ref, execution: started.execution }
 }
-const material = { body: 'Original full discussion\nKeep this whitespace. ', decisions: 'Use the accepted Task identity and retain its owner.', evidence: 'Controller created the selected model Session.', unfinished: 'Verify the successor result.', next: 'Continue the original acceptance check.' }
+const specificationPath = 'docs/specs/task-interaction-v4-delivery.md'
+const standaloneToken = 'sk-abcdefghijklmnopqrstuvwxyz'
+const material = { body: `Original full discussion\nRead ${specificationPath}.\nSensitive value (${standaloneToken}).\nKeep this whitespace. `, decisions: 'Use the accepted Task identity and retain its owner.', evidence: 'Controller created the selected model Session.', unfinished: 'Verify the successor result.', next: 'Continue the original acceptance check.' }
 function fence(execution: WorkExecution) { return { ref: execution.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch } }
 it.each(['material-request', 'successor-create', 'source-take', 'source-seal', 'successor-kickoff'] as const)('recovers the same operation and successor after the real %s receipt is lost', async checkpoint => {
   const h = await setup()
@@ -90,11 +93,38 @@ it.each(['material-request', 'successor-create', 'source-take', 'source-seal', '
   const successorLog = await fixtures.run(() => restored.ctx.sessionController.inspect(SessionId(operation.successor.sessionId)))
   expect(sourceLog.events.filter(event => event.type === 'user/message' && event.data.id === operation.materialRequestId)).toHaveLength(1)
   expect(successorLog.events.filter(event => event.type === 'user/message' && event.data.id === operation.kickoffId)).toHaveLength(1)
+  const kickoff = h.model.requests.concat(restored.model.requests).find(request => request.messages.some(message => message.id === operation.kickoffId))!
+  expect(JSON.stringify(kickoff.messages)).toContain(specificationPath)
+  expect(JSON.stringify(kickoff.messages)).not.toContain(standaloneToken)
   expect(sourceLog.events.filter(event => event.type === 'agent/inbox/spliced' && event.data.inserted.some(message => message.id === `intake-seal:${operation.operationId}`))).toHaveLength(1)
   if (cutoverInput) {
     expect(sourceLog.events.filter(event => event.type === 'user/message' && event.data.id === cutoverInput!.id)).toHaveLength(1)
     expect(successorLog.events.filter(event => event.type === 'user/message' && event.data.id === cutoverInput!.id)).toHaveLength(0)
   }
+})
+
+it('keeps the source authoritative when kickoff preparation fails and retries the reserved successor', async () => {
+  const h = await setup()
+  h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+  const command = { type: 'task.continue', commandId: 'prepare-message', ...fence(h.execution) }
+  const prepare = vi.spyOn(continuation, 'successorMessage').mockImplementation(() => { throw new Error('Kickoff preparation failed') })
+  try {
+    await h.app.execute(command, operator)
+    await fixtures.run(() => h.ctx.agents.get(SessionId(h.execution.session.sessionId))!.whenIdle())
+    await fixtures.run(() => h.app.reconcileControls())
+    const failed = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+    expect(failed).toMatchObject({ execution: { epoch: 1, session: h.execution.session, continuation: { phase: 'material-saved', error: { message: 'Kickoff preparation failed' } } } })
+    if (failed.status !== 'completed' || !failed.execution?.continuation) throw Error('Missing failed operation')
+    const operation = failed.execution.continuation
+    expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(1)
+    prepare.mockRestore()
+    const recovered = await h.app.execute({ ...command, commandId: 'retry-prepared-message' }, operator)
+    expect(recovered).toMatchObject({ execution: { epoch: 2, session: operation.successor, continuation: { operationId: operation.operationId, kickoffId: operation.kickoffId, phase: 'delivered' } } })
+    await fixtures.run(() => h.ctx.agents.get(SessionId(operation.successor.sessionId))!.whenIdle())
+    const log = await fixtures.run(() => h.ctx.sessionController.inspect(SessionId(operation.successor.sessionId)))
+    expect(log.events.filter(event => event.type === 'user/message' && event.data.id === operation.kickoffId)).toHaveLength(1)
+    expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(2)
+  } finally { prepare.mockRestore() }
 })
 
 it.each(['cancelled', 'completed-without-material'] as const)('retries a consumed %s material request without replacing the operation or successor', async outcome => {

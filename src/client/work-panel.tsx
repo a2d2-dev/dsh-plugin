@@ -289,7 +289,7 @@ function ErrorText({error}:{error:string}) {return error ? <p role="alert" class
 
 /** Present native work links without owning navigation or execution side effects. */
 export function SessionWorkLinks({work,onReveal,onEnter,opening=false}:{work:AssociatedWork[];onReveal:(ref:AssociatedWork['ref'])=>void;onEnter:(ref:AssociatedWork['ref'])=>void;opening?:boolean}) {
-  return <>{work.map(item=><span key={`${item.ref.projectId}/${item.ref.taskId}`}><button onClick={()=>onReveal(item.ref)} title="查看工作与进展">{item.projectName} / {item.title} · 工作与进展</button>{item.purpose==='history'&&<><span> 已接续到新会话 · </span><button disabled={opening} onClick={()=>onEnter(item.ref)}>{opening?'正在核对当前会话…':'进入当前处理会话'}</button></>}</span>)}</>
+  return <>{work.map(item=><span key={`${item.ref.projectId}/${item.ref.taskId}`}><button onClick={()=>onReveal(item.ref)} title="查看工作与进展">{item.projectName} / {item.title} · 工作与进展</button>{item.purpose==='history'&&<><span> 处理会话已切换；内容投递状态见「A²D² 接续」 · </span><button disabled={opening} onClick={()=>onEnter(item.ref)}>{opening?'正在核对当前会话…':'进入当前处理会话'}</button></>}</span>)}</>
 }
 /** Mounted native entries observe role changes; polling never opens a Session or touches drafts. */
 export function SessionWorkEntry({controller, sessionId}: {controller: WorkPanelController; sessionId: string}) {

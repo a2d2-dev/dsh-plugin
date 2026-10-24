@@ -7,6 +7,20 @@ import { resolve } from 'node:path'
 import styles from '../../src/client/execution-components.module.css'
 import { ExecutionSessions, ExecutionContinuation } from '../../src/client/execution-components.tsx'
 import type { ExecutionGraph } from '../../src/work-execution/observation.ts'
+import type { WorkExecution } from '../../src/work-types.ts'
+
+it('shows an undelivered takeover as a delivery failure with a retry action', () => {
+  const ref = { projectId: 'p', taskId: 't' }
+  const source = { runtimeId: 'runtime', sessionId: 'source' }
+  const successor = { ...source, sessionId: 'successor' }
+  const execution: WorkExecution = { id: 'e', ref, owner: 'owner', epoch: 2, agentId: 'agent', resource: { runtimeId: 'runtime', workspaceId: 'ws' }, session: successor, sessionMode: 'create', agentPreset: 'standard', model: { provider: 'test', model: 'test' }, permissionPreset: 'read-only', policy: { version: 1, modelCandidates: [], instructions: '', capabilities: [] }, state: 'ready', history: [], events: [], continuation: { operationId: 'op', commandId: 'cmd', automatic: false, phase: 'taken', source, successor, sourceEpoch: 1, materialRequestId: 'material', kickoffId: 'kickoff', goal: 'Continue', specification: { version: 1, text: 'Keep decisions', acceptance: ['Delivered'] }, title: 'Task', history: { ref, session: source }, error: { code: 'delivery-failed', message: 'Host temporarily unavailable' } } }
+  const html = renderToStaticMarkup(createElement(ExecutionContinuation, { execution, onContinue: () => {} }))
+  expect(html).toContain('交接内容尚未确认送达')
+  expect(html).toContain('接续尚未完成')
+  expect(html).toContain('重试内容投递')
+  expect(html).toContain('Host temporarily unavailable')
+  expect(html).not.toContain('接续内容已投递')
+})
 
 it('renders independent child entry, real job owner and distinct delivery/consumption with visible continuation parameters', async () => {
   const session = { runtimeId: 'runtime', sessionId: 'current' }

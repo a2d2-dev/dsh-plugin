@@ -1008,6 +1008,7 @@ export class WorkApplication {
     if (['waiting', 'paused'].includes(execution.state) || (execution.control?.status === 'accepted' && execution.control.action !== 'resume')) return execution
     if (execution.continuation!.automatic && execution.runtimeFailure && !execution.runtimeFailure.acknowledged) return save(current => { current.continuation!.error = { code: 'continuation-source-failed', message: 'The source model turn failed or was cancelled; explicit resume, input or manual continuation is required' } })
     if (execution.continuation!.automatic && !execution.continuationPolicy?.enabled) return save(current => { current.continuation!.error = { code: 'continuation-disabled', message: 'Automatic continuation is disabled; explicit manual continuation can resume this same operation' } })
+    let kickoffText: string | undefined
     try {
       if (!host.maintain || !host.profile) throw new WorkExecutionError('host-capability-unavailable', 'Safe continuation host boundary is unavailable')
       if (execution.continuation!.phase !== 'taken') await host.maintain(execution, async () => {
@@ -1041,6 +1042,8 @@ export class WorkApplication {
           return
         }
         if (!operation.material) throw new WorkExecutionError('continuation-material-missing', 'Saved source material is required before creating a successor')
+        // Validate message preparation before any successor creation or authority transfer.
+        kickoffText = successorMessage(operation, execution.policy.instructions)
         if (operation.phase === 'material-saved' || operation.phase === 'successor-created') {
           const profile = operation.profile!
           const successor = { ...execution, session: operation.successor, sessionMode: 'create' as const, epoch: operation.sourceEpoch + 1,
@@ -1089,7 +1092,7 @@ export class WorkApplication {
           await host.maintain(source, sealInput)
         }
         const op = execution.continuation!
-        const event = { id: op.kickoffId, text: successorMessage(op, execution.policy.instructions), kind: 'input' as const, delivery: op.kickoffDelivery ?? 'accepted' as const, acceptance: 'unassessed' as const }
+        const event = { id: op.kickoffId, text: kickoffText ?? successorMessage(op, execution.policy.instructions), kind: 'input' as const, delivery: op.kickoffDelivery ?? 'accepted' as const, acceptance: 'unassessed' as const }
         // Source authority was retired in the same transaction as the epoch change.
         const delivered = await host.deliver(execution, event)
         execution = await save(current => { current.continuation!.kickoffDelivery = delivered; current.continuation!.phase = 'delivered'; delete current.continuation!.error })

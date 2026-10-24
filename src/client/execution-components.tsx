@@ -132,8 +132,9 @@ export function ExecutionContinuation({ graph, execution, policy, busy = false, 
   const observation = execution?.continuationObservation
   return <section className={styles.surface} aria-label="接续">
     <div className={styles.sectionHead}><h2>接续</h2>
-      {onContinue && <button type="button" className={styles.primaryAction} disabled={busy || !execution?.actual} onClick={onContinue}>{busy ? '正在准备接续…' : op && op.phase !== 'delivered' ? '重试本次接续' : '准备接续'}</button>}
+      {onContinue && <button type="button" className={styles.primaryAction} disabled={busy || !execution?.actual} onClick={onContinue}>{busy ? '正在准备接续…' : op?.phase === 'taken' ? '重试内容投递' : op && op.phase !== 'delivered' ? '重试本次接续' : '准备接续'}</button>}
     </div>
+    {op?.phase === 'taken' && <p role={op.error ? 'alert' : 'status'}>后继已接任，但交接内容尚未确认送达。{op.error ? '接续尚未完成，请重试确认内容投递。' : '正在等待内容投递。'}</p>}
     <dl className={styles.parameters}>
       <dt>自动接续</dt><dd>{policy ? policy.enabled ? '已开启' : '已关闭' : '尚未配置'}</dd>
       <dt>提前接续目标</dt><dd>{policy ? `${policy.targetTokens.toLocaleString('en-US')} tokens` : '未配置'}</dd>
