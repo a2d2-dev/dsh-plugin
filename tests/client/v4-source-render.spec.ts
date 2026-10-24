@@ -8,7 +8,43 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { expect, it } from 'vitest'
 import { WorkPanel } from '../../src/client/work-panel.tsx'
 import { WorkPanelController } from '../../src/client/work-panel-controller.ts'
+import { WorkClientError } from '../../src/client/work-api.ts'
 import type { WorkSource } from '../../src/work-sources/types.ts'
+
+it.each(['project', 'prs'] as const)('distinguishes fresh, cached, failed and missing catalogs on %s', async tab => {
+  const catalog = { observedAt: '2026-10-24T05:00:00Z', pullRequests: [], pullRequestsComplete: true, views: [{ id: 'v', number: 1, name: 'Actual view', filter: '', layout: 'TABLE_LAYOUT' }], fields: [], viewsComplete: true, limitations: [] }
+  const source: WorkSource = { id: 's', projectId: 'p', provider: 'github', title: 'Actual Project', githubProject: { owner: 'acme', type: 'org', number: 1 }, enabled: true, version: 1, sequence: 1, requests: {}, observations: [], pages: [] }
+  let failure = false, available = true
+  const makeController = () => new WorkPanelController({
+    command: async () => { throw Error('Browsing must not issue commands') },
+    query: async query => {
+      if (query.type === 'source.catalog') {
+        if (failure) throw new WorkClientError({ status: 'failed', source, ...(available ? { catalog } : {}), error: { code: 'github-forbidden', message: 'GitHub Project permission denied (403)' } })
+        return { status: 'completed', source, ...(available ? { catalog } : {}) }
+      }
+      return { status: 'completed', ...(query.type === 'projects.list' ? { projects: [{ id: 'p', name: 'Actual Project', version: 1, defaultAgentId: 'a', resources: [] }] } : query.type === 'source.list' ? { sources: [source] } : query.type === 'source.issues' ? { source, page: { identity: { login: 'viewer', nodeId: 'U', name: null }, items: [], observedAt: catalog.observedAt } } : { tasks: [] }) }
+    },
+  }, { selectPanel: () => {}, openSession: () => {} })
+  const controller = makeController()
+  const render = () => renderToStaticMarkup(createElement(WorkPanel, { controller }))
+  await controller.load()
+  await controller.selectSourceTab(tab)
+  await controller.browseDirectory(true)
+  expect(render()).toContain('本次读取 · 目录观察时间：2026-10-24T05:00:00Z')
+  await controller.browseDirectory(false)
+  expect(render()).toContain('缓存 / 最后已知观察 · 目录观察时间：2026-10-24T05:00:00Z')
+  failure = true
+  await controller.browseDirectory(true)
+  expect(render()).toContain('github-forbidden')
+  expect(render()).toContain('缓存 / 最后已知观察 · 目录观察时间：2026-10-24T05:00:00Z')
+  available = false; failure = false
+  const missing = makeController()
+  await missing.load()
+  await missing.selectSourceTab(tab)
+  const empty = renderToStaticMarkup(createElement(WorkPanel, { controller: missing }))
+  expect(empty).toContain('尚无可读缓存')
+  expect(empty).not.toContain('缓存 / 最后已知观察 · 目录观察时间：')
+})
 it('renders Repo source tabs and unknown aggregate counts without presenting one Issue page as a total', async () => {
   const source: WorkSource = { id: 's', projectId: 'p', provider: 'github', title: 'acme/app', repository: { owner: 'acme', repository: 'app' }, enabled: true, version: 1, sequence: 1, requests: {}, observations: [], pages: [] }
   const controller = new WorkPanelController({ command: async () => { throw Error('Unexpected command') }, query: async q => ({ status: 'completed', ...(q.type === 'projects.list' ? { projects: [{ id: 'p', name: 'acme/app', version: 1, defaultAgentId: 'a', resources: [] }] } : q.type === 'source.list' ? { sources: [source] } : q.type === 'source.issues' ? { source, page: { identity: { login: 'viewer', nodeId: 'U', name: null }, items: [], observedAt: '2026-10-21T00:00:00Z', nextPage: 2 } } : { tasks: [] }) }) }, { selectPanel: () => {}, openSession: () => {} })

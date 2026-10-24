@@ -1,0 +1,10 @@
+
+ RUN  v4.1.11 /data/src/github.com/a2d2-dev/dsh-plugin.worktrees/issue-137-live-acceptance
+
+ ✓ tests/client/v4-source-render.spec.ts (3 tests) 34ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  22:42:35
+   Duration  788ms (transform 421ms, setup 0ms, import 536ms, tests 34ms, environment 0ms)
+
