@@ -116,7 +116,8 @@ export class WorkDao {
       const inline = hasInlineBulk(source)
       const bulk = inline ? bulkOf(source) : undefined
       this.attachSource(source, { ref: inline ? undefined : ref, legacy: !ref || inline, mutable: false,
-        base: () => bulk ?? (ref ? this.readSource(ref, source) : this.validateSource(source, readBulkSync(bulkPath(this.directory, source.id))?.bulk ?? { observations: [], pages: [] })) })
+        // Only unmarked legacy stores may consult mutable sidecars or have no saved bulk.
+        base: () => bulk ?? (state.storage ? this.readSource(ref!, source) : this.validateSource(source, readBulkSync(bulkPath(this.directory, source.id))?.bulk ?? { observations: [], pages: [] })) })
     }
     return freeze(state)
   }

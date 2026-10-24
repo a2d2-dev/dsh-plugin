@@ -233,3 +233,24 @@ it('validates archived source contents on demand rather than replacing invalid d
   const source = (await WorkDao.forDirectory(directory).read()).sources[0]!
   expect(() => source.observations).toThrow()
 })
+
+it.each([false, true])('rejects a missing committed source reference without fallback or writes (legacy sidecar: %s)', async legacySidecar => {
+  const { directory, app } = await open()
+  const created = await app.execute({ type: 'project.create', commandId: 'project', name: 'Source' }, actor)
+  if (created.status !== 'completed' || !created.project) throw new Error('Expected project')
+  await app.execute({ type: 'source.configure-project', commandId: 'source', projectId: created.project.id, githubProject: { owner: 'a2d2-dev', type: 'org', number: 1 } }, actor)
+  const file = join(directory, 'work-v3.json'), persisted = JSON.parse(await readFile(file, 'utf8'))
+  const sourceId = persisted.sources[0].id
+  if (legacySidecar) {
+    await fs.mkdir(join(directory, 'work-v3.sources'))
+    await fs.writeFile(join(directory, 'work-v3.sources', `${sourceId}.json`), JSON.stringify({ observations: [], pages: [], checkpoint: { sourceVersion: 1, startedAt: '2026-10-24T00:00:00Z', pages: 99, items: [], issues: [] } }))
+  }
+  delete persisted.storage.sources[sourceId]
+  const corrupt = JSON.stringify(persisted)
+  await fs.writeFile(file, corrupt)
+  const writes = vi.mocked(atomic.writeFileAtomic); writes.mockClear()
+  await expect(app.query({ type: 'projects.list' }, actor)).rejects.toThrow('Missing source archive reference')
+  await expect(app.execute({ type: 'project.create', commandId: 'after-corruption', name: 'Must not commit' }, actor)).rejects.toThrow('Missing source archive reference')
+  expect(writes).not.toHaveBeenCalled()
+  expect(await readFile(file, 'utf8')).toBe(corrupt)
+})

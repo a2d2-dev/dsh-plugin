@@ -32,7 +32,7 @@
 - 历史文件：`{ previous?, entries }`；从 head 逆向读取、按原顺序组合，并检查数量。
 - 来源文件：观察、分页、repository/project snapshot 和 discovery checkpoint。
 
-已有未拆分 JSON 和 `work-v3.sources/<sourceId>.json` 在首次写事务或 `ensureSourceSplit()` 中迁移；旧 sidecar 保留，不再更新。迁移前的查询只读旧格式。冷字段按需读取、校验和缓存，缺失或损坏引用报错，不用空数据兜底。控制 schema、历史项及新回执在各自写入边界校验。
+已有未拆分 JSON 和 `work-v3.sources/<sourceId>.json` 在首次写事务或 `ensureSourceSplit()` 中迁移；旧 sidecar 保留，不再更新。迁移前的查询只读旧格式。冷字段按需读取、校验和缓存，缺失或损坏引用报错，不用空数据兜底。带有 `storage` 标记的控制文件必须为每个来源提供自己的归档引用；缺少引用时拒绝读取与写入，只有无标记的旧格式允许读取旧来源 sidecar。控制 schema、历史项及新回执在各自写入边界校验。
 
 `subscribe()`/`WorkApplication.onChange()` 在本地提交或读取发现外部版本变化后通知；它不是跨进程文件 watcher。既有恢复轮询保留。会话标题维护订阅通知，并在轮询取得相同快照时跳过重复标题投影，失败仍可重试。不可变归档按引用使用弱缓存，控制提交不会主动清空仍被使用的历史内容；未使用内容允许被 GC 回收。控制文件成本仍随实时业务字段和 commandId/fingerprint 索引增长，不声称所有状态规模下恒定时间。
 

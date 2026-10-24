@@ -157,6 +157,7 @@ export const snapshotSchema = z.object({
   legacyMappings: z.array(z.object({ address: legacyAddressSchema, ref: taskRefSchema }).strict()),
 }).strict().superRefine((state, ctx) => {
   if (state.storage && state.commands.some(receipt => !Object.hasOwn(state.storage!.receipts, receipt.commandId))) ctx.addIssue({ code: 'custom', message: 'Missing command archive reference' })
+  if (state.storage && state.sources.some(source => !Object.hasOwn(state.storage!.sources, source.id))) ctx.addIssue({ code: 'custom', message: 'Missing source archive reference' })
   const ruleSources = new Set<string>(), claimedTasks = new Set<string>()
   for (const rule of state.continuousRules ?? []) {
     if (ruleSources.has(rule.sourceId) || !state.sources.some(source => source.id === rule.sourceId && source.projectId === rule.projectId)) ctx.addIssue({ code: 'custom', message: 'Continuous rule source authority is inconsistent' })
