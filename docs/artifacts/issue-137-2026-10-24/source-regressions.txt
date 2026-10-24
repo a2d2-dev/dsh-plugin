@@ -1,0 +1,22 @@
+
+ RUN  v4.1.11 /data/src/github.com/a2d2-dev/dsh-plugin.worktrees/issue-137-live-acceptance
+
+ ✓ tests/project-discovery.spec.ts (18 tests) 692ms
+ ✓ tests/work-sources.spec.ts (29 tests) 714ms
+ ✓ tests/client/work-observation.spec.ts (8 tests) 58ms
+ ✓ tests/client/work-startup.spec.ts (14 tests) 73ms
+ ✓ tests/client/work-source.spec.ts (11 tests) 126ms
+ ✓ tests/v4-sources.spec.ts (11 tests) 198ms
+ ✓ tests/work-source-navigation.spec.ts (15 tests) 761ms
+ ✓ tests/github-project-source.spec.ts (8 tests) 51ms
+ ✓ tests/client/v4-source-render.spec.ts (3 tests) 53ms
+ ✓ tests/work-source-client.spec.ts (1 test) 296ms
+ ✓ tests/github-source.spec.ts (24 tests) 107ms
+ ✓ tests/v4-source-catalog.spec.ts (3 tests) 47ms
+ ✓ tests/v4-source-navigation.spec.ts (2 tests) 9ms
+ ✓ tests/client/pr-source-identity.spec.ts (1 test) 24ms
+
+ Test Files  14 passed (14)
+      Tests  148 passed (148)
+   Start at  22:45:56
+   Duration  5.29s (transform 1.75s, setup 0ms, import 3.97s, tests 3.21s, environment 3ms)

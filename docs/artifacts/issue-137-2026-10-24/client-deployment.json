@@ -1,0 +1,46 @@
+{
+  "base": "d975e9cc60c8c7acee6c91fc80d7d277691d9577",
+  "changedSources": [
+    "../src/client/source-directory.tsx"
+  ],
+  "preservedClientSources": 31,
+  "backup": "/data/_dsh-builds/issue-137-client-20261024-cache-status",
+  "installed": "/data/_ssd2t/dsh/home/profiles/web/node_modules/@a2d2/dsh-a2d2/lib",
+  "files": {
+    "client.js": {
+      "before": "96649c2bc682c2d008e73914aa1e5211dab896ea3031ceed87f1a00cd4f181d7",
+      "after": "49c688cf3e4c867ce592e802dbf496d6422514cfa6e2ecee4ca835233af3ad02"
+    },
+    "client.js.map": {
+      "before": "0ab40faa3fcd62f9ab28d225f7b7aed8eb07d5166968b9b41296cca27a86b99d",
+      "after": "c0f61680112f92c1234c6aab405508bb351ebe01ea3b426d7f42e2d4a36f24fa"
+    }
+  },
+  "hostAssets": {
+    "tools.js": "4bcc62c8c8e4b6f8633ca130f3cd3c07dd4db071c6065e3662e10195b0be86af",
+    "invariant.js": "fa29fb7cddc43e3889813561e48b3593d8c1d555cbb5ce8f7130485cf4cee35c",
+    "agent-prompt.js": "f6a30042bb7d9d196a55446aebb577e23786be3aba67bb71ed5b9ded3d4b4a7f",
+    "host-CaFzf73Y.js": "b5d60ccd87d9494c17e290de3674dc6b2f8cf72fe5544f36b51b26791ecbc97b",
+    "route-auth-sLEZTfdd.js": "236b1529e4502ecacd31c57c4c08bb65824132cd15416bdd0c7dbcbfe85b8e09",
+    "work-B5rggljl.js": "195e6e61c239c95e7dbbd3bae296fb6f64e5db26b399f631d71a15ceb9637c97",
+    "work-plugin.js": "6a2b6fd008f2814f3c5dfed5a032f892c97be5043d9bb5dd1c827c90ef6dbd2e",
+    "store-B7xWzR9J.js": "0cc95c6c9ea3ed3c405359988b08fcb4612e9283b40cd7ba5954c549e940cf87",
+    "work.js": "f05d12ca363c993382d16f99f8f11767dedbebf9a2d0b424008709ac5826a2d0",
+    "task-runtime.js": "b400f4639c40d5d391807fdb1e5fbb1b35826f6a6f726ca3d80bfd10f1fdcce5",
+    "github-watch.js": "aac5a061c67712d678a7cd62fd7fc2cf8e45ec03cb918edddaddb269b3a65a51",
+    "work-sources.js": "1501598759be603f95fc58d543027833659bbe3e74e11a3fd105018f7883af3e",
+    "root-session-6CqSnH4M.js": "4782b5b7171e33c94ac494e3452e3c362e57fd5962ef8dceff7e11721dab7bb4",
+    "complete-task-tools.js": "e8a58381fb6c4b77d008451d13a9f965bfc1b5397f7f63f01943d3c25914ac9c",
+    "work-types.js": "80fd745de31c2d95bff7fe2a196613e10f8aa319f91868812839eeae3c6dd44d",
+    "command.js": "43f46e033708ea628ae2835eca5ddd0bc39bb647a13ab2be98cc59d6e903cd0d",
+    "ceo-prompt.js": "8af959eb399c703711cf3862cc3d76a1096221443fae495dad78f05a381499d0",
+    "index.js": "b893f4872b32b37780168e5fcd4f43156efba711aacf2c57d2897738addce847",
+    "handoff-p7N302P_.js": "eaa5c76425a650c4850a5fac0fdd52b207d371c21d25ca221d49b30895f3e8a4",
+    "work-issue206-2337575.js": "768e30338c9c09d8ad3196a0ad4b36d6ac1562492c55fe05392454ada3add41b",
+    "open-subtask-tools.js": "965d344d010265cbd2a897714ebc65b5b353b2c6b9ffa0e36f5e1d369ca2fa8b",
+    "github-remote-Cd_OrFOj.js": "000f785f59ebe1019d4745d6c3cf24d56538a287d0faa0be76cef825679a1006",
+    "work-plugin-issue206-2337575.js": "ff52fbb182e93cbe7c2dacba5d9ca4200eec7956b4eab547dfe6dac1b91fe9be",
+    "discovery-6xZjHiss.js": "a5d82e94a0a894f7f10587b9c3e5d649d52496e306293644182aca85f66a869b",
+    "work-completion-BwOw7Y8l.js": "33aa3217b8038ab5691eede4bdede9b77a7b6514a13d81fdf21a394c38c07daf"
+  }
+}
