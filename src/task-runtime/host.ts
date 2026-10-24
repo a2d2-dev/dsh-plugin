@@ -104,7 +104,7 @@ export class RuntimeHost {
     }
     const registry = (this.ctx.get as (key: string) => unknown).call(this.ctx, 'jobs') as PublicJobRegistry | undefined
     const journal = events.filter(event => ['jobs/registered', 'jobs/settled', 'jobs/collected'].includes(event.type)).map(event => event.data as unknown as import('../work-execution/job-observation.ts').PublicJobObservation)
-    const jobs = observeJobs(registry, id, runtimeId, journal)
+    const jobs = observeJobs(registry, id, runtimeId, journal, events)
     return { session, role, ...(parent ? { parent } : {}), status, children, tools: [...toolCalls].map(([callId, name]) => ({ callId, name })), jobs: jobs.jobs, jobObservation: jobs.capability, waitingHuman: !!questions?.active.length || questionCalls.size > 0,
       ...(ended ? { attempt: { turn: ended.data.turn, reason: ended.data.reason?.kind } } : {}) }
   }
