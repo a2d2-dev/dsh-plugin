@@ -51,6 +51,14 @@ it('commits child acceptance and exactly one parent result before any delivery, 
  const h=await setup(),parent=await h.create('parent'),parentExecution=await h.start(parent)
  const child=await canonicalChild(h,parent,parentExecution)
  const childExecution=await h.start(child)
+ expect(await h.app.sessionReport(parentExecution.session,'parent-cannot-accept-child',{
+  specificationVersion:1,stage:'done',summary:'Attempt parent rollup',next:'',blockers:[],
+  criteria:[{index:0,passed:true,evidence:['parent summary is not child acceptance']}],
+  breakdown:[{id:'required-child',title:'Required child',description:'Independent acceptance',status:'done',evidence:['parent summary'],child:childExecution.ref}],
+ })).toMatchObject({status:'failed',error:{code:'unfinished-child'}})
+ expect((await h.detail(parent)).task!.completion).toBeUndefined()
+ expect((await h.detail(child)).task!.completion).toBeUndefined()
+ expect((await h.detail(parent)).task!.childCompletions).toBeUndefined()
  const childReport={specificationVersion:child.specification.version,stage:'done' as const,summary:'verified',next:'',blockers:[],criteria:[{index:0,passed:true,evidence:['contract passed']}],closeExternal:false}
  ok(await h.app.sessionReport(childExecution.session,'done-child',childReport))
  const recovered=new WorkApplication(h.app.directory,h.host)

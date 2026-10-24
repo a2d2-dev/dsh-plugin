@@ -22,7 +22,7 @@ WorkApplication 通过共享 [Work DAO](work-dao.md) 的事务写入 `work-v3.js
 
 ### 架构设计
 
-CompletionOperation 保存 operationId、commandId、规格版本、executionId、owner、epoch 和时间。完成后命令写入与原生执行 guard 均检查完成事实，旧版当前规格 done 也保持终态。相同 command 重放返回原回执，新的完成报告不会重建操作。父结果事件使用 completion:<operationId> 去重；父尚无执行时结果保存在领域 Task，开始时才入 inbox；事件投递、消费与父自己的验收分别成立。
+CompletionOperation 保存 operationId、commandId、规格版本、executionId、owner、epoch 和时间。完成后 Task 写命令与自动推进 guard 均检查完成事实，旧版当前规格 done 也保持终态。原生人工对话继续可用：已经获准的本轮仍可处理工具结果并给出最终回复，后续人工消息进入原会话并得到回应；各个 Task 写操作独立校验权限和终态。相同 command 重放返回原回执，新的完成报告不会重建操作。父结果事件使用 completion:<operationId> 去重；父尚无执行时结果保存在领域 Task，开始时才入 inbox；事件投递、消费与父自己的验收分别成立。
 
 ### 组件模块
 
@@ -73,11 +73,27 @@ await app.execute({
 }, trustedActor)
 ```
 
-只观察/恢复既有 operation；completion.operationId、Task、Execution 和 Session 均保持原身份。外部错误不会退回 in-progress。已完成 Task 的新报告、改规格、resume、输入推进、接续及重新 start 均拒绝；原生消息可以进入历史记录，但不能启动普通推进。
+只观察/恢复既有 operation；completion.operationId、Task、Execution 和 Session 均保持原身份。外部错误不会退回 in-progress。已完成 Task 的新报告、改规格、resume、自动输入推进、接续及重新 start 均拒绝。人工对话可继续使用普通宿主工具，不能借人工输入隐式重开 Task、重复父通知或远端关闭。
 
-## 独立 UI 接线（交 SourceA／最终整合者）
+### 完成后交代、追问与重启
 
-组件为 `src/client/completion-status.tsx`，不改 work-panel 或 controller。整合时在 task.detail 详情区渲染：
+**前置条件**：当前协调会话通过全部验收，`work_report(stage=done)` 已返回成功。
+
+**操作**：让本轮模型给出最终交代；在原会话发送人工追问。重启后打开同一会话再追问，不执行 Task resume。回归入口：
+
+```sh
+pnpm exec vitest run tests/work-completion-native.spec.ts
+```
+
+**状态呈现**：本轮最终 `assistant/message` 出现在成功的 `tool/result` 之后；人工追问以原消息 ID 和正文各保存一次，并有后续实际 `assistant/message`。读取 JSONL 历史能回读两者，重建 DSH Context 本身没有模型请求；人工追问触发新请求，其后 reconciliation 不增加请求。
+
+**数据走向**：人工消息 → 原生 DSH loop → 模型与普通宿主工具 → JSONL `user/message` / `assistant/message`。Task 完成事实继续由 Work DAO 保存，人工对话不改 operationId、executionId、owner、epoch 或当前 Session。
+
+**完成判据**：普通宿主工具仍可使用，明确的 Task resume 返回 `task-completed`。真实 job_output 组合回归同时检查人工追问后的父完成记录仍为一条、外部关闭调用仍为一次，队列下一项保持独立等待；验证入口为 `scripts/verify-v4-completion-host.mjs`，需提供匹配宿主制品目录。
+
+## UI 接线
+
+当前 `src/client/work-panel.tsx` 已将组件接入详情概览，并通过 controller 的 `syncCompletion` 使用既有受信 transport；完成状态、远端状态和补同步独立呈现。以下是该接线的最小接口示例：
 
 ```tsx
 <CompletionStatus
@@ -96,7 +112,9 @@ await app.execute({
 
 `executeExistingWorkCommand`/`refreshExistingTaskDetail` 是接线示意占位名称，非新 API。组件自身不创建模型、不拼 URL、不读取凭据。`completionSyncCommand` 只产生 task.completion-sync，携带当前 owner/epoch。宿主面板负责展示命令失败、busy 与刷新；同一次网络重试应复用已生成命令的 commandId。状态文本分别为本地已验收、远端 Open/Closed、关闭待同步/失败/结果未知/冲突/已关闭，以及执行收口待处理/已安全收口。
 
-## 验证记录与边界
+## 初期分支验证记录（历史）
+
+以下记录保留早期中间票的验证范围和组合过程；其中待接线、待宿主集成的表述反映当时状态。当前接线见上文，已指定的原生完成及追问回归可按场景命令重跑。
 
 - 首条公共 progress 完成测试已先红（无 completion）再绿，7 个 progress 合同通过。
 - 本地公共命令父子完成、重放父结果去重、原生终态 guard、host unknown→settled、外部 lost receipt/reopen/assignee conflict 合同通过。

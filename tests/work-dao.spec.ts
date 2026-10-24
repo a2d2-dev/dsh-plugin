@@ -33,6 +33,35 @@ it('shares one committed read across application instances and concurrent cold q
   await Promise.all(apps.map(app => app.query({ type: 'projects.list' }, actor)))
   expect(reads.mock.calls.filter(([file]) => file === join(directory, 'work-v3.json')).length).toBeLessThanOrEqual(1)
 })
+it.each(['unknown-version', 'valid-update'] as const)('preserves a same-size in-place %s when filesystem timestamps collide', async change => {
+  const { directory, app } = await open(), file = join(directory, 'work-v3.json')
+  const originalFs = await vi.importActual<typeof fs>('node:fs/promises')
+  // Some filesystems report the same timestamps for several same-inode writes.
+  // Keep real file I/O and identity; pin only that external clock resolution.
+  vi.mocked(fs.stat).mockImplementation((async (...args: Parameters<typeof fs.stat>) => {
+    const info = await originalFs.stat(...args)
+    return args[0] === file ? Object.assign(info, { mtimeNs: 0n, ctimeNs: 0n }) : info
+  }) as typeof fs.stat)
+  await app.execute({ type: 'project.create', commandId: 'seed', name: 'Original' }, actor)
+  const before = await readFile(file, 'utf8')
+  const updated = change === 'unknown-version' ? before.replace('"schemaVersion":3', '"schemaVersion":9') : before.replace('"name":"Original"', '"name":"External"')
+  expect(updated).not.toBe(before)
+  expect(Buffer.byteLength(updated)).toBe(Buffer.byteLength(before))
+  const identity = await fs.stat(file, { bigint: true })
+  await fs.writeFile(file, updated)
+  expect(await fs.stat(file, { bigint: true })).toMatchObject({ dev: identity.dev, ino: identity.ino, size: identity.size, mtimeNs: identity.mtimeNs, ctimeNs: identity.ctimeNs })
+  const command = { type: 'project.create', commandId: 'after-external-write', name: 'Additional' }
+  if (change === 'unknown-version') {
+    await expect(app.query({ type: 'projects.list' }, actor)).rejects.toThrow()
+    await expect(app.execute(command, actor)).rejects.toThrow()
+    expect(await readFile(file, 'utf8')).toBe(updated)
+  } else {
+    // The command itself must reload; no preceding query may refresh the cache.
+    expect(await app.execute(command, actor)).toMatchObject({ status: 'completed' })
+    expect(await app.query({ type: 'projects.list' }, actor)).toMatchObject({ projects: [{ name: 'External' }, { name: 'Additional' }] })
+  }
+})
+
 it('does not let a returned query object change the committed read snapshot', async () => {
   const { app } = await open()
   await app.execute({ type: 'project.create', commandId: 'seed', name: 'Original' }, actor)
@@ -141,7 +170,9 @@ it('migrates 30 MB without data loss and keeps small writes and history appends 
   for (let i = 0; i < 3; i++) await app.execute({ type: 'project.create', commandId: `small-${i}`, name: `Small ${i}` }, actor)
   await dao.transaction(async state => { dao.appendHistory(state.executions[0]!, { state: 'ready', commandId: 'increment' }) })
   expect(syncReads.mock.calls.filter(([file]) => String(file).includes('work-v3.archive'))).toHaveLength(0)
-  expect(asyncReads.mock.calls.filter(([file]) => file === join(directory, 'work-v3.json'))).toHaveLength(0)
+  expect(asyncReads.mock.calls.length).toBeGreaterThan(0)
+  expect(asyncReads.mock.calls.every(([path]) => path === file)).toBe(true)
+  for (const result of asyncReads.mock.results) expect(Buffer.byteLength(String(await result.value))).toBeLessThan(30_000)
   expect(writes.mock.calls.every(([, data]) => Buffer.byteLength(String(data)) < 30_000)).toBe(true)
   expect((await dao.read()).executions[0]!.history).toHaveLength(32_001)
   const replay = await app.execute({ type: 'project.create', commandId: 'legacy-5', name: 'Legacy' }, actor)

@@ -61,7 +61,7 @@ export class WorkDao {
     return dao
   }
   readonly file: string
-  private cached?: { key: string; state: WorkSnapshot }
+  private cached?: { key: string; content?: string; state: WorkSnapshot }
   private loading?: Promise<WorkSnapshot>
   private writers: Promise<void> = Promise.resolve()
   private listeners = new Set<() => void>()
@@ -88,13 +88,16 @@ export class WorkDao {
   private async readCommitted(): Promise<WorkSnapshot> {
     for (;;) {
       const key = await this.key()
-      if (this.cached?.key === key) return this.cached.state
-      const parsed = key === 'missing' ? empty() : snapshotSchema.parse(JSON.parse(await readFile(this.file, 'utf8')))
+      // Same-inode, same-size writes can share timestamps on real filesystems.
+      // Recheck the hot control bytes; immutable archives remain lazy and cold.
+      const content = key === 'missing' ? undefined : await readFile(this.file, 'utf8')
       // An external writer can rename between stat and read. Never label that data with an older revision.
       if (await this.key() !== key) continue
+      if (this.cached?.key === key && this.cached.content === content) return this.cached.state
+      const parsed = content === undefined ? empty() : snapshotSchema.parse(JSON.parse(content))
       const state = this.materialize(parsed)
       const changed = this.cached !== undefined
-      this.cached = { key, state }
+      this.cached = { key, content, state }
       if (changed) this.notify()
       return state
     }
@@ -292,9 +295,10 @@ export class WorkDao {
     const persisted = control(draft); persisted.storage = refs
     // Validate references and prepare a detached snapshot before the durable commit.
     const state = this.materialize(snapshotSchema.parse(persisted))
-    await writeFileAtomic(this.file, `${JSON.stringify(persisted)}\n`, options)
+    const content = `${JSON.stringify(persisted)}\n`
+    await writeFileAtomic(this.file, content, options)
     const key = await this.key()
-    if (this.cached?.key !== key) { this.cached = { key, state }; this.notify() }
+    if (this.cached?.key !== key || this.cached.content !== content) { this.cached = { key, content, state }; this.notify() }
   }
   /** Explicit offline downgrade/audit boundary: materializes all cold data. */
   async exportSnapshot(): Promise<WorkSnapshot> {
