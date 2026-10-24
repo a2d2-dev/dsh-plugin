@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { projectFieldCell } from '../../src/client/project-fields.ts'
+import { projectFieldCell, projectFieldValues, UNKNOWN_FIELD_VALUE } from '../../src/client/project-fields.ts'
 import type { GitHubIssue, GitHubProjectItem } from '../../src/work-sources/types.ts'
 
 const field = (dataType: string, id = `F_${dataType.toLowerCase()}`, name = dataType) => ({ id, name, dataType })
@@ -45,4 +45,17 @@ it('falls back to native children and item facts, and never invents values it di
   expect(projectFieldCell(field('CREATED'), undefined, pull).text).toBe('10-01')
   expect(projectFieldCell(field('UPDATED'), undefined, pull).text).toBe('10-02')
   expect(projectFieldCell(field('USER'), undefined, pull).text).toBe('未读取此类字段值')
+})
+
+it('keeps full observed dates and literal display-placeholder text as distinct query values',()=>{
+  expect(projectFieldValues(field('CREATED'),issue,item)).toEqual(['2026-10-22T02:10:41Z'])
+  expect(projectFieldValues(field('CREATED'),{...issue,createdAt:'2025-10-22T02:10:41Z'},item)).toEqual(['2025-10-22T02:10:41Z'])
+  expect(projectFieldValues(field('TEXT','F_text'),issue,{...item,fields:[{id:'F_text',name:'Text',type:'text',value:'—'}]})).toEqual(['—'])
+})
+it('distinguishes partial or restricted observations from confirmed empty values',()=>{
+  expect(projectFieldValues(field('TEXT'),issue,{...item,fieldsPartial:true})).toEqual([UNKNOWN_FIELD_VALUE])
+  expect(projectFieldValues(field('TEXT'),issue,item)).toEqual([])
+  expect(projectFieldValues(field('ASSIGNEES'),undefined,{...item,kind:'restricted'})).toEqual([UNKNOWN_FIELD_VALUE])
+  expect(projectFieldValues(field('ASSIGNEES'),{...issue,assignees:[]},item)).toEqual([])
+  expect(projectFieldValues(field('SINGLE_SELECT','F_status'),issue,{...item,fieldsPartial:true})).toEqual(['In Progress'])
 })

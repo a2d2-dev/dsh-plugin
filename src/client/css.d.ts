@@ -11,6 +11,15 @@
 
 declare module '*.module.css' {
   const classes: {
+    readonly listSearch: string
+    readonly listScope: string
+    readonly activeFilters: string
+    readonly columnHead: string
+    readonly columnSelected: string
+    readonly columnMenu: string
+    readonly columnMenuTitle: string
+    readonly columnValues: string
+    readonly groupHeading: string
     readonly navigation: string
     readonly sourceToolbar: string
     readonly delegation: string

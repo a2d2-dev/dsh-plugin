@@ -3,8 +3,10 @@ import type { ReactNode } from 'react'
 import type { WorkPanelController, SourceTab } from './work-panel-controller.ts'
 import type { WorkSource } from '../work-sources/types.ts'
 import { filterProjectItems } from '../work-sources/views.ts'
-import { projectFieldCell } from './project-fields.ts'
+import { projectFieldCell, projectFieldValues, UNKNOWN_FIELD_VALUE } from './project-fields.ts'
 import { SESSION_SLOT, fieldOption, orderProjectRows, projectColumnSlots, projectColumns } from './project-rows.ts'
+import { InteractiveTable } from './interactive-table.tsx'
+import type { TableColumn } from './interactive-table.tsx'
 import { SessionCell, sessionOf } from './session-cell.tsx'
 import type { ProjectRow } from './project-rows.ts'
 import type { SourceScanProgress } from '../work-types.ts'
@@ -61,7 +63,7 @@ export function SourceDirectory({controller,issues,panelContent,panel,onPanel}:{
       {!sourceState.loading&&sourceState.catalog&&<p role="status">{cache} · 目录观察时间：{sourceState.catalog.observedAt}</p>}
       {sourceState.catalog?.limitations.map(reason=><p role="status" key={reason}>{reason}</p>)}
       {sourceState.tab==='overview'&&<SourceOverview controller={controller} source={source}/>}
-      {sourceState.tab==='project'&&<ProjectViews controller={controller} source={source}/>}
+      {sourceState.tab==='project'&&<ProjectViews key={`${source.projectId}/${source.id}/${sourceState.viewNumber??'entry'}`} controller={controller} source={source}/>}
       {sourceState.tab==='prs'&&<PullRequests key={source.id} controller={controller}/>}
     </>}
   </>
@@ -92,7 +94,8 @@ function SourceOverview({controller,source}:{controller:WorkPanelController;sour
   </section>
 }
 function ProjectViews({controller,source}:{controller:WorkPanelController;source:WorkSource}) {
-  const state=controller.getSnapshot().source,catalog=state.catalog,snapshot=source.projectSnapshot
+  const state=controller.getSnapshot().source,snapshot=source.projectSnapshot
+  const catalog=state.catalog??{observedAt:'',pullRequests:[],pullRequestsComplete:false,views:[],fields:[],viewsComplete:false,limitations:[]}
   const [collapsed,setCollapsed]=useState<ReadonlySet<string>>(()=>new Set())
   const [extraColumns,setExtraColumns]=useState(false)
   const [includeClosed,setIncludeClosed]=useState(false)
@@ -104,7 +107,6 @@ function ProjectViews({controller,source}:{controller:WorkPanelController;source
     return new Set(new URL(entry).searchParams.getAll('sliceBy[value]'))
   })
   const [showEmpty,setShowEmpty]=useState(false)
-  if(!catalog)return <p>尚无真实 Project 视图缓存，请刷新来源。</p>
   const entry=source.entryUrls?.at(-1),url=entry?new URL(entry):undefined
   const entryView=Number(/\/views\/(\d+)/.exec(url?.pathname??'')?.[1])||null
   const viewNumber=state.viewNumber??entryView??catalog.views[0]?.number??null
@@ -116,8 +118,8 @@ function ProjectViews({controller,source}:{controller:WorkPanelController;source
     ? entryFilter||view?.filter||''
     : viewNumber===entryView&&entryFilter ? entryFilter : view?.filter??''
   const filtered=snapshot?filterProjectItems(expression,snapshot.items,source.observations.map(item=>item.issue),snapshot.identity.login,catalog.fields.filter(field=>['SINGLE_SELECT','ITERATION','TEXT','NUMBER','DATE','MILESTONE'].includes(field.dataType)).map(field=>field.name)):null
-  const page=state.viewPage,perPage=25,issues=source.observations.map(item=>item.issue)
-  const matched=filtered?.supported?filtered.items:[]
+  const issues=source.observations.map(item=>item.issue)
+  const matched=state.catalog&&view&&filtered?.supported?filtered.items:[]
   const issuesByNode=new Map(issues.map(issue=>[issue.nodeId,issue]))
   // The Project view's own filter is upstream truth; this local switch only
   // hides items the view would otherwise include because GitHub shows closed
@@ -134,13 +136,27 @@ function ProjectViews({controller,source}:{controller:WorkPanelController;source
   const sliceField=sliceFieldOptions.find(field=>field.id===sliceFieldId)??sliceFieldOptions[0]
   const sliceAgg=sliceField?sliceAggregate(sliceField.id,base):null
   const visible=sliceField?applySlice(base,sliceField.id,sliceSelected,showEmpty):base
-  const rows=orderProjectRows(visible.slice((page-1)*perPage,page*perPage),issues,collapsed)
-  const columns=projectColumns(catalog.fields,orderProjectRows(visible,issues,new Set()),extraColumns),slots=projectColumnSlots(columns)
-  const weightTotal=Math.max(1,columns.reduce((total,field)=>total+columnWeight(field.dataType),0))
-  const fieldWidth=(field:ProjectFieldDefinition)=>`${60*columnWeight(field.dataType)/weightTotal}%`
+  const rows=orderProjectRows(visible,issues,collapsed)
+  const columns=projectColumns(catalog.fields,orderProjectRows(base,issues,new Set()),extraColumns),slots=projectColumnSlots(columns)
   const parents=new Set(visible.flatMap(item=>{const parent=issues.find(issue=>issue.nodeId===item.issueNodeId)?.parent?.nodeId;return parent?[parent]:[]}))
   const progressByNode=new Map(controller.getSnapshot().progressItems.flatMap(item=>item.source?.nodeId?[[item.source.nodeId,item] as const]:[]))
   const toggle=(nodeId:string)=>setCollapsed(current=>{const next=new Set(current);if(next.has(nodeId))next.delete(nodeId);else next.add(nodeId);return next})
+  const tableColumns:TableColumn<ProjectRow>[]=[{
+    id:'title',label:'条目',protected:true,width:3,values:row=>[row.issue?.title??row.item.title??row.item.kind],
+    qualifiers:[{id:'kind',label:'条目类型',values:row=>[row.item.kind]},{id:'state',label:'GitHub 状态',values:row=>[row.issue?.state??row.item.facts?.state??'未观察到状态']}],
+    render:(row,transformed)=><div className={styles.hierarchy} style={{paddingLeft:transformed?0:row.depth*22}}>
+      {!transformed&&row.item.issueNodeId&&parents.has(row.item.issueNodeId)?<button className={styles.chevron} aria-label={collapsed.has(row.item.issueNodeId)?'展开子项':'收起子项'} aria-expanded={!collapsed.has(row.item.issueNodeId)} onClick={()=>toggle(row.item.issueNodeId!)}>{collapsed.has(row.item.issueNodeId)?'▸':'▾'}</button>:null}
+      <span className={styles.rowState} data-closed={row.issue?.state==='closed'?'true':undefined} title={row.issue?.state??row.item.facts?.state??'未观察到状态'}/>
+      {row.issue?<button className={styles.rowTitle} title={`#${row.issue.number} ${row.issue.title} · ${row.issue.repository.owner}/${row.issue.repository.repository}`} onClick={()=>void controller.openIssue(row.issue!.number,source.enabled,row.issue!.nodeId)}>#{row.issue.number} {row.issue.title}</button>:row.item.url?<TrustedLink url={row.item.url}>{row.item.title??row.item.kind}</TrustedLink>:row.item.title??row.item.kind}{row.item.archived&&<span> · 已归档</span>}
+    </div>,
+  },...slots.map((slot):TableColumn<ProjectRow>=>slot===SESSION_SLOT?{
+    id:SESSION_SLOT,label:'会话',width:1.5,values:row=>{const progress=row.issue?.nodeId?progressByNode.get(row.issue.nodeId):undefined;return progress?.execution?[progress.execution.session.sessionId]:[]},
+    render:row=><SessionCell entry={sessionOf(row.issue?.nodeId?progressByNode.get(row.issue.nodeId):undefined)} onOpen={session=>controller.openSession(session)}/>,
+  }:{id:slot.id,label:slot.name,width:columnWeight(slot.dataType)/10,values:row=>projectValues(slot,row),
+    sortValue:row=>projectSortValue(slot,row),groupable:['ASSIGNEES','LABELS','SINGLE_SELECT','STATUS','ITERATION','REPOSITORY','MILESTONE','REVIEWERS','PARENT_ISSUE'].includes(slot.dataType),
+    ...(!supportedFieldTypes.has(slot.dataType)?{unsupported:`尚未读取 ${slot.dataType} 字段值，不能排序、过滤或分组`}:{}),
+    render:row=><ProjectCell field={slot} row={row} fields={catalog.fields}/>,
+  })]
   return <section>
     <div className={styles.projectToolbar}>
       <label>视图<select aria-label="Project 视图" value={viewNumber??''} onChange={event=>controller.setProjectView(Number(event.target.value))}>{catalog.views.map(view=><option key={view.id} value={view.number}>{view.name}</option>)}</select></label>
@@ -151,20 +167,7 @@ function ProjectViews({controller,source}:{controller:WorkPanelController;source
       <label className={styles.projectToggle}><input type="checkbox" checked={extraColumns} onChange={event=>setExtraColumns(event.target.checked)}/> 时间与仓库列</label>
       {entry&&<span className={styles.projectLink}><TrustedLink url={entry}>原始视图</TrustedLink></span>}
     </div>
-    {!view?<p role="alert">保存的 view 不在当前可读取目录中，请选择真实视图。</p>:!snapshot?<p role="status">完整 Project 成员扫描尚未完成，请刷新继续；没有用全列表冒充视图。</p>:filtered&&!filtered.supported?<p role="alert">{filtered.reason}</p>:<>
-      {rows.length?<div className={styles.tableScroll}><table className={styles.projectTable} aria-label="真实 Project 条目"><colgroup><col style={{width:'25%'}}/>{slots.map(slot=>slot===SESSION_SLOT?<col key={SESSION_SLOT} style={{width:'15%'}}/>:<col key={slot.id} style={{width:fieldWidth(slot)}}/>)}</colgroup><thead><tr><th>条目</th>{slots.map(slot=>slot===SESSION_SLOT?<th key={SESSION_SLOT}>会话</th>:<th key={slot.id}>{slot.name}</th>)}</tr></thead><tbody>{rows.map(row=><tr key={row.item.id}>
-        <td className={styles.titleCell}><div className={styles.hierarchy} style={{paddingLeft:row.depth*22}}>
-          {row.item.issueNodeId&&parents.has(row.item.issueNodeId)?<button className={styles.chevron} aria-label={collapsed.has(row.item.issueNodeId)?'展开子项':'收起子项'} aria-expanded={!collapsed.has(row.item.issueNodeId)} onClick={()=>toggle(row.item.issueNodeId!)}>{collapsed.has(row.item.issueNodeId)?'▸':'▾'}</button>:<span className={styles.chevronSpacer}/>}
-          <span className={styles.rowState} data-closed={row.issue?.state==='closed'?'true':undefined} title={row.issue?.state==='closed'?'已关闭':'打开'}/>
-          {row.issue?<button className={styles.rowTitle} title={`#${row.issue.number} ${row.issue.title} · ${row.issue.repository.owner}/${row.issue.repository.repository}`} onClick={()=>void controller.openIssue(row.issue!.number,source.enabled,row.issue!.nodeId)}>#{row.issue.number} {row.issue.title}</button>:row.item.url?<TrustedLink url={row.item.url}>{row.item.title??row.item.kind}</TrustedLink>:row.item.title??({draft:'草稿',restricted:'权限受限',issue:'Issue','pull-request':'PR'} as Record<string,string>)[row.item.kind]}
-          {row.item.archived&&<span> · 已归档</span>}
-        </div></td>
-        {slots.map(slot=>slot===SESSION_SLOT
-          ?<td key={SESSION_SLOT}><div className={styles.cellClip}><SessionCell entry={sessionOf(row.issue?.nodeId?progressByNode.get(row.issue.nodeId):undefined)} onOpen={session=>controller.openSession(session)}/></div></td>
-          :<ProjectCell key={slot.id} field={slot} row={row} fields={catalog.fields}/>)}
-      </tr>)}</tbody></table></div>:<p>此视图没有可见匹配条目。</p>}
-      <div className={styles.toolbar}><button disabled={page<=1} onClick={()=>controller.setProjectView(viewNumber,page-1)}>上一页</button><span>第 {page} 页</span><button disabled={!filtered?.supported||page*perPage>=visible.length} onClick={()=>controller.setProjectView(viewNumber,page+1)}>下一页</button></div>
-    </>}
+      <InteractiveTable key={`${source.projectId}/${source.id}/${viewNumber}/${expression}`} label="真实 Project 条目" rows={orderProjectRows(visible,issues,new Set())} defaultRows={rows} columns={tableColumns} rowKey={row=>row.item.id} searchText={row=>`${row.issue?.number??''} #${row.issue?.number??''} ${row.issue?.title??row.item.title??''} ${row.issue?.repository.owner??row.item.facts?.repository.owner??''}/${row.issue?.repository.repository??row.item.facts?.repository.repository??''}`} searchLabel="搜索 Project 条目" scope={`当前 Project：${sourceName(source)} · 视图：${view?.name??'未选择'} · 完整扫描快照 ${snapshot?.observedAt??'尚无'}；仅当前视图、含关闭设置和入口切片范围`} pageSize={25} unavailable={!state.catalog?'尚无可读缓存：尚无真实 Project 视图缓存，请刷新来源。':!view?'保存的 view 不在当前可读取目录中，请选择真实视图。':!snapshot?'完整 Project 成员扫描尚未完成，请刷新继续；没有用全列表冒充视图。':filtered&&!filtered.supported?filtered.reason:undefined}/>
     <details><summary>字段定义</summary><ul>{catalog.fields.map(field=><li key={field.id}>{field.name} · {field.dataType}{field.options?.length?` · ${field.options.map(option=>`${option.name}(${option.color})`).join(' / ')}`:''}</li>)}</ul></details>
   </section>
 }
@@ -175,31 +178,40 @@ const chipClasses: Record<string,string> = { GRAY: styles.chipGray, BLUE: styles
 const avatarPalette = ['#1f6feb','#8250df','#1a7f37','#bc4c00','#cf222e','#0969da','#bf3989','#57606a']
 function avatarColor(login: string) { let hash = 0; for (const character of login) hash = (hash * 31 + character.charCodeAt(0)) >>> 0; return avatarPalette[hash % avatarPalette.length]! }
 /** One Project cell rendered like the GitHub board: chips, avatars, label pills and a progress bar. */
+const supportedFieldTypes=new Set(['TITLE','ASSIGNEES','LABELS','REPOSITORY','PARENT_ISSUE','SUB_ISSUES_PROGRESS','LINKED_PULL_REQUESTS','REVIEWERS','CREATED','UPDATED','CLOSED','MILESTONE','SINGLE_SELECT','STATUS','ITERATION','TEXT','NUMBER','DATE'])
+function projectValues(field:ProjectFieldDefinition,row:ProjectRow):string[] {
+  return projectFieldValues(field,row.issue,row.item)
+}
+function projectSortValue(field:ProjectFieldDefinition,row:ProjectRow):string|number {
+  const facts=row.item.facts,issue=row.issue,value=row.item.fields.find(entry=>entry.id===field.id)?.value
+  if(field.dataType==='NUMBER'&&value!==undefined&&Number.isFinite(Number(value)))return Number(value)
+  if(field.dataType==='CREATED')return issue?.createdAt??facts?.createdAt??''
+  if(field.dataType==='UPDATED')return issue?.updatedAt??facts?.updatedAt??''
+  if(field.dataType==='CLOSED')return issue?.closedAt??facts?.closedAt??''
+  return projectValues(field,row).join(', ')
+}
 function ProjectCell({field,row,fields}:{field:ProjectFieldDefinition;row:ProjectRow;fields:ProjectFieldDefinition[]}) {
   const {item,issue}=row, cell=projectFieldCell(field,issue,item), partial=item.fieldsPartial?' · 字段部分观察':''
-  if(field.dataType==='ASSIGNEES'){const logins=issue?.assignees??item.facts?.assignees??[];return <td><div className={styles.cellClip}>{logins.length?logins.map(login=><span key={login} style={{whiteSpace:'nowrap',marginRight:8}}><span className={styles.avatar} style={{background:avatarColor(login)}}>{login.slice(0,1)}</span>{login}</span>):'—'}{partial}</div></td>}
-  if(field.dataType==='LABELS'){const labels=issue?.labels??item.facts?.labels??[];return <td><div className={styles.cellClip}>{labels.length?labels.map(label=><span key={label} className={styles.labelPill}>{label}</span>):'—'}{partial}</div></td>}
-  if(field.dataType==='SUB_ISSUES_PROGRESS'){const summary=issue?.subIssuesSummary,children=issue?.subIssues,total=summary?.total??children?.totalCount;if(!total)return <td><div className={styles.cellClip}>—{partial}</div></td>;const completed=summary?.completed??children?.items.filter(child=>child.state==='closed').length??0,pct=Math.floor(completed/total*100)
+  if(projectValues(field,row).includes(UNKNOWN_FIELD_VALUE))return <>{UNKNOWN_FIELD_VALUE}{partial}</>
+  if(field.dataType==='ASSIGNEES'){const logins=issue?.assignees??item.facts?.assignees??[];return <>{logins.length?logins.map(login=><span key={login} style={{whiteSpace:'nowrap',marginRight:8}}><span className={styles.avatar} style={{background:avatarColor(login)}}>{login.slice(0,1)}</span>{login}</span>):'—'}{partial}</>}
+  if(field.dataType==='LABELS'){const labels=issue?.labels??item.facts?.labels??[];return <>{labels.length?labels.map(label=><span key={label} className={styles.labelPill}>{label}</span>):'—'}{partial}</>}
+  if(field.dataType==='SUB_ISSUES_PROGRESS'){const summary=issue?.subIssuesSummary,children=issue?.subIssues,total=summary?.total??children?.totalCount;if(!total)return <>—{partial}</>;const completed=summary?.completed??children?.items.filter(child=>child.state==='closed').length??0,pct=Math.floor(completed/total*100)
     const segments=Math.min(total,10),filled=Math.round((completed/total)*segments)
-    return <td><div className={styles.progress}><div className={styles.progressSegments}>{Array.from({length:segments},(_,index)=><span key={index} className={index<filled?styles.segmentOn:styles.segmentOff}/>)}</div><span className={styles.progressText}>{completed}/{total} · {pct}%{summary===undefined&&children?.hasNextPage?' · 部分观察':''}</span></div></td>}
+    return <div className={styles.progress}><div className={styles.progressSegments}>{Array.from({length:segments},(_,index)=><span key={index} className={index<filled?styles.segmentOn:styles.segmentOff}/>)}</div><span className={styles.progressText}>{completed}/{total} · {pct}%{summary===undefined&&children?.hasNextPage?' · 部分观察':''}</span></div>}
   const option=fieldOption(fields,field.id,cell.text)
-  return <td><div className={styles.cellClip}>{option?<span className={`${styles.chip} ${chipClasses[option.color.toUpperCase()]??styles.chipGray}`}>{cell.text}</span>:cell.parts?cell.parts.map((part,index)=>part.url?<TrustedLink key={index} url={part.url}>{part.label}</TrustedLink>:<span key={index}>{part.label}</span>):cell.text}{partial}</div></td>
+  return <>{option?<span className={`${styles.chip} ${chipClasses[option.color.toUpperCase()]??styles.chipGray}`}>{cell.text}</span>:cell.parts?cell.parts.map((part,index)=>part.url?<TrustedLink key={index} url={part.url}>{part.label}</TrustedLink>:<span key={index}>{part.label}</span>):cell.text}{partial}</>
 }
 function PullRequests({controller}:{controller:WorkPanelController}) {
-  const catalog=controller.getSnapshot().source.catalog
-  const [state,setState]=useState('all'),[search,setSearch]=useState(''),[page,setPage]=useState(1)
-  if(!catalog)return <p>PR 目录尚无可读缓存，请刷新来源；读取失败不表示空目录。</p>
-  const filtered=catalog.pullRequests.filter(pr=>(state==='all'||pr.state===state)&&(search.trim()===''||`${pr.repository.owner}/${pr.repository.repository} #${pr.number} ${pr.title}`.toLowerCase().includes(search.trim().toLowerCase())))
-  const items=filtered.slice((page-1)*25,page*25)
-  return <section><h2>PR 只读目录</h2><div className={styles.toolbar}><label>PR 状态<select value={state} onChange={event=>{setState(event.target.value);setPage(1)}}><option value="all">全部</option><option value="open">开放</option><option value="closed">已关闭</option><option value="merged">已合并</option></select></label><label>搜索 PR<input value={search} onChange={event=>{setSearch(event.target.value);setPage(1)}}/></label></div><p>{catalog.pullRequestsComplete?'当前范围完整观察':'部分目录，不能视为全量'} · {filtered.length} 项匹配 · 引用不等于验收。</p>
-    <div className={styles.tableScroll}><table className={styles.projectTable} aria-label="PR 目录"><colgroup><col style={{width:'38%'}}/><col style={{width:'10%'}}/><col style={{width:'16%'}}/><col style={{width:'20%'}}/><col style={{width:'16%'}}/></colgroup><thead><tr><th>PR</th><th>状态</th><th>会话</th><th>相关 Issue</th><th>检查 / 评审</th></tr></thead><tbody>{items.map(pr=>{const progress=pr.issues.map(issue=>controller.progressForIssue(issue)).find(progress=>progress!==undefined);return <tr key={pr.nodeId}>
-  <td><div className={styles.cellClip}><TrustedLink url={pr.url}>{pr.repository.owner}/{pr.repository.repository} #{pr.number} {pr.title}</TrustedLink></div></td>
-  <td><div className={styles.cellClip}>{({open:'开放',closed:'已关闭',merged:'已合并'})[pr.state]}{pr.draft?' · 草稿':''}</div></td>
-  <td><div className={styles.cellClip}><SessionCell entry={sessionOf(progress)} onOpen={session=>controller.openSession(session)}/></div></td>
-  <td><div className={styles.cellClip}>{pr.issues.length?pr.issues.map(issue=><span key={issue.url} style={{marginRight:8}}><TrustedLink url={issue.url}>#{issue.number}</TrustedLink></span>):'未观察到关联'}{!pr.issuesComplete?' · 部分':''}</div></td>
-  <td><div className={styles.cellClip} title={`${pr.checks??'未提供'} / ${pr.review??'未提供'}`}>{pr.checks??'—'} · {pr.review??'—'}</div></td>
-</tr>})}</tbody></table></div>{!items.length&&<p>当前筛选下没有 PR；这是已成功读取目录的有效空结果。</p>}<div className={styles.toolbar}><button disabled={page<=1} onClick={()=>setPage(page-1)}>上一页</button><span>第 {page} 页</span><button disabled={page*25>=filtered.length} onClick={()=>setPage(page+1)}>下一页</button></div>
-  </section>
+  const state=controller.getSnapshot(),catalog=state.source.catalog,source=state.source.sources.find(item=>item.id===state.source.sourceId)
+  const progress=(pr:import('../work-sources/types.ts').GitHubPullRequest)=>pr.issues.map(issue=>controller.progressForIssue(issue)).find(item=>item!==undefined)
+  const columns:TableColumn<import('../work-sources/types.ts').GitHubPullRequest>[]=[
+    {id:'title',label:'PR',protected:true,width:3,values:pr=>[pr.title],qualifiers:[{id:'state',label:'PR 状态',values:pr=>[pr.state]},{id:'type',label:'PR 类型',values:pr=>[pr.draft?'草稿':'就绪']}],render:pr=><TrustedLink url={pr.url}>{pr.repository.owner}/{pr.repository.repository} #{pr.number} {pr.title}</TrustedLink>},
+    {id:'status',label:'状态',groupable:true,values:pr=>[pr.state],render:pr=><>{({open:'开放',closed:'已关闭',merged:'已合并'})[pr.state]}{pr.draft?' · 草稿':''}</>},
+    {id:'session',label:'会话',width:1.5,values:pr=>{const entry=sessionOf(progress(pr));return entry?[entry.session.sessionId]:[]},render:pr=><SessionCell entry={sessionOf(progress(pr))} onOpen={session=>controller.openSession(session)}/>},
+    {id:'issues',label:'相关 Issue',values:pr=>pr.issues.map(issue=>`${issue.url} #${issue.number}`),render:pr=><>{pr.issues.length?pr.issues.map(issue=><span key={issue.url} style={{marginRight:8}}><TrustedLink url={issue.url}>#{issue.number}</TrustedLink></span>):'未观察到关联'}{!pr.issuesComplete?' · 部分':''}</>},
+    {id:'checks',label:'检查 / 评审',groupable:true,values:pr=>[`${pr.checks??'未提供'} / ${pr.review??'未提供'}`],render:pr=><span title={`${pr.checks??'未提供'} / ${pr.review??'未提供'}`}>{pr.checks??'—'} · {pr.review??'—'}</span>},
+  ]
+  return <section><h2>PR 只读目录</h2><InteractiveTable label="PR 目录" columns={columns} rows={catalog?.pullRequests??[]} rowKey={pr=>pr.nodeId} searchText={pr=>`${pr.repository.owner}/${pr.repository.repository} #${pr.number} ${pr.title}`} searchLabel="搜索 PR" scope={`当前来源：${source?sourceName(source):'未选择'} · ${catalog?.pullRequestsComplete?'当前范围完整观察':'部分目录，不能视为全量'} · 引用不等于验收`} pageSize={25} unavailable={!catalog?'PR 目录尚无可读缓存，请刷新来源；读取失败不表示空目录。':undefined}/></section>
 }
 function TrustedLink({url,children}:{url:string;children:ReactNode}) {
   let safe=false
