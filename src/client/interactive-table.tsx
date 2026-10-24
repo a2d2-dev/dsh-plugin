@@ -1,0 +1,117 @@
+import { Fragment, useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
+import { emptyListState, groupList, listOptions, moveColumn, orderedColumns, queryList, reconcileListState, valueLabel } from './list-state.ts'
+import type { ListColumn, ListState } from './list-state.ts'
+import { columnMenuPosition } from './column-menu-position.ts'
+import styles from './work-panel.module.css'
+
+export interface TableColumn<T> extends ListColumn<T> {
+  render: (row: T, transformed: boolean) => ReactNode
+  width?: number
+  qualifiers?: ListColumn<T>[]
+}
+interface Props<T> {
+  label: string
+  columns: TableColumn<T>[]
+  rows: T[]
+  rowKey: (row: T) => string
+  searchText: (row: T) => string
+  searchLabel: string
+  scope: string
+  defaultRows?: T[]
+  pageSize?: number
+  unavailable?: string
+}
+/** Shared read-only table. Its state is remounted at source/view boundaries. */
+export function InteractiveTable<T>({ label, columns, rows, defaultRows, rowKey, searchText, searchLabel, scope, pageSize, unavailable }: Props<T>) {
+  const [storedState, setState] = useState(emptyListState)
+  const [page, setPage] = useState(1)
+  const [menu, setMenu] = useState<string | null>(null)
+  const [picker, setPicker] = useState<string | null>(null)
+  const [valueSearch, setValueSearch] = useState('')
+  const button = useRef<HTMLButtonElement | null>(null)
+  const popup = useRef<HTMLDivElement | null>(null)
+  const all = columns.flatMap(column => [column, ...(column.qualifiers ?? [])])
+  const state = reconcileListState(storedState, all)
+  const columnIds = JSON.stringify(all.map(column => column.id))
+  useEffect(() => {
+    const available: {id:string}[] = (JSON.parse(columnIds) as string[]).map(id => ({id}))
+    setState(current => reconcileListState(current, available)); setMenu(null); setPicker(null)
+  }, [columnIds])
+  const shown = orderedColumns(columns, state) as TableColumn<T>[]
+  const transformed = Boolean(state.sort || state.group || state.search || Object.values(state.filters).some(values => values.length) || state.slice)
+  const filtered = queryList(!transformed && defaultRows ? defaultRows : rows, all, state, searchText)
+  const currentPage = Math.min(page, Math.max(1, Math.ceil(filtered.length / (pageSize ?? Math.max(1, filtered.length)))))
+  const displayed = pageSize ? filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize) : filtered
+  const group = columns.find(column => column.id === state.group)
+  const groups = groupList(displayed, group)
+  const active = columns.find(column => column.id === menu)
+  const picking = all.find(column => column.id === picker)
+  const change = (update: Partial<ListState>) => { setState(current => ({ ...current, ...update })); setPage(1) }
+  const close = () => { setMenu(null); setPicker(null); setValueSearch(''); button.current?.focus() }
+  const act = (update: Partial<ListState>) => { change(update); close() }
+  useEffect(() => {
+    if (!menu) return
+    const dismiss = (event: PointerEvent) => { if (!popup.current?.contains(event.target as Node) && !button.current?.contains(event.target as Node)) { setMenu(null); setPicker(null) } }
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); close() }
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        const items = [...(popup.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input') ?? [])]
+        const at = items.indexOf(document.activeElement as HTMLElement)
+        if (at >= 0 && !(document.activeElement instanceof HTMLInputElement)) { event.preventDefault(); items[(at + (event.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus() }
+      }
+    }
+    document.addEventListener('pointerdown', dismiss); document.addEventListener('keydown', escape)
+    popup.current?.querySelector<HTMLElement>('button:not(:disabled),input')?.focus()
+    return () => { document.removeEventListener('pointerdown', dismiss); document.removeEventListener('keydown', escape) }
+  }, [menu, picker])
+  const open = (id: string, target: HTMLButtonElement) => {
+    if (menu === id) { close(); return }
+    button.current = target; setMenu(id); setPicker(null); setValueSearch('')
+  }
+  const rect = button.current?.getBoundingClientRect()
+  const placement = rect ? columnMenuPosition(rect, {width:window.innerWidth,height:window.innerHeight}) : {left:8,top:8,maxHeight:600}
+  const selected = columns.find(column => column.id === state.selected)
+  return <>
+    <div className={styles.listSearch}>
+      <label>{searchLabel}<input type="search" aria-label={searchLabel} placeholder="标题、#编号或仓库" value={state.search} onChange={event => change({ search: event.target.value })}/></label>
+      {state.search && <button onClick={() => change({ search: '' })}>清空搜索</button>}
+      <button onClick={() => { setState(emptyListState()); setPage(1); close() }}>重置列与查询</button>
+    </div>
+    <p className={styles.listScope}>{scope} · 搜索范围：标题、编号、仓库 · {filtered.length} / {rows.length} 项{selected ? ` · 已选择整列：${selected.label}` : ''}</p>
+    <div className={styles.activeFilters} aria-label="当前列条件">
+      {Object.entries(state.filters).filter(([, values]) => values.length).map(([id, values]) => <button key={id} onClick={() => change({ filters: { ...state.filters, [id]: [] } })} title="点击清除此列过滤">{all.find(column => column.id === id)?.label}：{values.map(valueLabel).join(' / ')} ×</button>)}
+      {state.sort && <button onClick={() => change({ sort: null })}>排序：{columns.find(column => column.id === state.sort?.id)?.label} {state.sort.direction === 'asc' ? '↑' : '↓'} ×</button>}
+      {group && <button onClick={() => change({ group: null })}>分组：{group.label} ×</button>}
+      {state.slice && <label>切片：{columns.find(column => column.id === state.slice?.id)?.label}<select aria-label="列切片值" value={state.slice.value} onChange={event => change({ slice: { id: state.slice!.id, value: event.target.value } })}>{listOptions(columns.find(column => column.id === state.slice?.id)!, rows).map(option => <option key={option.value} value={option.value}>{valueLabel(option.value)}（{option.count}）</option>)}</select><button onClick={() => change({ slice: null })}>清除切片</button></label>}
+      {state.hidden.map(id => <button key={id} onClick={() => change({ hidden: state.hidden.filter(value => value !== id) })}>显示 {columns.find(column => column.id === id)?.label}</button>)}
+    </div>
+    <div className={styles.tableScroll}><table className={styles.projectTable} aria-label={label} style={{minWidth:shown.reduce((total,column)=>total+Math.max(100,(column.width??1)*90),0)}}>
+      <colgroup>{shown.map(column => <col key={column.id} style={{ width: `${100 * (column.width ?? 1) / shown.reduce((sum, entry) => sum + (entry.width ?? 1), 0)}%` }}/>)}</colgroup>
+      <thead><tr>{shown.map(column => <th key={column.id} scope="col" className={state.selected === column.id ? styles.columnSelected : undefined} aria-sort={state.sort?.id === column.id ? state.sort.direction === 'asc' ? 'ascending' : 'descending' : 'none'}><div className={styles.columnHead}><span>{column.label}{state.sort?.id === column.id ? state.sort.direction === 'asc' ? ' ↑' : ' ↓' : ''}{state.filters[column.id]?.length ? ' ⏷' : ''}</span><button aria-label={`${column.label} 列操作`} aria-haspopup="dialog" aria-expanded={menu === column.id} onClick={event => open(column.id, event.currentTarget)}>⋯</button></div></th>)}</tr></thead>
+      <tbody>{groups.map((entry, index) => <Fragment key={entry.value}>{group && <tr className={styles.groupHeading}><th colSpan={shown.length} scope="rowgroup">{group.label}：{valueLabel(entry.value)} · {entry.rows.length} 项（当前展示页，多值条目可出现在多个组）</th></tr>}{entry.rows.map(row => <tr key={`${index}/${rowKey(row)}`}>{shown.map(column => <td key={column.id} className={state.selected === column.id ? styles.columnSelected : undefined}><div className={styles.cellClip}>{column.render(row, transformed)}</div></td>)}</tr>)}</Fragment>)}</tbody>
+    </table></div>
+    {unavailable ? <p role="status">{unavailable}</p> : !filtered.length && <p role="status">当前搜索与列过滤没有匹配结果；可清空搜索或清除列条件。</p>}
+    {pageSize && <div className={styles.toolbar}><button disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>上一页</button><span>第 {currentPage} / {Math.max(1, Math.ceil(filtered.length / pageSize))} 页 · 每页 {pageSize} 项 · 搜索与列过滤作用于分页前的当前范围</span><button disabled={currentPage * pageSize >= filtered.length} onClick={() => setPage(currentPage + 1)}>下一页</button></div>}
+    {active && <div ref={popup} role="dialog" aria-label={`${active.label} 列菜单`} className={styles.columnMenu} style={placement}>
+      <div className={styles.columnMenuTitle}><strong>{active.label}</strong><button aria-label="关闭列菜单" onClick={close}>×</button></div>
+      {picking ? <>
+        <button onClick={() => { setPicker(null); setValueSearch('') }}>← 返回列操作</button><strong>按值过滤：{picking.label}</strong>
+        <input aria-label="查找字段值" placeholder="查找字段值" value={valueSearch} onChange={event => setValueSearch(event.target.value)}/>
+        <div className={styles.columnValues}>{listOptions(picking, rows).filter(option => valueLabel(option.value).toLocaleLowerCase().includes(valueSearch.toLocaleLowerCase())).map(option => <label key={option.value}><input type="checkbox" checked={state.filters[picking.id]?.includes(option.value) ?? false} onChange={event => change({ filters: { ...state.filters, [picking.id]: event.target.checked ? [...(state.filters[picking.id] ?? []), option.value] : (state.filters[picking.id] ?? []).filter(value => value !== option.value) } })}/><span>{valueLabel(option.value)}</span><small>{option.count}</small></label>)}</div>
+        {!rows.length && <p>当前范围尚无可供选择的字段值。</p>}<button onClick={() => change({ filters: { ...state.filters, [picking.id]: [] } })}>清除此列过滤</button>
+      </> : <>
+        <button onClick={() => act({ selected: active.id })}>选择整列</button>
+        <button disabled={!!active.unsupported} title={active.unsupported} onClick={() => act({ sort: { id: active.id, direction: 'asc' } })}>升序排序</button>
+        <button disabled={!!active.unsupported} title={active.unsupported} onClick={() => act({ sort: { id: active.id, direction: 'desc' } })}>降序排序</button>
+        <button disabled={!!active.unsupported} title={active.unsupported} onClick={() => setPicker(active.id)}>按值过滤…</button>
+        {active.qualifiers?.map(qualifier => <button key={qualifier.id} onClick={() => setPicker(qualifier.id)}>按类型或状态过滤…（{qualifier.label}）</button>)}
+        <button disabled={!active.groupable || !!active.unsupported} title={active.unsupported ?? (!active.groupable ? '此列为连续值或标识，不支持按值分组' : undefined)} onClick={() => act({ group: active.id })}>按值分组</button>
+        <button disabled={!active.groupable || !!active.unsupported || !rows.length} title={active.unsupported ?? (!active.groupable ? '此列为连续值或标识，不支持按值切片' : !rows.length ? '当前范围尚无字段值' : undefined)} onClick={() => act({ slice: { id: active.id, value: listOptions(active, rows)[0]!.value } })}>按值切片</button>
+        <button disabled={active.protected} title={active.protected ? '基础标题列不能隐藏，保留条目入口' : undefined} onClick={() => act({ hidden: [...state.hidden, active.id], ...(state.selected === active.id ? { selected: null } : {}) })}>隐藏字段{active.protected ? '（基础列受保护）' : ''}</button>
+        {(['left', 'right', 'first', 'last'] as const).map(target => { const at = shown.findIndex(column => column.id === active.id), blocked = target === 'left' || target === 'first' ? at === 0 : at === shown.length - 1; return <button key={target} disabled={blocked} title={blocked ? (at === 0 ? '已是最左列' : '已是最右列') : undefined} onClick={() => act({ order: [...moveColumn(shown.map(column => column.id), active.id, target), ...state.hidden] })}>{({ left: '左移', right: '右移', first: '移到最前', last: '移到最后' })[target]}{blocked ? (at === 0 ? '（已在最左）' : '（已在最右）') : ''}</button> })}
+        {active.unsupported && <p>{active.unsupported}</p>}
+      </>}
+    </div>}
+  </>
+}

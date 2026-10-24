@@ -524,6 +524,7 @@ export class WorkPanelController {
   }
   async selectSource(sourceId:string):Promise<void> {
     this.advanceSourceRevision()
+    this.update({search:'',issueFilter:'all'})
     const project=this.state.source.sources.find(item=>item.id===sourceId)?.githubProject!==undefined
     this.updateSource({...emptySource(),sources:this.state.source.sources,sourceId,...(project?{tab:'overview' as const}:{})})
     if(!project){
@@ -635,7 +636,7 @@ export class WorkPanelController {
   }
   async selectSourceTab(tab:SourceTab):Promise<void> {
     this.advanceSourceRevision();++this.revision
-    this.update({detail:null,loading:false})
+    this.update({detail:null,loading:false,search:'',issueFilter:'all'})
     this.updateSource({tab,issue:null,error:null,loading:false})
     if(tab==='issues')await this.browseIssues({},!this.state.source.listing)
     else await this.browseDirectory(false)
