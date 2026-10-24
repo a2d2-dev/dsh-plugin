@@ -93,9 +93,18 @@ it('keeps short-UUID jobs across registry restarts separate from fresh jobs and 
   const old = row.jobs.find(item => item.id === job.id && !item.registryEpoch)!
   expect(old).toMatchObject({ availability: 'lost', delivery: 'unknown', status: 'completed' })
   expect(old).not.toHaveProperty('instanceId')
+  expect(old.detail ?? '').not.toContain('再次调用 job_output')
   expect(settleUncollectedJob(old)).toHaveProperty('reminder')
   expect(settleUncollectedJob(old)).not.toHaveProperty('blocker')
   expect(row.jobs).toContainEqual(expect.objectContaining({ id: fresh.id, availability: 'live', delivery: 'pending' }))
+})
+
+it('reads legacy fork journal namespaced by official V3-to-V4 migration', async () => {
+  const legacy = { job: { ...job, id: 'bash-7' }, registryEpoch: 'legacy-epoch', instanceId: 'legacy-instance', terminalResult: 'pending' }
+  const migrated = { ...event('plugin:jobs/settled', 1, legacy), ignorable: true }
+  const row = await runtime([migrated], registryOf([])).host.executionFacts(owner, 'runtime', 'retired')
+  expect(row.jobs).toEqual([expect.objectContaining({ id: 'bash-7', registryEpoch: 'legacy-epoch', availability: 'lost', delivery: 'unknown' })])
+  expect(settleUncollectedJob(row.jobs[0]!)).toHaveProperty('reminder')
 })
 
 it.each(['registered', 'settled'])('does not transfer foreign official %s history into the current owner', async kind => {

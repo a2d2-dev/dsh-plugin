@@ -75,7 +75,7 @@ function project(record: PublicJobObservation, owner: SessionId, runtimeId: stri
 
 function projectOfficial(record: OfficialJobRecord, owner: SessionId, runtimeId: string, live: boolean): ExecutionJob {
   const job = record.job
-  const needsRead = !record.delivered && !['running', 'stopping'].includes(job.status)
+  const needsRead = live && !record.delivered && !['running', 'stopping'].includes(job.status)
   const detail = [job.detail, ...(needsRead ? ['终态读取交付尚无持久证明；请在作业终态后再次调用 job_output，成功提交结果后可解除等待。'] : [])].filter(Boolean).join('；')
   return { id: job.id, owner: { runtimeId, sessionId: owner }, kind: job.kind, label: job.label, status: job.status,
     ...(detail ? { detail } : {}), result: 'unknown', delivery: record.delivered ? 'delivered' : live ? 'pending' : 'unknown', acceptance: 'unassessed',
