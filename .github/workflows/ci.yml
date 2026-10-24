@@ -16,6 +16,7 @@ concurrency:
 
 jobs:
   checks:
+    if: github.event_name != 'push' || !github.event.deleted
     name: checks (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -45,6 +46,7 @@ jobs:
       - run: git diff --exit-code
 
   secrets:
+    if: github.event_name != 'push' || !github.event.deleted
     name: secrets
     runs-on: ubuntu-latest
     timeout-minutes: 15
