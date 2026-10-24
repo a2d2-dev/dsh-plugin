@@ -349,12 +349,15 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       const header = inspection.events.findLast(item => item.type === 'request/header')
       if (header?.type === 'request/header' && (header.data.header.config.provider !== request.model.provider || header.data.header.config.model !== request.model.model || header.data.header.config.reasoningEffort !== requested.reasoningEffort)) throw new WorkExecutionError('incompatible-session', 'Existing Session model differs; silent reconfiguration refused')
       const pending = inspection.events.findLast(item => item.type === 'model/selection')
-      const selected = pending?.type === 'model/selection' && (!header || pending.seq > header.seq) ? pending.data
-        : header?.type === 'request/header' ? header.data.header.config : undefined
-      if (selected && (selected.provider !== request.model.provider || selected.model !== request.model.model || selected.reasoningEffort !== request.model.reasoningEffort)) throw new WorkExecutionError('incompatible-session', 'Existing Session local selection differs; silent reconfiguration refused')
+      const local = pending?.type === 'model/selection' && (!header || pending.seq > header.seq) ? pending.data : undefined
+      const selected = local ?? (header?.type === 'request/header' ? header.data.header.config : undefined)
+      // A local selection preserves omission; a request header contains the
+      // adapter's resolved default effort. Compare each at its own boundary.
+      const expectedEffort = local ? request.model.reasoningEffort : requested.reasoningEffort
+      if (selected && (selected.provider !== request.model.provider || selected.model !== request.model.model || selected.reasoningEffort !== expectedEffort)) throw new WorkExecutionError('incompatible-session', 'Existing Session local selection differs; silent reconfiguration refused')
       if (request.sessionMode === 'reuse') {
         const effective = selected ?? this.service('agentDefaultModel').currentSelection()
-        if (effective.provider !== request.model.provider || effective.model !== request.model.model || effective.reasoningEffort !== request.model.reasoningEffort) throw new WorkExecutionError('incompatible-session', 'Existing Session local selection differs')
+        if (effective.provider !== request.model.provider || effective.model !== request.model.model || effective.reasoningEffort !== (selected ? expectedEffort : request.model.reasoningEffort)) throw new WorkExecutionError('incompatible-session', 'Existing Session local selection differs')
         using observation = await this.service('sessionQuery').observeSession(SessionId(request.session.sessionId))
         const permission = (observation.projections?.values as { permissions?: { currentValue: string } } | undefined)?.permissions
         if (permission?.currentValue !== request.permissionPreset) throw new WorkExecutionError('incompatible-session', 'Existing Session effective permission differs')
