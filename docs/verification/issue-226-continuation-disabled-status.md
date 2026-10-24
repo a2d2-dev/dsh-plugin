@@ -22,6 +22,8 @@
 | 最终 `corepack pnpm typecheck` | exit 0；服务端与客户端类型检查通过 |
 | `corepack pnpm build` | exit 0；产物仅在本工作树忽略目录生成；现有 tsdown `external` / `noExternal` 弃用警告 |
 | 最终相关回归（下方完整命令） | exit 0；6 文件 44 pass |
+| 初次 CI 与本地 `corepack pnpm verify:repository` | exit 1；记录位于 `docs/artifacts/`，触发禁止提交该目录文件的规则；将本人记录移到本文路径，未修改规则 |
+| 迁移后 `corepack pnpm verify:repository` | exit 0；仓库元数据与源文件排除规则通过 |
 | `git diff --check` | exit 0 |
 
 最终相关回归命令：
