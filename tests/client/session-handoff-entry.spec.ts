@@ -89,6 +89,22 @@ describe('native chat takeover visibility', () => {
     expect(h.navigation.openSession).toHaveBeenCalledExactlyOnceWith(session.sessionId)
     expect(h.client.command).not.toHaveBeenCalled()
   })
+  it.each([
+    ['missing Session', undefined],
+    ['empty Session id', { runtimeId: 'host', sessionId: '' }],
+    ['empty runtime', { runtimeId: '', sessionId: 'latest-current' }],
+  ] as const)('rejects %s with a clear navigation error even when retired history exists', async (_label, session) => {
+    const h = setup()
+    // Malformed transport payload: static types alone cannot prove a Session exists.
+    vi.mocked(h.client.query).mockResolvedValueOnce({ status: 'completed', task, execution: {
+      ...execution, state: 'failed', session,
+      actual: { ...execution.actual!, runtimeId: session?.runtimeId ?? 'host' },
+      retired: [{ session: execution.session, epoch: 2, operationId: 'handoff' }],
+    } as WorkExecution })
+    await expect(h.panel.openCurrentTask(ref)).rejects.toThrow('当前处理会话暂不可进入')
+    expect(h.navigation.openSession).not.toHaveBeenCalled()
+    expect(h.client.command).not.toHaveBeenCalled()
+  })
   it('ignores a fresh-current response when the native entry unmounts before it resolves', async () => {
     const h = setup(), pending = deferred<WorkCompleted>(), scope = new AbortController()
     vi.mocked(h.client.query).mockReturnValueOnce(pending.promise)
