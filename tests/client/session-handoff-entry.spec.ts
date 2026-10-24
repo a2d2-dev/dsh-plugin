@@ -75,6 +75,20 @@ describe('native chat takeover visibility', () => {
     await expect(h.panel.openCurrentTask(ref)).rejects.toThrow('当前处理会话暂不可进入')
     expect(h.navigation.openSession).not.toHaveBeenCalled()
   })
+  it('enters the real current Session of a failed execution after handoff without resuming work', async () => {
+    const h = setup()
+    const runtimeId = 'b921120e-e6dd-4e5d-b109-945d9d692d25'
+    const session = { runtimeId, sessionId: 'session-7353477e-dcc2-4e6e-b8c3-5df486cfbe9e' }
+    vi.mocked(h.client.query).mockResolvedValueOnce({ status: 'completed', task, execution: {
+      ...execution, epoch: 4, state: 'failed', session,
+      actual: { ...execution.actual!, runtimeId },
+      retired: [{ session: { runtimeId, sessionId: 'session-9af116ad-e4ab-4a92-b9d5-6207d324983a' }, epoch: 3, operationId: 'handoff' }],
+    } })
+    await h.panel.openCurrentTask(ref)
+    expect(h.client.query).toHaveBeenCalledExactlyOnceWith({ type: 'task.detail', ref }, expect.any(AbortSignal))
+    expect(h.navigation.openSession).toHaveBeenCalledExactlyOnceWith(session.sessionId)
+    expect(h.client.command).not.toHaveBeenCalled()
+  })
   it('ignores a fresh-current response when the native entry unmounts before it resolves', async () => {
     const h = setup(), pending = deferred<WorkCompleted>(), scope = new AbortController()
     vi.mocked(h.client.query).mockReturnValueOnce(pending.promise)
