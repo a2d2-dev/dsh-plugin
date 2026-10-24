@@ -5,7 +5,7 @@
  * this ledger records sessions created directly as a named A2D2 Agent, such as
  * dispatched subagents and browser-created sessions.
  *
- * @module @deepseek-ai/dsh-a2d2/src/session-agents
+ * @module @a2d2/dsh-a2d2/src/session-agents
  */
 
 import { mkdir, readFile } from 'node:fs/promises'

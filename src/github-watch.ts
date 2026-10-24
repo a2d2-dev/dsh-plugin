@@ -13,7 +13,7 @@
  * service it declares exists, and this row needs live sessions and the session
  * controller.
  *
- * @module @deepseek-ai/dsh-a2d2/src/github-watch
+ * @module @a2d2/dsh-a2d2/src/github-watch
  */
 
 import { execFile } from 'node:child_process'
@@ -114,7 +114,30 @@ export function apply(ctx: Context, config: Config = {}): void {
   const controller = ctx.get('sessionController') as unknown as SessionController
   const log = (message: string) => (ctx as unknown as { logger?: { warn(m: string): void } }).logger?.warn(message)
 
-  const injectMessage: Inject = async (sessionId, message) => {
+  const injectMessage: Inject = async (sessionId, message, watch) => {
+    let address = watch?.task
+    const a2d2 = ctx.get('a2d2')
+    if (!address && watch && a2d2) {
+      // Old watch documents predate task addresses. Read the source header
+      // without resuming a retired main session, then resolve its task trail.
+      const live = agents.list().find(candidate => candidate.id === sessionId)
+      const persistence = ctx.get('sessionPersistence') as unknown as {
+        stat(id: SessionId): Promise<{ header: { cwd?: string } } | undefined>
+      } | undefined
+      const cwd = live?.session.header.cwd ?? (await persistence?.stat(sessionId as SessionId))?.header.cwd
+      if (cwd) {
+        const task = (await a2d2.list(cwd)).find(item => item.issue && item.members.some(member => member.sessionId === sessionId))
+        if (task) address = { projectRoot: await a2d2.projectRoot(cwd), task: task.id }
+      }
+    }
+    if (address && watch) {
+      const runtime = ctx.get('a2d2TaskRuntime')?.runner
+      const id = message.eventId
+      if (!id) throw new Error('Task watch delivery requires a stable state event ID')
+      if (await runtime?.enqueue(address, id, message.text)) return 'delivered'
+      const task = await a2d2?.readTask(address.projectRoot, address.task)
+      if (task?.issue) sessionId = task.issue.mainSession
+    }
     let agent = agents.list().find(candidate => candidate.id === sessionId)
     if (agent === undefined) {
       const resolved = await controller.resolveAgent(sessionId as SessionId)
@@ -169,6 +192,7 @@ export function apply(ctx: Context, config: Config = {}): void {
         },
       },
       render: (_args, value) => [{ type: 'text', text: value.message }],
+      presentationMeta: (_args, value) => ({ a2d2GitHubWatch: { status: value.status, ...(value.state ? { state: value.state } : {}) } }),
     },
     async execute(args, exec) {
       const agent = exec.agent
@@ -178,7 +202,11 @@ export function apply(ctx: Context, config: Config = {}): void {
         throw new Error('repo must be "owner/name"; the working directory has no github.com origin to default to')
       }
       if (!Number.isSafeInteger(args.pr) || args.pr <= 0) throw new Error('pr must be a positive integer')
-      const result = await watcher.watch(repo, args.pr, agent.id)
+      const cwd = agent.session.header.cwd ?? ''
+      const a2d2 = ctx.get('a2d2')
+      const task = a2d2 ? await a2d2.taskOfMainSession(cwd, agent.id) : undefined
+      const address = task && a2d2 ? { projectRoot: await a2d2.projectRoot(cwd), task: task.id } : undefined
+      const result = await watcher.watch(repo, args.pr, agent.id, address)
       const state = 'state' in result ? result.state : undefined
       return {
         repo,

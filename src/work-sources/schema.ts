@@ -1,0 +1,39 @@
+import { catalogSchema } from './catalog-schema.ts'
+import { z } from 'zod'
+const owner = z.string().regex(/^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$/)
+const nodeId = z.string().min(1).max(256)
+export const repositorySchema = z.object({ owner, repository: z.string().regex(/^(?!\.{1,2}$)[a-zA-Z0-9_.-]{1,100}$/) }).strict()
+export const githubProjectSchema = z.object({ owner, type: z.enum(['org', 'user']), number: z.number().int().positive() }).strict()
+const identity = z.object({ login: z.string().min(1), nodeId, name: z.string().nullable() }).strict()
+const issueReference = z.object({ nodeId, url: z.string().regex(/^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+\/issues\/[1-9][0-9]*$/), number: z.number().int().positive(), title: z.string().min(1).max(100_000), repository: repositorySchema, state: z.enum(['open', 'closed']) }).strict()
+export const nativeChildrenSchema = z.object({ items: z.array(issueReference), totalCount: z.number().int().nonnegative(), hasNextPage: z.boolean() }).strict()
+export const linkedPullRequestSchema = z.object({ number: z.number().int().positive(), title: z.string().min(1).max(100_000), url: z.string().regex(/^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+\/pull\/[1-9][0-9]*$/), state: z.enum(['open', 'closed', 'merged']), draft: z.boolean() }).strict()
+export const issueSchema = issueReference.extend({ body: z.string().max(1_000_000).nullable(), assignees: z.array(z.string()), labels: z.array(z.string()), updatedAt: z.iso.datetime(), observedAt: z.iso.datetime(),
+  createdAt: z.iso.datetime().optional(), closedAt: z.iso.datetime().nullable().optional(),
+  parent: issueReference.nullable().optional(), subIssues: nativeChildrenSchema.optional(),
+  subIssuesSummary: z.object({ total: z.number().int().nonnegative(), completed: z.number().int().nonnegative() }).strict().optional(),
+  linkedPullRequests: z.array(linkedPullRequestSchema).max(20).optional(),
+}).strict()
+const projectMetadata = z.object({ nodeId, title: z.string(), url: z.string().regex(/^https:\/\/github\.com\/(?:orgs|users)\/[a-zA-Z0-9-]+\/projects\/[1-9][0-9]*$/), closed: z.boolean() }).strict()
+const projectItem = z.object({ id: nodeId, kind: z.enum(['issue', 'pull-request', 'draft', 'restricted']), archived: z.boolean(), issueNodeId: nodeId.optional(), title: z.string().optional(), url: z.string().regex(/^https:\/\/github\.com\//).optional(),
+  facts: z.object({ draft: z.boolean().optional(), assignees: z.array(z.string()), labels: z.array(z.string()), state: z.string(), repository: repositorySchema, body: z.string().nullable().optional(),
+    reviewers: z.array(z.string()).optional(), createdAt: z.iso.datetime().optional(), updatedAt: z.iso.datetime().optional(), closedAt: z.iso.datetime().nullable().optional() }).strict().optional(),
+  fields: z.array(z.object({ id: nodeId, name: z.string(), type: z.enum(['single-select', 'iteration', 'text', 'number', 'date']), value: z.string() }).strict()), fieldsPartial: z.boolean(),
+}).strict()
+export const projectPageSchema = z.object({ identity, project: projectMetadata, items: z.array(projectItem), issues: z.array(issueSchema), observedAt: z.iso.datetime(), total: z.number().int().nonnegative().optional(), nextCursor: z.string().min(1).max(2048).optional() }).strict()
+const discovery = z.object({ state: z.enum(['idle', 'syncing', 'error']), nextAttemptAt: z.iso.datetime(), lastAttemptAt: z.iso.datetime().optional(), lastSuccessAt: z.iso.datetime().optional(), failures: z.number().int().nonnegative(),
+  inFlight: z.object({ id: z.string().uuid(), expiresAt: z.iso.datetime() }).strict().optional(),
+  checkpoint: z.object({ sourceVersion: z.number().int().positive(), startedAt: z.iso.datetime(), cursor: z.string().min(1).max(2048).optional(), pages: z.number().int().nonnegative(), total: z.number().int().nonnegative().optional(), identity: identity.optional(), project: projectMetadata.optional(), items: z.array(projectItem), issues: z.array(issueSchema) }).strict().optional(),
+}).strict()
+export const sourceSchema = z.object({ id: z.string().uuid(), projectId: z.string().uuid(), provider: z.literal('github'), repository: repositorySchema.optional(), githubProject: githubProjectSchema.optional(),
+  enabled: z.boolean(), version: z.number().int().positive(), sequence: z.number().int().nonnegative(), requests: z.record(z.string(), z.number().int().positive()),
+  observations: z.array(z.object({ issue: issueSchema, sequence: z.number().int().positive() }).strict()),
+  pages: z.array(z.object({ key: z.string(), nodeIds: z.array(z.string()), nextPage: z.number().int().positive().optional(), identity, observedAt: z.iso.datetime() }).strict()),
+  catalogError: z.object({ code: z.string(), message: z.string(), retryAt: z.string().optional() }).strict().optional(),
+  catalog: catalogSchema.optional(),
+  title: z.string().optional(), nodeId: nodeId.optional(), entryUrls: z.array(z.string().max(2048)).optional(),
+  identity: identity.optional(), lastError: z.object({ code: z.string(), message: z.string(), retryAt: z.string().optional() }).strict().optional(),
+  repositorySnapshot: z.object({ sourceVersion: z.number().int().positive(), identity, nodeIds: z.array(nodeId).max(1000), observedAt: z.iso.datetime() }).strict().optional(),
+  projectSnapshot: z.object({ identity, project: projectMetadata, items: z.array(projectItem), observedAt: z.iso.datetime() }).strict().optional(), discovery: discovery.optional(),
+}).strict().refine(value => Boolean(value.repository) !== Boolean(value.githubProject), 'A source must name exactly one repository or GitHub Project')
+export const bindingSchema = z.object({ provider: z.literal('github'), nodeId: z.string(), urls: z.array(z.string()), ref: z.object({ projectId: z.string().uuid(), taskId: z.string().uuid() }).strict(), sourceIds: z.array(z.string().uuid()), accepted: issueSchema, lastObserved: issueSchema, acceptedChildren: nativeChildrenSchema.extend({ observedAt: z.iso.datetime() }).optional(), relatedObservations: z.array(issueSchema).max(1000).optional(), hierarchyWarnings: z.array(z.object({ code: z.literal('source-hierarchy-frozen'), reason: z.string(), parent: z.object({projectId:z.string().uuid(),taskId:z.string().uuid()}).strict(), child: z.object({projectId:z.string().uuid(),taskId:z.string().uuid()}).strict(), message:z.string() }).strict()).optional() }).strict()

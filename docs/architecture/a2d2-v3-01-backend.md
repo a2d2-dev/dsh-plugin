@@ -1,0 +1,117 @@
+# #121 第一阶段：本地工作后端实现与验证
+
+## 背景
+
+旧任务以项目目录和 Issue 寻址，旧 YAML writer 仅保留既有字段；旧面板查询依赖 live Session。它们不能承载 v3 的独立 Project、Project Agent、Task 身份。本阶段只交付后端，UI 与真实浏览器验收另派。
+
+## 目标与非目标
+
+以公开 WorkApplication.execute/query 为行为接缝，保存无 GitHub、remote、Issue、在线 Session 的本地工作。此阶段不迁移旧活动任务、不取得协调权、不启动模型、不改变宿主服务或客户端。
+
+## 架构
+
+WorkApplication 在独立目录的 work-v3.json 保存 schemaVersion=3 快照；Project/Agent/Task ID 由随机 UUID 独立生成，目录与显示名称均不是身份。项目创建自动实例化默认协调职责 Agent，默认策略不声明未经核实的模型路由。
+
+依赖宿主公开 @deepseek-ai/dsh-atomic-write。withFileLock 将同一文件的短事务串行化；writeFileAtomic 用同目录临时文件与 rename 提交完整快照，读者看到旧或新记录。适用单宿主、同 PID 命名空间；不承诺断电 fsync。新文件名与目录不交给旧 YAML writer。
+
+## 场景与验证
+
+### 本地工作保存与重载
+
+调用 project.create，再以返回的 ProjectId 调用 task.create，保存目标、规格和版本化验收；新建 WorkApplication 实例以 task.detail 与 project.detail 查询。观察稳定 Task/Project/Agent ID 和完整规格内容。
+
+工作目录为本票 worktree，执行：
+
+```sh
+pnpm exec vitest run tests/work.spec.ts
+```
+
+2026-10-19 初始红测：最小公开接缝返回 failed，断言期望 completed，退出 1。实现独立身份与真实持久化后：1/1 通过，退出 0。更早缺失模块的导入失败不作为行为红测证据。
+
+命令回执与领域记录同事务保存。第二条红测：6 个独立应用实例并发提交同 commandId 生成 6 个身份，退出 1；实现持久 ledger 后 2/2 测试通过，退出 0。同名项目用不同 commandId 创建各自独立身份；同 commandId 内容不同时返回 command-id-reused，未授权重放在读取回执前拒绝。
+
+规格更新采用 Task expectedVersion；旧规格和验收标准进入 specificationHistory，新标准有独立规格版本。第三条红测无成功更新（退出 1），实现后 3/3 通过（退出 0）；两个并发编辑仅一个成功，另一个得到 currentVersion=2 的 version-conflict。
+
+父 TaskRef 创建子任务与已有子任务关联同事务保存双向关系；跨项目和循环关系拒绝。第四条红测 task.create-child 返回 failed（退出 1），实现后 4/4 通过（退出 0），重载可读完整父子详情。
+
+工作拆解按稳定 block ID 保存，不自动生成子 Task 或 Session。第五条红测返回 failed（退出 1），实现后 5/5 通过（退出 0）；重复 block ID 拒绝且不改变原版本。
+
+受信资源端口返回 runtime/workspace 引用，ProjectId 与资源分别保存；资源跨项目唯一归属在快照事务内判断。Session 使用 runtime/session 复合引用，候选受项目资源过滤，关联只保存 related/review 观察关系，不产生协调事实。第六条红测 project.attach-resource 返回 failed（退出 1），实现后 6/6 通过（退出 0）。此条使用可控宿主边界端口；真实 DSH 适配证据见下文生产接线。
+
+## 宿主与环境基线
+
+只读核验宿主实际 HEAD：a45068d2ec03326c800c68c9bdcd47508e3ccb9c。已读取 atomic-write、workspaceRegistry 与 SessionPersistence 公共源码，未修改宿主。Node v22.23.1，pnpm 11.7.0。首次 pnpm exec 自动安装依赖时报告未批准构建脚本（subprocess-local、koffi、node-pty），随后相关测试、typecheck、build 与 pack 导出验证均能运行；未更改构建脚本批准策略，不将安装告警判作产品缺陷。
+
+## 公开接入合同
+
+[work-types.ts](../../src/work-types.ts) 是不含宿主依赖的客户端类型合同；WORK_ROUTE_PATH=/a2d2/api/work。POST JSON envelope 为 {kind:'command'|'query',value:WorkCommand|WorkQuery}，返回 WorkResult。所列本阶段命令/查询已有公开实现与生产可信 UI 路由；WorkCompleted 的 project/task/projects/tasks/agents/resources/candidates/work/ref 字段依动作返回，WorkFailure 带具名 error.code/message 与冲突 currentVersion。
+
+## 宿主生产接线
+
+bundle 的 a2d2-work 行挂载 dsh-a2d2/work-plugin，独立于 live Session、Agent 和 LLM。默认记录目录为 ${DSH_HOME:-~/.dsh}/a2d2/work-v3；runtime-v1.json 原子生成并保存稳定 runtimeId，work-v3.json 保存领域快照。可通过服务端配置 directory 指定隔离目录，浏览器没有路径参数。
+
+DshWorkHost 只读取 workspaceRegistry.list/status、经过宿主验证的 sessionIds 与 sessionPersistence.stat 或 live header，并在关联前检查实际 canonical cwd 与 workspace.path 相等。仅服务器已登记且目录有效的 workspace 可作为资源；不恢复 Session、不调用 SessionController、不申请执行资格。资源全局只能属于一个领域项目，避免同一资源被隐式用于跨项目关联。
+
+POST /a2d2/api/work 使用 application/json、1 MiB 上限与 strict schema；首先复用 connection.requestRejection 的宿主 operator 登录/Host/Origin 边界，然后才读 body。WorkResult completed 对应 HTTP 200、conflict 对应 409、具名业务失败对应 400；宿主能力缺失或记录不可安全访问为 503。响应无凭据和服务器异常路径。公开生产入口不是 fixture 内部 Store CRUD。
+
+### API 使用场景
+
+以下为合同调用示例，需在已登录 DSH 的同源客户端调用：
+
+```ts
+const response = await fetch('/a2d2/api/work', {
+  method: 'POST', headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ kind: 'command', value: {
+    type: 'project.create', commandId: crypto.randomUUID(), name: '本地需求',
+  } }),
+})
+const result = await response.json() // WorkResult；project.id 是独立 ProjectId
+```
+
+随后 task.create 保存完整内容，task.detail(ref) 查询；resources.list 取得可接入引用，project.create(resource) 或 project.attach-resource 接入。session.candidates(projectId) 返回兼容持久/在线会话，task.associate-session 保存观察关联，session.work(session) 反向查询。各 mutation 的 expectedVersion 是目标 Project 或 Task 当前版本；task.link-child 还要求 childExpectedVersion。相同 commandId 同内容重放已保存回执；拒绝/冲突不提交新的领域事实。
+
+### 真实宿主隔离验证
+
+生产插件测试先因未注册 handler 得到行为红测（退出 1）；实现后 work + work-host 共 8/8 通过（退出 0）。使用真实 SessionStore、JsonlSessionPersistence、StorageDomain/StorageJson 与 WorkspaceRegistry；认证/路由注册使用结构化宿主边界替身，不冒称浏览器实证。Session 采用宿主真实 v4 header 并 flush 后发现，关闭 Context 后重建仍能按 ProjectId 查询；未装载 Agent/LLM，关联前后 Session stat（header/revision/eventCount）不变，未启动模型或创建 live Session。更早 Session fixture 的格式与 flush 前置失败不计入产品红测。
+
+认证测试覆盖命令、查询和已存在 commandId 的回读；拒绝在 body 读取前成立。额外浏览器 cwd 字段被 strict schema 拒绝。pnpm typecheck 退出 0。
+
+## 旧地址唯一映射契约
+
+legacy.map(ref,address,expectedVersion) 在相同领域事务中保存唯一 (runtimeId,projectRoot,旧 TaskId) → TaskRef。地址必须是绝对、normalize 后相等的历史规范地址；未来迁移调用方须先解析真实旧项目根，不能把别名当另一身份。此入口仅保存地址元数据，不读取旧文件、不复制活动任务、不更换 writer/runner。legacy.resolve 返回唯一已接受 TaskRef；同地址指向另一 TaskRef 返回 legacy-address-in-use。两个应用实例竞争只有一个映射成功，重载可解析同一身份。该片红测无成功映射退出 1，实现后 work + work-host 9/9 通过退出 0。
+
+## 并发、失败与恢复证据
+
+2026-10-19，work / work-host / work-process 三个相关测试文件共 14/14 通过，退出 0。work-process 启动实际独立 Node 进程，使用公开 WorkApplication 接缝和真实文件系统：
+
+- 两进程同时创建相同 commandId 得到同一回执；不同 commandId 的同名项目全部保留。
+- 测试先通过 IPC 收到子进程提交回执，再 SIGKILL writer；重载重试仍返回同一回执与身份，无第二份记录。此例只证明已提交且已收到回执后的 writer 崩溃重放，不证明调用方未收到回执的故障窗口；R3 仅更正用例名称及本说明，未增加窗口、修改原断言或超时。
+- 活进程持有 writer 锁时另一命令超时拒绝，查询仅保留先前事实；杀死持锁进程后，公开命令接管死 PID 锁并成功保存，重载仍有原记录。
+- 未知 schemaVersion 会拒绝写入且原字节不变；恢复原文件后可查询已接受数据，不把不可读状态当空库。
+
+完整文本测试发现 trim 会破坏规格代码缩进和尾部换行：红测退出 1；改为仅检查非空但保留原文，三文件 14/14 绿测退出 0。此处没有扩大超时或 mock 内部 CRUD 来跳过失败。
+
+## 构建与生产包证据
+
+原构建 entry 未含新后端，曾出现 pnpm build 退出 0 而 import('dsh-a2d2/work-plugin') 因缺文件退出 1；不能以该次 build 成功代替生产装配成立。主会话明确扩权允许必要 tsdown.config.ts 接线后，将 work、work-types、work-plugin 加入原有同一 entry 清单，沿用 .js 产物和原 build 脚本。未保留第二构建路径。
+
+最终 pnpm verify:pack-exports 退出 0：实际构建、打包、临时安装并 import 全部 13 个 Node 导出，包括三个新入口。中间一次恢复扩展名时误改 verify 脚本路径得到 MODULE_NOT_FOUND，已恢复原 scripts/verify-pack-exports.mjs 后重新验证通过。构建产物保持忽略，不纳入提交。
+
+## 最终验证与交接边界
+
+2026-10-19 最终验证结果：
+
+| 命令 | 真实退出结果 | 观察 |
+| --- | --- | --- |
+| pnpm typecheck | 0 | 后端与既有客户端类型检查通过 |
+| pnpm exec vitest run tests/work.spec.ts tests/work-host.spec.ts tests/work-process.spec.ts | 0 | 3 文件 15/15 通过；含新增跨进程资源唯一归属竞争 |
+| pnpm test | 1 | 当次全量 42 文件，677/679 通过；两个原有 task-runtime 测试 5000ms 超时 |
+| pnpm exec vitest run tests/task-runtime.spec.ts -t 'durably accepts an event while successor creation\|observes a real in-flight question' | 1 | 隔离后 question 测试 695ms 通过；slow successor 5455ms 超时，31 项未选 |
+| pnpm build | 0 | 最终统一 entry 构建成功；同时由下一条再次执行验证 |
+| pnpm verify:pack-exports | 0 | 真实 tgz 安装并 import 13 个 Node 生产导出 |
+| git diff --check | 0 | 补丁格式检查通过 |
+| git diff e9dc56bdc022cfdfa259bc5f1e04b931249bb102 -- src/task-runtime.ts src/task-runtime tests/task-runtime.spec.ts | 0、无差异 | 两个超时涉及的原运行器源码与测试未被本票修改 |
+
+超时测试包含真实 DSH 初始化、磁盘 I/O 与一次显式 2300ms 的锁持有。当前证据只证明原测试在此环境超过原 5 秒预算，不能据此声称其业务断言通过，也未把它归结为本票产品回归。原源码、断言与超时均未调整；固定 base 对照诊断交主会话继续。
+
+UI、真实 DSH 浏览器、真实模型调用、活动旧记录迁移均未在本阶段验证；不据后端测试宣称整票浏览器验收完成。本阶段未部署/重启/修改现有 18780/18781 服务，没有外部业务写入。记录作用域保持单宿主同 PID 命名空间，不提供跨机器锁或断电 fsync 保证。

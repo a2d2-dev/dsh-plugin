@@ -22,6 +22,13 @@ import { Watcher } from '../src/github-watch/watcher.ts'
 import type { Inject } from '../src/github-watch/watcher.ts'
 import { StubTools, stubAgent, toolRunContext } from './stubs.ts'
 
+// The plugin tries `gh auth token` before GH_TOKEN. Never launch a real CLI
+// (or read a developer's credentials) in unit tests: exercise its env fallback.
+vi.mock('node:child_process', async importOriginal => ({
+  ...await importOriginal<typeof import('node:child_process')>(),
+  execFile: vi.fn(() => { throw new Error('gh is unavailable in unit tests') }),
+}))
+
 const pr = (patch: Partial<PrState> = {}): PrState => ({
   number: 7, state: 'open', draft: false, headSha: 'aaaaaaa1', mergedAt: null, checks: null, review: null, ...patch,
 })
@@ -79,7 +86,7 @@ describe('WatchStore', () => {
     await store.add({ repo: 'A/B', pr: 7, session: 's1', last: null, since: 't2' })
     await store.told({ repo: 'a/b', pr: 7, session: 's1' }, pr({ checks: 'pending' }))
     const reread = await new WatchStore(dir).list()
-    expect(reread).toEqual([{ repo: 'a/b', pr: 7, session: 's1', last: pr({ checks: 'pending' }), since: 't' }])
+    expect(reread).toEqual([{ repo: 'a/b', pr: 7, session: 's1', last: pr({ checks: 'pending' }), since: 't', revision: 1 }])
     await store.remove({ repo: 'a/b', pr: 7, session: 's1' })
     expect(JSON.parse(await readFile(join(dir, WATCHES_FILE), 'utf8'))).toEqual({ version: 1, watches: [] })
   })
@@ -134,6 +141,42 @@ function harness(dir: string, options: { answerTimeoutMs?: number; gone?: Set<st
 }
 
 describe('Watcher', () => {
+  it('preserves both states across a crash after enqueue but before the watch acknowledgement', async () => {
+    const dir = await tempDir()
+    const store = new WatchStore(dir)
+    await store.add({ repo: 'a/b', pr: 7, session: 's1', last: pr(), since: 'stable-watch' })
+    const inbox = new Map<string, string>()
+    const ids: string[] = []
+    let connection!: FakeConnection
+    let failAfterEnqueue = true
+    const options = {
+      store, relay: { baseUrl: 'https://relay.test', token: async () => 't' },
+      connect: (repo: string, emit: (event: RelayEvent) => void) => { connection = new FakeConnection(repo, emit); return connection },
+      inject: async (_session: string, message: Parameters<Inject>[1]) => {
+        if (!message.eventId) throw new Error('missing durable event identity')
+        ids.push(message.eventId)
+        inbox.set(message.eventId, message.text)
+        if (failAfterEnqueue) throw new Error('crash after enqueue')
+        return 'delivered' as const
+      },
+    }
+    let watcher = new Watcher(options)
+    await watcher.start()
+    connection.emit({ type: 'states', prs: [pr({ checks: 'success' })] })
+    await (watcher as unknown as { chain: Promise<unknown> }).chain
+    expect((await store.list())[0]?.revision).toBeUndefined()
+    watcher.stop()
+    failAfterEnqueue = false
+    watcher = new Watcher({ ...options, store: new WatchStore(dir) })
+    await watcher.start()
+    connection.emit({ type: 'states', prs: [pr({ state: 'merged', checks: 'success', mergedAt: 't' })] })
+    await (watcher as unknown as { chain: Promise<unknown> }).chain
+    expect(inbox.size).toBe(2)
+    expect(ids[0]).not.toBe(ids[1])
+    expect(await store.list()).toEqual([])
+    watcher.stop()
+  })
+
   it('answers the tool call with the first state, then reports only differences', async () => {
     const h = harness(await tempDir())
     const call = h.watcher.watch('a/b', 7, 's1')
@@ -382,47 +425,54 @@ describe('github_watch plugin', () => {
     const agent = stubAgent(home, session)
     const flush = vi.fn(async () => true)
     const ctx = new Context()
-    await ctx.plugin(StubTools)
-    await ctx.plugin(NamedStub, { name: 'agents', impl: { list: () => [agent] } })
-    await ctx.plugin(NamedStub, { name: 'sessions', impl: { flush } })
-    await ctx.plugin(NamedStub, { name: 'sessionController', impl: { resolveAgent: async () => ({ error: { code: 'session/not-found' } }) } })
-    await ctx.plugin(watchPlugin, { homeDir: home, relayUrl: 'https://relay.test' })
-    const tool = (ctx.get('tools') as unknown as StubTools).find('github_watch')
-    if (tool === undefined) throw new Error('the tool did not register')
+    try {
+      await ctx.plugin(StubTools)
+      await ctx.plugin(NamedStub, { name: 'agents', impl: { list: () => [agent] } })
+      await ctx.plugin(NamedStub, { name: 'sessions', impl: { flush } })
+      await ctx.plugin(NamedStub, { name: 'sessionController', impl: { resolveAgent: async () => ({ error: { code: 'session/not-found' } }) } })
+      await ctx.plugin(watchPlugin, { homeDir: home, relayUrl: 'https://relay.test' })
+      const tool = (ctx.get('tools') as unknown as StubTools).find('github_watch')
+      if (tool === undefined) throw new Error('the tool did not register')
 
-    const args = { repo: 'a2d2-dev/a2d2-services', pr: 7 }
-    const call = tool.execute(args, toolRunContext(agent as unknown as Agent, tool.name, args))
-    await vi.waitFor(() => expect(sockets).toHaveLength(1))
-    sockets[0]!.open()
-    sockets[0]!.message({ type: 'snapshot', prs: [pr({ checks: 'pending' })] })
-    expect(await call).toMatchObject({ repo: 'a2d2-dev/a2d2-services', pr: 7, status: 'watching', state: 'open', checks: 'pending' })
-    expect(agent.followup).not.toHaveBeenCalled()
+      const args = { repo: 'a2d2-dev/a2d2-services', pr: 7 }
+      const call = tool.execute(args, toolRunContext(agent as unknown as Agent, tool.name, args))
+      await vi.waitFor(() => expect(sockets).toHaveLength(1))
+      sockets[0]!.open()
+      sockets[0]!.message({ type: 'snapshot', prs: [pr({ checks: 'pending' })] })
+      expect(await call).toMatchObject({ repo: 'a2d2-dev/a2d2-services', pr: 7, status: 'watching', state: 'open', checks: 'pending' })
+      expect(agent.followup).not.toHaveBeenCalled()
 
-    sockets[0]!.message({ type: 'pr', pr: pr({ state: 'merged', checks: 'success', mergedAt: '2026-10-01T15:50:15Z' }) })
-    await vi.waitFor(() => expect(agent.followup).toHaveBeenCalledTimes(1))
-    const message = agent.followup.mock.calls[0]![0]
-    expect(message.source).toEqual({
-      kind: 'a2d2-github-watch', repo: 'a2d2-dev/a2d2-services', pr: 7, form: 'notice', summary: 'a2d2-dev/a2d2-services#7: merged, CI passed',
-    })
-    expect(message.content[0].text).toContain('The watch on this PR has ended')
-    await vi.waitFor(() => expect(flush).toHaveBeenCalledWith(agent.session))
-    // The merge ended the only watch, so the connection is already closed.
-    expect(sockets[0]!.readyState).toBe(3)
-    await ctx.fiber.dispose()
+      sockets[0]!.message({ type: 'pr', pr: pr({ state: 'merged', checks: 'success', mergedAt: '2026-10-01T15:50:15Z' }) })
+      await vi.waitFor(() => expect(agent.followup).toHaveBeenCalledTimes(1))
+      const message = agent.followup.mock.calls[0]![0]
+      expect(message.source).toEqual({
+        kind: 'a2d2-github-watch', repo: 'a2d2-dev/a2d2-services', pr: 7, form: 'notice', summary: 'a2d2-dev/a2d2-services#7: merged, CI passed',
+      })
+      expect(message.content[0].text).toContain('The watch on this PR has ended')
+      await vi.waitFor(() => expect(flush).toHaveBeenCalledWith(agent.session))
+      // Delivery flush precedes durable watch removal and asynchronous pruning.
+      await vi.waitFor(() => expect(sockets[0]!.readyState).toBe(3))
+    } finally {
+      await ctx.fiber.dispose()
+    }
   })
 
   it('closes its connections when the plugin unloads', async () => {
     const home = await tempDir()
     await new WatchStore(home).add({ repo: 'a/b', pr: 7, session: 'session-main', last: pr(), since: 't' })
     const ctx = new Context()
-    await ctx.plugin(StubTools)
-    await ctx.plugin(NamedStub, { name: 'agents', impl: { list: () => [] } })
-    await ctx.plugin(NamedStub, { name: 'sessions', impl: { flush: async () => true } })
-    await ctx.plugin(NamedStub, { name: 'sessionController', impl: { resolveAgent: async () => ({ error: { code: 'session/not-found' } }) } })
-    await ctx.plugin(watchPlugin, { homeDir: home, relayUrl: 'https://relay.test' })
-    await vi.waitFor(() => expect(sockets).toHaveLength(1))
-    sockets[0]!.open()
-    await ctx.fiber.dispose()
-    expect(sockets[0]!.readyState).toBe(3)
+    try {
+      await ctx.plugin(StubTools)
+      await ctx.plugin(NamedStub, { name: 'agents', impl: { list: () => [] } })
+      await ctx.plugin(NamedStub, { name: 'sessions', impl: { flush: async () => true } })
+      await ctx.plugin(NamedStub, { name: 'sessionController', impl: { resolveAgent: async () => ({ error: { code: 'session/not-found' } }) } })
+      await ctx.plugin(watchPlugin, { homeDir: home, relayUrl: 'https://relay.test' })
+      await vi.waitFor(() => expect(sockets).toHaveLength(1))
+      sockets[0]!.open()
+      await ctx.fiber.dispose()
+      expect(sockets[0]!.readyState).toBe(3)
+    } finally {
+      await ctx.fiber.dispose()
+    }
   })
 })

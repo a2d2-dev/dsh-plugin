@@ -8,7 +8,7 @@
  * `ctx.get` is typed as possibly absent, and every caller below degrades to a
  * no-op rather than throwing.
  *
- * @module @deepseek-ai/dsh-a2d2/client/context
+ * @module @a2d2/dsh-a2d2/client/context
  */
 
 import type { Context } from '@deepseek-ai/cordis'

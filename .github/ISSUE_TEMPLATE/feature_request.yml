@@ -1,0 +1,24 @@
+name: Feature request
+description: Propose an improvement with observable acceptance criteria
+title: 'feat: '
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: Who encounters this problem, and what are they trying to accomplish?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior and alternatives
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Describe how a contributor and reviewer can verify the result.
+    validations:
+      required: true

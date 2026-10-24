@@ -7,7 +7,7 @@
  * login-cookie check as DSH's built-in channels; a Host or Origin header alone
  * is forgeable by any non-browser client and is never enough.
  *
- * @module @deepseek-ai/dsh-a2d2/src/route-auth
+ * @module @a2d2/dsh-a2d2/src/route-auth
  */
 
 import type { IncomingHttpHeaders } from 'node:http'

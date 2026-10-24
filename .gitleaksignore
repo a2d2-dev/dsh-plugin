@@ -1,4 +1,6 @@
 # Reviewed false positives: SHA-256 evidence digests and deliberate redaction test fixtures.
+# client_update.py generated this hostAssets value with hashlib.sha256.
+baba28766787639eee08046e9c9a3af6f04f699a:docs/artifacts/issue-137-2026-10-24/client-deployment.json:generic-api-key:24
 09079fd34e4ac5e0d9b3d43db2d2558bc069c4c9:docs/artifacts/a2d2-v3-121-2026-10-19/product-first-pass/evidence-sha256.json:generic-api-key:4
 09079fd34e4ac5e0d9b3d43db2d2558bc069c4c9:docs/artifacts/a2d2-v3-121-2026-10-19/product-first-pass/evidence-sha256.json:generic-api-key:10
 7ff27a45a60b67f4a649191b5efc848b85a9bd2f:tests/handoff-service.spec.ts:generic-api-key:315

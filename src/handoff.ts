@@ -7,7 +7,7 @@
  * this grammar only: text this parser does not recognize as an option or a
  * sub-command is the focus, exactly as `/goal` treats unrecognized input.
  *
- * @module @deepseek-ai/dsh-a2d2/src/handoff
+ * @module @a2d2/dsh-a2d2/src/handoff
  */
 
 import { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -37,7 +37,9 @@ export type HandoffCommand =
  * @returns the branded id, or `undefined` when it is not one.
  */
 export function parseSessionId(value: string): SessionId | undefined {
-  return /^session-[a-z0-9][a-z0-9-]*$/.test(value) ? SessionId(value) : undefined
+  const legacy = /^session-[a-z0-9][a-z0-9-]*$/u
+  const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/iu
+  return legacy.test(value) || uuid.test(value) ? SessionId(value) : undefined
 }
 
 /**
@@ -193,7 +195,9 @@ const REDACTION_PATTERNS: readonly RedactionPattern[] = [
   },
   {
     label: 'high-entropy token',
-    pattern: /(sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,})/gu,
+    // Every rule captures (preserved prefix, secret). A single capture would
+    // pass replace's numeric offset as `secret`. Do not match inside identifiers.
+    pattern: /(?<![A-Za-z0-9_-])()(sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,})/gu,
   },
 ]
 

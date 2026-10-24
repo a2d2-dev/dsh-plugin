@@ -6,10 +6,11 @@ coverage/
 *.tgz
 tmp/
 
-# Local agent sessions, worktrees, and machine state
+# Local agent sessions, isolated worktrees, and machine state
 /.claude/
 /.dsh/
 /.local/
+/.scratch/
 
-# Local acceptance reports and screenshots
+# Private acceptance reports and screenshots; Git history needs separate review.
 /docs/artifacts/

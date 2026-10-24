@@ -5,7 +5,7 @@
  * and openability. This module folds those two public reads into rows the React
  * surface can render without knowing task-document details.
  *
- * @module @deepseek-ai/dsh-a2d2/client/panel-model
+ * @module @a2d2/dsh-a2d2/client/panel-model
  */
 
 import type { PanelMember, PanelPayload, PanelTask, PanelTaskIssue } from '../panel-types.ts'

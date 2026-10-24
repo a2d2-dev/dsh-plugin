@@ -5,7 +5,7 @@
  * only the plugin-owned stage Agent settings, and only to a browser DSH has
  * authenticated (see `route-auth.ts`), like every other A2D2 route.
  *
- * @module @deepseek-ai/dsh-a2d2/src/config-page
+ * @module @a2d2/dsh-a2d2/src/config-page
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -248,6 +248,10 @@ export function createConfigHandler(
         case 'settings.get': {
           respond(response, 200, { ok: true, value: {
             ...settingsView(dependencies.getSettings()),
+            // The A2D2 candidate list is the plugin's routable catalog
+            // (`llm.listModels`), which can be wider than the session
+            // controller's Host-generation catalog.
+            catalog: await dependencies.modelRoutes?.() ?? [],
             efforts: await dependencies.modelEfforts?.() ?? {},
           } })
           return

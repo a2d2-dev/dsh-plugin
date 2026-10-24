@@ -12,7 +12,7 @@
  * circle and is clamped into the viewport, because a card that follows a dragged
  * circle off the screen edge would be a worse surface than no drag at all.
  *
- * @module @deepseek-ai/dsh-a2d2/client/orb-position
+ * @module @a2d2/dsh-a2d2/client/orb-position
  */
 
 /** Distance kept between the indicator and a shell panel or a viewport edge, in px. */

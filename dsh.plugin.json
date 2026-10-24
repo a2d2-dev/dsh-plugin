@@ -1,14 +1,14 @@
 {
   "id": "dsh-external/dsh-a2d2",
-  "version": "0.0.1",
+  "version": "0.0.23-dev.0",
   "main": "./lib/index.js",
-  "description": "A²D² 任务聚合与交接：把属于同一件事的会话归到一起、记录交接边，并用 /handoff 生成交接文档与后继会话的首条 prompt，数据存项目本地 .dsh/a2d2 文档",
+  "description": "A²D² for DSH: GitHub Project and Issue workflow, task execution, session continuation, and acceptance evidence",
   "engines": {
     "dsh": ">=0.2.0-rc.2"
   },
   "contributes": {
     "commands": ["handoff"],
-    "tools": ["bind_main_session", "dispatch_subagent", "open_subtask", "complete_task", "github_watch"],
+    "tools": ["bind_main_session", "dispatch_subagent", "open_subtask", "complete_task", "github_watch", "work_control", "work_organize", "work_related_issue", "work_read", "work_report", "work_continuation_material", "task_runtime"],
     "skills": []
   }
 }

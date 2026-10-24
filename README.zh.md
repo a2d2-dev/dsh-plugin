@@ -2,7 +2,39 @@
 
 [English](README.md) | 中文
 
+[CI](https://github.com/a2d2-dev/dsh-plugin/actions/workflows/ci.yml) · [贡献指南](CONTRIBUTING.md) · [支持](SUPPORT.md) · [安全政策](SECURITY.md) · [更新记录](CHANGELOG.md)
+
 本仓库存放 **A²D² DeepSeek Harness 插件**：把 A²D² 落地进 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的各组件，作为一个可安装的插件交付。
+
+默认分支 `main` 是整合后的开发源码（`0.0.23-dev.0`）。现有 `v0.0.22` 预发布包保持原标签，标签后的修复列在更新记录的 **Unreleased** 部分；后续版本从 `main` 发布。
+
+## 安装 v0.0.22 预发布包
+
+从 [GitHub Release v0.0.22](https://github.com/a2d2-dev/dsh-plugin/releases/tag/v0.0.22) 下载 `a2d2-dsh-a2d2-0.0.22.tgz`，不要解压，也不要使用自动生成的 Source code 压缩包。桌面端插件管理器可通过下载文件的绝对路径安装；命令行安装使用对应应用提供的 `dsh plugin --profile desktop add /absolute/path/a2d2-dsh-a2d2-0.0.22.tgz`。更新后完整退出并重新打开 DSH，以清除旧会话实例中的拦截器；仅刷新页面不足以替换旧实例。
+
+此包沿用当前运行版本的包名 `@a2d2/dsh-a2d2`，包含完整工作面板、服务端与浏览器构建。此前 GitHub v0.0.1 使用 `dsh-a2d2`；不要把两种包名同时启用为两套 A²D² 实例。版本号接续已部署的内部 0.0.21。Node.js 22 起；本版在当前匹配的 DSH 0.2.1-rc.2 开发宿主上验证，未宣称所有官方桌面版本均已兼容。校验文件随 Release 提供。
+
+人工对话在任务等待、暂停、完成和交接后仍可使用。旧会话会提示新会话入口；对话不自动重开已完成任务或夺回协调身份。旧版暂存的未消费人工消息会在原会话下一次人工输入时恢复，保留内容及附件并去重。
+
+## GitHub Project 与 Issue 工作流
+
+打开 DSH 侧栏的 **A²D² 控制面板**，连接 GitHub Project，直接浏览和处理分配给你的 Issues。连接和浏览不会启动模型。
+
+1. 点击 Issue 查看原始要求、处理状态、下一步和阻塞。点击 **开始处理**，确认目录与模型后创建或复用当前处理会话。
+2. 在 Project 中开启 **持续处理**，明确负责人、必须包含的标签与执行配置。规则只领取范围内的开放 Issues，同一规则同时自动推进一项；等待回复的工作保留会话并让其他候选继续。
+3. **暂停接新工作**保留当前执行；Issue 中的**暂停处理**停止该项自动推进，自动任务输入先保存，直到显式恢复。原生会话中的人工消息始终可以发送并得到回应，不要求先恢复任务，也不自动解除暂停。自动调度继续遵守并发限制。
+4. 在项目或当前执行中设置 **200K、300K 或自定义 token 目标**。系统在安全边界保存决定、证据与待办，再交给后继会话。目标结合实际模型容量校验，是提前接续目标，单个长轮次可能超过它。
+5. 围绕原始 Issue 查看需求块、关联子 Issue 与更深层子工作，以及每项的状态、证据和待确认事项。完成依据当前验收结果；会话空闲和 GitHub Closed 都不会替代验收。
+
+持续处理当前支持 GitHub Project 来源。搜索和处理状态筛选作用于当前已载入页；自动领取按完整 Project 观察与已保存规则执行。来源读取、处理进展和 GitHub 远端状态分别显示，此流程不自动关闭远端 Issue。
+
+DSH Goal 自动续跑消息由 Goal 驱动管理，A²D² 不把它们保存为 Task 待投递输入，也不跨会话转移。旧版本误存而尚未消费的 Goal 消息会在执行恢复时标记为“已废弃”，保留原消息供查看，并停止重放；废弃不表示已被模型消费或已通过任务验收。Goal 的暂停与 Task 的恢复分别生效。
+
+任务处理与接续会话自动使用任务名称和真实编号，例如 `#200/#211 · 会话 2 · 修复会话名称`。完整名称按宿主80字节上限保留编号、接续序列与可读短标题；规则和历史名称修复范围见[任务会话名称](docs/session-naming.md)。
+
+以下章节还保留既有会话工具与兼容记录格式的说明；控制面板中的受管会话使用 `work_control`、`work_report` 和 `work_organize` 保存进展，不要求手工绑定 Issue。
+
+子代理派发优先使用宿主的 `startActivation`，显式指定 `delivery: 'parent'`；仅在该方法不存在时使用旧宿主的 `startContinuable`。模型与 reasoningEffort 在派发请求的 `agentOptions` 中指定，不需要为派发新增 `selectLocalModel` 或修改 DSH 源码。新接口报错直接返回，不重试旧接口。两种契约的类型来自各自已发布的 DSH 包，别名依赖只用于开发时类型检查。会话 ID 原样兼容旧式 `session-…` 与 UUID，仍拒绝路径输入。
 
 **A²D²（Agentic Agile Driven Development，智能体敏捷驱动开发）是一套开发方法学**——它把敏捷开发的节奏交给智能体来驱动：由高品质模型主持架构与决策，由多模型编排承担执行，让属于同一件工作的会话在推进过程中始终串在一起。方法学本身比这个插件更大（它还涵盖工作流 skill 与多模型编排）；本仓库只是它在 DSH 一侧的具体落点。随着这一落地增长，更多 DSH 侧组件都会归在同一个 `a2d2` 命名空间下、存放于此。
 
@@ -11,33 +43,11 @@
 - **任务聚合**——一个任务把属于同一件工作的会话归到一起，并记录它们之间的交接边，使相关会话保留一段可阅读、可评审、可提交的关系。数据存放在项目本地文档中，且不为承载它而修改任何会话的持久格式。绑定了任务 issue 的任务还记着它的主会话——此刻执行它的那一条会话，由会话用 `bind_main_session` 工具绑定。主会话可以用 `open_subtask` 把设计较重的子任务开成根主会话，也可以用 `dispatch_subagent` 派出可续跑子代理，或用 `complete_task` 宣告自己的任务完成；Agent 身份与模型选择都来自阶段 Agent 表。
 - **会话交接**——`/handoff` 把工作从一条又长又贵的会话搬到一条干净的新会话而不丢失脉络：交接出去的会话写下有界的接续内容，后继会话据此继续。
 - **指示球**——输入框旁一枚可一眼看清上下文长度与花费的小球；会话接近 smart zone 时告警，提醒在下个相位边界决定去向。
-- **A²D² 面板**——better-sidebar 里的侧边栏 Tab，展示当前会话所属项目的任务、成员交接树，以及主会话子代理路由树。
+- **A²D² 控制面板**——DSH 内的 GitHub Project 与 Issue 入口，连接原始要求、持续处理、需求拆解、验收进展和当前处理会话。
 - **GitHub 关注**——`github_watch` 让会话不用轮询就能等一个 PR：PR 合并、关闭、CI 出结果或有了 review 结论时，会话会收到一条消息，空闲中的会话也会被唤醒。
 - **通知**——任务 issue 的主会话停下来等 LF 时，经已装的 `notifier` 提供者往 LF 手机推一条带 A²D² 语义的消息。
 
-> `A²D²` 是品牌与展示写法；`a2d2` 是技术标识——包名、目录、服务名都用它，因为 `²` 不能进 npm 包名。包名为 `dsh-a2d2`。
-
-## 安装
-
-`lib/` 是构建产物且在 `.gitignore` 中，因此刚 clone 的源码树里没有可运行的插件。`pnpm pack` 会运行 `prepack` 钩子（构建 + 入口断言），所以打出的 tarball 总是完整的：
-
-```console
-git clone https://github.com/a2d2-dev/dsh-plugin.git dsh-a2d2
-cd dsh-a2d2
-pnpm install
-pnpm build                       # 可选：pnpm pack 的 prepack 也会构建
-pnpm pack                        # -> dsh-a2d2-0.0.1.tgz
-dsh plugin --profile web add "$(pwd)/dsh-a2d2-0.0.1.tgz"
-```
-
-安装时使用 tarball 的绝对路径。打包产物是否完整由 `pnpm verify:pack-exports`（见下）检查。
-
-> **警告——请安装构建后的 tarball，不要安装源码树。** 安装本地目录（`dsh plugin --profile web add ./dsh-a2d2`）或 git URL（`… add git+https://…`）**不会**运行 `pnpm build`，包会以没有 `lib/` 的空壳形态落地；随后 8 个 A²D² 行全部 import 失败（`ERR_MODULE_NOT_FOUND …/lib/*.js`），profile 启动时只留一行 warning，A²D² 静默失效。改动源码后，重新构建 tarball 并安装它：
->
-> ```console
-> pnpm build && pnpm pack
-> dsh plugin --profile web add "$(pwd)/dsh-a2d2-0.0.1.tgz"
-> ```
+> `A²D²` 是品牌与展示写法；`a2d2` 是技术标识——包名、目录、服务名都用它，因为 `²` 不能进 npm 包名。包名为 `@a2d2/dsh-a2d2`。
 
 本文余下部分是插件的行为契约与已知限制，按各组件分列于下。
 
@@ -54,19 +64,25 @@ git clone https://github.com/a2d2-dev/dsh-plugin.git
 cd dsh-plugin
 corepack enable
 pnpm install --frozen-lockfile
+pnpm verify:repository
 pnpm typecheck
 pnpm test
-pnpm verify:pack-exports
-pnpm pack --out /absolute/path/to/output
+pnpm test:node
+pnpm verify:pack-exports        # 要求已提交且干净的 HEAD
+pnpm pack --pack-destination /absolute/path/to/output
 ```
 
 将生成的 tarball 安装到已有的 DSH web profile：
 
 ```sh
-dsh plugin --profile web add /absolute/path/to/output/dsh-a2d2-0.0.1.tgz
+dsh plugin --profile web add /absolute/path/to/output/a2d2-dsh-a2d2-0.0.23-dev.0.tgz
 ```
 
-包名和浏览器 bundle 名称统一为 `dsh-a2d2`；本项目不在 `@deepseek-ai` scope 下发布。npm registry 发布及干净宿主上的端到端安装尚未验证。Agent 候选应配置为宿主实际可用的 provider/model 路由；示例默认值不代表插件提供这些模型。可选工作流 skill（`ask-matt`、`handoff`）需单独安装，路径见下方 `skillsRoot`。GitHub 功能还需要安装并认证 `gh` CLI。
+包名和浏览器 bundle 名称统一为 `@a2d2/dsh-a2d2`；本项目不在 `@deepseek-ai` scope 下发布。npm registry 发布及干净宿主上的端到端安装尚未验证。Agent 候选应配置为宿主实际可用的 provider/model 路由；示例默认值不代表插件提供这些模型。可选工作流 skill（`ask-matt`、`handoff`）需单独安装，路径见下方 `skillsRoot`。GitHub 功能还需要安装并认证 `gh` CLI。
+
+将构建后的 tarball 安装到实际使用的 profile（`desktop` 或 `web`）。源码 checkout 没有 `lib/`；`pnpm pack` 会通过 `prepack` 构建。Git URL 安装可以运行准备构建，但较新 pnpm 可能要求在所属 profile 显式批准精确提交，见 [Git 安装说明](docs/git-installation.md)；不要配置一律允许依赖构建。
+
+贡献检查和测试资料存放方式见[贡献指南](CONTRIBUTING.md)与[测试说明](docs/testing.md)。可选的 GitHub watch 会将 GitHub token 发送到指定 relay，默认由 A²D² 项目运营的 `hooks.a2d2.dev`；启用前阅读[凭据信任边界](SECURITY.md#credentials-and-external-services)。
 
 ## 许可证
 
@@ -74,27 +90,33 @@ dsh plugin --profile web add /absolute/path/to/output/dsh-a2d2-0.0.1.tgz
 
 ## 插件（namespace：`a2d2`）
 
-本包贡献八个挂载行。`ctx.a2d2` 是任务存储，不声明任何服务，因此在任何 profile 中都会加载；命令行声明了 `commands` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `/handoff`；基础工具行声明了 `tools` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `bind_main_session` 与 `dispatch_subagent`；开子任务工具行额外声明 `agents` 与 `llm`，因为 `open_subtask` 要创建根会话，并从 `grill` 阶段指定的 Agent 选择模型；完成任务工具行声明 `agents`，因为 `complete_task` 可能需要先恢复父任务主会话再发送通知；CEO 提示段行声明了 `agents`、`systemPrompt` 与 `a2d2`，所以只有同时组合 live Agents 与系统提示词组装的 profile 才得到主会话作用域指导；Agent 提示段行使用同一组服务，为已记录 Agent 的工程师/评审会话装配配置；GitHub 关注行声明了 `tools`、`agents`、`sessions` 与 `sessionController`，所以只有能唤醒会话的 profile 才得到 `github_watch`。`dispatch_subagent` 只在实际运行时查找 `subagents`，因此没有子代理服务的 profile 仍能加载基础工具行，`bind_main_session` 照常可用。Cordis 对"声明了却缺失的服务"是拒绝加载，这正是把它们拆成多行、而不是从一行里条件式注册的原因。悬浮球不需要自己的一行：它通过自己已经身处的那个会话驱动同一条命令。
+本包声明十个挂载行，其中 `a2d2-work` 提供受管工作面板和工具，兼容的 `a2d2-task-runtime` 默认禁用。其余八行保留以下会话工具能力。`ctx.a2d2` 是任务存储，不声明任何服务，因此在任何 profile 中都会加载；命令行声明了 `commands` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `/handoff`；基础工具行声明了 `tools` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `bind_main_session` 与 `dispatch_subagent`；开子任务工具行额外声明 `agents` 与 `llm`，因为 `open_subtask` 要创建根会话，并从 `grill` 阶段指定的 Agent 选择模型；完成任务工具行声明 `agents`，因为 `complete_task` 可能需要先恢复父任务主会话再发送通知；CEO 提示段行声明了 `agents`、`systemPrompt` 与 `a2d2`，所以只有同时组合 live Agents 与系统提示词组装的 profile 才得到主会话作用域指导；Agent 提示段行使用同一组服务，为已记录 Agent 的工程师/评审会话装配配置；GitHub 关注行声明了 `tools`、`agents`、`sessions` 与 `sessionController`，所以只有能唤醒会话的 profile 才得到 `github_watch`。`dispatch_subagent` 只在实际运行时查找 `subagents`，因此没有子代理服务的 profile 仍能加载基础工具行，`bind_main_session` 照常可用。Cordis 对"声明了却缺失的服务"是拒绝加载，这正是把它们拆成多行、而不是从一行里条件式注册的原因。悬浮球不需要自己的一行：它通过自己已经身处的那个会话驱动同一条命令。
 
 发布前运行 `pnpm verify:pack-exports`。它先用 `git archive HEAD` 只把 git 跟踪的文件导出到临时干净树（并断言其中没有 `lib/`），在该树里运行 `pnpm pack`，让 `prepack` 从零构建；随后断言 tarball 文件清单包含全部显式 `exports` 目标（含类型声明与 client 产物）、`dsh.plugin.json` 与 `cordis.patch.yml`，再把同一个 tarball 安装到空的临时项目并逐个导入 `package.json` exports 声明的每个 Node 入口。因此这个检查既覆盖空壳 tarball（未构建就打包的失败形态），也会在发版前发现遗漏的 hash 构建分块，例如共享的交接分块。由于校验对象是已提交的 `HEAD`，工作区有未提交改动时该检查会直接失败：先 commit 或 stash。
 
 ```yaml
 - id: a2d2
-  name: 'dsh-a2d2'
+  name: '@a2d2/dsh-a2d2'
+- id: a2d2-work
+  name: '@a2d2/dsh-a2d2/work-plugin'
 - id: a2d2-command
-  name: 'dsh-a2d2/command'
+  name: '@a2d2/dsh-a2d2/command'
 - id: a2d2-tools
-  name: 'dsh-a2d2/tools'
+  name: '@a2d2/dsh-a2d2/tools'
 - id: a2d2-open-subtask-tools
-  name: 'dsh-a2d2/open-subtask-tools'
+  name: '@a2d2/dsh-a2d2/open-subtask-tools'
 - id: a2d2-complete-task-tools
-  name: 'dsh-a2d2/complete-task-tools'
+  name: '@a2d2/dsh-a2d2/complete-task-tools'
 - id: a2d2-ceo-prompt
-  name: 'dsh-a2d2/ceo-prompt'
+  name: '@a2d2/dsh-a2d2/ceo-prompt'
 - id: a2d2-agent-prompt
-  name: 'dsh-a2d2/agent-prompt'
+  name: '@a2d2/dsh-a2d2/agent-prompt'
 - id: a2d2-github-watch
-  name: 'dsh-a2d2/github-watch'
+  name: '@a2d2/dsh-a2d2/github-watch'
+- id: a2d2-task-runtime
+  name: '@a2d2/dsh-a2d2/task-runtime'
+  config:
+    enabled: false
 ```
 
 | 键 | 默认值 | 约定 |
@@ -324,7 +346,7 @@ sessions:
 
 ## 指示球
 
-本包还带一个浏览器 bundle（`exports["./client"]`、`dsh.client.platform: 'web'`），挂在**裸 `dsh-a2d2` 行**上——子路径行永远不能承载客户端半边，而且 bundle 自己注册的 id 必须等于入口名，这就是为什么它的 id 就是包名。
+本包还带一个浏览器 bundle（`exports["./client"]`、`dsh.client.platform: 'web'`），挂在**裸 `@a2d2/dsh-a2d2` 行**上——子路径行永远不能承载客户端半边，而且 bundle 自己注册的 id 必须等于入口名，这就是为什么它的 id 就是包名。
 
 它在输入框旁渲染一个圆形指示球：显示当前会话的**上下文长度**（`453K`、`1.2M`），该路由配了费率时再显示估算的输入花费。**背景色承载读数**：低于告警长度为绿，达阈值为琥珀，危急为红；默认告警长度为 150K token。琥珀色表示会话接近 smart zone：到下个相位边界该做五选一，交接只是其一。悬停给出完整数字——精确 token、容量、百分比、以及带货币符号的花费——并在圆球上方只露出一个边界入口：**下一步**。交接不再是球上的平级动作。
 
@@ -539,3 +561,32 @@ sessions:
 - **子代理后代是懒加载的** —— 目录按父会话发布，因此新发现的分支会在面板可见且该父目录刷新后出现。
 - **路由取自子会话自己的最新 `request/header`** —— 子代理发起首次请求前该行显示未知；列表也永远无法报告一个子代理"此刻"在跑什么，只能报告它最近一次请求用了什么路由。
 - **目录是请求/响应，不是流** —— 新派出的子代理最多 5 秒后才出现在表内，而 Tab 不可见时不刷新。
+
+## 宿主后台任务运行器（一期）
+
+新增 `@a2d2/dsh-a2d2/task-runtime` mount（id `a2d2-task-runtime`），默认 `enabled: false`。仅在独立开发 profile 启用 `enabled: true`；`homeDir` 默认是 `$DSH_HOME/a2d2/task-runtime`（未设置 DSH_HOME 时使用 `~/.dsh`）。开发与生产的 DSH home、会话、存储和项目 `.dsh/a2d2` 必须隔离。
+
+已绑定 issue 且属于 workspace 的主会话可运行：
+
+```text
+/task-runtime start [issue-number] [title]
+/task-runtime status
+/task-runtime rotate [交接重点]
+/task-runtime stop
+/task-runtime resume
+/task-runtime recover
+```
+
+`run` 是 `start` 的别名；重复 start 不重复启动。普通 bind 不启动运行器。managed `/handoff` 明确拒绝且不调度交接，提示改用 `/task-runtime rotate`；既有 orb 会在 prepare 失败处停止，不创建额外后继。未启用运行器的手动交接保持原行为，手动 take 不能绕开执行权。后台与浏览器连接无关，在重启时只恢复 homeDir 中已显式登记的任务。
+
+`running` 默认继续 active 任务；`waiting-human` 等 LF 回复或 resume（期间外部事件保留），`waiting-event` 等任务事件，`paused` 暂停，`blocked` 表示有限重试或无进展检查失败，`done` 完成。`task_runtime` 模型工具可以报告 continue、wait-human、wait-event、rotate；实际提问、未结算原生子代理、活动子任务和 GitHub watch 也会阻止空推。`complete_task` 仅更新插件任务状态，不关闭 GitHub issue。
+
+配置：`pollMs`（默认 2000）、`rotateTokens`（150000）、`maxAutoTurns`（8，每代健康自动轮数，达到后交接）、`maxFailures`（3，操作失败及连续无进展阈值）。状态输出包含当前主会话、代数、workspace、操作步骤、待处理事件和最后错误。排查失败后使用 resume；未完成的交接沿原 operation 和后继 ID 恢复。
+
+恢复时会区分消息已排队与已被模型消费，并通过公开 Agent API 唤醒持久队列，不要求 LF 追加消息。事件先写入 homeDir 下独立 inbox，再并入运行记录；慢交接不占用入箱锁。GitHub 注册返回已结束或失败时，运行器不会把它当作仍需等待的 watch。
+
+每次交接先保存后继 ID，通过公开宿主 API 创建/恢复、继承 workspace、设置 CEO 会话本地模型、接任和投递接续内容。旧会话在 `agent/pre-step` 被拒绝执行。交接期间 GitHub 和子任务事件保存在任务收件箱，接任后投递。消息 ID 先落盘，重试回读会话日志与 inbox 去重；这不是跨存储的绝对一次事务。进展指纹是工具结果/回答的启发式比较，不能代替验收。文件锁限同机器同 PID 命名空间；断电持久性和跨主机共享不在本期承诺内。详见 ADR 0011。
+
+运行器后继与 `open_subtask` 使用公开 `sessionController.create` 创建/接续根会话，继承源会话当前 Agent preset 和 workspace，由宿主在发布会话前装配文件、shell 等工具及提示词。交接在创建前持久化选定 preset 与权限配置，重试保持相同身份；CEO 模型仍使用会话本地选择。继承命名权限 preset 及实际 sandbox/approval 配置（包括 custom），不继承单次审批结果，不写宿主全局默认。
+
+升级恢复旧后继时，create、take、deliver 都验证 preset。尚未开始运行的旧会话通过公开 preset 选择 API 补齐，保留原 ID；已有内容且 preset 不兼容时不覆盖，会在 status 中给出 `recoveryRequired` 和 `/task-runtime recover` 指令。在当前主会话空闲时执行该命令，会保留旧会话，先登记新的替代后继 ID，再携带原模型交接内容及旧会话历史指针接续；模型须检查旧会话的新进展后再执行。普通 resume 不会强改非空会话的 preset。

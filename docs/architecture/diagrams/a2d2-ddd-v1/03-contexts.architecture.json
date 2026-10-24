@@ -1,0 +1,24 @@
+{
+ "schema_version":1,"diagram_type":"architecture",
+ "meta":{"title":"A²D² 限界上下文映射","subtitle":"候选内部边界 + 既有外部边界 · C1–C6 对应正文协作表；不是微服务部署图"},
+ "components":[
+  {"id":"policy","type":"security","label":"BC-P Agent 策略","sublabel":"候选内部上下文 · D3","pos":[390,90],"size":[210,72]},
+  {"id":"tracking","type":"external","label":"BC-T 工作项跟踪","sublabel":"外部 · GitHub · D5","pos":[50,285],"size":[210,72]},
+  {"id":"orchestration","type":"backend","label":"BC-O 任务编排与连续执行","sublabel":"候选内部上下文 · D1 + D2","pos":[390,285],"size":[210,72]},
+  {"id":"runtime","type":"cloud","label":"BC-H 会话执行","sublabel":"外部 · DSH · D6","pos":[730,285],"size":[210,72]},
+  {"id":"projection","type":"frontend","label":"查询与交互投影","sublabel":"D4 · 暂不设独立领域上下文","pos":[390,550],"size":[210,72]}
+ ],
+ "connections":[
+  {"from":"policy","to":"orchestration","label":"C3 策略快照","fromSide":"bottom","toSide":"top","labelAt":[495,222]},
+  {"from":"orchestration","to":"tracking","label":"C1 CEO 使用 gh","fromSide":"left","toSide":"right","variant":"emphasis","labelAt":[325,306]},
+  {"from":"tracking","to":"orchestration","label":"C2 任务事件适配","fromSide":"bottom","toSide":"left","via":[[155,430],[345,430],[345,340]],"variant":"dashed","labelAt":[252,447]},
+  {"from":"orchestration","to":"runtime","label":"C4 公开 API","fromSide":"right","toSide":"left","variant":"emphasis","labelAt":[665,306]},
+  {"from":"runtime","to":"orchestration","label":"C5 宿主事实与结算","fromSide":"bottom","toSide":"right","via":[[835,430],[645,430],[645,340]],"variant":"dashed","labelAt":[742,447]},
+  {"from":"orchestration","to":"projection","label":"C6 本地事实投影","fromSide":"bottom","toSide":"top","labelAt":[495,480]}
+ ],
+ "cards":[
+  {"dot":"emerald","title":"内部边界为本轮提议","items":["BC-O 统一任务归属和执行权语义","BC-P 管 Agent 定义与策略有效性","均在现有插件进程内，不拆服务"]},
+  {"dot":"amber","title":"外部关系与翻译边界","items":["GitHub / DSH 提供上游事实与 API","适配层区分 Issue、Task、Session","原生子代理通知不改写父会话"]},
+  {"dot":"cyan","title":"投影不成为第二套真相","items":["现有面板只读当前项目本地任务","跨项目整页仍是已有设计","通知渠道沿既有 notifier 接口"]}
+ ]
+}

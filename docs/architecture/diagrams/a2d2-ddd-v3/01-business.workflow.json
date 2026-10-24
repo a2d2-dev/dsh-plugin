@@ -1,0 +1,239 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "A²D² 核心场景 · 本地与 GitHub 可选协同",
+    "subtitle": "同一领域身份与业务规则；图中五条路径均不要求 GitHub Issue 存在"
+  },
+  "lanes": [
+    {
+      "id": "establish",
+      "label": "S1 创建领域项目与任务 · 本地即可启动"
+    },
+    {
+      "id": "delegate",
+      "label": "S2 项目 Agent 指派与统一执行"
+    },
+    {
+      "id": "rotate",
+      "label": "S3 会话交接 · 保留领域身份"
+    },
+    {
+      "id": "recover",
+      "label": "S4 持久事件与恢复 · 不依赖 GitHub 在线",
+      "variant": "exception"
+    },
+    {
+      "id": "complete",
+      "label": "S5 验收完成 · 外部关闭独立同步"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "issue",
+      "lane": "establish",
+      "col": 0,
+      "type": "external",
+      "label": "创建项目与任务",
+      "sublabel": "生成领域稳定 ID"
+    },
+    {
+      "id": "bind",
+      "lane": "establish",
+      "col": 2,
+      "type": "backend",
+      "label": "保存指派与关联",
+      "sublabel": "本地工作记录持久化",
+      "width": 126
+    },
+    {
+      "id": "start",
+      "lane": "establish",
+      "col": 5,
+      "type": "security",
+      "label": "申请执行资格",
+      "sublabel": "无需 Issue 或 gh"
+    },
+    {
+      "id": "choose",
+      "lane": "delegate",
+      "col": 0,
+      "type": "backend",
+      "label": "选择项目 Agent",
+      "sublabel": "能力与工作目录"
+    },
+    {
+      "id": "dispatch",
+      "lane": "delegate",
+      "col": 2,
+      "type": "backend",
+      "label": "统一委派入口",
+      "sublabel": "DSH 子会话 / CLI provider",
+      "width": 132
+    },
+    {
+      "id": "result",
+      "lane": "delegate",
+      "col": 5,
+      "type": "messagebus",
+      "label": "复核执行结果",
+      "sublabel": "任务引用不带平台假设"
+    },
+    {
+      "id": "boundary",
+      "lane": "rotate",
+      "col": 0,
+      "type": "security",
+      "label": "安全交接边界",
+      "sublabel": "检查未结算执行"
+    },
+    {
+      "id": "successor",
+      "lane": "rotate",
+      "col": 2,
+      "type": "backend",
+      "label": "固定后继与恢复点",
+      "sublabel": "Task 与 Agent 不换身份",
+      "width": 132
+    },
+    {
+      "id": "take",
+      "lane": "rotate",
+      "col": 5,
+      "type": "backend",
+      "label": "提交接任",
+      "sublabel": "外部摘要可选发布"
+    },
+    {
+      "id": "waiting",
+      "lane": "recover",
+      "col": 0,
+      "type": "messagebus",
+      "label": "事件或中断",
+      "sublabel": "任务与执行标识"
+    },
+    {
+      "id": "inbox",
+      "lane": "recover",
+      "col": 2,
+      "type": "database",
+      "label": "本地持久化回读",
+      "sublabel": "收件箱 / 会话日志",
+      "width": 132
+    },
+    {
+      "id": "resume",
+      "lane": "recover",
+      "col": 5,
+      "type": "backend",
+      "label": "恢复或受阻",
+      "sublabel": "按执行能力处理"
+    },
+    {
+      "id": "accept",
+      "lane": "complete",
+      "col": 0,
+      "type": "backend",
+      "label": "验收通过",
+      "sublabel": "负责 Agent 复核"
+    },
+    {
+      "id": "close",
+      "lane": "complete",
+      "col": 2,
+      "type": "external",
+      "label": "保存任务完成事实",
+      "sublabel": "提交证据与领域版本",
+      "width": 132
+    },
+    {
+      "id": "done",
+      "lane": "complete",
+      "col": 5,
+      "type": "messagebus",
+      "label": "结束执行",
+      "sublabel": "通知与可选同步"
+    }
+  ],
+  "edges": [
+    {
+      "from": "issue",
+      "to": "bind",
+      "variant": "emphasis"
+    },
+    {
+      "from": "bind",
+      "to": "start",
+      "variant": "emphasis"
+    },
+    {
+      "from": "choose",
+      "to": "dispatch",
+      "variant": "emphasis"
+    },
+    {
+      "from": "dispatch",
+      "to": "result",
+      "variant": "dashed"
+    },
+    {
+      "from": "boundary",
+      "to": "successor",
+      "variant": "emphasis"
+    },
+    {
+      "from": "successor",
+      "to": "take",
+      "variant": "emphasis"
+    },
+    {
+      "from": "waiting",
+      "to": "inbox",
+      "variant": "dashed"
+    },
+    {
+      "from": "inbox",
+      "to": "resume",
+      "variant": "emphasis"
+    },
+    {
+      "from": "accept",
+      "to": "close",
+      "variant": "emphasis"
+    },
+    {
+      "from": "close",
+      "to": "done",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "纯本地完整闭环",
+      "items": [
+        "项目、任务、Agent 可独立创建",
+        "规格、证据、交接与完成持久保存",
+        "不需要 GitHub 账号、Issue 或 CLI gh"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "GitHub 是可选协同",
+      "items": [
+        "领域 ID 不等于平台 ID",
+        "关联、发布、导入由适配器负责",
+        "同步失败不伪称远端已更新"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "一致性范围不混用",
+      "items": [
+        "执行锁按领域 TaskId 仲裁",
+        "完成与远端关闭分别观察",
+        "跨机器仍需共享协调权威"
+      ]
+    }
+  ]
+}

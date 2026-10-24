@@ -1,0 +1,13 @@
+.panel { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--border-color, #5555); border-radius: 10px; background: var(--background-color, transparent); color: inherit; min-width: 0; }
+.panel p { margin: 6px 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.toolbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.form { display: grid; gap: 8px; }
+.form textarea { width: 100%; box-sizing: border-box; resize: vertical; padding: 10px; color: inherit; background: transparent; border: 1px solid var(--border-color, #7777); border-radius: 6px; font: inherit; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.panel button { padding: 6px 10px; border: 1px solid var(--border-color, #7777); border-radius: 6px; color: inherit; background: transparent; font: inherit; cursor: pointer; }
+.panel button:disabled { opacity: .5; cursor: default; }
+.panel a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.queue { display: grid; gap: 12px; padding-left: 24px; margin: 0; }
+.card { border: 1px solid var(--border-color, #5555); border-radius: 8px; padding: 12px; }
+.cardError { color: var(--error-color, #d85757); }
+@media (max-width: 600px) { .panel { padding: 10px; } .toolbar { display: grid; } .actions button { flex: 1 1 140px; } }
