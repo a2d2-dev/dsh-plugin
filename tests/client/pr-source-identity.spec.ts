@@ -41,7 +41,7 @@ it('shows PR repository facts and resolves sessions from full related Issue iden
   await controller.load()
   await controller.selectSourceTab('prs')
   const html = renderToStaticMarkup(createElement(WorkPanel, { controller }))
-  const rows = html.match(/<tr>[\s\S]*?<\/tr>/g) ?? []
+  const rows = html.match(/<tr\b[^>]*>[\s\S]*?<\/tr>/g) ?? []
   const own = rows.find(row => row.includes('Change 1'))
   const unrelated = rows.find(row => row.includes('Change 2'))
   const crossRepository = rows.find(row => row.includes('Change 3'))

@@ -125,6 +125,6 @@ describe('GitHub source public client behavior',()=>{
     panel.backToIssues()
     expect(panel.getSnapshot()).toMatchObject({source:{assignee:'*',page:2,issue:null,listing:{items:[{number:112}],nextPage:3}}})
     expect(requests.filter(r=>r.kind==='command')).toEqual([])
-    expect(requests).toContainEqual({kind:'query',value:{type:'source.issues',projectId:'p1',sourceId:'s1',assignee:'*',state:'open',page:2,perPage:20,refresh:true}})
+    expect(requests).toContainEqual({kind:'query',value:{type:'source.issues',projectId:'p1',sourceId:'s1',assignee:'*',state:'open',page:2,perPage:100,refresh:true}})
   })
 })

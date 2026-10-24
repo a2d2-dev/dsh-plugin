@@ -117,7 +117,7 @@ describe('visible panel local observation', () => {
     h.client.query = async query => query.type === 'project.detail' ? { status: 'completed', tasks: [task], progressItems: [progress] } : query.type === 'source.issues' ? { status: 'completed', source, page: { identity: { login: 'viewer', nodeId: 'U1', name: null }, items: [{ ...issue, state: 'closed' }, { ...issue, nodeId: 'foreign', title: '另一个仓库', repository: { owner: 'acme', repository: 'other' }, url: 'https://github.com/acme/other/issues/1' }], observedAt: issue.observedAt } } : original(query)
     await h.panel.observeCurrent()
     const rendered = html(h.panel)
-    const rows = rendered.match(/<tr>[\s\S]*?<\/tr>/g) ?? []
+    const rows = rendered.match(/<tr\b[^>]*>[\s\S]*?<\/tr>/g) ?? []
     const ownRow = rows.find(row => row.includes('#1 来源工作'))
     const foreignRow = rows.find(row => row.includes('#1 另一个仓库'))
     for (const text of ['正在实现已确认需求', '等待评审', '等待', 'session-current']) expect(ownRow).toContain(text)

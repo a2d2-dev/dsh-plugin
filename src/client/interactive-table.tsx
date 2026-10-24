@@ -1,9 +1,11 @@
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { emptyListState, groupList, listOptions, moveColumn, orderedColumns, queryList, reconcileListState, valueLabel } from './list-state.ts'
 import type { ListColumn, ListState } from './list-state.ts'
 import { columnMenuPosition } from './column-menu-position.ts'
 import styles from './work-panel.module.css'
+
+const useBrowserLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
 
 export interface TableColumn<T> extends ListColumn<T> {
   render: (row: T, transformed: boolean) => ReactNode
@@ -19,13 +21,16 @@ interface Props<T> {
   searchLabel: string
   scope: string
   defaultRows?: T[]
-  pageSize?: number
+  /** Remote Issue pages are appended by the controller; snapshots use local batches. */
+  remote?: { hasMore: boolean; loading: boolean; error: string | null; loadMore: () => void; retry: () => void }
+  resetKey?: string
+  complete?: boolean
   unavailable?: string
 }
 /** Shared read-only table. Its state is remounted at source/view boundaries. */
-export function InteractiveTable<T>({ label, columns, rows, defaultRows, rowKey, searchText, searchLabel, scope, pageSize, unavailable }: Props<T>) {
+export function InteractiveTable<T>({ label, columns, rows, defaultRows, rowKey, searchText, searchLabel, scope, remote, resetKey, complete = true, unavailable }: Props<T>) {
   const [storedState, setState] = useState(emptyListState)
-  const [page, setPage] = useState(1)
+  const [batch, setBatch] = useState({ key: '', count: 100, rows: rows.length })
   const [menu, setMenu] = useState<string | null>(null)
   const [picker, setPicker] = useState<string | null>(null)
   const [valueSearch, setValueSearch] = useState('')
@@ -41,13 +46,58 @@ export function InteractiveTable<T>({ label, columns, rows, defaultRows, rowKey,
   const shown = orderedColumns(columns, state) as TableColumn<T>[]
   const transformed = Boolean(state.sort || state.group || state.search || Object.values(state.filters).some(values => values.length) || state.slice)
   const filtered = queryList(!transformed && defaultRows ? defaultRows : rows, all, state, searchText)
-  const currentPage = Math.min(page, Math.max(1, Math.ceil(filtered.length / (pageSize ?? Math.max(1, filtered.length)))))
-  const displayed = pageSize ? filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize) : filtered
+  const queryKey = JSON.stringify([resetKey, state.search, state.filters, state.sort, state.group, state.slice])
+  const addedRows = remote ? Math.max(0, rows.length - batch.rows) : 0
+  const count = batch.key === queryKey ? batch.count + addedRows : 100
+  useEffect(() => {
+    setBatch(current => current.key === queryKey
+      ? { key: queryKey, count: current.count + (remote ? Math.max(0, rows.length - current.rows) : 0), rows: rows.length }
+      : { key: queryKey, count: 100, rows: rows.length })
+  }, [queryKey, remote ? rows.length : 0])
+  const displayed = filtered.slice(0, count)
+  const hasLocalMore = count < filtered.length
+  const hasMore = hasLocalMore || Boolean(remote?.hasMore)
+  const sentinel = useRef<HTMLDivElement | null>(null)
+  const tableRegion = useRef<HTMLDivElement | null>(null)
+  const anchor = useRef<{ query: string; row: string; top: number } | null>(null)
+  const lastQuery = useRef<string | null>(null)
+  useBrowserLayoutEffect(() => {
+    const region = tableRegion.current, root = region?.closest('main')
+    if (!region || !root) return
+    const currentRows = () => [...region.querySelectorAll<HTMLElement>('tr[data-row-key]')]
+    if (lastQuery.current !== queryKey) { root.scrollTop = 0; anchor.current = null }
+    else if (anchor.current?.query === queryKey) {
+      const previous = anchor.current, row = currentRows().find(row => row.dataset.rowKey === previous.row)
+      if (row) root.scrollTop += row.getBoundingClientRect().top - previous.top
+    }
+    lastQuery.current = queryKey
+    const remember = () => {
+      const bounds = root.getBoundingClientRect()
+      const row = currentRows().find(row => { const rect = row.getBoundingClientRect(); return rect.bottom > bounds.top && rect.top < bounds.bottom })
+      anchor.current = row ? { query: queryKey, row: row.dataset.rowKey!, top: row.getBoundingClientRect().top } : null
+    }
+    remember(); root.addEventListener('scroll', remember, { passive: true })
+    return () => root.removeEventListener('scroll', remember)
+  })
+  useEffect(() => {
+    const element = sentinel.current
+    if (!element || !hasMore || remote?.loading || remote?.error || unavailable) return
+    // The panel owns vertical scrolling; expand its observation boundary so
+    // the next batch starts before the footer becomes visible.
+    const observer = new IntersectionObserver(entries => {
+      if (!entries.some(entry => entry.isIntersecting)) return
+      observer.disconnect()
+      if (hasLocalMore) setBatch({ key: queryKey, count: count + 100, rows: rows.length })
+      else remote?.loadMore()
+    }, { root: element.closest('main'), rootMargin: '240px 0px' })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [queryKey, count, filtered.length, hasMore, hasLocalMore, remote?.loading, remote?.error, remote?.loadMore, unavailable])
   const group = columns.find(column => column.id === state.group)
   const groups = groupList(displayed, group)
   const active = columns.find(column => column.id === menu)
   const picking = all.find(column => column.id === picker)
-  const change = (update: Partial<ListState>) => { setState(current => ({ ...current, ...update })); setPage(1) }
+  const change = (update: Partial<ListState>) => { setState(current => ({ ...current, ...update })) }
   const close = () => { setMenu(null); setPicker(null); setValueSearch(''); button.current?.focus() }
   const act = (update: Partial<ListState>) => { change(update); close() }
   useEffect(() => {
@@ -76,7 +126,7 @@ export function InteractiveTable<T>({ label, columns, rows, defaultRows, rowKey,
     <div className={styles.listSearch}>
       <label>{searchLabel}<input type="search" aria-label={searchLabel} placeholder="标题、#编号或仓库" value={state.search} onChange={event => change({ search: event.target.value })}/></label>
       {state.search && <button onClick={() => change({ search: '' })}>清空搜索</button>}
-      <button onClick={() => { setState(emptyListState()); setPage(1); close() }}>重置列与查询</button>
+      <button onClick={() => { setState(emptyListState()); setBatch({ key: '', count: 100, rows: rows.length }); close() }}>重置列与查询</button>
     </div>
     <p className={styles.listScope}>{scope} · 搜索范围：标题、编号、仓库 · {filtered.length} / {rows.length} 项{selected ? ` · 已选择整列：${selected.label}` : ''}</p>
     <div className={styles.activeFilters} aria-label="当前列条件">
@@ -86,13 +136,17 @@ export function InteractiveTable<T>({ label, columns, rows, defaultRows, rowKey,
       {state.slice && <label>切片：{columns.find(column => column.id === state.slice?.id)?.label}<select aria-label="列切片值" value={state.slice.value} onChange={event => change({ slice: { id: state.slice!.id, value: event.target.value } })}>{listOptions(columns.find(column => column.id === state.slice?.id)!, rows).map(option => <option key={option.value} value={option.value}>{valueLabel(option.value)}（{option.count}）</option>)}</select><button onClick={() => change({ slice: null })}>清除切片</button></label>}
       {state.hidden.map(id => <button key={id} onClick={() => change({ hidden: state.hidden.filter(value => value !== id) })}>显示 {columns.find(column => column.id === id)?.label}</button>)}
     </div>
-    <div className={styles.tableScroll}><table className={styles.projectTable} aria-label={label} style={{minWidth:shown.reduce((total,column)=>total+Math.max(100,(column.width??1)*90),0)}}>
+    <div ref={tableRegion} className={styles.tableScroll}><table className={styles.projectTable} aria-label={label} style={{minWidth:shown.reduce((total,column)=>total+Math.max(100,(column.width??1)*90),0)}}>
       <colgroup>{shown.map(column => <col key={column.id} style={{ width: `${100 * (column.width ?? 1) / shown.reduce((sum, entry) => sum + (entry.width ?? 1), 0)}%` }}/>)}</colgroup>
       <thead><tr>{shown.map(column => <th key={column.id} scope="col" className={state.selected === column.id ? styles.columnSelected : undefined} aria-sort={state.sort?.id === column.id ? state.sort.direction === 'asc' ? 'ascending' : 'descending' : 'none'}><div className={styles.columnHead}><span>{column.label}{state.sort?.id === column.id ? state.sort.direction === 'asc' ? ' ↑' : ' ↓' : ''}{state.filters[column.id]?.length ? ' ⏷' : ''}</span><button aria-label={`${column.label} 列操作`} aria-haspopup="dialog" aria-expanded={menu === column.id} onClick={event => open(column.id, event.currentTarget)}>⋯</button></div></th>)}</tr></thead>
-      <tbody>{groups.map((entry, index) => <Fragment key={entry.value}>{group && <tr className={styles.groupHeading}><th colSpan={shown.length} scope="rowgroup">{group.label}：{valueLabel(entry.value)} · {entry.rows.length} 项（当前展示页，多值条目可出现在多个组）</th></tr>}{entry.rows.map(row => <tr key={`${index}/${rowKey(row)}`}>{shown.map(column => <td key={column.id} className={state.selected === column.id ? styles.columnSelected : undefined}><div className={styles.cellClip}>{column.render(row, transformed)}</div></td>)}</tr>)}</Fragment>)}</tbody>
+      <tbody>{groups.map(entry => <Fragment key={entry.value}>{group && <tr className={styles.groupHeading}><th colSpan={shown.length} scope="rowgroup">{group.label}：{valueLabel(entry.value)} · {entry.rows.length} 项（当前已展示范围，多值条目可出现在多个组）</th></tr>}{entry.rows.map(row => <tr key={`${entry.value}/${rowKey(row)}`} data-row-key={`${entry.value}/${rowKey(row)}`}>{shown.map(column => <td key={column.id} className={state.selected === column.id ? styles.columnSelected : undefined}><div className={styles.cellClip}>{column.render(row, transformed)}</div></td>)}</tr>)}</Fragment>)}</tbody>
     </table></div>
     {unavailable ? <p role="status">{unavailable}</p> : !filtered.length && <p role="status">当前搜索与列过滤没有匹配结果；可清空搜索或清除列条件。</p>}
-    {pageSize && <div className={styles.toolbar}><button disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>上一页</button><span>第 {currentPage} / {Math.max(1, Math.ceil(filtered.length / pageSize))} 页 · 每页 {pageSize} 项 · 搜索与列过滤作用于分页前的当前范围</span><button disabled={currentPage * pageSize >= filtered.length} onClick={() => setPage(currentPage + 1)}>下一页</button></div>}
+    <div ref={sentinel} role="status" aria-label={`${label} 加载状态`}>
+      {remote?.error ? <p role="alert">后续读取失败，保留已加载内容：{remote.error} <button onClick={remote.retry} disabled={remote.loading}>重试加载</button></p>
+        : remote?.loading ? <p>正在加载更多…</p>
+        : !unavailable && <p>{hasMore ? `已展示 ${displayed.length} 项，滚动接近底部自动加载更多（每批最多 100 项）` : complete ? `已加载全部当前查询结果 · ${displayed.length} 项` : `当前已观察目录已展示完 · ${displayed.length} 项；来源仍为部分观察`}</p>}
+    </div>
     {active && <div ref={popup} role="dialog" aria-label={`${active.label} 列菜单`} className={styles.columnMenu} style={placement}>
       <div className={styles.columnMenuTitle}><strong>{active.label}</strong><button aria-label="关闭列菜单" onClick={close}>×</button></div>
       {picking ? <>

@@ -26,7 +26,7 @@ it.each([{view:999,available:true,reason:'保存的 view 不在当前可读取�
 })
 it('reuses discoverable column entries and visible scoped search across Project, Issue and PR tables',async()=>{
   const {controller,commands,render}=await setup()
-  for(const [tab,search] of [['project','搜索 Project 条目'],['issues','搜索当前页 Issues'],['prs','搜索 PR']] as const){
+  for(const [tab,search] of [['project','搜索 Project 条目'],['issues','搜索已加载 Issues'],['prs','搜索 PR']] as const){
     await controller.selectSourceTab(tab)
     const html=render()
     expect(html).toContain(`aria-label="${search}"`)

@@ -47,7 +47,7 @@ describe('GitHub-first navigation and evidence',()=>{
     expect(h.panel.getSnapshot().projects.find(item=>item.id==='p1')?.name).toBe('Roadmap')
     await h.panel.selectSourceTab('issues')
     const rendered=html(h.panel)
-    for(const text of ['Roadmap','Project · acme / #7','Requirement 1','搜索与处理状态筛选仅作用于当前已载入页','持续委托'])expect(rendered).toContain(text)
+    for(const text of ['Roadmap','Project · acme / #7','Requirement 1','列查询及处理状态筛选作用于已加载范围','持续委托'])expect(rendered).toContain(text)
     for(const text of ['Archived internal records','创建本地项目','接入已有资源','添加工作','关联已有本地工作','PR 来源','全部本地工作'])expect(rendered).not.toContain(text)
     expect(h.command).not.toHaveBeenCalled()
     expect(h.query.mock.calls.some(([q])=>q.type==='task.execution-options'||q.type==='source.execution-options')).toBe(false)
