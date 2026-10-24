@@ -31,6 +31,7 @@ export function WorkPanel({ controller }: { controller: WorkPanelController }) {
   const projects=controller.connectedProjects()
   const source=state.source.sources.find(item=>item.id===state.source.sourceId)
   const detail=state.detail, task=detail?.task
+  const continuationCompleted=Boolean(task?.completion||detail?.progress?.completion||detail?.progress?.processingState==='completed')
   const binding=detail?.bindings?.[0]
   const issue=task ? (binding?.lastObserved ?? (state.source.bindings.some(item=>item.ref.taskId===task.id&&item.ref.projectId===task.projectId)?state.source.issue:null)) : state.source.issue
   const hasDetail=Boolean(task||issue)
@@ -57,7 +58,7 @@ export function WorkPanel({ controller }: { controller: WorkPanelController }) {
         </>}
         {state.detailTab==='related'&&<><Requirements controller={controller}/>{issue&&<NativeIssueRelations issue={issue} controller={controller}/>}</>}
         {state.detailTab==='sessions'&&<>{detail?.executionGraph?<ExecutionSessions graph={detail.executionGraph} onReadIssue={issue=>void controller.openNativeIssue(issue)} onOpenTask={ref=>void controller.openTask(ref)} onEnterTask={ref=>void controller.enterTask(ref)} onOpenSession={session=>controller.openSession(session)} onReadHistory={session=>void controller.openHistory(session)}/>:<p role="status">执行图尚未读取，执行与结果状态未知。</p>}<HistoryTranscript controller={controller}/></>}
-        {state.detailTab==='continuation'&&<ExecutionContinuation graph={detail?.executionGraph} execution={detail?.execution} policy={detail?.execution?.continuationPolicy??project?.continuationPolicy} busy={state.startup.busy} {...(!task?.completion?{onContinue:()=>void controller.controlExecution('continue')}: {})}/>}
+        {state.detailTab==='continuation'&&<ExecutionContinuation graph={detail?.executionGraph} execution={detail?.execution} policy={detail?.execution?.continuationPolicy??project?.continuationPolicy} busy={state.startup.busy} completed={continuationCompleted} {...(!continuationCompleted?{onContinue:()=>void controller.controlExecution('continue')}: {})}/>}
         {state.detailTab==='activity'&&<Section title="活动记录">{task?.activity.length?<ol>{[...task.activity].reverse().map(item=><li key={item.commandId}>版本 {item.version} · {activityLabel(item.type)}</li>)}</ol>:<p>尚无处理活动。</p>}</Section>}
       </div>
       <ErrorText error={state.source.error??''}/>
