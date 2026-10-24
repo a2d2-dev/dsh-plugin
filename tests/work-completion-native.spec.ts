@@ -29,6 +29,13 @@ it('accepts a real model work_report without waiting for its own running tool', 
     expect(ok(await h.app.query({ type: 'task.detail', ref }, operator)).task!.completion).toBeDefined()
     expect(h.model.requests).toHaveLength(3)
     expect(agent.session.snapshotEvents().filter(event => event.type === 'turn/end').at(-1)).toMatchObject({ data: { reason: { kind: 'completed' } } })
+    const completionLog = await fixtures.run(() => h.ctx.sessionController.inspect(agent.id))
+    const completionResult = completionLog.events.find(event => event.type === 'tool/result')!
+    expect(completionResult).toMatchObject({ data: { message: { isError: false } } })
+    expect(completionLog.events.findLast(event => event.type === 'assistant/message')).toMatchObject({
+      data: { message: { content: [{ type: 'text', text: 'Recorded work progress' }] } },
+    })
+    expect(completionLog.events.findLast(event => event.type === 'assistant/message')!.seq).toBeGreaterThan(completionResult.seq)
     await h.app.reconcileCompletions()
     const completed = ok(await h.app.query({ type: 'task.detail', ref }, operator)).task!.completion!
     expect(completed.closeout.status).toBe('settled')
@@ -48,6 +55,45 @@ it('accepts a real model work_report without waiting for its own running tool', 
     await h.app.reconcileCompletions()
     expect(ok(await h.app.query({ type: 'task.detail', ref }, operator)).task!.completion).toEqual(completed)
     expect(await h.app.sessionControl(execution.session, 'late', 'resume', 'more')).toMatchObject({ status: 'failed', error: { code: 'task-completed' } })
+    await fixtures.run(() => h.ctx.sessions.flush(agent.session))
+    {
+      await using handle = await h.ctx.sessionPersistence.open(agent.id, 'read')
+      const persisted = await handle.read()
+      const input = persisted.events.find(event => event.type === 'user/message' && event.data.id === followup.id)!
+      expect(input).toMatchObject({ data: { content: followup.content } })
+      expect(persisted.events.filter(event => event.type === 'user/message' && event.data.id === followup.id)).toHaveLength(1)
+      expect(persisted.events.findLast(event => event.type === 'assistant/message')!.seq).toBeGreaterThan(input.seq)
+      expect(persisted.events.findLast(event => event.type === 'assistant/message')).toMatchObject({ data: { message: { content: [{ type: 'text', text: 'Recorded work progress' }] } } })
+    }
+    // A cold DSH context reads the same accepted Task and JSONL history without
+    // starting a model. A new human message alone starts the conversation turn.
+    await fixtures.dispose(h.ctx)
+    const restored = await fixtures.mount(h.workspace.path, 'read-only')
+    installWorkProgressTools(restored.ctx, restored.app, 'runtime')
+    await restored.app.reconcileControls()
+    expect(restored.model.requests).toHaveLength(0)
+    const recovered = await fixtures.run(() => new RuntimeHost(restored.ctx).agent(agent.id))
+    const question = createUserMessage({ content: [{ type: 'text', text: 'Explain the accepted result after restart.' }], source: { kind: 'user' } })
+    recovered.followup(question)
+    await fixtures.run(() => recovered.whenIdle())
+    expect(restored.model.requests).toHaveLength(1)
+    expect(restored.model.requests[0]!.messages).toContainEqual(expect.objectContaining({ id: question.id, content: question.content }))
+    expect(restored.model.requests[0]!.messages).toContainEqual(expect.objectContaining({ id: followup.id, content: followup.content }))
+    await restored.app.reconcileControls()
+    expect(restored.model.requests).toHaveLength(1)
+    const final = ok(await restored.app.query({ type: 'task.detail', ref }, operator))
+    expect(final.task!.completion).toEqual(completed)
+    expect(final.progress!.stage).toBe('done')
+    expect(final.execution).toMatchObject({ id: execution.id, owner: execution.owner, epoch: execution.epoch, session: execution.session })
+    expect(await fixtures.run(() => restored.ctx.sessionPersistence.list())).toHaveLength(1)
+    await fixtures.run(() => restored.ctx.sessions.flush(recovered.session))
+    await using handle = await restored.ctx.sessionPersistence.open(recovered.id, 'read')
+    const persisted = await handle.read()
+    const input = persisted.events.find(event => event.type === 'user/message' && event.data.id === question.id)!
+    expect(input).toMatchObject({ data: { content: question.content } })
+    expect(persisted.events.filter(event => event.type === 'user/message' && event.data.id === question.id)).toHaveLength(1)
+    expect(persisted.events.findLast(event => event.type === 'assistant/message')!.seq).toBeGreaterThan(input.seq)
+    expect(persisted.events.findLast(event => event.type === 'assistant/message')).toMatchObject({ data: { message: { content: [{ type: 'text', text: 'Recorded work progress' }] } } })
   } finally { await fixtures.close() }
 })
 
