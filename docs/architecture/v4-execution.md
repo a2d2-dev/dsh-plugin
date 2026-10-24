@@ -93,7 +93,7 @@ observe(id, caller): {
 
 ### 接续后查看当前处理会话
 
-原生聊天中的“进入当前处理会话”调用 `WorkPanelController.openCurrentTask(ref, signal)`，每次点击重新查询 `task.detail`。导航只使用响应的 `execution.session`，校验响应 Task 与 execution 的完整 TaskRef、实际 `actual` 和 session runtime 一致后，调用原生会话导航。`execution.state` 描述执行状态，不是查看资格：failed 的已创建当前会话仍可查看；打开不会发送 command、恢复执行或改变 owner/epoch，也不会回退到 retired 会话。
+原生聊天中的“进入当前处理会话”调用 `WorkPanelController.openCurrentTask(ref, signal)`，每次点击重新查询 `task.detail`。导航只使用响应的 `execution.session`，校验响应 Task 与 execution 的完整 TaskRef、非空 sessionId/runtimeId、实际 `actual` 和 session runtime 一致后，调用原生会话导航。`execution.state` 描述执行状态，不是查看资格：failed 的已创建当前会话仍可查看；打开不会发送 command、恢复执行或改变 owner/epoch，也不会回退到 retired 会话。
 
 挂载生命周期取消、后续点击替代读取及面板导航代次变化会丢弃迟到成功响应。读取失败由现有原生入口呈现错误。没有当前执行或无法证明实际会话身份时拒绝进入。自动启动入口的 `currentSession()` 状态筛选不属于这个显式查看入口，本次保持其现有启动行为。
 

@@ -105,6 +105,76 @@ describe('native chat takeover visibility', () => {
     expect(h.navigation.openSession).not.toHaveBeenCalled()
     expect(h.client.command).not.toHaveBeenCalled()
   })
+  it.each<[string, WorkCompleted]>([
+    ['no Task', { status: 'completed', execution }],
+    ['wrong Task', { status: 'completed', task: { ...task, id: 'other' }, execution }],
+    ['wrong Project', { status: 'completed', task: { ...task, projectId: 'other' }, execution }],
+    ['no execution', { status: 'completed', task }],
+    ['wrong execution Task', { status: 'completed', task, execution: { ...execution, ref: { ...ref, taskId: 'other' } } }],
+    ['wrong execution Project', { status: 'completed', task, execution: { ...execution, ref: { ...ref, projectId: 'other' } } }],
+    ['no actual', { status: 'completed', task, execution: { ...execution, state: 'failed', actual: undefined } }],
+  ])('rejects %s without navigation or execution commands', async (_label, detail) => {
+    const h = setup()
+    vi.mocked(h.client.query).mockResolvedValueOnce(detail)
+    await expect(h.panel.openCurrentTask(ref)).rejects.toThrow('当前处理会话暂不可进入')
+    expect(h.navigation.openSession).not.toHaveBeenCalled()
+    expect(h.client.command).not.toHaveBeenCalled()
+  })
+  it.each(['completed', 'user-cancelled'] as const)('allows viewing a %s Task execution without restarting it', async terminal => {
+    const h = setup()
+    const completedTask: WorkTask = { ...task, completion: {
+      operationId: 'done', commandId: 'done-command', specificationVersion: 1,
+      executionId: execution.id, owner: execution.owner, epoch: execution.epoch,
+      completedAt: '2026-10-24T00:00:00Z', closeout: { status: 'settled' },
+    } }
+    vi.mocked(h.client.query).mockResolvedValueOnce({ status: 'completed',
+      task: terminal === 'completed' ? completedTask : task,
+      execution: { ...execution, state: terminal === 'completed' ? 'paused' : 'failed',
+        ...(terminal === 'user-cancelled' ? { runtimeFailure: { id: 'cancelled', message: '用户取消', userCancelled: true } } : {}),
+      },
+    })
+    await h.panel.openCurrentTask(ref)
+    expect(h.navigation.openSession).toHaveBeenCalledExactlyOnceWith('latest-current')
+    expect(h.client.command).not.toHaveBeenCalled()
+  })
+  it('uses the newest click and ignores the superseded response even if its transport ignores abort', async () => {
+    const h = setup(), older = deferred<WorkCompleted>()
+    vi.mocked(h.client.query).mockReturnValueOnce(older.promise)
+    const first = h.panel.openCurrentTask(ref)
+    const firstSignal = vi.mocked(h.client.query).mock.calls[0]![1]
+    vi.mocked(h.client.query).mockResolvedValueOnce({ status: 'completed', task, execution: {
+      ...execution, state: 'failed', epoch: 4, session: { ...execution.session, sessionId: 'successor-current' },
+    } })
+    await h.panel.openCurrentTask(ref)
+    expect(firstSignal?.aborted).toBe(true)
+    older.resolve({ status: 'completed', task, execution }); await first
+    expect(h.navigation.openSession).toHaveBeenCalledExactlyOnceWith('successor-current')
+    expect(h.client.command).not.toHaveBeenCalled()
+  })
+  it.each(['panel', 'source'] as const)('ignores a late current-session response after %s navigation', async destination => {
+    const h = setup(), pending = deferred<WorkCompleted>()
+    vi.mocked(h.client.query).mockReturnValueOnce(pending.promise)
+    const opening = h.panel.openCurrentTask(ref)
+    if (destination === 'panel') h.panel.leavePanel()
+    else await h.panel.selectSource('another-source')
+    pending.resolve({ status: 'completed', task, execution }); await opening
+    expect(h.navigation.openSession).not.toHaveBeenCalled()
+    expect(h.client.command).not.toHaveBeenCalled()
+  })
+  it('does not read authority when already cancelled', async () => {
+    const h = setup(), scope = new AbortController()
+    scope.abort(); await h.panel.openCurrentTask(ref, scope.signal)
+    expect(h.client.query).not.toHaveBeenCalled()
+    expect(h.navigation.openSession).not.toHaveBeenCalled()
+    expect(h.client.command).not.toHaveBeenCalled()
+  })
+  it('surfaces a runtime read failure to the entry without navigation or commands', async () => {
+    const h = setup()
+    vi.mocked(h.client.query).mockRejectedValueOnce(Error('runtime-unavailable: 宿主不可达'))
+    await expect(h.panel.openCurrentTask(ref)).rejects.toThrow('runtime-unavailable: 宿主不可达')
+    expect(h.navigation.openSession).not.toHaveBeenCalled()
+    expect(h.client.command).not.toHaveBeenCalled()
+  })
   it('ignores a fresh-current response when the native entry unmounts before it resolves', async () => {
     const h = setup(), pending = deferred<WorkCompleted>(), scope = new AbortController()
     vi.mocked(h.client.query).mockReturnValueOnce(pending.promise)
