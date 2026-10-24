@@ -164,7 +164,7 @@ it('runs on the selected local model, waits without empty turns, and separates c
   expect(await h.app.execute({ type: 'task.control', commandId: 'pause', ...fence, action: 'pause', text: 'User paused work' }, operator)).toMatchObject({ status: 'completed', execution: { state: 'paused', control: { status: 'applied' } } })
 })
 
-it.each(['header', 'selection', 'controller', 'kickoff'] as const)('recovers fixed execution after the real %s checkpoint receipt is lost', async checkpoint => {
+it.each(['header', 'selection', 'resolve', 'kickoff'] as const)('recovers fixed execution after the real %s checkpoint receipt is lost', async checkpoint => {
   let h = await setup()
   const path = h.workspace.path
   const command = { type: 'task.start', commandId: 'lost-receipt', ref: h.ref, expectedVersion: 1, resource: h.resource,
@@ -176,12 +176,13 @@ it.each(['header', 'selection', 'controller', 'kickoff'] as const)('recovers fix
       await fixtures.run(() => h.ctx.agents.get(execution.session.sessionId as never)!.whenIdle())
       throw new Error('Real kickoff was consumed; its application receipt was lost')
     })
-  } else if (checkpoint === 'controller') {
-    const create = h.ctx.sessionController.create.bind(h.ctx.sessionController)
-    vi.spyOn(h.ctx.sessionController, 'create').mockImplementationOnce(async request => {
-      const result = await create(request)
-      await fixtures.run(() => h.ctx.sessions.flush(h.ctx.agents.get(result.sessionId)!.session))
-      throw new Error('Actual host created and flushed; client receipt lost')
+  } else if (checkpoint === 'resolve') {
+    const resolve = h.ctx.sessionController.resolveAgent.bind(h.ctx.sessionController)
+    vi.spyOn(h.ctx.sessionController, 'resolveAgent').mockImplementationOnce(async id => {
+      const result = await resolve(id)
+      if ('error' in result) throw new Error(result.error.message)
+      await fixtures.run(() => h.ctx.sessions.flush(result.agent.session))
+      throw new Error('Actual host restored and flushed; client receipt lost')
     })
   } else {
     const create = h.ctx.sessionPersistence.create.bind(h.ctx.sessionPersistence)
@@ -408,14 +409,14 @@ it('keeps an actual unmigrated legacy main Session under its existing writer aut
   expect(h.model.requests).toHaveLength(0)
 })
 
-it('accepts repeated start and input while real Controller creation is parked without holding the snapshot writer', async () => {
+it('accepts repeated start and input while real Controller restore is parked without holding the snapshot writer', async () => {
   const h = await setup()
   let entered!: () => void
   let release!: () => void
   const inside = new Promise<void>(resolve => { entered = resolve })
   const held = new Promise<void>(resolve => { release = resolve })
-  const create = h.ctx.sessionController.create.bind(h.ctx.sessionController)
-  vi.spyOn(h.ctx.sessionController, 'create').mockImplementationOnce(async request => { entered(); await held; return create(request) })
+  const resolveAgent = h.ctx.sessionController.resolveAgent.bind(h.ctx.sessionController)
+  vi.spyOn(h.ctx.sessionController, 'resolveAgent').mockImplementationOnce(async id => { entered(); await held; return resolveAgent(id) })
   const command = { type: 'task.start', commandId: 'slow-start', ref: h.ref, expectedVersion: 1, resource: h.resource,
     agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }
   const first = h.app.execute(command, operator)

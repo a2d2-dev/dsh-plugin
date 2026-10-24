@@ -14,6 +14,7 @@ import { WORK_ROUTE_PATH } from './work-types.ts'
 import { GitHubSource } from './work-sources/github.ts'
 import type { GitHubSourcePort } from './work-sources/types.ts'
 import { installWorkTools, installWorkControlRecovery } from './work-execution/tools.ts'
+import { installOfficialJobReceipts } from './work-execution/official-job-receipts.ts'
 import { installWorkProgressTools } from './work-progress-tools.ts'
 import { installWorkOrganizationTools } from './work-organization-tools.ts'
 import { startProjectDiscovery } from './work-sources/discovery.ts'
@@ -54,7 +55,7 @@ export async function apply(ctx: Context, config: Config = {}): Promise<void> {
   // Migrate legacy inline history/receipts and mutable source sidecars under the DAO writer lock.
   void app.ensureSourceSplit().catch(error => ctx.logger.warn(`Work store archive migration: ${String(error)}`))
   ctx.provide('a2d2Work', app)
-  ctx.inject(['tools'], toolsCtx => { installWorkTools(toolsCtx, app, runtimeId); installWorkProgressTools(toolsCtx, app, runtimeId); installWorkOrganizationTools(toolsCtx, app, runtimeId) })
+  ctx.inject(['tools'], toolsCtx => { installOfficialJobReceipts(toolsCtx); installWorkTools(toolsCtx, app, runtimeId); installWorkProgressTools(toolsCtx, app, runtimeId); installWorkOrganizationTools(toolsCtx, app, runtimeId) })
   ctx.inject(['agents'], executionCtx => { installWorkControlRecovery(executionCtx, app) })
   if (source) ctx.effect(() => startProjectDiscovery({
     reconcile: () => app.reconcileSources(),

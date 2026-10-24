@@ -53,9 +53,9 @@ DSH Goal 自动续跑消息由 Goal 驱动管理，A²D² 不把它们保存为 
 
 ## 安装与开发
 
-需要 Node.js 22 或更高版本、pnpm 10.26.2，以及使用 DSH 0.2.0-rc.2 API 系列的宿主。会话创建和交接还要求宿主提供公开的 `sessionController.selectLocalModel` 能力。版本号不能证明该能力存在，缺少它的宿主会被明确拒绝。目前尚未验证哪个公开发布的 DSH 版本首次提供该能力，因此未经修改的公开宿主上的端到端兼容性仍是发布门槛。
+插件开发需要 Node.js 22 或更高版本、pnpm 10.26.2。当前开发源码保留已验证的 DSH 0.2.0-rc.2 / 0.2.1-rc.2 契约，并适配未经修改的官方源码构建 [`22ddee37`](https://github.com/deepseek-ai/deepseek-harness/tree/22ddee3792402c3e70ec5f86a63c3e3e895a2f60)（`0.2.1-rc.3`，宿主需要 Node 24.9 起）。Session/model 与 jobs 集成测试实际使用该官方构建；生产 profile 激活、完整数据备份与 GUI 验收仍是独立的部署检查。
 
-已核对的上游 [session-controller 源码 `687f282e`](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/api/session-controller/src/index.ts) 未定义 `selectLocalModel`。会话初始化兼容性因此仍是待解决的上游发布阻塞，不能宣称原生宿主已支持。
+会话初始化使用官方公开的 `Agent.model.current/select`，同时保留旧宿主已验证的 `sessionController.selectLocalModel`。同版 npm `0.2.1-rc.3` 分发包不包含这两种能力，会在会话本地模型初始化时被明确拒绝。版本号和 metadata 准入不能证明完整兼容性，参见[整合验证证据](docs/verification/issue-243-integrated-compat.md)和[可复用升级测试集](docs/verification/dsh-upgrade-test-suite.md)。运行 `node scripts/verify-dsh-upgrade.mjs --help` 可查看固定候选的快速检查与单阶段重跑入口。
 
 从源码构建：
 
@@ -189,7 +189,7 @@ reviewer:
 
 这些列表位于 `stageAgents.agents` 下。咨询同样可在 `stageAgents.consult` 中使用对象。不要给路由字符串添加 `@medium` 后缀。芯片新建和交接创建由宿主设置会话本地模型，不调用会保存全局默认的 DSH 模型选择器。重复登记同一 Agent 不会重新设置已有会话的模型或强度。「测试」会使用当前候选所选强度，修改强度后不会复用旧档位的测试结果。
 
-芯片新建和交接会话初始化的最低宿主能力是公开的 `ctx.sessionController.selectLocalModel({ sessionId, provider, model, reasoningEffort? }): Promise<{ selected: ModelSelection }>` API，只应用到指定会话，绝不保存宿主默认值。缺少该方法的宿主会被明确拒绝；不会回退到会保存默认值的 `selectModel`，也不会修改私有 Agent 或 registry。
+芯片新建和交接会话初始化要求公开的会话本地模型选择：官方 `Agent.model.current/select`，或旧宿主已验证的 `ctx.sessionController.selectLocalModel({ sessionId, provider, model, reasoningEffort? })`。设置前验证 provider/model 与显式强度，已开始的会话拒绝再次初始化。两种能力都缺少时明确拒绝；不会调用保存全局默认的 `selectModel`，也不会修改私有 Agent 或 registry。
 
 初始化按会话串行执行，不阻塞其他会话。只有会话本地模型安装成功后才登记 Agent；安装失败不留下身份记录，可重新尝试，已经排队的请求也可继续。成功后重复初始化同一 Agent 不重装模型，保留用户手动选择；不同 Agent 会在安装前被拒绝。
 
@@ -589,6 +589,6 @@ sessions:
 
 每次交接先保存后继 ID，通过公开宿主 API 创建/恢复、继承 workspace、设置 CEO 会话本地模型、接任和投递接续内容。旧会话在 `agent/pre-step` 被拒绝执行。交接期间 GitHub 和子任务事件保存在任务收件箱，接任后投递。消息 ID 先落盘，重试回读会话日志与 inbox 去重；这不是跨存储的绝对一次事务。进展指纹是工具结果/回答的启发式比较，不能代替验收。文件锁限同机器同 PID 命名空间；断电持久性和跨主机共享不在本期承诺内。详见 ADR 0011。
 
-运行器后继与 `open_subtask` 使用公开 `sessionController.create` 创建/接续根会话，继承源会话当前 Agent preset 和 workspace，由宿主在发布会话前装配文件、shell 等工具及提示词。交接在创建前持久化选定 preset 与权限配置，重试保持相同身份；CEO 模型仍使用会话本地选择。继承命名权限 preset 及实际 sandbox/approval 配置（包括 custom），不继承单次审批结果，不写宿主全局默认。
+运行器后继与 `open_subtask` 使用公开 `sessionController.create` 首次创建根会话，已有预留 ID 通过 `resolveAgent` 恢复并显式确认 workspace 成员关系，继承源会话当前 Agent preset，由宿主在发布会话前装配文件、shell 等工具及提示词。交接在创建前持久化选定 preset 与权限配置，重试保持相同身份；CEO 模型仍使用会话本地选择。继承命名权限 preset 及实际 sandbox/approval 配置（包括 custom），不继承单次审批结果，不写宿主全局默认。
 
 升级恢复旧后继时，create、take、deliver 都验证 preset。尚未开始运行的旧会话通过公开 preset 选择 API 补齐，保留原 ID；已有内容且 preset 不兼容时不覆盖，会在 status 中给出 `recoveryRequired` 和 `/task-runtime recover` 指令。在当前主会话空闲时执行该命令，会保留旧会话，先登记新的替代后继 ID，再携带原模型交接内容及旧会话历史指针接续；模型须检查旧会话的新进展后再执行。普通 resume 不会强改非空会话的 preset。

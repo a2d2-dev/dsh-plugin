@@ -8,7 +8,7 @@ import { createRootSession, rootSessionProfile } from '../root-session.ts'
 import { observeJobs } from '../work-execution/job-observation.ts'
 import type { PublicJobRegistry } from '../work-execution/job-observation.ts'
 
-interface Event { type: string; seq: number; time: number; data: Record<string, any> }
+interface Event { type: string; seq: number; time: number; data: Record<string, any>; ignorable?: boolean }
 interface Observation extends Disposable {
   events: readonly Event[]
   inheritedEventCount: number
@@ -103,8 +103,12 @@ export class RuntimeHost {
         ...(end ? { attempt: { turn: end.data.turn, reason: end.data.reason?.kind } } : {}) })
     }
     const registry = (this.ctx.get as (key: string) => unknown).call(this.ctx, 'jobs') as PublicJobRegistry | undefined
-    const journal = events.filter(event => ['jobs/registered', 'jobs/settled', 'jobs/collected'].includes(event.type)).map(event => event.data as unknown as import('../work-execution/job-observation.ts').PublicJobObservation)
-    const jobs = observeJobs(registry, id, runtimeId, journal)
+    // Official V3→V4 restoration retains unknown ignorable fork records under
+    // plugin:<old-type>. Their original epoch/instance domain stays separate.
+    const journal = events.filter(event => ['jobs/registered', 'jobs/settled', 'jobs/collected'].includes(
+      event.ignorable === true && event.type.startsWith('plugin:') ? event.type.slice('plugin:'.length) : event.type,
+    )).map(event => event.data as unknown as import('../work-execution/job-observation.ts').PublicJobObservation)
+    const jobs = observeJobs(registry, id, runtimeId, journal, events)
     return { session, role, ...(parent ? { parent } : {}), status, children, tools: [...toolCalls].map(([callId, name]) => ({ callId, name })), jobs: jobs.jobs, jobObservation: jobs.capability, waitingHuman: !!questions?.active.length || questionCalls.size > 0,
       ...(ended ? { attempt: { turn: ended.data.turn, reason: ended.data.reason?.kind } } : {}) }
   }

@@ -1,5 +1,7 @@
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ExecutionJob } from './observation.ts'
+import { isOfficialJob, officialJobJournal } from './official-job-observation.ts'
+import type { OfficialJobEvent, OfficialJobRecord } from './official-job-observation.ts'
 
 /** Structural face of the formal host #142 contract; no private registry access. */
 export interface PublicJobView {
@@ -15,6 +17,9 @@ export interface PublicJobObservation {
 export interface PublicJobRegistry {
   list(owner: SessionId): PublicJobView[]
   observe?(id: string, owner: SessionId): PublicJobObservation
+  /** Official DSH status projection; neither method consumes output. */
+  get?(id: string, owner: SessionId): PublicJobView
+  events?: { subscribe: (...args: never[]) => unknown }
 }
 const key = (record: PublicJobObservation) => JSON.stringify([record.registryEpoch, record.instanceId, record.job.id])
 /** A reminder is bounded by code points, not UTF-16 units; see lostJobReminder. */
@@ -68,15 +73,35 @@ function project(record: PublicJobObservation, owner: SessionId, runtimeId: stri
     persistence: live ? 'process-local' : 'session-journal', availability: live ? 'live' : record.terminalResult === 'collected' ? 'history' : 'lost' }
 }
 
+function projectOfficial(record: OfficialJobRecord, owner: SessionId, runtimeId: string, live: boolean): ExecutionJob {
+  const job = record.job
+  const needsRead = live && !record.delivered && !['running', 'stopping'].includes(job.status)
+  const detail = [job.detail, ...(needsRead ? ['终态结果尚无交付凭据；请用 job_output（可 wait）收取非空结果并成功提交。已消费后失败、空结果、PTC 或已提交 inline 通知无法靠重复读取恢复证明。可重新执行并收取新作业以补证；原作业仍阻断，须由操作者通过公开 jobs.remove 移除已结束记录，或在原注册表结束后按不可达提醒处理。'] : [])].filter(Boolean).join('；')
+  return { id: job.id, owner: { runtimeId, sessionId: owner }, kind: job.kind, label: job.label, status: job.status,
+    ...(detail ? { detail } : {}), result: 'unknown', delivery: record.delivered ? 'delivered' : live ? 'pending' : 'unknown', acceptance: 'unassessed',
+    persistence: live ? 'process-local' : 'session-journal', availability: live ? 'live' : record.delivered ? 'history' : 'lost' }
+}
+
 /** This face intentionally has no read/readAt method: an observation cannot collect. */
-export function observeJobs(registry: PublicJobRegistry | undefined, owner: SessionId, runtimeId: string, journal: readonly PublicJobObservation[] = []): { jobs: ExecutionJob[]; capability: 'available' | 'unavailable' | 'disabled' } {
+export function observeJobs(registry: PublicJobRegistry | undefined, owner: SessionId, runtimeId: string, journal: readonly PublicJobObservation[] = [], officialEvents: readonly OfficialJobEvent[] = []): { jobs: ExecutionJob[]; capability: 'available' | 'unavailable' | 'disabled' } {
   const rows = new Map<string, ExecutionJob>()
   for (const record of journal) {
     if (record.job.owner !== owner) continue
     rows.set(key(record), project(record, owner, runtimeId, false))
   }
+  const officialJournal = officialJobJournal(officialEvents, owner)
+  for (const [id, record] of officialJournal) rows.set(JSON.stringify(['official', id]), projectOfficial(record, owner, runtimeId, false))
+  const official = !registry?.observe && typeof registry?.get === 'function' && typeof registry.events?.subscribe === 'function'
+  let identitiesVerified = true
   for (const job of registry?.list(owner).filter(job => job.owner === owner) ?? []) {
+    if (official && isOfficialJob(job)) {
+      const observed = registry!.get!(job.id, owner)
+      if (observed.id !== job.id || observed.owner !== owner || !isOfficialJob(observed)) throw new Error('Host job observation identity changed')
+      rows.set(JSON.stringify(['official', observed.id]), projectOfficial({ job: observed, delivered: officialJournal.get(observed.id)?.delivered ?? false }, owner, runtimeId, true))
+      continue
+    }
     if (!registry?.observe) {
+      identitiesVerified = false
       rows.set(JSON.stringify(['unknown', job.id]), { id: job.id, owner: { runtimeId, sessionId: owner }, kind: job.kind, label: job.label, status: job.status,
         ...(job.detail ? { detail: job.detail } : {}), result: 'unknown', delivery: 'unknown', acceptance: 'unassessed', persistence: 'process-local', availability: 'live' })
       continue
@@ -85,5 +110,5 @@ export function observeJobs(registry: PublicJobRegistry | undefined, owner: Sess
     if (observed.job.id !== job.id) throw new Error('Host job observation identity changed')
     rows.set(key(observed), project(observed, owner, runtimeId, true))
   }
-  return { jobs: [...rows.values()], capability: !registry ? 'disabled' : registry.observe ? 'available' : 'unavailable' }
+  return { jobs: [...rows.values()], capability: !registry ? 'disabled' : registry.observe || (official && identitiesVerified) ? 'available' : 'unavailable' }
 }
