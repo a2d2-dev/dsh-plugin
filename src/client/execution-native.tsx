@@ -36,7 +36,7 @@ export function ExecutionSessionWorkEntry({ controller, sessionId, blank, placem
   }
   if (placement === 'dock' && work.some(item => item.purpose === 'history')) return <div className={`${styles.entry} ${styles.card}`} role="status">
     {work.filter(item => item.purpose === 'history').map(item => <div key={`${item.ref.projectId}/${item.ref.taskId}`}>
-      <p>“{item.title}”已转到新会话，你仍可在这里继续对话。</p>
+      <p>“{item.title}”的处理会话已切换。交接内容是否送达，请查看「A²D² 接续」。你仍可在这里继续对话。</p>
       <button type="button" disabled={opening} onClick={() => void enter(item)}>进入当前处理会话</button>
     </div>)}
     {navigationError && <p role="alert">{navigationError}</p>}

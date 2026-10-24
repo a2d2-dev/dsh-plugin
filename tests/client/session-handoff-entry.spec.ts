@@ -37,7 +37,8 @@ describe('native chat takeover visibility', () => {
     const work = receive.mock.lastCall![0] as AssociatedWork[]
     expect(work[0]?.purpose).toBe('history')
     const rendered = renderToStaticMarkup(createElement(SessionWorkLinks, { work, onReveal: vi.fn(), onEnter: enter }))
-    expect(rendered).toContain('已接续到新会话')
+    expect(rendered).toContain('处理会话已切换')
+    expect(rendered).toContain('内容投递状态')
     expect(rendered).toContain('进入当前处理会话')
     expect(enter).not.toHaveBeenCalled()
     expect(h.navigation.openSession).not.toHaveBeenCalled()
