@@ -76,7 +76,7 @@ function project(record: PublicJobObservation, owner: SessionId, runtimeId: stri
 function projectOfficial(record: OfficialJobRecord, owner: SessionId, runtimeId: string, live: boolean): ExecutionJob {
   const job = record.job
   const needsRead = live && !record.delivered && !['running', 'stopping'].includes(job.status)
-  const detail = [job.detail, ...(needsRead ? ['终态读取交付尚无持久证明；请在作业终态后再次调用 job_output，成功提交结果后可解除等待。'] : [])].filter(Boolean).join('；')
+  const detail = [job.detail, ...(needsRead ? ['终态结果尚无交付凭据；请用 job_output（可 wait）收取非空结果并成功提交。已消费后失败、空结果、PTC 或已提交 inline 通知无法靠重复读取恢复证明。可重新执行并收取新作业以补证；原作业仍阻断，须由操作者通过公开 jobs.remove 移除已结束记录，或在原注册表结束后按不可达提醒处理。'] : [])].filter(Boolean).join('；')
   return { id: job.id, owner: { runtimeId, sessionId: owner }, kind: job.kind, label: job.label, status: job.status,
     ...(detail ? { detail } : {}), result: 'unknown', delivery: record.delivered ? 'delivered' : live ? 'pending' : 'unknown', acceptance: 'unassessed',
     persistence: live ? 'process-local' : 'session-journal', availability: live ? 'live' : record.delivered ? 'history' : 'lost' }

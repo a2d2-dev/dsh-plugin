@@ -1,89 +1,102 @@
-# #243 官方 DSH jobs 观察适配验证
+# #243 官方 DSH jobs 观察与 P1 修复验证
 
 ## 目的与范围
 
-在纯官方 DSH `0.2.1-rc.3` 上恢复 A²D² 的后台作业观察与完成门禁，同时保留旧 fork journal 的历史读取。插件只使用公开 `jobs.list/get` 和 `sessionQuery.observeSession`；观察不读取输出、不改变模型 cursor，也不激活模型。
+修复独立审查确认的 P1：官方 `jobs.read` 已消费一次性结果，但后续 post-execute 失败或 Session result 提交失败；旧适配把随后没有 payload 的成功重复 `job_output` 当作已交付，错误解除完成门禁。
 
-- 插件工作树：`/data/src/github.com/a2d2-dev/dsh-plugin/.scratch/official-dsh-jobs`；分支 `fix/243-official-jobs`。
-- 插件 base：`acaaece04a6a1494e5c6633c1b9c7d2a2ec35149`。
-- 只读官方源码与构建：`/data/src/github.com/deepseek-ai/deepseek-harness-dev.worktrees/dsh-upgrade-latest-20261024`；HEAD `22ddee3792402c3e70ec5f86a63c3e3e895a2f60`。
-- 命令显式使用 Node `v24.22.1`，`TMPDIR=$PWD/.local/tmp`。未修改 Host 源码、profile/live 数据、原 Session 文件，也未启动服务、浏览器或真实模型。集成 fixture 的 Session/JSONL 全在该 TMPDIR 下新建，并只通过官方公开服务读写和冷观察。
-- 未安装依赖、未修改依赖包。**执行偏差：前几次默认 Vitest 自动更新了共享依赖目录中的 `.vite/vitest/.../results.json` 测试缓存，已报告父会话。未尝试清理或回写该共享目录；后续改用 `--configLoader runner --cache=false`，集成配置的 `cacheDir` 固定为本工作树 `.local/tmp/vite-official-jobs`。最后一次集成运行前后该共享缓存 mtime 不变。**
+- 工作树：`/data/src/github.com/a2d2-dev/dsh-plugin/.scratch/official-dsh-compat`，分支 `fix/243-official-dsh-compat`，本次修复基线 `ba0b4d2646a1e2b31fa696f2f88be10fb8df1f10`。
+- 只读官方构建：`/data/src/github.com/deepseek-ai/deepseek-harness-dev.worktrees/dsh-upgrade-latest-20261024`，HEAD `22ddee3792402c3e70ec5f86a63c3e3e895a2f60`，各载入包版本 `0.2.1-rc.3`。
+- 所有命令显式使用 Node `v24.22.1`。未修改官方 Host、live/profile/3080、依赖目录、package 或 CHANGELOG，未 install、push、PR 或 merge。
+- 生产修改限于 [official-job-observation.ts](../../src/work-execution/official-job-observation.ts)、[job-observation.ts](../../src/work-execution/job-observation.ts)、新增 [official-job-receipts.ts](../../src/work-execution/official-job-receipts.ts)，以及已提前告知父会话的 [work-plugin.ts](../../src/work-plugin.ts) 最小 hook 安装接线。
+- 观察仍只用公开 `jobs.list/get` 与 `sessionQuery.observeSession`；不读输出、不改变 cursor、不激活模型。receipt 使用公开 `tools/result`、`session/event` 和官方 `appendPluginRecord`。
 
-生产变更仅涉及 [job-observation.ts](../../src/work-execution/job-observation.ts)、[official-job-observation.ts](../../src/work-execution/official-job-observation.ts)、[host.ts](../../src/task-runtime/host.ts)。未修改另一 writer 负责的入口、root-session 或 dsh-host。
+## 根因及真实红灯
 
-## 公开合同与采用的证明
+官方 `packages/jobs/jobs-local/src/index.ts:470-475` 的 `readJob` 先推进 model cursor，并把终态 final result 标为已消费。`packages/jobs/tool-jobs/src/index.ts:517` 先 read，再由 `packages/core/tools/src/pipeline.ts:354-362` 跑 post-execute；策略抛错或取消后，最终只返回 error。标准 `tool/result` 不保存 canonical value。
 
-官方 [jobs 类型](../../../../../../deepseek-ai/deepseek-harness-dev.worktrees/dsh-upgrade-latest-20261024/packages/jobs/jobs/src/types.ts) 定义 `job/registered`、`job/settled`，携带原 owner、唯一作业标识、kind、label 与生命周期事实；[registry](../../../../../../deepseek-ai/deepseek-harness-dev.worktrees/dsh-upgrade-latest-20261024/packages/jobs/jobs/src/index.ts) 的 `get` 不消费，`list` 含当前 owner 和 unowned。适配再做 exact owner 过滤，用 `get(id, owner)` 核验 live 身份，并验证官方 `kind-<16 UUID hex>` 身份域。旧 ordinal / list-only Host 保持 unavailable。官方行不产生 registryEpoch 或 instanceId。
+旧算法只有 `settled < tool/call < successful tool/result` 的排序证明。该排序既不证明首读提交，也不证明重复读取还带 payload。此前合成测试“失败后重复成功必恢复”假设错误，已替换。
 
-官方 [job_output 实现](../../../../../../deepseek-ai/deepseek-harness-dev.worktrees/dsh-upgrade-latest-20261024/packages/jobs/tool-jobs/src/index.ts) 在成功路径执行真实 `jobs.read`；canonical `{ text, job }` 不随标准 Session 日志持久化，也没有默认收取 receipt。本实现采用授权的保守路径：
+先只扩真实官方 integration，在基线源码上运行下述官方命令，exit 1，约 1.92 秒。原始记录在本工作树 `.local/tmp/p1-red.log`：
 
-1. 从本会话非 inherited 的公开日志读取同 owner、同官方 JobId 的 `job/settled`。
-2. 仅当该 settled 的 seq 严格早于 direct `job_output` 的 `tool/call`，且 JSON arguments 的 `job_id` 精确匹配，才建立候选。
-3. 仅当同 callId、turn、step 的后继 `tool/result` 明确成功，且无 error，才投影 `delivery=delivered`。
-4. 所有官方行始终保持 `result=unknown`、`acceptance=unassessed`。交付不能代替模型理解或业务验收。
+```text
+Official jobs fixture provenance ... "head":"22ddee3792402c3e70ec5f86a63c3e3e895a2f60","node":"v24.22.1" ...
+AssertionError: expected 'delivered' to be 'pending'
+Expected: "pending"
+Received: "delivered"
+...work-execution-official-jobs.integration.ts:156:80
+Test Files 1 failed (1)
+Tests 1 failed (1)
+```
 
-不解析输出或 summary，不修改 readonly canonical result，不添加 PostToolDecision 不支持的 meta，不使用宿主私有 registry 状态，不调用 `read/readAt` 观察。
+红灯之前已断言真实首读后重复 read 为 `chunks: []` 且没有 `result`；失败点恰是该无 payload 重复读取错误解除门禁，不是环境或模块装配错误。
 
-旧 `jobs/*` 保留 epoch/instance 身份；官方 V3→V4 对未知 ignorable 事件改名为 `plugin:jobs/*`，这些迁移后的事件也可读。官方唯一 JobId 与旧 fork 身份使用分离的 Map key，避免跨域误配。
+## 修复后的结构证明
 
-## 恢复行为与实际限制
+[receipt hook](../../src/work-execution/official-job-receipts.ts) 只接受 direct `job_output` 的最终公开 canonical outcome。必须成功、无 error、无 parent，canonical `job.id` 与精确 JSON arguments 的 `job_id` 相同，canonical 状态为 completed/failed/killed，且 canonical `text` 字段非空。这里仅检查公开字段是否存在 payload；不解析 text、状态行、summary、标签或自然语言证明输出。
 
-- running→terminal 且无交付证据的 reachable 作业仍阻断。detail 明确要求终态后再次 direct `job_output`，成功提交结果后解除等待。
-- 如果 `job/settled` 晚于调用开始，即使它早于 `tool/result`，也不能证明该次 read 已经读取终态；running 开始的 wait 同样保守保留 pending。终态后的重复读取可恢复。
-- 丢失或失败的 tool result 不会记录假交付；成功重复读取可恢复。重启后可由已持久化的三个事件重新建立证明，不依赖内存 receipt 或侧车。
-- inline completion 通知、job_kill、teardown、移除 foreground 作业均不构成收取证明。无证明且 registry 已 lost 的旧作业仅给 bounded reminder，不永久阻断，也不提示执行不可行的重复读取。
-- 本实现不证明 PTC 内部读取，也不承诺一次 running wait 立即解锁；可恢复操作是终态后 direct `job_output`。
-- 若官方 registry 因日志 append 失败而根本未记录 `job/settled`，此保守路径没有持久 read-time 身份/状态证明。它不会伪造交付；仅重复读取无法补造缺失生命周期事实。要覆盖该故障，需要额外的 canonical result + 对应已提交 Session result 的插件持久 receipt，或官方提供原生持久 read-time receipt；本片未实现、更未声称具备该能力。
+随后等待同一 Session 的真正 `tool/result` 接受事件。必须匹配 callId、turn、step，成功且无 error，`sourceEventSeqs` 引用精确 call seq，最终 content 的 SHA-256 摘要与 tools/result 一致。只有这些条件成立才排队追加 `plugin:a2d2/official-job-receipt`。官方禁止 publication 内重入 append，所以追加在 microtask 进行；追加失败只记录警告，不生成替代证明。
 
-## 步骤与命令记录
+receipt 保存 version、owner、jobId、终态、canonical payload 字节数，以及 call/result seq、callId、turn/step 和已提交 content 摘要；不重复持久化原始输出。重放再次校验 receipt 的 ignorable 身份、版本、owner、官方 UUID 生命周期、终态、正整数字节数、精确 call/result/source edge、提交成功及摘要。单独成功 result、单独 receipt、缺失提交、错误提交或错配 receipt 都不会交付。
 
-所有测试从上述插件工作树运行。范围回归沿用既有 fixture 和不可变依赖；官方正向验证则显式加载指定官方构建。
+这是 Session 接受提交边界的证明，沿公开 Session 持久化通道保存。它不承诺每个 live event 在 fsync 前就耐受断电：进程在 result 与 receipt 之间崩溃，或 receipt 的持久化丢失，冷读会保守回到无证明；不会从 prose 或重复空 read 补造 receipt。fixture 显式 `sessions.flush` 后重建全新 Context，验证真实 JSONL 冷读可恢复。
+
+正常有 payload 的 running `wait:true` 不再要求 settled 早于调用开始。其 canonical 终态值与成功提交可直接形成 receipt，首次 wait 即解除等待；普通 terminal read 同理。旧 fork 的 epoch/instance journal 和官方 V3→V4 后的 `plugin:jobs/*` 读取保持原行为。始终保留 `result=unknown`、`acceptance=unassessed`，交付不替代业务验收。
+
+## 能力限制与准确恢复
+
+- **真正空输出、无 final result，或空字符串 final result**：公开 canonical `{text:'',job:terminal}` 与“此前已消费后，重复读到空”不可区分。因此无 payload 不发 receipt，live 原作业仍 pending。fixture 明确覆盖真正空结果的 `wait:true`。本片不宣称这类 wait 自动解除，也不把它称为交付。需要宿主提供更强结构化消费事实，或操作者按以下 loss 流程收口，才能避免该边界。
+- **失败、取消、丢失成功提交、插件启用前已消费或 receipt 丢失**：仅重复 `job_output` 无法恢复一次性 final result。新作业可补充独立证据，但不会清除旧作业 blocker。
+- **PTC/无日志调用**：公开工具执行即使成功返回 canonical payload，没有匹配 direct Session call/result commit 也不交付。嵌套 parent outcome 不发 direct receipt。本片验证真实公共 PTC 子 dispatch pipeline seam，未运行完整 PTC 语言运行时/VM，不宣称支持 PTC delivery receipt。
+- **inline 通知**：通知源有 `kind:'tool-jobs'`，但没有可作为 job/result 对应证明的结构身份；不解析其文本或 summary。通知提交后若只剩空 read，仍 pending。真实官方 `inlineOutputBytes:2048` 路径已覆盖。该配置下提前开始的正常带 payload wait 仍首次交付；fixture 也已覆盖。若日常异步工作必须稳定经 direct read 形成证明，部署可使用官方现有 `inlineOutputBytes:0` 配置；本片没有修改任何部署配置。
+- **可行的旧记录恢复**：先保留产物、补跑并独立核验结果；旧 live 记录仍阻断。操作者可通过官方公开 `jobs.remove(id, owner)` 移除已结束记录，或在计划结束原注册表实例后收口。此时历史投影为 `availability=lost, delivery=unknown`，沿既有“不可达只提醒”规则给 bounded reminder，不再阻断。fixture 验证真实 remove 路径；插件不会自动移除、伪造 collected 或重新标为 delivered。
+- 未记录官方生命周期时，receipt 也不能补造 owner/官方作业身份；保持无交付证明。跨 owner、旧 ordinal/list-only Host、通知、job_kill、teardown 不会获得额外权限或交付证明。
+
+因此，本片修复 P1 的假阳性，并支持正常带 payload 的 read/wait；**不等同于所有官方 jobs 消费形式均具备自动完成门禁恢复能力**。尤其空结果与已提交 inline 的自动收口仍有限制，父会话整合与部署判断必须保留这一点。
+
+## 实际执行命令
+
+从上述工作树运行，官方红灯与修复后绿灯使用同一官方命令。普通回归和类型检查使用独立 TMPDIR。所有 Vitest 使用 `--configLoader runner --no-cache`，不使用共享依赖缓存。
 
 ```bash
-export PATH=/root/.nvm/versions/node/v24.22.1/bin:$PATH
-export TMPDIR="$PWD/.local/tmp"
-node node_modules/vitest/vitest.mjs run --configLoader runner --cache=false \
+PATH=/root/.nvm/versions/node/v24.22.1/bin:$PATH \
+TMPDIR="$PWD/.local/tmp" \
+DSH_OFFICIAL_HOST_ROOT=/data/src/github.com/deepseek-ai/deepseek-harness-dev.worktrees/dsh-upgrade-latest-20261024 \
+node node_modules/vitest/vitest.mjs run --configLoader runner --no-cache \
+  --config tests/official-jobs.config.ts
+
+PATH=/root/.nvm/versions/node/v24.22.1/bin:$PATH \
+TMPDIR=/data/_ssd2t/dsh/tmp/issue-243-integration \
+node node_modules/vitest/vitest.mjs run --configLoader runner --no-cache \
   tests/work-execution-official-jobs.spec.ts \
   tests/work-execution-jobs.spec.ts \
   tests/work-execution-lost-job.spec.ts \
   tests/work-execution-observation.spec.ts \
   tests/work-compact-results.spec.ts \
   tests/work-execution-boundary.spec.ts
+
+PATH=/root/.nvm/versions/node/v24.22.1/bin:$PATH \
+TMPDIR=/data/_ssd2t/dsh/tmp/issue-243-integration \
 node node_modules/typescript/bin/tsc --noEmit --incremental false
-DSH_OFFICIAL_HOST_ROOT=/data/src/github.com/deepseek-ai/deepseek-harness-dev.worktrees/dsh-upgrade-latest-20261024 \
-  node node_modules/vitest/vitest.mjs run --configLoader runner --cache=false \
-  --config tests/official-jobs.config.ts
+
 git diff --check
 ```
 
-范围回归的已完成 46 项运行使用的是相同测试列表的默认 config loader/cache 命令；上面展示后续应使用的无共享缓存等价命令，不把未执行的变体冒称已执行。
+命令原始 stdout/stderr 分别重定向至工作树 `.local/tmp/p1-red.log`、`.local/tmp/p1-expanded.log`、`.local/tmp/p1-unit.log`、`.local/tmp/p1-typecheck.log`。这些本地日志供父会话复核，不纳入源码提交。
 
-| 记录 | exit | 结果 |
+| 验证 | exit | 结果 |
 | --- | ---: | --- |
-| 第一片 red：仅增加官方 get/list 观察测试 | 1 | 复现 capability 从 unavailable 无法变 available |
-| 第一片 green：官方观察 + 旧 fork 身份 | 0 | 2 文件、2 测试通过；commit `a8fdb4f` |
-| 第二片 red：成功终态 job_output 后观察 | 1 | 复现 delivery 仍为 pending |
-| 第二片 green 与扩展回归 | 0 | 3 文件、31 测试通过；commit `a340abb` |
-| 迁移兼容 red | 1 | `plugin:jobs/settled` 未被读取 |
-| 不可达恢复提示 red | 1 | lost 行错误提示再次 job_output；随后限制为仅 live 行提示 |
-| 范围回归最终运行 | 0 | 6 文件、46 测试通过 |
-| 服务端 TypeScript 检查 | 0 | `tsc --noEmit --incremental false` 通过 |
-| 官方 fixture 初次装配 | 1 | 官方 JSONL 已改为 namespace 插件，default 为 undefined；按实际源码修正 |
-| fixture 初次类型检查 | 2 | 项目 ES2023 类型无 Promise.withResolvers；改为标准 Promise 门闩 |
-| 官方 built fixture（含真实 V3→V4 迁移） | 0 | 1 文件、1 完整集成场景通过 |
+| 真实官方 P1 红灯，先扩测试、未改根因代码 | 1 | 消费后失败 + 成功空重复错误得到 delivered |
+| 真实官方扩展 fixture | 0 | 1 文件、1 完整集成场景通过；官方 SHA、版本、Node provenance 强断言 |
+| 相关回归 | 0 | 6 文件、62 测试通过，其中 official jobs 35 项 |
+| 服务端 TypeScript | 0 | `tsc --noEmit --incremental false` 通过 |
+| diff whitespace 检查 | 0 | 无问题 |
 
-## 覆盖证据
+## 真实 fixture 覆盖及未验证项
 
-[公开观察回归](../../tests/work-execution-official-jobs.spec.ts) 共 19 测试，覆盖官方非消费 get/list、unowned/foreign 隔离、get 身份变化拒绝、UUID 重启身份、旧/新 journal 共存、迁移后旧 journal、running→terminal 未收取阻断、成功终态读取解锁、read/result 间竞态、丢回执/失败/重复读取、registry lost 仅提醒、通知文本无证明、观察无激活。既有 [lost-job 门禁测试](../../tests/work-execution-lost-job.spec.ts)、[fork 身份测试](../../tests/work-execution-jobs.spec.ts)、[执行边界](../../tests/work-execution-boundary.spec.ts)、[观察图](../../tests/work-execution-observation.spec.ts)、[紧凑结果](../../tests/work-compact-results.spec.ts) 一并通过。
+[官方 integration](../../tests/work-execution-official-jobs.integration.ts) 使用官方 registry、tool-jobs、共享 pipeline、native executor、AgentLoop、Session、JSONL、sessionQuery 与 migration catalog；仅模型是确定性脚本适配器。配置缺 env、缺构建或 SHA/version 不符会 hard fail，不 skip。
 
-[官方集成 fixture](../../tests/work-execution-official-jobs.integration.ts) 通过[显式配置](../../tests/official-jobs.config.ts)运行：缺 env、官方 SHA 不符、模块非 rc.3 或构建缺失会 hard fail，不 skip。它使用真官方 registry、tool-jobs、AgentLoop、Session、JSONL、sessionQuery 与 format catalog；只有模型是确定性脚本适配器，无外部模型请求。验证内容包含：
+实际覆盖：只观察不 read/readAt/不增加模型请求，exact owner/unowned 隔离，正常终态 read 和重复读，真实 post-execute 消费后抛错，canonical 成功但无日志，Session 成功 result append 故障及官方 error recovery，消费后取消为 ABORTED，嵌套 parent 消费，两个真实并发 read 的一份 payload/一份空结果，running wait 首次交付，真正空 wait 的限制，公开 remove 后 loss 提醒，JSONL flush 后冷恢复，UUID 重启隔离、旧 fork V3→V4 迁移，以及真实 inline 通知提交后空读和默认 inline 策略下正常 wait。
 
-- Host 没有 fork `jobs.observe` / `appendIgnorable`。
-- 真 registry 的 owner 拒绝与 list 中 unowned 过滤。
-- 连续观察不调用 `read/readAt`，不增加模型请求；显式读取仍取得完整 stream 和 terminal result。
-- 终态前 wait 的成功结果保持 pending，后续 direct terminal repeat 解锁。
-- 真 Session result 和生命周期事件 flush 后可从新 Context 冷读重建 delivered；未收取历史仅提醒。
-- 新 registry 生成新 UUID；官方真实 V3→V4 catalog 迁移的 legacy journal 由 RuntimeHost 正确读取。
+[unit journal 验证](../../tests/work-execution-official-jobs.spec.ts) 补充 receipt 的版本、owner、job、状态、字节数、call/result/source edge、turn/step、摘要错配拒绝；旧“重复必恢复”断言已删除。既有 lost jobs、fork jobs、观察图、执行边界、紧凑结果一并回归。
 
-未运行全仓测试、浏览器/UI 验收、live 模型或父分支合并后的统一测试。旧 fork 专用 matched-host 集成不是本片的官方验证入口。未创建 PR、未 merge、未关闭 Issue；父会话负责合并两片并统一 review。
+未运行全仓测试、完整 PTC VM、浏览器/UI、live 模型或 3080 切换验收。本任务只修 jobs scope，官方 Host 与 live 均未修改；父会话负责整合、独立复核与最终部署验收。

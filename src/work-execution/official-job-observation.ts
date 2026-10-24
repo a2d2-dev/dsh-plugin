@@ -1,3 +1,4 @@
+import { OFFICIAL_JOB_RECEIPT, jobResultDigest } from './official-job-receipts.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { PublicJobView } from './job-observation.ts'
 
@@ -6,6 +7,8 @@ export interface OfficialJobEvent {
   type: string
   seq: number
   data: Record<string, any>
+  ignorable?: boolean
+  sourceEventSeqs?: readonly number[]
 }
 export interface OfficialJobRecord {
   job: PublicJobView
@@ -27,16 +30,11 @@ function argumentJobId(raw: unknown): string | undefined {
   } catch { /* A malformed call is not collection evidence. */ }
 }
 
-/**
- * Conservative terminal-read proof using only committed public events. A
- * settlement must precede the invocation, not merely its result: otherwise
- * settlement can race a running read before that result reaches the log.
- * A wait that began running can recover with another job_output after terminal.
- * No content, notice summary, canonical value, or fabricated meta is consulted.
- */
+/** Reconstruct delivery only from plugin receipts paired with exact public commits. */
 export function officialJobJournal(events: readonly OfficialJobEvent[], owner: SessionId): Map<string, OfficialJobRecord> {
   const jobs = new Map<string, OfficialJobRecord>()
-  const calls = new Map<string, { jobId?: string; seq: number; turn: number; step: number }>()
+  const calls = new Map<number, OfficialJobEvent>()
+  const results = new Map<number, OfficialJobEvent>()
   for (const event of events) {
     const data = event.data
     if (event.type === 'job/registered' || event.type === 'job/settled') {
@@ -50,20 +48,25 @@ export function officialJobJournal(events: readonly OfficialJobEvent[], owner: S
         jobs.set(job.id, { job, settledSeq: event.seq, delivered: jobs.get(job.id)?.delivered ?? false })
       } else if (!jobs.has(job.id)) jobs.set(job.id, { job, delivered: false })
     } else if (event.type === 'tool/call') {
-      if (typeof data.callId !== 'string') continue
-      // A reused call id replaces the earlier invocation, including an
-      // ineligible one. Pairing also checks turn/step at the committed result.
-      const jobId = data.name === 'job_output' ? argumentJobId(data.arguments) : undefined
-      const settledSeq = jobId === undefined ? undefined : jobs.get(jobId)?.settledSeq
-      calls.set(data.callId, { jobId: settledSeq !== undefined && settledSeq < event.seq ? jobId : undefined,
-        seq: event.seq, turn: data.turn, step: data.step })
+      calls.set(event.seq, event)
     } else if (event.type === 'tool/result') {
-      const callId = data.message?.toolCallId
-      const call = calls.get(callId)
-      calls.delete(callId)
-      if (!call?.jobId || call.seq >= event.seq || call.turn !== data.turn || call.step !== data.step
-        || data.message?.isError !== false || data.error !== undefined) continue
-      jobs.get(call.jobId)!.delivered = true
+      results.set(event.seq, event)
+    } else if (event.type === OFFICIAL_JOB_RECEIPT && event.ignorable === true) {
+      const call = calls.get(data.callSeq)
+      const result = results.get(data.resultSeq)
+      const record = jobs.get(data.jobId)
+      if (data.version !== 1 || data.owner !== owner || !record || record.settledSeq === undefined
+        || data.status !== record.job.status || !terminal(data.status)
+        || !Number.isSafeInteger(data.payloadBytes) || data.payloadBytes <= 0
+        || !call || !result || call.seq >= result.seq || result.seq >= event.seq
+        || !result.sourceEventSeqs?.includes(call.seq)
+        || call.data.name !== 'job_output' || argumentJobId(call.data.arguments) !== data.jobId
+        || call.data.callId !== data.callId || result.data.message?.toolCallId !== data.callId
+        || call.data.turn !== data.turn || result.data.turn !== data.turn
+        || call.data.step !== data.step || result.data.step !== data.step
+        || result.data.message?.isError !== false || result.data.error !== undefined
+        || data.contentDigest !== jobResultDigest(result.data.message.content)) continue
+      record.delivered = true
     }
   }
   return jobs
