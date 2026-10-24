@@ -1,0 +1,39 @@
+
+ RUN  v4.1.11 /data/src/github.com/a2d2-dev/dsh-plugin/.scratch/global-empty-turn-fix
+
+ ✓ tests/client/execution-components.spec.ts (1 test) 52ms
+ ✓ tests/work-goal-replay.spec.ts (3 tests) 1017ms
+   ✓ leaves rejected Goal rounds with their producer instead of retaining them as Task input  504ms
+ ✓ tests/work-continuous-integration.spec.ts (2 tests) 1377ms
+   ✓ dispatches assigned Project Issues through real DSH sessions, preserves pause-new semantics and continues after acceptance  902ms
+   ✓ automatically hands a queued Issue to its successor without giving its slot to another Issue  473ms
+ ✓ tests/work-continuation.spec.ts (19 tests) 8518ms
+   ✓ recovers the same operation and successor after the real material-request receipt is lost  811ms
+   ✓ recovers the same operation and successor after the real successor-create receipt is lost  560ms
+   ✓ recovers the same operation and successor after the real source-take receipt is lost  496ms
+   ✓ recovers the same operation and successor after the real source-seal receipt is lost  640ms
+   ✓ recovers the same operation and successor after the real successor-kickoff receipt is lost  536ms
+   ✓ retries a consumed cancelled material request without replacing the operation or successor  694ms
+   ✓ retries a consumed completed-without-material material request without replacing the operation or successor  557ms
+   ✓ preserves queued Task and full native input while successor creation is parked  537ms
+   ✓ hands the same Task to two real successor Sessions with source-authored decisions and stable identity  545ms
+   ✓ inherits the actual Session-local reasoning effort and Project Agent instructions  371ms
+   ✓ keeps retired conversations usable after cold restore without restoring Task coordination  472ms
+   ✓ automatically continues at a 200K soft target and observes successor context of 100 tokens  427ms
+   ✓ automatically continues at a 200K soft target and observes successor context of 200001 tokens  354ms
+   ✓ does not prompt or rotate while explicitly waiting and does not rotate without source material  327ms
+ ✓ tests/work-execution.spec.ts (22 tests) 9436ms
+   ✓ accepts a real model self-wait before applying it at the settled maintenance boundary  2325ms
+   ✓ accepts a real model self-pause before applying it at the settled maintenance boundary  2245ms
+   ✓ recovers a real tool accepted intent after Context loss before the settled recovery consumer runs  327ms
+   ✓ runs on the selected local model, waits without empty turns, and separates consumption from acceptance  319ms
+   ✓ recovers fixed execution after the real controller checkpoint receipt is lost  309ms
+   ✓ keeps a paused Task paused after cold restore while native conversations remain usable  317ms
+   ✓ recovers legacy buffered human content once on the next human turn without resuming the Task  326ms
+   ✓ explicitly reuses a compatible nonempty related Session while review association never grants coordination  300ms
+
+ Test Files  5 passed (5)
+      Tests  47 passed (47)
+   Start at  21:17:29
+   Duration  11.17s (transform 2.76s, setup 0ms, import 6.42s, tests 20.40s, environment 1ms)
+
