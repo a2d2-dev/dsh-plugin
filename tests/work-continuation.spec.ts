@@ -207,10 +207,10 @@ it('preserves queued Task and full native input while successor creation is park
   let releaseResolve!: () => void
   const entered = { promise: new Promise<void>(resolve => { enteredResolve = resolve }), resolve: () => enteredResolve() }
   const release = { promise: new Promise<void>(resolve => { releaseResolve = resolve }), resolve: () => releaseResolve() }
-  const create = h.ctx.sessionController.create.bind(h.ctx.sessionController)
-  vi.spyOn(h.ctx.sessionController, 'create').mockImplementation(async request => {
-    if (request?.sessionId !== source.id) { entered.resolve(); await release.promise }
-    return create(request)
+  const resolveAgent = h.ctx.sessionController.resolveAgent.bind(h.ctx.sessionController)
+  vi.spyOn(h.ctx.sessionController, 'resolveAgent').mockImplementation(async id => {
+    if (id !== source.id) { entered.resolve(); await release.promise }
+    return resolveAgent(id)
   })
   const recovery = fixtures.run(() => h.app.reconcileControls())
   const native = createUserMessage({ content: [{ type: 'text', text: 'Native decision with full stable identity' }], source: { kind: 'user' } })
