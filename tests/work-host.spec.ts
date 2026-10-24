@@ -186,7 +186,7 @@ it('starts through the production plugin Context with real execution services an
   const command = { kind: 'command', value: { type: 'task.start', commandId: 'start', ref, expectedVersion: 1,
     agentId: project.defaultAgentId, resource, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'read-only' } } as const
   const controller = ctx.get('sessionController')!
-  for (const method of ['create', 'modelCatalog'] as const) {
+  for (const method of ['resolveAgent', 'modelCatalog'] as const) {
     const descriptor = Object.getOwnPropertyDescriptor(controller, method)
     Object.defineProperty(controller, method, { value: undefined, configurable: true })
     try {

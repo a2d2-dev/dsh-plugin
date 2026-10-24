@@ -94,6 +94,26 @@ describe('Agent candidate reasoning effort', () => {
     }
   })
 
+  it('refuses to initialize an unrecorded started Session without changing its model', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'a2d2-started-effort-'))
+    const ctx = new Context()
+    const id = SessionId('started-user-session')
+    const selectLocalModel = vi.fn()
+    ctx.provide('agents', { get: () => stubAgent(root, id) } as never)
+    ctx.provide('sessionProjections', { stateOf: () => ({ lastTurn: 1, openTurnStartSeq: null }) } as never)
+    ctx.provide('sessionController', { selectLocalModel } as never)
+    try {
+      await ctx.plugin(StubLlm, { routes: [route] })
+      await ctx.plugin(A2d2Service, { root, stageAgents: settings as never })
+      await expect(ctx.a2d2.initializeSessionAgent(root, id, 'engineer')).rejects.toThrow('already started')
+      expect(selectLocalModel).not.toHaveBeenCalled()
+      expect(await ctx.a2d2.agentOfSession(root, id)).toBeUndefined()
+    } finally {
+      await ctx.fiber.dispose()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   it('host initialization sets a session-local effort and never saves host defaults', async () => {
     const root = await mkdtemp(join(tmpdir(), 'a2d2-effort-'))
     const ctx = new Context()

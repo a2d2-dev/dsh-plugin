@@ -1,4 +1,3 @@
-import { createRequire } from 'node:module'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-session-controller'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
@@ -15,6 +14,7 @@ import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import type { WorkEvent, WorkExecution } from '../work-types.ts'
 import { RuntimeHost } from '../task-runtime/host.ts'
 import { rootSessionProfile } from '../root-session.ts'
+import { resolveSessionAgent } from '../official-session.ts'
 import { WorkExecutionError } from './host.ts'
 import type { WorkExecutionHost } from './host.ts'
 import { settleUncollectedJob } from './job-observation.ts'
@@ -292,12 +292,10 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
   }
   async choices(): Promise<import('../work-types.ts').HostExecutionChoices> {
     if (!this.ctx.get('sessionController') || !this.ctx.get('agentPresets') || !this.ctx.get('permissionPresets')) throw new WorkExecutionError('host-capability-unavailable', 'Host execution catalogs are unavailable')
-    const manifest = createRequire(import.meta.url)('@deepseek-ai/dsh-api-session-controller/package.json') as { version: string }
-    // 0.2.1 keeps the contract this adapter relies on: create() accepts the
-    // Agent preset and returns the effective identity, and the identity check
-    // below still fails loudly if a Host substitutes a different Session.
-    if (manifest.version !== '0.2.0-rc.2' && manifest.version !== '0.2.1-rc.2') throw new WorkExecutionError('unsupported-host-controller', `This adapter supports the SessionController 0.2.0-rc.2 and 0.2.1-rc.2 contracts; ${manifest.version} requires a separately verified adapter`)
-    const catalog = await this.service('sessionController', 'modelCatalog').modelCatalog()
+    // A peer resolved from this plugin can be its development dependency rather
+    // than the serving Host. Admission checks the actual public services below;
+    // package engines declare the verified rc.2 / official rc.3 releases.
+    const catalog = await this.service('sessionController', 'modelCatalog', 'resolveAgent').modelCatalog()
     // The host's own catalogs are the authority, like a normal new Session: a
     // managed execution may use any activated Agent preset and any configured
     // permission preset (the derived auto mode is not a fixed sandbox).
@@ -317,7 +315,11 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     for (const name of ['sessionController', 'sessionPersistence', 'sessionQuery', 'agents', 'sessions', 'agentPresets', 'permissionPresets', 'sandboxPolicy', 'approval', 'llm', 'workspaceRegistry', 'agentDefaultModel']) {
       if (!(this.ctx.get as (key: string) => unknown).call(this.ctx, name)) throw new WorkExecutionError('host-capability-unavailable', `DSH ${name} is required for managed execution`)
     }
-    this.service('sessionController', 'create', 'inspect', 'modelCatalog', 'resolveAgent')
+    this.service('sessionController', 'modelCatalog', 'resolveAgent')
+    this.service('sessionQuery', 'observeSession')
+    this.service('sessionPersistence', 'stat', 'create', 'open')
+    this.service('sessions', 'prepare', 'flush')
+    this.service('llm', 'resolveCallConfig', 'resolveModelInfo')
     if (this.ctx.get('fs')?.sandboxMode === undefined || this.ctx.get('shell')?.sandboxMode === undefined) throw new WorkExecutionError('host-permission-unenforced', 'Managed execution requires real sandbox-aware filesystem and shell providers')
     if (request.resource.runtimeId !== this.runtimeId) throw new WorkExecutionError('incompatible-resource', 'Execution belongs to another runtime')
     const workspace = this.service('workspaceRegistry').list().find(item => item.id === request.resource.workspaceId)
@@ -332,20 +334,27 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     const preset = await this.service('agentPresets').resolve(request.agentPreset)
     if (preset.broken) throw new WorkExecutionError('unavailable-agent-preset', 'Requested Agent preset has an activation failure')
     if (!this.service('permissionPresets').names.includes(request.permissionPreset)) throw new WorkExecutionError('invalid-permission-preset', 'Permission preset is unavailable')
+    if (request.model.reasoningEffort !== undefined) {
+      const info = await this.service('llm').resolveModelInfo(request.model.provider, request.model.model)
+      if (!info.reasoning?.efforts.some(effort => effort.id === request.model.reasoningEffort)) throw new WorkExecutionError('unavailable-model', 'Requested reasoning effort is unavailable')
+    }
     const requested = await this.service('llm').resolveCallConfig({ ...request.model, reasoningEffort: request.model.reasoningEffort ? ReasoningEffortId(request.model.reasoningEffort) : undefined })
     const stat = await this.service('sessionPersistence').stat(SessionId(request.session.sessionId))
     if (!stat && request.sessionMode === 'reuse') throw new WorkExecutionError('incompatible-session', 'Requested Session does not exist')
     if (stat) {
       if (request.sessionMode === 'reuse' && !workspace.sessionIds.includes(SessionId(request.session.sessionId))) throw new WorkExecutionError('incompatible-session', 'Session is not a member of the selected workspace')
-      const inspection = await this.service('sessionController').inspect(SessionId(request.session.sessionId))
-      if (inspection.meta.cwd !== workspace.path || inspection.meta.agentPreset !== request.agentPreset) throw new WorkExecutionError('incompatible-session', 'Existing Session resource or preset differs')
+      using inspection = await this.service('sessionQuery').observeSession(SessionId(request.session.sessionId))
+      const selectedPreset = (inspection.projections?.values as { agentPreset?: string | null } | undefined)?.agentPreset ?? inspection.header.agentPreset
+      if (inspection.header.cwd !== workspace.path || selectedPreset !== request.agentPreset) throw new WorkExecutionError('incompatible-session', 'Existing Session resource or preset differs')
       const header = inspection.events.findLast(item => item.type === 'request/header')
       if (header?.type === 'request/header' && (header.data.header.config.provider !== request.model.provider || header.data.header.config.model !== request.model.model || header.data.header.config.reasoningEffort !== requested.reasoningEffort)) throw new WorkExecutionError('incompatible-session', 'Existing Session model differs; silent reconfiguration refused')
+      const pending = inspection.events.findLast(item => item.type === 'model/selection')
+      const selected = pending?.type === 'model/selection' && (!header || pending.seq > header.seq) ? pending.data
+        : header?.type === 'request/header' ? header.data.header.config : undefined
+      if (selected && (selected.provider !== request.model.provider || selected.model !== request.model.model || selected.reasoningEffort !== request.model.reasoningEffort)) throw new WorkExecutionError('incompatible-session', 'Existing Session local selection differs; silent reconfiguration refused')
       if (request.sessionMode === 'reuse') {
-        const pending = inspection.events.findLast(item => item.type === 'model/selection')
-        const selected = pending?.type === 'model/selection' && (!header || pending.seq > header.seq) ? pending.data
-          : header?.type === 'request/header' ? header.data.header.config : this.service('agentDefaultModel').currentSelection()
-        if (selected.provider !== request.model.provider || selected.model !== request.model.model) throw new WorkExecutionError('incompatible-session', 'Existing Session local selection differs')
+        const effective = selected ?? this.service('agentDefaultModel').currentSelection()
+        if (effective.provider !== request.model.provider || effective.model !== request.model.model || effective.reasoningEffort !== request.model.reasoningEffort) throw new WorkExecutionError('incompatible-session', 'Existing Session local selection differs')
         using observation = await this.service('sessionQuery').observeSession(SessionId(request.session.sessionId))
         const permission = (observation.projections?.values as { permissions?: { currentValue: string } } | undefined)?.permissions
         if (permission?.currentValue !== request.permissionPreset) throw new WorkExecutionError('incompatible-session', 'Existing Session effective permission differs')
@@ -383,16 +392,16 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       try { await handle.append([{ type: 'model/selection', seq: SessionSeq(0), time: Date.now(), data: execution.model }]) }
       finally { await handle.close() }
     } else if (execution.sessionMode === 'create' && !this.service('agents').get(id)) {
-      const inspection = await this.service('sessionController').inspect(id)
-      if (inspection.events.length === 0) {
+      const events = await this.runtime.events(id)
+      if (events.length === 0) {
         const handle = await this.service('sessionPersistence').open(id, 'write')
         try { await handle.append([{ type: 'model/selection', seq: SessionSeq(0), time: Date.now(), data: execution.model }]); await handle.flush() }
         finally { await handle.close() }
       }
     }
-    const created = await this.service('sessionController').create({ sessionId: id, workspaceId: execution.resource.workspaceId as never, agentPreset: execution.agentPreset })
-    if (created.sessionId !== id) throw new WorkExecutionError('host-session-identity-changed', 'Host did not preserve the reserved Session identity')
-    const agent = await this.runtime.agent(id)
+    const agent = await resolveSessionAgent(this.ctx, id)
+    const workspace = this.service('workspaceRegistry').list().find(item => item.id === execution.resource.workspaceId)!
+    await workspace.attachSession(id)
     await agent.whenIdle()
     await agent.runMaintenance(async () => {
       const events = await this.runtime.events(id)

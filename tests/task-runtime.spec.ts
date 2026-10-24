@@ -251,16 +251,17 @@ describe('task runtime over real DSH loop, JSONL persistence, query and workspac
     expect(restored.session.header.agentPreset).toBeUndefined()
     expect(h.ctx.agentPresets.composedPreset(restored.ctx)).toBe('workspace-agent')
     const state = (await h.runner.store.read(record))!
-    if (origin === 'ambiguous') {
+    if (origin === 'ambiguous' || origin === 'initial') {
       expect(state.state).toBe('blocked')
-      expect(state.error).toContain('ambiguous permission history')
+      expect(state.error).toContain(origin === 'ambiguous' ? 'ambiguous permission history' : 'already started with different permissions')
+      if (origin === 'initial') expect(h.ctx.sandboxPolicy.resolve({ session: restored.session }).mode).toBe('danger-full-access')
       expect(state.recoveryRequired).toMatchObject({ session: id, agentPreset: 'workspace-agent' })
       expect(await h.runner.allowed(restored)).toBe(false)
       expect(h.adapter.calls).toBe(0)
     } else {
       expect(state.generation, state.error).toBe(1)
-      expect(h.ctx.sandboxPolicy.resolve({ session: restored.session }).mode).toBe(origin === 'initial' ? 'read-only' : 'workspace-write')
-      expect(h.ctx.approval.overrideOf(restored.session)).toBe(origin === 'initial' ? 'never' : 'ask')
+      expect(h.ctx.sandboxPolicy.resolve({ session: restored.session }).mode).toBe('workspace-write')
+      expect(h.ctx.approval.overrideOf(restored.session)).toBe('ask')
       expect(state.recoveryRequired).toBeUndefined()
     }
   })
