@@ -127,9 +127,22 @@ export class GitHubSource implements GitHubSourcePort {
       }
     }
     const raw = await this.get(`/repos/${repository.owner}/${repository.repository}/issues?${parameters}`, token)
-    if (!Array.isArray(raw)) throw new SourceError('github-invalid-response', 'GitHub returned an invalid Issue page')
-    const items = raw.filter(item => !(item && typeof item === 'object' && 'pull_request' in item)).map(item => this.issue(item))
-    return { identity, items, ...(raw.length === request.perPage ? { nextPage: request.page + 1 } : {}), observedAt: new Date().toISOString() }
+    if (!Array.isArray(raw) || raw.length > request.perPage) throw new SourceError('github-invalid-response', 'GitHub returned an invalid Issue page')
+    const isIssue = (item: unknown) => !(item && typeof item === 'object' && 'pull_request' in item)
+    const items = raw.filter(isIssue).map(item => this.issue(item))
+    // REST /issues also includes PRs. A full raw page proves neither that an
+    // Issue follows nor that this is a terminal page. Probe generated paths,
+    // never a remote Link URL, retaining the existing sequential page contract.
+    if (raw.length === request.perPage) {
+      for (let offset = 1; ; offset++) {
+        parameters.set('page', String(request.page + offset))
+        const following = await this.get(`/repos/${repository.owner}/${repository.repository}/issues?${parameters}`, token)
+        if (!Array.isArray(following) || following.length > request.perPage) throw new SourceError('github-invalid-response', 'GitHub returned an invalid Issue page')
+        if (following.some(isIssue)) return { identity, items, nextPage: request.page + 1, observedAt: new Date().toISOString() }
+        if (following.length < request.perPage) break
+      }
+    }
+    return { identity, items, observedAt: new Date().toISOString() }
   }
   async detail(repository: GitHubRepository, number: number, options?: { nativeChildren: true }) {
     if (!validRepository(repository) || !Number.isSafeInteger(number) || number < 1) throw new SourceError('github-invalid-scope', 'Invalid source Issue reference')

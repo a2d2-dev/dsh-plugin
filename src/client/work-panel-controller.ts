@@ -13,11 +13,12 @@ export interface SourcePanelState extends IssuePageRequest {
   tab: SourceTab; catalog: SourceCatalog | null; viewNumber: number | null; viewPage: number
   sources: WorkSource[]; sourceId: string | null; listing: IssuePage | null; issue: GitHubIssue | null
   bindings: ExternalBinding[]; loading: boolean; error: string | null; cached: boolean
+  loadingMore: boolean; moreError: string | null; listEpoch: number
   canonical: TaskRef | null
   /** Live Project scan progress while the directory load is in flight. */
   scan: SourceScanProgress | null
 }
-const emptySource = (): SourcePanelState => ({tab:'overview',catalog:null,viewNumber:null,viewPage:1,sources:[],sourceId:null,listing:null,issue:null,bindings:[],page:1,perPage:20,assignee:'@me',state:'open',loading:false,error:null,cached:true,canonical:null,scan:null})
+const emptySource = (): SourcePanelState => ({tab:'overview',catalog:null,viewNumber:null,viewPage:1,sources:[],sourceId:null,listing:null,issue:null,bindings:[],page:1,perPage:100,assignee:'@me',state:'open',loading:false,loadingMore:false,moreError:null,listEpoch:0,error:null,cached:true,canonical:null,scan:null})
 /** One bounded refresh scans a couple of Project pages; cap the automatic continuation rounds. */
 const MAX_SCAN_ROUNDS=120
 /** Fold one source's discovery checkpoint into the small progress shape the panel renders. */
@@ -77,7 +78,7 @@ export class WorkPanelController {
   private activeCommands = 0
   stopObservation(): void { this.observationRead?.abort() }
   private observationBlocked(): boolean {
-    return this.state.loading || this.state.source.loading || this.state.startup.busy || !!this.state.startup.options || this.state.history.loading || this.activeCommands > 0
+    return this.state.loading || this.state.source.loading || this.state.source.loadingMore || this.state.startup.busy || !!this.state.startup.options || this.state.history.loading || this.activeCommands > 0
   }
   /** Visible-panel observation reads local projections/cache only; it never starts work or refreshes GitHub. */
   async observeCurrent(allowed: () => boolean = () => true): Promise<void> {
@@ -123,6 +124,7 @@ export class WorkPanelController {
         update.progressItems = related.progressItems ?? snapshot.progressItems
         if (related.project?.id === projectId) update.projects = this.state.projects.map(item => item.id === projectId ? related.project! : item)
       }
+      let restartProjectIssues = false
       if (watchingSource) {
         const nextSource = { ...this.state.source }
         if (sourceList.status === 'fulfilled' && sourceList.value?.sources) nextSource.sources = sourceList.value.sources
@@ -132,12 +134,19 @@ export class WorkPanelController {
           if (issue && result.issue?.nodeId === issue.nodeId) {
             nextSource.issue = result.issue
             if (result.bindings) nextSource.bindings = result.bindings
-          } else if (!issue && result.page) nextSource.listing = result.page
+          } else if (!issue && result.page) {
+            const listing = nextSource.listing
+            const previousSource = snapshot.source.sources.find(item=>item.id===sourceId)
+            const observedSource = nextSource.sources.find(item=>item.id===sourceId)
+            restartProjectIssues = Boolean(previousSource?.githubProject && previousSource.projectSnapshot?.observedAt !== observedSource?.projectSnapshot?.observedAt)
+            nextSource.listing = restartProjectIssues ? null : listing ? { ...result.page, items: [...new Map([...listing.items,...result.page.items].map(item=>[item.nodeId,item])).values()] } : result.page
+          }
           nextSource.cached = true
         }
         update.source = nextSource
       }
       this.update(update)
+      if (restartProjectIssues && current()) await this.browseIssues({},false)
       if (!task && this.state.source.issue && current()) await this.loadIssueProgress(sourceRevision)
     } catch (error) { if (current()) this.update({ observationError: message(error) }) }
     finally { if (this.observationRead === abort) this.observationRead = undefined }
@@ -473,7 +482,8 @@ export class WorkPanelController {
       this.update({ history: { session, events: cursor === undefined ? transcript.events : [...history.events, ...transcript.events], ...(transcript.nextCursor === undefined ? {} : { nextCursor: transcript.nextCursor }), loading: false, loaded: true, error: null } })
     } catch (error) { if (current()) this.update({ history: { ...this.state.history, loading: false, error: message(error) } }) }
   }
-  private advanceSourceRevision(): number { this.stopObservation(); this.closeHistory(); this.update({ startup: emptyStartup(), observationError: null }); return ++this.sourceRevision }
+  private moreRead?: AbortController
+  private advanceSourceRevision(): number { this.moreRead?.abort(); this.moreRead=undefined; this.updateSource({loadingMore:false,moreError:null}); this.stopObservation(); this.closeHistory(); this.update({ startup: emptyStartup(), observationError: null }); return ++this.sourceRevision }
   private sourceRevision = 0
   private updateSource(value: Partial<SourcePanelState>): void { this.update({source:{...this.state.source,...value}}) }
   /** Navigation invalidates source UI effects, never an already authorized command. */
@@ -539,12 +549,41 @@ export class WorkPanelController {
     if(!projectId || !previous.sourceId) return
     const revision=this.advanceSourceRevision()
     const changed=Object.entries(change).some(([key,value])=>previous[key as keyof IssuePageRequest]!==value)
-    this.updateSource({...change,loading:true,error:null,issue:null,bindings:[],canonical:null,...(changed?{listing:null}:{})})
+    this.updateSource({...change,page:change.page??1,perPage:100,listEpoch:previous.listEpoch+1,loading:true,error:null,issue:null,bindings:[],canonical:null,...(changed?{listing:null}:{})})
     const {sourceId,page,perPage,assignee,state,labels,search}=this.state.source
     try {
       const result=await this.client.query({type:'source.issues',projectId,sourceId:sourceId!,page,perPage,assignee,state,...(labels?.length?{labels}:{}),...(search?.trim()?{search}:{}),refresh})
       if(revision===this.sourceRevision) this.receiveSource(result,refresh,false)
     }catch(error){if(revision===this.sourceRevision) this.sourceFailed(error,false)}
+  }
+  /** Append one batch, leaving the cursor unchanged on failure for an exact retry. */
+  async moreIssues(): Promise<void> {
+    const previous=this.state.source, projectId=this.state.projectId
+    const next=previous.listing?.nextPage
+    if(!projectId||!previous.sourceId||!next||previous.loading||previous.loadingMore||previous.issue||this.state.detail)return
+    const revision=this.sourceRevision, abort=new AbortController()
+    this.stopObservation();this.moreRead=abort
+    this.updateSource({loadingMore:true,moreError:null})
+    const current=()=>!abort.signal.aborted&&revision===this.sourceRevision&&this.moreRead===abort
+    const source=previous.sources.find(item=>item.id===previous.sourceId)
+    try {
+      const result=await this.client.query({type:'source.issues',projectId,sourceId:previous.sourceId,page:next,perPage:100,assignee:previous.assignee,state:previous.state,...(previous.labels?.length?{labels:previous.labels}:{}),...(previous.search?.trim()?{search:previous.search}:{}),refresh:Boolean(source?.enabled&&!source.githubProject)},abort.signal)
+      if(!current())return
+      if(!result.page)throw Error('来源未返回后续列表')
+      if(result.page.items.length>100||result.page.nextPage!==undefined&&result.page.nextPage<=next)throw Error('来源后续列表位置未向前推进')
+      if(result.source?.lastError)throw Error(`${result.source.lastError.code}: ${result.source.lastError.message}`)
+      if(source?.githubProject&&result.source&&result.source.projectSnapshot?.observedAt!==source.projectSnapshot?.observedAt){
+        this.updateSource({sources:this.state.source.sources.map(item=>item.id===source.id?result.source!:item),listing:null})
+        await this.browseIssues({},false)
+        return
+      }
+      const listing=this.state.source.listing!
+      const items=[...new Map([...listing.items,...result.page.items].map(item=>[item.nodeId,item])).values()]
+      const sources=result.source?this.state.source.sources.map(item=>item.id===previous.sourceId?result.source!:item):this.state.source.sources
+      this.updateSource({listing:{...result.page,items},sources,page:next,loadingMore:false,cached:!source?.enabled})
+      if(result.progressItems)this.mergeProgressItems(result.progressItems)
+    }catch(error){if(current())this.updateSource({loadingMore:false,moreError:message(error)})}
+    finally {if(this.moreRead===abort)this.moreRead=undefined}
   }
   async openIssue(number:number,refresh=true,nodeId?:string):Promise<void> {
     this.detailTrail=[]
