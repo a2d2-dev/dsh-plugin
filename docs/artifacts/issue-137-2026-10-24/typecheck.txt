@@ -1,0 +1,3 @@
+
+> @a2d2/dsh-a2d2@0.0.22 typecheck /data/src/github.com/a2d2-dev/dsh-plugin.worktrees/issue-137-live-acceptance
+> tsc --noEmit && tsc -p tsconfig.client.json

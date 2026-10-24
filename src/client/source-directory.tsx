@@ -58,6 +58,7 @@ export function SourceDirectory({controller,issues,panelContent,panel,onPanel}:{
     {panelContent}
     {sourceState.tab==='issues'?issues:<>
       {sourceState.loading&&<ScanProgressLine scan={sourceState.scan}/>}{!sourceState.loading&&sourceState.scan&&sourceState.scan.total!==undefined&&sourceState.scan.fetched<sourceState.scan.total&&<p role="status">Project 扫描未完成：已取 {sourceState.scan.fetched}/{sourceState.scan.total} 项，刷新来源可继续。</p>}{sourceState.error&&<p role="alert" className={styles.failure}>{sourceState.error}</p>}{!source.enabled&&<p role="status">来源已停用，保留已保存内容。</p>}
+      {!sourceState.loading&&sourceState.catalog&&<p role="status">{cache} · 目录观察时间：{sourceState.catalog.observedAt}</p>}
       {sourceState.catalog?.limitations.map(reason=><p role="status" key={reason}>{reason}</p>)}
       {sourceState.tab==='overview'&&<SourceOverview controller={controller} source={source}/>}
       {sourceState.tab==='project'&&<ProjectViews controller={controller} source={source}/>}

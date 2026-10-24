@@ -1,0 +1,47 @@
+
+ RUN  v4.1.11 /data/src/github.com/a2d2-dev/dsh-plugin.worktrees/issue-137-live-acceptance
+
+ ❯ tests/client/v4-source-render.spec.ts (3 tests | 2 failed) 59ms
+   × distinguishes fresh, cached, failed and missing catalogs on project 38ms
+   × distinguishes fresh, cached, failed and missing catalogs on prs 15ms
+   ✓ renders Repo source tabs and unknown aggregate counts without presenting one Issue page as a total 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/v4-source-render.spec.ts > distinguishes fresh, cached, failed and missing catalogs on project
+AssertionError: expected '<main class="_panel_4653fe" aria-labe…' to contain '本次读取 · 目录观察时间：2026-10-24T05:00:00Z'
+
+Expected: "本次读取 · 目录观察时间：2026-10-24T05:00:00Z"
+Received: "<main class="_panel_4653fe" aria-label="A²D² 控制面板"><div class="_navigation_4653fe"><nav class="_tabs_4653fe" aria-label="来源标签"><strong>A²D² 控制面板</strong><button aria-pressed="true">Actual Project <small>Project</small></button><button aria-label="添加来源">＋</button></nav><button>关闭面板</button></div><div class="_sourceHeader_4653fe"><div class="_sourceIdentity_4653fe"><span class="_sourceIcon_4653fe" aria-hidden="true"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v12.5A1.75 1.75 0 0 1 14.25 16H1.75A1.75 1.75 0 0 1 0 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25H5.5v-13Zm5.25 0v13h7.25a.25.25 0 0 0 .25-.25V1.75a.25.25 0 0 0-.25-.25Z"></path></svg></span><div class="_sourceTitles_4653fe"><strong>Actual Project</strong><span class="_sourceMeta_4653fe">Project · acme / #1 · 组织<span class="_metaDot_4653fe">·</span>读取账号：尚未确认</span></div></div><nav class="_tabs_4653fe" aria-label="来源目录"><button aria-pressed="false">概览</button><button aria-pressed="true">项目</button><button aria-pressed="false">Issue</button><button aria-pressed="false">PR</button></nav><div class="_sourceActions_4653fe"><div class="_menuWrap_4653fe"><button class="_iconButton_4653fe" aria-label="来源操作" aria-expanded="false" title="来源操作：刷新来源 / 读取目录缓存 / 持续委托 / 新执行默认自动接续"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM1.5 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm13 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"></path></svg></button></div></div></div><section><div class="_projectToolbar_4653fe"><label>视图<select aria-label="Project 视图"><option value="1" selected="">Actual view</option></select></label><span class="_projectCount_4653fe">0 项</span><label class="_projectToggle_4653fe"><input type="checkbox"/> 含已关闭</label><label class="_projectToggle_4653fe"><input type="checkbox"/> 时间与仓库列</label></div><p role="status">完整 Project 成员扫描尚未完成，请刷新继续；没有用全列表冒充视图。</p><details><summary>字段定义</summary><ul></ul></details></section></main>"
+
+ ❯ tests/client/v4-source-render.spec.ts:33:20
+     31|   await controller.selectSourceTab(tab)
+     32|   await controller.browseDirectory(true)
+     33|   expect(render()).toContain('本次读取 · 目录观察时间：2026-10-24T05:00:00Z')
+       |                    ^
+     34|   await controller.browseDirectory(false)
+     35|   expect(render()).toContain('缓存 / 最后已知观察 · 目录观察时间：2026-10-24T05:00:00…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/client/v4-source-render.spec.ts > distinguishes fresh, cached, failed and missing catalogs on prs
+AssertionError: expected '<main class="_panel_4653fe" aria-labe…' to contain '本次读取 · 目录观察时间：2026-10-24T05:00:00Z'
+
+Expected: "本次读取 · 目录观察时间：2026-10-24T05:00:00Z"
+Received: "<main class="_panel_4653fe" aria-label="A²D² 控制面板"><div class="_navigation_4653fe"><nav class="_tabs_4653fe" aria-label="来源标签"><strong>A²D² 控制面板</strong><button aria-pressed="true">Actual Project <small>Project</small></button><button aria-label="添加来源">＋</button></nav><button>关闭面板</button></div><div class="_sourceHeader_4653fe"><div class="_sourceIdentity_4653fe"><span class="_sourceIcon_4653fe" aria-hidden="true"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v12.5A1.75 1.75 0 0 1 14.25 16H1.75A1.75 1.75 0 0 1 0 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25H5.5v-13Zm5.25 0v13h7.25a.25.25 0 0 0 .25-.25V1.75a.25.25 0 0 0-.25-.25Z"></path></svg></span><div class="_sourceTitles_4653fe"><strong>Actual Project</strong><span class="_sourceMeta_4653fe">Project · acme / #1 · 组织<span class="_metaDot_4653fe">·</span>读取账号：尚未确认</span></div></div><nav class="_tabs_4653fe" aria-label="来源目录"><button aria-pressed="false">概览</button><button aria-pressed="false">项目</button><button aria-pressed="false">Issue</button><button aria-pressed="true">PR</button></nav><div class="_sourceActions_4653fe"><div class="_menuWrap_4653fe"><button class="_iconButton_4653fe" aria-label="来源操作" aria-expanded="false" title="来源操作：刷新来源 / 读取目录缓存 / 持续委托 / 新执行默认自动接续"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM1.5 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm13 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"></path></svg></button></div></div></div><section><h2>PR 只读目录</h2><div class="_toolbar_4653fe"><label>PR 状态<select><option value="all" selected="">全部</option><option value="open">开放</option><option value="closed">已关闭</option><option value="merged">已合并</option></select></label><label>搜索 PR<input value=""/></label></div><p>当前范围完整观察 · 0 项匹配 · 引用不等于验收。</p><div class="_tableScroll_4653fe"><table class="_projectTable_4653fe" aria-label="PR 目录"><colgroup><col style="width:38%"/><col style="width:10%"/><col style="width:16%"/><col style="width:20%"/><col style="width:16%"/></colgroup><thead><tr><th>PR</th><th>状态</th><th>会话</th><th>相关 Issue</th><th>检查 / 评审</th></tr></thead><tbody></tbody></table></div><p>当前筛选下没有 PR；这是已成功读取目录的有效空结果。</p><div class="_toolbar_4653fe"><button disabled="">上一页</button><span>第 1 页</span><button disabled="">下一页</button></div></section></main>"
+
+ ❯ tests/client/v4-source-render.spec.ts:33:20
+     31|   await controller.selectSourceTab(tab)
+     32|   await controller.browseDirectory(true)
+     33|   expect(render()).toContain('本次读取 · 目录观察时间：2026-10-24T05:00:00Z')
+       |                    ^
+     34|   await controller.browseDirectory(false)
+     35|   expect(render()).toContain('缓存 / 最后已知观察 · 目录观察时间：2026-10-24T05:00:00…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  22:40:53
+   Duration  833ms (transform 442ms, setup 0ms, import 547ms, tests 59ms, environment 0ms)

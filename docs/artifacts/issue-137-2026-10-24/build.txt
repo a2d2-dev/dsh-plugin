@@ -1,0 +1,48 @@
+
+> @a2d2/dsh-a2d2@0.0.22 build /data/src/github.com/a2d2-dev/dsh-plugin.worktrees/issue-137-live-acceptance
+> node -e "require('node:fs').rmSync('lib',{recursive:true,force:true})" && tsc -p tsconfig.build.json && tsc -p tsconfig.build.client.json && tsdown
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.9
+ℹ config file: /data/src/github.com/a2d2-dev/dsh-plugin.worktrees/issue-137-live-acceptance/tsdown.config.ts
+ℹ entry: src/work-sources.ts, src/work.ts, src/work-types.ts, src/work-plugin.ts, src/task-runtime.ts, src/index.ts, src/command.ts, src/tools.ts, src/open-subtask-tools.ts, src/complete-task-tools.ts, src/ceo-prompt.ts, src/agent-prompt.ts, src/github-watch.ts, src/invariant.ts
+ℹ target: es2024
+ℹ tsconfig: tsconfig.json
+ℹ entry: src/client/index.tsx
+ℹ target: node22.0.0
+ℹ tsconfig: tsconfig.json
+
+ WARN  `external` is deprecated. Use `deps.neverBundle` instead.
+
+
+ WARN  `noExternal` is deprecated. Use `deps.alwaysBundle` instead.
+
+ℹ Build start
+ℹ [ESM] lib/index.js                     125.75 kB │ gzip: 33.53 kB
+ℹ [ESM] lib/work-plugin.js                67.90 kB │ gzip: 18.09 kB
+ℹ [ESM] lib/task-runtime.js               31.20 kB │ gzip:  8.19 kB
+ℹ [ESM] lib/github-watch.js               26.04 kB │ gzip:  8.40 kB
+ℹ [ESM] lib/tools.js                       5.05 kB │ gzip:  1.64 kB
+ℹ [ESM] lib/ceo-prompt.js                  4.54 kB │ gzip:  1.69 kB
+ℹ [ESM] lib/command.js                     4.52 kB │ gzip:  1.74 kB
+ℹ [ESM] lib/agent-prompt.js                4.33 kB │ gzip:  1.54 kB
+ℹ [ESM] lib/open-subtask-tools.js          2.91 kB │ gzip:  1.19 kB
+ℹ [ESM] lib/complete-task-tools.js         2.85 kB │ gzip:  1.17 kB
+ℹ [ESM] lib/invariant.js                   0.97 kB │ gzip:  0.56 kB
+ℹ [ESM] lib/work-sources.js                0.22 kB │ gzip:  0.15 kB
+ℹ [ESM] lib/work-types.js                  0.11 kB │ gzip:  0.11 kB
+ℹ [ESM] lib/work.js                        0.09 kB │ gzip:  0.09 kB
+ℹ [ESM] lib/work-BFLu5Ksc.js             232.26 kB │ gzip: 52.56 kB
+ℹ [ESM] lib/discovery-Cq03TPks.js         62.18 kB │ gzip: 15.40 kB
+ℹ [ESM] lib/store-r1BlXwzj.js             26.89 kB │ gzip:  7.96 kB
+ℹ [ESM] lib/host-Ck2QS22d.js              15.78 kB │ gzip:  5.14 kB
+ℹ [ESM] lib/handoff-CikN-2jV.js            8.94 kB │ gzip:  3.64 kB
+ℹ [ESM] lib/root-session-6CqSnH4M.js       8.83 kB │ gzip:  2.87 kB
+ℹ [ESM] lib/work-completion-BrCUekH_.js    5.09 kB │ gzip:  1.73 kB
+ℹ [ESM] lib/github-remote-Cd_OrFOj.js      1.05 kB │ gzip:  0.61 kB
+ℹ [ESM] lib/route-auth-sLEZTfdd.js         0.58 kB │ gzip:  0.36 kB
+ℹ [ESM] 23 files, total: 638.08 kB
+✔ Build complete in 230ms
+ℹ [CJS] lib/client.js      414.98 kB │ gzip:  94.63 kB
+ℹ [CJS] lib/client.js.map  587.13 kB │ gzip: 143.71 kB
+ℹ [CJS] 2 files, total: 1.00 MB
+✔ Build complete in 233ms

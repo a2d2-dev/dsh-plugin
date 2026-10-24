@@ -1,0 +1,7 @@
+
+> @a2d2/dsh-a2d2@0.0.22 verify:pack-exports /data/src/github.com/a2d2-dev/dsh-plugin.worktrees/issue-137-pack
+> node scripts/verify-pack-exports.mjs
+
+clean tree: exported HEAD 1c14d0b (no lib/), node_modules linked for the build
+tarball: a2d2-dsh-a2d2-0.0.22.tgz carries all 30 export targets and dsh.plugin.json + cordis.patch.yml (177 entries)
+installed tarball imports 14 Node entrypoints: @a2d2/dsh-a2d2/work-sources, @a2d2/dsh-a2d2/work, @a2d2/dsh-a2d2/work-types, @a2d2/dsh-a2d2/work-plugin, @a2d2/dsh-a2d2/task-runtime, @a2d2/dsh-a2d2, @a2d2/dsh-a2d2/command, @a2d2/dsh-a2d2/tools, @a2d2/dsh-a2d2/open-subtask-tools, @a2d2/dsh-a2d2/complete-task-tools, @a2d2/dsh-a2d2/ceo-prompt, @a2d2/dsh-a2d2/agent-prompt, @a2d2/dsh-a2d2/github-watch, @a2d2/dsh-a2d2/invariant
