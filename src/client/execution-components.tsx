@@ -52,7 +52,7 @@ function EventRow({ event }: { event: WorkExecution['events'][number] }) {
     <details className={styles.eventItem}>
       <summary><span className={styles.eventSummary}>
         <strong>{event.kind === 'result' ? '结果' : '输入'}</strong>
-        <span>{event.delivery === 'consumed' ? '已消费' : event.delivery === 'delivered' ? '已投递' : '已接受'} · 未验收</span>
+        <span>{event.delivery === 'discarded' ? '已废弃' : event.delivery === 'consumed' ? '已消费' : event.delivery === 'delivered' ? '已投递' : '已接受'} · 未验收</span>
         <span className={styles.eventPreview}>{firstLine(event.text)}</span>
       </span></summary>
       <p className={styles.eventText}>{event.text}</p>

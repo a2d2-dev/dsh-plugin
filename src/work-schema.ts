@@ -51,7 +51,7 @@ export const executionSchema = z.object({
   history: z.array(z.object({ state: z.enum(['accepted', 'creating', 'ready', 'running', 'waiting', 'paused', 'failed']), commandId: referenceId }).strict()),
   actual: z.object({ runtimeId: referenceId, cwd: text, agentPreset: referenceId, provider: referenceId, model: referenceId, reasoningEffort: referenceId.optional(),
     permissionPreset: referenceId, sandbox: referenceId, approval: referenceId }).strict().optional(),
-  events: z.array(z.object({ id: referenceId, text, kind: z.enum(['input', 'result']), delivery: z.enum(['accepted', 'delivered', 'consumed']), acceptance: z.literal('unassessed'), nativeMessage: z.object({ id: referenceId, role: z.literal('user'), content: z.array(z.unknown()), source: z.unknown() }).passthrough().transform(value => value as NativeWorkMessage).optional() }).strict()).default([]),
+  events: z.array(z.object({ id: referenceId, text, kind: z.enum(['input', 'result']), delivery: z.enum(['accepted', 'delivered', 'consumed', 'discarded']), acceptance: z.literal('unassessed'), nativeMessage: z.object({ id: referenceId, role: z.literal('user'), content: z.array(z.unknown()), source: z.unknown() }).passthrough().transform(value => value as NativeWorkMessage).optional() }).strict()).default([]),
   runtimeFailure: z.object({ id: referenceId, message: text, userCancelled: z.boolean(), acknowledged: z.boolean().optional() }).strict().optional(),
   continuationMaterial: materialSchema.optional(),
   continuationPolicy: continuationPolicySchema.optional(),

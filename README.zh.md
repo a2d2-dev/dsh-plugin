@@ -24,6 +24,8 @@
 
 持续处理当前支持 GitHub Project 来源。搜索和处理状态筛选作用于当前已载入页；自动领取按完整 Project 观察与已保存规则执行。来源读取、处理进展和 GitHub 远端状态分别显示，此流程不自动关闭远端 Issue。
 
+DSH Goal 自动续跑消息由 Goal 驱动管理，A²D² 不把它们保存为 Task 待投递输入，也不跨会话转移。旧版本误存而尚未消费的 Goal 消息会在执行恢复时标记为“已废弃”，保留原消息供查看，并停止重放；废弃不表示已被模型消费或已通过任务验收。Goal 的暂停与 Task 的恢复分别生效。
+
 以下章节还保留既有会话工具与兼容记录格式的说明；控制面板中的受管会话使用 `work_control`、`work_report` 和 `work_organize` 保存进展，不要求手工绑定 Issue。
 
 子代理派发优先使用宿主的 `startActivation`，显式指定 `delivery: 'parent'`；仅在该方法不存在时使用旧宿主的 `startContinuable`。模型与 reasoningEffort 在派发请求的 `agentOptions` 中指定，不需要为派发新增 `selectLocalModel` 或修改 DSH 源码。新接口报错直接返回，不重试旧接口。两种契约的类型来自各自已发布的 DSH 包，别名依赖只用于开发时类型检查。会话 ID 原样兼容旧式 `session-…` 与 UUID，仍拒绝路径输入。
