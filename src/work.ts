@@ -9,22 +9,23 @@ import { SourceError } from './work-sources/errors.ts'
 import type { SourceCandidate, WorkSource } from './work-sources/types.ts'
 import { synchronizeClose } from './work-completion/recovery.ts'
 import { isTaskCompleted, queueParentResults } from './work-completion/index.ts'
+import { mkdir } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdir, readFile, stat } from 'node:fs/promises'
 import { isAbsolute, join, normalize } from 'node:path'
-import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
-import { commandSchema, querySchema, snapshotSchema } from './work-schema.ts'
+import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
+import { commandSchema, querySchema } from './work-schema.ts'
 import { applySourceCommand, refreshSource, sourceResult } from './work-sources/application.ts'
 import type { GitHubSourcePort } from './work-sources/types.ts'
 import type { WorkSnapshot } from './work-schema.ts'
 import { WorkExecutionError } from './work-execution/host.ts'
 import { continuationInFlight, MANAGED_WORK_INSTRUCTIONS, materialRequest, reserveContinuation, successorMessage } from './work-execution/continuation.ts'
 import { applyTaskOrganization, taskStructureBlocker } from './work-organization.ts'
-import { isCanonicalChild, normalizeLegacyLocalChildren } from './work-migrate.ts'
+import { isCanonicalChild } from './work-migrate.ts'
 import { applyTaskReport, projectProgress, taskProgressView } from './work-progress.ts'
 import { continuousDependenciesReady, continuousOwner, continuousMayAdvance, continuousCompleted, discoverContinuous, sourceScopeError, sameTask, continuousRetry, MAX_CONTINUOUS_ATTEMPTS } from './work-continuous.ts'
 import { reconcileProjectSources } from './work-sources/discovery.ts'
-import { attachBulk, bulkFingerprint, bulkKeySync, bulkOf, bulkPath, controlSource, hasInlineBulk, readBulkSync, writeBulk, type SourceBulk } from './work-store/source-bulk.ts'
+import { WorkDao } from './work-store/dao.ts'
+export { WorkDao } from './work-store/dao.ts'
 import type { WorkExecutionHost } from './work-execution/host.ts'
 export type { WorkExecutionHost } from './work-execution/host.ts'
 import type { HostResource, NativeWorkMessage, Project, ResourceRef, SessionCandidate, TaskRef, WorkCommand, WorkEvent, WorkResult, WorkTask } from './work-types.ts'
@@ -64,30 +65,6 @@ function sourceIssuesAt(state: WorkSnapshot, ref: TaskRef): import('./work-sourc
     .map(({ lastObserved: issue }) => ({ nodeId: issue.nodeId, url: issue.url, number: issue.number, title: issue.title, repository: issue.repository, state: issue.state }))
 }
 
-const workWriters = new Map<string, Promise<void>>()
-const WORK_WRITE_WAIT_MS = 30_000
-/** Queue local writers before the cross-process lock; both waits share one budget. */
-async function withWorkFileLock<T>(file: string, apply: () => Promise<T>): Promise<T> {
-  const deadline = Date.now() + WORK_WRITE_WAIT_MS
-  const previous = workWriters.get(file) ?? Promise.resolve()
-  let release!: () => void
-  const turn = new Promise<void>(resolve => { release = resolve })
-  const tail = previous.then(() => turn)
-  workWriters.set(file, tail)
-  let timer: ReturnType<typeof setTimeout> | undefined
-  try {
-    await Promise.race([previous, new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error(`atomic-write: timed out waiting for the writer lock at ${file}.lock`)), WORK_WRITE_WAIT_MS)
-    })])
-    clearTimeout(timer)
-    return await withFileLock(file, apply, { waitMs: Math.max(0, deadline - Date.now()) })
-  } finally {
-    clearTimeout(timer)
-    release()
-    void tail.then(() => { if (workWriters.get(file) === tail) workWriters.delete(file) })
-  }
-}
-
 /** Public local work commands and queries. One v3 snapshot is the only writer authority. */
 /**
  * The Project table reads a row's state, labels and assignees, never the issue
@@ -106,21 +83,13 @@ function slimSource(source: WorkSource): WorkSource {
   return { ...source, observations: [], pages: [], ...(source.projectSnapshot ? { projectSnapshot: { ...source.projectSnapshot, items: [] } } : {}) }
 }
 export class WorkApplication {
-  private readonly file: string
+  private readonly dao: WorkDao
   private readonly discoverySchedule = new Map<string, { version: number; persisted: string; next: string }>()
-  /** Parsed snapshot reused across the read-heavy pollers; every writer invalidates it. */
-  private snapshotCache?: { key: string; state: WorkSnapshot }
-  /** Mutation blocks stop cache reuse: they edit the state they read. */
-  private mutationDepth = 0
-  /** Sidecars already read, keyed by the file identity they were parsed from. */
-  private readonly bulkCache = new Map<string, { key: string; bulk: SourceBulk }>()
   /** User-triggered source reads currently running; the scheduled pass yields to them. */
   private refreshCount = 0
-  /** Sources whose bulk still lives in the control file and must move to a sidecar on the next write. */
-  private inlineSources = new Set<string>()
   constructor(readonly directory: string, readonly host: WorkHost, readonly source?: GitHubSourcePort, readonly planner?: WorkPlanner) {
     if (!isAbsolute(directory)) throw new Error('Work record directory must be absolute')
-    this.file = join(directory, 'work-v3.json')
+    this.dao = WorkDao.forDirectory(directory)
     this.host.execution?.connectObservation?.(async requested => {
       const state = await this.load()
       const current = state.executions.find(item => item.id === requested.id && sameTask(item.ref, requested.ref))
@@ -151,11 +120,7 @@ export class WorkApplication {
       if (state.executions.some(item => item.retired?.some(old => old.session.sessionId === sessionId) || (item.continuation?.successor.sessionId === sessionId && item.session.sessionId !== sessionId))) return false
       const execution = state.executions.find(item => item.session.sessionId === sessionId)
       if (mayAdvance(execution) || messages.length === 0) return mayAdvance(execution)
-      return withWorkFileLock(this.file, async () => {
-        this.mutationDepth++
-        try {
-        const current = await this.load()
-        const before = { bulk: this.bulkFingerprints(current), control: this.comparableJson(current) }
+      return this.dao.transaction(async current => {
         const owner = current.executions.find(item => item.session.sessionId === sessionId)
         if (current.executions.some(item => item.retired?.some(old => old.session.sessionId === sessionId))) return false
         state = current
@@ -167,9 +132,7 @@ export class WorkApplication {
           if (managed && managed.item.state !== 'completed' && !continuousCompleted(current, owner!) && owner!.state !== 'paused' && !(owner!.control?.action === 'pause' && owner!.control.status === 'accepted')) { managed.item.resumeRequested = true; managed.item.attempts = 0; delete managed.item.retryAt; if (owner!.runtimeFailure) owner!.runtimeFailure.acknowledged = true }
           owner!.events.push({ id: message.id, text: text.trim() ? text.slice(0, 100_000) : 'Native Session input', kind: 'input', delivery: 'accepted', acceptance: 'unassessed', nativeMessage: structuredClone(message) })
         }
-        await this.persist(current, before)
         return false
-        } finally { this.mutationDepth--; this.snapshotCache = undefined }
       })
     }, sessionId => this.conversationContext(sessionId), async sessionId => {
       const execution = (await this.load()).executions.find(item => item.session.sessionId === sessionId)
@@ -250,135 +213,46 @@ export class WorkApplication {
     return graph
   }
   private async load(): Promise<WorkSnapshot> {
-    try {
-      // A large Project turns a thousands-item snapshot into megabytes; the
-      // panel polls several reads a second, so reuse the parsed state until a
-      // write replaces the file (the atomic rename changes inode, size or mtime).
-      const info = await stat(this.file)
-      const key = `${info.ino}:${info.size}:${info.mtimeMs}`
-      const cacheable = this.mutationDepth === 0
-      if (!cacheable) this.snapshotCache = undefined
-      else if (this.snapshotCache?.key !== key) this.snapshotCache = { key, state: snapshotSchema.parse(JSON.parse(await readFile(this.file, 'utf8'))) }
-      const state = cacheable ? this.snapshotCache!.state : snapshotSchema.parse(JSON.parse(await readFile(this.file, 'utf8')))
-      // The scheduling overlay is in-memory only; never mutate the cached copy,
-      // or a second load would compare against the overlaid value and drop it.
-      let sources = state.sources
-      for (let index = 0; index < sources.length; index++) {
-        const source = sources[index]!
-        const schedule = this.discoverySchedule.get(source.id)
-        if (!schedule) continue
-        if (source.version === schedule.version && source.discovery?.nextAttemptAt === schedule.persisted) {
-          if (sources === state.sources) sources = [...state.sources]
-          sources[index] = { ...source, discovery: { ...source.discovery, nextAttemptAt: schedule.next } }
-        } else this.discoverySchedule.delete(source.id)
-      }
-      return normalizeLegacyLocalChildren(this.attachSourceBulk(sources === state.sources ? state : { ...state, sources }))
+    const state = await this.dao.read()
+    let sources = state.sources
+    for (let index = 0; index < sources.length; index++) {
+      const source = sources[index]!, schedule = this.discoverySchedule.get(source.id)
+      if (!schedule) continue
+      if (source.version === schedule.version && source.discovery?.nextAttemptAt === schedule.persisted) {
+        if (sources === state.sources) sources = [...state.sources]
+        // Preserve lazy cold-field descriptors when applying the scheduling overlay.
+        const descriptors = Object.getOwnPropertyDescriptors(source)
+        const discoveryDescriptors = Object.getOwnPropertyDescriptors(source.discovery)
+        discoveryDescriptors.nextAttemptAt = { value: schedule.next, enumerable: true }
+        descriptors.discovery = { value: Object.freeze(Object.defineProperties({}, discoveryDescriptors)) as NonNullable<WorkSource['discovery']>, enumerable: true }
+        const copy = Object.freeze(Object.defineProperties({}, descriptors)) as WorkSource
+        sources[index] = copy
+      } else this.discoverySchedule.delete(source.id)
     }
-    catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { schemaVersion: 3, projects: [], agents: [], tasks: [], commands: [], legacyMappings: [], sources: [], externalBindings: [], externalIndex: {}, executions: [] }
-      throw error
-    }
+    return sources === state.sources ? state : { ...state, sources }
   }
-  /**
-   * Attach each source's bulk from its sidecar. A source whose bulk is only in
-   * the control file is remembered for migration on the next write.
-   */
-  private attachSourceBulk(state: WorkSnapshot): WorkSnapshot {
-    const sources = state.sources.map(source => {
-      // Work on a copy so the cached control state never accumulates bulk.
-      const copy: WorkSource = { ...source, ...(source.discovery ? { discovery: { ...source.discovery } } : {}) }
-      // A control file that still carries bulk is a pre-split store (or a
-      // compatible writer); use it and migrate on the next persist.
-      if (hasInlineBulk(copy)) { this.inlineSources.add(copy.id); return copy }
-      const path = bulkPath(this.directory, copy.id)
-      const key = bulkKeySync(path)
-      if (key === undefined) return copy
-      const cached = this.bulkCache.get(copy.id)
-      if (cached?.key === key) return attachBulk(copy, cached.bulk)
-      const read = readBulkSync(path)
-      if (!read) return copy
-      this.bulkCache.set(copy.id, read)
-      return attachBulk(copy, read.bulk)
-    })
-    return { ...state, sources }
-  }
-  /** Control-plane JSON: the only shape that may land in `work-v3.json`. */
-  private controlJson(state: WorkSnapshot): string {
-    return JSON.stringify({ ...state, sources: state.sources.map(controlSource) })
-  }
-  /**
-   * The control plane without the ephemeral scheduling overlay: a tick that only
-   * moves nextAttemptAt must not rewrite the store.
-   */
-  private comparableJson(state: WorkSnapshot): string {
-    return JSON.stringify({ ...state, sources: state.sources.map(source => {
-      const control = controlSource(source)
-      if (control.discovery) control.discovery = { ...control.discovery, nextAttemptAt: undefined as unknown as string }
-      return control
-    }) })
-  }
-  private bulkFingerprints(state: WorkSnapshot): Map<string, string> {
-    return new Map(state.sources.map(source => [source.id, bulkFingerprint(source)]))
-  }
-  /**
-   * Write the changed sidecars, then the control file when it changed. Every
-   * writer goes through here so a Project's items never enter `work-v3.json`.
-   */
-  private async persist(state: WorkSnapshot, before: { bulk: Map<string, string>; control: string }, forceControl = false): Promise<void> {
-    let wrote = false
-    for (const source of state.sources) {
-      const inline = this.inlineSources.has(source.id)
-      if (!inline && bulkFingerprint(source) === before.bulk.get(source.id)) continue
-      await writeBulk(bulkPath(this.directory, source.id), bulkOf(source))
-      this.inlineSources.delete(source.id)
-      this.bulkCache.delete(source.id)
-      wrote = true
-    }
-    if (forceControl || this.comparableJson(state) !== before.control) {
-      await writeFileAtomic(this.file, `${this.controlJson(state)}\n`, { mode: 0o600, dirMode: 0o700 })
-      this.discoverySchedule.clear()
-      wrote = true
-    }
-    if (wrote) this.snapshotCache = undefined
-  }
-  /** Move any inline bulk from an older store into sidecars. Safe to call repeatedly. */
-  async ensureSourceSplit(): Promise<void> {
-    if (!await stat(this.file).then(() => true, () => false)) return
-    await mkdir(this.directory, { recursive: true, mode: 0o700 })
-    return withWorkFileLock(this.file, async () => {
-      this.mutationDepth++
-      try {
-        const state = await this.attachSourceBulk(await this.load())
-        if (this.inlineSources.size === 0) return
-        await this.persist(state, { bulk: this.bulkFingerprints(state), control: this.comparableJson(state) }, true)
-      } finally { this.mutationDepth--; this.snapshotCache = undefined }
-    })
-  }
+  /** Observe durable changes without granting work/execution authority. */
+  onChange(listener: () => void): () => void { return this.dao.subscribe(listener) }
+  /** Migrate inline source bulk, historical results and execution logs together. */
+  async ensureSourceSplit(): Promise<void> { await this.dao.migrate() }
   private async sourceTransaction<T>(apply: (state: WorkSnapshot) => Promise<T>): Promise<T> {
-    await mkdir(this.directory, { recursive: true, mode: 0o700 })
-    return withWorkFileLock(this.file, async () => {
-      this.mutationDepth++
-      try {
-      const state = await this.load()
-      // Only the control plane decides whether the store changed; bulk changes
-      // are detected per source and written to their sidecars.
-      const before = { bulk: this.bulkFingerprints(state), control: this.comparableJson(state) }
-      const schedules = new Map(state.sources.map(source => [source.id, this.discoverySchedule.get(source.id)?.persisted ?? source.discovery?.nextAttemptAt]))
-      const result = await apply(state)
-      snapshotSchema.parse({ ...state, sources: state.sources.map(controlSource) })
-      const controlChanged = this.comparableJson(state) !== before.control
-      await this.persist(state, before)
-      if (!controlChanged) {
-        for (const source of state.sources) {
-          const persisted = schedules.get(source.id)
-          if (persisted && source.discovery && source.discovery.nextAttemptAt !== persisted) {
-            this.discoverySchedule.set(source.id, { version: source.version, persisted, next: source.discovery.nextAttemptAt })
-          } else this.discoverySchedule.delete(source.id)
-        }
+    let schedules: { id: string; version: number; next?: string }[] = []
+    const result = await this.dao.transaction(async state => {
+      for (const source of state.sources) {
+        const schedule = this.discoverySchedule.get(source.id)
+        if (schedule && source.version === schedule.version && source.discovery?.nextAttemptAt === schedule.persisted) source.discovery.nextAttemptAt = schedule.next
       }
+      const result = await apply(state)
+      schedules = state.sources.map(source => ({ id: source.id, version: source.version, next: source.discovery?.nextAttemptAt }))
       return result
-      } finally { this.mutationDepth--; this.snapshotCache = undefined }
     })
+    const committed = await this.dao.read()
+    for (const schedule of schedules) {
+      const source = committed.sources.find(source => source.id === schedule.id), persisted = source?.discovery?.nextAttemptAt
+      if (source?.version === schedule.version && persisted && schedule.next && schedule.next !== persisted) this.discoverySchedule.set(schedule.id, { version: schedule.version, persisted, next: schedule.next })
+      else this.discoverySchedule.delete(schedule.id)
+    }
+    return result
   }
   private async coordinatorUnavailable(session: import('./work-types.ts').SessionRef): Promise<WorkResult> {
     const execution = (await this.load()).executions.find(item => item.retired?.some(old => sameSession(old.session, session)))
@@ -558,7 +432,7 @@ export class WorkApplication {
           delete planning.error
           current.version++
           const result: WorkResult = { status: 'completed', continuousRule: current }
-          state.commands.push({ commandId: command.commandId, fingerprint: JSON.stringify(command), result: structuredClone(result) })
+          this.dao.recordCommand(state, command.commandId, JSON.stringify(command), result)
           return result
         })
       } catch (error) {
@@ -677,7 +551,7 @@ export class WorkApplication {
                 })
               }
               await this.observeContinuation(execution.id)
-              const result = await this.ensureExecution(execution.id, execution.history[0]!.commandId)
+              const result = await this.ensureExecution(execution.id, this.dao.firstHistory(execution)!.commandId)
               if (result.status === 'completed' && (result.execution?.error || result.execution?.continuation?.error)) {
                 const error = result.execution.error ?? result.execution.continuation!.error!
                 await this.sourceTransaction(async state => { continuousRetry(continuousOwner(state, execution!.ref)!.item, error.message) })
@@ -743,7 +617,7 @@ export class WorkApplication {
           if (current.planning && !continuousDependenciesReady(state, current, item.nodeId)) return undefined
           const commandId = `continuous:${current.id}:${createHash('sha256').update(item.nodeId).digest('hex')}`
           // Reserve import, binding, execution and slot in one snapshot. No host side effects precede this commit.
-          const draft = structuredClone(state)
+          const draft = this.dao.fork(state)
           const canonical = draft.externalBindings.find(binding => binding.nodeId === item.nodeId)
           const imported = canonical
             ? { status: 'completed' as const, ref: canonical.ref, task: taskAt(draft, canonical.ref) }
@@ -825,12 +699,7 @@ export class WorkApplication {
       try { admissionChoices = await this.host.execution.check({ ...command, sessionMode: 'session' in command && command.session ? 'reuse' : 'create', session: ('session' in command ? command.session : undefined) ?? { runtimeId: command.resource.runtimeId, sessionId: `session-${randomUUID()}` } }) }
       catch (error) { return failed(error instanceof WorkExecutionError ? error.code : 'host-admission-failed', error instanceof WorkExecutionError ? error.message : 'Host execution admission failed') }
     }
-    await mkdir(this.directory, { recursive: true, mode: 0o700 })
-    const receipt = await withWorkFileLock<WorkResult>(this.file, async () => {
-      this.mutationDepth++
-      try {
-      const state = await this.load()
-      const before = { bulk: this.bulkFingerprints(state), control: this.comparableJson(state) }
+    const receipt = await this.dao.transaction<WorkResult>(async state => {
       if (!actor.operator) {
         const execution = 'executionId' in command ? state.executions.find(item => item.id === command.executionId) : undefined
         if (!execution || actor.agentId !== execution.agentId || !actor.session || !sameSession(actor.session, execution.session)) return failed('forbidden', 'Caller is not the responsible current Session and Project Agent')
@@ -847,12 +716,9 @@ export class WorkApplication {
       const result = await this.apply(state, command, admissionChoices, sourceCandidate, actor.reporter)
       if (result.status !== 'completed') return result
       // Receipt owns a detached snapshot: subsequent commands must not alter retry results.
-      state.commands.push({ commandId: command.commandId, fingerprint, result: structuredClone(result) })
-      snapshotSchema.parse({ ...state, sources: state.sources.map(controlSource) })
-      await this.persist(state, before)
+      this.dao.recordCommand(state, command.commandId, fingerprint, result)
       return result
-      } finally { this.mutationDepth--; this.snapshotCache = undefined }
-    })
+    }, result => result.status === 'completed')
     if (receipt.status === 'completed' && ['task.associate-session', 'task.link-child', 'source.link', 'source.import'].includes(command.type)) await this.refreshSessionTitles()
     if ((command.type === 'continuous.configure' || command.type === 'continuous.set-enabled') && receipt.status === 'completed') {
       await this.reconcileContinuous()
@@ -959,7 +825,7 @@ export class WorkApplication {
       const execution = (await this.load()).executions.find(item => item.id === initial.id)!
       if (execution.control?.status === 'accepted' || continuationInFlight(execution) || ['accepted', 'creating', 'failed'].includes(execution.state)
         || execution.events.some(event => pendingEvent(event) && !['waiting', 'paused'].includes(execution.state))) {
-        await this.ensureExecution(execution.id, execution.control?.commandId ?? execution.continuation?.commandId ?? execution.history[0]!.commandId)
+        await this.ensureExecution(execution.id, execution.control?.commandId ?? execution.continuation?.commandId ?? this.dao.firstHistory(execution)!.commandId)
       }
     }
   }
@@ -1127,16 +993,10 @@ export class WorkApplication {
   private async ensureExecution(id: string, commandId: string): Promise<WorkResult> {
     const lease = join(this.directory, `${id}.execution`)
     return withFileLock<WorkResult>(lease, async () => {
-      const save = async (change: (execution: import('./work-types.ts').WorkExecution) => void) => withWorkFileLock(this.file, async () => {
-        this.mutationDepth++
-        try {
-        const state = await this.load()
-        const before = { bulk: this.bulkFingerprints(state), control: this.comparableJson(state) }
+      const save = async (change: (execution: import('./work-types.ts').WorkExecution) => void) => this.dao.transaction(async state => {
         const execution = state.executions.find(item => item.id === id)!
         change(execution)
-        await this.persist(state, before)
         return execution
-        } finally { this.mutationDepth--; this.snapshotCache = undefined }
       })
       const state = await this.load()
       let execution = state.executions.find(item => item.id === id)!
@@ -1150,7 +1010,7 @@ export class WorkApplication {
           execution = await this.advanceContinuation(execution)
           if (continuationInFlight(execution)) return { status: 'completed', execution }
         }
-        if (['accepted', 'creating', 'failed'].includes(execution.state)) execution = await save(item => { item.state = 'creating'; delete item.error; item.history.push({ state: 'creating', commandId }) })
+        if (['accepted', 'creating', 'failed'].includes(execution.state)) execution = await save(item => { item.state = 'creating'; delete item.error; this.dao.appendHistory(item, { state: 'creating', commandId }) })
         const actual = await this.host.execution!.ensure(execution, async () => {
           const snapshot = await this.load()
           const current = snapshot.executions.find(item => item.id === id)
@@ -1161,7 +1021,7 @@ export class WorkApplication {
         await this.refreshSessionTitles(execution.session)
         execution = await save(item => {
           item.actual = actual
-          if (item.state === 'creating') { item.state = 'ready'; item.history.push({ state: 'ready', commandId }) }
+          if (item.state === 'creating') { item.state = 'ready'; this.dao.appendHistory(item, { state: 'ready', commandId }) }
         })
         const control = execution.control
         if (control?.status === 'accepted') {
@@ -1170,7 +1030,7 @@ export class WorkApplication {
             if (item.control?.commandId !== control.commandId) return
             item.state = control.action === 'pause' ? 'paused' : control.action === 'wait' ? 'waiting' : 'ready'
             item.control!.status = 'applied'
-            item.history.push({ state: item.state, commandId })
+            this.dao.appendHistory(item, { state: item.state, commandId })
           })
           if (control.action === 'resume' && execution.control?.commandId === control.commandId) await this.host.execution!.wake(execution)
         }
@@ -1183,7 +1043,7 @@ export class WorkApplication {
         }
       } catch (error) {
         execution = await save(item => { item.state = 'failed'; item.error = { code: error instanceof WorkExecutionError ? error.code : 'host-create-unknown',
-          message: error instanceof WorkExecutionError ? error.message : 'Host outcome is unknown; retry recovers the reserved Session and message identities' }; item.history.push({ state: 'failed', commandId }) })
+          message: error instanceof WorkExecutionError ? error.message : 'Host outcome is unknown; retry recovers the reserved Session and message identities' }; this.dao.appendHistory(item, { state: 'failed', commandId }) })
       }
       return { status: 'completed', execution }
     }, { waitMs: 0 }).catch(async error => {

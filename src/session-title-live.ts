@@ -4,6 +4,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from './work-plugin.ts'
 import type { WorkApplication } from './work.ts'
 import type { WorkSnapshot } from './work-schema.ts'
+import { WorkDao } from './work-store/dao.ts'
 import type { SessionRef, WorkExecution } from './work-types.ts'
 import { TaskSessionTitleWriter } from './task-session-title-writer.ts'
 import { workSessionTitles } from './work-session-titles.ts'
@@ -16,19 +17,24 @@ export const inject = ['a2d2Work', 'sessions', 'sessionPersistence']
 export function installLiveSessionTitles(ctx: Context, app: WorkApplication, runtimeId: string): boolean {
   if (typeof app.host.nameSession === 'function') return false
   const writer = new TaskSessionTitleWriter(ctx, runtimeId)
+  const dao = WorkDao.forDirectory(app.directory)
   ctx.effect(() => {
     let closed = false
+    let lastState: WorkSnapshot | undefined
     let queue: Promise<void> = Promise.resolve()
     let background: Promise<void> | undefined
     const report = (error: unknown) => ctx.logger.warn(`Task title live integration: ${String(error)}`)
     const refresh = (session?: SessionRef, pending?: WorkExecution) => {
       const operation = queue.catch(() => {}).then(async () => {
         if (closed) return
-        const state = JSON.parse(await readFile(join(app.directory, 'work-v3.json'), 'utf8')) as WorkSnapshot
+        const state = await dao.read()
+        if (!session && !pending && state === lastState) return
+        let successful = true
         for (const item of workSessionTitles(state, pending)) {
           if (session && (item.session.runtimeId !== session.runtimeId || item.session.sessionId !== session.sessionId)) continue
-          try { await writer.set(item.session, item.title) } catch (error) { report(error) }
+          try { await writer.set(item.session, item.title) } catch (error) { successful = false; report(error) }
         }
+        if (!session && !pending && successful) lastState = state
       })
       queue = operation
       return operation
@@ -55,12 +61,14 @@ export function installLiveSessionTitles(ctx: Context, app: WorkApplication, run
       if (closed || background) return
       background = refresh().catch(report).finally(() => { background = undefined })
     }
+    const unsubscribe = dao.subscribe(tick)
     const timer = setInterval(tick, 2_000)
     timer.unref()
     tick()
     return async () => {
       closed = true
       clearInterval(timer)
+      unsubscribe()
       if (app.execute === wrappedExecute) app.execute = execute
       if (execution && ensure && execution.ensure === wrappedEnsure) execution.ensure = ensure
       await queue.catch(() => {})

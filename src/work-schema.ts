@@ -135,9 +135,20 @@ export const querySchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('session.work'), session: sessionRefSchema }).strict(),
   z.object({ type: z.literal('legacy.resolve'), address: legacyAddressSchema }).strict(),
 ])
-const receiptSchema = z.object({ continuousRule: continuousRuleSchema.optional(), status: z.literal('completed'), execution: executionSchema.optional(), project: projectSchema.optional(), task: taskSchema.optional(), ref: taskRefSchema.optional(), source: sourceSchema.optional(), binding: bindingSchema.optional(), reminders: z.array(z.string()).optional() }).strict()
+export const receiptSchema = z.object({ continuousRule: continuousRuleSchema.optional(), status: z.literal('completed'), execution: executionSchema.optional(), project: projectSchema.optional(), task: taskSchema.optional(), ref: taskRefSchema.optional(), source: sourceSchema.optional(), binding: bindingSchema.optional(), reminders: z.array(z.string()).optional() }).strict()
+const archiveFileSchema = z.string().regex(/^[0-9a-f-]{36}\.json$/)
+// z.record deliberately drops __proto__; command IDs are opaque data and must round-trip it.
+const receiptIndexSchema = z.custom<Record<string, unknown>>(value => !!value && typeof value === 'object' && !Array.isArray(value))
+  .transform(value => Object.entries(value)).pipe(z.array(z.tuple([z.string(), archiveFileSchema])))
+  .transform(entries => Object.fromEntries(entries))
+export const historyRefSchema = z.object({ head: archiveFileSchema, length: z.number().int().nonnegative(), first: executionSchema.shape.history.element.optional() }).strict()
 export const snapshotSchema = z.object({
-  schemaVersion: z.literal(3), projects: z.array(projectSchema), agents: z.array(agentSchema), tasks: z.array(taskSchema),
+  schemaVersion: z.literal(3),
+  // Deliberately unknown to pre-DAO strict schemas: old writers must reject this format.
+  storage: z.object({ version: z.literal(1), receipts: receiptIndexSchema,
+    histories: z.record(z.string(), historyRefSchema),
+    sources: z.record(z.string(), z.string().regex(/^[0-9a-f-]{36}\.json$/)),
+  }).strict().optional(), projects: z.array(projectSchema), agents: z.array(agentSchema), tasks: z.array(taskSchema),
   sources: z.array(sourceSchema).default([]), externalBindings: z.array(bindingSchema).default([]),
   externalIndex: z.record(z.string(), taskRefSchema).default({}),
   executions: z.array(executionSchema).default([]),
@@ -145,6 +156,7 @@ export const snapshotSchema = z.object({
   commands: z.array(z.object({ commandId: referenceId, fingerprint: z.string(), result: receiptSchema }).strict()),
   legacyMappings: z.array(z.object({ address: legacyAddressSchema, ref: taskRefSchema }).strict()),
 }).strict().superRefine((state, ctx) => {
+  if (state.storage && state.commands.some(receipt => !Object.hasOwn(state.storage!.receipts, receipt.commandId))) ctx.addIssue({ code: 'custom', message: 'Missing command archive reference' })
   const ruleSources = new Set<string>(), claimedTasks = new Set<string>()
   for (const rule of state.continuousRules ?? []) {
     if (ruleSources.has(rule.sourceId) || !state.sources.some(source => source.id === rule.sourceId && source.projectId === rule.projectId)) ctx.addIssue({ code: 'custom', message: 'Continuous rule source authority is inconsistent' })

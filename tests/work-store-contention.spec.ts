@@ -74,7 +74,7 @@ it('round-trips all 3000 observations and the large checkpoint within the write 
   // move to the source's sidecar on the first write after the split.
   expect(after.sources[0].observations).toEqual([])
   expect(after.sources[0].discovery.checkpoint).toBeUndefined()
-  const sidecar = JSON.parse(await readFile(join(directory, 'work-v3.sources', `${before.sources[0].id}.json`), 'utf8'))
+  const sidecar = JSON.parse(await readFile(join(directory, 'work-v3.archive', after.storage.sources[before.sources[0].id]), 'utf8'))
   expect(sidecar.observations).toHaveLength(3000)
   expect(sidecar.checkpoint.issues).toHaveLength(3000)
 }, 30_000)
