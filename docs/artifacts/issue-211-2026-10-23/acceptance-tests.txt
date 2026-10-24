@@ -1,0 +1,44 @@
+
+ RUN  v4.1.11 /data/src/github.com/a2d2-dev/dsh-plugin.worktrees/issue-211-session-titles
+
+ ✓ tests/work-execution-lifecycle.spec.ts (2 tests) 578ms
+   ✓ settles a real lost-receipt command before cleanup and blocks recovery after cancellation  445ms
+ ✓ tests/task-session-title-writer.spec.ts (3 tests) 836ms
+   ✓ does not cache a competing cold title written after the writer lease is released  395ms
+ ✓ tests/work-host.spec.ts (5 tests) 975ms
+   ✓ exposes real local commands and trusted persisted host Sessions through the production plugin without a live Session or model  411ms
+   ✓ starts through the production plugin Context with real execution services and one deterministic kickoff  401ms
+ ✓ tests/work-execution-boundary.spec.ts (3 tests) 1135ms
+   ✓ flushes and holds associated executors before entering a settled maintenance body  394ms
+   ✓ observes explicitly associated and retired roots without activating them and fences unresolved descendants  462ms
+ ✓ tests/work-session-titles.spec.ts (12 tests) 2052ms
+   ✓ gives a newly created task Session its readable Task title and a real sequence before any automatic naming  548ms
+ ✓ tests/work-continuation.spec.ts (17 tests) 7149ms
+   ✓ recovers the same operation and successor after the real material-request receipt is lost  970ms
+   ✓ recovers the same operation and successor after the real successor-create receipt is lost  501ms
+   ✓ recovers the same operation and successor after the real source-take receipt is lost  566ms
+   ✓ recovers the same operation and successor after the real source-seal receipt is lost  474ms
+   ✓ recovers the same operation and successor after the real successor-kickoff receipt is lost  485ms
+   ✓ preserves queued Task and full native input while successor creation is parked  482ms
+   ✓ hands the same Task to two real successor Sessions with source-authored decisions and stable identity  578ms
+   ✓ inherits the actual Session-local reasoning effort and Project Agent instructions  367ms
+   ✓ keeps retired native input and tools fenced after cold restore while history stays read-only  470ms
+   ✓ automatically continues at a 200K soft target and observes successor context of 100 tokens  360ms
+   ✓ automatically continues at a 200K soft target and observes successor context of 200001 tokens  388ms
+ ✓ tests/work-execution.spec.ts (21 tests) 7561ms
+   ✓ accepts a real model self-wait before applying it at the settled maintenance boundary  713ms
+   ✓ accepts a real model self-pause before applying it at the settled maintenance boundary  2233ms
+   ✓ recovers a real tool accepted intent after Context loss before the settled recovery consumer runs  388ms
+   ✓ runs on the selected local model, waits without empty turns, and separates consumption from acceptance  326ms
+   ✓ recovers fixed execution after the real controller checkpoint receipt is lost  302ms
+   ✓ keeps paused Task fenced after cold ordinary Session activation and explicitly resumes existing native inbox  342ms
+
+ Test Files  7 passed (7)
+      Tests  63 passed (63)
+   Start at  08:47:51
+   Duration  9.04s (transform 2.98s, setup 0ms, import 8.83s, tests 20.29s, environment 1ms)
+
+
+> @a2d2/dsh-a2d2@0.0.21 typecheck /data/src/github.com/a2d2-dev/dsh-plugin.worktrees/issue-211-session-titles
+> tsc --noEmit && tsc -p tsconfig.client.json
+
