@@ -23,6 +23,11 @@ export function mountProductionComponent(props: Record<string, unknown>, compone
       if (!instance.setters.has(index)) instance.setters.set(index, (value: any) => { instance.slots[index] = typeof value === 'function' ? value(instance.slots[index]) : value })
       return [instance.slots[index], instance.setters.get(index)]
     },
+    useRef(initial: any) {
+      const instance = active, index = instance.cursor++
+      if (!(index in instance.slots)) instance.slots[index] = { current: initial }
+      return instance.slots[index]
+    },
     useSyncExternalStore: (_subscribe: unknown, getSnapshot: () => unknown) => getSnapshot(),
     useMemo(factory: () => unknown, dependencies: unknown[]) {
       const instance = active, index = instance.cursor++, previous = instance.slots[index]

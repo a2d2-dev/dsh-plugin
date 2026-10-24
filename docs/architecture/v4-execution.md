@@ -85,7 +85,7 @@ observe(id, caller): {
 3. children 通过父 Task.children 完整 ref 查询对应 Task/Execution，保留独立 owner；Issue 负责人来自已有真实 source 投影。
 4. UI 以 graph/controller props 接入新独立组件，SourceA 独占共享 work types/schema/query、work-panel/controller/styles 的编辑：
    - `ExecutionSessions({graph,onOpenTask?,onEnterTask?,onOpenSession?,onReadHistory?})`：分别接 openTask、openCurrentTask、openSession、现有只读 history 方法。
-   - `ExecutionContinuation({graph?,execution?,policy?,busy?,onContinue?})`：只显示参数与接续动作，不重复提供策略编辑入口。Issue 顶部唯一设置按钮由 SourceA 复用已有编辑器；Tab 使用此组件。
+   - `ExecutionContinuation({graph?,execution?,policy?,busy?,completed?,onContinue?})`：只显示参数与接续动作，不重复提供策略编辑入口。Issue 顶部唯一设置按钮由 SourceA 复用已有编辑器；Tab 使用此组件。
    - 原生 `ExecutionSessionWorkEntry` 由 index 注册 header actions 与 blank dock；`ExecutionConversationContinuation` 注册 `conversation.view/a2d2-continuation`，不修改 WorkPanel 当前选择、宿主标题或草稿。点击接续前重新读取 Task 完整 ref、实际 execution/session 和 owner/epoch，后端再次校验。
    - 无真实 graph 时明确“相关执行结算未知”，不制造空图安全状态。
 
@@ -102,6 +102,12 @@ observe(id, caller): {
 ### 准备接续与失败重试
 
 操作沿用 `task.continue`。固定 operation 与 successor 先保留，准备不修改当前入口。`maintain` 等当前 idle，取得 source maintenance 并 flush；观察相关执行者，再对其 live idle Agent 取得 maintenance 并逐一 flush，最后重读公开事实。如果获取锁时出现新的相关 live 执行者，先补锁与 flush 再重读。body 已在这一持久屏障内，禁止再次调用 settle/whenIdle/runMaintenance 造成嵌套等待。pending/unknown 拒绝 body，释放维护窗口，让原生工具继续结算。settled 才进入已有 take；失败重试复用原 operation/successor，不另建入口。不可达作业只提醒，不计入这里的 pending/unknown。
+
+### 已验收任务的接续入口
+
+原生会话「A²D² 接续」与 Issue「接续」页从 `task.detail` 的 `task.completion`、`progress.completion` 或 `progress.processingState === 'completed'` 读取 Task 完成事实，传入 `ExecutionContinuation.completed`。完成后保留置灰的「准备接续」，并显示「任务阶段：done（已验收完成）」和「任务已验收完成，不能继续接续」。该参数即使与 handler 同时传入也会禁用动作；handler 仍由当前协调关联等既有资格判断提供，缺少 handler 不伪造可用能力，未完成的历史或评审会话沿用隐藏行为。原生会话 Completed/idle、Goal 与 GitHub closed 均不推断 Task 完成；完成显示不改变 owner、epoch 或 Task 状态。
+
+验证入口：`TMPDIR="$PWD/.local/tmp" corepack pnpm exec vitest run tests/client/execution-components.spec.ts tests/client/execution-continuation-render.spec.ts`。组件渲染验证完成按钮、状态提示及当前／历史资格，不执行真实 `task.continue`。
 
 ### 作业返回与收取
 

@@ -84,6 +84,7 @@ function NativeTaskContinuation({ controller, sessionId, work }: { controller: W
     } catch (error) { if (!scope.signal.aborted) setError(error instanceof Error ? error.message : String(error)) }
     finally { if (!scope.signal.aborted) setBusy(false) }
   }
+  const completed = Boolean(detail?.task?.completion || detail?.progress?.completion || detail?.progress?.processingState === 'completed')
   const purpose = work.purpose === 'control' ? '当前协调' : work.purpose === 'history' ? '已交接 · 可继续对话' : work.purpose === 'review' ? '评审关联' : '工作关联'
   return <section className={styles.nativeView}>
     <div className={styles.split}>
@@ -100,7 +101,7 @@ function NativeTaskContinuation({ controller, sessionId, work }: { controller: W
         {error && <p role="alert">{error}</p>}
       </aside>
       <div className={styles.configPane}>
-        {detail ? <ExecutionContinuation graph={detail.executionGraph} execution={detail.execution} policy={policy} busy={busy} {...(work.purpose === 'control' && !detail.task?.completion && detail.progress?.processingState !== 'completed' && detail.execution?.session.sessionId === sessionId ? { onContinue: () => void continueWork() } : {})}/> : !error && <p role="status">正在读取接续事实…</p>}
+        {detail ? <ExecutionContinuation graph={detail.executionGraph} execution={detail.execution} policy={policy} busy={busy} completed={completed} {...(work.purpose === 'control' && !completed && detail.execution?.session.sessionId === sessionId ? { onContinue: () => void continueWork() } : {})}/> : !error && <p role="status">正在读取接续事实…</p>}
       </div>
     </div>
   </section>

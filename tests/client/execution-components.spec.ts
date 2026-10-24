@@ -9,6 +9,16 @@ import { ExecutionSessions, ExecutionContinuation } from '../../src/client/execu
 import type { ExecutionGraph } from '../../src/work-execution/observation.ts'
 import type { WorkExecution } from '../../src/work-types.ts'
 
+it('keeps the prepare action visible but disabled with Task completion facts, even with a handler', () => {
+  const execution: WorkExecution = { id: 'e', ref: { projectId: 'p', taskId: 't' }, owner: 'owner', epoch: 1, agentId: 'agent', resource: { runtimeId: 'runtime', workspaceId: 'ws' }, session: { runtimeId: 'runtime', sessionId: 'current' }, sessionMode: 'create', agentPreset: 'standard', model: { provider: 'test', model: 'test' }, permissionPreset: 'read-only', policy: { version: 1, modelCandidates: [], instructions: '', capabilities: [] }, state: 'ready', history: [], events: [], actual: { runtimeId: 'runtime', cwd: '/workspace', agentPreset: 'standard', provider: 'test', model: 'test', permissionPreset: 'read-only', sandbox: 'none', approval: 'never' } }
+  for (const onContinue of [undefined, () => {}]) {
+    const html = renderToStaticMarkup(createElement(ExecutionContinuation, { execution, completed: true, onContinue }))
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>准备接续<\/button>/)
+    expect(html).toContain('任务阶段：done（已验收完成）')
+    expect(html).toContain('任务已验收完成，不能继续接续')
+  }
+})
+
 it('shows an undelivered takeover as a delivery failure with a retry action', () => {
   const ref = { projectId: 'p', taskId: 't' }
   const source = { runtimeId: 'runtime', sessionId: 'source' }
