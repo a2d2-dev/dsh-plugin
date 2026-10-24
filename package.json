@@ -22,6 +22,10 @@
       "types": "./lib/types/work-plugin.d.ts",
       "default": "./lib/work-plugin.js"
     },
+    "./session-title-live": {
+      "types": "./lib/types/session-title-live.d.ts",
+      "default": "./lib/session-title-live.js"
+    },
     "./task-runtime": {
       "types": "./lib/types/task-runtime.d.ts",
       "default": "./lib/task-runtime.js"
