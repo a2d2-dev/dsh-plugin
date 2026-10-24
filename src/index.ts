@@ -78,6 +78,7 @@ import type { Notifier } from './wait-notice.ts'
 import type { TaskRuntimeService } from './task-runtime.ts'
 import { inheritWorkspace } from './workspace.ts'
 import { createRootSession } from './root-session.ts'
+import { selectSessionModel } from './official-session.ts'
 
 export { TaskId, taskIdForIssue } from './brand.ts'
 export type { TaskId as TaskIdType } from './brand.ts'
@@ -740,9 +741,7 @@ export class A2d2Service extends Service {
     const model = { ...selection, ...(reasoningEffort === undefined ? {} : { reasoningEffort: ReasoningEffortId(reasoningEffort) }) }
     const session = brandString<SessionId>(`session-${randomUUID()}`)
     const agent = await createRootSession(this.ctx, { source: request.caller, sessionId: session, cwd: projectRoot })
-    const controller = this.getService<{ selectLocalModel(request: { sessionId: SessionId } & typeof model): Promise<unknown> }>('sessionController')
-    if (!controller?.selectLocalModel) throw new Error('a2d2: sessionController.selectLocalModel is required for subtask local model selection')
-    await controller.selectLocalModel({ sessionId: session, ...model })
+    await selectSessionModel(this.ctx, session, model)
     const task = await this.bindMainSession({
       cwd: projectRoot,
       issue: request.issue,
@@ -863,16 +862,7 @@ export class A2d2Service extends Service {
     }
     const candidate = await this.selectModelCandidate(`Agent "${agent}"`, this.stageAgents.agents[agent])
     const { reasoningEffort, ...route } = candidateSelection(candidate)
-    const controller = this.getService<{
-      selectLocalModel?: (request: {
-        sessionId: SessionId; provider: string; model: string; reasoningEffort?: ReturnType<typeof ReasoningEffortId>
-      }) => Promise<{ selected: { provider: string; model: string; reasoningEffort?: string } }>
-    }>('sessionController')
-    if (typeof controller?.selectLocalModel !== 'function') {
-      throw new Error('a2d2: sessionController.selectLocalModel is required for session-local model selection in this DSH host')
-    }
-    await controller.selectLocalModel({
-      sessionId,
+    await selectSessionModel(this.ctx, sessionId, {
       ...route,
       ...(reasoningEffort === undefined ? {} : { reasoningEffort: ReasoningEffortId(reasoningEffort) }),
     })
