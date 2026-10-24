@@ -1,5 +1,5 @@
 /**
- * tsdown build for dsh-a2d2: the node halves of the plugin plus the browser
+ * tsdown build for @a2d2/dsh-a2d2: the node halves of the plugin plus the browser
  * bundle that draws the floating handoff indicator.
  *
  * - `lib/index.js` is the plugin and its `ctx.a2d2` service.
@@ -33,7 +33,7 @@ import { transform } from 'lightningcss'
 const require = createRequire(import.meta.url)
 
 /** The bundle id: the shell's row id is the Loader entry name, which is the package name. */
-export const CLIENT_BUNDLE_ID = 'dsh-a2d2'
+export const CLIENT_BUNDLE_ID = '@a2d2/dsh-a2d2'
 
 /** Node builtins must never survive into the browser module-loader factory. */
 const NODE_BUILTINS = new Set([
@@ -138,7 +138,11 @@ function cssPlugin(): BuildPlugin {
           minify: true,
         })
         const classMap: Record<string, string> = {}
-        for (const [local, exp] of Object.entries(cssExports ?? {})) classMap[local] = exp.name
+        const exported = cssExports ?? {}
+        // lightningcss returns a plain record, so its iteration order is an
+        // implementation detail: sort the locals or one commit builds to a
+        // different client.js byte stream on another run.
+        for (const local of Object.keys(exported).sort()) classMap[local] = exported[local]!.name
         return [
           injectTag(fileId, code.toString()),
           `export default ${JSON.stringify(classMap)};`,
@@ -151,7 +155,7 @@ function cssPlugin(): BuildPlugin {
 
 export default [
   {
-    entry: { index: 'src/index.ts', command: 'src/command.ts', tools: 'src/tools.ts', 'open-subtask-tools': 'src/open-subtask-tools.ts', 'complete-task-tools': 'src/complete-task-tools.ts', 'ceo-prompt': 'src/ceo-prompt.ts', 'agent-prompt': 'src/agent-prompt.ts', 'github-watch': 'src/github-watch.ts', invariant: 'src/invariant.ts' },
+    entry: { 'work-sources': 'src/work-sources.ts', work: 'src/work.ts', 'work-types': 'src/work-types.ts', 'work-plugin': 'src/work-plugin.ts', 'session-title-live': 'src/session-title-live.ts', 'task-runtime': 'src/task-runtime.ts', index: 'src/index.ts', command: 'src/command.ts', tools: 'src/tools.ts', 'open-subtask-tools': 'src/open-subtask-tools.ts', 'complete-task-tools': 'src/complete-task-tools.ts', 'ceo-prompt': 'src/ceo-prompt.ts', 'agent-prompt': 'src/agent-prompt.ts', 'github-watch': 'src/github-watch.ts', invariant: 'src/invariant.ts' },
     outDir: 'lib',
     format: ['esm'],
     platform: 'node',

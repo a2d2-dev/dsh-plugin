@@ -15,6 +15,17 @@ import {
 } from '../src/handoff.ts'
 
 describe('session id parsing', () => {
+  it.each(['3eb796c2-5159-4686-affe-df8719f6f987', '3EB796C2-5159-4686-AFFE-DF8719F6F987'])(
+    'keeps the Team UUID unchanged: %s', id => {
+      expect(parseSessionId(id)).toBe(id)
+      expect(parseHandoffCommand(`take ${id}`)).toEqual({ kind: 'take', source: id })
+    },
+  )
+  it.each(['/', '..', 'session-..', 'session-a/../b', 'session-a\\b',
+    '3eb796c2-5159-4686-affe-df8719f6f987/..', 'session-a\n'])(
+    'rejects unsafe input %j', id => { expect(parseSessionId(id)).toBeUndefined() },
+  )
+
   it('accepts a session id and rejects a traversal attempt', () => {
     expect(parseSessionId('session-3eb796c2-5159-4686-affe-df8719f6f987'))
       .toBe(SessionId('session-3eb796c2-5159-4686-affe-df8719f6f987'))
@@ -110,6 +121,17 @@ describe('/handoff syntax', () => {
 })
 
 describe('secret redaction', () => {
+  it('preserves the continuation specification path and token-like identifier suffixes', () => {
+    const text = 'See docs/specs/task-interaction-v4-delivery.md and prefix_ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ012345.'
+    expect(redactText(text)).toEqual({ text, labels: [], count: 0 })
+  })
+
+  it.each(['sk-abcdefghijklmnopqrstuvwxyz', 'ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ012345', 'xoxb-1234567890-abcdef'])('redacts a standalone %s token without retaining its capture', secret => {
+    const once = redactText(`Use (${secret}), then continue.`)
+    expect(once).toEqual({ text: `Use ([redacted ${secret.length} chars]), then continue.`, labels: ['high-entropy token'], count: 1 })
+    expect(redactText(once.text)).toEqual({ text: once.text, labels: [], count: 0 })
+  })
+
   it('removes a labelled assignment and counts the removed characters', () => {
     const secret = 'sk-live-0123456789abcdef'
     const redacted = redactText(`API_KEY=${secret}`)

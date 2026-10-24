@@ -1,0 +1,239 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "A²D² 核心业务场景 · 修订版",
+    "subtitle": "Project / Project Agent / Task / Session / 工作目录分层；归属记录与执行锁分离"
+  },
+  "lanes": [
+    {
+      "id": "establish",
+      "label": "S1 选择项目、指派任务并获得执行资格"
+    },
+    {
+      "id": "delegate",
+      "label": "S2 项目 Agent 通过统一委派入口执行"
+    },
+    {
+      "id": "rotate",
+      "label": "S3 会话换代与任务协调关系恢复"
+    },
+    {
+      "id": "recover",
+      "label": "S4 持久事件与原生 / 外部执行恢复",
+      "variant": "exception"
+    },
+    {
+      "id": "complete",
+      "label": "S5 验收、关闭与执行锁释放"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "issue",
+      "lane": "establish",
+      "col": 0,
+      "type": "external",
+      "label": "选择 Project",
+      "sublabel": "Issue 可关联多项目"
+    },
+    {
+      "id": "bind",
+      "lane": "establish",
+      "col": 2,
+      "type": "backend",
+      "label": "指派项目 Agent",
+      "sublabel": "Issue 记录业务归属",
+      "width": 126
+    },
+    {
+      "id": "start",
+      "lane": "establish",
+      "col": 5,
+      "type": "security",
+      "label": "申请执行锁",
+      "sublabel": "获准后才启动"
+    },
+    {
+      "id": "choose",
+      "lane": "delegate",
+      "col": 0,
+      "type": "backend",
+      "label": "选择 Agent",
+      "sublabel": "能力与资源"
+    },
+    {
+      "id": "dispatch",
+      "lane": "delegate",
+      "col": 2,
+      "type": "backend",
+      "label": "统一委派入口",
+      "sublabel": "DSH 原生 / CLI provider",
+      "width": 132
+    },
+    {
+      "id": "result",
+      "lane": "delegate",
+      "col": 5,
+      "type": "messagebus",
+      "label": "结果与证据",
+      "sublabel": "协调 Agent 复核"
+    },
+    {
+      "id": "boundary",
+      "lane": "rotate",
+      "col": 0,
+      "type": "security",
+      "label": "安全交接边界",
+      "sublabel": "先结算原生子会话"
+    },
+    {
+      "id": "successor",
+      "lane": "rotate",
+      "col": 2,
+      "type": "backend",
+      "label": "预存并创建后继",
+      "sublabel": "Agent 与任务身份不变",
+      "width": 132
+    },
+    {
+      "id": "take",
+      "lane": "rotate",
+      "col": 5,
+      "type": "backend",
+      "label": "切换执行引用",
+      "sublabel": "同步 Issue 执行摘要"
+    },
+    {
+      "id": "waiting",
+      "lane": "recover",
+      "col": 0,
+      "type": "messagebus",
+      "label": "事件或中断",
+      "sublabel": "任务 / 执行ID"
+    },
+    {
+      "id": "inbox",
+      "lane": "recover",
+      "col": 2,
+      "type": "database",
+      "label": "持久化与回读",
+      "sublabel": "单次外部运行不冒充会话",
+      "width": 132
+    },
+    {
+      "id": "resume",
+      "lane": "recover",
+      "col": 5,
+      "type": "backend",
+      "label": "恢复或阻塞",
+      "sublabel": "按能力恢复"
+    },
+    {
+      "id": "accept",
+      "lane": "complete",
+      "col": 0,
+      "type": "backend",
+      "label": "确认验收通过",
+      "sublabel": "负责Agent复核"
+    },
+    {
+      "id": "close",
+      "lane": "complete",
+      "col": 2,
+      "type": "external",
+      "label": "同步并关闭 Issue",
+      "sublabel": "业务结果由 tracker 承载",
+      "width": 132
+    },
+    {
+      "id": "done",
+      "lane": "complete",
+      "col": 5,
+      "type": "messagebus",
+      "label": "完成并释放",
+      "sublabel": "通知父任务 / 留痕"
+    }
+  ],
+  "edges": [
+    {
+      "from": "issue",
+      "to": "bind",
+      "variant": "emphasis"
+    },
+    {
+      "from": "bind",
+      "to": "start",
+      "variant": "emphasis"
+    },
+    {
+      "from": "choose",
+      "to": "dispatch",
+      "variant": "emphasis"
+    },
+    {
+      "from": "dispatch",
+      "to": "result",
+      "variant": "dashed"
+    },
+    {
+      "from": "boundary",
+      "to": "successor",
+      "variant": "emphasis"
+    },
+    {
+      "from": "successor",
+      "to": "take",
+      "variant": "emphasis"
+    },
+    {
+      "from": "waiting",
+      "to": "inbox",
+      "variant": "dashed"
+    },
+    {
+      "from": "inbox",
+      "to": "resume",
+      "variant": "emphasis"
+    },
+    {
+      "from": "accept",
+      "to": "close",
+      "variant": "emphasis"
+    },
+    {
+      "from": "close",
+      "to": "done",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "目标模型",
+      "items": [
+        "Project 对齐 GitHub Project",
+        "所有 Agent 都归属 Project",
+        "Session 只是执行载体"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "当前与目标不能混用",
+      "items": [
+        "GitHub 记录归属，不充当原子锁",
+        "现有绑定仍按本地路径与会话",
+        "新入口及跨项目协调均为拟调整"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "执行资源明确",
+      "items": [
+        "工作目录按 host / cwd / checkout 记录",
+        "CLI 可先接入现有 one-shot provider",
+        "持久子会话与离线恢复能力待补"
+      ]
+    }
+  ]
+}

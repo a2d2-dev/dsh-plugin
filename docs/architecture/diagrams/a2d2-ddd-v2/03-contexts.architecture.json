@@ -1,0 +1,212 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "A²D² 上下文映射 · 修订版",
+    "subtitle": "业务归属在 GitHub 可见；执行协调负责互斥；CLI 通过 DSH provider 适配",
+    "viewBox": [
+      1080,
+      760
+    ]
+  },
+  "components": [
+    {
+      "id": "policy",
+      "type": "security",
+      "label": "BC-P 项目 Agent 配置",
+      "sublabel": "ProjectAgent / 模板 / 能力策略",
+      "pos": [
+        390,
+        90
+      ],
+      "size": [
+        210,
+        72
+      ]
+    },
+    {
+      "id": "tracking",
+      "type": "external",
+      "label": "BC-T 项目与工作项",
+      "sublabel": "GitHub Project / Issue / 归属记录",
+      "pos": [
+        50,
+        285
+      ],
+      "size": [
+        210,
+        72
+      ]
+    },
+    {
+      "id": "orchestration",
+      "type": "backend",
+      "label": "BC-O 任务归属与执行协调",
+      "sublabel": "Binding / 执行锁 / 事件 / 恢复",
+      "pos": [
+        390,
+        285
+      ],
+      "size": [
+        210,
+        72
+      ]
+    },
+    {
+      "id": "runtime",
+      "type": "cloud",
+      "label": "BC-H 会话执行",
+      "sublabel": "DSH Session / 子会话 / cwd",
+      "pos": [
+        730,
+        285
+      ],
+      "size": [
+        210,
+        72
+      ]
+    },
+    {
+      "id": "projection",
+      "type": "frontend",
+      "label": "查询与人机介入",
+      "sublabel": "业务项目 / 执行事实 / 工作目录",
+      "pos": [
+        390,
+        550
+      ],
+      "size": [
+        210,
+        72
+      ]
+    },
+    {
+      "id": "cli",
+      "type": "external",
+      "label": "外部 CLI / SDK 执行",
+      "sublabel": "已有 one-shot；持久子会话待补",
+      "pos": [
+        730,
+        550
+      ],
+      "size": [
+        210,
+        72
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from": "policy",
+      "to": "orchestration",
+      "label": "C3 项目 Agent 策略",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        495,
+        222
+      ]
+    },
+    {
+      "from": "orchestration",
+      "to": "tracking",
+      "label": "C1 归属 / 执行摘要",
+      "fromSide": "left",
+      "toSide": "right",
+      "variant": "dashed",
+      "labelAt": [
+        325,
+        306
+      ]
+    },
+    {
+      "from": "tracking",
+      "to": "orchestration",
+      "label": "C2 任务事件适配",
+      "fromSide": "bottom",
+      "toSide": "left",
+      "via": [
+        [
+          155,
+          430
+        ],
+        [
+          345,
+          430
+        ],
+        [
+          345,
+          340
+        ]
+      ],
+      "variant": "dashed",
+      "labelAt": [
+        252,
+        447
+      ]
+    },
+    {
+      "from": "orchestration",
+      "to": "runtime",
+      "label": "C4/C5 执行与事实",
+      "fromSide": "right",
+      "toSide": "left",
+      "variant": "emphasis",
+      "labelAt": [
+        665,
+        306
+      ]
+    },
+    {
+      "from": "orchestration",
+      "to": "projection",
+      "label": "C6 联合查询",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        495,
+        480
+      ]
+    },
+    {
+      "from": "runtime",
+      "to": "cli",
+      "label": "C7 provider 适配",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        835,
+        455
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "候选职责边界",
+      "items": [
+        "BC-P 定义项目内 Agent 身份",
+        "BC-O 指派任务、仲裁执行与交接",
+        "BC-T 保存人和 agent 可见的归属"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "锁不等于评论",
+      "items": [
+        "Issue 元数据没有已确认的原子抢占保证",
+        "执行锁由单一协调权威授予",
+        "多实例必须共享仲裁，不能各自抢标签"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "DSH 概念不扩张",
+      "items": [
+        "主会话是 A²D² 关系，不新增 DSH 类型",
+        "cwd / workspace 保留真实资源语义",
+        "CLI one-shot 不伪装成可续聊子会话"
+      ]
+    }
+  ]
+}

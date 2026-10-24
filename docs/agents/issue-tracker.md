@@ -31,7 +31,9 @@ Create a GitHub issue.
 
 ## A²D² task labels
 
-Every A²D² task issue carries exactly one label that tells how it is executed (see `CONTEXT.md` → 任务 issue):
+This section governs development issues in this repository, not the product's runtime Task model. The product supports independent Project/Task/Project Agent identities and optional GitHub collaboration; using GitHub to develop this repository does not make GitHub a product prerequisite.
+
+Every development task issue carries exactly one execution label:
 
 | Label | Meaning | Executed by |
 |---|---|---|

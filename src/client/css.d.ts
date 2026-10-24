@@ -6,11 +6,84 @@
  * resolves to `undefined` and renders no class. Declaring the map's keys here
  * makes that a compile error instead.
  *
- * @module @deepseek-ai/dsh-a2d2/client/css
+ * @module @a2d2/dsh-a2d2/client/css
  */
 
 declare module '*.module.css' {
   const classes: {
+    readonly navigation: string
+    readonly sourceToolbar: string
+    readonly delegation: string
+    readonly eyebrow: string
+    readonly issueHeader: string
+    readonly badge: string
+    readonly projectToolbar: string
+    readonly projectCount: string
+    readonly projectToggle: string
+    readonly projectLink: string
+    readonly projectTable: string
+    readonly hierarchy: string
+    readonly chevron: string
+    readonly chevronSpacer: string
+    readonly rowState: string
+    readonly avatar: string
+    readonly labelPill: string
+    readonly chip: string
+    readonly chipGray: string
+    readonly chipBlue: string
+    readonly chipGreen: string
+    readonly chipYellow: string
+    readonly chipOrange: string
+    readonly chipRed: string
+    readonly chipPink: string
+    readonly chipPurple: string
+    readonly progress: string
+    readonly progressSegments: string
+    readonly segmentOn: string
+    readonly segmentOff: string
+    readonly progressBar: string
+    readonly progressFill: string
+    readonly progressText: string
+    readonly scanProgress: string
+    readonly titleCell: string
+    readonly rowTitle: string
+    readonly cellClip: string
+    readonly sessionCell: string
+    readonly sessionDot: string
+    readonly sessionLink: string
+    readonly sessionEmpty: string
+    readonly detailGrid: string
+    readonly sourceSummary: string
+    readonly sourceHeader: string
+    readonly sourceIdentity: string
+    readonly sourceIcon: string
+    readonly sourceTitles: string
+    readonly sourceMeta: string
+    readonly metaDot: string
+    readonly menu: string
+    readonly menuWrap: string
+    readonly delegationHeader: string
+    readonly settingsPanel: string
+    readonly sourceActions: string
+    readonly iconButton: string
+    readonly requirementBranch: string
+    readonly requirement: string
+    readonly formRow: string
+    readonly primary: string
+    readonly issueLink: string
+    readonly continuous: string
+    readonly queue: string
+    readonly continuation: string
+    readonly panel: string
+    readonly toolbar: string
+    readonly tabs: string
+    readonly metrics: string
+    readonly tableScroll: string
+    readonly formSection: string
+    readonly form: string
+    readonly link: string
+    readonly sourceBody: string
+    readonly sessionEntry: string
     readonly root: string
     readonly water: string
     readonly readout: string

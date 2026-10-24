@@ -13,7 +13,7 @@
  * markup. A failure at any step stops the sequence and reports which step
  * failed, so a half-finished handoff never looks like a finished one.
  *
- * @module @deepseek-ai/dsh-a2d2/client/orb-actions
+ * @module @a2d2/dsh-a2d2/client/orb-actions
  */
 
 import type {

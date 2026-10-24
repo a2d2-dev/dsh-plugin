@@ -93,11 +93,11 @@ describe('pack manifest', () => {
     expect(uncovered).toEqual([])
   })
 
-  it('declares eight mount rows that resolve to built explicit exports', () => {
+  it('declares ten mount rows that resolve to built explicit exports', () => {
     const rows = patch?.insert ?? []
-    expect(rows).toHaveLength(8)
+    expect(rows).toHaveLength(10)
     const names = rows.map(row => row.name)
-    expect(new Set(names).size).toBe(8)
+    expect(new Set(names).size).toBe(10)
     const explicitSpecifiers = new Set(
       Object.keys(pkg.exports).filter(specifier => specifier !== './package.json' && !specifier.includes('*')),
     )

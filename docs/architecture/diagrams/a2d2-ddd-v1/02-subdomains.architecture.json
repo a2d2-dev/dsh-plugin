@@ -1,0 +1,23 @@
+{
+ "schema_version":1,"diagram_type":"architecture",
+ "meta":{"title":"A²D² 子域全景","subtitle":"分类提议 · 根据业务差异化与复用性划分，不按代码目录或部署进程划分"},
+ "components":[
+  {"id":"coordination","type":"backend","label":"D1 任务推进与协作","sublabel":"阶段判断 / 分解 / 复核","pos":[70,110],"size":[190,72]},
+  {"id":"continuity","type":"backend","label":"D2 跨会话连续执行","sublabel":"执行权 / 交接 / 事件恢复","pos":[70,260],"size":[190,72]},
+  {"id":"agents","type":"security","label":"D3 Agent 策略与装配","sublabel":"职责 / 候选模型 / 两级配置","pos":[360,110],"size":[190,72]},
+  {"id":"visibility","type":"frontend","label":"D4 观察与人机介入","sublabel":"事实展示 / 问题 / 通知","pos":[360,260],"size":[190,72]},
+  {"id":"tracking","type":"external","label":"D5 工作项跟踪","sublabel":"GitHub Issue / PR / 证据","pos":[650,110],"size":[190,72]},
+  {"id":"execution","type":"cloud","label":"D6 通用执行底座","sublabel":"DSH 会话 / 模型 / 工具 / 权限","pos":[650,260],"size":[190,72]}
+ ],
+ "boundaries":[
+  {"kind":"region","label":"核心子域 · A²D² 的业务价值","wraps":["coordination","continuity"]},
+  {"kind":"region","label":"支撑子域 · 服务于核心场景","wraps":["agents","visibility"]},
+  {"kind":"region","label":"通用子域 · 复用外部能力","wraps":["tracking","execution"]}
+ ],
+ "connections":[],
+ "cards":[
+  {"dot":"emerald","title":"为什么核心是两项","items":["D1 决定工作如何推进","D2 保证工作跨会话继续","单纯聊天或任务列表不足以替代"]},
+  {"dot":"cyan","title":"不按实现形态分类","items":["D1 含 CEO 遵循的方法与规则","D2 含插件的确定性执行机制","D1 / D2 暂放同一候选上下文"]},
+  {"dot":"slate","title":"避免过度拆分","items":["D4 暂不设独立业务上下文","通知渠道作为可替换外部适配","子域分类不意味着六个服务"]}
+ ]
+}

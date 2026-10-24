@@ -1,0 +1,213 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "A²D² 上下文与端口 · 两种落地方式",
+    "subtitle": "本地完整运行；GitHub 经可选协同适配接入，不充当领域身份或执行锁",
+    "viewBox": [
+      1080,
+      760
+    ]
+  },
+  "components": [
+    {
+      "id": "policy",
+      "type": "security",
+      "label": "BC-P 项目 Agent 策略",
+      "sublabel": "领域 ProjectId / AgentId",
+      "pos": [
+        390,
+        90
+      ],
+      "size": [
+        210,
+        72
+      ]
+    },
+    {
+      "id": "local",
+      "type": "database",
+      "label": "本地持久化适配",
+      "sublabel": "工作记录 / 协调记录 / Outbox",
+      "pos": [
+        50,
+        285
+      ],
+      "size": [
+        210,
+        72
+      ]
+    },
+    {
+      "id": "orchestration",
+      "type": "backend",
+      "label": "BC-O 工作管理与执行协调",
+      "sublabel": "TaskId / 指派 / 验收 / 执行锁",
+      "pos": [
+        390,
+        285
+      ],
+      "size": [
+        210,
+        72
+      ]
+    },
+    {
+      "id": "runtime",
+      "type": "cloud",
+      "label": "BC-H DSH 会话执行",
+      "sublabel": "会话 / 子会话 / cwd / provider",
+      "pos": [
+        730,
+        285
+      ],
+      "size": [
+        210,
+        72
+      ]
+    },
+    {
+      "id": "sync",
+      "type": "messagebus",
+      "label": "可选协同适配端口",
+      "sublabel": "映射 / 发布 / 导入 / 冲突处理",
+      "pos": [
+        390,
+        550
+      ],
+      "size": [
+        210,
+        72
+      ]
+    },
+    {
+      "id": "github",
+      "type": "external",
+      "label": "GitHub（可选）",
+      "sublabel": "Project / Issue / PR / 评论",
+      "pos": [
+        50,
+        550
+      ],
+      "size": [
+        210,
+        72
+      ]
+    },
+    {
+      "id": "cli",
+      "type": "external",
+      "label": "CLI / SDK 后端",
+      "sublabel": "通过 DSH provider 接入",
+      "pos": [
+        730,
+        550
+      ],
+      "size": [
+        210,
+        72
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from": "policy",
+      "to": "orchestration",
+      "label": "C3 Agent 策略",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        495,
+        222
+      ]
+    },
+    {
+      "from": "orchestration",
+      "to": "local",
+      "label": "C1 领域存储端口",
+      "fromSide": "left",
+      "toSide": "right",
+      "variant": "emphasis",
+      "labelAt": [
+        325,
+        306
+      ]
+    },
+    {
+      "from": "orchestration",
+      "to": "runtime",
+      "label": "C4/C5 执行与事实",
+      "fromSide": "right",
+      "toSide": "left",
+      "variant": "emphasis",
+      "labelAt": [
+        665,
+        306
+      ]
+    },
+    {
+      "from": "orchestration",
+      "to": "sync",
+      "label": "C2 可选发布 / 导入",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "variant": "dashed",
+      "labelAt": [
+        495,
+        455
+      ]
+    },
+    {
+      "from": "sync",
+      "to": "github",
+      "label": "C6 平台协议映射",
+      "fromSide": "left",
+      "toSide": "right",
+      "variant": "dashed",
+      "labelAt": [
+        325,
+        570
+      ]
+    },
+    {
+      "from": "runtime",
+      "to": "cli",
+      "label": "C7 provider 契约",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        835,
+        455
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "本地模式",
+      "items": [
+        "BC-O / BC-P + 本地记录 + DSH",
+        "移除下方 GitHub 分支仍完整运行",
+        "无需伪造 repo 或 issue 编号"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "GitHub 协同模式",
+      "items": [
+        "增加可选适配器和 ExternalBinding",
+        "发布已提交事实，导入外部观察",
+        "本地与远端不是两个任意写入的真相源"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "边界与箭头",
+      "items": [
+        "C2 / C4-C5 汇总调用与回传，详见表",
+        "同步不拥有 Task 执行资格",
+        "内外部提交非原子，失败明确可见"
+      ]
+    }
+  ]
+}

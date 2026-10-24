@@ -2,7 +2,37 @@
 
 English | [中文](README.zh.md)
 
+[CI](https://github.com/a2d2-dev/dsh-plugin/actions/workflows/ci.yml) · [Contributing](CONTRIBUTING.md) · [Support](SUPPORT.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
+
 This repository holds the **A²D² DeepSeek Harness plugin**: the components that land A²D² inside [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) as one installable plugin.
+
+The default branch `main` is the integrated development source (`0.0.23-dev.0`). The existing `v0.0.22` prerelease is an older immutable snapshot; fixes made after its tag are described under **Unreleased** in the changelog. Future releases must come from `main`.
+
+## Install the v0.0.22 prerelease
+
+Download `a2d2-dsh-a2d2-0.0.22.tgz` from [GitHub Release v0.0.22](https://github.com/a2d2-dev/dsh-plugin/releases/tag/v0.0.22). Keep it compressed and install its absolute path through the desktop plugin manager, or use the app-provided CLI: `dsh plugin --profile desktop add /absolute/path/a2d2-dsh-a2d2-0.0.22.tgz`. Fully quit and reopen DSH after upgrading: a page refresh alone cannot remove interceptors already attached to live Sessions.
+
+This package retains the deployed name `@a2d2/dsh-a2d2` and includes the complete work panel plus built host and browser modules. The earlier GitHub v0.0.1 package was named `dsh-a2d2`; do not activate both names as separate A²D² instances. The version follows the internally deployed 0.0.21. Node.js 22 or newer is required. This release was verified on the matching DSH 0.2.1-rc.2 development host, not every official desktop version. The Release includes checksums.
+
+Native human conversations remain available while a Task waits, pauses, completes, or transfers to another Session. Old Sessions show the current Session entry. Conversation does not reopen completed work or regain coordination. Previously buffered, unconsumed human input is recovered with its original content and attachments on the next human input in that Session, without duplicate delivery.
+
+## GitHub Project and Issue workflow
+
+Open **A²D² Control Panel** in DSH and connect a GitHub Project. Browse assigned Issues, open their original requirements and progress, and start or revisit the current processing Session. Browsing never starts a model. The execution directory can be chosen when connecting or at the first explicit start.
+
+Enable continuous processing with an explicit assignee, required labels, directory, model and presets. Each rule advances one Issue at a time. Waiting work retains its Session and yields to other eligible Issues; automatic inputs rejoin the same serial scheduler. Pausing new intake preserves active work, while an explicitly paused Issue needs an explicit resume for automation. Native human input always receives a response and does not itself resume the Task.
+
+Configure a 200K, 300K or custom token target for automatic continuation. The successor retains the Issue's decisions, evidence and remaining work. These are early handoff targets checked against the actual model capacity, not hard limits on a long turn. The original Issue overview connects requirement blocks, nested child work, known sub-Issues, blockers and acceptance evidence.
+
+Continuous intake currently supports GitHub Project sources. Search and processing-state filters cover the loaded page; dispatch uses the complete observed Project membership and the persisted rule. GitHub state is shown separately from processing and acceptance; this flow does not automatically close remote Issues.
+
+The DSH Goal driver owns its continuation messages. A²D² neither retains them as pending Task input nor transfers them to successor Sessions. Execution recovery marks previously retained, unconsumed Goal messages as discarded and stops replaying them, while keeping the original records for inspection. Discarding is separate from model consumption and Task acceptance. Resuming a Task does not resume a paused Goal.
+
+Task and continuation Sessions receive a task-based name such as `#200/#211 · 会话 2 · 修复会话名称`. The complete title fits the host's 80-byte limit while retaining task identity, continuation order and readable task text. See [Session naming rules](docs/session-naming.md) for numbering, fallbacks and existing-title repair.
+
+The component reference below also documents retained legacy tools and record formats. Managed control-panel Sessions use `work_control`, `work_report` and `work_organize`; manual Issue binding is not part of the user flow.
+
+Subagent dispatch prefers the host's `startActivation` with `delivery: 'parent'`, using `startContinuable` only when the newer method is absent. The request sets the model and reasoning effort through `agentOptions`; dispatch requires no additional `selectLocalModel` API or DSH source patch. Activation errors propagate without retrying the older method. Published DSH types cover both contracts; the aliased package is a development-only type dependency. Session IDs preserve both legacy `session-…` values and UUIDs while rejecting path syntax.
 
 **A²D² — Agentic Agile Driven Development — is a development methodology** that hands the rhythm of agile development to agents: a high-quality model chairs architecture and decisions, a multi-model orchestration carries execution, and the sessions of one piece of work stay tied together as it moves. The methodology is larger than this plugin (it spans workflow skills and multi-model orchestration too); this repository is only its concrete landing on the DSH side. As that landing grows, further DSH-side components live here under the same `a2d2` namespace.
 
@@ -11,33 +41,11 @@ What the plugin gives DSH today:
 - **Task aggregation** — a task groups the sessions belonging to one piece of work and records the handoff edges between them, so related sessions keep a relationship a person can read, review, and commit. The data lives in project-local documents, and no session's durable format changes to carry it. A task bound to a task issue also records its main session — the one session executing it — which a session sets with the `bind_main_session` tool. A main session can open design-heavy subtasks as root main sessions with `open_subtask`, dispatch continuable subagents with `dispatch_subagent`, or declare its own task done with `complete_task`, using the stage Agent table for Agent identity and model selection.
 - **Session handoff** — `/handoff` moves work from a long, expensive session to a fresh one without losing the thread: the handing-off session writes bounded continuation content, and the successor continues from it.
 - **A floating indicator** — an at-a-glance orb by the composer that tracks context length and cost, and warns when a session approaches the smart zone so the next phase boundary can choose its outcome.
-- **A²D² panel** — a better-sidebar tab for the open session's project tasks, member handoff tree, and main-session subagent route tree.
+- **A²D² control panel** — a GitHub Project and Issue entry inside DSH, connecting original requirements, continuous processing, decomposition, acceptance progress and the current Session.
 - **GitHub watch** — `github_watch` lets a session wait on a pull request without polling: when the PR merges, closes, finishes CI, or gets a review decision, the session receives a message, even if it was idle.
 - **Notifications** — when a task issue's main session stops for LF, one A²D²-worded message reaches LF's phone through an installed `notifier` provider.
 
-> `A²D²` is the brand and display form; `a2d2` is the technical identifier — package name, directories, and service names all use it, because `²` cannot appear in an npm package name. The package is `dsh-a2d2`.
-
-## Install
-
-`lib/` is build output and git-ignored, so a checkout contains no runnable plugin until it is built. `pnpm pack` runs the `prepack` hook (build plus the entrypoint assertion), so packing always produces a complete tarball:
-
-```console
-git clone https://github.com/a2d2-dev/dsh-plugin.git dsh-a2d2
-cd dsh-a2d2
-pnpm install
-pnpm build                       # optional: pnpm pack's prepack builds too
-pnpm pack                        # -> dsh-a2d2-0.0.1.tgz
-dsh plugin --profile web add "$(pwd)/dsh-a2d2-0.0.1.tgz"
-```
-
-Install the tarball by its absolute path. Whether the packed artifact is complete is what `pnpm verify:pack-exports` (below) checks.
-
-> **Warning — install the built tarball, never a source tree.** Installing a local directory (`dsh plugin --profile web add ./dsh-a2d2`) or a git URL (`… add git+https://…`) does **not** run `pnpm build`; the package lands as an empty shell with no `lib/`. All eight A²D² rows then fail to import (`ERR_MODULE_NOT_FOUND …/lib/*.js`), and the profile boots with a single warning and A²D² silently inactive. After changing the source, rebuild the tarball and install that:
->
-> ```console
-> pnpm build && pnpm pack
-> dsh plugin --profile web add "$(pwd)/dsh-a2d2-0.0.1.tgz"
-> ```
+> `A²D²` is the brand and display form; `a2d2` is the technical identifier — package name, directories, and service names all use it, because `²` cannot appear in an npm package name. The package is `@a2d2/dsh-a2d2`.
 
 The rest of this document is the plugin's behavior contract and known limits, kept per component below.
 
@@ -54,19 +62,25 @@ git clone https://github.com/a2d2-dev/dsh-plugin.git
 cd dsh-plugin
 corepack enable
 pnpm install --frozen-lockfile
+pnpm verify:repository
 pnpm typecheck
 pnpm test
-pnpm verify:pack-exports
-pnpm pack --out /absolute/path/to/output
+pnpm test:node
+pnpm verify:pack-exports        # requires committed, clean HEAD
+pnpm pack --pack-destination /absolute/path/to/output
 ```
 
 Install the generated tarball in an existing DSH web profile:
 
 ```sh
-dsh plugin --profile web add /absolute/path/to/output/dsh-a2d2-0.0.1.tgz
+dsh plugin --profile web add /absolute/path/to/output/a2d2-dsh-a2d2-0.0.23-dev.0.tgz
 ```
 
-The package and browser bundle are named `dsh-a2d2`; this project does not publish under the `@deepseek-ai` scope. Registry publication and a clean-host end-to-end install are not yet verified. Configure Agent candidates using provider/model routes actually available in your host; the example defaults are not bundled model providers. Optional workflow skills (`ask-matt`, `handoff`) must be installed separately; see `skillsRoot` below. GitHub features also need the `gh` CLI and authentication.
+The package and browser bundle are named `@a2d2/dsh-a2d2`; this project does not publish under the `@deepseek-ai` scope. Registry publication and a clean-host end-to-end install are not yet verified. Configure Agent candidates using provider/model routes actually available in your host; the example defaults are not bundled model providers. Optional workflow skills (`ask-matt`, `handoff`) must be installed separately; see `skillsRoot` below. GitHub features also need the `gh` CLI and authentication.
+
+Install a built tarball into the profile you actually run (`desktop` or `web`). A source checkout contains no `lib/`; `pnpm pack` builds through `prepack`. Git URL installation can run a preparation build, but newer pnpm versions may require explicit approval of the exact commit in the owning profile; see [Git installation](docs/git-installation.md). Do not enable blanket dependency build approval.
+
+For contributor checks and test evidence storage, see [CONTRIBUTING.md](CONTRIBUTING.md) and [testing](docs/testing.md). Optional GitHub watch sends a GitHub token to its configured relay, defaulting to the A²D²-operated `hooks.a2d2.dev`; read the [trust boundary](SECURITY.md#credentials-and-external-services) before enabling it.
 
 ## License
 
@@ -74,27 +88,33 @@ Licensed under the [Apache License, Version 2.0](LICENSE). Third-party dependenc
 
 ## Plugin (namespace: `a2d2`)
 
-The package contributes eight mount rows. `ctx.a2d2` is the task store and declares no service, so it loads in any profile; the command row declares `commands` and `a2d2`, so only a profile that composes both gets `/handoff`; the base tools row declares `tools` and `a2d2`, so only a profile that composes both gets `bind_main_session` and `dispatch_subagent`; the open-subtask tools row additionally declares `agents` and `llm`, because `open_subtask` creates a root session and selects the model from the Agent assigned to the `grill` stage; the complete-task tools row declares `agents`, because `complete_task` may resume a parent task's main session before sending the notification; the CEO prompt row declares `agents`, `systemPrompt`, and `a2d2`, so only a profile that composes live Agents and system prompt assembly gets scoped main-session guidance; the Agent prompt row uses the same services to assemble engineer/reviewer configuration for recorded Agent sessions; the GitHub watch row declares `tools`, `agents`, `sessions`, and `sessionController`, so only a profile that can wake sessions gets `github_watch`. The dispatch tool looks up `subagents` only when it runs, so profiles without the subagent service still load the base tools row and keep `bind_main_session` available. Cordis refuses to load a plugin whose declared services are absent, which is why the rows are split rather than registered conditionally from one row. The floating orb needs no row of its own: it drives that same command through the session it already sits on.
+The package declares ten mount rows. `a2d2-work` supplies the managed work panel and tools; the legacy `a2d2-task-runtime` row is disabled by default. The remaining eight rows retain the session tools described below. `ctx.a2d2` is the task store and declares no service, so it loads in any profile; the command row declares `commands` and `a2d2`, so only a profile that composes both gets `/handoff`; the base tools row declares `tools` and `a2d2`, so only a profile that composes both gets `bind_main_session` and `dispatch_subagent`; the open-subtask tools row additionally declares `agents` and `llm`, because `open_subtask` creates a root session and selects the model from the Agent assigned to the `grill` stage; the complete-task tools row declares `agents`, because `complete_task` may resume a parent task's main session before sending the notification; the CEO prompt row declares `agents`, `systemPrompt`, and `a2d2`, so only a profile that composes live Agents and system prompt assembly gets scoped main-session guidance; the Agent prompt row uses the same services to assemble engineer/reviewer configuration for recorded Agent sessions; the GitHub watch row declares `tools`, `agents`, `sessions`, and `sessionController`, so only a profile that can wake sessions gets `github_watch`. The dispatch tool looks up `subagents` only when it runs, so profiles without the subagent service still load the base tools row and keep `bind_main_session` available. Cordis refuses to load a plugin whose declared services are absent, which is why the rows are split rather than registered conditionally from one row. The floating orb needs no row of its own: it drives that same command through the session it already sits on.
 
 Before publishing, run `pnpm verify:pack-exports`. It exports only git-tracked files with `git archive HEAD` into a temporary clean tree (asserting `lib/` is absent), then runs `pnpm pack` inside that tree so `prepack` builds from scratch. It asserts the tarball's file list carries every explicit `exports` target — types and the client bundle included — plus `dsh.plugin.json` and `cordis.patch.yml`, then installs that same tarball into an empty temporary project and imports every Node entry declared in `package.json` exports. The check therefore covers the empty-shell tarball (a checkout packed without a build) as well as missing hashed build chunks such as the shared handoff chunk before a release is cut. Because it verifies the committed `HEAD`, a dirty working tree is rejected: commit or stash first.
 
 ```yaml
 - id: a2d2
-  name: 'dsh-a2d2'
+  name: '@a2d2/dsh-a2d2'
+- id: a2d2-work
+  name: '@a2d2/dsh-a2d2/work-plugin'
 - id: a2d2-command
-  name: 'dsh-a2d2/command'
+  name: '@a2d2/dsh-a2d2/command'
 - id: a2d2-tools
-  name: 'dsh-a2d2/tools'
+  name: '@a2d2/dsh-a2d2/tools'
 - id: a2d2-open-subtask-tools
-  name: 'dsh-a2d2/open-subtask-tools'
+  name: '@a2d2/dsh-a2d2/open-subtask-tools'
 - id: a2d2-complete-task-tools
-  name: 'dsh-a2d2/complete-task-tools'
+  name: '@a2d2/dsh-a2d2/complete-task-tools'
 - id: a2d2-ceo-prompt
-  name: 'dsh-a2d2/ceo-prompt'
+  name: '@a2d2/dsh-a2d2/ceo-prompt'
 - id: a2d2-agent-prompt
-  name: 'dsh-a2d2/agent-prompt'
+  name: '@a2d2/dsh-a2d2/agent-prompt'
 - id: a2d2-github-watch
-  name: 'dsh-a2d2/github-watch'
+  name: '@a2d2/dsh-a2d2/github-watch'
+- id: a2d2-task-runtime
+  name: '@a2d2/dsh-a2d2/task-runtime'
+  config:
+    enabled: false
 ```
 
 | Key | Default | Contract |
@@ -324,7 +344,7 @@ Only one direction of a handoff edge is stored: a member's `handoffFrom`, naming
 
 ## The indicator orb
 
-The package also ships a browser bundle (`exports["./client"]`, `dsh.client.platform: 'web'`) mounted on the bare `dsh-a2d2` row — a subpath row can never be a client row, and the bundle's registered id must equal the entry name, which is why the id is the package name.
+The package also ships a browser bundle (`exports["./client"]`, `dsh.client.platform: 'web'`) mounted on the bare `@a2d2/dsh-a2d2` row — a subpath row can never be a client row, and the bundle's registered id must equal the entry name, which is why the id is the package name.
 
 It renders one fixed circle beside the composer showing the session's context length (`453K`, `1.2M`) and, when the route has a configured rate, its estimated input cost. The **background** carries the reading: green below the warn length, amber at it, red at critical. The default warn length is 150K tokens. Amber means the session is approaching the smart zone: at the next phase boundary, choose among the five workflow outcomes; handoff is only one of them. Hovering gives the full figures — exact tokens, capacity, percent, and the cost with the currency it is quoted in — and reveals one boundary action above the circle: **下一步**. Handoff is no longer a peer orb action.
 
@@ -539,3 +559,17 @@ None. No session's request content changes.
 - **Subagent descendants are lazy** — the catalog is published per parent, so a newly discovered branch appears after that parent catalog refreshes while the panel is visible.
 - **A route comes from the child's own newest `request/header`** — a child shows as unknown until it issues its first request, and the list can never say what a child is running *right now*, only which route its last request used.
 - **The catalog is a request, not a stream** — a newly delegated child appears up to five seconds late, and the tab does not refresh while it is not visible.
+
+## Host task runtime (phase one)
+
+The separate `@a2d2/dsh-a2d2/task-runtime` mount (`a2d2-task-runtime`) defaults to `enabled: false`. Enable it only in the intended isolated profile; ordinary task binding never opts a task in. Use `/task-runtime start [issue-number] [title]`, `status`, `stop`, `resume`, and `rotate [focus]` from the bound main session. `run` aliases `start`. The session must belong to a workspace.
+
+The host continues active tasks without a browser. Completion, human questions, unsettled children, external dependencies, and explicit `task_runtime` waits stop automatic turns. Healthy turns rotate at the context threshold or per-generation turn limit. Repeated progress fingerprints and operation failures become observable blocked state. Restart recovery discovers only explicitly started records under `homeDir` (default `$DSH_HOME/a2d2/task-runtime`, with `~/.dsh` as the home fallback).
+
+Recovery distinguishes durable queued input from consumed messages and wakes the existing inbox through public Agent APIs. Events use a separate short inbox transaction, so slow handoff operations cannot block enqueue. Only successful active or pending GitHub registrations create an external wait; terminal and failed registrations do not.
+
+Configuration: `pollMs: 2000`, `rotateTokens: 150000`, `maxAutoTurns: 8`, `maxFailures: 3`. Rotation reserves the successor identity before creation, inherits the workspace, selects a session-local CEO model, and fences retired sessions at the public agent pre-step boundary. GitHub and child-completion events are durable task messages retained across handoffs. Stable message IDs and public log reads deduplicate delivery retries; separate session/runtime storage does not provide an exactly-once transaction. Progress detection is heuristic. File ownership locks support one machine/PID namespace; power-loss durability and shared multi-host data are outside this contract. Development and production homes, sessions, storage, and project `.dsh/a2d2` data must remain separate. See ADR 0011.
+
+Managed `/handoff` returns an error directing the caller to `/task-runtime rotate`; it schedules no host rotation. The existing orb stops at prepare and creates no extra session. Unmanaged manual handoffs retain their behavior. Runtime successors and `open_subtask` use public `sessionController.create`/`resolveAgent`, retaining the source’s effective Agent preset and workspace so the host composes tools before publication. Rotation checkpoints the preset and permission configuration before creation. Named and custom sandbox/approval settings are inherited through public services; one-off approvals and host model defaults are not copied. CEO selection remains session-local.
+
+Legacy create/take/deliver checkpoints validate the successor preset. Blank successors are repaired through the public preset selector while keeping their IDs. A started conflicting session stays intact and status exposes `recoveryRequired`. From the idle current main session, `/task-runtime recover` reserves a fresh replacement and carries the prior model-written handoff plus a pointer to the preserved session history. The model must inspect that history before repeating work. Ordinary resume never overwrites a started session's preset.

@@ -1,24 +1,22 @@
-# dsh-a2d2 bundle patch: the mount row this plugin contributes to a profile.
+# @a2d2/dsh-a2d2 bundle patch: the mount row this plugin contributes to a profile.
 #
 # Installed through the official CLI, from the built tarball —
 #
-#   dsh plugin --profile web add /absolute/path/to/dsh-a2d2-0.0.1.tgz
+#   dsh plugin --profile web add /absolute/path/to/a2d2-dsh-a2d2-<version>.tgz
 #
-# `pnpm pack` builds through `prepack`; a source-directory install has no built
-# `lib/`, so every row below would fail to import.
-#
-# The command reconciles `dsh.profile.bundles` against installed packages and,
-# seeing the `dsh.bundle.patch` declaration in package.json, appends `dsh-a2d2`
+# — the command reconciles `dsh.profile.bundles` against installed packages and,
+# seeing the `dsh.bundle.patch` declaration in package.json, appends `@a2d2/dsh-a2d2`
 # to the bundle stack. The profile boot then merges THIS patch, which inserts
 # the plugin row.
 #
 # `root`, `projectMarkers`, `suggestedSkills`, `handoffWarnTokens`, and
 # `handoffCriticalTokens` belong to the `a2d2` row's own config; omitting them
 # keeps the defaults (marker `.git`, project root derived from each session cwd,
-# the A²D² mainline skill suggestions, an empty price table, and the 200k / 1M
+# the A²D² mainline skill suggestions, an empty price table, and the 150k / 1M
 # context lengths the floating indicator warns and turns critical at).
 #
-# Eight rows, because cordis loads a plugin only once its declared services
+# Ten rows, including the managed work plugin and the disabled legacy runtime.
+# Cordis loads a plugin only once its declared services
 # exist. The task store declares none, so `ctx.a2d2` is available in any
 # profile; the command row declares `commands` and `a2d2`, so only a profile
 # that composes both gets `/handoff`; the tools row declares `tools` and
@@ -38,18 +36,24 @@
 # sits on.
 - insert:
     - id: a2d2
-      name: 'dsh-a2d2'
+      name: '@a2d2/dsh-a2d2'
+    - id: a2d2-work
+      name: '@a2d2/dsh-a2d2/work-plugin'
     - id: a2d2-command
-      name: 'dsh-a2d2/command'
+      name: '@a2d2/dsh-a2d2/command'
     - id: a2d2-tools
-      name: 'dsh-a2d2/tools'
+      name: '@a2d2/dsh-a2d2/tools'
     - id: a2d2-open-subtask-tools
-      name: 'dsh-a2d2/open-subtask-tools'
+      name: '@a2d2/dsh-a2d2/open-subtask-tools'
     - id: a2d2-complete-task-tools
-      name: 'dsh-a2d2/complete-task-tools'
+      name: '@a2d2/dsh-a2d2/complete-task-tools'
     - id: a2d2-ceo-prompt
-      name: 'dsh-a2d2/ceo-prompt'
+      name: '@a2d2/dsh-a2d2/ceo-prompt'
     - id: a2d2-agent-prompt
-      name: 'dsh-a2d2/agent-prompt'
+      name: '@a2d2/dsh-a2d2/agent-prompt'
     - id: a2d2-github-watch
-      name: 'dsh-a2d2/github-watch'
+      name: '@a2d2/dsh-a2d2/github-watch'
+    - id: a2d2-task-runtime
+      name: '@a2d2/dsh-a2d2/task-runtime'
+      config:
+        enabled: false

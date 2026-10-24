@@ -6,7 +6,7 @@
  * `skill-filesystem` uses for `.dsh/skills`); the plugin's short name namespaces
  * this store so the plugin's footprint stays one directory even when it later
  * owns further kinds of state.
- * @module @deepseek-ai/dsh-a2d2/src/store
+ * @module @a2d2/dsh-a2d2/src/store
  */
 
 import { mkdir, readFile, readdir, stat } from 'node:fs/promises'

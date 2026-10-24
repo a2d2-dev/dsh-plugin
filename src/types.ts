@@ -3,7 +3,7 @@
  * project; membership and handoff edges live here rather than on the session, so
  * a session's durable format stays untouched. A task bound to a task issue also
  * records its main session (ADR 0003).
- * @module @deepseek-ai/dsh-a2d2/src/types
+ * @module @a2d2/dsh-a2d2/src/types
  */
 
 import type { SessionId } from '@deepseek-ai/dsh-session'

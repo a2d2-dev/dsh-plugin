@@ -5,7 +5,7 @@
  * to the route path and payload shape without pulling host-only modules into
  * the client typecheck.
  *
- * @module @deepseek-ai/dsh-a2d2/src/panel-types
+ * @module @a2d2/dsh-a2d2/src/panel-types
  */
 
 import type { Task } from './types.ts'

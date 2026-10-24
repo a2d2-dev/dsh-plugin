@@ -17,7 +17,7 @@
  * A push never affects the session: results are logged, and a rejected or
  * throwing provider is contained here.
  *
- * @module @deepseek-ai/dsh-a2d2/src/wait-notice
+ * @module @a2d2/dsh-a2d2/src/wait-notice
  */
 
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'

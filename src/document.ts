@@ -3,7 +3,7 @@
  * it. A task document is a file a person may hand-edit and commit, so every
  * accepted field is checked here and an unexpected one fails loudly instead of
  * degrading into an empty task.
- * @module @deepseek-ai/dsh-a2d2/src/document
+ * @module @a2d2/dsh-a2d2/src/document
  */
 
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'

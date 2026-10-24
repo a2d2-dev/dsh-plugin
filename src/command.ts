@@ -12,7 +12,7 @@
  * summary is about. Preparing therefore ends by queueing one ordinary turn of
  * that session, and the document stays unreadable until the turn finishes.
  *
- * @module @deepseek-ai/dsh-a2d2/src/command
+ * @module @a2d2/dsh-a2d2/src/command
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -83,6 +83,10 @@ async function prepare(
 
   let prepared: Awaited<ReturnType<Context['a2d2']['prepareHandoff']>>
   try {
+    const runtime = ctx.get('a2d2TaskRuntime')?.runner
+    if (runtime && await runtime.status(cwd, agent.id)) {
+      return { kind: 'error', text: 'Task runtime owns this task. Use /task-runtime rotate; the manual handoff flow cannot create its successor.' }
+    }
     prepared = await ctx.a2d2.prepareHandoff({
       source: agent.id,
       cwd,

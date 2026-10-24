@@ -5,7 +5,7 @@
  * session's working directory, derives the project root with the same store
  * rules as `/handoff`, and returns the task documents for that project.
  *
- * @module @deepseek-ai/dsh-a2d2/src/panel
+ * @module @a2d2/dsh-a2d2/src/panel
  */
 
 import type { IncomingHttpHeaders } from 'node:http'
