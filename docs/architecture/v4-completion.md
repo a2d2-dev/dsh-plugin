@@ -18,7 +18,7 @@
 
 ### 概要设计
 
-WorkApplication 唯一写入 `work-v3.json`。已有验收检查成立后，`commitCompletion` 在同一快照内保存 Task.completion、父 Task.childCompletions 和父执行的稳定 result inbox 事件。事务提交前没有通知或远端副作用。
+WorkApplication 通过共享 [Work DAO](work-dao.md) 的事务写入 `work-v3.json`。已有验收检查成立后，`commitCompletion` 在同一快照内保存 Task.completion、父 Task.childCompletions 和父执行的稳定 result inbox 事件。事务提交前没有通知或远端副作用。
 
 ### 架构设计
 
@@ -30,7 +30,7 @@ CompletionOperation 保存 operationId、commandId、规格版本、executionId�
 | --- | --- | --- |
 | work-progress | 保留既有验收检查并提交完成 | Task.progress |
 | work-completion | 稳定操作、父结果、终态判断 | Task.completion / childCompletions |
-| WorkApplication | 授权、锁、原子持久化、执行栅栏 | work-v3.json |
+| WorkApplication / WorkDao | 业务授权与执行栅栏 / 共享快照、锁与原子持久化 | work-v3.json + immutable archive |
 
 ### 数据流程
 

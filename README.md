@@ -82,6 +82,8 @@ Install a built tarball into the profile you actually run (`desktop` or `web`). 
 
 For contributor checks and test evidence storage, see [CONTRIBUTING.md](CONTRIBUTING.md) and [testing](docs/testing.md). Optional GitHub watch sends a GitHub token to its configured relay, defaulting to the A²D²-operated `hooks.a2d2.dev`; read the [trust boundary](SECURITY.md#credentials-and-external-services) before enabling it.
 
+Local work data uses a shared DAO with immutable history/receipt archives. Back up the entire work directory; older plugin versions reject the new storage metadata. See [storage, migration and offline downgrade](docs/architecture/work-dao.md).
+
 ## License
 
 Licensed under the [Apache License, Version 2.0](LICENSE). Third-party dependencies retain their own licenses; see [release requirements](docs/releasing.md).

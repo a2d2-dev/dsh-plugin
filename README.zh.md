@@ -84,6 +84,8 @@ dsh plugin --profile web add /absolute/path/to/output/a2d2-dsh-a2d2-0.0.23-dev.0
 
 贡献检查和测试资料存放方式见[贡献指南](CONTRIBUTING.md)与[测试说明](docs/testing.md)。可选的 GitHub watch 会将 GitHub token 发送到指定 relay，默认由 A²D² 项目运营的 `hooks.a2d2.dev`；启用前阅读[凭据信任边界](SECURITY.md#credentials-and-external-services)。
 
+本地工作数据通过共享 DAO 和不可变历史/回执归档保存。备份须包含完整工作目录；旧插件会拒绝新的存储元数据。参见[存储、迁移与离线降级](docs/architecture/work-dao.md)。
+
 ## 许可证
 
 采用 [Apache License, Version 2.0](LICENSE)。第三方依赖保留各自许可证；参见[发布要求](docs/releasing.md)。
