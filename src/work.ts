@@ -26,7 +26,7 @@ import { reconcileProjectSources } from './work-sources/discovery.ts'
 import { attachBulk, bulkFingerprint, bulkKeySync, bulkOf, bulkPath, controlSource, hasInlineBulk, readBulkSync, writeBulk, type SourceBulk } from './work-store/source-bulk.ts'
 import type { WorkExecutionHost } from './work-execution/host.ts'
 export type { WorkExecutionHost } from './work-execution/host.ts'
-import type { HostResource, Project, ResourceRef, SessionCandidate, TaskRef, WorkCommand, WorkResult, WorkTask } from './work-types.ts'
+import type { HostResource, NativeWorkMessage, Project, ResourceRef, SessionCandidate, TaskRef, WorkCommand, WorkEvent, WorkResult, WorkTask } from './work-types.ts'
 export type * from './work-types.ts'
 
 /** Only trusted adapters construct authorization; browser payloads cannot supply it. */
@@ -40,6 +40,14 @@ export interface WorkHost {
 function failed(code: string, message: string): WorkResult { return { status: 'failed', error: { code, message } } }
 function conflict(currentVersion: number): WorkResult {
   return { status: 'conflict', error: { code: 'version-conflict', message: 'Expected version is stale', currentVersion } }
+}
+function goalOwned(message: NativeWorkMessage | undefined): boolean {
+  const source = message?.source
+  return typeof source === 'object' && source !== null && 'kind' in source && source.kind === 'goal'
+}
+function pendingEvent(event: WorkEvent): boolean { return event.delivery !== 'consumed' && event.delivery !== 'discarded' }
+function discardGoalEvents(execution: import('./work-types.ts').WorkExecution): void {
+  for (const event of execution.events) if (pendingEvent(event) && goalOwned(event.nativeMessage)) event.delivery = 'discarded'
 }
 function legacyKey(address: { runtimeId: string; projectRoot: string; taskId: string }): string { return JSON.stringify([address.runtimeId, address.projectRoot, address.taskId]) }
 function sameResource(a: ResourceRef, b: ResourceRef): boolean { return a.runtimeId === b.runtimeId && a.workspaceId === b.workspaceId }
@@ -150,7 +158,7 @@ export class WorkApplication {
         state = current
         if (mayAdvance(owner)) return true
         for (const message of messages) {
-          if (owner!.events.some(item => item.id === message.id)) continue
+          if (goalOwned(message) || owner!.events.some(item => item.id === message.id)) continue
           const text = message.content.flatMap(block => typeof block === 'object' && block !== null && 'type' in block && block.type === 'text' && 'text' in block && typeof block.text === 'string' ? [block.text] : []).join('\n')
           const managed = continuousOwner(current, owner!.ref)
           if (managed && managed.item.state !== 'completed' && !continuousCompleted(current, owner!) && owner!.state !== 'paused' && !(owner!.control?.action === 'pause' && owner!.control.status === 'accepted')) { managed.item.resumeRequested = true; managed.item.attempts = 0; delete managed.item.retryAt; if (owner!.runtimeFailure) owner!.runtimeFailure.acknowledged = true }
@@ -165,7 +173,7 @@ export class WorkApplication {
       return (execution?.events ?? []).flatMap(event => {
         const message = event.nativeMessage
         const source = message?.source
-        return event.delivery !== 'consumed' && message && typeof source === 'object' && source !== null && 'kind' in source && source.kind === 'user' ? [message] : []
+        return pendingEvent(event) && message && typeof source === 'object' && source !== null && 'kind' in source && source.kind === 'user' ? [message] : []
       })
     })
   }
@@ -599,7 +607,7 @@ export class WorkApplication {
             await this.observeContinuation(execution.id)
             // Read back receipts before declaring an idle execution unfinished; observation never wakes it.
             if (execution.actual && !['accepted', 'creating', 'failed'].includes(execution.state)) {
-              const deliveries = await Promise.all(execution.events.filter(event => event.delivery !== 'consumed').map(async event => ({ id: event.id, delivery: await host.observe(execution!, event) })))
+              const deliveries = await Promise.all(execution.events.filter(pendingEvent).map(async event => ({ id: event.id, delivery: await host.observe(execution!, event) })))
               await this.sourceTransaction(async state => {
                 const current = state.executions.find(item => item.id === execution!.id)!
                 if (current.epoch !== execution!.epoch) return
@@ -621,7 +629,7 @@ export class WorkApplication {
             else if (execution.continuationBlocked) { release = 'blocked'; reason = execution.continuationBlocked.message }
             else if (['waiting', 'paused'].includes(execution.state) && !currentOwner.item.resumeRequested) { release = execution.state as 'waiting' | 'paused'; reason = execution.control?.reason }
             else if (currentOwner.item.state === 'blocked' && !currentOwner.item.resumeRequested) { release = 'blocked'; reason = currentOwner.item.reason }
-            else if (!continuationInFlight(execution) && !execution.error && !currentOwner.item.resumeRequested && !['accepted', 'creating', 'failed'].includes(execution.state) && execution.events.every(event => event.delivery === 'consumed')) {
+            else if (!continuationInFlight(execution) && !execution.error && !currentOwner.item.resumeRequested && !['accepted', 'creating', 'failed'].includes(execution.state) && execution.events.every(event => !pendingEvent(event))) {
               const task = taskAt(state, execution.ref)!
               const progress = task.progress
               const fingerprint = progress && createHash('sha256').update(JSON.stringify({ stage: progress.stage, summary: progress.summary, next: progress.next, blockers: progress.blockers, criteria: progress.criteria, breakdown: task.breakdown })).digest('hex')
@@ -642,7 +650,7 @@ export class WorkApplication {
                 const owner = continuousOwner(state, current.ref)!
                 if (current.epoch !== execution!.epoch || host.status(current) === 'running' || (current.control?.status === 'accepted' && current.control.action === 'resume')) return undefined
                 if (continuationInFlight(current) && !continuousCompleted(state, current) && !['waiting', 'paused'].includes(current.state) && !current.continuation?.error && !current.continuationBlocked) return undefined
-                if (release === 'blocked' && !current.error && !current.runtimeFailure && !current.continuationBlocked && !current.continuation?.error && (owner.item.resumeRequested || current.events.some(event => event.delivery !== 'consumed'))) return undefined
+                if (release === 'blocked' && !current.error && !current.runtimeFailure && !current.continuationBlocked && !current.continuation?.error && (owner.item.resumeRequested || current.events.some(pendingEvent))) return undefined
                 owner.item.state = release!; owner.item.reason = reason
                 return current
               })
@@ -918,6 +926,10 @@ export class WorkApplication {
   }
   /** Host lifecycle recovery includes starts, handoffs and controls. */
   async reconcileControls(): Promise<void> {
+    const before = await this.load()
+    if (before.executions.some(execution => execution.events.some(event => pendingEvent(event) && goalOwned(event.nativeMessage)))) {
+      await this.sourceTransaction(async state => { for (const execution of state.executions) discardGoalEvents(execution) })
+    }
     await this.reconcileCompletions()
     if (!this.host.execution) return
     await this.reconcileContinuous()
@@ -929,7 +941,7 @@ export class WorkApplication {
       await this.observeContinuation(initial.id)
       const execution = (await this.load()).executions.find(item => item.id === initial.id)!
       if (execution.control?.status === 'accepted' || continuationInFlight(execution) || ['accepted', 'creating', 'failed'].includes(execution.state)
-        || execution.events.some(event => event.delivery !== 'consumed' && !['waiting', 'paused'].includes(execution.state))) {
+        || execution.events.some(event => pendingEvent(event) && !['waiting', 'paused'].includes(execution.state))) {
         await this.ensureExecution(execution.id, execution.control?.commandId ?? execution.continuation?.commandId ?? execution.history[0]!.commandId)
       }
     }
@@ -987,7 +999,7 @@ export class WorkApplication {
       execution = await save(current => {
         if (current.continuation!.inputSeal !== undefined && current.continuation!.inputSeal !== sealed.seq) throw new WorkExecutionError('continuation-seal-conflict', 'Source intake seal changed')
         for (const message of sealed.messages) {
-          if (message.id === operation.materialRequestId || current.events.some(item => item.id === message.id)) continue
+          if (goalOwned(message) || message.id === operation.materialRequestId || current.events.some(item => item.id === message.id)) continue
           current.events.push({ id: message.id, text: 'Input accepted before source intake was sealed', kind: 'input', delivery: 'accepted', acceptance: 'unassessed', nativeMessage: message })
         }
         current.continuation!.inputSeal = sealed.seq
@@ -1041,7 +1053,7 @@ export class WorkApplication {
           execution = await save(current => { current.continuation!.phase = 'successor-created' })
           // Read source consumption before transferring outstanding events to the successor.
           for (const event of execution.events) {
-            if (event.delivery === 'consumed') continue
+            if (!pendingEvent(event)) continue
             const delivery = await host.observe(execution, event)
             execution = await save(current => { current.events.find(item => item.id === event.id)!.delivery = delivery === 'consumed' ? 'consumed' : 'accepted' })
           }
@@ -1107,6 +1119,7 @@ export class WorkApplication {
       })
       const state = await this.load()
       let execution = state.executions.find(item => item.id === id)!
+      if (execution.events.some(event => pendingEvent(event) && goalOwned(event.nativeMessage))) execution = await save(discardGoalEvents)
       if (isTaskCompleted(taskAt(state, execution.ref))) return { status: 'completed', execution }
       const owner = continuousOwner(state, execution.ref)
       const stopping = owner && sameTask(owner.rule.active, execution.ref) && execution.control?.status === 'accepted' && execution.control.action !== 'resume'
@@ -1140,7 +1153,7 @@ export class WorkApplication {
           if (control.action === 'resume' && execution.control?.commandId === control.commandId) await this.host.execution!.wake(execution)
         }
         for (const event of execution.events) {
-          if (event.delivery === 'consumed') continue
+          if (!pendingEvent(event)) continue
           const delivery = ['waiting', 'paused'].includes(execution.state)
             ? await this.host.execution!.observe(execution, event)
             : await this.host.execution!.deliver(execution, event)

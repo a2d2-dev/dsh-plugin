@@ -22,7 +22,7 @@ export interface ContinuationOperation {
   goal: string; specification: WorkSpecification; title: string
   history: { ref: TaskRef; session: SessionRef }
   inputSeal?: number
-  requestDelivery?: WorkEvent['delivery']; kickoffDelivery?: WorkEvent['delivery']
+  requestDelivery?: Exclude<WorkEvent['delivery'], 'discarded'>; kickoffDelivery?: Exclude<WorkEvent['delivery'], 'discarded'>
   error?: { code: string; message: string }
 }
 export interface Project { id: string; name: string; version: number; defaultAgentId: string; resources: ResourceRef[]; continuationPolicy?: ContinuationPolicy }
@@ -51,7 +51,7 @@ export interface HostExecutionChoices {
 export interface WorkExecutionOptions extends HostExecutionChoices { agentId: string; resources: HostResource[] }
 export interface ExecutionRef { ref: TaskRef; executionId: string }
 export interface NativeWorkMessage { id: string; role: 'user'; content: readonly unknown[]; source: unknown }
-export interface WorkEvent { id: string; text: string; kind: 'input' | 'result'; delivery: 'accepted' | 'delivered' | 'consumed'; acceptance: 'unassessed'; nativeMessage?: NativeWorkMessage }
+export interface WorkEvent { id: string; text: string; kind: 'input' | 'result'; delivery: 'accepted' | 'delivered' | 'consumed' | 'discarded'; acceptance: 'unassessed'; nativeMessage?: NativeWorkMessage }
 /** Source-authored material; full original text is retained before any delivery redaction. */
 export interface ContinuationContent { body: string; decisions: string; evidence: string; unfinished: string; next: string }
 export interface ContinuationMaterial extends ContinuationContent {
