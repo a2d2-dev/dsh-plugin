@@ -1,0 +1,45 @@
+{
+  "observedAt": "2026-10-24T06:58:49.578Z",
+  "taskCount": 8,
+  "executionCount": 8,
+  "namedSessionCount": 12,
+  "current": {
+    "session": {
+      "runtimeId": "b921120e-e6dd-4e5d-b109-945d9d692d25",
+      "sessionId": "session-6d3435f0-9413-403e-8542-faf9a36a8570"
+    },
+    "title": "#211 · 会话 1 · 会话命名：关联任务并携带阶梯/序列编号，"
+  },
+  "execution": [
+    {
+      "id": "2c5e3246-8771-4b3d-9c52-60a1d450a01e",
+      "ref": {
+        "projectId": "f2827706-8088-47a5-976d-683147a430d6",
+        "taskId": "d08d669f-aeea-4f8e-85aa-ae45eff5b28b"
+      },
+      "owner": "5bd90975-6c3b-4233-8960-78d69f61589e",
+      "epoch": 1,
+      "session": {
+        "runtimeId": "b921120e-e6dd-4e5d-b109-945d9d692d25",
+        "sessionId": "session-6d3435f0-9413-403e-8542-faf9a36a8570"
+      },
+      "state": "waiting"
+    }
+  ],
+  "continuationTitles": [
+    {
+      "session": {
+        "runtimeId": "b921120e-e6dd-4e5d-b109-945d9d692d25",
+        "sessionId": "session-ac4ee728-47ca-45dd-8ae6-16642452b6ee"
+      },
+      "title": "#137 · 会话 1 · [v4/01] Project／仓库链接接入、真实视图与 PR"
+    },
+    {
+      "session": {
+        "runtimeId": "b921120e-e6dd-4e5d-b109-945d9d692d25",
+        "sessionId": "session-ba1cd580-b994-4fca-aa9c-a762306bb7d7"
+      },
+      "title": "#137 · 会话 2 · [v4/01] Project／仓库链接接入、真实视图与 PR"
+    }
+  ]
+}

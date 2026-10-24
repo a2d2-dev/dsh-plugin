@@ -1,0 +1,53 @@
+
+ RUN  v4.1.11 /data/src/github.com/a2d2-dev/dsh-plugin.worktrees/issue-211-release
+
+ ✓ tests/work-execution-lifecycle.spec.ts (2 tests) 683ms
+   ✓ settles a real lost-receipt command before cleanup and blocks recovery after cancellation  516ms
+ ✓ tests/task-session-title-writer.spec.ts (3 tests) 896ms
+   ✓ does not cache a competing cold title written after the writer lease is released  409ms
+ ✓ tests/session-title-live.spec.ts (3 tests) 903ms
+   ✓ names before the first Task message while retaining the live execution host and its authorization state  574ms
+ ✓ tests/work-host.spec.ts (5 tests) 1112ms
+   ✓ exposes real local commands and trusted persisted host Sessions through the production plugin without a live Session or model  454ms
+   ✓ starts through the production plugin Context with real execution services and one deterministic kickoff  482ms
+ ✓ tests/work-execution-boundary.spec.ts (3 tests) 1223ms
+   ✓ flushes and holds associated executors before entering a settled maintenance body  436ms
+   ✓ observes explicitly associated and retired roots without activating them and fences unresolved descendants  503ms
+ ✓ tests/work-goal-replay.spec.ts (3 tests) 1273ms
+   ✓ leaves rejected Goal rounds with their producer instead of retaining them as Task input  689ms
+   ✓ discards a previously accepted Goal round without replaying empty turns and preserves human input  317ms
+ ✓ tests/work-session-titles.spec.ts (12 tests) 2226ms
+   ✓ gives a newly created task Session its readable Task title and a real sequence before any automatic naming  576ms
+   ✓ keeps task naming independent of an automatic provider that would return empty  345ms
+ ✓ tests/work-continuation.spec.ts (20 tests) 8860ms
+   ✓ recovers the same operation and successor after the real material-request receipt is lost  1099ms
+   ✓ recovers the same operation and successor after the real successor-create receipt is lost  545ms
+   ✓ recovers the same operation and successor after the real source-take receipt is lost  535ms
+   ✓ recovers the same operation and successor after the real source-seal receipt is lost  482ms
+   ✓ recovers the same operation and successor after the real successor-kickoff receipt is lost  414ms
+   ✓ keeps the source authoritative when kickoff preparation fails and retries the reserved successor  350ms
+   ✓ retries a consumed cancelled material request without replacing the operation or successor  551ms
+   ✓ retries a consumed completed-without-material material request without replacing the operation or successor  506ms
+   ✓ preserves queued Task and full native input while successor creation is parked  482ms
+   ✓ hands the same Task to two real successor Sessions with source-authored decisions and stable identity  650ms
+   ✓ inherits the actual Session-local reasoning effort and Project Agent instructions  410ms
+   ✓ keeps retired conversations usable after cold restore without restoring Task coordination  549ms
+   ✓ automatically continues at a 200K soft target and observes successor context of 100 tokens  404ms
+   ✓ automatically continues at a 200K soft target and observes successor context of 200001 tokens  380ms
+   ✓ does not prompt or rotate while explicitly waiting and does not rotate without source material  351ms
+ ✓ tests/work-execution.spec.ts (22 tests) 9653ms
+   ✓ accepts a real model self-wait before applying it at the settled maintenance boundary  2344ms
+   ✓ accepts a real model self-pause before applying it at the settled maintenance boundary  2208ms
+   ✓ recovers a real tool accepted intent after Context loss before the settled recovery consumer runs  309ms
+   ✓ runs on the selected local model, waits without empty turns, and separates consumption from acceptance  335ms
+   ✓ recovers fixed execution after the real header checkpoint receipt is lost  308ms
+   ✓ recovers fixed execution after the real kickoff checkpoint receipt is lost  327ms
+   ✓ keeps a paused Task paused after cold restore while native conversations remain usable  315ms
+   ✓ recovers legacy buffered human content once on the next human turn without resuming the Task  303ms
+   ✓ persists original continuation material written by the real source model with server-owned Task references across cold reload  302ms
+
+ Test Files  9 passed (9)
+      Tests  73 passed (73)
+   Start at  23:51:35
+   Duration  11.35s (transform 4.70s, setup 0ms, import 13.71s, tests 26.83s, environment 2ms)
+
