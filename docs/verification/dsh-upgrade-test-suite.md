@@ -52,7 +52,7 @@
 | build | `node --run build` | 既有正式插件 build exit 0；仅清理/重建已核对的本树 lib |
 | repository | `node --run verify:repository` | [verify-repository.mjs](../../scripts/verify-repository.mjs) 不变量全部通过 |
 
-full 只 build 一次；quick 和失败阶段重跑不 build。最终发行如需导出检查，在已完成 build 后单独执行 `node scripts/assert-pack-entrypoints.mjs`，不要为重复检查调用 prepack 再构建。实际入口见 [assert-pack-entrypoints.mjs](../../scripts/assert-pack-entrypoints.mjs)。
+full 的本地 build 只执行一次；quick 和失败阶段重跑不 build。排障时可用 `node scripts/assert-pack-entrypoints.mjs` 检查已有产物。最终提交仍须按仓库规范运行 `pnpm verify:pack-exports`：它有意从干净归档重新构建、打包并安装验证，已有 lib 的检查不能替代它。将该发布门集中在最终提交固定后运行，避免每次排查都重复 prepack；见 [打包校验器](../../scripts/verify-pack-exports.mjs)。
 
 ### 冻结、运行环境与报告
 
@@ -60,7 +60,9 @@ full 只 build 一次；quick 和失败阶段重跑不 build。最终发行如�
 
 Node 使用当前 `process.execPath`；root 或 CLI engines 不满足就拒绝，不静默换 Node。当前候选要求 `>=24.9.0`，Node22 会拒绝。支持比较运算符和 `||` 的数字版本范围，遇到未支持 engines 语法会明确拒绝，先更新校验器再运行，不能猜测通过。
 
-runner 显式传入 `DSH_OFFICIAL_HOST_ROOT`、`DSH_OFFICIAL_HOST_COMMIT`、`DSH_OFFICIAL_HOST_VERSION`。fixture 的当前默认是上述 SHA / rc.3；未来版本仍须更新真实合同断言，传 env 不等于自动支持新 API。官方 fixture 的临时根固定为插件树 `.local/tmp`。unit/host 另外使用无 `.git` 祖先的私有临时根，避免 markerless 用例错误走到父仓库；可用 `--unit-tmp-dir` 指定。其余子进程使用插件临时根。隔离 `DSH_HOME`、HOME/USERPROFILE 及 XDG config/state/cache 到新报告下的私有位置，不继承 live home。
+runner 显式传入 `DSH_OFFICIAL_HOST_ROOT`、`DSH_OFFICIAL_HOST_COMMIT`、`DSH_OFFICIAL_HOST_VERSION`。fixture 的当前默认是上述 SHA / rc.3；未来版本仍须更新真实合同断言，传 env 不等于自动支持新 API。官方 fixture 的临时根固定为插件树 `.local/tmp`。unit/host 另外使用无 `.git` 祖先的私有临时根，避免 markerless 用例错误走到父仓库；可用 `--unit-tmp-dir` 指定。其余子进程使用插件临时根。隔离 `DSH_HOME`、HOME/USERPROFILE、profile 目录及 XDG config/state/cache 到新报告下的私有位置，清除子进程 `NODE_OPTIONS` 和原会话/服务定位变量，避免依赖当前 Host 的隐式解析 hook。
+
+优先查看 `summary.json`：它只保留阶段状态、退出码、耗时、候选/插件摘要及日志索引；完整逐文件来源保留在 `report.json`。
 
 报告目录以 0700 创建，日志/JSON 为 0600，已存在目录拒绝覆盖；插件树内须为 Git 忽略路径，禁止写官方候选和 live DSH_HOME。输出 JSON 包含：范围与 GUI/profile `not-run` 标记、候选及插件来源摘要、Node 路径/版本、临时根、每阶段 argv/cwd/exit/signal/duration/log/provenance、结束冻结复核和总状态。预检拒绝发生在创建报告/fixture 临时目录之前，exit 1 与 stderr 即证据；不伪造一个测试报告。阶段 exit 0 且最终冻结复核通过才算该次离线 PASS；错误、取消、非零 exit、构建或源码中途改变均 FAIL。
 
@@ -76,7 +78,7 @@ runner 显式传入 `DSH_OFFICIAL_HOST_ROOT`、`DSH_OFFICIAL_HOST_COMMIT`、`DSH
 | A04 已自动化 | preset 在 publication 前装配；权限继承；已开始 Session 的模型/权限保护和默认 effort 归一化 | 同上；[work-execution.spec.ts](../../tests/work-execution.spec.ts) / [task-runtime.spec.ts](../../tests/task-runtime.spec.ts)，`--phase host` | 继承来源且既有显式用户记录不被改写；不符合启动条件明确拒绝。为跑通重写已开始会话即 FAIL |
 | A05 已自动化 | native UUID registry 的 owner 隔离和非消费观察 | [work-execution-official-jobs.integration.ts](../../tests/work-execution-official-jobs.integration.ts)，`--phase jobs` | list/get + Session observation 不调用 read/readAt、不移动 cursor、不激活模型；跨 owner/unowned 不越权 |
 | A06 已自动化，P1 `2a6e519` | 首读已消费后 post-execute 抛错、取消或成功 result append 丢失；重复 read 成功但 payload 空 | 同上；[work-execution-official-jobs.spec.ts](../../tests/work-execution-official-jobs.spec.ts)，`--phase jobs` / `unit` | 空重复不能得到 delivered，旧作业仍 pending。仅“successful tool/result 排在 settled 后”即解除门禁为 FAIL |
-| A07 父 fixture 继续更新 | canonical 有 payload，但 post policy `accept.content=[]` 或任意替换内容；不能给被抹除/替换的真实输出发 receipt | 同上；[official-job-receipts.ts](../../src/work-execution/official-job-receipts.ts) | 父修复后的真实官方 fixture 必须证明抹除/替换均无有效 delivery receipt。只看 canonical 非空、或只给最终任意内容算 digest 而 delivered，即 FAIL；未取得该断言绿灯前不算覆盖完成 |
+| A07 已自动化，v2回执 | canonical 有 payload，但 post policy `accept.content=[]` 或任意替换内容；不能给被抹除/替换的真实输出发 receipt | 同上；[official-job-receipts.ts](../../src/work-execution/official-job-receipts.ts) | 公开纯 `output.render` 的完整 canonical 投影必须与最终提交内容一致；清空/无关替换均 pending，v1回执被拒绝。真实有损 finalizer 也保持 pending，不重复调用有状态finalizer；只算最终任意内容 digest 而 delivered 即 FAIL |
 | A08 已自动化 | 正常 terminal read、带 payload 的 running `wait:true`，含默认 inline 策略下提前开始 wait | 官方 jobs fixture，`--phase jobs` | 精确 canonical payload 与真实 direct Session call/result commit 配对才 delivered；无需伪造“settled 必须早于调用” |
 | A09 已自动化 | 两个并发 read；一份消费 payload、一份成功空结果 | 同上 | 仅确实交付且提交的一方建立证明；空一方不能补造证明或互相串 receipt |
 | A10 已自动化 | no-commit、parent/PTC 子 dispatch、inline 通知、真正空输出/空 final result 的边界 | 同上 | 无 direct commit/无 payload 保守 pending；inline prose 不能冒充身份。PTC 仅覆盖公共子 dispatch seam，完整 PTC VM 未验证；“这些自动解除”即 FAIL |
@@ -125,7 +127,7 @@ prepare/check/emit 只作 P01/P02/P03 的既有入口；P04–P07 还必须由�
 
 ## G：必须实际 GUI 的矩阵
 
-验收入口保持原服务，向 LF 提供可访问的 `http://10.126.126.12:3080`。本子任务不启动或切换该服务。父应记录实际候选 SHA/profile 哈希、时间、原 URL、操作步骤、可见结果与私有截图索引。
+验收使用升级前已实际核实、用户正在使用的原 GUI 入口，同时记录真实监听和代理路径。内部健康检查地址与用户对外入口分别核实，不能从约定 IP 推定某端口可达。本子任务不启动或切换服务。父应记录实际候选 SHA/profile 哈希、时间、原 URL、操作步骤、可见结果与私有截图索引。
 
 | ID | 实际操作 | PASS / FAIL 定义 |
 | --- | --- | --- |
@@ -134,6 +136,24 @@ prepare/check/emit 只作 P01/P02/P03 的既有入口；P04–P07 还必须由�
 | G03 模型/权限/preset | 在受控会话实际选择模型/effort、检查其他会话和全局默认，验证既有会话权限及 preset | 当前会话正确、全局不污染、权限不静默降级、UI 与持久化一致 |
 | G04 产品插件与作业/A2D2 | 验证当前启用的全部直接产品及侧栏、浏览器、连接器和 A2D2；执行可控带输出 job，观察/收取/重读/完成门禁 | 真实 UI/工具事件与 A 场景语义一致。空结果/inline/PTC/丢 receipt 保守边界须如实呈现，不能以“新建一个 job”抹除旧 blocker |
 | G05 回退预案 | 仅按父授权计划，在保留新输入的前提下执行需要的恢复并复验原 GUI | 数据完整、旧 reader 已在副本证实可读、原登录和原功能可用；若未执行回退实操，只能记“计划准备完成/回退实机未验证” |
+
+## 本次发现台账
+
+下列数据结果来自私有审计副本，属于升级前准备；不表示生产数据已经迁移或服务已经切换。
+
+| 发现 | 已核实结果与后续验收要求 |
+| --- | --- |
+| 同版分发不同 API | npm rc.3 缺会话本地模型选择，官方固定源码构建具备；测试绑定提交和实际产物，不以版本号替代 |
+| 两个作业收取 P1 | 消费后失败再空读、canonical 与 presentation 分离均有真实红灯及修复后绿灯；固定在 A06/A07 |
+| 历史 V0 格式 | 旧、新 reader 共同拒绝629个 V0，其中615明确为不支持的 descriptor 版本；保留原始代文件，不能删除、手改或作为候选新增损坏统计 |
+| 旧 V4 词汇 | 旧 reader 在候选运行前已拒绝264个 V4：`job/registered` 226、`working-directory/change` 38；候选可读这264个。未来 `job/settled` 等新增必需类型仍要单独验证回退边界 |
+| 真实写迁移与 DAO | 副本实际生成193个新 V4，旧 reader 可读这些新增文件；DAO旧→新→旧逻辑摘要一致，10 tasks/146 commands/10 executions/3 sources，9909个archive/sidecar JSON通过。未引用旧blob只有语法证明，不冒称完整语义验收 |
+| 活跃复制引用竞态 | 首轮 live-copy 控制快照缺2个根引用，仅向副本补135个可达不可变blob后闭包读通。正式验收仍需停写一致性快照，不能用活跃copy当checkpoint |
+| 真实 reader 身份 | 共享 modules 的链接目标不能代表运行服务的正式reader；实际启动解析器与磁盘编译hash对上后才固定旧适配器。未取得内存module cache的限制须明示 |
+| 配置漂移 | 调查期间 live profile patch 有外部变化；最终候选必须重新保存实际控制配置并核验前后hash，不能用早期snapshot覆盖后来的设置 |
+| 官方 schema 基线 | 纯默认profile本身有4个preset诊断，保留原生exit1，候选只比较新增诊断；不能把它写成schema全通过 |
+| Cookie audience | 原HTTP backend跨版兼容，原生TLS的旧host/new https-origin不互认；Caddy终止TLS后的backend按HTTP路径验签。原浏览器仍必须G01实测 |
+| 隔离测试的 native 解析 | 第一轮统一入口发现fixture依赖隐式resolver、缺native flock映射；现显式取候选native包，清除父Host注入后仍通过 |
 
 ## 执行记录与以后升级的最短路径
 
@@ -147,8 +167,10 @@ prepare/check/emit 只作 P01/P02/P03 的既有入口；P04–P07 还必须由�
 | 配置修正后 quick | 运行标识 `upgrade-runner-quick-20261024-b`：Session 4/4、jobs 1/1 完整集成场景通过，阶段 exit 均 0，耗时分别 7354ms / 2766ms；结束 SHA/clean/build/源码冻结复核通过 |
 | 构建记录与私有权限 | 实物重算官方客户端 358 个产物，符合官方记录；quick-b 构建摘要 `8713b09a6d2204b6bf0704dd667ba2e46cc064d59b89956b5b8a6b117f88cc0a`。报告目录 0700、JSON/两份日志 0600；另一次真实预检拒绝覆盖已有报告 |
 | 单阶段与仓库不变量 | 运行标识 `upgrade-runner-repository-20261024-a`：`--phase repository` exit 0，113ms，结束冻结复核通过，未隐含 build |
-| 其余范围 | 本子任务没有重复 full、typecheck 或 build，没有运行 profile 安装/数据 reader/服务切换/原 GUI 验收；父统一检查最终整合源码。A07 的父 fixture 更新和最终交付状态仍由父报告收口 |
+| 其余范围 | 本子任务没有重复 full、typecheck 或 build，没有运行 profile 安装/数据 reader/服务切换/原 GUI 验收；父统一检查最终整合源码 |
+| 父补测 A07 | 真实官方清空/无关替换展示先红后绿；v2 projection检查与有损finalizer场景通过。6文件63项相关回归通过，类型检查和正式构建通过 |
+| 父统一 quick 复核 | 运行标识 `upgrade-parent-quick-20261024-final`：session 4/4、jobs 1完整场景通过，两个阶段约10秒，结束构建/源码冻结复核通过 |
 
-以上证据绑定各自报告的插件源码摘要。随后补写本段执行记录仅更新文档，不能把它改称已测最终发行包。A07 是父更新的第二个 P1 fixture，须以最终 fixture 真实断言及父最终合跑记录为准。
+以上证据绑定各自报告的插件源码摘要。文档补记不能替代最终发行包验证。父在第二个P1投影修复前运行的全套为109文件1246项通过，Node suites为28通过/2个既有可选项skip；投影修复后按影响范围补测，不能把旧全套结果称为最终源码全套已跑。
 
 以后升级按此顺序：冻结候选 → quick → 仅重跑失败项 → 最终源码按需 full（build 一次）→ P 的最终包/profile/数据基线 → 服务外切换 → 原 GUI 验收。不能把一次 quick、纯官方 schema 对照或配置 dump 的通过改写为“所有 live 数据迁移、空输出自动恢复和完整升级均支持”。

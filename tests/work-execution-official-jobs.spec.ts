@@ -11,8 +11,9 @@ const event = (type: string, seq: number, data: Event['data']): Event => ({ type
 const registered = (seq = 1, overrides: Record<string, unknown> = {}) => event('job/registered', seq, { jobId: job.id, owner, kind: 'bash', label: job.label, startedAt: 1000, ...overrides })
 const settled = (seq = 2, overrides: Record<string, unknown> = {}) => event('job/settled', seq, { ...registered().data, finishedAt: 1002, status: 'completed', cause: 'producer', producerReported: true, ...overrides })
 const call = (seq = 3, callId = 'read', jobId = job.id) => event('tool/call', seq, { turn: 1, step: 0, callId, name: 'job_output', arguments: JSON.stringify({ job_id: jobId }) })
-const result = (seq = 4, callId = 'read', isError = false, callSeq = seq - 1): Event => ({ ...event('tool/result', seq, { turn: 1, step: 0, message: { toolCallId: callId, isError, content: [] } }), sourceEventSeqs: [callSeq] })
-const receipt = (seq = 5, callSeq = 3, resultSeq = 4, callId = 'read', overrides: Record<string, unknown> = {}): Event => ({ ...event(OFFICIAL_JOB_RECEIPT, seq, { version: 1, owner, jobId: job.id, status: 'completed', payloadBytes: 8, contentDigest: jobResultDigest([]), callSeq, resultSeq, callId, turn: 1, step: 0, ...overrides }), ignorable: true } as Event)
+const payload = () => [{ type: 'text', text: 'evidence' }]
+const result = (seq = 4, callId = 'read', isError = false, callSeq = seq - 1): Event => ({ ...event('tool/result', seq, { turn: 1, step: 0, message: { toolCallId: callId, isError, content: payload() } }), sourceEventSeqs: [callSeq] })
+const receipt = (seq = 5, callSeq = 3, resultSeq = 4, callId = 'read', overrides: Record<string, unknown> = {}): Event => ({ ...event(OFFICIAL_JOB_RECEIPT, seq, { version: 2, owner, jobId: job.id, status: 'completed', payloadBytes: 8, contentDigest: jobResultDigest(payload()), callSeq, resultSeq, callId, turn: 1, step: 0, ...overrides }), ignorable: true } as Event)
 function runtime(events: Event[], jobs: unknown) {
   const activate = vi.fn(() => { throw Error('Observation must not activate a model') })
   const dispose = vi.fn()
@@ -84,9 +85,16 @@ it.each([
   { payloadBytes: 0 }, { payloadBytes: -1 }, { payloadBytes: 1.5 },
   { contentDigest: 'different-projection' }, { callSeq: 7 }, { resultSeq: 7 },
   { owner: 'foreign' }, { jobId: 'bash-fedcba9876543210' }, { status: 'running' },
-  { turn: 2 }, { step: 1 }, { callId: 'different-call' }, { version: 2 },
+  { turn: 2 }, { step: 1 }, { callId: 'different-call' }, { version: 1 },
 ])('rejects an unbound or non-payload receipt %j', async overrides => {
   const events = [registered(), settled(), call(), result(), receipt(5, 3, 4, 'read', overrides)]
+  expect((await runtime(events, registryOf()).host.executionFacts(owner, 'runtime', 'current')).jobs[0]!.delivery).toBe('pending')
+})
+
+it('rejects an empty committed presentation even when a v2 receipt repeats its digest', async () => {
+  const response = result()
+  response.data.message.content = []
+  const events = [registered(), settled(), call(), response, receipt(5, 3, 4, 'read', { contentDigest: jobResultDigest([]) })]
   expect((await runtime(events, registryOf()).host.executionFacts(owner, 'runtime', 'current')).jobs[0]!.delivery).toBe('pending')
 })
 

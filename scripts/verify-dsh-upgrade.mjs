@@ -250,16 +250,26 @@ async function main() {
   const isolatedHome = join(opt.reportDir, 'isolated-home')
   Object.assign(environment, {
     DSH_HOME: isolatedHome, HOME: isolatedHome, USERPROFILE: isolatedHome,
+    DSH_PROFILE: 'web', DSH_PROFILE_DIR: join(isolatedHome, 'profiles/web'), NODE_OPTIONS: '',
     XDG_CONFIG_HOME: join(isolatedHome, 'config'), XDG_STATE_HOME: join(isolatedHome, 'state'),
     XDG_CACHE_HOME: join(isolatedHome, 'cache'),
   })
+  for (const name of ['DSH_SESSION_ID', 'DSH_WEB_URL', 'DSH_SHELL']) delete environment[name]
   const report = {
     schemaVersion: 1, status: 'running', scope: 'offline-plugin-upgrade-tests', guiAcceptance: 'not-run', profileMigrationAcceptance: 'not-run',
     startedAt: new Date().toISOString(), selectedPhases: opt.selected,
     provenance: { candidate, plugin: source, node: { execPath: process.execPath, version: process.version }, fixtureTmp, unitTmp },
     provenanceId: sha(JSON.stringify({ candidate, source, node: process.execPath, version: process.version })), stages: [],
   }
-  const save = () => writeFileSync(join(opt.reportDir, 'report.json'), JSON.stringify(report, null, 2) + '\n', { mode: 0o600 })
+  const save = () => {
+    writeFileSync(join(opt.reportDir, 'report.json'), JSON.stringify(report, null, 2) + '\n', { mode: 0o600 })
+    const summary = { status: report.status ?? 'running', scope: report.scope, guiAcceptance: report.guiAcceptance,
+      profileMigrationAcceptance: report.profileMigrationAcceptance, candidate: { head: candidate.head, version: candidate.version, buildSha256: candidate.buildSha256 },
+      plugin: { head: source.head, sourceSha256: source.sourceSha256 }, node: process.version,
+      stages: report.stages.map(({ id, status, exit, durationMs, log }) => ({ id, status, exit, durationMs, log })),
+      freezeRechecked: report.freezeRechecked ?? false, error: report.error, fullReport: 'report.json' }
+    writeFileSync(join(opt.reportDir, 'summary.json'), JSON.stringify(summary, null, 2) + '\n', { mode: 0o600 })
+  }
   save()
   try {
     for (const phase of opt.selected) {

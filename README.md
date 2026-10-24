@@ -51,9 +51,9 @@ The rest of this document is the plugin's behavior contract and known limits, ke
 
 ## Installation and development
 
-Requires Node.js 22 or later, pnpm 10.26.2, and a DSH host using the 0.2.0-rc.2 API family. Session creation and handoff additionally require the host's public `sessionController.selectLocalModel` capability. A version string alone does not prove that capability is installed; hosts without it are rejected. The minimum released DSH version providing it has not yet been verified, so end-to-end compatibility with an unmodified public host is a release gate.
+Requires Node.js 22 or later and pnpm 10.26.2 for plugin development. Current development source supports the verified DSH 0.2.0-rc.2 / 0.2.1-rc.2 contracts and the unmodified official source build at [`22ddee37`](https://github.com/deepseek-ai/deepseek-harness/tree/22ddee3792402c3e70ec5f86a63c3e3e895a2f60) (`0.2.1-rc.3`, Node 24.9 or newer). Session/model and jobs integration tests exercise that exact official build; production profile activation, complete data backup and GUI acceptance remain separate deployment checks.
 
-The checked upstream [session-controller source at `687f282e`](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/api/session-controller/src/index.ts) does not define `selectLocalModel`. Session initialization compatibility is therefore an unresolved upstream release blocker, not a verified stock-host feature.
+Session initialization uses the official public `Agent.model.current/select` API, retaining the older verified `sessionController.selectLocalModel` path. The same-version npm `0.2.1-rc.3` distribution does not contain either capability and is explicitly rejected for local model initialization. A version string or metadata admission does not establish full compatibility. See the [integration evidence](docs/verification/issue-243-integrated-compat.md) and the [reusable upgrade test suite](docs/verification/dsh-upgrade-test-suite.md). Run `node scripts/verify-dsh-upgrade.mjs --help` for the frozen-candidate quick checks and individual phase reruns.
 
 Build from source:
 
@@ -187,7 +187,7 @@ reviewer:
 
 `stageAgents.consult` accepts the same candidate objects. Do not append `@medium` to a route string. Browser-created and handoff sessions install their model through the trusted host route, using session-local selection rather than DSH's default-saving picker. Repeating the same Agent registration does not change an existing session's model or effort. Probes send the currently selected effort; their result identity includes effort so a changed setting cannot reuse a different effort's result.
 
-The minimum host capability for browser-created and handoff session initialization is the public `ctx.sessionController.selectLocalModel({ sessionId, provider, model, reasoningEffort? }): Promise<{ selected: ModelSelection }>` API. It must apply selection only to that session and never save host defaults. Hosts without this method are explicitly rejected; there is no fallback to the default-saving `selectModel` or private Agent/registry mutation.
+Browser-created and handoff session initialization requires public session-local model selection: the official `Agent.model.current/select` API, or the older verified `ctx.sessionController.selectLocalModel({ sessionId, provider, model, reasoningEffort? })` API. Provider, model and explicit effort are validated before selection, and an already started Session is not initialized again. Hosts with neither capability are explicitly rejected; initialization never uses the default-saving `selectModel` or private Agent/registry mutation.
 
 Initialization is serialized per session, with independent sessions free to proceed. Agent identity is recorded only after local model installation succeeds; a failed installation leaves no identity record and can be retried, including by an already queued request. After success, repeated same-Agent initialization does not reinstall a model, preserving any manual session selection; a different Agent is rejected before installation.
 

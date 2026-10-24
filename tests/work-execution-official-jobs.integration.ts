@@ -13,7 +13,8 @@ import type { SessionId as PluginSessionId } from '@deepseek-ai/dsh-session'
 
 // Every Host implementation comes from the explicit official build. Plugin
 // imports retain their normal immutable dependencies; no install or relinking.
-const officialHead = '22ddee3792402c3e70ec5f86a63c3e3e895a2f60'
+const officialHead = process.env.DSH_OFFICIAL_HOST_COMMIT ?? '22ddee3792402c3e70ec5f86a63c3e3e895a2f60'
+const officialVersion = process.env.DSH_OFFICIAL_HOST_VERSION ?? '0.2.1-rc.3'
 function deferred<T>() {
   let resolve!: (value: T) => void
   const promise = new Promise<T>(fulfill => { resolve = fulfill })
@@ -21,11 +22,13 @@ function deferred<T>() {
 }
 async function officialModules() {
   const root = process.env.DSH_OFFICIAL_HOST_ROOT
-  if (!root) throw Error('DSH_OFFICIAL_HOST_ROOT must name the built official 0.2.1-rc.3 checkout')
+  if (!root) throw Error('DSH_OFFICIAL_HOST_ROOT must name the built official checkout')
+  expect(officialHead).toMatch(/^[0-9a-f]{40}$/u)
   expect(execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()).toBe(officialHead)
+  expect(execFileSync('git', ['-C', root, 'status', '--porcelain'], { encoding: 'utf8' }).trim()).toBe('')
   const load = async (directory: string) => {
     const manifest = JSON.parse(await readFile(join(root, directory, 'package.json'), 'utf8'))
-    expect(manifest.version).toBe('0.2.1-rc.3')
+    expect(manifest.version).toBe(officialVersion)
     return import(/* @vite-ignore */ pathToFileURL(join(root, directory, 'lib/index.js')).href)
   }
   const requireOfficial = createRequire(join(root, 'packages/jobs/jobs-local/package.json'))
@@ -94,10 +97,10 @@ it('uses built official registry, job_output, committed Session results and cold
     expect(typeof agent.session.appendIgnorable).toBe('undefined')
     const runtime = new RuntimeHost(ctx as PluginContext)
     const facts = () => runtime.executionFacts(agent.id as PluginSessionId, 'official-fixture', 'current')
-    const produce = (owner?: string, text = 'stream evidence\n') => {
+    const produce = (owner?: string, text = 'stream evidence\n', outputLimitBytes?: number) => {
       const done = deferred<any>()
       producers.push(done)
-      const id = ctx.jobs.start({ kind: 'bash', label: 'official deterministic checks', ...(owner ? { owner } : {}), run(job: any) {
+      const id = ctx.jobs.start({ kind: 'bash', label: 'official deterministic checks', ...(owner ? { owner } : {}), ...(outputLimitBytes === undefined ? {} : { outputLimitBytes }), run(job: any) {
         job.append(text)
         return { done: done.promise, cancel() { done.resolve({ status: 'killed' }) } }
       } })
@@ -160,6 +163,45 @@ it('uses built official registry, job_output, committed Session results and cold
     expect(read.mock.results.at(-1)!.value).toMatchObject({ chunks: [] })
     expect(read.mock.results.at(-1)!.value).not.toHaveProperty('result')
     expect((await facts()).jobs.find(job => job.id === consumed.id)!.delivery).toBe('pending')
+
+    for (const [kind, content] of [
+      ['empty', []],
+      ['replacement', [{ type: 'text', text: 'policy replacement with no job payload' }]],
+    ] as const) {
+      const hidden = produce(agent.id)
+      hidden.done.resolve({ status: 'completed', result: 'canonical evidence must reach the committed result' })
+      await ctx.jobs.wait(hidden.id, 1000, agent.id)
+      const callId = `policy-${kind}`
+      let canonicalText: string | undefined
+      const replace = ctx.on('tools/post-execute', async (exec: any, _result: any, next: any) =>
+        exec.callId === callId ? { kind: 'accept', content: [...content] } : next())
+      const capture = ctx.on('tools/result', (exec: any, result: any) => {
+        if (exec.callId === callId) canonicalText = result.value?.text
+      })
+      await runRead(hidden.id, callId)
+      replace(); capture()
+      expect(canonicalText).toContain('canonical evidence must reach the committed result')
+      using committed = await ctx.sessionQuery.observeSession(agent.id)
+      const row = committed.events.findLast((event: any) => event.type === 'tool/result' && event.data.message.toolCallId === callId)
+      expect(row.data.message).toMatchObject({ isError: false, content: [...content] })
+      expect((await facts()).jobs.find(job => job.id === hidden.id)!.delivery).toBe('pending')
+    }
+
+    const limited = produce(agent.id, 'payload '.repeat(256), 128)
+    limited.done.resolve({ status: 'completed', result: 'final evidence' })
+    await ctx.jobs.wait(limited.id, 1000, agent.id)
+    let fullText = '', presented = ''
+    const captureLimited = ctx.on('tools/result', (exec: any, result: any) => {
+      if (exec.callId === 'limited-presentation') {
+        fullText = result.value.text
+        presented = result.content.map((block: any) => block.text ?? '').join('')
+      }
+    })
+    await runRead(limited.id, 'limited-presentation')
+    captureLimited()
+    expect(Buffer.byteLength(fullText)).toBeGreaterThan(128)
+    expect(Buffer.byteLength(presented)).toBeLessThanOrEqual(128)
+    expect((await facts()).jobs.find(job => job.id === limited.id)!.delivery).toBe('pending')
 
     const rawCall = (id: string, callId: string, signal = new AbortController().signal) => ctx.tools.execute({
       agent, signal, calls: [{ type: 'tool-call', id: m.llm.ToolCallId(callId), name: 'job_output', arguments: JSON.stringify({ job_id: id }) }],
@@ -318,7 +360,7 @@ it('uses built official registry, job_output, committed Session results and cold
     expect(legacy.jobs).toEqual([expect.objectContaining({ id: 'bash-1', registryEpoch: 'old-fork', availability: 'lost', delivery: 'unknown' })])
     expect(settleUncollectedJob(legacy.jobs[0]!)).toHaveProperty('reminder')
     expect(settleUncollectedJob(legacy.jobs[0]!)).not.toHaveProperty('blocker')
-    expect(adapter.requests).toHaveLength(before + 25)
+    expect(adapter.requests).toHaveLength(before + 31)
 
     const inlineCtx = await mount(true, 2048)
     const inlineAdapter = new ScriptedAdapter()

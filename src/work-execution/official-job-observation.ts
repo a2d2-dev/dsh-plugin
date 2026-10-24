@@ -55,7 +55,7 @@ export function officialJobJournal(events: readonly OfficialJobEvent[], owner: S
       const call = calls.get(data.callSeq)
       const result = results.get(data.resultSeq)
       const record = jobs.get(data.jobId)
-      if (data.version !== 1 || data.owner !== owner || !record || record.settledSeq === undefined
+      if (data.version !== 2 || data.owner !== owner || !record || record.settledSeq === undefined
         || data.status !== record.job.status || !terminal(data.status)
         || !Number.isSafeInteger(data.payloadBytes) || data.payloadBytes <= 0
         || !call || !result || call.seq >= result.seq || result.seq >= event.seq
@@ -65,6 +65,7 @@ export function officialJobJournal(events: readonly OfficialJobEvent[], owner: S
         || call.data.turn !== data.turn || result.data.turn !== data.turn
         || call.data.step !== data.step || result.data.step !== data.step
         || result.data.message?.isError !== false || result.data.error !== undefined
+        || !Array.isArray(result.data.message.content) || result.data.message.content.length === 0
         || data.contentDigest !== jobResultDigest(result.data.message.content)) continue
       record.delivered = true
     }

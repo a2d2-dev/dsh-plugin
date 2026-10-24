@@ -30,9 +30,17 @@ Tests 1 failed (1)
 
 红灯之前已断言真实首读后重复 read 为 `chunks: []` 且没有 `result`；失败点恰是该无 payload 重复读取错误解除门禁，不是环境或模块装配错误。
 
+## 第二轮审查：canonical 与展示投影必须对应
+
+`2a6e519` 仍有另一个可达窗口：官方 post-execute 可合法返回 `{ kind: 'accept', content: [] }` 或任意替换展示，而保留非空 canonical `value.text`。此前只比较两处最终 content 的摘要，空展示也能产生回执。
+
+父会话先加入真实官方“清空展示”和“替换成无关文本”场景，使用相同官方测试命令运行，`.local/tmp/presentation-red.log` 明确失败：`expected delivered to be pending`，断言同时确认 canonical 有实际输出、已提交 result 成功且展示确为空。修复使用当前调用快照中工具公开、纯的 `output.render(args, value)` 重建 canonical 投影，必须与最终 content 完全一致且非空，才进入回执候选；不再次调用有状态的 finalizer，也不解析自然语言。
+
+加强后的回执为 **version 2**，冷读明确拒绝缺少该证明的 v1；空 content 即使伪配相同摘要也被拒绝。`.local/tmp/presentation-green.log` 中两种真实策略替换场景通过，`.local/tmp/presentation-unit.log` 为6文件63项通过；后续 `.local/tmp/presentation-final.log` 加入官方真实 `outputLimitBytes:128` 有损 finalizer，完整场景通过，类型检查与正式构建也通过。此有损场景保守 pending，未把输出截断伪装完整交付。
+
 ## 修复后的结构证明
 
-[receipt hook](../../src/work-execution/official-job-receipts.ts) 只接受 direct `job_output` 的最终公开 canonical outcome。必须成功、无 error、无 parent，canonical `job.id` 与精确 JSON arguments 的 `job_id` 相同，canonical 状态为 completed/failed/killed，且 canonical `text` 字段非空。这里仅检查公开字段是否存在 payload；不解析 text、状态行、summary、标签或自然语言证明输出。
+[receipt hook](../../src/work-execution/official-job-receipts.ts) 只接受 direct `job_output` 的最终公开 canonical outcome。必须成功、无 error、无 parent，canonical `job.id` 与精确 JSON arguments 的 `job_id` 相同，canonical 状态为 completed/failed/killed，且 canonical `text` 字段非空。随后通过本次调用快照的公开 `ToolDefinition.output.render` 重建投影，并与最终 content 精确核对。这里仅比较结构与完整不透明 payload，不解析 text、状态行、summary、标签或自然语言证明输出。
 
 随后等待同一 Session 的真正 `tool/result` 接受事件。必须匹配 callId、turn、step，成功且无 error，`sourceEventSeqs` 引用精确 call seq，最终 content 的 SHA-256 摘要与 tools/result 一致。只有这些条件成立才排队追加 `plugin:a2d2/official-job-receipt`。官方禁止 publication 内重入 append，所以追加在 microtask 进行；追加失败只记录警告，不生成替代证明。
 
@@ -44,6 +52,7 @@ receipt 保存 version、owner、jobId、终态、canonical payload 字节数，
 
 ## 能力限制与准确恢复
 
+- **被策略替换或有损截断的展示**：即使 canonical 有 payload，最终展示也必须与公开纯 renderer 的完整投影相同。清空、无关文本替换或有损 finalizer 均不发v2回执；这不表示截断后的文字不存在，而是没有完整 payload→已提交内容的证明。该边界已用真实 `outputLimitBytes` 场景验证；不解析截断提示或文件路径来补造证明。
 - **真正空输出、无 final result，或空字符串 final result**：公开 canonical `{text:'',job:terminal}` 与“此前已消费后，重复读到空”不可区分。因此无 payload 不发 receipt，live 原作业仍 pending。fixture 明确覆盖真正空结果的 `wait:true`。本片不宣称这类 wait 自动解除，也不把它称为交付。需要宿主提供更强结构化消费事实，或操作者按以下 loss 流程收口，才能避免该边界。
 - **失败、取消、丢失成功提交、插件启用前已消费或 receipt 丢失**：仅重复 `job_output` 无法恢复一次性 final result。新作业可补充独立证据，但不会清除旧作业 blocker。
 - **PTC/无日志调用**：公开工具执行即使成功返回 canonical payload，没有匹配 direct Session call/result commit 也不交付。嵌套 parent outcome 不发 direct receipt。本片验证真实公共 PTC 子 dispatch pipeline seam，未运行完整 PTC 语言运行时/VM，不宣称支持 PTC delivery receipt。

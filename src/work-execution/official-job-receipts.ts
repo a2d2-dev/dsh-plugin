@@ -31,6 +31,16 @@ export function installOfficialJobReceipts(ctx: Context, appendRecord: AppendRec
     let args: any
     try { args = JSON.parse(call.event.data.arguments) } catch { return }
     if (args?.job_id !== job.id) return
+    // Replay the public pure output projection, never the stateful finalizer.
+    // A post-policy content replacement can retain value without delivering it.
+    // Lossy finalization cannot prove the complete payload and stays pending.
+    const tools = ctx.get('tools') as unknown as { get(name: string, scope?: unknown, toolSet?: unknown): { output?: { render(args: unknown, value: unknown): unknown } } | undefined } | undefined
+    const definition = tools?.get(exec.name, exec.agent, exec.toolSet)
+    if (typeof definition?.output?.render !== 'function') return
+    try {
+      const projection = definition.output.render(exec.arguments, value)
+      if (!Array.isArray(projection) || projection.length === 0 || jobResultDigest(projection) !== jobResultDigest(result.content)) return
+    } catch { return }
     call.candidate = { jobId: job.id, status: job.status, payloadBytes: Buffer.byteLength(value.text), contentDigest: jobResultDigest(result.content) }
   })
   on('session/event', (session, event: OfficialJobEvent) => {
@@ -47,7 +57,7 @@ export function installOfficialJobReceipts(ctx: Context, appendRecord: AppendRec
         || !event.sourceEventSeqs?.includes(call.event.seq)
         || call.event.data.turn !== event.data.turn || call.event.data.step !== event.data.step
         || call.candidate.contentDigest !== jobResultDigest(event.data.message.content)) return
-      const receipt = { version: 1, owner: session.id, ...call.candidate, callId,
+      const receipt = { version: 2, owner: session.id, ...call.candidate, callId,
         callSeq: call.event.seq, resultSeq: event.seq, turn: event.data.turn, step: event.data.step }
       // Session publication forbids reentrant appends. Receipt eligibility is
       // the accepted Session commit; persistence retains both in log order.

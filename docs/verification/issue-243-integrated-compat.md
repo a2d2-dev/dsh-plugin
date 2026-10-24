@@ -27,8 +27,14 @@
 
 旧生命周期测试的超时是故障注入仍挂在已不使用的 `SessionController.create`，导致 `reached` 门闩永不释放。改为挂到真实 `resolveAgent` 恢复并flush的边界后，原取消、settlement、禁止晚写和保留/移除fixture断言全部保持并通过，没有增加超时或替换真实Host结果。
 
+## 独立审查后的 P1 修复
+
+早期整合测试未覆盖官方消费 cursor 与最终 Session 提交之间的失败窗口，不能把其通过视为最终作业交付验收。独立复核发现：首读已消费终态输出后，post-execute 仍可失败或取消；随后成功的空读取没有恢复输出，旧 event-only 算法却误判 delivered。
+
+`2a6e519` 先在真实官方链路取得红灯，再加入公开 `tools/result` 最终 canonical payload 与精确成功 Session result 提交的配对回执，通过公开 `appendPluginRecord` 保存；冷读取重新检查 owner、call/result/receipt 顺序、sourceEventSeqs、callId、turn/step 和最终内容摘要。真实扩展集成与6文件62项相关回归已通过，见 [jobs修复报告](issue-243-official-jobs.md)。后续最终合跑记录单独补充，不能把先前的1095项冒充修复后测试数。
+
 ## 限制与交付边界
 
-- jobs通过 `settled < direct job_output call < successful result` 的已提交事件证明收取，running开始的wait不能单凭随后terminal result建立该证明，需终态后再次直接读取。缺少原生settled日志的故障没有伪造交付；结果内容理解与业务验收仍是独立责任。
+- 只有有 payload 的成功直接读取与对应 Session commit 共同建立回执，正常带 payload 的 running wait 首次即可记录。真正空结果、已提交 inline、PTC、失败消费或丢失 receipt 无法靠空重复证明交付，live 保守 pending。仅重新创建作业不会清除旧 blocker；操作者须在保留/补证及独立验收后移除旧终态 registry 记录，或按计划结束旧 registry，再由既定 lost 提醒政策处理。结果理解与业务验收仍是独立责任。
 - 明确缺少公开能力的Host会拒绝；`engines.dsh` 的同版允许范围不意味着每种发行构建都有相同API。
 - 此处的离线测试和构建不替代最终纯官方profile激活、全量真实数据读取/回退、原GUI登录及旧会话/插件验收。当前服务与数据尚未切换。
