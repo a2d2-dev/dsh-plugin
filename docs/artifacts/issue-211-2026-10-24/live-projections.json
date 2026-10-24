@@ -1,0 +1,38 @@
+{
+  "observedAt": "2026-10-24T07:02:29.402Z",
+  "origin": "https://dsh.e5box.a2d2.dev",
+  "plugins": [
+    {
+      "enabled": true,
+      "entryId": "include:a2d2-work-continuation-217-d975e9c",
+      "fiberPhase": "active",
+      "moduleName": "file:///data/_ssd2t/dsh/home/profiles/web/node_modules/@a2d2/dsh-a2d2/lib/session-names-211-2926089/work-plugin.js"
+    },
+    {
+      "enabled": true,
+      "entryId": "include:a2d2-session-title-live-211-c6b06a3",
+      "fiberPhase": "active",
+      "moduleName": "file:///data/_ssd2t/dsh/home/profiles/web/node_modules/@a2d2/dsh-a2d2/lib/session-title-live-211-c6b06a3/session-title-live.js"
+    }
+  ],
+  "projections": [
+    {
+      "asOfSeq": 2449,
+      "sessionId": "session-6d3435f0-9413-403e-8542-faf9a36a8570",
+      "title": "#211 · 会话 1 · 会话命名：关联任务并携带阶梯/序列编号，",
+      "utf8Bytes": 78
+    },
+    {
+      "asOfSeq": 812,
+      "sessionId": "session-ac4ee728-47ca-45dd-8ae6-16642452b6ee",
+      "title": "#137 · 会话 1 · [v4/01] Project／仓库链接接入、真实视图与 PR",
+      "utf8Bytes": 77
+    },
+    {
+      "asOfSeq": 1321,
+      "sessionId": "session-ba1cd580-b994-4fca-aa9c-a762306bb7d7",
+      "title": "#137 · 会话 2 · [v4/01] Project／仓库链接接入、真实视图与 PR",
+      "utf8Bytes": 77
+    }
+  ]
+}
