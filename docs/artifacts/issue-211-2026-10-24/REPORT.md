@@ -2,7 +2,7 @@
 
 ## 目标与结果
 
-继续完成 [Issue #211](https://github.com/a2d2-dev/dsh-plugin/issues/211) 的交付，使已实现的任务会话命名在当前运行页面实际生效，并更新 [DSH A²D² Project](https://github.com/orgs/a2d2-dev/projects/1) 的原生状态。此前“只开 PR、不合并部署”的收口不再作为当前约定。
+继续完成 [Issue #211](https://github.com/a2d2-dev/dsh-plugin/issues/211) 的交付，使已实现的任务会话命名在当前运行页面实际生效，并更新 [DSH A²D² Project](https://github.com/orgs/a2d2-dev/projects/1) 的原生状态。此前仅开PR、尚未实际生效属于交付缺项，不能据此宣称整个任务完成，也不能把未部署表述成用户约定。
 
 **结果：代码已合并，命名已在线加载，当前真实会话及既有接续历史的名称已自动修复，整页刷新后仍保持。** 宿主 PID 一直为 `3451716`，没有重启进程、恢复数据快照或重建现有执行对象。
 
