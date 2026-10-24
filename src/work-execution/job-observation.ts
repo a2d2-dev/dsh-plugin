@@ -1,5 +1,7 @@
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ExecutionJob } from './observation.ts'
+import { isOfficialJob, officialJobJournal } from './official-job-observation.ts'
+import type { OfficialJobEvent, OfficialJobRecord } from './official-job-observation.ts'
 
 /** Structural face of the formal host #142 contract; no private registry access. */
 export interface PublicJobView {
@@ -71,21 +73,31 @@ function project(record: PublicJobObservation, owner: SessionId, runtimeId: stri
     persistence: live ? 'process-local' : 'session-journal', availability: live ? 'live' : record.terminalResult === 'collected' ? 'history' : 'lost' }
 }
 
+function projectOfficial(record: OfficialJobRecord, owner: SessionId, runtimeId: string, live: boolean): ExecutionJob {
+  const job = record.job
+  const needsRead = !record.delivered && !['running', 'stopping'].includes(job.status)
+  const detail = [job.detail, ...(needsRead ? ['终态读取交付尚无持久证明；请在作业终态后再次调用 job_output，成功提交结果后可解除等待。'] : [])].filter(Boolean).join('；')
+  return { id: job.id, owner: { runtimeId, sessionId: owner }, kind: job.kind, label: job.label, status: job.status,
+    ...(detail ? { detail } : {}), result: 'unknown', delivery: record.delivered ? 'delivered' : live ? 'pending' : 'unknown', acceptance: 'unassessed',
+    persistence: live ? 'process-local' : 'session-journal', availability: live ? 'live' : record.delivered ? 'history' : 'lost' }
+}
+
 /** This face intentionally has no read/readAt method: an observation cannot collect. */
-export function observeJobs(registry: PublicJobRegistry | undefined, owner: SessionId, runtimeId: string, journal: readonly PublicJobObservation[] = []): { jobs: ExecutionJob[]; capability: 'available' | 'unavailable' | 'disabled' } {
+export function observeJobs(registry: PublicJobRegistry | undefined, owner: SessionId, runtimeId: string, journal: readonly PublicJobObservation[] = [], officialEvents: readonly OfficialJobEvent[] = []): { jobs: ExecutionJob[]; capability: 'available' | 'unavailable' | 'disabled' } {
   const rows = new Map<string, ExecutionJob>()
   for (const record of journal) {
     if (record.job.owner !== owner) continue
     rows.set(key(record), project(record, owner, runtimeId, false))
   }
+  const officialJournal = officialJobJournal(officialEvents, owner)
+  for (const [id, record] of officialJournal) rows.set(JSON.stringify(['official', id]), projectOfficial(record, owner, runtimeId, false))
   const official = !registry?.observe && typeof registry?.get === 'function' && typeof registry.events?.subscribe === 'function'
   let identitiesVerified = true
   for (const job of registry?.list(owner).filter(job => job.owner === owner) ?? []) {
     if (official && isOfficialJob(job)) {
       const observed = registry!.get!(job.id, owner)
       if (observed.id !== job.id || observed.owner !== owner || !isOfficialJob(observed)) throw new Error('Host job observation identity changed')
-      rows.set(JSON.stringify(['official', observed.id]), { id: observed.id, owner: { runtimeId, sessionId: owner }, kind: observed.kind, label: observed.label, status: observed.status,
-        ...(observed.detail ? { detail: observed.detail } : {}), result: 'unknown', delivery: 'pending', acceptance: 'unassessed', persistence: 'process-local', availability: 'live' })
+      rows.set(JSON.stringify(['official', observed.id]), projectOfficial({ job: observed, delivered: officialJournal.get(observed.id)?.delivered ?? false }, owner, runtimeId, true))
       continue
     }
     if (!registry?.observe) {
@@ -99,9 +111,4 @@ export function observeJobs(registry: PublicJobRegistry | undefined, owner: Sess
     rows.set(key(observed), project(observed, owner, runtimeId, true))
   }
   return { jobs: [...rows.values()], capability: !registry ? 'disabled' : registry.observe || (official && identitiesVerified) ? 'available' : 'unavailable' }
-}
-
-/** Official LocalJobRegistry uses kind + 16 UUID hex characters, never ordinals. */
-function isOfficialJob(job: PublicJobView): boolean {
-  return job.id.startsWith(`${job.kind}-`) && /^[0-9a-f]{16}$/u.test(job.id.slice(job.kind.length + 1))
 }
