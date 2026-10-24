@@ -39,18 +39,23 @@ export class TaskRuntimeService extends Service {
     this.runner = new TaskRunner(ctx, new RuntimeStore(root), new RuntimeHost(ctx), options)
     ctx.a2d2.installRuntimeExecutionGuard((agent, messages) => this.runner.allowed(agent, messages))
     ctx.effect(() => {
-      let recovering = false
-      const tick = async () => {
-        if (recovering) return
-        recovering = true
-        try { await this.runner.recover() }
-        catch (error) { ctx.logger.warn(`task-runtime: ${String(error)}`) }
-        finally { recovering = false }
+      let recovering: Promise<void> | undefined
+      let stopped = false
+      const tick = () => {
+        if (stopped || recovering) return
+        recovering = this.runner.recover()
+          .catch(error => { ctx.logger.warn(`task-runtime: ${String(error)}`) })
+          .finally(() => { recovering = undefined })
       }
-      void tick()
-      const timer = setInterval(() => { void tick() }, pollMs)
+      tick()
+      const timer = setInterval(tick, pollMs)
       timer.unref()
-      return async () => { clearInterval(timer); await this.runner.close() }
+      return async () => {
+        stopped = true
+        clearInterval(timer)
+        await recovering
+        await this.runner.close()
+      }
     }, 'task runtime recovery loop')
   }
 }
