@@ -15,6 +15,9 @@ export interface PublicJobObservation {
 export interface PublicJobRegistry {
   list(owner: SessionId): PublicJobView[]
   observe?(id: string, owner: SessionId): PublicJobObservation
+  /** Official DSH status projection; neither method consumes output. */
+  get?(id: string, owner: SessionId): PublicJobView
+  events?: { subscribe: (...args: never[]) => unknown }
 }
 const key = (record: PublicJobObservation) => JSON.stringify([record.registryEpoch, record.instanceId, record.job.id])
 /** A reminder is bounded by code points, not UTF-16 units; see lostJobReminder. */
@@ -75,8 +78,18 @@ export function observeJobs(registry: PublicJobRegistry | undefined, owner: Sess
     if (record.job.owner !== owner) continue
     rows.set(key(record), project(record, owner, runtimeId, false))
   }
+  const official = !registry?.observe && typeof registry?.get === 'function' && typeof registry.events?.subscribe === 'function'
+  let identitiesVerified = true
   for (const job of registry?.list(owner).filter(job => job.owner === owner) ?? []) {
+    if (official && isOfficialJob(job)) {
+      const observed = registry!.get!(job.id, owner)
+      if (observed.id !== job.id || observed.owner !== owner || !isOfficialJob(observed)) throw new Error('Host job observation identity changed')
+      rows.set(JSON.stringify(['official', observed.id]), { id: observed.id, owner: { runtimeId, sessionId: owner }, kind: observed.kind, label: observed.label, status: observed.status,
+        ...(observed.detail ? { detail: observed.detail } : {}), result: 'unknown', delivery: 'pending', acceptance: 'unassessed', persistence: 'process-local', availability: 'live' })
+      continue
+    }
     if (!registry?.observe) {
+      identitiesVerified = false
       rows.set(JSON.stringify(['unknown', job.id]), { id: job.id, owner: { runtimeId, sessionId: owner }, kind: job.kind, label: job.label, status: job.status,
         ...(job.detail ? { detail: job.detail } : {}), result: 'unknown', delivery: 'unknown', acceptance: 'unassessed', persistence: 'process-local', availability: 'live' })
       continue
@@ -85,5 +98,10 @@ export function observeJobs(registry: PublicJobRegistry | undefined, owner: Sess
     if (observed.job.id !== job.id) throw new Error('Host job observation identity changed')
     rows.set(key(observed), project(observed, owner, runtimeId, true))
   }
-  return { jobs: [...rows.values()], capability: !registry ? 'disabled' : registry.observe ? 'available' : 'unavailable' }
+  return { jobs: [...rows.values()], capability: !registry ? 'disabled' : registry.observe || (official && identitiesVerified) ? 'available' : 'unavailable' }
+}
+
+/** Official LocalJobRegistry uses kind + 16 UUID hex characters, never ordinals. */
+function isOfficialJob(job: PublicJobView): boolean {
+  return job.id.startsWith(`${job.kind}-`) && /^[0-9a-f]{16}$/u.test(job.id.slice(job.kind.length + 1))
 }
