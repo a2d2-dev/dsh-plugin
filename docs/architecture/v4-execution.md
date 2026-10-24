@@ -91,6 +91,14 @@ observe(id, caller): {
 
 数据走向：权威工作存储 → 明确观察范围 → 宿主公开只读事实 → graph → Issue／原生聊天。查询不执行 collect、不启动或接管会话。
 
+### 接续后查看当前处理会话
+
+原生聊天中的“进入当前处理会话”调用 `WorkPanelController.openCurrentTask(ref, signal)`，每次点击重新查询 `task.detail`。导航只使用响应的 `execution.session`，校验响应 Task 与 execution 的完整 TaskRef、实际 `actual` 和 session runtime 一致后，调用原生会话导航。`execution.state` 描述执行状态，不是查看资格：failed 的已创建当前会话仍可查看；打开不会发送 command、恢复执行或改变 owner/epoch，也不会回退到 retired 会话。
+
+挂载生命周期取消、后续点击替代读取及面板导航代次变化会丢弃迟到成功响应。读取失败由现有原生入口呈现错误。没有当前执行或无法证明实际会话身份时拒绝进入。自动启动入口的 `currentSession()` 状态筛选不属于这个显式查看入口，本次保持其现有启动行为。
+
+验证命令：`TMPDIR="$PWD/.local/tmp" corepack pnpm exec vitest run tests/client/session-handoff-entry.spec.ts`。#225 在真实控制器入口已记录 failed 误拒绝的红测及绿测；GUI 截图、部署与原任务点击由父 #223 验证，控制器测试不替代运行实例验收。
+
 ### 准备接续与失败重试
 
 操作沿用 `task.continue`。固定 operation 与 successor 先保留，准备不修改当前入口。`maintain` 等当前 idle，取得 source maintenance 并 flush；观察相关执行者，再对其 live idle Agent 取得 maintenance 并逐一 flush，最后重读公开事实。如果获取锁时出现新的相关 live 执行者，先补锁与 flush 再重读。body 已在这一持久屏障内，禁止再次调用 settle/whenIdle/runMaintenance 造成嵌套等待。pending/unknown 拒绝 body，释放维护窗口，让原生工具继续结算。settled 才进入已有 take；失败重试复用原 operation/successor，不另建入口。不可达作业只提醒，不计入这里的 pending/unknown。

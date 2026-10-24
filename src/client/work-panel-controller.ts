@@ -865,8 +865,7 @@ export class WorkPanelController {
       const execution = detail.execution
       if (detail.task?.id !== ref.taskId || detail.task.projectId !== ref.projectId || !execution?.actual
         || execution.ref.taskId !== ref.taskId || execution.ref.projectId !== ref.projectId
-        || execution.actual.runtimeId !== execution.session.runtimeId
-        || !['ready', 'running', 'waiting', 'paused'].includes(execution.state)) throw Error('当前处理会话暂不可进入，请稍后重试或查看工作详情。')
+        || execution.actual.runtimeId !== execution.session.runtimeId) throw Error('当前处理会话暂不可进入，请稍后重试或查看工作详情。')
       this.openSession(execution.session)
     } catch (error) { if (!abort.signal.aborted) throw error }
     finally { signal?.removeEventListener('abort', cancel); if (this.currentTaskRead === abort) this.currentTaskRead = undefined }
