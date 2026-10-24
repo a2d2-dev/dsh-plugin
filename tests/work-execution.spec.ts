@@ -47,7 +47,8 @@ it.each(['wait', 'pause'] as const)('accepts a real model self-%s before applyin
   expect(agent.session.snapshotEvents()).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'user/message', data: expect.objectContaining({ id: native.id }) })]))
   const fence = { ref: h.ref, executionId: started.execution.id, owner: started.execution.owner, epoch: started.execution.epoch }
   expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { state: action === 'wait' ? 'waiting' : 'paused', epoch: 1 } })
-  expect(await h.app.execute({ type: 'task.control', commandId: 'resume-tool-wait', ...fence, action: 'resume', text: 'Use the accepted answer' }, operator)).toMatchObject({ status: 'completed', execution: { state: 'ready' } })
+  expect(await h.app.execute({ type: 'task.control', commandId: 'resume-tool-wait', ...fence, action: 'resume', text: 'Use the accepted answer' }, operator)).toMatchObject({ status: 'completed', execution: { control: { action: 'resume' } } })
+  await vi.waitFor(async () => expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { state: 'ready', control: { action: 'resume', status: 'applied' } } }))
   await fixtures.run(() => agent.whenIdle())
   expect(h.model.requests).toHaveLength(3)
 })
@@ -371,8 +372,12 @@ it('explicitly reuses a compatible nonempty related Session while review associa
     session: { runtimeId: 'runtime', sessionId: id }, agentId: h.agentId,
     agentPreset: 'contract', model: { provider: 'contract', model: 'default' }, permissionPreset: 'workspace-write' }
   await h.app.execute({ type: 'task.associate-session', commandId: 'related', ref: h.ref, expectedVersion: 1, session: command.session, purpose: 'related' }, operator)
+  const associated = await fixtures.run(() => h.ctx.sessionController.inspect(id))
+  expect(associated.meta).toEqual(before.meta)
+  expect(associated.events.slice(0, before.events.length)).toEqual(before.events)
+  expect(associated.events.slice(before.events.length)).toMatchObject([{ type: 'session/title', data: { title: `T:${h.ref.taskId.replaceAll('-', '').slice(0, 8)} · 关联 1 · First` } }])
   expect(await h.app.execute({ ...command, commandId: 'mismatched-model', model: { provider: 'contract', model: 'selected' } }, operator)).toMatchObject({ status: 'failed', error: { code: 'incompatible-session' } })
-  expect(await fixtures.run(() => h.ctx.sessionController.inspect(id))).toEqual(before)
+  expect(await fixtures.run(() => h.ctx.sessionController.inspect(id))).toEqual(associated)
   const result = await h.app.execute(command, operator)
   expect(result, JSON.stringify(result)).toMatchObject({ status: 'completed', execution: { session: command.session, sessionMode: 'reuse', actual: { model: 'default' } } })
   await fixtures.run(() => agent.whenIdle())

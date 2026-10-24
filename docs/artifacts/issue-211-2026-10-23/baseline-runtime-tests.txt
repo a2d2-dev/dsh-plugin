@@ -1,0 +1,23 @@
+
+ RUN  v4.1.11 /data/src/github.com/a2d2-dev/dsh-plugin.worktrees/issue-211-baseline
+
+ ✓ tests/task-runtime.spec.ts (33 tests) 10736ms
+     ✓ handles initial permissions on a cold started preset-less successor without widening silently  627ms
+     ✓ handles changed permissions on a cold started preset-less successor without widening silently  490ms
+     ✓ handles ambiguous permissions on a cold started preset-less successor without widening silently  346ms
+     ✓ recovers a legacy blank successor at take (cold=false) through public preset selection  309ms
+     ✓ recovers a legacy blank successor at create (cold=true) through public preset selection  486ms
+     ✓ recovers a legacy blank successor at take (cold=true) through public preset selection  458ms
+     ✓ recovers a legacy blank successor at deliver (cold=true) through public preset selection  378ms
+     ✓ preserves a started conflicting successor and provides an explicit fresh-session recovery  343ms
+     ✓ creates successors and subtasks through real preset setup with workspace-write permissions  353ms
+     ✓ creates successors and subtasks through real preset setup with custom permissions  357ms
+     ✓ wakes a persisted unconsumed handoff after reconstruction without adding a second model message  338ms
+     ✓ durably accepts an event while successor creation holds the transition lock longer than its timeout  2556ms
+     ✓ performs two handoffs, preserves workspace/model initialization, routes an in-handoff event and fences both old sessions  410ms
+
+ Test Files  1 passed (1)
+      Tests  33 passed (33)
+   Start at  08:47:52
+   Duration  12.27s (transform 701ms, setup 0ms, import 1.30s, tests 10.74s, environment 0ms)
+

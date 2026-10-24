@@ -91,6 +91,8 @@ it.each(['material-request', 'successor-create', 'source-take', 'source-seal', '
   expect(await fixtures.run(() => restored.ctx.sessionPersistence.list())).toHaveLength(2)
   const sourceLog = await fixtures.run(() => restored.ctx.sessionController.inspect(SessionId(operation.source.sessionId)))
   const successorLog = await fixtures.run(() => restored.ctx.sessionController.inspect(SessionId(operation.successor.sessionId)))
+  expect(successorLog.events.findLast(event => event.type === 'session/title')?.data.title).toBe(`T:${h.ref.taskId.replaceAll('-', '').slice(0, 8)} · 会话 2 · Continue work`)
+  expect(sourceLog.events.findLast(event => event.type === 'session/title')?.data.title).toBe(`T:${h.ref.taskId.replaceAll('-', '').slice(0, 8)} · 会话 1 · Continue work`)
   expect(sourceLog.events.filter(event => event.type === 'user/message' && event.data.id === operation.materialRequestId)).toHaveLength(1)
   expect(successorLog.events.filter(event => event.type === 'user/message' && event.data.id === operation.kickoffId)).toHaveLength(1)
   const kickoff = h.model.requests.concat(restored.model.requests).find(request => request.messages.some(message => message.id === operation.kickoffId))!
@@ -258,6 +260,11 @@ it('hands the same Task to two real successor Sessions with source-authored deci
     await fixtures.run(() => h.ctx.agents.get(SessionId(execution.session.sessionId))!.whenIdle())
     expect(execution.continuation?.material).toMatchObject(material)
     const inspection = await fixtures.run(() => h.ctx.sessionController.inspect(SessionId(execution.session.sessionId)))
+    const title = inspection.events.findLast(event => event.type === 'session/title')!
+    expect(title.data.title).toBe(`T:${h.ref.taskId.replaceAll('-', '').slice(0, 8)} · 会话 ${generation} · Continue work`)
+    expect(title.seq).toBeLessThan(inspection.events.find(event => event.type === 'user/message')!.seq)
+    const previous = await h.ctx.sessionController.inspect(SessionId(originals.at(-1)!))
+    expect(previous.events.findLast(event => event.type === 'session/title')?.data.title).toBe(`T:${h.ref.taskId.replaceAll('-', '').slice(0, 8)} · 会话 ${generation - 1} · Continue work`)
     expect(JSON.stringify(inspection.events)).toContain(material.decisions)
   }
   expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(3)
