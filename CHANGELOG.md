@@ -2,6 +2,14 @@
 
 ## Unreleased — 0.0.23-dev.0
 
+### 官方 DSH 兼容（#243）
+
+- 使用官方公开 `Agent.model.select` 记录会话本地模型，验证目录及推理强度，保留已开始会话和全局默认设置。
+- 通过公开持久化与 `SessionController.resolveAgent` 恢复预留会话 ID，在 Agent 发布前装配 preset，并保留权限继承、丢回执重试和旧 Host 兼容。
+- 官方 UUID 作业通过非消费 `list/get` 与已提交 Session 事件观察；终态后成功的直接 `job_output` 可建立收取证明，先开始等待再结束的作业需终态后重复读取。保留旧 fork journal 与迁移后 ignorable 记录，失联历史只提醒。
+- 已验证未经修改的官方源码构建 `22ddee3792402c3e70ec5f86a63c3e3e895a2f60`（CLI `0.2.1-rc.3`）。相同版本的 npm 包不一定包含所需公开接口，版本声明不能代替运行能力检查；本节不表示生产实例已升级。
+
+
 ### 仓库与交付
 
 - 将 v4 工作面板和发布线修复整合回 `main`，保留原主干的 Apache-2.0、推理强度与干净源码打包检查。

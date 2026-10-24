@@ -31,14 +31,15 @@ it('settles a real lost-receipt command before cleanup and blocks recovery after
   const reached = barrier()
   const release = barrier()
   const controller = h.ctx.sessionController
-  const create = controller.create.bind(controller)
-  // Fault injection holds a real public Controller create+flush; it supplies no fake host result.
-  controller.create = async request => {
-    const result = await create(request)
-    await h.ctx.sessions.flush(h.ctx.agents.get(result.sessionId)!.session)
+  const resolveAgent = controller.resolveAgent.bind(controller)
+  // Hold the actual public restore+flush boundary used by reserved Sessions.
+  controller.resolveAgent = async id => {
+    const result = await resolveAgent(id)
+    if ('error' in result) throw new Error(result.error.message)
+    await h.ctx.sessions.flush(result.agent.session)
     reached.release()
     await release.promise
-    throw new Error('Actual host created and flushed; client receipt lost')
+    throw new Error('Actual host restored and flushed; client receipt lost')
   }
   let recovered = false
   const continuation = (async () => {
