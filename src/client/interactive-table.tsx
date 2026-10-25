@@ -20,7 +20,8 @@ interface Props<T> {
   searchText: (row: T) => string
   searchLabel: string
   scope: string
-  defaultRows?: T[]
+  /** Rebuild hierarchy and apply collapse within each matching group, before batching. */
+  arrangeRows?: (rows: T[]) => T[]
   /** Remote Issue pages are appended by the controller; snapshots use local batches. */
   remote?: { hasMore: boolean; loading: boolean; error: string | null; loadMore: () => void; retry: () => void }
   resetKey?: string
@@ -28,7 +29,7 @@ interface Props<T> {
   unavailable?: string
 }
 /** Shared read-only table. Its state is remounted at source/view boundaries. */
-export function InteractiveTable<T>({ label, columns, rows, defaultRows, rowKey, searchText, searchLabel, scope, remote, resetKey, complete = true, unavailable }: Props<T>) {
+export function InteractiveTable<T>({ label, columns, rows, arrangeRows, rowKey, searchText, searchLabel, scope, remote, resetKey, complete = true, unavailable }: Props<T>) {
   const [storedState, setState] = useState(emptyListState)
   const [batch, setBatch] = useState({ key: '', count: 100, rows: rows.length })
   const [menu, setMenu] = useState<string | null>(null)
@@ -45,7 +46,10 @@ export function InteractiveTable<T>({ label, columns, rows, defaultRows, rowKey,
   }, [columnIds])
   const shown = orderedColumns(columns, state) as TableColumn<T>[]
   const transformed = Boolean(state.sort || state.group || state.search || Object.values(state.filters).some(values => values.length) || state.slice)
-  const filtered = queryList(!transformed && defaultRows ? defaultRows : rows, all, state, searchText)
+  const matched = queryList(rows, all, state, searchText)
+  const group = columns.find(column => column.id === state.group)
+  const arrangedGroups = arrangeRows ? groupList(matched, group).map(entry => ({ ...entry, rows: arrangeRows(entry.rows) })) : []
+  const filtered = arrangeRows ? arrangedGroups.flatMap(entry => entry.rows) : matched
   const queryKey = JSON.stringify([resetKey, state.search, state.filters, state.sort, state.group, state.slice])
   const addedRows = remote ? Math.max(0, rows.length - batch.rows) : 0
   const count = batch.key === queryKey ? batch.count + addedRows : 100
@@ -93,8 +97,12 @@ export function InteractiveTable<T>({ label, columns, rows, defaultRows, rowKey,
     observer.observe(element)
     return () => observer.disconnect()
   }, [queryKey, count, filtered.length, hasMore, hasLocalMore, remote?.loading, remote?.error, remote?.loadMore, unavailable])
-  const group = columns.find(column => column.id === state.group)
-  const groups = groupList(displayed, group)
+  let remaining = count
+  const groups = arrangeRows ? arrangedGroups.map(entry => {
+    const rows = entry.rows.slice(0, remaining)
+    remaining -= rows.length
+    return { ...entry, rows }
+  }).filter(entry => entry.rows.length) : groupList(displayed, group)
   const active = columns.find(column => column.id === menu)
   const picking = all.find(column => column.id === picker)
   const change = (update: Partial<ListState>) => { setState(current => ({ ...current, ...update })) }

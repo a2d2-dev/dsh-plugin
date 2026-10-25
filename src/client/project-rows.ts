@@ -2,7 +2,7 @@ import type { GitHubIssue, GitHubProjectItem, SourceCatalog } from '../work-sour
 import { projectFieldCell } from './project-fields.ts'
 
 type Field = { id: string; name: string; dataType: string; options?: { id: string; name: string; color: string }[] }
-export interface ProjectRow { item: GitHubProjectItem; issue: GitHubIssue | undefined; depth: number }
+export interface ProjectRow { item: GitHubProjectItem; issue: GitHubIssue | undefined; depth: number; hasChildren?: boolean }
 const issueOf = (items: Map<string, GitHubIssue>) => (item: GitHubProjectItem) => item.issueNodeId ? items.get(item.issueNodeId) : undefined
 
 /**
@@ -24,7 +24,7 @@ export function orderProjectRows(items: GitHubProjectItem[], issues: GitHubIssue
   const rows: ProjectRow[] = []
   const place = (item: GitHubProjectItem, depth: number) => {
     const issue = issueOf(byNode)(item)
-    rows.push({ item, issue, depth })
+    rows.push({ item, issue, depth, hasChildren: Boolean(children.get(item.issueNodeId ?? '')?.length) })
     if (item.issueNodeId && collapsed.has(item.issueNodeId)) return
     for (const child of children.get(item.issueNodeId ?? '') ?? []) place(child, depth + 1)
   }
