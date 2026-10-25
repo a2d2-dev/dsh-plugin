@@ -1,7 +1,10 @@
+import { SourceSwitcher } from './source-switcher.tsx'
+import { ListQueryBar } from './list-query-bar.tsx'
+import { PanelIcon } from './icons.tsx'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import type { WorkPanelController, SourceTab } from './work-panel-controller.ts'
-import type { WorkSource } from '../work-sources/types.ts'
+import type { GitHubPullRequest, WorkSource } from '../work-sources/types.ts'
 import { filterProjectItems } from '../work-sources/views.ts'
 import { projectFieldCell, projectFieldValues, UNKNOWN_FIELD_VALUE } from './project-fields.ts'
 import { SESSION_SLOT, fieldOption, orderProjectRows, projectColumnSlots, projectColumns } from './project-rows.ts'
@@ -14,9 +17,15 @@ import { applySlice, sliceAggregate, sliceCandidates } from './project-slice.ts'
 import styles from './work-panel.module.css'
 
 const sourceName = (source: WorkSource) => source.title ?? source.projectSnapshot?.project.title ?? (source.repository ? `${source.repository.owner}/${source.repository.repository}` : `${source.githubProject?.owner} / Project #${source.githubProject?.number}`)
+const pullRequestLabel = (pr: GitHubPullRequest, source?: WorkSource) => {
+  const repository = `${pr.repository.owner}/${pr.repository.repository}`
+  const current = source?.repository ? `${source.repository.owner}/${source.repository.repository}` : null
+  return `${repository.toLowerCase() === current?.toLowerCase() ? '' : `${repository} `}#${pr.number} ${pr.title}`
+}
+const isUnobservedSource = (error: string | null | undefined) => Boolean(error && (error.startsWith('source-page-unobserved:') || error.startsWith('source-catalog-unobserved:') || error === '目录尚无可读缓存，请刷新来源'))
 /** One line of scan progress: fetched/total items and the page being read, with a bar when the total is known. */
 export function ScanProgressLine({scan}:{scan:SourceScanProgress|null}) {
-  if(!scan||(!scan.pages&&!scan.fetched))return <p role="status">正在读取来源目录…</p>
+  if(!scan||(!scan.pages&&!scan.fetched))return null
   const total=scan.total, fetched=scan.fetched
   return <div role="status" className={styles.scanProgress}>
     <p>正在读取来源目录… 已取 {fetched}{total===undefined?'':`/${total}`} 项 · 第 {Math.max(1,scan.pages)} 页</p>
@@ -25,7 +34,34 @@ export function ScanProgressLine({scan}:{scan:SourceScanProgress|null}) {
 }
 export function SourceTabs({controller,onAdd}:{controller:WorkPanelController;onAdd:()=>void}) {
   const state=useSyncExternalStore(controller.subscribe,controller.getSnapshot,controller.getSnapshot)
-  return <nav className={styles.tabs} aria-label="来源标签"><strong>A²D² 控制面板</strong>{Object.entries(state.projectSources).flatMap(([projectId,sources])=>sources.map(source=><button key={source.id} aria-pressed={state.projectId===projectId&&state.source.sourceId===source.id} onClick={()=>void controller.selectConnectedSource(projectId,source.id)}>{sourceName(source)} <small>{source.repository?'仓库':'Project'}</small></button>))}<button aria-label="添加来源" onClick={onAdd}>＋</button></nav>
+  const current=state.source, source=current.sources.find(item=>item.id===current.sourceId)
+  const options=Object.entries(state.projectSources).flatMap(([projectId,sources])=>sources.map(item=>({projectId,source:item,value:`${projectId}/${item.id}`})))
+  const selected=options.find(item=>item.projectId===state.projectId&&item.source.id===current.sourceId)
+  const observed=current.tab==='issues'?current.listing?.observedAt:current.catalog?.observedAt
+  const error=(isUnobservedSource(current.error)?null:current.error)??(isUnobservedSource(state.observationError)?null:state.observationError)
+  const status=current.loading?'正在刷新':source?.enabled===false?'已停用':error?(observed?'更新失败 · 显示缓存':'更新失败'):!observed?'尚未刷新':current.cached?'显示缓存':'已更新'
+  const reader=(current.tab==='issues'?current.listing?.identity.login:current.catalog?.identity?.login)??source?.identity?.login
+  const activeLogin=state.github.account?.identity?.login
+  return <div className={styles.sourceContext}>
+    <nav className={styles.sourcePicker} aria-label="来源标签">
+      <span className={styles.sourceKind} title={source?.repository?'GitHub 仓库':'GitHub Project'}><PanelIcon name={source?.repository?'repo':'project'}/></span>
+      <SourceSwitcher options={options} value={selected?.value} onSelect={value=>{const option=options.find(item=>item.value===value);if(option)void controller.selectConnectedSource(option.projectId,option.source.id)}}/>
+      <button className={styles.addSourceButton} aria-label="添加来源" title="添加来源" onClick={onAdd}><PanelIcon name="plus"/></button>
+    </nav>
+    {source&&<div className={styles.sourceSync}>
+      <details className={styles.sourceSyncDetails} data-source-freshness={current.loading?'loading':!observed?'unknown':current.cached?'cached':'fresh'}>
+        <summary aria-label={`来源同步状态：${status}`} title={status}><PanelIcon name={source.enabled===false?'pause':error?'alert':!observed||current.cached?'clock':'check'} className={error?styles.statusWarning:undefined}/>{current.loading&&<span className={styles.visuallyHidden}>正在刷新</span>}{observed&&<time dateTime={observed}>{new Date(observed).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}</time>}<PanelIcon name="chevron" size={12}/></summary>
+        <div className={styles.sourceSyncPopover}>
+          <strong>{status}</strong>
+          {observed?<p><time dateTime={observed}>{new Date(observed).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</time></p>:<p>尚无缓存</p>}
+          {reader&&reader!==activeLogin&&<p title="此数据读取时使用的账号">读取账号 @{reader}</p>}
+          {error&&<p>{error}</p>}
+          <button disabled={current.loading} onClick={()=>void (current.tab==='issues'?controller.browseIssues({},false):controller.browseDirectory(false))}>读取缓存</button>
+        </div>
+      </details>
+      <button className={styles.sourceRefresh} aria-label="刷新来源" aria-busy={current.loading} title={current.loading?'正在刷新来源':'刷新来源'} disabled={current.loading||!source.enabled} onClick={()=>void (current.tab==='issues'?controller.browseIssues({},true):controller.browseDirectory(true))}><PanelIcon name="refresh" className={current.loading?styles.iconSpin:undefined}/></button>
+    </div>}
+  </div>
 }
 export function SourceDirectory({controller,issues,panelContent,panel,onPanel}:{controller:WorkPanelController;issues:ReactNode;panelContent?:ReactNode;panel:'none'|'delegation'|'continuation';onPanel:(panel:'none'|'delegation'|'continuation')=>void}) {
   const state=useSyncExternalStore(controller.subscribe,controller.getSnapshot,controller.getSnapshot), sourceState=state.source
@@ -34,25 +70,16 @@ export function SourceDirectory({controller,issues,panelContent,panel,onPanel}:{
   const source=sourceState.sources.find(source=>source.id===sourceState.sourceId)
   if(!source)return null
   const tabs:[SourceTab,string][]=[['overview','概览'],...(source.githubProject?[['project','项目'] as [SourceTab,string]]:[]),['issues','Issue'],['prs','PR']]
-  const cache=sourceState.cached?'缓存 / 最后已知观察':'本次读取'
   return <>
     <div className={styles.sourceHeader}>
-      <div className={styles.sourceIdentity}>
-        <span className={styles.sourceIcon} aria-hidden="true">{source.repository?<RepoIcon/>:<ProjectIcon/>}</span>
-        <div className={styles.sourceTitles}>
-          <strong>{sourceName(source)}</strong>
-          <span className={styles.sourceMeta}>{source.repository?`仓库 · ${source.repository.owner}/${source.repository.repository}`:`Project · ${source.githubProject?.owner} / #${source.githubProject?.number} · ${source.githubProject?.type==='org'?'组织':'个人'}`}<span className={styles.metaDot}>·</span>读取账号：{source.identity?.login??'尚未确认'}</span>
-        </div>
-      </div>
       <nav className={styles.tabs} aria-label="来源目录">{tabs.map(([tab,label])=><button key={tab} aria-pressed={sourceState.tab===tab} onClick={()=>void controller.selectSourceTab(tab)}>{label}</button>)}</nav>
       <div className={styles.sourceActions}>
         <div className={styles.menuWrap}>
-          <button className={styles.iconButton} aria-label="来源操作" aria-expanded={menu} title="来源操作：刷新来源 / 读取目录缓存 / 持续委托 / 新执行默认自动接续" onClick={event=>{event.stopPropagation();setMenu(open=>!open)}}><MoreIcon/></button>
+          <button className={styles.iconButton} aria-label="来源操作" aria-expanded={menu} title="来源设置：读取缓存 / 持续委托 / 自动接续" onClick={event=>{event.stopPropagation();setMenu(open=>!open)}}><MoreIcon/></button>
           {menu&&<div className={styles.menu} role="menu">
-            <button role="menuitem" disabled={sourceState.loading||!source.enabled} onClick={event=>{event.stopPropagation();setMenu(false);void controller.browseDirectory(true)}}>刷新来源</button>
-            <button role="menuitem" disabled={sourceState.loading} onClick={event=>{event.stopPropagation();setMenu(false);void controller.browseDirectory(false)}}>读取目录缓存</button>
+            <button role="menuitem" disabled={sourceState.loading} onClick={event=>{event.stopPropagation();setMenu(false);void controller.browseDirectory(false)}}>读取缓存</button>
             <button role="menuitem" aria-pressed={panel==='delegation'} onClick={event=>{event.stopPropagation();setMenu(false);onPanel(panel==='delegation'?'none':'delegation')}}>持续委托</button>
-            <button role="menuitem" aria-pressed={panel==='continuation'} onClick={event=>{event.stopPropagation();setMenu(false);onPanel(panel==='continuation'?'none':'continuation')}}>新执行默认自动接续</button>
+            <button role="menuitem" aria-pressed={panel==='continuation'} onClick={event=>{event.stopPropagation();setMenu(false);onPanel(panel==='continuation'?'none':'continuation')}}>自动接续</button>
           </div>}
         </div>
       </div>
@@ -60,7 +87,7 @@ export function SourceDirectory({controller,issues,panelContent,panel,onPanel}:{
     {panelContent}
     {sourceState.tab==='issues'?issues:<>
       {sourceState.loading&&<ScanProgressLine scan={sourceState.scan}/>}{!sourceState.loading&&sourceState.scan&&sourceState.scan.total!==undefined&&sourceState.scan.fetched<sourceState.scan.total&&<p role="status">Project 扫描未完成：已取 {sourceState.scan.fetched}/{sourceState.scan.total} 项，刷新来源可继续。</p>}{sourceState.error&&<p role="alert" className={styles.failure}>{sourceState.error}</p>}{!source.enabled&&<p role="status">来源已停用，保留已保存内容。</p>}
-      {!sourceState.loading&&sourceState.catalog&&<p role="status">{cache} · 目录观察时间：{sourceState.catalog.observedAt}</p>}
+
       {sourceState.catalog?.limitations.map(reason=><p role="status" key={reason}>{reason}</p>)}
       {sourceState.tab==='overview'&&<SourceOverview controller={controller} source={source}/>}
       {sourceState.tab==='project'&&<ProjectViews key={`${source.projectId}/${source.id}/${sourceState.viewNumber??'entry'}`} controller={controller} source={source}/>}
@@ -68,8 +95,6 @@ export function SourceDirectory({controller,issues,panelContent,panel,onPanel}:{
     </>}
   </>
 }
-function RepoIcon(){return <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M0 1.75A.75.75 0 0 1 .75 1h4.253c1.227 0 2.317.59 3 1.501A3.743 3.743 0 0 1 11.006 1h4.245a.75.75 0 0 1 .75.75v10.5a.75.75 0 0 1-.75.75h-4.507a2.25 2.25 0 0 0-1.591.659l-.622.621a.75.75 0 0 1-1.06 0l-.622-.621A2.25 2.25 0 0 0 5.258 13H.75a.75.75 0 0 1-.75-.75Zm7.251 10.324.004-5.073-.002-2.253A2.25 2.25 0 0 0 5.003 2.5H1.5v9h3.757a3.75 3.75 0 0 1 1.994.574ZM8.755 4.75l-.004 7.322a3.752 3.752 0 0 1 1.992-.572H14.5v-9h-3.495a2.25 2.25 0 0 0-2.25 2.25Z"/></svg>}
-function ProjectIcon(){return <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v12.5A1.75 1.75 0 0 1 14.25 16H1.75A1.75 1.75 0 0 1 0 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25H5.5v-13Zm5.25 0v13h7.25a.25.25 0 0 0 .25-.25V1.75a.25.25 0 0 0-.25-.25Z"/></svg>}
 function MoreIcon(){return <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM1.5 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm13 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/></svg>}
 function RefreshIcon(){return <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="currentColor"><path d="M1.705 8.005a.75.75 0 0 1 .834.656 5.5 5.5 0 0 0 9.592 2.97l-1.204-1.204a.25.25 0 0 1 .177-.427h3.646a.25.25 0 0 1 .25.25v3.646a.25.25 0 0 1-.427.177l-1.38-1.38A7.002 7.002 0 0 1 1.05 8.84a.75.75 0 0 1 .655-.835ZM8 2.5a5.487 5.487 0 0 0-4.131 1.869l1.204 1.204A.25.25 0 0 1 4.896 6H1.25A.25.25 0 0 1 1 5.75V2.104a.25.25 0 0 1 .427-.177l1.38 1.38A7.002 7.002 0 0 1 14.95 7.16a.75.75 0 0 1-1.49.178A5.5 5.5 0 0 0 8 2.5Z"/></svg>}
 function ClockIcon(){return <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="currentColor"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm6.25-3.25v2.992l2.028.812a.75.75 0 0 1-.557 1.392l-2.5-1A.751.751 0 0 1 7 8.25v-3.5a.75.75 0 1 1 1.5 0Z"/></svg>}
@@ -82,15 +107,29 @@ function SourceOverview({controller,source}:{controller:WorkPanelController;sour
   const incomplete=!!snapshot?.items.some(item=>item.kind==='restricted')
   const processing=relevant.filter(item=>item.processingState==='processing'),attention=relevant.filter(item=>['waiting','paused','blocked'].includes(item.processingState??'not-started'))
   const workKnown=!!catalog&&!!(source.repository||snapshot)
-  return <section aria-label="来源概览"><h2>来源概览</h2><div className={styles.metrics}>
-    <article><span>开放 Issue</span><strong>{open??'—'}{incomplete&&open!==undefined?' + 未可见项':''}</strong><p>{open===undefined?'尚未完整观察':source.repository?'GitHub 全仓库计数':`完整扫描的可见收录 · ${snapshot?.observedAt}`}</p></article>
-    <article><span>PR</span><strong>{catalog?catalog.pullRequests.length:'—'}</strong><p>{catalog?catalog.pullRequestsComplete?'当前范围完整观察':'部分观察，非全量':'尚未完整观察'}</p></article>
-    <article><span>处理中</span><strong>{workKnown?processing.length:'—'}</strong><p>{workKnown?'当前来源已关联的本地工作':'本地工作聚合尚未读取'}</p></article><article><span>需要关注</span><strong>{workKnown?attention.length:'—'}</strong><p>{workKnown?'等待、暂停或阻塞':'本地工作聚合尚未读取'}</p></article>
-  </div>{source.discovery?.checkpoint&&<p role="status">Project 扫描进行中，已读取 {source.discovery.checkpoint.pages} 页；概览保留上次完整扫描。可刷新继续读取。</p>}
-    <div className={styles.detailGrid}>{[{title:'需要关注',items:attention},{title:'正在处理',items:processing}].map(({title,items}) => <details key={title}><summary>{title} · {workKnown?items.length:'—'}</summary>{items.length ? <ul className={styles.queue}>{items.map(item => <li key={`${item.ref.projectId}/${item.ref.taskId}`}><div><button className={styles.link} onClick={() => void controller.openTask(item.ref)}>#{item.source?.number} {item.title}</button><p>{item.processingReason ?? item.summary}{item.next ? ` · 下一步：${item.next}` : ''}</p></div></li>)}</ul> : <p>{workKnown ? '当前没有已关联的匹配工作。' : '本地工作聚合尚未读取。'}</p>}</details>)}</div>
-    <h3>最近进展</h3>{relevant.length?<ul>{[...relevant].sort((a,b)=>(b.updatedAt??'').localeCompare(a.updatedAt??'')).slice(0,8).map(item=><li key={`${item.ref.projectId}/${item.ref.taskId}`}><button className={styles.link} onClick={()=>void controller.openTask(item.ref)}>#{item.source?.number} {item.title}</button><p>{item.summary||'尚无工作报告'}{item.next?` · 下一步：${item.next}`:''}</p></li>)}</ul>:<p>当前来源尚无已关联的工作进展。</p>}
-    {catalog&&<><h3>最近外部更新</h3><ul>{catalog.pullRequests.slice(0,5).map(pr=><li key={pr.nodeId}><TrustedLink url={pr.url}>{pr.repository.owner}/{pr.repository.repository}#{pr.number} {pr.title}</TrustedLink> · {pr.updatedAt}</li>)}</ul></>}
-    <p>PR 引用、检查或合并是外部观察，不能替代任务验收。分页 Issue 列表不作为全量统计。</p>
+  const [activityView,setActivityView]=useState<'attention'|'processing'|'recent'>(()=>attention.length?'attention':processing.length?'processing':'recent')
+  const activityItems=activityView==='attention'?attention:activityView==='processing'?processing:[...relevant].sort((a,b)=>(b.updatedAt??'').localeCompare(a.updatedAt??'')).slice(0,8)
+  const activityKnown=workKnown||relevant.length>0
+  const activityViews=[{id:'attention',label:'需要关注',count:attention.length},{id:'processing',label:'正在处理',count:processing.length},{id:'recent',label:'最近进展',count:relevant.length}] as const
+  const activityEmptyTitle=!activityKnown?'工作进展尚未读取':!relevant.length?'还没有关联的工作':activityView==='attention'?'暂时没有需要关注的工作':'当前没有正在处理的工作'
+
+  return <section className={styles.sourceOverview} aria-label="来源概览"><h2 className={styles.visuallyHidden}>来源概览</h2>
+    <div className={styles.overviewSummary} role="group" aria-label="来源统计">
+      <div title={open===undefined?'尚未完整观察':source.repository?'GitHub 全仓库计数':`完整扫描的可见收录 · ${snapshot?.observedAt}`}><span>开放 Issue</span><strong>{open??'—'}</strong>{incomplete&&<small>部分可见</small>}</div>
+      <div title={catalog?catalog.pullRequestsComplete?'当前范围完整观察':'部分观察，非全量':'尚未完整观察'}><span>PR</span><strong>{catalog?catalog.pullRequests.length:'—'}</strong>{catalog&&!catalog.pullRequestsComplete&&<small>部分</small>}</div>
+    </div>
+    {source.discovery?.checkpoint&&<p className={styles.overviewFootnote} role="status">正在扫描来源，已读取 {source.discovery.checkpoint.pages} 页，当前保留上次完整结果。</p>}
+    <div className={styles.overviewActivity}>
+      <div className={styles.overviewSegments} role="group" aria-label="工作动态视图">{activityViews.map(view=><button key={view.id} type="button" data-work-view={view.id} aria-pressed={activityView===view.id} onClick={()=>setActivityView(view.id)}><PanelIcon name={view.id==='attention'?'alert':view.id==='processing'?'play':'clock'}/>{view.label}<span>{activityKnown?view.count:'—'}</span></button>)}</div>
+      {activityItems.length?<ul className={styles.overviewActivityList}>{activityItems.map(item=><li key={`${item.ref.projectId}/${item.ref.taskId}`}>
+        <span className={styles.overviewActivityIcon}><PanelIcon name={['waiting','paused','blocked'].includes(item.processingState??'')?'alert':item.processingState==='processing'?'play':'clock'}/></span>
+        <div><button className={styles.link} onClick={()=>void controller.openTask(item.ref)}>#{item.source?.number} {item.title}</button><p>{item.processingReason||item.summary||'尚无工作报告'}</p>{item.next&&<p>下一步：{item.next}</p>}</div>
+        <span className={styles.overviewActivityState}>{({processing:'处理中',waiting:'等待确认',paused:'已暂停',blocked:'受阻',completed:'已完成','not-started':'未开始'})[item.processingState??'not-started']}</span>
+      </li>)}</ul>:<div className={styles.overviewActivityEmpty} role="status"><PanelIcon name={!activityKnown?'clock':!relevant.length?'repo':'check'} size={22}/><h3>{activityEmptyTitle}</h3><p>{!activityKnown?'刷新来源后查看已关联工作的进展。':!relevant.length?'从 Issue 中选择一项工作，开始后会在这里显示进展。':'可以切换到最近进展，查看其他工作的更新。'}</p>
+        {!activityKnown?<button disabled={state.source.loading||!source.enabled} onClick={()=>void controller.browseDirectory(true)}>刷新来源</button>:!relevant.length?<button onClick={()=>void controller.selectSourceTab('issues')}>查看 Issue</button>:<button onClick={()=>setActivityView('recent')}>最近进展</button>}
+      </div>}
+    </div>
+    {catalog&&catalog.pullRequests.length>0&&<div className={styles.overviewExternal}><h3>最近外部更新</h3><ul>{catalog.pullRequests.slice(0,5).map(pr=><li key={pr.nodeId}><TrustedLink url={pr.url}>{pullRequestLabel(pr,source)}</TrustedLink><span>{new Date(pr.updatedAt).toLocaleDateString('zh-CN')}</span></li>)}</ul></div>}
   </section>
 }
 function ProjectViews({controller,source}:{controller:WorkPanelController;source:WorkSource}) {
@@ -201,15 +240,42 @@ function ProjectCell({field,row,fields}:{field:ProjectFieldDefinition;row:Projec
 }
 function PullRequests({controller}:{controller:WorkPanelController}) {
   const state=controller.getSnapshot(),catalog=state.source.catalog,source=state.source.sources.find(item=>item.id===state.source.sourceId)
+  const [search,setSearch]=useState('')
+  const [filtersOpen,setFiltersOpen]=useState(false)
+  const [prState,setPrState]=useState('all'),[prType,setPrType]=useState('all')
+  const [stateDraft,setStateDraft]=useState('all'),[typeDraft,setTypeDraft]=useState('all')
+  const rows=catalog?.pullRequests.filter(pr=>(prState==='all'||pr.state===prState)&&(prType==='all'||pr.draft===(prType==='draft')))??[]
+  const matchedCount=rows.filter(pr=>`${pr.repository.owner}/${pr.repository.repository} #${pr.number} ${pr.title}`.toLowerCase().includes(search.toLowerCase())).length
+  const filterCount=Number(prState!=='all')+Number(prType!=='all')
+  const applyFilters=()=>{setPrState(stateDraft);setPrType(typeDraft);setFiltersOpen(false)}
+  const resetFilters=()=>{setSearch('');setPrState('all');setPrType('all');setStateDraft('all');setTypeDraft('all');setFiltersOpen(false)}
+  const {loading,error}=state.source
   const progress=(pr:import('../work-sources/types.ts').GitHubPullRequest)=>pr.issues.map(issue=>controller.progressForIssue(issue)).find(item=>item!==undefined)
   const columns:TableColumn<import('../work-sources/types.ts').GitHubPullRequest>[]=[
-    {id:'title',label:'PR',protected:true,width:3,values:pr=>[pr.title],qualifiers:[{id:'state',label:'PR 状态',values:pr=>[pr.state]},{id:'type',label:'PR 类型',values:pr=>[pr.draft?'草稿':'就绪']}],render:pr=><TrustedLink url={pr.url}>{pr.repository.owner}/{pr.repository.repository} #{pr.number} {pr.title}</TrustedLink>},
+    {id:'title',label:'PR',protected:true,width:3,values:pr=>[pr.title],qualifiers:[{id:'state',label:'PR 状态',values:pr=>[pr.state]},{id:'type',label:'PR 类型',values:pr=>[pr.draft?'草稿':'就绪']}],render:pr=><TrustedLink url={pr.url}>{pullRequestLabel(pr,source)}</TrustedLink>},
     {id:'status',label:'状态',groupable:true,values:pr=>[pr.state],render:pr=><>{({open:'开放',closed:'已关闭',merged:'已合并'})[pr.state]}{pr.draft?' · 草稿':''}</>},
     {id:'session',label:'会话',width:1.5,values:pr=>{const entry=sessionOf(progress(pr));return entry?[entry.session.sessionId]:[]},render:pr=><SessionCell entry={sessionOf(progress(pr))} onOpen={session=>controller.openSession(session)}/>},
     {id:'issues',label:'相关 Issue',values:pr=>pr.issues.map(issue=>`${issue.url} #${issue.number}`),render:pr=><>{pr.issues.length?pr.issues.map(issue=><span key={issue.url} style={{marginRight:8}}><TrustedLink url={issue.url}>#{issue.number}</TrustedLink></span>):'未观察到关联'}{!pr.issuesComplete?' · 部分':''}</>},
     {id:'checks',label:'检查 / 评审',groupable:true,values:pr=>[`${pr.checks??'未提供'} / ${pr.review??'未提供'}`],render:pr=><span title={`${pr.checks??'未提供'} / ${pr.review??'未提供'}`}>{pr.checks??'—'} · {pr.review??'—'}</span>},
   ]
-  return <section><h2>PR 只读目录</h2><InteractiveTable label="PR 目录" resetKey={catalog?.observedAt} complete={catalog?.pullRequestsComplete??false} columns={columns} rows={catalog?.pullRequests??[]} rowKey={pr=>pr.nodeId} searchText={pr=>`${pr.repository.owner}/${pr.repository.repository} #${pr.number} ${pr.title}`} searchLabel="搜索 PR" scope={`当前来源：${source?sourceName(source):'未选择'} · ${catalog?.pullRequestsComplete?'当前范围完整观察':'部分目录，不能视为全量'} · 引用不等于验收`} unavailable={!catalog?'PR 目录尚无可读缓存，请刷新来源；读取失败不表示空目录。':undefined}/></section>
+  const readError=Boolean(error&&!(!catalog&&isUnobservedSource(error)))
+  const emptyTitle=readError?'暂时无法更新 PR':!catalog?'尚未读取 PR':catalog.pullRequestsComplete?'当前来源暂无 PR':'已读取范围暂无 PR'
+  const emptyDescription=readError?'未能取得最新目录，可检查账号权限或网络后重试。':!catalog?'读取当前来源后查看 PR 与关联会话。':catalog.pullRequestsComplete?'后续发现的 PR 会出现在这里。':'当前目录仍为部分观察，不能据此判断来源没有 PR。'
+  const appliedFilters=<div className={styles.issueApplied} aria-label="已应用的 PR 筛选">{prState!=='all'&&<button onClick={()=>{setPrState('all');setStateDraft('all')}}>{({open:'Open',closed:'Closed',merged:'Merged'})[prState as 'open'|'closed'|'merged']} <PanelIcon name="close" size={12}/></button>}{prType!=='all'&&<button onClick={()=>{setPrType('all');setTypeDraft('all')}}>{prType==='draft'?'草稿':'就绪'} <PanelIcon name="close" size={12}/></button>}</div>
+  return <section className={styles.issueList} aria-label="PR 目录"><h2 className={styles.visuallyHidden}>PR 列表</h2>
+    <ListQueryBar label="搜索 PR" placeholder="搜索 PR" searchTitle="搜索已读取的 PR" value={search} onChange={setSearch} onSubmit={applyFilters} count={loading?'读取中…':catalog?`${matchedCount} 项${catalog.pullRequestsComplete?'':' · 部分'}`:'尚未读取'} disabled={loading||!source?.enabled} filtersOpen={filtersOpen} filterCount={filterCount} filterId="a2d2-pr-filters" onToggleFilters={()=>setFiltersOpen(open=>!open)}>
+      <label>GitHub 状态<select aria-label="PR 状态" value={stateDraft} onChange={event=>setStateDraft(event.target.value)}><option value="all">全部状态</option><option value="open">Open</option><option value="closed">Closed</option><option value="merged">Merged</option></select></label>
+      <label>类型<select aria-label="PR 类型" value={typeDraft} onChange={event=>setTypeDraft(event.target.value)}><option value="all">全部类型</option><option value="draft">草稿</option><option value="ready">就绪</option></select></label>
+      <div className={styles.issueFilterActions}><button type="button" onClick={resetFilters}>重置</button><button type="submit" disabled={loading||!source?.enabled}>应用</button></div>
+    </ListQueryBar>
+    {!(catalog&&catalog.pullRequests.length>0)&&appliedFilters}
+    {catalog&&catalog.pullRequests.length>0&&<>
+
+      {error&&<div className={styles.issueReadNotice} role="alert">更新未完成，保留上次目录。<button disabled={loading||!source?.enabled} onClick={()=>void controller.browseDirectory(true)}>重试</button></div>}
+      <InteractiveTable compact toolbarContent={appliedFilters} emptyState={<div className={styles.issueEmpty} role="status"><h3>没有匹配的 PR</h3><button onClick={resetFilters}>清除筛选</button></div>} label="PR 目录" resetKey={catalog.observedAt} complete={catalog.pullRequestsComplete} columns={columns} rows={rows} rowKey={pr=>pr.nodeId} searchText={pr=>`${pr.repository.owner}/${pr.repository.repository} #${pr.number} ${pr.title}`} searchLabel="搜索 PR" searchControl={{value:search,onChange:setSearch}} scope="PR 列表仅用于浏览与关联，不代表任务验收"/>
+    </>}
+    {loading&&(!catalog||!catalog.pullRequests.length)?<div className={styles.issueSkeleton} role="status"><span className={styles.visuallyHidden}>正在读取 PR…</span>{[0,1,2].map(value=><div key={value}><span/><span/></div>)}</div>:!catalog||!catalog.pullRequests.length?<div className={styles.issueEmpty} role="status"><span className={styles.issueEmptyIcon}><PanelIcon name={readError?'alert':'repo'} size={22}/></span><h3>{emptyTitle}</h3><p>{emptyDescription}</p><button disabled={loading||!source?.enabled} onClick={()=>void controller.browseDirectory(true)}>{readError?'重试':!catalog?'读取 PR':'刷新'}</button></div>:null}
+  </section>
 }
 function TrustedLink({url,children}:{url:string;children:ReactNode}) {
   let safe=false

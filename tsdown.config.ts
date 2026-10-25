@@ -96,7 +96,12 @@ function injectTag(fileId: string, cssText: string): string {
 function purityGatePlugin(): BuildPlugin {
   return {
     name: 'dsh-client-bundle-purity',
-    resolveId(source: string) {
+    resolveId(source: string, importer: string | undefined) {
+      // vfile uses private import aliases; select its provided browser adapters
+      // explicitly because dependency probing otherwise picks the Node branch.
+      if (/^#min(path|proc|url)$/.test(source) && importer?.replaceAll('\\', '/').endsWith('/vfile/lib/index.js')) {
+        return resolvePath(dirname(importer), `${source.slice(1)}.browser.js`)
+      }
       if (NODE_BUILTINS.has(source)) {
         throw new Error(
           `client bundle purity: Node builtin "${source}" cannot run in the browser module table — `

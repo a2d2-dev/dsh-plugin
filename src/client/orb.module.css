@@ -2,9 +2,9 @@
  * The floating handoff indicator: a circle that fills with water as the context
  * grows.
  *
- * Every color here is a literal rather than a theme variable: this bundle is
- * applied before the theme's own tokens exist, so a variable it cannot see
- * resolves to nothing and leaves the text unreadable against the shell.
+ * The floating card uses a fixed dark palette. The embedded settings page
+ * follows the host theme with paired foreground/background fallbacks, so it
+ * remains readable both before theme tokens load and when the theme changes.
  *
  * The fill share arrives as `--a2d2-level` (0-100%) and the tier arrives as a
  * level class; the water's height is the occupancy and its color is the tier, so
@@ -704,10 +704,13 @@
 }
 
 .configPage {
+  container-type: inline-size;
   box-sizing: border-box;
+  width: 100%;
   max-width: 960px;
+  background: var(--dsw-alias-bg-layer-1, #ffffff);
   padding: 20px;
-  color: #1b2430;
+  color: var(--dsw-alias-label-primary, #1b2430);
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
@@ -729,29 +732,40 @@
 .configSubtitle {
   margin: 6px 0 0;
   font-size: 12px;
-  color: #5c6673;
+  color: var(--dsw-alias-label-secondary, #5c6673);
 }
 
 .configSave,
 .configButton,
 .configIconButton {
   box-sizing: border-box;
-  border: 1px solid #c8d1dc;
-  background: #ffffff;
-  color: #1b2430;
+  border: 1px solid var(--dsw-alias-border-l2, #c8d1dc);
+  background: var(--dsw-alias-bg-layer-1, #ffffff);
+  color: var(--dsw-alias-label-primary, #1b2430);
   font: inherit;
   cursor: pointer;
 }
 
 .configSave {
-  min-width: 86px;
-  padding: 8px 14px;
-  border-radius: 8px;
-  background: #205f46;
-  border-color: #205f46;
-  color: #ffffff;
+  min-width: 72px;
+  min-height: 32px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: var(--dsw-alias-button-primary-fill, #1b2430);
+  border-color: transparent;
+  color: var(--dsw-alias-label-primary-foreground, #ffffff);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
+}
+
+.configSave:hover:not(:disabled) {
+  background: var(--dsw-alias-button-primary-hover, #43454a);
+}
+
+.configSave:disabled {
+  background: var(--dsw-alias-button-primary-dimmed, #ebeef2);
+  color: var(--dsw-alias-label-secondary, #5c6673);
+  cursor: default;
 }
 
 .configButton {
@@ -770,7 +784,6 @@
   line-height: 1;
 }
 
-.configSave:disabled,
 .configButton:disabled,
 .configIconButton:disabled {
   opacity: 0.45;
@@ -805,7 +818,7 @@
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 8px;
   font-size: 12px;
-  color: #46515f;
+  color: var(--dsw-alias-label-secondary, #46515f);
 }
 
 .configRoadExtras span {
@@ -816,14 +829,12 @@
 .configRows {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
 }
 
 .configRow {
-  border: 1px solid #d7dee8;
-  border-radius: 8px;
-  padding: 12px;
-  background: #ffffff;
+  border-top: 1px solid var(--dsw-alias-border-l2, #d7dee8);
+  padding: 18px 0;
 }
 
 .configRowHead {
@@ -842,7 +853,7 @@
 }
 
 .configRowHead span {
-  color: #667180;
+  color: var(--dsw-alias-label-secondary, #5c6673);
   font-size: 12px;
 }
 
@@ -853,36 +864,154 @@
 }
 
 .configRoute {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(140px, 1fr) minmax(110px, 150px) 28px 28px auto 28px;
-  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
   align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--dsw-alias-border-l1, #e4e8ed);
+}
+
+.configDragHandle {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #5c6673);
+  font: inherit;
+  font-size: 22px;
+  cursor: grab;
+}
+
+.configDragHandle:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover, #eef0f6);
+  color: var(--dsw-alias-label-primary, #1b2430);
+}
+
+.configDragHandle:active { cursor: grabbing; }
+.configDragHandle:disabled { opacity: .4; cursor: default; }
+.configDragging { opacity: .45; }
+
+.configDropBefore::before,
+.configDropAfter::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--dsw-alias-brand-primary, #1f5f99);
+  pointer-events: none;
+}
+
+.configDropBefore::before { top: 0; }
+.configDropAfter::after { bottom: -1px; }
+
+.configRouteActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.configModelDetails {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  min-width: 0;
+}
+
+.configModelDetails > .configSelect {
+  width: auto;
+  max-width: 180px;
+  min-height: 26px;
+  padding: 3px 6px;
+  font-size: 11px;
+}
+
+.configRouteActions .configIconButton {
+  border-color: transparent;
+  background: transparent;
+}
+
+.configRouteActions .configButton {
+  min-width: 48px;
+  font-weight: 500;
 }
 
 .configRouteName {
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.configCandidateOrder {
+  flex: none;
+  width: 18px;
+  color: var(--dsw-alias-label-secondary, #5c6673);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.configModelIdentity {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.configModelName {
+  font-size: 13px;
+  font-weight: 500;
   overflow-wrap: anywhere;
+}
+
+.configProvider {
+  color: var(--dsw-alias-label-secondary, #5c6673);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.configEffortNote {
+  color: var(--dsw-alias-label-secondary, #5c6673);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.configHelp {
+  margin: -6px 0 0;
+  color: var(--dsw-alias-label-secondary, #5c6673);
   font-size: 12px;
-  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  line-height: 1.5;
 }
 
 .configProbe {
   grid-column: 1 / -1;
   min-width: 0;
-  color: #46515f;
+  color: var(--dsw-alias-label-secondary, #46515f);
   font-size: 12px;
   overflow-wrap: anywhere;
 }
 
 .configNoSwitch {
+  box-sizing: border-box;
   display: inline-flex;
-  width: fit-content;
+  align-items: center;
+  min-height: 32px;
+  width: 100%;
   max-width: 100%;
   padding: 5px 10px;
-  border: 1px solid #d7dee8;
+  border: 1px solid var(--dsw-alias-border-l2, #d7dee8);
   border-radius: 6px;
-  background: #f6f8fb;
-  color: #46515f;
+  background: var(--dsw-alias-bg-layer-2, #f6f8fb);
+  color: var(--dsw-alias-label-secondary, #46515f);
   font-size: 12px;
   font-weight: 600;
   overflow-wrap: anywhere;
@@ -897,15 +1026,94 @@
 
 .configSelect {
   box-sizing: border-box;
+  min-height: 32px;
   width: 100%;
   min-width: 0;
   padding: 6px 8px;
-  border: 1px solid #c8d1dc;
+  border: 1px solid var(--dsw-alias-border-l2, #c8d1dc);
   border-radius: 6px;
-  background: #ffffff;
-  color: #1b2430;
+  background: var(--dsw-alias-bg-layer-1, #ffffff);
+  color: var(--dsw-alias-label-primary, #1b2430);
   font: inherit;
   font-size: 12px;
+}
+
+/* Keep the configuration table independent from the orb's progress drawing. */
+.configPage .highwayStations::before,
+.configPage .highwayMarker {
+  display: none;
+}
+
+.configPage .highwayStation {
+  grid-template-columns: minmax(0, 1fr) 112px minmax(0, 200px);
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--dsw-alias-border-l1, #e4e8ed);
+}
+
+.configPage .highwayName {
+  font-size: 13px;
+}
+
+.configPage .highwayRole {
+  color: var(--dsw-alias-label-secondary, #5c6673);
+  opacity: 1;
+  font-size: 11px;
+  margin-top: 3px;
+}
+
+.configPage .highwayModel {
+  max-width: none;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #5c6673);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+.configPage .highwayPlacard,
+.configPage .highwayAside {
+  padding: 0 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #5c6673);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.configPage .highwayMap {
+  margin-bottom: 12px;
+}
+
+.configButton,
+.configIconButton {
+  min-height: 32px;
+}
+
+.configPage .highwayCurrent,
+.configPage .highwayNext {
+  color: inherit;
+}
+
+.configButton:hover:not(:disabled),
+.configIconButton:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover, #eef0f6);
+}
+
+.configDragHandle:focus-visible,
+.configSave:focus-visible,
+.configButton:focus-visible,
+.configIconButton:focus-visible,
+.configSelect:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary, #1f5f99);
+  outline-offset: 2px;
 }
 
 @media (max-width: 720px) {
@@ -918,16 +1126,33 @@
     align-items: stretch;
     flex-direction: column;
   }
+}
 
+@container (max-width: 360px) {
   .configRoute {
-    grid-template-columns: 1fr 28px 28px 64px 28px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
   }
 
-  .configRouteName {
-    grid-column: 1 / -1;
+  .configRouteActions {
+    justify-self: end;
+  }
+}
+
+@container (max-width: 480px) {
+  .configPage .highwayStation {
+    grid-template-columns: minmax(0, 1fr) 112px;
+    gap: 6px 12px;
   }
 
-  .configProbe {
-    grid-column: 1 / -1;
+  .configPage .highwayModel {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .configPage .highwayStation > .configSelect,
+  .configPage .highwayStation > .configNoSwitch {
+    grid-column: 2;
+    grid-row: 1 / 3;
   }
 }

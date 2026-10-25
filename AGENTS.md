@@ -21,3 +21,8 @@ DSH web instance, a preview build, a proxy — must use the host address
 `10.126.126.12`, never `127.0.0.1` or `localhost`. When a service binds
 loopback only, publish it on the host address first (the `dsh-dev-web-proxy`
 socat pattern) and print the `10.126.126.12` URL.
+
+## UI changes
+
+修改界面布局、文案、按钮、菜单或空状态前，先阅读并遵循
+[UI 设计规则](docs/agents/ui-design.md)。检查同一流程中的同类控件，避免只修截图中的单个位置。

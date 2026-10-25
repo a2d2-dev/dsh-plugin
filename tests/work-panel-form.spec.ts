@@ -15,7 +15,7 @@ afterEach(() => vi.unstubAllGlobals())
 async function mountWorkPanel(props: Record<string, unknown>, component = 'SourceConnect') {
   return mountProductionComponent(props, component, component === 'SourceConnect'
     ? new URL('../src/client/source-connect.tsx', import.meta.url)
-    : new URL('../src/client/work-panel.tsx', import.meta.url))
+    : new URL('../src/client/work-panel.tsx', import.meta.url), { document: { addEventListener() {}, removeEventListener() {} } })
 }
 
 async function withPanel(run: (panel: WorkPanelController) => Promise<void>, host: WorkHost = { resources: async () => [], sessions: async () => [] }, source?: GitHubSourcePort) {
@@ -79,7 +79,7 @@ describe('production Issue source acceptance controls', () => {
       await panel.configureSource('a2d2-dev','dsh-plugin');await panel.openIssue(112)
       const writes=vi.spyOn(panel.client,'command')
       expect((await panel.client.query({type:'project.detail',projectId:panel.getSnapshot().projectId!})).tasks).toEqual([])
-      const form=await mountWorkPanel({controller:panel},'CurrentExecution')
+      const form=await mountWorkPanel({controller:panel},'WorkPanel')
       expect(writes).not.toHaveBeenCalled()
       form.click('开始处理')
       await vi.waitFor(()=>expect(panel.getSnapshot().detail?.task?.specification).toMatchObject({text:'',acceptance:[],missing:['body','acceptance']}))
@@ -165,12 +165,12 @@ describe('GitHub Project onboarding production controls',()=>{
   it('identifies the Project URL and confirms owner, account type and number before connecting',async()=>{
     const h=fixture(),saved=vi.fn(),form=await mountWorkPanel({controller:h.panel,onSaved:saved})
     try {
-      form.change(form.inputs()[0],'https://github.com/users/acme/projects/7');form.submit()
-      await vi.waitFor(()=>expect(form.text()).toContain('个人 acme'))
+      form.click('通过链接');form.change(form.inputs()[0],'https://github.com/users/acme/projects/7');form.submit()
+      await vi.waitFor(()=>expect(form.text()).toContain('Product roadmap'))
       expect(h.panel.getSnapshot().connection.candidate).toMatchObject({githubProject:{owner:'acme',type:'user',number:7}})
-      expect(form.text()).toContain('viewer · 已确认可读取')
+      expect(h.panel.getSnapshot().connection.candidate?.identity.login).toBe('viewer')
       expect(h.command).not.toHaveBeenCalled()
-      form.click('确认添加并进入概览');await vi.waitFor(()=>expect(saved).toHaveBeenCalledOnce())
+      form.click('添加');await vi.waitFor(()=>expect(saved).toHaveBeenCalledOnce())
       expect(h.command).toHaveBeenCalledExactlyOnceWith({type:'source.connect',url:'https://github.com/users/acme/projects/7',commandId:expect.any(String)})
       expect(h.panel.getSnapshot()).toMatchObject({projectId:'p1',object:'issues',detail:null,source:{tab:'overview'}})
       expect(h.query.mock.calls.some(([q])=>q.type==='resources.list'||q.type==='source.execution-options')).toBe(false)
@@ -180,11 +180,11 @@ describe('GitHub Project onboarding production controls',()=>{
     const h=fixture(),saved=vi.fn(),form=await mountWorkPanel({controller:h.panel,onSaved:saved})
     h.command.mockRejectedValueOnce(Error('connection lost'))
     try {
-      form.change(form.inputs()[0],'https://github.com/users/acme/projects/7');form.submit()
+      form.click('通过链接');form.change(form.inputs()[0],'https://github.com/users/acme/projects/7');form.submit()
       await vi.waitFor(()=>expect(h.panel.getSnapshot().connection.candidate).not.toBeNull())
-      form.click('确认添加并进入概览')
+      form.click('添加')
       await vi.waitFor(()=>expect(form.text()).toContain('connection lost'))
-      expect(saved).not.toHaveBeenCalled();form.click('确认添加并进入概览');await vi.waitFor(()=>expect(saved).toHaveBeenCalledOnce())
+      expect(saved).not.toHaveBeenCalled();form.click('添加');await vi.waitFor(()=>expect(saved).toHaveBeenCalledOnce())
       expect(h.command).toHaveBeenCalledTimes(2);expect(h.command.mock.calls[0]![0]).toEqual(h.command.mock.calls[1]![0])
       expect(h.command.mock.calls[0]![0]).not.toHaveProperty('resource')
     }finally{form.unmount()}
@@ -235,7 +235,7 @@ describe('continuous processing production scope controls',()=>{
     try {
       await vi.waitFor(()=>expect(form.nodes('li')).toHaveLength(1))
       expect(form.text()).toContain('Waiting for acceptance evidence')
-      form.click('查看当前执行 / 暂停处理')
+      form.click('当前执行')
       expect(open).toHaveBeenCalledExactlyOnceWith({projectId:'p1',taskId:'t1'})
       expect(h.command).not.toHaveBeenCalled()
     }finally{form.unmount()}

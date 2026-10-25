@@ -46,6 +46,7 @@ export async function apply(ctx: Context, config: Config = {}): Promise<void> {
   if (!isAbsolute(directory)) throw new Error('a2d2-work directory must be absolute')
   const runtimeId = await runtimeIdentity(directory)
   const source = config.github === false ? undefined : ctx.get('a2d2GitHubSource') ?? new GitHubSource()
+  if (source instanceof GitHubSource) ctx.effect(() => () => source.dispose(), 'GitHub login cleanup')
   const planner = createLlmPlanner(options => {
     const llm = ctx.get('llm')
     if (!llm) throw new Error('Host LLM service is unavailable')

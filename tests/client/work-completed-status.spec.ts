@@ -48,7 +48,7 @@ describe('completed execution presentation', () => {
     const h = setup(); await h.panel.openTask(ref)
     expect(html(h.panel)).toContain('正在收口')
     for (const label of ['暂停处理', '恢复处理', '接续到新会话', '等待回复', '等待请求']) expect(html(h.panel)).not.toContain(label)
-    expect(html(h.panel)).toContain('进入当前会话')
+    expect(html(h.panel)).toContain('进入会话')
     h.panel.setDetailTab('sessions')
     expect(html(h.panel)).toContain('只读历史')
     h.panel.setDetailTab('overview')

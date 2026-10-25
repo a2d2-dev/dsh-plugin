@@ -7,8 +7,8 @@
  * @module @deepseek-ai/dsh-a2d2/client/config-page
  */
 
-import { createElement, useEffect, useMemo, useState } from 'react'
-import type { ChangeEvent, ReactNode } from 'react'
+import { createElement, useEffect, useMemo, useRef, useState } from 'react'
+import type { ChangeEvent, DragEvent, KeyboardEvent, ReactNode } from 'react'
 import type { InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
 import {
   CLOSED_HIGHWAY_STATIONS,
@@ -236,6 +236,22 @@ export function moveConfigCandidate(
   return replaceCandidateList(settings, scope, routes)
 }
 
+/** Move the existing candidate intact, including its saved reasoning effort. */
+export function reorderConfigCandidate(
+  settings: StageAgentsSettings,
+  scope: ConfigCandidateScope,
+  sourceRoute: string,
+  targetRoute: string,
+): StageAgentsSettings {
+  const routes = [...(scope === 'consult' ? settings.consult : settings.agents[scope])]
+  const source = routes.findIndex(candidate => candidateRoute(candidate) === sourceRoute)
+  const target = routes.findIndex(candidate => candidateRoute(candidate) === targetRoute)
+  if (source < 0 || target < 0 || source === target) return settings
+  const [candidate] = routes.splice(source, 1)
+  routes.splice(target, 0, candidate!)
+  return replaceCandidateList(settings, scope, routes)
+}
+
 export function setConfigCandidateEffort(
   settings: StageAgentsSettings,
   scope: ConfigCandidateScope,
@@ -253,6 +269,17 @@ export function setConfigCandidateEffort(
 
 export function configWarnings(settings: StageAgentsSettings): readonly string[] {
   return stageAgentWarnings(settings)
+}
+
+export function configHasChanges(settings: StageAgentsSettings, saved?: StageAgentsSettings): boolean {
+  if (!saved) return false
+  const sameCandidates = (left: readonly ModelCandidate[], right: readonly ModelCandidate[]) =>
+    left.length === right.length && left.every((candidate, index) =>
+      candidateRoute(candidate) === candidateRoute(right[index]!)
+      && candidateEffort(candidate) === candidateEffort(right[index]!))
+  return CLOSED_HIGHWAY_STATIONS.some(stage => settings.stages[stage] !== saved.stages[stage])
+    || STAGE_AGENTS.some(agent => !sameCandidates(settings.agents[agent], saved.agents[agent]))
+    || !sameCandidates(settings.consult, saved.consult)
 }
 
 export function configUpdatePayload(settings: StageAgentsSettings, revision: number): { readonly settings: StageAgentsSettings; readonly expectedRevision: number } {
@@ -333,10 +360,19 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
   const [catalog, setCatalog] = useState<readonly string[]>([])
   const [status, setStatus] = useState<string>('加载中')
   const [saving, setSaving] = useState(false)
+  const dragSource = useRef<{ scope: ConfigCandidateScope; route: string } | null>(null)
+  const [draggedRoute, setDraggedRoute] = useState<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<string | null>(null)
+  const clearDrag = () => {
+    dragSource.current = null
+    setDraggedRoute(null)
+    setDropTarget(null)
+  }
   const [probes, setProbes] = useState<Readonly<Record<string, ProbeResult | undefined>>>(EMPTY_PROBES)
   const [selected, setSelected] = useState<Record<string, string>>({})
   const warnings = useMemo(() => configWarnings(draft), [draft])
   const rows = useMemo(() => configCandidateRows(draft), [draft])
+  const dirty = configHasChanges(draft, snapshot?.settings)
 
   useEffect(() => {
     let alive = true
@@ -369,7 +405,7 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
     setDraft(current => replaceCandidateList(current, scope, routes))
   }
   const save = async (): Promise<void> => {
-    if (snapshot?.revision === undefined) return
+    if (!dirty || saving || snapshot?.revision === undefined) return
     setSaving(true)
     setStatus('保存中')
     try {
@@ -408,10 +444,11 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
   }
 
   const renderStationControl = (station: HighwayViewStation): ReactNode => {
-    if (station.id === 'standalone') return createElement('span', { className: css.configNoSwitch }, 'CEO（任意 skill）')
+    if (station.id === 'standalone') return createElement('span', { className: css.configNoSwitch }, 'CEO')
     return createElement('select', {
       className: css.configSelect,
       disabled: saving,
+      'aria-label': `/${station.id} 负责角色`,
       value: station.agentKey ?? draft.stages[station.id],
       onChange: (event: ChangeEvent<HTMLSelectElement>) => {
         setDraft(current => setConfigStageAgent(current, station.id as Stage, event.currentTarget.value as StageAgent))
@@ -434,54 +471,111 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
         const options = snapshot?.efforts?.[route] ?? []
         const unsupported = effort !== '' && !options.some(option => option.id === effort)
         const result = probes[routeKey(scope, candidate)]
-        return createElement('div', { className: css.configRoute, key: route },
-          createElement('span', { className: css.configRouteName }, route),
-          createElement('select', {
-            className: css.configSelect,
-            'aria-label': `${row.label} ${route} 推理强度`,
-            value: effort,
-            disabled: saving || (options.length === 0 && effort === ''),
-            onChange: (event: ChangeEvent<HTMLSelectElement>) => {
-              const value = event.currentTarget.value
-              setDraft(current => setConfigCandidateEffort(current, scope, route, value, snapshot?.efforts ?? {}))
-            },
+        const separator = route.indexOf('/')
+        const provider = separator < 0 ? '' : route.slice(0, separator)
+        const model = separator < 0 ? route : route.slice(separator + 1)
+        const dragKey = `${scope}:${route}`
+        const sourceIndex = routes.findIndex(item => candidateRoute(item) === dragSource.current?.route)
+        const canDrop = !saving && dragSource.current?.scope === scope && sourceIndex >= 0 && sourceIndex !== index
+        return createElement('div', {
+          className: `${css.configRoute} ${draggedRoute === dragKey ? css.configDragging : ''} ${dropTarget === dragKey && canDrop ? sourceIndex < index ? css.configDropAfter : css.configDropBefore : ''}`,
+          key: route,
+          'data-config-route': route,
+          onDragOver: (event: DragEvent<HTMLDivElement>) => {
+            if (!canDrop) return
+            event.preventDefault()
+            event.dataTransfer.dropEffect = 'move'
+            setDropTarget(dragKey)
           },
-            createElement('option', { value: '' }, metadataUnavailable ? '推理强度元数据不可用' : options.length === 0 ? '未声明推理强度' : '默认（未指定）'),
-            unsupported ? createElement('option', { value: effort }, `${effort}（${metadataUnavailable ? '元数据不可用' : '不受支持'}）`) : null,
-            ...options.map(option => createElement('option', { key: option.id, value: option.id }, option.name)),
+          onDragLeave: (event: DragEvent<HTMLDivElement>) => {
+            if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return
+            setDropTarget(current => current === dragKey ? null : current)
+          },
+          onDrop: (event: DragEvent<HTMLDivElement>) => {
+            if (!canDrop || !dragSource.current) return
+            event.preventDefault()
+            const source = dragSource.current
+            setDraft(current => reorderConfigCandidate(current, scope, source.route, route))
+            setStatus('优先级已调整，保存后生效')
+            clearDrag()
+          },
+        },
+          createElement('div', { className: css.configRouteName, title: route },
+            createElement('button', {
+              className: css.configDragHandle,
+              type: 'button',
+              draggable: !saving && routes.length > 1,
+              disabled: saving || routes.length <= 1,
+              title: '拖动排序，或聚焦后按 ↑ / ↓ 调整优先级',
+              'aria-label': `${row.label} ${route} 拖动排序，当前第 ${index + 1} 位`,
+              onDragStart: (event: DragEvent<HTMLButtonElement>) => {
+                if (saving || routes.length <= 1) { event.preventDefault(); return }
+                dragSource.current = { scope, route }
+                event.dataTransfer.effectAllowed = 'move'
+                event.dataTransfer.setData('text/plain', route)
+                const element = event.currentTarget.closest('[data-config-route]')
+                if (element instanceof HTMLElement) event.dataTransfer.setDragImage(element, 16, 16)
+                setDraggedRoute(dragKey)
+              },
+              onDragEnd: clearDrag,
+              onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => {
+                if (saving || !['ArrowUp', 'ArrowDown'].includes(event.key)) return
+                event.preventDefault()
+                const delta = event.key === 'ArrowUp' ? -1 : 1
+                if (index + delta < 0 || index + delta >= routes.length) return
+                setDraft(current => moveConfigCandidate(current, scope, index, delta))
+                setStatus(`${row.label} ${model} 已移至第 ${index + delta + 1} 位，保存后生效`)
+              },
+            }, createElement('span', { 'aria-hidden': true }, '⠿')),
+            createElement('span', { className: css.configCandidateOrder, 'aria-label': `优先级 ${index + 1}` }, index + 1),
+            createElement('div', { className: css.configModelIdentity },
+              createElement('span', { className: css.configModelName }, model),
+              createElement('div', { className: css.configModelDetails },
+                createElement('span', { className: css.configProvider }, provider),
+                options.length === 0 && effort === ''
+                  ? createElement('span', {
+                    className: css.configEffortNote,
+                    title: metadataUnavailable ? '未能获取该模型的推理强度信息，当前保留宿主默认设置。' : '宿主未为该模型声明可选推理强度。',
+                  }, metadataUnavailable ? '推理强度暂不可设置' : '未声明推理强度')
+                  : createElement('select', {
+                    className: css.configSelect,
+                    'aria-label': `${row.label} ${route} 推理强度`,
+                    value: effort,
+                    disabled: saving || (options.length === 0 && effort === ''),
+                    onChange: (event: ChangeEvent<HTMLSelectElement>) => {
+                      const value = event.currentTarget.value
+                      setDraft(current => setConfigCandidateEffort(current, scope, route, value, snapshot?.efforts ?? {}))
+                    },
+                  },
+                    createElement('option', { value: '' }, metadataUnavailable ? '默认（信息不可用）' : options.length === 0 ? '未声明推理强度' : '默认（未指定）'),
+                    unsupported ? createElement('option', { value: effort }, `${effort}（${metadataUnavailable ? '元数据不可用' : '不受支持'}）`) : null,
+                    ...options.map(option => createElement('option', { key: option.id, value: option.id }, option.name)),
+                  ),
+              ),
+            ),
           ),
-          createElement('button', {
-            className: css.configIconButton,
-            type: 'button',
-            title: '上移',
-            disabled: saving || index === 0,
-            onClick: () => setDraft(current => moveConfigCandidate(current, scope, index, -1)),
-          }, '↑'),
-          createElement('button', {
-            className: css.configIconButton,
-            type: 'button',
-            title: '下移',
-            disabled: saving || index === routes.length - 1,
-            onClick: () => setDraft(current => moveConfigCandidate(current, scope, index, 1)),
-          }, '↓'),
-          createElement('button', {
-            className: css.configButton,
-            type: 'button',
-            onClick: () => { void probe(scope, candidate) },
-          }, '测试'),
-          createElement('button', {
-            className: css.configIconButton,
-            type: 'button',
-            title: '删除',
-            disabled: saving || routes.length <= 1,
-            onClick: () => setRoutes(scope, routes.filter(item => candidateRoute(item) !== route)),
-          }, '×'),
+          createElement('div', { className: css.configRouteActions },
+            createElement('button', {
+              className: css.configButton,
+              type: 'button',
+              onClick: () => { void probe(scope, candidate) },
+            }, '测试'),
+            createElement('button', {
+              className: css.configIconButton,
+              type: 'button',
+              title: '删除',
+              'aria-label': `${row.label} ${route} 删除`,
+              disabled: saving || routes.length <= 1,
+              onClick: () => setRoutes(scope, routes.filter(item => candidateRoute(item) !== route)),
+            }, '×'),
+          ),
           result === undefined ? null : createElement('span', { className: css.configProbe }, probeResultText(result)),
         )
       }),
       createElement('div', { className: css.configAddRow },
         createElement('select', {
           className: css.configSelect,
+          'aria-label': `${row.label} 添加模型候选`,
           value: selectedRoute,
           onChange: (event: ChangeEvent<HTMLSelectElement>) => setSelected(current => ({ ...current, [scope]: event.currentTarget.value })),
         },
@@ -507,19 +601,21 @@ export function A2d2ConfigSection(props: A2d2ConfigSectionProps): ReactNode {
     createElement('header', { className: css.configHeader },
       createElement('div', null,
         createElement('h2', { className: css.configTitle }, 'A2D2 配置'),
-        createElement('p', { className: css.configSubtitle }, `状态：${status}`),
+        createElement('p', { className: css.configSubtitle, role: 'status', 'aria-live': 'polite' }, `状态：${status}`),
       ),
-      createElement('button', { className: css.configSave, type: 'button', disabled: saving || snapshot?.revision === undefined, onClick: () => { void save() } }, '保存'),
+      dirty || saving ? createElement('button', { className: css.configSave, type: 'button', disabled: saving || snapshot?.revision === undefined, onClick: () => { void save() } }, saving ? '保存中…' : '保存') : null,
     ),
     createElement('section', { className: css.configSection },
       createElement('h3', { className: css.configSectionTitle }, 'Matt 工作流'),
       createElement(HighwayMap, { view: configHighwayView(draft, catalog), mode: 'editable', renderStationControl }),
       warnings.length === 0 ? null : createElement('div', { className: css.configWarning }, warnings.join('\n')),
+      createElement('h3', { className: css.configSectionTitle }, '模型候选'),
+      createElement('p', { className: css.configHelp }, '按顺序尝试模型。拖动左侧手柄排序，也可聚焦手柄后按 ↑ / ↓；保存后生效。'),
       createElement('div', { className: css.configRows },
         ...rows.map(row => createElement('article', { className: css.configRow, key: row.scope },
           createElement('div', { className: css.configRowHead },
             createElement('strong', null, row.label),
-            createElement('span', null, row.group),
+            row.scope === 'consult' ? createElement('span', null, row.group) : null,
           ),
           renderRoutes(row),
         )),

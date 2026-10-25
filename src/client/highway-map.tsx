@@ -41,7 +41,10 @@ export function HighwayMap(props: HighwayMapProps): ReturnType<typeof createElem
           createElement('span', { className: css.highwayRole }, station.role),
         ),
         props.renderStationControl === undefined ? null : props.renderStationControl(station),
-        stationModelLabel(station) === undefined ? null : createElement('span', { className: css.highwayModel }, stationModelLabel(station)),
+        stationModelLabel(station) === undefined ? null : createElement('span', {
+          className: css.highwayModel,
+          title: stationModelLabel(station),
+        }, props.mode === 'editable' ? station.models ?? '无可用模型' : stationModelLabel(station)),
       )),
     ),
   )

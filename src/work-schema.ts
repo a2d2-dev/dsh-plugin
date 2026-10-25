@@ -81,6 +81,8 @@ export const continuousRuleSchema = z.object({
   active: taskRefSchema.optional(), error: z.object({ code: referenceId, message: text }).strict().optional(),
 }).strict()
 export const commandSchema = z.discriminatedUnion('type', [
+  z.object({ ...command, type: z.literal('github.logout'), login: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9-]{0,38}$/), nodeId: referenceId }).strict(),
+  z.object({ ...command, type: z.literal('github.login'), action: z.enum(['start', 'cancel']) }).strict(),
   z.object({ ...command, type: z.literal('continuous.instruct'), projectId: id, sourceId: id, expectedVersion: z.number().int().positive(), text }).strict(),
   z.object({ ...command, type: z.literal('continuous.preview'), projectId: id, sourceId: id, expectedVersion: z.number().int().positive() }).strict(),
   z.object({ ...command, type: z.literal('continuous.block'), projectId: id, sourceId: id, expectedVersion: z.number().int().positive(), nodeId: referenceId, blocked: z.boolean() }).strict(),
@@ -115,6 +117,8 @@ export const commandSchema = z.discriminatedUnion('type', [
     agentPreset: referenceId, model: modelSchema, permissionPreset: referenceId }).strict(),
 ])
 export const querySchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('github.account') }).strict(),
+  z.object({ type: z.literal('github.repositories'), page: z.number().int().min(1).max(10000) }).strict(),
   z.object({ type: z.literal('source.catalog'), projectId: id, sourceId: id, refresh: z.boolean().optional() }).strict(),
   z.object({ type: z.literal('source.identify'), url: z.string().min(1).max(2048) }).strict(),
   z.object({ type: z.literal('source.execution-options'), projectId: id, sourceId: id }).strict(),

@@ -7,7 +7,7 @@ import type { GitHubIssue, SourceCatalog, WorkSource } from '../../src/work-sour
 
 const identity={login:'reader',nodeId:'U',name:null}
 const issue:GitHubIssue={nodeId:'I',number:246,title:'Private snapshot sentinel',url:'https://github.com/acme/app/issues/246',body:null,repository:{owner:'acme',repository:'app'},state:'open',assignees:['reader'],labels:['real-label'],updatedAt:'2026-10-24T00:00:00Z',observedAt:'2026-10-24T00:00:00Z'}
-const catalog:SourceCatalog={observedAt:issue.observedAt,pullRequests:[],pullRequestsComplete:true,views:[{id:'v1',number:1,name:'Actual view',filter:'',layout:'TABLE_LAYOUT'}],fields:[{id:'a',name:'Assignees',dataType:'ASSIGNEES'}],viewsComplete:true,limitations:[]}
+const catalog:SourceCatalog={observedAt:issue.observedAt,pullRequests:[{nodeId:'PR1',number:1,title:'Observed change',url:'https://github.com/acme/app/pull/1',repository:issue.repository,state:'open',draft:false,updatedAt:issue.updatedAt,issues:[],issuesComplete:true,checks:null,review:null,membership:'project'}],pullRequestsComplete:true,views:[{id:'v1',number:1,name:'Actual view',filter:'',layout:'TABLE_LAYOUT'}],fields:[{id:'a',name:'Assignees',dataType:'ASSIGNEES'}],viewsComplete:true,limitations:[]}
 async function setup(view=1,available=true){
   const source:WorkSource={id:'s',projectId:'p',provider:'github',githubProject:{owner:'acme',type:'org',number:1},enabled:true,version:1,sequence:1,requests:{},pages:[],observations:[{issue,sequence:1}],entryUrls:[`https://github.com/orgs/acme/projects/1/views/${view}`],projectSnapshot:{identity,project:{nodeId:'P',title:'Project',url:'https://github.com/orgs/acme/projects/1',closed:false},observedAt:issue.observedAt,items:[{id:'item',kind:'issue',archived:false,issueNodeId:issue.nodeId,title:issue.title,url:issue.url,fields:[],fieldsPartial:false}]}}
   const commands:unknown[]=[]
@@ -26,7 +26,7 @@ it.each([{view:999,available:true,reason:'保存的 view 不在当前可读取�
 })
 it('reuses discoverable column entries and visible scoped search across Project, Issue and PR tables',async()=>{
   const {controller,commands,render}=await setup()
-  for(const [tab,search] of [['project','搜索 Project 条目'],['issues','搜索已加载 Issues'],['prs','搜索 PR']] as const){
+  for(const [tab,search] of [['project','搜索 Project 条目'],['issues','搜索来源 Issues'],['prs','搜索 PR']] as const){
     await controller.selectSourceTab(tab)
     const html=render()
     expect(html).toContain(`aria-label="${search}"`)

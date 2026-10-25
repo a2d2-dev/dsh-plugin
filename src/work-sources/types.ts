@@ -60,6 +60,11 @@ export interface SourceCatalog {
 }
 export type SourceCandidate = { kind: 'project' | 'repository'; nodeId: string; title: string; url: string; entryUrl: string; identity: GitHubIdentity; repository?: GitHubRepository; githubProject?: GitHubProjectRef }
 export interface GitHubSourcePort {
+  account?(): Promise<GitHubAccount>
+  repositories?(page: number): Promise<GitHubRepositoryPage>
+  login?(action: 'start' | 'cancel'): GitHubLogin
+  logout?(expected: { login: string; nodeId: string }): Promise<GitHubAccount>
+  dispose?(): void
   catalog?(source: { repository?: GitHubRepository; githubProject?: GitHubProjectRef }): Promise<SourceCatalog>
   identify?(url: string): Promise<SourceCandidate>
   /** Host-only write capability. Targets come exclusively from accepted local bindings. */
@@ -87,3 +92,9 @@ export interface ExternalBinding {
   relatedObservations?: GitHubIssue[]
   hierarchyWarnings?: { code: 'source-hierarchy-frozen'; reason: string; parent: import('../work-types.ts').TaskRef; child: import('../work-types.ts').TaskRef; message: string }[]
 }
+
+
+export interface GitHubLogin { state: 'idle' | 'pending' | 'complete' | 'error'; code?: string; url?: string; message?: string }
+export interface GitHubAccount { status: 'connected' | 'disconnected' | 'unavailable'; identity?: GitHubIdentity; message?: string; canLogout?: boolean; login: GitHubLogin }
+export interface GitHubRepositoryOption { nodeId: string; owner: string; name: string; url: string; description: string | null; private: boolean; archived: boolean }
+export interface GitHubRepositoryPage { identity: GitHubIdentity; items: GitHubRepositoryOption[]; nextPage?: number }

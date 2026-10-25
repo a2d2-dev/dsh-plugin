@@ -675,6 +675,17 @@ export class WorkApplication {
     const parsed = commandSchema.safeParse(input)
     if (!parsed.success) return failed('invalid-command', 'Invalid work command')
     const command = parsed.data
+    if (command.type === 'github.logout') {
+      if (!actor.operator) return failed('forbidden', 'Host operator authorization is required')
+      if (!this.source?.logout) return failed('github-capability-unavailable', '当前宿主未提供 GitHub 退出能力')
+      try { return { status: 'completed', githubAccount: await this.source.logout(command) } }
+      catch (error) { return failed(error instanceof SourceError ? error.code : 'github-unavailable', error instanceof SourceError ? error.message : '退出 GitHub 失败') }
+    }
+    if (command.type === 'github.login') {
+      if (!actor.operator) return failed('forbidden', 'Host operator authorization is required')
+      if (!this.source?.login) return failed('github-capability-unavailable', 'GitHub 登录能力不可用')
+      return { status: 'completed', githubLogin: this.source.login(command.action) }
+    }
     let sourceCandidate: SourceCandidate | undefined
     if (!actor.operator && command.type === 'source.connect') return failed('forbidden', 'Host operator authorization is required')
     let admissionChoices: import('./work-types.ts').HostExecutionChoices | undefined
@@ -1088,7 +1099,7 @@ export class WorkApplication {
     task.version++
     task.activity.push({ commandId: command.commandId, type: command.type, version: task.version })
   }
-  private async apply(state: WorkSnapshot, command: WorkCommand, admissionChoices?: import('./work-types.ts').HostExecutionChoices, candidate?: SourceCandidate, reporter?: import('@deepseek-ai/dsh-tools').ToolExecutionToken): Promise<WorkResult> {
+  private async apply(state: WorkSnapshot, command: Exclude<WorkCommand, { type: 'github.login' | 'github.logout' }>, admissionChoices?: import('./work-types.ts').HostExecutionChoices, candidate?: SourceCandidate, reporter?: import('@deepseek-ai/dsh-tools').ToolExecutionToken): Promise<WorkResult> {
     if (command.type === 'source.connect') {
       const target = candidate?.githubProject ?? command.githubProject, repository = candidate?.repository
       if (!target && !repository) return failed('github-invalid-scope', 'Source identification did not return a scope')
@@ -1363,6 +1374,13 @@ export class WorkApplication {
     const parsed = querySchema.safeParse(input)
     if (!parsed.success) return failed('invalid-query', 'Invalid work query')
     const query = parsed.data
+    if (query.type === 'github.account' || query.type === 'github.repositories') {
+      try {
+        if (query.type === 'github.account' && this.source?.account) return { status: 'completed', githubAccount: await this.source.account() }
+        if (query.type === 'github.repositories' && this.source?.repositories) return { status: 'completed', githubRepositories: await this.source.repositories(query.page) }
+        return failed('github-capability-unavailable', '当前宿主未提供 GitHub 账号和仓库目录能力')
+      } catch (error) { return failed(error instanceof SourceError ? error.code : 'github-unavailable', error instanceof SourceError ? error.message : 'GitHub 暂时不可用') }
+    }
     if (query.type === 'source.identify') {
       if (!this.source?.identify) return failed('github-capability-unavailable', 'Source identification is unavailable')
       try { return { status: 'completed', candidate: await this.source.identify(query.url) } } catch (error) { return failed(error instanceof SourceError ? error.code : 'github-unavailable', error instanceof Error ? error.message : 'Source could not be identified') }

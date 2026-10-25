@@ -24,6 +24,18 @@ declare module '*.module.css' {
     readonly sourceToolbar: string
     readonly delegation: string
     readonly eyebrow: string
+    readonly detailPanel: string
+    readonly detailStart: string
+    readonly markdownCode: string
+    readonly codeToolbar: string
+    readonly issueMarkdown: string
+    readonly markdownTable: string
+    readonly idleExecution: string
+    readonly detailActions: string
+    readonly detailTabs: string
+    readonly detailContent: string
+    readonly externalSource: string
+    readonly issueFacts: string
     readonly issueHeader: string
     readonly badge: string
     readonly projectToolbar: string
@@ -73,6 +85,71 @@ declare module '*.module.css' {
     readonly menuWrap: string
     readonly delegationHeader: string
     readonly settingsPanel: string
+    readonly iconSpin: string
+    readonly statusWarning: string
+    readonly visuallyHidden: string
+    readonly logoutConfirmActions: string
+    readonly dangerAction: string
+    readonly panelContext: string
+    readonly issueList: string
+    readonly issueQuery: string
+    readonly issueQueryBar: string
+    readonly issueSearch: string
+    readonly issueFilterToggle: string
+    readonly issueResultCount: string
+    readonly issueFilterPanel: string
+    readonly issueFilterActions: string
+    readonly issueApplied: string
+    readonly issueEmpty: string
+    readonly issueEmptyIcon: string
+    readonly issueReadNotice: string
+    readonly issueSkeleton: string
+    readonly overviewSummary: string
+    readonly overviewActivity: string
+    readonly overviewSegments: string
+    readonly overviewActivityList: string
+    readonly overviewActivityIcon: string
+    readonly overviewActivityState: string
+    readonly overviewActivityEmpty: string
+    readonly overviewExternal: string
+    readonly overviewFootnote: string
+    readonly tableOptionsBar: string
+    readonly tableOptions: string
+    readonly panelTitle: string
+    readonly panelUtilities: string
+    readonly closePanel: string
+    readonly sourceContext: string
+    readonly sourceSwitcher: string
+    readonly sourceSwitchTrigger: string
+    readonly sourceSwitchMenu: string
+    readonly sourceSwitchSearch: string
+    readonly sourceSwitchOptions: string
+    readonly sourcePicker: string
+    readonly sourceKind: string
+    readonly addSourceButton: string
+    readonly sourceSync: string
+    readonly sourceSyncDetails: string
+    readonly sourceSyncPopover: string
+    readonly sourceRefresh: string
+    readonly githubAccountHeading: string
+    readonly githubAccountStatus: string
+    readonly githubLoginContent: string
+    readonly githubAccountNote: string
+    readonly githubAccount: string
+    readonly githubAvatar: string
+    readonly githubAccountMenu: string
+    readonly githubAccountActions: string
+    readonly sourceConfirm: string
+    readonly sourceConnect: string
+    readonly repositoryFilters: string
+    readonly repositoryScope: string
+    readonly loadSentinel: string
+    readonly repositoryList: string
+    readonly repositoryOption: string
+    readonly sourceLinkEntry: string
+    readonly observationNotice: string
+    readonly sourceFreshness: string
+    readonly sourceOverview: string
     readonly sourceActions: string
     readonly iconButton: string
     readonly requirementBranch: string
@@ -215,6 +292,18 @@ declare module '*.module.css' {
     readonly configRowHead: string
     readonly configRoutes: string
     readonly configRoute: string
+    readonly configHelp: string
+    readonly configCandidateOrder: string
+    readonly configModelDetails: string
+    readonly configDragHandle: string
+    readonly configDragging: string
+    readonly configDropBefore: string
+    readonly configDropAfter: string
+    readonly configRouteActions: string
+    readonly configModelIdentity: string
+    readonly configModelName: string
+    readonly configProvider: string
+    readonly configEffortNote: string
     readonly configRouteName: string
     readonly configProbe: string
     readonly configNoSwitch: string

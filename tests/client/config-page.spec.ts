@@ -1,3 +1,6 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { HighwayMap } from '../../src/client/highway-map.tsx'
 import { Context } from '@deepseek-ai/cordis'
 import { Service } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
@@ -9,6 +12,7 @@ import {
   addConfigCandidate,
   configCandidateRows,
   configHighwayView,
+  configHasChanges,
   configUpdatePayload,
   configWarnings,
   loadModelRouteCatalog,
@@ -16,6 +20,7 @@ import {
   normalizeConfigInjected,
   probeResultText,
   removeConfigCandidate,
+  reorderConfigCandidate,
   setConfigStageAgent,
   setConfigCandidateEffort,
 } from '../../src/client/config-page.tsx'
@@ -255,5 +260,96 @@ describe('A2D2 config page view model', () => {
     expect(probeResultText({ status: 'pending', reason: '测试中' })).toBe('测试中…')
     expect(probeResultText({ status: 'normal', reason: 'OK' })).toBe('正常 · OK')
     expect(probeResultText({ status: 'refusal', reason: 'policy block' })).toBe('拒答 · policy block')
+  })
+})
+
+
+describe('configuration presentation', () => {
+  it('keeps role context on the orb while avoiding duplicate role labels in settings', () => {
+    const view = configHighwayView(DEFAULT_STAGE_AGENTS, [])
+    const readonly = renderToStaticMarkup(createElement(HighwayMap, { view }))
+    const editable = renderToStaticMarkup(createElement(HighwayMap, { view, mode: 'editable' }))
+    expect(readonly).toContain('CEO ·')
+    expect(editable).not.toContain('>CEO ·')
+    expect(editable).toContain('claude-fable-5-1')
+  })
+
+  it('presents unavailable effort as explanatory text and keeps configuration actions named', () => {
+    const html = renderToStaticMarkup(createElement(A2d2ConfigSection, {}))
+    expect(html).toContain('推理强度暂不可设置')
+    expect(html).toContain('未能获取该模型的推理强度信息')
+    expect(html).not.toContain('推理强度元数据不可用</option>')
+    expect(html).toContain('aria-label="/grill 负责角色"')
+    expect(html).toContain('aria-label="CEO 添加模型候选"')
+    expect(html).toContain('aria-label="优先级 1"')
+    expect(html).toContain('claude-bray')
+    expect(html).toContain('claude-fable-5-1')
+  })
+})
+
+
+describe('model candidate drag ordering', () => {
+  it('moves candidates in both directions without losing effort or changing other roles', () => {
+    const preferred = { route: 'provider/first', reasoningEffort: 'high' }
+    const settings = {
+      ...DEFAULT_STAGE_AGENTS,
+      agents: { ...DEFAULT_STAGE_AGENTS.agents, ceo: [preferred, 'provider/middle', 'provider/last'] },
+    }
+    const moved = reorderConfigCandidate(settings, 'ceo', 'provider/first', 'provider/last')
+    expect(moved.agents.ceo).toEqual(['provider/middle', 'provider/last', preferred])
+    expect(moved.agents.ceo[2]).toBe(preferred)
+    expect(moved.agents.engineer).toBe(settings.agents.engineer)
+    expect(settings.agents.ceo).toEqual([preferred, 'provider/middle', 'provider/last'])
+    expect(reorderConfigCandidate(moved, 'ceo', 'provider/first', 'provider/middle').agents.ceo).toEqual(settings.agents.ceo)
+  })
+
+  it('does not import a candidate from another list and also sorts consultation candidates', () => {
+    const settings = { ...DEFAULT_STAGE_AGENTS, consult: ['provider/one', 'provider/two'] }
+    expect(reorderConfigCandidate(settings, 'consult', 'other/missing', 'provider/one')).toBe(settings)
+    expect(reorderConfigCandidate(settings, 'consult', 'provider/one', 'other/missing')).toBe(settings)
+    expect(reorderConfigCandidate(settings, 'consult', 'provider/one', 'provider/one')).toBe(settings)
+    const moved = reorderConfigCandidate(settings, 'consult', 'provider/two', 'provider/one')
+    expect(moved.consult).toEqual(['provider/two', 'provider/one'])
+    expect(moved.agents).toBe(settings.agents)
+  })
+
+  it('exposes named drag handles with keyboard instructions instead of arrow buttons', () => {
+    const html = renderToStaticMarkup(createElement(A2d2ConfigSection, {}))
+    expect(html).toContain('draggable="true"')
+    expect(html).toContain('拖动排序，当前第 1 位')
+    expect(html).toContain('聚焦手柄后按 ↑ / ↓')
+    expect(html).not.toContain('title="上移"')
+    expect(html).not.toContain('title="下移"')
+    expect(html).toContain('aria-live="polite"')
+  })
+})
+
+
+describe('unsaved configuration changes', () => {
+  it('hides save before loading and after loading unchanged or equivalent candidates', () => {
+    expect(configHasChanges(DEFAULT_STAGE_AGENTS)).toBe(false)
+    expect(configHasChanges(DEFAULT_STAGE_AGENTS, DEFAULT_STAGE_AGENTS)).toBe(false)
+    const equivalent = {
+      ...DEFAULT_STAGE_AGENTS,
+      consult: DEFAULT_STAGE_AGENTS.consult.map(candidate => typeof candidate === 'string' ? { route: candidate } : candidate),
+    }
+    expect(configHasChanges(equivalent, DEFAULT_STAGE_AGENTS)).toBe(false)
+    const html = renderToStaticMarkup(createElement(A2d2ConfigSection, {}))
+    expect(html).not.toContain('>保存</button>')
+  })
+
+  it('detects role, effort, candidate membership and priority changes, and clears after reverting or saving', () => {
+    const original = DEFAULT_STAGE_AGENTS
+    const changedRole = setConfigStageAgent(original, 'grill', original.stages.grill === 'ceo' ? 'engineer' : 'ceo')
+    expect(configHasChanges(changedRole, original)).toBe(true)
+    expect(configHasChanges(setConfigStageAgent(changedRole, 'grill', original.stages.grill), original)).toBe(false)
+    const reordered = moveConfigCandidate(original, 'ceo', 0, 1)
+    expect(configHasChanges(reordered, original)).toBe(true)
+    expect(configHasChanges(moveConfigCandidate(reordered, 'ceo', 1, -1), original)).toBe(false)
+    expect(configHasChanges(reordered, reordered)).toBe(false)
+    expect(configHasChanges({ ...original, consult: [...original.consult, 'provider/extra'] }, original)).toBe(true)
+    const changedEffort = { ...original, consult: [{ route: 'provider/model', reasoningEffort: 'high' }] }
+    const baseEffort = { ...original, consult: [{ route: 'provider/model', reasoningEffort: 'low' }] }
+    expect(configHasChanges(changedEffort, baseEffort)).toBe(true)
   })
 })

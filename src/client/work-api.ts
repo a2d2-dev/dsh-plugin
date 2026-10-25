@@ -25,7 +25,9 @@ export function createWorkClient(fetcher: typeof fetch = globalThis.fetch.bind(g
     if (!response.ok || result?.status !== 'completed') throw new Error(`工作服务不可用（HTTP ${response.status}）`)
     if (payload.kind === 'query') {
       const query = payload.value.type
-      const valid = query === 'projects.list' ? Array.isArray(result.projects)
+      const valid = query === 'github.account' ? !!result.githubAccount && ['connected', 'disconnected', 'unavailable'].includes(result.githubAccount.status) && !!result.githubAccount.login && ['idle', 'pending', 'complete', 'error'].includes(result.githubAccount.login.state) && (result.githubAccount.status !== 'connected' || (typeof result.githubAccount.identity?.nodeId === 'string' && typeof result.githubAccount.identity.login === 'string'))
+        : query === 'github.repositories' ? !!result.githubRepositories?.identity && Array.isArray(result.githubRepositories.items)
+        : query === 'projects.list' ? Array.isArray(result.projects)
         : query === 'resources.list' ? Array.isArray(result.resources)
         : query === 'project.detail' ? result.project !== undefined && Array.isArray(result.tasks)
         : query === 'task.detail' ? result.task !== undefined

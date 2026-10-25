@@ -1,3 +1,4 @@
+import { Children, isValidElement } from 'react'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
@@ -10,13 +11,14 @@ import * as uuid from '../../src/client/browser-uuid.ts'
 
 // Run production TSX and callbacks without a DOM. Resolve imports at each source
 // module and give every rendered component its own hook slots, including children.
-export function mountProductionComponent(props: Record<string, unknown>, component: string, source = new URL('../../src/client/work-panel.tsx', import.meta.url)) {
+export function mountProductionComponent(props: Record<string, unknown>, component: string, source = new URL('../../src/client/work-panel.tsx', import.meta.url), environment: Record<string, unknown> = {}) {
   type Instance = { slots: any[]; cursor: number; setters: Map<number, (value: any) => void> }
   const instances = new Map<string, Instance>(), modules = new Map<string, any>()
   const effects: (() => void)[] = []
   let active: Instance
   const dependenciesMatch = (left?: unknown[], right?: unknown[]) => !!left && !!right && left.length === right.length && right.every((value, index) => Object.is(value, left[index]))
   const react = {
+    Children, isValidElement,
     Fragment: Symbol.for('react.fragment'),
     useState(initial: any) {
       const instance = active, index = instance.cursor++
@@ -50,7 +52,7 @@ export function mountProductionComponent(props: Record<string, unknown>, compone
     const extra = url.href === source.href && url.pathname.endsWith('/work-panel.tsx') ? '\nexport { ContinuousProcessing, CurrentExecution, Requirements, IssueSourcePanel }' : ''
     const compiled = ts.transpileModule(readFileSync(url, 'utf8') + extra, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2023 } }).outputText
     runInNewContext(compiled, {
-      module, exports: module.exports, AbortController, URL, crypto: globalThis.crypto, setInterval, clearInterval,
+      module, exports: module.exports, AbortController, URL, crypto: globalThis.crypto, setInterval, clearInterval, ...environment,
       require: (id: string) => {
         if (id === 'react') return react
         if (id.endsWith('.css')) return { default: {} }
