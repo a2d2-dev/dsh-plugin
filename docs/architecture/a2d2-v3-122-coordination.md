@@ -4,6 +4,8 @@
 
 固定 base 为 `1f562b107ad9adc046b1f0bb01929185b5c7d234`，分支 `feat/a2d2-v3-02-coordination`，PR base 为 `spec/dsh-control-panel-v3`。原 WorkApplication 只有 completed 领域回执和只读资源端口，没有 ExecutionId、双向协调约束或宿主副作用恢复记录。旧 issue-bound writer/runner 保持原权威，本阶段没有修改它们。
 
+**模型恢复规则修订（#250）：** 本文保留该阶段的实现与验证记录。“模型兼容”不再要求已有会话与启动模型快照相等。当前目标以 [ADR 0005](../adr/0005-execution-context-and-provider-capabilities.md)、[ADR 0009](../adr/0009-a2d2-settings-live-in-a-settings-namespace-with-own-page.md)和 [ADR 0011](../adr/0011-explicit-task-runtime-owns-execution-and-recovery.md)为准：同一会话可以切换模型，恢复采用宿主当前有效选择。历史相等检查不能作为继续限制用户切换模型的依据；运行时修复与回归仍由 #250 跟踪。
+
 ## 目标
 
 以公开 `WorkApplication.execute/query` 为已在规格确认的行为接缝，完成一次本地 Task 的启动、真实宿主创建/兼容复用、固定 kickoff、TaskRef 控制与消息恢复。`completed` 表示应用命令事实已保存；只有真实宿主观察说明模型是否运行，不把 accepted/creating/ready 当作模型执行。
