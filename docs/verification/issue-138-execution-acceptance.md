@@ -29,6 +29,8 @@
 | 持久性显示新增断言，修复前 | 1 项失败，精确复现进程内作业误标持久记录 | `docs/artifacts/issue-138-2026-10-25/persistence-red.log` |
 | 修复后的执行组件与接续渲染 | 2 文件，23 项通过 | `docs/artifacts/issue-138-2026-10-25/persistence-green.log` |
 | 官方 jobs 真实组合 | 1 个完整场景通过 | `docs/artifacts/issue-138-2026-10-25/official-jobs.log` |
+| 匹配 Host 8282d612 四包真实组合 | 1 个完整场景通过，268 个源码／测试快照留存 | `docs/artifacts/issue-138-2026-10-25/matched-host-jobs.log` |
+| 匹配宿主 jobs registry 与 Loader 持久回执／冷重载 | 2 文件，93 项通过 | `docs/artifacts/issue-138-2026-10-25/patched-host-restart.log` |
 | TypeScript | 通过 | `docs/artifacts/issue-138-2026-10-25/typecheck.log` |
 | 正式构建 | 通过 | `docs/artifacts/issue-138-2026-10-25/build.log` |
 | 导出与格式 | 32 个导出目标及 sidecar 存在；`git diff --check` 通过 | 命令实际输出 |
@@ -36,6 +38,10 @@
 首次测试在断言运行前因默认临时目录缺失而退出（11 suites、0 tests）。按仓库已有约定使用 `TMPDIR="$PWD/.local/tmp"` 后完整通过，未把该环境错误解释成产品缺陷。
 
 官方组合使用明确构建 `22ddee3792402c3e70ec5f86a63c3e3e895a2f60`、Node `v24.22.1`，从 `tests/official-jobs.config.ts` 进入实际 registry、tool-jobs、Session 提交和冷 journal 回读。测试验证观察不消费、真实终态收取、错误／取消／空重读不伪造交付、持久回执与冷读。该场景针对官方公开适配，不冒充当前运行宿主跨重启升级验收。
+
+匹配宿主正向组合使用 `/data/_dsh-builds/v4-141-artifacts-38d4d91/matched-host-8282` 的既有 manifest。`scripts/verify-v4-completion-host.mjs` 核对 Host `8282d61299a04f60555f9ce473af174bbe161b02` 及四包固定 SHA256，在本工作树 `.local/matched-host-8282-env` 一起安装 session／jobs／jobs-local／tool-jobs，保存 268 个源码／测试快照及真实模块解析 provenance；场景确认原生结果与真实 `job_output` 均收取后才允许新的验收释放执行槽位，不能用 nominal rc2 或混合 singleton 冒充匹配构建。
+
+随后在该宿主 checkout 只读运行 jobs-local registry 和 tool-jobs Loader 公开合同，Node `v22.23.1`、2 文件 93 项通过。Loader 场景实际 flush、dispose 并新建 Context，冷读 `jobs/registered` 与两次终态 `tool/result.meta.jobReceipt`，重新注册得到同名 job 时，Registry epoch 和 instanceId 均不同；还覆盖 owner 隔离、观察不消费和重复收取。宿主 checkout 的 `git status --short` 为空。本次重建的是测试 Context，未重启用户正在使用的 GUI 或宿主进程。
 
 ## 真实页面与执行事实
 
@@ -52,6 +58,8 @@
 - `job-persistence-deployed.png`：真实 `bash-2773` 详情保持 owner、已返回、输出已交付／消费未知／未验收，显示“宿主进程内作业”，DOM 中“持久生命周期记录”计数为 0。
 - `parent-native-issues.png` 与 `child-independent-execution.png`：从真实父 Issue #136 的七项原生子 Issue 列表点击 #138“查看进展”，进入同一个 canonical Task，再经执行图的当前会话按钮返回原生协调 Session。未导入或启动父工作，未为截图创造业务子 Issue。
 - `native-continuation-desktop.png` 与 `native-continuation-mobile.png`：原生单标题、Chat／Trajectory／A²D²接续、原生队列与输入控件保留。390px 窄屏实测 `document.scrollWidth=body.scrollWidth=390`，接续区域宽度与 scrollWidth 都为 295，无横向溢出；恢复 1600×1000 后继续验收。
+- `parent-child-entry-visible.png`：补充父 #136 页面中实际可见的 #138 子项及“查看进展”按钮，已逐图复核；与父页顶部和独立执行页截图共同记录完整往返。
+- `continuation-reserved.png`：真实原生按钮提交操作 `e55b31d6-3317-4845-9d27-2fbdabb26da7`，固定后继 `session-7f523df6-365f-4904-96bc-e4a85fd63583`；公开查询及页面确认 phase 为 `reserved`，当前仍原段 `session-4c0d3e10…`、epoch 1，准备未切入口。正式接任待后继补验。
 - 浏览器后半程使用命名上下文 `issue-138`，复用登录而不输出凭据，避免共享 default 浏览器被其他工作导航干扰。没有把共享浏览器导航变化误判为产品缺陷。
 
 短只读委派核查了显式身份、独立工作分区、只读历史查询及控制资格，未发现其已读基线范围内可证实缺陷。该审查早于本轮一行持久性修复，不能宣称独立审查覆盖了后续补丁；补丁由主会话阅读完整差异并运行红／绿回归复核。
@@ -66,4 +74,4 @@
 6. 历史与当前同一工作、退休失权、材料保留：真实宿主合同通过；最终实际接续后的只读历史截图待补。历史只读指 Task 历史投影和协调权限，保留原生旧聊天人工对话能力。
 7. 合同与前端测试通过，已有真实子会话、job、补丁部署后及桌面／窄屏截图；真实模型接续与接任历史仍未完成，不据此宣称整票完成。
 
-#142 仍 Open 只记录为来源事实，不能凭状态断言能力缺失。本轮官方组合已经通过；指定宿主的跨重启／终态回执组合最终验收仍按原边界处理。整票完成前必须继续核对以上余项并更新记录。
+#142 仍 Open 只记录为来源事实，不能凭状态断言能力缺失。本轮官方适配组合、匹配 Host 四包真实组合、匹配宿主终态回执持久化与冷重载防同名误配均已通过；无需为这些合同重启现有运行实例。整票剩余验收为本 Task 的真实模型正式接任、同工作历史只读／失权与当前关联入口，完成前继续保留未完成状态。
