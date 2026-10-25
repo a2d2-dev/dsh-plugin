@@ -21,6 +21,12 @@ pnpm test:node
 
 After committing, run `pnpm verify:pack-exports`. It deliberately rejects a dirty tree, builds a clean archive of committed HEAD, installs its tarball into an empty project and imports public Node entrypoints. `pnpm pack` runs the build itself through `prepack`; build output stays out of Git.
 
+## Dependency updates / 依赖更新
+
+Dependency updates are maintained manually. Dependabot version updates for npm and GitHub Actions are disabled by removing the repository's Dependabot configuration, and Dependabot security update PRs are disabled in repository settings. Security alerts are managed separately. Submit focused dependency PRs with the checks above; re-enabling automatic PRs requires an explicit maintainer decision. Existing Dependabot PRs #231–#239 are retained for manual review under [Issue #262](https://github.com/a2d2-dev/dsh-plugin/issues/262).
+
+依赖由维护者手动更新。本仓库通过移除 Dependabot 配置停用 npm 和 GitHub Actions 定时更新，并在仓库设置中关闭 Dependabot 安全更新自动 PR。安全告警单独管理。提交依赖更新 PR 时运行上述检查；重新启用自动 PR 须由维护者明确决定。已有 Dependabot PR #231–#239 保留供人工按需审阅，处理记录见 [Issue #262](https://github.com/a2d2-dev/dsh-plugin/issues/262)。
+
 ## Pull requests
 
 - Branch from current `main` and target `main`. Explain the concrete problem, resulting behavior and validation; link the relevant Issue.
