@@ -18,6 +18,9 @@
 - 独立复核发现并修复“继承模型丢失”“校验后重新读未经检查模型”两项；独立小复现核实最终捕获前、捕获后、校验后发生选择变化的返回配置均经过检查，fork 原事件前缀保留。
 - 最终 `TMPDIR=/tmp pnpm test`：116 文件、1321 项通过；类型检查、构建及仓库校验通过。
 - 实验目的、步骤、记录及原始日志位于 `docs/artifacts/task-session-recovery-20261024/`，按仓库规则不提交运行产物。
-- 现有 GUI 应用、真实 Task 恢复与接续、提交 HEAD 的打包验证尚待完成；代码回归不代替页面验收。
+- 干净提交 `95457b7` 的打包验证通过：32 个 export targets 完整，安装后 15 个 Node 入口可导入。最终提交 `bda0e99` 保留后续主干 #253/#254；Node 22、Node 24 和 secrets CI 均通过。
+- 已在既有 GUI 应用 `bda0e99` 构建，通过宿主公开插件管理入口重新激活工作组件，未重启 DSH 服务。页面接续详情正常显示，真实 #2104 恢复到 `ready`，`resume/applied`，无 error，当前实际模型 `codex/gpt-6-astra/high`；“准备接续”已启用。
+- TaskVersion 9、规格 v4、ExecutionId、原会话和 epoch 1 保持不变。现场证据 `live-recovery.json` 与 `original-task-ready.png` 位于上述证据目录；已回读截图。
+- 真实业务会话没有自动交接或强绑到手工创建的会话：GUI 验收到恢复及可用接续入口，完整后继创建/接任/内容送达由真实宿主回归覆盖。用户可从原任务显式准备接续，不能把旧版绑定工具的拒绝当作已转移协调权。
 
 关联：[#252](https://github.com/a2d2-dev/dsh-plugin/issues/252)，模型配置裁决见 [#250](https://github.com/a2d2-dev/dsh-plugin/issues/250)。本修复没有修改 DSH 本体或 Rise Global 业务代码，也不表示原业务任务已完成。
