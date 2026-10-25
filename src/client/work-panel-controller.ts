@@ -12,13 +12,15 @@ export type SourceTab = 'overview' | 'project' | 'issues' | 'prs'
 export interface SourcePanelState extends IssuePageRequest {
   tab: SourceTab; catalog: SourceCatalog | null; viewNumber: number | null; viewPage: number
   sources: WorkSource[]; sourceId: string | null; listing: IssuePage | null; issue: GitHubIssue | null
+  /** A click selects the detail surface before its remote data is available. */
+  issueTarget: { number: number; nodeId?: string } | null
   bindings: ExternalBinding[]; loading: boolean; error: string | null; cached: boolean
   loadingMore: boolean; moreError: string | null; listEpoch: number
   canonical: TaskRef | null
   /** Live Project scan progress while the directory load is in flight. */
   scan: SourceScanProgress | null
 }
-const emptySource = (): SourcePanelState => ({tab:'overview',catalog:null,viewNumber:null,viewPage:1,sources:[],sourceId:null,listing:null,issue:null,bindings:[],page:1,perPage:100,assignee:'@me',state:'open',loading:false,loadingMore:false,moreError:null,listEpoch:0,error:null,cached:true,canonical:null,scan:null})
+const emptySource = (): SourcePanelState => ({tab:'overview',catalog:null,viewNumber:null,viewPage:1,sources:[],sourceId:null,listing:null,issue:null,issueTarget:null,bindings:[],page:1,perPage:100,assignee:'@me',state:'open',loading:false,loadingMore:false,moreError:null,listEpoch:0,error:null,cached:true,canonical:null,scan:null})
 /** One bounded refresh scans a couple of Project pages; cap the automatic continuation rounds. */
 const MAX_SCAN_ROUNDS=120
 /** Fold one source's discovery checkpoint into the small progress shape the panel renders. */
@@ -483,7 +485,7 @@ export class WorkPanelController {
     } catch (error) { if (current()) this.update({ history: { ...this.state.history, loading: false, error: message(error) } }) }
   }
   private moreRead?: AbortController
-  private advanceSourceRevision(): number { this.moreRead?.abort(); this.moreRead=undefined; this.updateSource({loadingMore:false,moreError:null}); this.stopObservation(); this.closeHistory(); this.update({ startup: emptyStartup(), observationError: null }); return ++this.sourceRevision }
+  private advanceSourceRevision(): number { this.issueRead?.abort(); this.issueRead=undefined; this.moreRead?.abort(); this.moreRead=undefined; this.updateSource({loadingMore:false,moreError:null}); this.stopObservation(); this.closeHistory(); this.update({ startup: emptyStartup(), observationError: null }); return ++this.sourceRevision }
   private sourceRevision = 0
   private updateSource(value: Partial<SourcePanelState>): void { this.update({source:{...this.state.source,...value}}) }
   /** Navigation invalidates source UI effects, never an already authorized command. */
@@ -502,7 +504,7 @@ export class WorkPanelController {
       const sources=result.sources ?? []
       this.update({projectSources:{...this.state.projectSources,[projectId]:sources}})
       const sourceId=sources.find(item=>item.id===this.state.source.sourceId)?.id ?? sources.find(item=>item.githubProject)?.id ?? sources[0]?.id ?? null
-      this.updateSource({sources,sourceId,loading:false,issue:null,bindings:[],canonical:null,tab:'overview',catalog:sources.find(source=>source.id===sourceId)?.catalog??null})
+      this.updateSource({sources,sourceId,loading:false,issue:null,issueTarget:null,bindings:[],canonical:null,tab:'overview',catalog:sources.find(source=>source.id===sourceId)?.catalog??null})
       if(sourceId){if(this.state.source.catalog)await this.browseDirectory(false);else await this.browseIssues({},false)}
     } catch(error) {if(revision===this.sourceRevision) this.updateSource({loading:false,error:message(error)})}
   }
@@ -549,7 +551,7 @@ export class WorkPanelController {
     if(!projectId || !previous.sourceId) return
     const revision=this.advanceSourceRevision()
     const changed=Object.entries(change).some(([key,value])=>previous[key as keyof IssuePageRequest]!==value)
-    this.updateSource({...change,page:change.page??1,perPage:100,listEpoch:previous.listEpoch+1,loading:true,error:null,issue:null,bindings:[],canonical:null,...(changed?{listing:null}:{})})
+    this.updateSource({...change,page:change.page??1,perPage:100,listEpoch:previous.listEpoch+1,loading:true,error:null,issue:null,issueTarget:null,bindings:[],canonical:null,...(changed?{listing:null}:{})})
     const {sourceId,page,perPage,assignee,state,labels,search}=this.state.source
     try {
       const result=await this.client.query({type:'source.issues',projectId,sourceId:sourceId!,page,perPage,assignee,state,...(labels?.length?{labels}:{}),...(search?.trim()?{search}:{}),refresh})
@@ -585,24 +587,30 @@ export class WorkPanelController {
     }catch(error){if(current())this.updateSource({loadingMore:false,moreError:message(error)})}
     finally {if(this.moreRead===abort)this.moreRead=undefined}
   }
+  private issueRead?: AbortController
   async openIssue(number:number,refresh=true,nodeId?:string):Promise<void> {
+    const {projectId}=this.state,previous=this.state.source,{sourceId}=previous
+    if(!projectId || !sourceId) return
     this.detailTrail=[]
     ++this.revision
+    const revision=this.advanceSourceRevision(),abort=new AbortController()
+    this.issueRead=abort
+    const selected=previous.sources.find(source=>source.id===sourceId)
+    const issue=[previous.issue,...(previous.listing?.items??[]),...(selected?.observations.map(item=>item.issue)??[])]
+      .find((item):item is GitHubIssue=>!!item&&item.number===number&&(!nodeId||item.nodeId===nodeId))??null
     this.update({detail:null,detailTab:'overview',loading:false,error:null})
-    const {projectId}=this.state,{sourceId}=this.state.source
-    if(!projectId || !sourceId) return
-    const revision=this.advanceSourceRevision()
-    this.updateSource({...(this.state.source.issue?.number===number&&(!nodeId||this.state.source.issue.nodeId===nodeId)?{}:{issue:null,bindings:[]}),canonical:null,loading:true,error:null})
+    this.updateSource({issueTarget:{number,...(nodeId?{nodeId}:{})},issue,bindings:previous.bindings.filter(binding=>binding.nodeId===issue?.nodeId),canonical:null,loading:true,cached:true,error:null})
+    const current=()=>!abort.signal.aborted&&revision===this.sourceRevision
     try {
-      const result=await this.client.query({type:'source.issue',projectId,sourceId,number,refresh,...(nodeId?{nodeId}:{})})
-      if(revision===this.sourceRevision) {
-        this.receiveSource(result,refresh,true)
-        await this.loadIssueProgress(revision)
-      }
-    }catch(error){if(revision===this.sourceRevision) {
+      const result=await this.client.query({type:'source.issue',projectId,sourceId,number,refresh,...(nodeId?{nodeId}:{})},abort.signal)
+      if(!current())return
+      if(result.issue?.number!==number||(nodeId&&result.issue.nodeId!==nodeId))throw Error('Issue 身份与读取响应不一致')
+      this.receiveSource(result,refresh,true)
+      await this.loadIssueProgress(revision)
+    }catch(error){if(current()) {
       this.sourceFailed(error,true)
       await this.loadIssueProgress(revision)
-    }}
+    }}finally {if(this.issueRead===abort)this.issueRead=undefined}
   }
   /** Viewing an Issue only resolves an existing binding; it never imports or starts work. */
   private async loadIssueProgress(sourceRevision: number): Promise<void> {
@@ -611,10 +619,14 @@ export class WorkPanelController {
     const ref = this.state.source.bindings.find(binding => binding.nodeId === issue?.nodeId)?.ref
       ?? (issue ? this.progressForIssue(issue)?.ref : undefined)
     if (!ref) return
+    this.update({loading:true})
     try {
       const detail = await this.client.query({type:'task.detail',ref})
-      if (revision === this.revision && sourceRevision === this.sourceRevision && detail.task?.id === ref.taskId && detail.task.projectId === ref.projectId) this.update({detail})
-    } catch (error) { if (revision === this.revision && sourceRevision === this.sourceRevision) this.update({error:message(error)}) }
+      if (revision === this.revision && sourceRevision === this.sourceRevision) {
+        if(detail.task?.id!==ref.taskId||detail.task.projectId!==ref.projectId)throw Error('工作进展与所选 Issue 不一致')
+        this.update({detail,loading:false})
+      }
+    } catch (error) { if (revision === this.revision && sourceRevision === this.sourceRevision) this.update({loading:false,error:message(error)}) }
   }
   private issueDrafts = new Map<string,{search:string;labels:string}>()
   issueQueryDraft():{search:string;labels:string} {
@@ -676,7 +688,7 @@ export class WorkPanelController {
   async selectSourceTab(tab:SourceTab):Promise<void> {
     this.advanceSourceRevision();++this.revision
     this.update({detail:null,loading:false,search:'',issueFilter:'all'})
-    this.updateSource({tab,issue:null,error:null,loading:false})
+    this.updateSource({tab,issue:null,issueTarget:null,error:null,loading:false})
     if(tab==='issues')await this.browseIssues({},!this.state.source.listing)
     else await this.browseDirectory(false)
   }
@@ -685,7 +697,7 @@ export class WorkPanelController {
     const {projectId}=this.state,{sourceId}=this.state.source
     if(!projectId||!sourceId)return
     const revision=this.advanceSourceRevision()
-    this.updateSource({loading:true,error:null,issue:null,scan:null})
+    this.updateSource({loading:true,error:null,issue:null,issueTarget:null,scan:null})
     const timer=setInterval(()=>{void this.readSourceScan(projectId,sourceId,revision)},800)
     try {
       const selected=this.state.source.sources.find(item=>item.id===sourceId)
@@ -822,7 +834,7 @@ export class WorkPanelController {
       this.updateSource({loading:false,error:error instanceof WorkClientError&&error.result.error.code==='external-object-owned'?'该 Issue 已关联本地工作，请打开已有工作。':message(error),canonical:error instanceof WorkClientError?error.result.ref??null:null})
     }
   }
-  backToIssues():void {++this.revision;this.advanceSourceRevision();this.update({detail:null,loading:false,error:null});this.updateSource({issue:null,bindings:[],canonical:null,loading:false,error:null})}
+  backToIssues():void {++this.revision;this.advanceSourceRevision();this.update({detail:null,loading:false,error:null});this.updateSource({issue:null,issueTarget:null,bindings:[],canonical:null,loading:false,error:null})}
   private pendingCommands = new Map<string, string>()
   async submit(command: WorkIntent): Promise<WorkCompleted> {
     this.stopObservation(); ++this.activeCommands
@@ -849,10 +861,14 @@ export class WorkPanelController {
     if (previous) { this.update({...previous,loading:false,error:null}); return }
     const origin=this.sourceOrigin;this.sourceOrigin=null
     this.update({...(origin??{}),detail:null,loading:false,error:null})
-    this.updateSource({issue:null,bindings:[],canonical:null,loading:false})
+    this.updateSource({issue:null,issueTarget:null,bindings:[],canonical:null,loading:false})
     if (!this.state.source.listing && this.state.source.sourceId) void this.browseIssues({},false)
   }
-  leavePanel(): void { ++this.revision; this.invalidateSourceNavigation(); this.update({loading:false}) }
+  leavePanel(): void {
+    const interrupted=Boolean(this.issueRead)
+    ++this.revision; this.invalidateSourceNavigation(); this.update({loading:false})
+    if(interrupted)this.updateSource({error:'详情读取已中断，请重试加载详情。'})
+  }
   close(): void { this.leavePanel(); this.navigation.selectPanel(null) }
   openSession(session: SessionRef): void { this.leavePanel(); this.navigation.openSession(session.sessionId) }
   setSearch(search: string): void { this.update({ search }) }
