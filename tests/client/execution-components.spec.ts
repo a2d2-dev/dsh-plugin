@@ -41,6 +41,12 @@ it('renders independent child entry, real job owner and distinct delivery/consum
   for (const text of ['独立子 Issue / Task · 1', '后台作业 · 1']) expect(html).toContain(text)
   expect(html).toContain('注册表实例已不可达')
   expect(html).not.toContain('标记已消费')
+  const stableJob = { ...graph.sessions[0]!.jobs[0]!, registryEpoch: 'registry', instanceId: 'instance' }
+  for (const persistence of ['process-local', 'session-journal'] as const) {
+    const persisted = renderToStaticMarkup(createElement(ExecutionSessions, { graph: { ...graph, sessions: [{ ...graph.sessions[0]!, jobs: [{ ...stableJob, persistence }] }] } }))
+    expect(persisted.match(/持久生命周期记录/g) ?? []).toHaveLength(persistence === 'session-journal' ? 1 : 0)
+    expect(persisted).toContain(persistence === 'session-journal' ? '持久生命周期记录' : '宿主进程内作业')
+  }
   const continuation = renderToStaticMarkup(createElement(ExecutionContinuation, { graph, policy: { version: 1, enabled: true, targetTokens: 200000, reserveTokens: 12000 } }))
   expect(continuation).toContain('200,000')
   expect(continuation).toContain('12,000')

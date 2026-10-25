@@ -40,7 +40,7 @@ function JobRow({ job }: { job: ExecutionJob }) {
         <p className={styles.identity} title={sessionId(job.owner)}>执行者：{shortSession(job.owner)}</p>
         <p>{deliveryLabel(job.delivery)} · {resultLabel(job.result)} · 未验收{job.detail ? ` · ${job.detail}` : ''}</p>
         {job.label && <pre className={styles.command}>{job.label}</pre>}
-        <small>{job.registryEpoch && job.instanceId ? `Registry ${short(job.registryEpoch)} · Instance ${short(job.instanceId)} · 持久生命周期记录` : '宿主未提供稳定作业身份'} · {job.persistence === 'session-journal' ? '持久生命周期记录' : '宿主进程内作业'}</small>
+        <small>{job.registryEpoch && job.instanceId ? `Registry ${short(job.registryEpoch)} · Instance ${short(job.instanceId)}` : '宿主未提供稳定作业身份'} · {job.persistence === 'session-journal' ? '持久生命周期记录' : '宿主进程内作业'}</small>
       </div>
     </details>
   </li>
