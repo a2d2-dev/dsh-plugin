@@ -34,6 +34,35 @@ async function nativeView(detail: WorkCompleted, purpose: AssociatedWork['purpos
 }
 const prepareButton = (view: ReturnType<typeof mountProductionComponent>) => view.nodes('button').find(button => button.props.children === '准备接续')
 
+it('finishes a slow detail read while equal session associations refresh every five seconds', async () => {
+  vi.useFakeTimers()
+  try {
+    const detail = taskDetail()
+    const reads: AbortSignal[] = []
+    const controller = controllerFor(detail)
+    const query = controller.client.query.bind(controller.client)
+    controller.client.query = async (value, signal) => {
+      if (value.type === 'task.detail') {
+        reads.push(signal!)
+        await new Promise(resolve => setTimeout(resolve, 6000))
+        return detail
+      }
+      return query(value, signal)
+    }
+    const view = mountProductionComponent({ controller, sessionId: 'current' }, 'ExecutionConversationContinuation', new URL('../../src/client/execution-native.tsx', import.meta.url))
+    mounted.push(view)
+    await vi.advanceTimersByTimeAsync(0)
+    view.render()
+    for (let second = 0; second < 12; second++) {
+      await vi.advanceTimersByTimeAsync(1000)
+      view.render()
+    }
+    expect(view.text()).toContain('自动接续')
+    expect(reads).toHaveLength(1)
+    expect(reads[0]!.aborted).toBe(false)
+  } finally { mounted.splice(0).forEach(view => view.unmount()); vi.useRealTimers() }
+})
+
 it.each(['task.completion', 'progress.completion', 'progress.completed'])('native view shows a disabled prepare action and done reason from %s', async fact => {
   const detail = taskDetail()
   if (fact === 'task.completion') detail.task!.completion = completion
@@ -53,6 +82,42 @@ it.each(['idle', 'inactive'] as const)('keeps an unfinished current Task availab
   expect(prepareButton(view)).toBeDefined()
   expect(prepareButton(view).props.disabled).toBe(false)
   expect(view.text()).not.toContain('已验收完成')
+})
+
+it.each(['failed', 'waiting', 'paused', 'accepted', 'creating'] as const)('explains why %s execution cannot prepare continuation', async state => {
+  const detail = taskDetail()
+  detail.execution!.state = state
+  if (state === 'failed') detail.execution!.error = { code: 'incompatible-session', message: 'Existing Session model differs' }
+  const { view, controller } = await nativeView(detail)
+  expect(prepareButton(view)?.props.disabled).toBe(true)
+  if (state === 'failed') {
+    expect(view.text()).toContain('原执行恢复失败：incompatible-session')
+    expect(view.nodes('button').some(node => node.props.children === '重试原执行')).toBe(true)
+  } else if (state === 'waiting' || state === 'paused') {
+    expect(view.text()).toContain('请先恢复处理，再准备接续')
+    expect(view.nodes('button').some(node => node.props.children === '恢复处理')).toBe(true)
+  } else expect(view.text()).toContain('原执行尚未就绪')
+  expect(controller.client.command).not.toHaveBeenCalled()
+})
+
+it.each([true, false])('retries the existing execution with actual=%s using a freshly read fence', async hasActual => {
+  const detail = taskDetail()
+  if (!hasActual) delete detail.execution!.actual
+  detail.execution!.state = 'failed'
+  detail.execution!.error = { code: 'incompatible-session', message: 'Existing Session model differs' }
+  const { view, controller } = await nativeView(detail)
+  const command = vi.fn(async (_value: unknown) => {
+    detail.execution!.state = 'ready'
+    detail.execution!.actual = taskDetail().execution!.actual
+    delete detail.execution!.error
+    return detail
+  })
+  controller.client.command = command
+  view.click('重试原执行')
+  await expect.poll(() => command.mock.calls.length).toBe(1)
+  expect(command.mock.calls[0]![0]).toMatchObject({ type: 'task.reconcile', ref, executionId: 'e', owner: 'owner', epoch: 1 })
+  await expect.poll(() => prepareButton(view)?.props.disabled).toBe(false)
+  expect(view.text()).not.toContain('原执行恢复失败')
 })
 
 it.each(['history', 'review', 'related', 'different-current', 'missing-actual'] as const)('does not enable native continuation for %s', async eligibility => {

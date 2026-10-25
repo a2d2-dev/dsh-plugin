@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -307,6 +307,119 @@ it('enforces read-only through the real filesystem tool without claiming OS shel
   await expect(fs.stat(join(h.workspace.path, 'forbidden.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
   expect(h.ctx.sandboxPolicy.resolve({ session: agent.session }).mode).toBe('read-only')
   expect(h.ctx.approval.overrideOf(agent.session)).toBe('never')
+})
+
+it.each(['selection', 'request', 'cold'] as const)('recovers the same Task after an explicit model switch at the %s boundary', async boundary => {
+  const h = await setup()
+  const started = await h.app.execute({ type: 'task.start', commandId: 'model-switch-start', ref: h.ref, expectedVersion: 1, resource: h.resource,
+    agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }, operator)
+  if (started.status !== 'completed' || !started.execution) throw new Error(JSON.stringify(started))
+  const execution = started.execution
+  const fence = { ref: h.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch }
+  const agent = h.ctx.agents.get(SessionId(execution.session.sessionId))!
+  await fixtures.run(() => agent.whenIdle())
+  await h.app.execute({ type: 'task.control', commandId: 'switch-wait', ...fence, action: 'wait', text: 'Review before continuing' }, operator)
+  await fixtures.run(() => h.ctx.sessionController.selectModel({ sessionId: agent.id, provider: 'contract', model: 'default' }))
+  if (boundary !== 'selection') {
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Discuss with the explicitly selected model' }], source: { kind: 'user' } }))
+    await fixtures.run(() => agent.whenIdle())
+    expect(h.model.requests.at(-1)).toMatchObject({ model: 'default' })
+  }
+  let current: Pick<typeof h, 'ctx' | 'app' | 'model'> = h
+  if (boundary === 'cold') { await fixtures.dispose(h.ctx); current = await fixtures.mount(h.workspace.path) }
+  const result = await current.app.execute({ type: 'task.control', commandId: 'switch-resume', ...fence, action: 'resume', text: 'Continue with the selected model' }, operator)
+  expect(result, JSON.stringify(result)).toMatchObject({ status: 'completed', execution: {
+    id: execution.id, session: execution.session, owner: execution.owner, epoch: execution.epoch, state: 'ready',
+    model: { provider: 'contract', model: 'default' }, actual: { provider: 'contract', model: 'default' }, control: { status: 'applied' },
+  } })
+  expect(result).not.toHaveProperty('execution.error')
+  expect(await fixtures.run(() => current.ctx.sessionPersistence.list())).toHaveLength(1)
+  const restored = current.ctx.agents.get(agent.id)!
+  await fixtures.run(() => restored.whenIdle())
+  await current.app.execute({ type: 'task.input', commandId: 'switch-next', ...fence, kind: 'input', text: 'Process the next accepted item' }, operator)
+  await fixtures.run(() => restored.whenIdle())
+  expect(current.model.requests.at(-1)).toMatchObject({ model: 'default' })
+  expect(current.ctx.agentDefaultModel.currentSelection()).toMatchObject({ model: 'default' })
+})
+
+it.each(['selection', 'request', 'default'] as const)('preserves an explicit reasoning effort change at the %s boundary', async boundary => {
+  const h = await setup()
+  const resolve = h.model.resolveModel.bind(h.model)
+  vi.spyOn(h.model, 'resolveModel').mockImplementation(async (provider, model) => ({ ...await resolve(provider, model), reasoning: {
+    efforts: [{ id: ReasoningEffortId('low'), name: 'Low' }, { id: ReasoningEffortId('high'), name: 'High' }], defaultEffort: ReasoningEffortId('low'),
+  } }))
+  const globalBefore = h.ctx.agentDefaultModel.currentSelection()
+  const saves = vi.spyOn(h.ctx.agentDefaultModel, 'saveSelection')
+  const started = await h.app.execute({ type: 'task.start', commandId: 'effort-start', ref: h.ref, expectedVersion: 1, resource: h.resource,
+    agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected', reasoningEffort: 'low' }, permissionPreset: 'workspace-write' }, operator)
+  if (started.status !== 'completed' || !started.execution) throw new Error(JSON.stringify(started))
+  const execution = started.execution
+  const fence = { ref: h.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch }
+  const agent = h.ctx.agents.get(SessionId(execution.session.sessionId))!
+  await fixtures.run(() => agent.whenIdle())
+  await h.app.execute({ type: 'task.control', commandId: 'effort-wait', ...fence, action: 'wait', text: 'Review' }, operator)
+  const effort = boundary === 'default' ? undefined : ReasoningEffortId('high')
+  await fixtures.run(() => h.ctx.sessionController.selectModel({ sessionId: agent.id, provider: 'contract', model: 'selected', reasoningEffort: effort }))
+  saves.mockClear()
+  if (boundary === 'request') {
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Discuss with high effort' }], source: { kind: 'user' } }))
+    await fixtures.run(() => agent.whenIdle())
+  }
+  const result = await h.app.execute({ type: 'task.control', commandId: 'effort-resume', ...fence, action: 'resume', text: 'Use current selection' }, operator)
+  expect(result).toMatchObject({ status: 'completed', execution: { state: 'ready', id: execution.id, epoch: execution.epoch, session: execution.session, control: { status: 'applied' } } })
+  if (result.status !== 'completed' || !result.execution) throw new Error(JSON.stringify(result))
+  expect(result.execution.model.reasoningEffort).toBe(effort ?? 'low')
+  await h.app.execute({ type: 'task.input', commandId: 'effort-next', ...fence, kind: 'input', text: 'Next item' }, operator)
+  await fixtures.run(() => agent.whenIdle())
+  expect(agent.session.requestHeader()?.config.reasoningEffort).toBe(effort ?? 'low')
+  expect(h.ctx.agentDefaultModel.currentSelection()).toEqual(globalBefore)
+  expect(saves).not.toHaveBeenCalled()
+})
+
+it.each(['restore', 'profile'] as const)('validates the captured final model after a selection changes during %s', async boundary => {
+  const h = await setup()
+  const started = await h.app.execute({ type: 'task.start', commandId: 'restore-race-start', ref: h.ref, expectedVersion: 1, resource: h.resource,
+    agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }, operator)
+  if (started.status !== 'completed' || !started.execution) throw new Error(JSON.stringify(started))
+  const execution = started.execution
+  const agent = h.ctx.agents.get(SessionId(execution.session.sessionId))!
+  await fixtures.run(() => agent.whenIdle())
+  if (boundary === 'restore') {
+    const resolve = h.ctx.sessionController.resolveAgent.bind(h.ctx.sessionController)
+    vi.spyOn(h.ctx.sessionController, 'resolveAgent').mockImplementationOnce(async id => {
+      const result = await resolve(id)
+      await h.ctx.sessionController.selectModel({ sessionId: id, provider: 'contract', model: 'default' })
+      return result
+    })
+  } else {
+    const profile = h.host.execution.profile!.bind(h.host.execution)
+    vi.spyOn(h.host.execution, 'profile').mockImplementationOnce(async current => {
+      await h.ctx.sessionController.selectModel({ sessionId: agent.id, provider: 'contract', model: 'default' })
+      return profile(current)
+    })
+  }
+  const restricted = { ...execution, policy: { ...execution.policy, modelCandidates: ['contract/selected'] } }
+  await expect(h.host.execution.ensure(restricted, async () => true)).rejects.toMatchObject({ code: 'disallowed-model' })
+  expect(agent.session.requestHeader()?.config.model).toBe('selected')
+  expect(h.model.requests).toHaveLength(1)
+})
+
+it('adopts a compatible fork whose effective model is inherited from its source', async () => {
+  const h = await setup()
+  const source = await fixtures.run(() => h.ctx.sessionController.create({ workspaceId: h.workspace.id, agentPreset: 'contract' }))
+  const original = h.ctx.agents.get(source.sessionId)!
+  original.followup(createUserMessage({ content: [{ type: 'text', text: 'Original conversation' }], source: { kind: 'user' } }))
+  await fixtures.run(() => original.whenIdle())
+  const fork = await fixtures.run(() => h.ctx.sessionController.fork({ sessionId: source.sessionId }))
+  const before = await fixtures.run(() => h.ctx.sessionController.inspect(fork.sessionId))
+  expect(before.inheritedEventCount).toBeGreaterThan(0)
+  const started = await h.app.execute({ type: 'task.start', commandId: 'fork-start', ref: h.ref, expectedVersion: 1, resource: h.resource,
+    session: { runtimeId: 'runtime', sessionId: fork.sessionId }, agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'default' }, permissionPreset: 'workspace-write' }, operator)
+  expect(started, JSON.stringify(started)).toMatchObject({ status: 'completed', execution: { state: 'ready', session: { sessionId: fork.sessionId }, actual: { model: 'default' } } })
+  await fixtures.run(() => h.ctx.agents.get(fork.sessionId)!.whenIdle())
+  const after = await fixtures.run(() => h.ctx.sessionController.inspect(fork.sessionId))
+  expect(after.events.slice(0, before.inheritedEventCount)).toEqual(before.events.slice(0, before.inheritedEventCount))
+  expect(h.model.requests).toHaveLength(2)
 })
 
 it('keeps a paused Task paused after cold restore while native conversations remain usable', async () => {

@@ -68,8 +68,8 @@ function NativeTaskContinuation({ controller, sessionId, work }: { controller: W
       setDetail(next); setPolicy(next.execution?.continuationPolicy ?? project.project?.continuationPolicy)
     }).catch(error => { if (!abort.signal.aborted) setError(error instanceof Error ? error.message : String(error)) })
     return () => abort.abort()
-  }, [controller, sessionId, work, revision])
-  const continueWork = async () => {
+  }, [controller, sessionId, work.ref.projectId, work.ref.taskId, work.executionId, work.epoch, work.purpose, revision])
+  const controlWork = async (action: 'continue' | 'reconcile' | 'resume') => {
     const scope = lifetime.current
     if (busy || !scope || scope.signal.aborted) return
     setBusy(true); setError(null)
@@ -77,10 +77,16 @@ function NativeTaskContinuation({ controller, sessionId, work }: { controller: W
       const latest = await controller.client.query({ type: 'task.detail', ref: work.ref }, scope.signal)
       if (scope.signal.aborted) return
       const execution = latest.execution
-      if (!execution?.actual || execution.session.sessionId !== sessionId || latest.task?.id !== work.ref.taskId || latest.task.projectId !== work.ref.projectId
+      if (!execution || (action === 'continue' && !execution.actual) || execution.session.sessionId !== sessionId || latest.task?.id !== work.ref.taskId || latest.task.projectId !== work.ref.projectId
         || execution.ref.taskId !== work.ref.taskId || execution.ref.projectId !== work.ref.projectId) throw Error('此会话已不是当前协调，请从关联任务进入有效会话。')
-      await controller.submit({ type: 'task.continue', ref: work.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch })
-      if (!scope.signal.aborted) setRevision(value => value + 1)
+      const fence = { ref: work.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch }
+      const result = await controller.submit(action === 'resume'
+        ? { type: 'task.control', ...fence, action, text: '用户明确恢复处理' }
+        : { type: action === 'reconcile' ? 'task.reconcile' : 'task.continue', ...fence })
+      if (!scope.signal.aborted) {
+        setDetail({ ...latest, ...result })
+        setRevision(value => value + 1)
+      }
     } catch (error) { if (!scope.signal.aborted) setError(error instanceof Error ? error.message : String(error)) }
     finally { if (!scope.signal.aborted) setBusy(false) }
   }
@@ -101,7 +107,7 @@ function NativeTaskContinuation({ controller, sessionId, work }: { controller: W
         {error && <p role="alert">{error}</p>}
       </aside>
       <div className={styles.configPane}>
-        {detail ? <ExecutionContinuation graph={detail.executionGraph} execution={detail.execution} policy={policy} busy={busy} completed={completed} {...(work.purpose === 'control' && !completed && detail.execution?.session.sessionId === sessionId ? { onContinue: () => void continueWork() } : {})}/> : !error && <p role="status">正在读取接续事实…</p>}
+        {detail ? <ExecutionContinuation graph={detail.executionGraph} execution={detail.execution} policy={policy} busy={busy} completed={completed} {...(work.purpose === 'control' && !completed && detail.execution?.session.sessionId === sessionId ? { onContinue: () => void controlWork('continue'), onRecover: () => void controlWork('reconcile'), onResume: () => void controlWork('resume') } : {})}/> : !error && <p role="status">正在读取接续事实…</p>}
       </div>
     </div>
   </section>

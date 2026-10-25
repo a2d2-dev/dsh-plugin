@@ -1021,6 +1021,7 @@ export class WorkApplication {
         await this.refreshSessionTitles(execution.session)
         execution = await save(item => {
           item.actual = actual
+          item.model = { provider: actual.provider, model: actual.model, ...(actual.reasoningEffort ? { reasoningEffort: actual.reasoningEffort } : {}) }
           if (item.state === 'creating') { item.state = 'ready'; this.dao.appendHistory(item, { state: 'ready', commandId }) }
         })
         const control = execution.control

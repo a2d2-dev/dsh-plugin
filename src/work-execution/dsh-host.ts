@@ -103,7 +103,8 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     const agent = await this.runtime.agent(id)
     const profile = await rootSessionProfile(this.ctx, id)
     await this.runtime.flush(agent)
-    const events = await this.runtime.events(id)
+    using observation = await this.service('sessionQuery').observeSession(id)
+    const events = observation.events
     const selection = events.findLast(event => event.type === 'model/selection')
     const header = events.findLast(event => event.type === 'request/header')
     const route = selection && (!header || selection.seq > header.seq) ? selection.data : header?.data.header?.config
@@ -311,7 +312,18 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       models: catalog.groups.flatMap(group => group.models.map(model => ({ provider: group.id, model: model.id }))),
       defaults: { agentPreset, permissionPreset, model: { provider: catalog.default.provider, model: catalog.default.model } } }
   }
-  async check(request: Pick<WorkExecution, 'resource' | 'session' | 'sessionMode' | 'agentPreset' | 'model' | 'permissionPreset'>): Promise<import('../work-types.ts').HostExecutionChoices> {
+  private async validateModel(model: WorkExecution['model'], policy?: WorkExecution['policy']) {
+    const choices = await this.choices()
+    if (!choices.models.some(item => item.provider === model.provider && item.model === model.model)) throw new WorkExecutionError('unavailable-model', 'Model is not in the real host catalog')
+    if (policy?.modelCandidates.length && !policy.modelCandidates.includes(`${model.provider}/${model.model}`)) throw new WorkExecutionError('disallowed-model', 'Current Session model is not authorized by the Project Agent policy')
+    if (model.reasoningEffort !== undefined) {
+      const info = await this.service('llm').resolveModelInfo(model.provider, model.model)
+      if (!info.reasoning?.efforts.some(effort => effort.id === model.reasoningEffort)) throw new WorkExecutionError('unavailable-model', 'Requested reasoning effort is unavailable')
+    }
+    const requested = await this.service('llm').resolveCallConfig({ provider: model.provider, model: model.model, reasoningEffort: model.reasoningEffort ? ReasoningEffortId(model.reasoningEffort) : undefined })
+    return { choices, requested }
+  }
+  async check(request: Pick<WorkExecution, 'resource' | 'session' | 'sessionMode' | 'agentPreset' | 'model' | 'permissionPreset'>, execution?: WorkExecution): Promise<import('../work-types.ts').HostExecutionChoices> {
     for (const name of ['sessionController', 'sessionPersistence', 'sessionQuery', 'agents', 'sessions', 'agentPresets', 'permissionPresets', 'sandboxPolicy', 'approval', 'llm', 'workspaceRegistry', 'agentDefaultModel']) {
       if (!(this.ctx.get as (key: string) => unknown).call(this.ctx, name)) throw new WorkExecutionError('host-capability-unavailable', `DSH ${name} is required for managed execution`)
     }
@@ -329,17 +341,23 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       if (!legacy) throw new WorkExecutionError('legacy-authority-unavailable', 'Existing Session reuse requires the legacy authority to rule out active old ownership')
       if (await legacy.taskOfMainSession(workspace.path, SessionId(request.session.sessionId))) throw new WorkExecutionError('legacy-authority-retained', 'Legacy Session authority must be safely migrated before v3 reuse')
     }
-    const choices = await this.choices()
-    if (!choices.models.some(item => item.provider === request.model.provider && item.model === request.model.model)) throw new WorkExecutionError('unavailable-model', 'Model is not in the real host catalog')
+    // Once this execution owns a composed Session, its explicit host-local
+    // selection is the current configuration. Never write the startup snapshot
+    // back over a user model switch. Initial adoption still requires a match.
+    const stat = await this.service('sessionPersistence').stat(SessionId(request.session.sessionId))
+    let model = request.model
+    if (execution?.actual && stat) {
+      using observation = await this.service('sessionQuery').observeSession(SessionId(request.session.sessionId))
+      const selection = observation.events.findLast(item => item.type === 'model/selection')
+      const header = observation.events.findLast(item => item.type === 'request/header')
+      const route = selection && (!header || selection.seq > header.seq) ? selection.data : header?.data.header.config
+      if (!route?.provider || !route.model) throw new WorkExecutionError('continuation-profile-unknown', 'Current Session model selection must be known before recovery')
+      model = { provider: route.provider, model: route.model, ...(route.reasoningEffort ? { reasoningEffort: route.reasoningEffort } : {}) }
+    }
+    const { choices, requested } = await this.validateModel(model, execution?.policy)
     const preset = await this.service('agentPresets').resolve(request.agentPreset)
     if (preset.broken) throw new WorkExecutionError('unavailable-agent-preset', 'Requested Agent preset has an activation failure')
     if (!this.service('permissionPresets').names.includes(request.permissionPreset)) throw new WorkExecutionError('invalid-permission-preset', 'Permission preset is unavailable')
-    if (request.model.reasoningEffort !== undefined) {
-      const info = await this.service('llm').resolveModelInfo(request.model.provider, request.model.model)
-      if (!info.reasoning?.efforts.some(effort => effort.id === request.model.reasoningEffort)) throw new WorkExecutionError('unavailable-model', 'Requested reasoning effort is unavailable')
-    }
-    const requested = await this.service('llm').resolveCallConfig({ ...request.model, reasoningEffort: request.model.reasoningEffort ? ReasoningEffortId(request.model.reasoningEffort) : undefined })
-    const stat = await this.service('sessionPersistence').stat(SessionId(request.session.sessionId))
     if (!stat && request.sessionMode === 'reuse') throw new WorkExecutionError('incompatible-session', 'Requested Session does not exist')
     if (stat) {
       if (request.sessionMode === 'reuse' && !workspace.sessionIds.includes(SessionId(request.session.sessionId))) throw new WorkExecutionError('incompatible-session', 'Session is not a member of the selected workspace')
@@ -347,17 +365,17 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       const selectedPreset = (inspection.projections?.values as { agentPreset?: string | null } | undefined)?.agentPreset ?? inspection.header.agentPreset
       if (inspection.header.cwd !== workspace.path || selectedPreset !== request.agentPreset) throw new WorkExecutionError('incompatible-session', 'Existing Session resource or preset differs')
       const header = inspection.events.findLast(item => item.type === 'request/header')
-      if (header?.type === 'request/header' && (header.data.header.config.provider !== request.model.provider || header.data.header.config.model !== request.model.model || header.data.header.config.reasoningEffort !== requested.reasoningEffort)) throw new WorkExecutionError('incompatible-session', 'Existing Session model differs; silent reconfiguration refused')
+      if (!execution?.actual && header?.type === 'request/header' && (header.data.header.config.provider !== model.provider || header.data.header.config.model !== model.model || header.data.header.config.reasoningEffort !== requested.reasoningEffort)) throw new WorkExecutionError('incompatible-session', 'Existing Session model differs; silent reconfiguration refused')
       const pending = inspection.events.findLast(item => item.type === 'model/selection')
       const local = pending?.type === 'model/selection' && (!header || pending.seq > header.seq) ? pending.data : undefined
       const selected = local ?? (header?.type === 'request/header' ? header.data.header.config : undefined)
       // A local selection preserves omission; a request header contains the
       // adapter's resolved default effort. Compare each at its own boundary.
-      const expectedEffort = local ? request.model.reasoningEffort : requested.reasoningEffort
-      if (selected && (selected.provider !== request.model.provider || selected.model !== request.model.model || selected.reasoningEffort !== expectedEffort)) throw new WorkExecutionError('incompatible-session', 'Existing Session local selection differs; silent reconfiguration refused')
+      const expectedEffort = local ? model.reasoningEffort : requested.reasoningEffort
+      if (selected && (selected.provider !== model.provider || selected.model !== model.model || selected.reasoningEffort !== expectedEffort)) throw new WorkExecutionError('incompatible-session', 'Existing Session local selection differs; silent reconfiguration refused')
       if (request.sessionMode === 'reuse') {
         const effective = selected ?? this.service('agentDefaultModel').currentSelection()
-        if (effective.provider !== request.model.provider || effective.model !== request.model.model || effective.reasoningEffort !== (selected ? expectedEffort : request.model.reasoningEffort)) throw new WorkExecutionError('incompatible-session', 'Existing Session local selection differs')
+        if (effective.provider !== model.provider || effective.model !== model.model || effective.reasoningEffort !== (selected ? expectedEffort : model.reasoningEffort)) throw new WorkExecutionError('incompatible-session', 'Existing Session local selection differs')
         using observation = await this.service('sessionQuery').observeSession(SessionId(request.session.sessionId))
         const permission = (observation.projections?.values as { permissions?: { currentValue: string } } | undefined)?.permissions
         if (permission?.currentValue !== request.permissionPreset) throw new WorkExecutionError('incompatible-session', 'Existing Session effective permission differs')
@@ -386,7 +404,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     return await this.runtime.deliveryState(id, delivery) === 'consumed' ? 'consumed' : 'delivered'
   }
   async ensure(execution: WorkExecution, _allowed?: () => Promise<boolean>): Promise<NonNullable<WorkExecution['actual']>> {
-    await this.check(execution)
+    await this.check(execution, execution)
     const id = SessionId(execution.session.sessionId)
     if (!await this.service('sessionPersistence').stat(id) && !this.service('agents').get(id)) {
       const workspace = this.service('workspaceRegistry').list().find(item => item.id === execution.resource.workspaceId)!
@@ -406,7 +424,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     const workspace = this.service('workspaceRegistry').list().find(item => item.id === execution.resource.workspaceId)!
     await workspace.attachSession(id)
     await agent.whenIdle()
-    await agent.runMaintenance(async () => {
+    return agent.runMaintenance(async () => {
       const events = await this.runtime.events(id)
       const started = events.some(item => item.type === 'turn/start')
       const profile = await rootSessionProfile(this.ctx, id)
@@ -414,15 +432,18 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       if (!started && profile.permission?.preset !== execution.permissionPreset) this.service('permissionPresets').set(agent.session, execution.permissionPreset)
       const prior = installed.get(agent)
       if (prior && prior.executionId !== execution.id) throw new WorkExecutionError('session-in-use', 'Agent already belongs to another execution')
-      if (!prior) installed.set(agent, { executionId: execution.id })
       await this.runtime.flush(agent)
+      // Selection may change while restore is pending, and older selectors do
+      // not share the maintenance lock. Validate the captured profile itself;
+      // never return a fresh, unchecked route after validating an earlier read.
+      const current = await this.profile(execution)
+      await this.validateModel(current, execution.policy)
+      const filesystem = this.service('agentPresets').serviceFor(agent, 'fs') ?? this.ctx.get('fs')
+      const shell = this.service('agentPresets').serviceFor(agent, 'shell') ?? this.ctx.get('shell')
+      if (filesystem?.sandboxMode === undefined || shell?.sandboxMode === undefined) throw new WorkExecutionError('host-permission-unenforced', 'Selected preset did not compose sandbox-aware filesystem and shell providers')
+      if (current.permissionPreset !== execution.permissionPreset || current.agentPreset !== execution.agentPreset) throw new WorkExecutionError('host-context-mismatch', 'Host did not compose the requested execution context')
+      if (!prior) installed.set(agent, { executionId: execution.id })
+      return current
     })
-    const profile = await rootSessionProfile(this.ctx, id)
-    const filesystem = this.service('agentPresets').serviceFor(agent, 'fs') ?? this.ctx.get('fs')
-    const shell = this.service('agentPresets').serviceFor(agent, 'shell') ?? this.ctx.get('shell')
-    if (filesystem?.sandboxMode === undefined || shell?.sandboxMode === undefined) throw new WorkExecutionError('host-permission-unenforced', 'Selected preset did not compose sandbox-aware filesystem and shell providers')
-    if (!profile.permission || profile.permission.preset !== execution.permissionPreset || profile.agentPreset !== execution.agentPreset || agent.session.header.cwd === undefined) throw new WorkExecutionError('host-context-mismatch', 'Host did not compose the requested execution context')
-    return { runtimeId: this.runtimeId, cwd: agent.session.header.cwd, agentPreset: profile.agentPreset,
-      ...execution.model, permissionPreset: profile.permission.preset, sandbox: profile.permission.sandbox!, approval: profile.permission.approval! }
   }
 }
