@@ -33,7 +33,7 @@ Screenshots, Chinese test reports and A²D² project test information belong in 
 
 ## Compatibility and releases
 
-A passing build does not prove compatibility with a stock public DSH host. In particular, root/browser/handoff initialization requires `sessionController.selectLocalModel`; subagent dispatch has a separate activation contract. Record the exact tested host and consult [release requirements](docs/releasing.md).
+A passing build does not prove compatibility with a stock public DSH host. Root/browser/handoff initialization uses the public `Agent.model.current/select` API, retaining the verified legacy `sessionController.selectLocalModel` path; subagent dispatch has a separate activation contract. The unmodified official source build `22ddee3792402c3e70ec5f86a63c3e3e895a2f60` (`0.2.1-rc.3`) has Session/model and jobs integration evidence, while the same-version npm host lacks the required model APIs. Record the exact tested host and consult [release requirements](docs/releasing.md).
 
 Maintainers merge verified PRs and remove their remote branches when no longer needed. Existing local worktrees and unmerged branches must be checked before any batch cleanup. Releases use immutable version tags on `main`; the candidate workflow does not publish to npm or change repository visibility.
 

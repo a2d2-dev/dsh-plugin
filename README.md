@@ -6,13 +6,15 @@ English | [中文](README.zh.md)
 
 This repository holds the **A²D² DeepSeek Harness plugin**: the components that land A²D² inside [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) as one installable plugin.
 
-The default branch `main` is the integrated development source (`0.0.23-dev.0`). The existing `v0.0.22` prerelease is an older immutable snapshot; fixes made after its tag are described under **Unreleased** in the changelog. Future releases must come from `main`.
+Releases are built from the integrated `main` branch. The current prerelease is **v0.0.23**; see the [changelog](CHANGELOG.md) for changes since v0.0.22. Existing version tags remain immutable.
 
-## Install the v0.0.22 prerelease
+## Install the v0.0.23 prerelease
 
-Download `a2d2-dsh-a2d2-0.0.22.tgz` from [GitHub Release v0.0.22](https://github.com/a2d2-dev/dsh-plugin/releases/tag/v0.0.22). Keep it compressed and install its absolute path through the desktop plugin manager, or use the app-provided CLI: `dsh plugin --profile desktop add /absolute/path/a2d2-dsh-a2d2-0.0.22.tgz`. Fully quit and reopen DSH after upgrading: a page refresh alone cannot remove interceptors already attached to live Sessions.
+Back up the entire work directory before upgrading, including the control JSON, source sidecars and archive. Older plugins cannot directly read the new storage metadata; see [migration and offline downgrade](docs/architecture/work-dao.md).
 
-This package retains the deployed name `@a2d2/dsh-a2d2` and includes the complete work panel plus built host and browser modules. The earlier GitHub v0.0.1 package was named `dsh-a2d2`; do not activate both names as separate A²D² instances. The version follows the internally deployed 0.0.21. Node.js 22 or newer is required. This release was verified on the matching DSH 0.2.1-rc.2 development host, not every official desktop version. The Release includes checksums.
+Download `a2d2-dsh-a2d2-0.0.23.tgz` from [GitHub Release v0.0.23](https://github.com/a2d2-dev/dsh-plugin/releases/tag/v0.0.23). Keep it compressed and install its absolute path through the plugin manager for the profile you actually use, or use the app-provided CLI: `dsh plugin --profile desktop add /absolute/path/a2d2-dsh-a2d2-0.0.23.tgz`. Fully quit and reopen DSH after upgrading: a page refresh alone cannot replace existing Session instances.
+
+The package retains the name `@a2d2/dsh-a2d2` and includes the complete work panel plus built host and browser modules. The earlier GitHub v0.0.1 package was named `dsh-a2d2`; do not activate both names as separate A²D² instances. The plugin requires Node.js 22 or newer. The verified official source host described below requires Node 24.9 or newer; its Session/model and jobs integration evidence is separate from GUI acceptance on the matching development host. Not every official desktop distribution has been tested. The Release includes the source commit and checksums; publication does not itself upgrade a running instance.
 
 Native human conversations remain available while a Task waits, pauses, completes, or transfers to another Session. Old Sessions show the current Session entry. Conversation does not reopen completed work or regain coordination. Previously buffered, unconsumed human input is recovered with its original content and attachments on the next human input in that Session, without duplicate delivery.
 
@@ -30,7 +32,7 @@ Continuous intake currently supports GitHub Project sources. Dispatch uses the c
 
 Every Project, Issue and PR table column has a `⋯` menu for selection, ascending/descending sorting, observed-value filtering, and supported grouping, slicing, hiding and reordering. Title columns offer applicable type/state filters and preserve the item entry. Unsupported actions are disabled with a reason. Values within one filter are combined with OR; filters across columns and search are combined with AND. Conditions can be cleared, hidden columns restored, and all display settings reset.
 
-Visible list search covers titles, numbers and repositories. Project queries cover the complete observed snapshot within the saved view, entry slice and closed-item setting; PR queries cover the current catalog and state whether it is complete. Both run before local pagination. Issue column search and processing-state filters cover the loaded page; the separate source-search form queries the source. Scope and pagination are explicit. Switching sources or views clears inapplicable display conditions. Unobserved fields remain distinct from confirmed empty values. These column and search actions do not start Sessions, enable continuous processing or modify GitHub fields.
+Visible list search covers titles, numbers and repositories. Project queries cover the complete observed snapshot within the saved view, entry slice and closed-item setting; PR queries cover the current catalog and state whether it is complete. Both run before selecting the visible rows. Issue column search and processing-state filters cover the loaded range; the separate source-search form queries the source. All three lists start with up to 100 rows and append batches of up to 100 near the bottom. Failed Issue appends preserve existing rows and offer retry. Switching sources, views or queries resets the visible batch and clears inapplicable display conditions. Unobserved fields remain distinct from confirmed empty values. These column and search actions do not start Sessions, enable continuous processing or modify GitHub fields.
 
 The DSH Goal driver owns its continuation messages. A²D² neither retains them as pending Task input nor transfers them to successor Sessions. Execution recovery marks previously retained, unconsumed Goal messages as discarded and stops replaying them, while keeping the original records for inspection. Discarding is separate from model consumption and Task acceptance. Resuming a Task does not resume a paused Goal.
 
@@ -83,7 +85,7 @@ pnpm pack --pack-destination /absolute/path/to/output
 Install the generated tarball in an existing DSH web profile:
 
 ```sh
-dsh plugin --profile web add /absolute/path/to/output/a2d2-dsh-a2d2-0.0.23-dev.0.tgz
+dsh plugin --profile web add /absolute/path/to/output/a2d2-dsh-a2d2-0.0.23.tgz
 ```
 
 The package and browser bundle are named `@a2d2/dsh-a2d2`; this project does not publish under the `@deepseek-ai` scope. Registry publication and a clean-host end-to-end install are not yet verified. Configure Agent candidates using provider/model routes actually available in your host; the example defaults are not bundled model providers. Optional workflow skills (`ask-matt`, `handoff`) must be installed separately; see `skillsRoot` below. GitHub features also need the `gh` CLI and authentication.

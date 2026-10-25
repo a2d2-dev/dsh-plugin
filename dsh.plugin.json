@@ -1,6 +1,6 @@
 {
   "id": "dsh-external/dsh-a2d2",
-  "version": "0.0.23-dev.0",
+  "version": "0.0.23",
   "main": "./lib/index.js",
   "description": "A²D² for DSH: GitHub Project and Issue workflow, task execution, session continuation, and acceptance evidence",
   "engines": {
