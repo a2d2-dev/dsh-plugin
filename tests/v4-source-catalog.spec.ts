@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import { readSourceCatalog } from '../src/work-sources/catalog.ts'
+import { catalogSchema } from '../src/work-sources/catalog-schema.ts'
 import { filterProjectItems } from '../src/work-sources/views.ts'
 import type { GitHubProjectItem, GitHubIssue } from '../src/work-sources/types.ts'
 
@@ -25,6 +26,33 @@ it('paginates Project views and merges real PR membership with partial Issue cro
   expect(requests).toHaveLength(4)
   expect(result).toMatchObject({ views: [{ number: 1 }, { number: 2 }], viewsComplete: true, pullRequestsComplete: false, pullRequests: [{ nodeId: 'P', state: 'merged', membership: 'project', issues: [{ number: 5, url: 'https://github.com/acme/app/issues/5' }] }], limitations: [expect.stringContaining('部分历史引用')] })
 })
+function projectCatalogReader(filter: unknown) {
+  return async (query: string) => {
+    const terminal = { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] }
+    const project = query.includes('views(first:')
+      ? { views: { ...terminal, nodes: [{ id: 'v1', number: 1, name: 'View 1', filter, layout: 'TABLE_LAYOUT' }] } }
+      : query.includes('fields(first:') ? { fields: terminal } : { items: terminal }
+    return { data: { viewer: { id: 'U', login: 'viewer', name: null }, organization: { projectV2: project } } }
+  }
+}
+
+it.each([
+  { filter: null, expected: '' },
+  { filter: '', expected: '' },
+  { filter: 'is:issue', expected: 'is:issue' },
+])('reads and caches a Project view with filter $filter without losing its meaning', async ({ filter, expected }) => {
+  const result = await readSourceCatalog({ githubProject: { owner: 'acme', type: 'org', number: 1 } }, projectCatalogReader(filter))
+  const cached = catalogSchema.parse(JSON.parse(JSON.stringify(result)))
+  expect(cached).toMatchObject({ viewsComplete: true, views: [{ number: 1, filter: expected, layout: 'TABLE_LAYOUT' }] })
+  const issue: GitHubProjectItem = { id: 'issue', kind: 'issue', archived: false, fields: [], fieldsPartial: false }
+  const draft: GitHubProjectItem = { id: 'draft', kind: 'draft', archived: false, fields: [], fieldsPartial: false }
+  expect(filterProjectItems(cached.views[0]!.filter, [issue, draft], [], 'viewer')).toEqual({ supported: true, items: expected ? [issue] : [issue, draft] })
+})
+
+it.each([undefined, 0, false, {}, []].map(filter => ({ filter })))('rejects missing or malformed Project view filters ($filter)', async ({ filter }) => {
+  await expect(readSourceCatalog({ githubProject: { owner: 'acme', type: 'org', number: 1 } }, projectCatalogReader(filter))).rejects.toMatchObject({ code: 'github-invalid-response', message: 'GitHub 未返回完整 Project views' })
+})
+
 it('applies actual view filters before pagination and refuses unsupported syntax rather than showing all items', () => {
   const issue = { nodeId: 'I1', labels: ['ready'], assignees: ['viewer'], state: 'open', repository: { owner: 'acme', repository: 'app' } } as GitHubIssue
   const item: GitHubProjectItem = { id: 'item', kind: 'issue', archived: false, issueNodeId: 'I1', fields: [{ id: 'status', name: 'Status', type: 'single-select', value: 'In Progress' }], fieldsPartial: false }
