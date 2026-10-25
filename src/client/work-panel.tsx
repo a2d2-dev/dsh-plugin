@@ -60,7 +60,7 @@ export function WorkPanel({ controller }: { controller: WorkPanelController }) {
         </>}
         {state.detailTab==='related'&&<><Requirements controller={controller}/>{issue&&<NativeIssueRelations issue={issue} controller={controller}/>}</>}
         {state.detailTab==='sessions'&&<>{detail?.executionGraph?<ExecutionSessions graph={detail.executionGraph} onReadIssue={issue=>void controller.openNativeIssue(issue)} onOpenTask={ref=>void controller.openTask(ref)} onEnterTask={ref=>void controller.enterTask(ref)} onOpenSession={session=>controller.openSession(session)} onReadHistory={session=>void controller.openHistory(session)}/>:<p role="status">执行图尚未读取，执行与结果状态未知。</p>}<HistoryTranscript controller={controller}/></>}
-        {state.detailTab==='continuation'&&<ExecutionContinuation graph={detail?.executionGraph} execution={detail?.execution} policy={detail?.execution?.continuationPolicy??project?.continuationPolicy} busy={state.startup.busy} completed={continuationCompleted} {...(!continuationCompleted?{onContinue:()=>void controller.controlExecution('continue')}: {})}/>}
+        {state.detailTab==='continuation'&&<ExecutionContinuation graph={detail?.executionGraph} execution={detail?.execution} policy={detail?.execution?.continuationPolicy??project?.continuationPolicy} busy={state.startup.busy} completed={continuationCompleted} {...(!continuationCompleted?{onContinue:()=>void controller.controlExecution('continue'),onRecover:()=>void controller.controlExecution('reconcile'),onResume:()=>void controller.controlExecution('resume')}: {})}/>}
         {state.detailTab==='activity'&&<Section title="活动记录">{task?.activity.length?<ol>{[...task.activity].reverse().map(item=><li key={item.commandId}>版本 {item.version} · {activityLabel(item.type)}</li>)}</ol>:<p>尚无处理活动。</p>}</Section>}
       </div>
       <ErrorText error={state.source.error??''}/>
@@ -198,7 +198,7 @@ function CurrentExecution({controller}:{controller:WorkPanelController}) {
     {execution ? <>
       <p>{(()=>{const task=state.detail?.task;if(!task)return null;const counts=controller.sessionCounts(task);return `${counts.total} 个会话 · 当前 ${counts.current} · 历史 ${counts.historical} · 其他关联 ${counts.associated}`})()}</p><p>执行状态：{state.detail?.task?.completion?({pending:'等待执行收口',settled:'执行已安全收口',error:'执行收口失败'})[state.detail.task.completion.closeout.status]:executionLabel(execution.state,progress,execution.control?.status)}{executionRuntime ? ` · 会话：${({running:'正在运行',idle:'空闲',inactive:'未激活'})[executionRuntime]}` : ''}</p>
       {execution.progress && <p>工作进展：{execution.progress}</p>}
-      {execution.control && !completed && <p>{({wait:'等待',pause:'暂停',resume:'恢复'})[execution.control.action]}请求{execution.control.status==='accepted'?'已接受，等待生效':'已生效'}{execution.control.reason?`：${execution.control.reason}`:''}</p>}
+      {execution.control && !completed && <p>{({wait:'等待',pause:'暂停',resume:'恢复'})[execution.control.action]}请求{execution.control.status==='accepted'?(execution.state==='failed'?'未生效，执行失败':'已接受，等待生效'):'已生效'}{execution.control.reason?`：${execution.control.reason}`:''}</p>}
       {execution.error && <ErrorText error={`${execution.error.code}: ${execution.error.message}`}/>}
       <div className={styles.toolbar}>
         {controller.currentSession() && <button disabled={busy} onClick={()=>controller.openCurrentSession()}>进入当前会话</button>}
