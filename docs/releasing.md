@@ -1,6 +1,6 @@
 # 发布要求
 
-源码采用 Apache-2.0，第三方依赖保留自己的许可证。包名、Cordis 挂载入口和浏览器 bundle 统一为 `@a2d2/dsh-a2d2`。默认分支 `main` 是后续版本的唯一整合来源；当前开发版本为 `0.0.23-dev.0`，既有 `v0.0.22` 是不可变的历史预发布标签。
+源码采用 Apache-2.0，第三方依赖保留自己的许可证。包名、Cordis 挂载入口和浏览器 bundle 统一为 `@a2d2/dsh-a2d2`。默认分支 `main` 是后续版本的唯一整合来源；本次发布版本为 `0.0.23`，既有 `v0.0.22` 标签保持不变。发行包通过 GitHub Release 分发，本次不发布 npm registry 或改变仓库可见性。
 
 ## 分支与版本
 
@@ -37,8 +37,8 @@ node scripts/verify-repository.mjs --tag v0.0.23
 
 ## 宿主与外部依赖
 
-- 当前 peerDependencies 基于 DSH 0.2.0-rc.2 API 系列；这不保证同版本的所有官方宿主都具备所需能力。
-- 根会话、浏览器会话和交接的 Agent 初始化仍要求 `sessionController.selectLocalModel`；缺少时明确拒绝。已核对的上游 [`687f282e`](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/api/session-controller/src/index.ts) 未定义该方法，其包版本为 `0.2.1-rc.2`。首次提供能力的公开宿主版本仍需确认，不能用本地开发宿主的验收替代，也不能回退到修改默认值的 `selectModel`。
+- 当前 peerDependencies 保留 DSH 0.2.0-rc.2 契约并声明已核对的 0.2.1-rc.2 / rc.3 范围；版本声明不能证明每种发行构建具备相同能力。
+- 根会话、浏览器会话和交接初始化使用官方公开的 `Agent.model.current/select`，同时保留旧宿主已验证的 `sessionController.selectLocalModel` 路径，不回退到修改全局默认的 `selectModel`。未经修改的官方源码构建 [`22ddee3792402c3e70ec5f86a63c3e3e895a2f60`](https://github.com/deepseek-ai/deepseek-harness/tree/22ddee3792402c3e70ec5f86a63c3e3e895a2f60)（CLI `0.2.1-rc.3`，宿主 Node 24.9 起）已有 Session/model 与 jobs 集成证据；相同版本的 npm 宿主分发包缺少两种模型选择能力，会明确拒绝。精确范围见[整合证据](verification/issue-243-integrated-compat.md)和[升级测试集](verification/dsh-upgrade-test-suite.md)，不据此宣称所有官方桌面版已验收。
 - 子代理 dispatch 使用另一条契约：优先 `startActivation`，方法不存在时才用 `startContinuable`；它不证明根会话初始化兼容性。
 - Node.js 22 是下限；GitHub watch 使用原生 WebSocket。开发 pnpm 版本与桌面应用内置安装器版本可以不同，见 [Git 安装](git-installation.md)。
 - `gh` 认证、模型提供者、可选 `ask-matt` / `handoff` skill 及通知服务由使用者配置。

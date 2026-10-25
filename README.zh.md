@@ -6,13 +6,15 @@
 
 本仓库存放 **A²D² DeepSeek Harness 插件**：把 A²D² 落地进 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的各组件，作为一个可安装的插件交付。
 
-默认分支 `main` 是整合后的开发源码（`0.0.23-dev.0`）。现有 `v0.0.22` 预发布包保持原标签，标签后的修复列在更新记录的 **Unreleased** 部分；后续版本从 `main` 发布。
+后续版本从整合后的 `main` 发布。当前预发布版为 **v0.0.23**，相对 v0.0.22 的变化见[更新记录](CHANGELOG.md)；已有发行标签保持不变。
 
-## 安装 v0.0.22 预发布包
+## 安装 v0.0.23 预发布包
 
-从 [GitHub Release v0.0.22](https://github.com/a2d2-dev/dsh-plugin/releases/tag/v0.0.22) 下载 `a2d2-dsh-a2d2-0.0.22.tgz`，不要解压，也不要使用自动生成的 Source code 压缩包。桌面端插件管理器可通过下载文件的绝对路径安装；命令行安装使用对应应用提供的 `dsh plugin --profile desktop add /absolute/path/a2d2-dsh-a2d2-0.0.22.tgz`。更新后完整退出并重新打开 DSH，以清除旧会话实例中的拦截器；仅刷新页面不足以替换旧实例。
+升级前备份完整工作目录，包含控制 JSON、来源 sidecar 和 archive。旧插件不能直接读取新的存储元数据，降级方式见[存储迁移与离线降级](docs/architecture/work-dao.md)。
 
-此包沿用当前运行版本的包名 `@a2d2/dsh-a2d2`，包含完整工作面板、服务端与浏览器构建。此前 GitHub v0.0.1 使用 `dsh-a2d2`；不要把两种包名同时启用为两套 A²D² 实例。版本号接续已部署的内部 0.0.21。Node.js 22 起；本版在当前匹配的 DSH 0.2.1-rc.2 开发宿主上验证，未宣称所有官方桌面版本均已兼容。校验文件随 Release 提供。
+从 [GitHub Release v0.0.23](https://github.com/a2d2-dev/dsh-plugin/releases/tag/v0.0.23) 下载 `a2d2-dsh-a2d2-0.0.23.tgz`，不要解压，也不要使用自动生成的 Source code 压缩包。在实际使用的 profile 插件管理器输入文件绝对路径；命令行可用对应应用提供的 `dsh plugin --profile desktop add /absolute/path/a2d2-dsh-a2d2-0.0.23.tgz`。更新后完整退出并重新打开 DSH；仅刷新页面不足以替换旧会话实例。
+
+包名保持 `@a2d2/dsh-a2d2`，包含完整工作面板、服务端与浏览器构建。此前 GitHub v0.0.1 使用 `dsh-a2d2`；不要把两种包名同时启用为两套 A²D² 实例。插件要求 Node.js 22 起；下文已核验的官方源码宿主要求 Node 24.9 起。该宿主的 Session/model、jobs 集成证据与匹配开发宿主上的 GUI 验收分开，未宣称所有官方桌面发行版均已验证。源码提交和校验文件随 Release 提供；发布操作本身不升级运行实例。
 
 人工对话在任务等待、暂停、完成和交接后仍可使用。旧会话会提示新会话入口；对话不自动重开已完成任务或夺回协调身份。旧版暂存的未消费人工消息会在原会话下一次人工输入时恢复，保留内容及附件并去重。
 
@@ -32,7 +34,7 @@
 
 Project、Issue、PR 表格的每列都有 `⋯`：选择整列、升降序、按当前观察到的真实值过滤，以及适用列的分组、切片、隐藏和移动。标题列可按类型／状态过滤，保留条目入口；不支持的动作置灰并说明原因。多值字段同列选项取并集，多列条件与搜索取交集。当前条件可清除；隐藏字段可通过“显示”恢复，“重置列与查询”恢复默认展示。
 
-列表搜索标题、编号和仓库。Project 搜索当前保存视图及入口切片、含关闭设置范围内的完整扫描快照；PR 搜索当前目录，并明确目录是否完整；这两类在本地分页前查询。Issue 的列搜索和处理状态仅作用于当前载入页，搜索整个来源使用上方“搜索当前来源”表单并应用。页面说明当前来源、视图和分页范围，切换来源／视图会清除不适用的列条件。未观察字段单独显示为未知，不能当作已确认空值。列查询和展示操作不会创建处理会话、开启持续处理或修改 GitHub 字段。
+列表搜索标题、编号和仓库。Project 搜索当前保存视图及入口切片、含关闭设置范围内的完整扫描快照；PR 搜索当前目录，并明确目录是否完整；这两类先查询再截取展示行。Issue 的列搜索和处理状态仅作用于已加载范围，搜索整个来源使用上方“搜索当前来源”表单并应用。三类列表首批最多 100 行，接近底部每次追加最多 100 行；Issue 追加失败保留已有内容并可重试。切换来源、视图或查询时重置展示批次并清除不适用的列条件。未观察字段单独显示为未知，不能当作已确认空值。列查询和展示操作不会创建处理会话、开启持续处理或修改 GitHub 字段。
 
 DSH Goal 自动续跑消息由 Goal 驱动管理，A²D² 不把它们保存为 Task 待投递输入，也不跨会话转移。旧版本误存而尚未消费的 Goal 消息会在执行恢复时标记为“已废弃”，保留原消息供查看，并停止重放；废弃不表示已被模型消费或已通过任务验收。Goal 的暂停与 Task 的恢复分别生效。
 
@@ -85,7 +87,7 @@ pnpm pack --pack-destination /absolute/path/to/output
 将生成的 tarball 安装到已有的 DSH web profile：
 
 ```sh
-dsh plugin --profile web add /absolute/path/to/output/a2d2-dsh-a2d2-0.0.23-dev.0.tgz
+dsh plugin --profile web add /absolute/path/to/output/a2d2-dsh-a2d2-0.0.23.tgz
 ```
 
 包名和浏览器 bundle 名称统一为 `@a2d2/dsh-a2d2`；本项目不在 `@deepseek-ai` scope 下发布。npm registry 发布及干净宿主上的端到端安装尚未验证。Agent 候选应配置为宿主实际可用的 provider/model 路由；示例默认值不代表插件提供这些模型。可选工作流 skill（`ask-matt`、`handoff`）需单独安装，路径见下方 `skillsRoot`。GitHub 功能还需要安装并认证 `gh` CLI。
