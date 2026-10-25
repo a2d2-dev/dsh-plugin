@@ -34,24 +34,25 @@ export function WorkPanel({ controller }: { controller: WorkPanelController }) {
   const source=state.source.sources.find(item=>item.id===state.source.sourceId)
   const detail=state.detail, task=detail?.task
   const continuationCompleted=Boolean(task?.completion||detail?.progress?.completion||detail?.progress?.processingState==='completed')
-  const binding=detail?.bindings?.[0]
+  const selectedNode=state.source.issueTarget?.nodeId
+  const binding=detail?.bindings?.find(item=>item.nodeId===selectedNode)??detail?.bindings?.[0]
   const issue=task ? (binding?.lastObserved ?? (state.source.bindings.some(item=>item.ref.taskId===task.id&&item.ref.projectId===task.projectId)?state.source.issue:null)) : state.source.issue
   const target=task?null:state.source.issueTarget
   const detailPending=Boolean(target&&(state.source.loading||state.loading))
   const detailUnavailable=Boolean(target&&(state.source.error||state.error))
   const hasDetail=Boolean(task||issue||target)
-  const retryIssue=()=>{const selected=target??issue;if(selected)void controller.openIssue(selected.number,Boolean(source?.enabled),selected.nodeId)}
+  const retryIssue=()=>void controller.refreshDetail()
   const sourceTitle=source?.title??source?.projectSnapshot?.project.title??(source?.repository?`${source.repository.owner}/${source.repository.repository}`:project?.name)
   return <main ref={setSurface} className={styles.panel} aria-label="A²D² 控制面板">
     <div className={styles.navigation}><SourceTabs controller={controller} onAdd={()=>setConnecting(!connecting)}/><button onClick={()=>controller.close()}>关闭面板</button></div>
-    {state.error&&<p className={styles.failure} role="alert">{state.error} <button onClick={()=>void (task?controller.refreshTask():target?retryIssue():controller.load())}>重新读取</button></p>}
+    {state.error&&<p className={styles.failure} role="alert">{state.error} <button onClick={retryIssue}>重新读取</button></p>}
     {state.observationError&&<p role="status">状态更新暂不可用，保留上次内容：{state.observationError}</p>}
     {state.startup.error&&<ErrorText error={state.startup.error}/>}
     {state.startup.busy&&<p role="status">正在准备执行，请稍候…</p>}
     {(connecting||(!projects.length&&!hasDetail&&!state.loading))&&<SourceConnect controller={controller} onSaved={()=>setConnecting(false)}/>}
     {state.loading&&<p role="status">正在读取 Issue 与进展…</p>}
     {hasDetail?<>
-      <header className={styles.issueHeader}><button className={styles.link} onClick={()=>controller.back()}>← {controller.canReturnToRequirement()?'返回上级要求':'返回 Issue 列表'}</button><p className={styles.eyebrow}>{issue?`${issue.repository.owner}/${issue.repository.repository} · #${issue.number}`:target?`${sourceTitle??'Issue'} · #${target.number}`:sourceTitle}</p><h1>{issue?`#${issue.number} ${issue.title}`:target?`#${target.number} Issue 详情`:task?.title}</h1><div className={styles.toolbar}>{issue&&<GitHubLink url={issue.url}/>}<span className={styles.badge}>{detailPending?'正在加载…':task?.completion?'已完成':!task&&target&&(state.source.error||state.error)?'读取失败':processingLabel(detail?.progress)}</span><button disabled={state.loading||state.source.loading} onClick={()=>void (task?controller.refreshTask():retryIssue())}>{state.source.error||state.error?'重试加载详情':'刷新详情'}</button></div></header>
+      <header className={styles.issueHeader}><button className={styles.link} onClick={()=>controller.back()}>← {controller.canReturnToRequirement()?'返回上级要求':'返回 Issue 列表'}</button><p className={styles.eyebrow}>{issue?`${issue.repository.owner}/${issue.repository.repository} · #${issue.number}`:target?`${sourceTitle??'Issue'} · #${target.number}`:sourceTitle}</p><h1>{issue?`#${issue.number} ${issue.title}`:target?`#${target.number} Issue 详情`:task?.title}</h1><div className={styles.toolbar}>{issue&&<GitHubLink url={issue.url}/>}<span className={styles.badge}>{detailPending?'正在加载…':task?.completion?'已完成':!task&&target&&(state.source.error||state.error)?'读取失败':processingLabel(detail?.progress)}</span><button disabled={state.loading||state.source.loading} onClick={retryIssue}>{state.source.error||state.error?'重试加载详情':'刷新详情'}</button></div></header>
       {detail?.execution&&!task?.completion&&<details className={styles.continuation}><summary>编辑自动接续设置</summary><ContinuationSettings key={`execution/${detail.execution.id}/${detail.execution.continuationPolicy?.version??0}`} controller={controller} policy={detail.execution.continuationPolicy??project?.continuationPolicy} forExecution/></details>}
       <nav className={styles.tabs} role="tablist" aria-label="Issue 详情标签">{detailTabs.map(([id,label])=><button key={id} role="tab" aria-selected={state.detailTab===id} onClick={()=>controller.setDetailTab(id)}>{label}</button>)}</nav>
       <div role="tabpanel" aria-label={detailTabs.find(([id])=>id===state.detailTab)?.[1]} aria-busy={detailPending}>

@@ -199,6 +199,7 @@ export class WorkPanelController {
       this.detailTrail.push({projectId,tasks,progressItems,source,object,search,view,detail,detailTab,issueFilter})
     } else if (!remember) this.detailTrail=[]
     this.invalidateSourceNavigation()
+    this.updateSource({issueTarget:null,error:null})
     if (this.state.projectId !== ref.projectId) {
       const origin=this.state.object==='issues'&&this.state.source.issue?{projectId:this.state.projectId,tasks:this.state.tasks,progressItems:this.state.progressItems,source:this.state.source,object:this.state.object,search:this.state.search,view:this.state.view,issueFilter:this.state.issueFilter}:null
       const projectRevision = this.revision + 1
@@ -235,6 +236,14 @@ export class WorkPanelController {
       }
       if (revision === this.revision) await this.openTask(ref,false)
     } catch (error) { if (revision === this.revision) this.update({ loading: false, error: message(error) }) }
+  }
+  async refreshDetail(): Promise<void> {
+    const {detail,source}=this.state,issue=source.issueTarget??source.issue
+    if(issue&&(!detail?.task||source.error)) {
+      const selected=source.sources.find(item=>item.id===source.sourceId)
+      await this.openIssue(issue.number,Boolean(selected?.enabled),issue.nodeId)
+    } else if(detail?.task) await this.refreshTask()
+    else await this.load()
   }
   async refreshTask(): Promise<void> {
     const task = this.state.detail?.task
@@ -619,14 +628,15 @@ export class WorkPanelController {
     const ref = this.state.source.bindings.find(binding => binding.nodeId === issue?.nodeId)?.ref
       ?? (issue ? this.progressForIssue(issue)?.ref : undefined)
     if (!ref) return
-    this.update({loading:true})
+    this.updateSource({loading:true})
     try {
       const detail = await this.client.query({type:'task.detail',ref})
       if (revision === this.revision && sourceRevision === this.sourceRevision) {
         if(detail.task?.id!==ref.taskId||detail.task.projectId!==ref.projectId)throw Error('工作进展与所选 Issue 不一致')
-        this.update({detail,loading:false})
+        this.update({detail})
+        this.updateSource({loading:false})
       }
-    } catch (error) { if (revision === this.revision && sourceRevision === this.sourceRevision) this.update({loading:false,error:message(error)}) }
+    } catch (error) { if (revision === this.revision && sourceRevision === this.sourceRevision) {this.update({error:message(error)});this.updateSource({loading:false})} }
   }
   private issueDrafts = new Map<string,{search:string;labels:string}>()
   issueQueryDraft():{search:string;labels:string} {
