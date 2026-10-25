@@ -17,6 +17,7 @@ export function mountProductionComponent(props: Record<string, unknown>, compone
   let active: Instance
   const dependenciesMatch = (left?: unknown[], right?: unknown[]) => !!left && !!right && left.length === right.length && right.every((value, index) => Object.is(value, left[index]))
   const react = {
+    Fragment: Symbol.for('react.fragment'),
     useState(initial: any) {
       const instance = active, index = instance.cursor++
       if (!(index in instance.slots)) instance.slots[index] = typeof initial === 'function' ? initial() : initial

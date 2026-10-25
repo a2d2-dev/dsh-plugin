@@ -136,16 +136,14 @@ function ProjectViews({controller,source}:{controller:WorkPanelController;source
   const sliceField=sliceFieldOptions.find(field=>field.id===sliceFieldId)??sliceFieldOptions[0]
   const sliceAgg=sliceField?sliceAggregate(sliceField.id,base):null
   const visible=sliceField?applySlice(base,sliceField.id,sliceSelected,showEmpty):base
-  const rows=orderProjectRows(visible,issues,collapsed)
   const columns=projectColumns(catalog.fields,orderProjectRows(base,issues,new Set()),extraColumns),slots=projectColumnSlots(columns)
-  const parents=new Set(visible.flatMap(item=>{const parent=issues.find(issue=>issue.nodeId===item.issueNodeId)?.parent?.nodeId;return parent?[parent]:[]}))
   const progressByNode=new Map(controller.getSnapshot().progressItems.flatMap(item=>item.source?.nodeId?[[item.source.nodeId,item] as const]:[]))
   const toggle=(nodeId:string)=>setCollapsed(current=>{const next=new Set(current);if(next.has(nodeId))next.delete(nodeId);else next.add(nodeId);return next})
   const tableColumns:TableColumn<ProjectRow>[]=[{
     id:'title',label:'条目',protected:true,width:3,values:row=>[row.issue?.title??row.item.title??row.item.kind],
     qualifiers:[{id:'kind',label:'条目类型',values:row=>[row.item.kind]},{id:'state',label:'GitHub 状态',values:row=>[row.issue?.state??row.item.facts?.state??'未观察到状态']}],
-    render:(row,transformed)=><div className={styles.hierarchy} style={{paddingLeft:transformed?0:row.depth*22}}>
-      {!transformed&&row.item.issueNodeId&&parents.has(row.item.issueNodeId)?<button className={styles.chevron} aria-label={collapsed.has(row.item.issueNodeId)?'展开子项':'收起子项'} aria-expanded={!collapsed.has(row.item.issueNodeId)} onClick={()=>toggle(row.item.issueNodeId!)}>{collapsed.has(row.item.issueNodeId)?'▸':'▾'}</button>:null}
+    render:row=><div className={styles.hierarchy} style={{paddingLeft:row.depth*22}}>
+      {row.item.issueNodeId&&row.hasChildren?<button className={styles.chevron} aria-label={collapsed.has(row.item.issueNodeId)?'展开子项':'收起子项'} aria-expanded={!collapsed.has(row.item.issueNodeId)} onClick={()=>toggle(row.item.issueNodeId!)}>{collapsed.has(row.item.issueNodeId)?'▸':'▾'}</button>:null}
       <span className={styles.rowState} data-closed={row.issue?.state==='closed'?'true':undefined} title={row.issue?.state??row.item.facts?.state??'未观察到状态'}/>
       {row.issue?<button className={styles.rowTitle} title={`#${row.issue.number} ${row.issue.title} · ${row.issue.repository.owner}/${row.issue.repository.repository}`} onClick={()=>void controller.openIssue(row.issue!.number,source.enabled,row.issue!.nodeId)}>#{row.issue.number} {row.issue.title}</button>:row.item.url?<TrustedLink url={row.item.url}>{row.item.title??row.item.kind}</TrustedLink>:row.item.title??row.item.kind}{row.item.archived&&<span> · 已归档</span>}
     </div>,
@@ -167,7 +165,7 @@ function ProjectViews({controller,source}:{controller:WorkPanelController;source
       <label className={styles.projectToggle}><input type="checkbox" checked={extraColumns} onChange={event=>setExtraColumns(event.target.checked)}/> 时间与仓库列</label>
       {entry&&<span className={styles.projectLink}><TrustedLink url={entry}>原始视图</TrustedLink></span>}
     </div>
-      <InteractiveTable key={`${source.projectId}/${source.id}/${viewNumber}/${expression}`} label="真实 Project 条目" resetKey={JSON.stringify([snapshot?.observedAt,includeClosed,sliceField?.id,[...sliceSelected],showEmpty])} rows={orderProjectRows(visible,issues,new Set())} defaultRows={rows} columns={tableColumns} rowKey={row=>row.item.id} searchText={row=>`${row.issue?.number??''} #${row.issue?.number??''} ${row.issue?.title??row.item.title??''} ${row.issue?.repository.owner??row.item.facts?.repository.owner??''}/${row.issue?.repository.repository??row.item.facts?.repository.repository??''}`} searchLabel="搜索 Project 条目" scope={`当前 Project：${sourceName(source)} · 视图：${view?.name??'未选择'} · 完整扫描快照 ${snapshot?.observedAt??'尚无'}；仅当前视图、含关闭设置和入口切片范围`} unavailable={!state.catalog?'尚无可读缓存：尚无真实 Project 视图缓存，请刷新来源。':!view?'保存的 view 不在当前可读取目录中，请选择真实视图。':!snapshot?'完整 Project 成员扫描尚未完成，请刷新继续；没有用全列表冒充视图。':filtered&&!filtered.supported?filtered.reason:undefined}/>
+      <InteractiveTable key={`${source.projectId}/${source.id}/${viewNumber}/${expression}`} label="真实 Project 条目" resetKey={JSON.stringify([snapshot?.observedAt,includeClosed,sliceField?.id,[...sliceSelected],showEmpty])} rows={orderProjectRows(visible,issues,new Set())} arrangeRows={matching=>orderProjectRows(matching.map(row=>row.item),issues,collapsed)} columns={tableColumns} rowKey={row=>row.item.id} searchText={row=>`${row.issue?.number??''} #${row.issue?.number??''} ${row.issue?.title??row.item.title??''} ${row.issue?.repository.owner??row.item.facts?.repository.owner??''}/${row.issue?.repository.repository??row.item.facts?.repository.repository??''}`} searchLabel="搜索 Project 条目" scope={`当前 Project：${sourceName(source)} · 视图：${view?.name??'未选择'} · 完整扫描快照 ${snapshot?.observedAt??'尚无'}；仅当前视图、含关闭设置和入口切片范围`} unavailable={!state.catalog?'尚无可读缓存：尚无真实 Project 视图缓存，请刷新来源。':!view?'保存的 view 不在当前可读取目录中，请选择真实视图。':!snapshot?'完整 Project 成员扫描尚未完成，请刷新继续；没有用全列表冒充视图。':filtered&&!filtered.supported?filtered.reason:undefined}/>
     <details><summary>字段定义</summary><ul>{catalog.fields.map(field=><li key={field.id}>{field.name} · {field.dataType}{field.options?.length?` · ${field.options.map(option=>`${option.name}(${option.color})`).join(' / ')}`:''}</li>)}</ul></details>
   </section>
 }
