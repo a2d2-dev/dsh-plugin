@@ -155,7 +155,7 @@ describe('explicit work startup', () => {
     await h.panel.configureProjectSource('acme', 'org', 9)
     expect(h.command.mock.calls[0]![0]).toMatchObject({ type: 'source.configure-project', projectId: 'p1', githubProject: projectSource.githubProject })
     await h.panel.openIssue(1, true, 'OtherRepoIssue')
-    expect(h.client.query).toHaveBeenLastCalledWith({ type: 'source.issue', projectId: 'p1', sourceId: 's1', number: 1, nodeId: 'OtherRepoIssue', refresh: true })
+    expect(h.client.query).toHaveBeenLastCalledWith({ type: 'source.issue', projectId: 'p1', sourceId: 's1', number: 1, nodeId: 'OtherRepoIssue', refresh: true }, expect.any(AbortSignal))
     expect(html(h.panel)).toContain('acme/other · #1')
   })
   it('distinguishes idle, persisted progress, wait application and business acceptance', async () => {

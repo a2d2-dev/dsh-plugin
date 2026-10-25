@@ -20,6 +20,8 @@ Native human conversations remain available while a Task waits, pauses, complete
 
 Open **A²D² Control Panel** in DSH and connect a GitHub Project. Browse assigned Issues, open their original requirements and progress, and start or revisit the current processing Session. Browsing never starts a model. The execution directory can be chosen when connecting or at the first explicit start.
 
+Clicking an Issue immediately opens its detail view with the selected title, a back button and a loading state. The complete source and existing work progress load afterward. Failed reads can be retried in place; returning while a read is pending preserves the source filters and loaded list. Superseded requests cannot reopen or replace the current detail.
+
 Enable continuous processing with an explicit assignee, required labels, directory, model and presets. Each rule advances one Issue at a time. Waiting work retains its Session and yields to other eligible Issues; automatic inputs rejoin the same serial scheduler. Pausing new intake preserves active work, while an explicitly paused Issue needs an explicit resume for automation. Native human input always receives a response and does not itself resume the Task.
 
 Configure a 200K, 300K or custom token target for automatic continuation. The successor retains the Issue's decisions, evidence and remaining work. These are early handoff targets checked against the actual model capacity, not hard limits on a long turn. The original Issue overview connects requirement blocks, nested child work, known sub-Issues, blockers and acceptance evidence.

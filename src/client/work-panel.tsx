@@ -34,23 +34,29 @@ export function WorkPanel({ controller }: { controller: WorkPanelController }) {
   const source=state.source.sources.find(item=>item.id===state.source.sourceId)
   const detail=state.detail, task=detail?.task
   const continuationCompleted=Boolean(task?.completion||detail?.progress?.completion||detail?.progress?.processingState==='completed')
-  const binding=detail?.bindings?.[0]
+  const selectedNode=state.source.issueTarget?.nodeId
+  const binding=detail?.bindings?.find(item=>item.nodeId===selectedNode)??detail?.bindings?.[0]
   const issue=task ? (binding?.lastObserved ?? (state.source.bindings.some(item=>item.ref.taskId===task.id&&item.ref.projectId===task.projectId)?state.source.issue:null)) : state.source.issue
-  const hasDetail=Boolean(task||issue)
+  const target=task?null:state.source.issueTarget
+  const detailPending=Boolean(target&&(state.source.loading||state.loading))
+  const detailUnavailable=Boolean(target&&(state.source.error||state.error))
+  const hasDetail=Boolean(task||issue||target)
+  const retryIssue=()=>void controller.refreshDetail()
   const sourceTitle=source?.title??source?.projectSnapshot?.project.title??(source?.repository?`${source.repository.owner}/${source.repository.repository}`:project?.name)
   return <main ref={setSurface} className={styles.panel} aria-label="A²D² 控制面板">
     <div className={styles.navigation}><SourceTabs controller={controller} onAdd={()=>setConnecting(!connecting)}/><button onClick={()=>controller.close()}>关闭面板</button></div>
-    {state.error&&<p className={styles.failure} role="alert">{state.error} <button onClick={()=>void (task?controller.refreshTask():controller.load())}>重新读取</button></p>}
+    {state.error&&<p className={styles.failure} role="alert">{state.error} <button onClick={retryIssue}>重新读取</button></p>}
     {state.observationError&&<p role="status">状态更新暂不可用，保留上次内容：{state.observationError}</p>}
     {state.startup.error&&<ErrorText error={state.startup.error}/>}
     {state.startup.busy&&<p role="status">正在准备执行，请稍候…</p>}
     {(connecting||(!projects.length&&!hasDetail&&!state.loading))&&<SourceConnect controller={controller} onSaved={()=>setConnecting(false)}/>}
     {state.loading&&<p role="status">正在读取 Issue 与进展…</p>}
     {hasDetail?<>
-      <header className={styles.issueHeader}><button className={styles.link} onClick={()=>controller.back()}>← {controller.canReturnToRequirement()?'返回上级要求':'返回 Issue 列表'}</button><p className={styles.eyebrow}>{issue?`${issue.repository.owner}/${issue.repository.repository} · #${issue.number}`:sourceTitle}</p><h1>{issue?`#${issue.number} ${issue.title}`:task?.title}</h1><div className={styles.toolbar}>{issue&&<GitHubLink url={issue.url}/>}<span className={styles.badge}>{task?.completion?'已完成':processingLabel(detail?.progress)}</span><button disabled={state.loading||state.source.loading} onClick={()=>void (task?controller.refreshTask():issue&&controller.openIssue(issue.number,Boolean(source?.enabled),issue.nodeId))}>刷新详情</button></div></header>
+      <header className={styles.issueHeader}><button className={styles.link} onClick={()=>controller.back()}>← {controller.canReturnToRequirement()?'返回上级要求':'返回 Issue 列表'}</button><p className={styles.eyebrow}>{issue?`${issue.repository.owner}/${issue.repository.repository} · #${issue.number}`:target?`${sourceTitle??'Issue'} · #${target.number}`:sourceTitle}</p><h1>{issue?`#${issue.number} ${issue.title}`:target?`#${target.number} Issue 详情`:task?.title}</h1><div className={styles.toolbar}>{issue&&<GitHubLink url={issue.url}/>}<span className={styles.badge}>{detailPending?'正在加载…':task?.completion?'已完成':!task&&target&&(state.source.error||state.error)?'读取失败':processingLabel(detail?.progress)}</span><button disabled={state.loading||state.source.loading} onClick={retryIssue}>{state.source.error||state.error?'重试加载详情':'刷新详情'}</button></div></header>
       {detail?.execution&&!task?.completion&&<details className={styles.continuation}><summary>编辑自动接续设置</summary><ContinuationSettings key={`execution/${detail.execution.id}/${detail.execution.continuationPolicy?.version??0}`} controller={controller} policy={detail.execution.continuationPolicy??project?.continuationPolicy} forExecution/></details>}
       <nav className={styles.tabs} role="tablist" aria-label="Issue 详情标签">{detailTabs.map(([id,label])=><button key={id} role="tab" aria-selected={state.detailTab===id} onClick={()=>controller.setDetailTab(id)}>{label}</button>)}</nav>
-      <div role="tabpanel" aria-label={detailTabs.find(([id])=>id===state.detailTab)?.[1]}>
+      <div role="tabpanel" aria-label={detailTabs.find(([id])=>id===state.detailTab)?.[1]} aria-busy={detailPending}>
+        {detailPending?<p role="status">正在加载 Issue 详情与进展…</p>:detailUnavailable?<><p role="status">详情读取失败，进展状态尚未确认，请重试加载详情。</p>{issue&&<Section title="Issue 原始要求"><IssueFacts issue={issue}/><p>最后已知内容</p><p className={styles.sourceBody}>{issue.body||'（原文正文为空）'}</p></Section>}</>:!issue&&!task?<p role="status">详情尚未读取，请重试加载详情。</p>:<>
         {state.detailTab==='overview'&&<>
           {task&&<CompletionStatus task={task} execution={detail?.execution} remoteState={binding?.lastObserved.state} busy={state.startup.busy} error={state.startup.error??undefined} onSync={command=>controller.syncCompletion(command)}/>}
           <div className={styles.detailGrid}><div><Section title="当前进展"><p>{detail?.progress?.summary??(task?.completion?'本地已验收，保留完成事实与收口状态。':'尚未开始处理')}</p>{detail?.progress&&<CriteriaCount criteria={detail.progress.criteria}/>}<p>下一步：{detail?.progress?.next||(task?.completion?(task.completion.closeout.status==='settled'?'已完成本地工作；外部同步独立观察':'等待执行安全收口'):!detail?.execution?'确认要求后开始处理':'等待当前会话报告下一步')}</p>{detail?.progress?.blockers.map((blocker,index)=><p className={styles.failure} key={index}>阻塞：{blocker}</p>)}</Section><Requirements controller={controller}/></div><CurrentExecution controller={controller}/></div>
@@ -62,6 +68,7 @@ export function WorkPanel({ controller }: { controller: WorkPanelController }) {
         {state.detailTab==='sessions'&&<>{detail?.executionGraph?<ExecutionSessions graph={detail.executionGraph} onReadIssue={issue=>void controller.openNativeIssue(issue)} onOpenTask={ref=>void controller.openTask(ref)} onEnterTask={ref=>void controller.enterTask(ref)} onOpenSession={session=>controller.openSession(session)} onReadHistory={session=>void controller.openHistory(session)}/>:<p role="status">执行图尚未读取，执行与结果状态未知。</p>}<HistoryTranscript controller={controller}/></>}
         {state.detailTab==='continuation'&&<ExecutionContinuation graph={detail?.executionGraph} execution={detail?.execution} policy={detail?.execution?.continuationPolicy??project?.continuationPolicy} busy={state.startup.busy} completed={continuationCompleted} {...(!continuationCompleted?{onContinue:()=>void controller.controlExecution('continue'),onRecover:()=>void controller.controlExecution('reconcile'),onResume:()=>void controller.controlExecution('resume')}: {})}/>}
         {state.detailTab==='activity'&&<Section title="活动记录">{task?.activity.length?<ol>{[...task.activity].reverse().map(item=><li key={item.commandId}>版本 {item.version} · {activityLabel(item.type)}</li>)}</ol>:<p>尚无处理活动。</p>}</Section>}
+        </>}
       </div>
       <ErrorText error={state.source.error??''}/>
     </>:state.projectId&&<>
