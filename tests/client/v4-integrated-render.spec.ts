@@ -20,7 +20,7 @@ it('wires authoritative execution, continuation and completion into one Issue wo
   expect(html).toContain('执行收口待处理')
   expect(html).not.toContain('未开始')
   expect(html.match(/<h1/g)).toHaveLength(1)
-  expect(html).toContain('会话与执行')
+  expect(html).toContain('会话')
   const pages = [{ name: 'overview', html }]
   controller.setDetailTab('sessions')
   html = renderToStaticMarkup(createElement(WorkPanel, { controller }))

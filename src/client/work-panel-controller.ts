@@ -1,3 +1,4 @@
+import type { GitHubAccount, GitHubRepositoryOption } from '../work-sources/types.ts'
 import type { TaskProgressView } from '../work-progress.ts'
 import { browserUUID } from './browser-uuid.ts'
 import { WorkClientError, type WorkClient } from './work-api.ts'
@@ -45,6 +46,7 @@ export interface HistoryState {
 }
 const emptyHistory = (): HistoryState => ({ session: null, events: [], loading: false, loaded: false, error: null })
 export interface WorkPanelState {
+  github: { account: GitHubAccount | null; busy: boolean; error: string | null; items: GitHubRepositoryOption[]; nextPage: number | null; repositoriesLoaded: boolean; repositoriesLoading: boolean }
   connection: { url: string; candidate: SourceCandidate | null; loading: boolean; error: string | null }
   observationError: string | null
   history: HistoryState
@@ -63,7 +65,7 @@ export interface WorkNavigation {
 }
 /** One root-owned state survives panel unmounts and native-session round trips. */
 export class WorkPanelController {
-  private state: WorkPanelState = { connection: { url: '', candidate: null, loading: false, error: null }, projectSources: {}, issueFilter: 'all', observationError: null, history: emptyHistory(), progressItems: [], startup: emptyStartup(), object:'issues', source:emptySource(), projects: [], projectId: null, tasks: [], detail: null, detailTab: 'overview', search: '', view: 'all', loading: false, error: null }
+  private state: WorkPanelState = { github: { account: null, busy: false, error: null, items: [], nextPage: null, repositoriesLoaded: false, repositoriesLoading: false }, connection: { url: '', candidate: null, loading: false, error: null }, projectSources: {}, issueFilter: 'all', observationError: null, history: emptyHistory(), progressItems: [], startup: emptyStartup(), object:'issues', source:emptySource(), projects: [], projectId: null, tasks: [], detail: null, detailTab: 'overview', search: '', view: 'all', loading: false, error: null }
   private listeners = new Set<() => void>()
   private sourceOrigin: Pick<WorkPanelState,'projectId'|'tasks'|'progressItems'|'source'|'object'|'search'|'view'|'issueFilter'> | null = null
   private detailTrail: Pick<WorkPanelState,'projectId'|'tasks'|'progressItems'|'source'|'object'|'search'|'view'|'detail'|'detailTab'|'issueFilter'>[] = []
@@ -98,6 +100,8 @@ export class WorkPanelController {
       const { sourceId, issue, page, perPage, assignee, state, labels, search } = snapshot.source
       const cached = !watchingSource || !sourceId ? Promise.resolve(null) : issue
         ? query({ type: 'source.issue', projectId, sourceId, number: issue.number, nodeId: issue.nodeId, refresh: false })
+        : snapshot.source.tab !== 'issues' && (snapshot.source.catalog !== null || snapshot.source.listing === null)
+        ? query({ type: 'source.catalog', projectId, sourceId, refresh: false })
         : query({ type: 'source.issues', projectId, sourceId, page, perPage, assignee, state, ...(labels?.length?{labels}:{}), ...(search?.trim()?{search}:{}), refresh: false })
       const [observed, sourceList, sourcePage, relatedWork] = await Promise.allSettled([base, sources, cached, related])
       if (!current()) return
@@ -133,6 +137,7 @@ export class WorkPanelController {
         if (sourcePage.status === 'fulfilled' && sourcePage.value) {
           const result = sourcePage.value
           if (result.source?.id === sourceId) nextSource.sources = nextSource.sources.map(item => item.id === sourceId ? result.source! : item)
+          if (result.catalog) nextSource.catalog = result.catalog
           if (issue && result.issue?.nodeId === issue.nodeId) {
             nextSource.issue = result.issue
             if (result.bindings) nextSource.bindings = result.bindings
@@ -646,6 +651,73 @@ export class WorkPanelController {
   setIssueQueryDraft(change:Partial<{search:string;labels:string}>):void {
     this.issueDrafts.set(this.state.source.sourceId??'',{...this.issueQueryDraft(),...change})
     this.update({})
+  }
+  private githubAccountRequest = 0
+  private githubEpoch = 0
+  async refreshGitHubAccount(): Promise<void> {
+    if (this.state.github.busy) return
+    const request = ++this.githubAccountRequest
+    this.update({ github: { ...this.state.github, busy: true, error: null } })
+    try {
+      const result = await this.client.query({ type: 'github.account' })
+      if (request !== this.githubAccountRequest) return
+      if (!result.githubAccount) throw Error('GitHub 未返回账号状态')
+      this.receiveGitHubAccount(result.githubAccount)
+    } catch (error) {
+      if (request === this.githubAccountRequest) this.update({ github: { ...this.state.github, busy: false, error: message(error) } })
+    }
+  }
+  private receiveGitHubAccount(account: GitHubAccount): void {
+    const changed = this.state.github.account?.identity?.nodeId !== account.identity?.nodeId
+    if (changed) {
+      ++this.githubEpoch
+      this.setSourceURLDraft(this.state.connection.url)
+    }
+    this.update({ github: { ...this.state.github, account: account, busy: false,
+      ...(changed ? { items: [], nextPage: null, repositoriesLoaded: false, repositoriesLoading: false } : {}) } })
+  }
+  async logoutGitHub(): Promise<void> {
+    const { account, busy } = this.state.github
+    if (busy || !account?.identity) return
+    this.update({ github: { ...this.state.github, busy: true, error: null } })
+    try {
+      const result = await this.submit({ type: 'github.logout', login: account.identity.login, nodeId: account.identity.nodeId })
+      if (!result.githubAccount) throw Error('GitHub 未返回退出后的账号状态')
+      this.receiveGitHubAccount(result.githubAccount)
+    } catch (error) { this.update({ github: { ...this.state.github, busy: false, error: message(error) } }) }
+  }
+  async loginGitHub(action: 'start' | 'cancel'): Promise<void> {
+    this.update({ github: { ...this.state.github, busy: true, error: null } })
+    try {
+      const result = await this.submit({ type: 'github.login', action })
+      if (!result.githubLogin) throw Error('GitHub 未返回登录状态')
+      this.update({ github: { ...this.state.github, busy: false, account: {
+        ...(this.state.github.account ?? { status: 'disconnected' as const }), login: result.githubLogin,
+      } } })
+    } catch (error) { this.update({ github: { ...this.state.github, busy: false, error: message(error) } }) }
+  }
+  async loadGitHubRepositories(reset = false): Promise<void> {
+    const state = this.state.github
+    if (state.repositoriesLoading || state.account?.status !== 'connected') return
+    const page = reset || !state.repositoriesLoaded ? 1 : state.nextPage
+    if (page === null) return
+    const epoch = this.githubEpoch, identity = state.account.identity?.nodeId
+    this.update({ github: { ...state, repositoriesLoading: true, error: null } })
+    try {
+      const result = await this.client.query({ type: 'github.repositories', page })
+      if (epoch !== this.githubEpoch) return
+      const repositories = result.githubRepositories
+      if (!repositories) throw Error('GitHub 未返回仓库目录')
+      if (repositories.identity.nodeId !== identity) {
+        await this.refreshGitHubAccount()
+        throw Error('GitHub 账号已变化，请重新读取仓库目录')
+      }
+      const items = [...(page === 1 ? [] : this.state.github.items), ...repositories.items]
+      this.update({ github: { ...this.state.github, items: [...new Map(items.map(item => [item.nodeId, item])).values()],
+        nextPage: repositories.nextPage ?? null, repositoriesLoaded: true, repositoriesLoading: false } })
+    } catch (error) {
+      if (epoch === this.githubEpoch) this.update({ github: { ...this.state.github, repositoriesLoading: false, error: message(error) } })
+    }
   }
   private connectionRevision = 0
   setSourceURLDraft(url: string): void {

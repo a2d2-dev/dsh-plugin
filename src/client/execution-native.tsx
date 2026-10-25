@@ -37,13 +37,13 @@ export function ExecutionSessionWorkEntry({ controller, sessionId, blank, placem
   if (placement === 'dock' && work.some(item => item.purpose === 'history')) return <div className={`${styles.entry} ${styles.card}`} role="status">
     {work.filter(item => item.purpose === 'history').map(item => <div key={`${item.ref.projectId}/${item.ref.taskId}`}>
       <p>“{item.title}”的处理会话已切换。交接内容是否送达，请查看「A²D² 接续」。你仍可在这里继续对话。</p>
-      <button type="button" disabled={opening} onClick={() => void enter(item)}>进入当前处理会话</button>
+      <button type="button" disabled={opening} onClick={() => void enter(item)}>进入会话</button>
     </div>)}
     {navigationError && <p role="alert">{navigationError}</p>}
   </div>
   return <details className={`${styles.entry} ${placement === 'dock' ? styles.dock : ''}`}><summary>关联任务{work.length ? ` · ${work.length}` : ''}</summary><div className={styles.popover}>
     {error && <p role="status">关联读取失败：{error}</p>}
-    {work.map(item => <article key={`${item.ref.projectId}/${item.ref.taskId}`}><p>{item.projectName} / {item.title}</p><p>{item.purpose === 'control' ? '当前协调' : item.purpose === 'history' ? '已交接 · 可继续对话' : item.purpose === 'review' ? '评审关联' : '工作关联'}</p><div className={styles.row}><button type="button" onClick={() => void controller.revealTask(item.ref)}>查看工作与执行</button>{item.purpose === 'history' && <button type="button" disabled={opening} onClick={() => void enter(item)}>进入当前处理会话</button>}</div></article>)}
+    {work.map(item => <article key={`${item.ref.projectId}/${item.ref.taskId}`}><p>{item.projectName} / {item.title}</p><p>{item.purpose === 'control' ? '当前协调' : item.purpose === 'history' ? '已交接 · 可继续对话' : item.purpose === 'review' ? '评审关联' : '工作关联'}</p><div className={styles.row}><button type="button" onClick={() => void controller.revealTask(item.ref)}>工作详情</button>{item.purpose === 'history' && <button type="button" disabled={opening} onClick={() => void enter(item)}>进入会话</button>}</div></article>)}
     {navigationError && <p role="alert">{navigationError}</p>}
   </div></details>
 }
@@ -101,8 +101,8 @@ function NativeTaskContinuation({ controller, sessionId, work }: { controller: W
           <p>{purpose}</p>
         </div>
         <div className={styles.taskActions}>
-          <button type="button" onClick={() => void controller.revealTask(work.ref)}>返回工作详情</button>
-          <button type="button" disabled={busy} onClick={() => setRevision(value => value + 1)}>刷新观察</button>
+          <button type="button" onClick={() => void controller.revealTask(work.ref)}>返回工作</button>
+          <button type="button" disabled={busy} onClick={() => setRevision(value => value + 1)}>刷新</button>
         </div>
         {error && <p role="alert">{error}</p>}
       </aside>

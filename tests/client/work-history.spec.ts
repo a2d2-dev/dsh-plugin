@@ -77,7 +77,7 @@ describe('read-only retired Session history', () => {
     query.mockResolvedValueOnce(page(old, ['first'], 9)).mockRejectedValueOnce(Error('读取暂不可用')).mockResolvedValueOnce(page(old, ['second']))
     await h.panel.openHistory(old); await h.panel.moreHistory()
     expect(h.panel.getSnapshot().history).toMatchObject({ events: ['first'], nextCursor: 9, error: '读取暂不可用', loading: false })
-    expect(html(h.panel)).toContain('重试读取')
+    expect(html(h.panel)).toContain('重试')
     await h.panel.retryHistory()
     expect(query.mock.calls.slice(-2).map(([value]) => value)).toEqual([
       { type: 'task.history', ref, session: old, cursor: 9, limit: 50 },

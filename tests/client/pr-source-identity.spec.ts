@@ -56,6 +56,6 @@ it('shows PR repository facts and resolves sessions from full related Issue iden
   expect(unrelated).not.toContain('session-wrong')
   expect(crossRepository).toContain('acme/contributor')
   expect(crossRepository).toContain('session-right')
-  expect(html).toContain('引用不等于验收')
+  expect(html).not.toContain('引用不等于验收')
   expect(command).not.toHaveBeenCalled()
 })

@@ -95,6 +95,8 @@ interface Command { commandId: string }
 interface TaskContent { title: string; goal: string; specification: string; acceptance: string[] }
 interface TaskChange extends Command { ref: TaskRef; expectedVersion: number }
 export type WorkCommand =
+  | (Command & { type: 'github.logout'; login: string; nodeId: string })
+  | (Command & { type: 'github.login'; action: 'start' | 'cancel' })
   | (Command & { type: 'continuous.instruct'; projectId: string; sourceId: string; expectedVersion: number; text: string })
   | (Command & { type: 'continuous.preview'; projectId: string; sourceId: string; expectedVersion: number })
   | (Command & { type: 'continuous.block'; projectId: string; sourceId: string; expectedVersion: number; nodeId: string; blocked: boolean })
@@ -127,6 +129,8 @@ export type WorkCommand =
   | (Command & ExecutionRef & { type: 'task.reconcile'; owner: string; epoch: number })
   | (TaskChange & { type: 'task.start'; agentId: string; resource: ResourceRef; session?: SessionRef; agentPreset: string; model: { provider: string; model: string; reasoningEffort?: string }; permissionPreset: string })
 export type WorkQuery =
+  | { type: 'github.account' }
+  | { type: 'github.repositories'; page: number }
   | { type: 'source.catalog'; projectId: string; sourceId: string; refresh?: boolean }
   | { type: 'source.identify'; url: string }
   | { type: 'source.execution-options'; projectId: string; sourceId: string }
@@ -149,6 +153,9 @@ export type WorkQuery =
 export interface AssociatedWork { ref: TaskRef; title: string; projectName: string; purpose: 'related' | 'review' | 'control' | 'history'; executionId?: string; epoch?: number; currentSession?: SessionRef }
 /** Completed fields correspond to command/query; task.detail includes related children and parent. */
 export interface SourceResultFields {
+  githubAccount?: import('./work-sources/types.ts').GitHubAccount
+  githubRepositories?: import('./work-sources/types.ts').GitHubRepositoryPage
+  githubLogin?: import('./work-sources/types.ts').GitHubLogin
   ref?: TaskRef
   catalog?: SourceCatalog
   candidate?: SourceCandidate

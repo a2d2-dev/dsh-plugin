@@ -1,3 +1,4 @@
+import { GitHubLoginFlow } from './login.ts'
 import { readSourceCatalog } from './catalog.ts'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -22,14 +23,55 @@ async function credential(): Promise<string> {
     return token
   } catch { throw new SourceError('github-credentials-unavailable', 'GitHub.com credentials are unavailable to this server') }
 }
-interface Options { credential?: () => Promise<string>; fetch?: typeof globalThis.fetch; timeoutMs?: number; graphql?: ProjectGraphQL }
+interface Options { credential?: () => Promise<string>; fetch?: typeof globalThis.fetch; timeoutMs?: number; graphql?: ProjectGraphQL; logout?: (login: string) => Promise<void> }
 /** Host GitHub.com adapter: reads plus a fixed canonical Issue close mutation. */
 export class GitHubSource implements GitHubSourcePort {
+  private loggingOut = false
+  private readonly loginFlow = new GitHubLoginFlow()
   private readonly options: Options
   private readonly token: () => Promise<string>
   private readonly fetcher: typeof globalThis.fetch
   private readonly timeoutMs: number
   constructor(options: Options = {}) { this.options = options; this.token = options.credential ?? credential; this.fetcher = options.fetch ?? globalThis.fetch; this.timeoutMs = options.timeoutMs ?? 15_000 }
+  login(action: 'start' | 'cancel') { if (this.loggingOut) return { state: 'error' as const, message: '正在退出账号，请稍候。' }; return action === 'start' ? this.loginFlow.start() : this.loginFlow.cancel() }
+  dispose() { this.loginFlow.cancel() }
+  async account(): Promise<import('./types.ts').GitHubAccount> {
+    try { return { status: 'connected', identity: await this.identity(await this.token()), canLogout: this.canLogout(), login: this.loginFlow.status() } }
+    catch (error) {
+      const disconnected = error instanceof SourceError && ['github-credentials-unavailable', 'github-unauthorized'].includes(error.code)
+      return { status: disconnected ? 'disconnected' : 'unavailable', message: disconnected ? '尚未连接 GitHub，或凭据已失效。' : '暂时无法确认 GitHub 账号，请检查网络后重试。', login: this.loginFlow.status() }
+    }
+  }
+  private canLogout(): boolean {
+    return !process.env.GH_TOKEN && !process.env.GITHUB_TOKEN && (!this.options.credential || !!this.options.logout)
+  }
+  async logout(expected: { login: string; nodeId: string }): Promise<import('./types.ts').GitHubAccount> {
+    if (!this.canLogout()) throw new SourceError('github-logout-unavailable', '凭据由宿主环境管理，无法从面板退出；请在宿主配置中移除或更换凭据。')
+    if (this.loggingOut) throw new SourceError('github-auth-busy', '正在退出账号，请稍候。')
+    this.loggingOut = true
+    try {
+      const identity = await this.identity(await this.token())
+      if (identity.login !== expected.login || identity.nodeId !== expected.nodeId) throw new SourceError('github-identity-changed', '账号已变化，请刷新状态后重新确认退出。')
+      this.loginFlow.cancel()
+      try {
+        if (this.options.logout) await this.options.logout(identity.login)
+        else await exec('gh', ['auth', 'logout', '--hostname', 'github.com', '--user', identity.login], { timeout: 10_000, maxBuffer: 16_384, env: process.env })
+      } catch { throw new SourceError('github-logout-failed', '退出 GitHub 账号失败，请刷新状态后重试。') }
+      return await this.account()
+    } finally { this.loggingOut = false }
+  }
+  async repositories(page: number): Promise<import('./types.ts').GitHubRepositoryPage> {
+    if (!Number.isSafeInteger(page) || page < 1 || page > 10000) throw new SourceError('github-invalid-scope', 'Invalid repository page')
+    const token = await this.token(), identity = await this.identity(token)
+    const raw = await this.get(`/user/repos?per_page=50&page=${page}&sort=updated&direction=desc&affiliation=owner,collaborator,organization_member`, token)
+    const parsed = z.array(z.object({ node_id: z.string().min(1), name: z.string(), owner: z.object({ login: z.string() }), html_url: z.string(), description: z.string().nullable(), private: z.boolean(), archived: z.boolean() })).safeParse(raw)
+    if (!parsed.success) throw new SourceError('github-invalid-response', 'GitHub 未返回完整仓库目录')
+    const items = parsed.data.map(value => {
+      if (!validRepository({ owner: value.owner.login, repository: value.name }) || value.html_url.toLowerCase() !== `https://github.com/${value.owner.login}/${value.name}`.toLowerCase()) throw new SourceError('github-invalid-response', 'GitHub 返回的仓库身份不一致')
+      return { nodeId: value.node_id, owner: value.owner.login, name: value.name, url: value.html_url, description: value.description, private: value.private, archived: value.archived }
+    })
+    return { identity, items, ...(items.length === 50 ? { nextPage: page + 1 } : {}) }
+  }
   catalog(source: { repository?: GitHubRepository; githubProject?: GitHubProjectRef }) { return readSourceCatalog(source) }
   async identify(url: string) {
     const scope = parseSourceURL(url)
@@ -46,7 +88,7 @@ export class GitHubSource implements GitHubSourcePort {
   }
   project(project: GitHubProjectRef, request: ProjectPageRequest) { return readGitHubProject(project, request, this.options.graphql) }
   private async get(path: string, token: string): Promise<unknown> {
-    if (!(path === '/user' || /^\/repos\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\/issues(?:\/[1-9][0-9]*(?:\/sub_issues)?)?(?:\?.*)?)?$/.test(path))) throw new SourceError('github-invalid-scope', 'Unsupported GitHub source path')
+    if (!(path === '/user' || /^\/user\/repos\?per_page=50&page=[1-9][0-9]{0,4}&sort=updated&direction=desc&affiliation=owner,collaborator,organization_member$/.test(path) || /^\/repos\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\/issues(?:\/[1-9][0-9]*(?:\/sub_issues)?)?(?:\?.*)?)?$/.test(path))) throw new SourceError('github-invalid-scope', 'Unsupported GitHub source path')
     try {
       const response = await this.fetcher(`https://api.github.com${path}`, { method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(this.timeoutMs), headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28', 'user-agent': 'dsh-a2d2-issue-source' } })
       if (!response.ok) {

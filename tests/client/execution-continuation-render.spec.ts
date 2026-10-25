@@ -137,7 +137,7 @@ it.each(['task.completion', 'progress.completed'])('Issue continuation shows the
   const controller = controllerFor(detail)
   await controller.openTask(ref)
   controller.setDetailTab('continuation')
-  const view = mountProductionComponent({ controller }, 'WorkPanel')
+  const view = mountProductionComponent({ controller }, 'WorkPanel', undefined, { document: { addEventListener() {}, removeEventListener() {} } })
   mounted.push(view)
   expect(prepareButton(view)?.props.disabled).toBe(true)
   expect(view.text()).toContain('任务阶段：done（已验收完成）')
