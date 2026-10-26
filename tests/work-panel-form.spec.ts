@@ -145,7 +145,7 @@ function fixture() {
   let rule:import('../src/work-types.ts').ContinuousWorkRule|undefined
   const command=vi.fn(async(value:import('../src/work-types.ts').WorkCommand):Promise<import('../src/work-types.ts').WorkCompleted>=>{
     if(value.type==='source.connect')return {status:'completed',project,source}
-    if(value.type==='continuous.configure'){rule={...rule,id:'r1',projectId:'p1',sourceId:'s1',version:(rule?.version??0)+1,enabled:value.enabled,scope:{assignee:value.assignee,labels:value.labels,identity},resource:value.resource,model:value.model,agentPreset:value.agentPreset,permissionPreset:value.permissionPreset,items:[]};return {status:'completed',continuousRule:rule}}
+    if(value.type==='continuous.configure'){rule={...rule,id:'r1',projectId:'p1',sourceId:'s1',version:(rule?.version??0)+1,enabled:value.enabled,scope:{assignee:value.assignee,labels:value.labels,identity},resource:value.resource,model:value.model,agentPreset:value.agentPreset,permissionPreset:value.permissionPreset,queue:value.queue,items:rule?.items??[]};return {status:'completed',continuousRule:rule}}
     if(value.type==='continuous.set-enabled'){rule={...rule!,version:rule!.version+1,enabled:value.enabled};return {status:'completed',continuousRule:rule}}
     throw Error('Unexpected write '+value.type)
   })
@@ -196,36 +196,43 @@ function planned(rule:import('../src/work-types.ts').ContinuousWorkRule) {
   return {instruction,supplements:[],scopeVersion:1,draftVersion:1,blocks:[],plans:[{version:1,draftVersion:1,createdAt:'2026-10-21T00:00:00Z',steps:[{nodeId:'I1',why:'Approved requirement',nextAction:'Collect acceptance evidence',mode:'existing' as const}],basis:{instruction,supplements:[],scopeVersion:1,blocks:[],scope:rule.scope,executionStrategy:{resource:rule.resource,model:rule.model,agentPreset:rule.agentPreset,permissionPreset:rule.permissionPreset},relationshipAvailability:{nativeParentChildren:'observed-when-present' as const,nativeDependencies:'unavailable-in-source-port' as const},source:{...source,sourceVersion:1,candidateCount:1},candidates:[{issue}]}}]}
 }
 describe('continuous processing production scope controls',()=>{
-  it('preserves explicit scope and real defaults, then enables a saved plan and pauses only new work',async()=>{
+  it('mounts the queue only in its permanent tab and makes the menu target that same tab',async()=>{
     const h=fixture();h.setRule(savedRule());await h.panel.load()
-    const original=h.command.getMockImplementation()!
-    h.command.mockImplementation(async value=>{
-      if(value.type==='continuous.instruct'||value.type==='continuous.preview'){
-        const rule=h.getRule()!,planning=planned(rule)
-        const updated={...rule,version:rule.version+1,planning:value.type==='continuous.instruct'?{...planning,plans:[]}:planning}
-        h.setRule(updated);return {status:'completed',continuousRule:updated}
-      }
-      return original(value)
-    })
-    const form=await mountWorkPanel({controller:h.panel,onClose(){}},'ContinuousProcessing')
+    const form=await mountWorkPanel({controller:h.panel},'WorkPanel')
     try {
-      await vi.waitFor(()=>expect(form.text()).toContain('所有负责人；标签：ready-for-agent、approved'))
-      expect(h.command).not.toHaveBeenCalled();form.click('执行目录与模型')
+      expect(form.text()).not.toContain('任务队列')
+      const tabs=form.nodes('nav').find(node=>node.props['aria-label']==='来源目录').props.children
+      expect(tabs.map((node:any)=>node.props.children)).toEqual(['概览','项目','Issue','PR','持续委托'])
+      expect(h.query.mock.calls.some(([value])=>value.type==='continuous.status')).toBe(false)
+      form.click('持续委托');await vi.waitFor(()=>expect(form.text()).toContain('任务队列'))
+      expect(form.text()).not.toContain('来源概览')
+      form.click('概览');await vi.waitFor(()=>expect(form.text()).not.toContain('任务队列'))
+      form.nodes('button').find(node=>node.props['aria-label']==='来源操作').props.onClick({stopPropagation(){}})
+      form.nodes('button').find(node=>node.props.role==='menuitem'&&node.props.children==='持续委托').props.onClick({stopPropagation(){}})
+      await vi.waitFor(()=>expect(form.text()).toContain('任务队列'))
+      expect(h.panel.getSnapshot().source.tab).toBe('delegation')
+      expect(h.command).not.toHaveBeenCalled()
+    }finally{form.unmount()}
+  })
+  it('preserves explicit scope and real defaults, saves queue settings, then pauses only later work',async()=>{
+    const h=fixture();h.setRule(savedRule());await h.panel.load()
+    const form=await mountWorkPanel({controller:h.panel},'ContinuousProcessing')
+    try {
+      await vi.waitFor(()=>expect(form.text()).toContain('所有负责人 · 标签：ready-for-agent、approved'))
+      expect(h.command).not.toHaveBeenCalled();form.click('队列设置')
       await vi.waitFor(()=>expect(form.nodes('form')).toHaveLength(1))
       expect(form.nodes('select').find(node=>node.props.children?.some?.((child:any)=>[child?.props?.children].flat(Infinity).join('')==='real/quality'))?.props.value).toBe(1)
       form.submit();await vi.waitFor(()=>expect(h.command).toHaveBeenCalledOnce())
-      expect(h.command.mock.calls[0]![0]).toMatchObject({type:'continuous.configure',projectId:'p1',sourceId:'s1',expectedVersion:3,assignee:'*',labels:['ready-for-agent','approved'],resource,model:options.defaults.model,agentPreset:'standard',permissionPreset:'review',enabled:false})
+      expect(h.command.mock.calls[0]![0]).toMatchObject({type:'continuous.configure',projectId:'p1',sourceId:'s1',expectedVersion:3,assignee:'*',labels:['ready-for-agent','approved'],resource,model:options.defaults.model,agentPreset:'standard',permissionPreset:'review',enabled:false,queue:{concurrency:1,refreshMinutes:10,order:'oldest'}})
       await vi.waitFor(()=>expect(form.nodes('form')).toHaveLength(0))
-      form.change(form.textareas()[0],'持续处理已批准的工作');form.click('保存委托')
-      await vi.waitFor(()=>expect(h.getRule()?.planning).toBeDefined())
-      form.click('生成计划预览');await vi.waitFor(()=>expect(form.text()).toContain('计划 v1'))
-      expect(h.command.mock.calls.some(([value])=>value.type==='continuous.set-enabled')).toBe(false)
-      form.click('启用此计划');await vi.waitFor(()=>expect(h.getRule()?.enabled).toBe(true))
-      await vi.waitFor(()=>expect(form.nodes('button').some(node=>node.props.children==='暂停接新')).toBe(true))
-      form.click('暂停接新');await vi.waitFor(()=>expect(h.getRule()?.enabled).toBe(false))
-      expect(h.command.mock.calls.slice(-2).map(([value])=>value)).toMatchObject([{type:'continuous.set-enabled',expectedVersion:6,enabled:true},{type:'continuous.set-enabled',expectedVersion:7,enabled:false}])
+      expect(form.textareas()).toHaveLength(0)
+      expect(form.text()).not.toContain('计划 v1')
+      form.click('继续处理队列');await vi.waitFor(()=>expect(h.getRule()?.enabled).toBe(true))
+      await vi.waitFor(()=>expect(form.nodes('button').some(node=>node.props.children==='暂停后续执行')).toBe(true))
+      form.click('暂停后续执行');await vi.waitFor(()=>expect(h.getRule()?.enabled).toBe(false))
+      expect(h.command.mock.calls.slice(-2).map(([value])=>value)).toMatchObject([{type:'continuous.set-enabled',expectedVersion:4,enabled:true},{type:'continuous.set-enabled',expectedVersion:5,enabled:false}])
       expect(h.command.mock.calls.some(([value])=>value.type==='task.control'||value.type==='task.start')).toBe(false)
-      expect(form.text()).toContain('暂停接新会保留当前处理与必要收尾')
+      expect(form.text()).toContain('在途处理和历史保留')
     }finally{form.unmount()}
   })
   it('renders persisted queue reasons and opens its active Issue without starting or pausing it',async()=>{
@@ -233,9 +240,9 @@ describe('continuous processing production scope controls',()=>{
     await h.panel.load();const open=vi.spyOn(h.panel,'openTask').mockResolvedValue()
     const form=await mountWorkPanel({controller:h.panel,onClose(){}},'ContinuousProcessing')
     try {
-      await vi.waitFor(()=>expect(form.nodes('li')).toHaveLength(1))
+      await vi.waitFor(()=>expect(form.nodes('td')).toHaveLength(4))
       expect(form.text()).toContain('Waiting for acceptance evidence')
-      form.click('当前执行')
+      form.click('#1 Requirement')
       expect(open).toHaveBeenCalledExactlyOnceWith({projectId:'p1',taskId:'t1'})
       expect(h.command).not.toHaveBeenCalled()
     }finally{form.unmount()}

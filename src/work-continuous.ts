@@ -3,6 +3,17 @@ import type { ContinuousWorkRule, TaskRef, WorkExecution } from './work-types.ts
 import type { WorkSource } from './work-sources/types.ts'
 
 export const sameTask = (a: TaskRef | undefined, b: TaskRef | undefined): boolean => !!a && !!b && a.projectId === b.projectId && a.taskId === b.taskId
+export const continuousSlots = (rule: ContinuousWorkRule): TaskRef[] => rule.slots ?? (rule.active ? [rule.active] : [])
+export const continuousHasSlot = (rule: ContinuousWorkRule, ref: TaskRef): boolean => continuousSlots(rule).some(slot => sameTask(slot, ref))
+export function continuousSetSlot(rule: ContinuousWorkRule, ref: TaskRef, retain: boolean): void {
+  rule.slots = continuousSlots(rule).filter(slot => !sameTask(slot, ref))
+  if (retain) rule.slots.push(ref)
+  rule.active = rule.slots[0]
+}
+export function continuousProblem(item: ContinuousWorkRule['items'][number], message: string): void {
+  if (item.state !== 'completed') item.state = 'blocked'
+  item.reason = message; item.attempts++; delete item.retryAt; delete item.resumeRequested; delete item.explicitResumeRequested
+}
 export function continuousOwner(state: WorkSnapshot, ref: TaskRef) {
   for (const rule of state.continuousRules ?? []) {
     const item = rule.items.find(item => sameTask(item.ref, ref))
@@ -18,15 +29,32 @@ export function continuousCompleted(state: WorkSnapshot, execution: WorkExecutio
 /** The native pre-step and per-session maintenance guard use the same durable slot. */
 export function continuousMayAdvance(state: WorkSnapshot, execution: WorkExecution): boolean {
   const owner = continuousOwner(state, execution.ref)
-  return !owner || (!continuousCompleted(state, execution) && owner.item.state === 'active' && sameTask(owner.rule.active, execution.ref))
+  return !owner || (!continuousCompleted(state, execution) && owner.item.state === 'active' && continuousHasSlot(owner.rule, execution.ref))
 }
 export function sourceScopeError(rule: ContinuousWorkRule, source: WorkSource | undefined): { code: string; message: string } | undefined {
+  if (rule.migrationConflict) return rule.migrationConflict
   if (!source?.enabled) return { code: 'source-disabled', message: 'Source is disabled; existing executions are retained' }
   if (source.lastError) return { code: source.lastError.code, message: source.lastError.message }
   if (rule.scope.assignee === '@me' && (!rule.scope.identity || source.identity?.nodeId !== rule.scope.identity.nodeId || source.identity.login.toLowerCase() !== rule.scope.identity.login.toLowerCase())) return { code: 'github-identity-changed', message: 'GitHub account differs from the account explicitly authorized for this rule; reconfigure the scope' }
   if (source.repository) return source.repositorySnapshot?.sourceVersion === source.version ? undefined : { code: 'source-snapshot-unavailable', message: 'Continuous processing requires a complete version-matched repository candidate scan' }
   if (!source.githubProject || !source.projectSnapshot) return { code: 'source-snapshot-unavailable', message: 'Continuous processing requires a completed GitHub Project observation' }
 }
+/** Read-only canonical facts never acquire a slot, execution ownership or host resources. */
+export function observeContinuousTasks(state: WorkSnapshot, rule: ContinuousWorkRule): void {
+  for (const item of rule.items) {
+    item.sourceId ??= rule.sourceId
+    const binding = state.externalBindings.find(binding => binding.nodeId === item.nodeId)
+    if (!binding) continue
+    item.taskRef = binding.ref
+    if (item.ref) continue // Owned work must retain its safe settlement and closeout path.
+    const task = state.tasks.find(task => task.projectId === binding.ref.projectId && task.id === binding.ref.taskId)
+    if (task?.progress?.stage === 'done' && task.progress.specificationVersion === task.specification.version) {
+      item.state = 'completed'; item.reason = task.progress.summary || 'Canonical Task is already accepted'
+      delete item.retryAt; delete item.resumeRequested; delete item.explicitResumeRequested; delete item.recoveryBlocked
+    }
+  }
+}
+
 /** Only the published complete Project membership is eligible; archived/draft/PR items never enter. */
 export function discoverContinuous(rule: ContinuousWorkRule, source: WorkSource): void {
   const members = new Set(source.repository ? source.repositorySnapshot?.nodeIds : source.projectSnapshot?.items.filter(item => item.kind === 'issue' && !item.archived).map(item => item.issueNodeId))
@@ -37,20 +65,32 @@ export function discoverContinuous(rule: ContinuousWorkRule, source: WorkSource)
     eligible.add(issue.nodeId)
     const item = rule.items.find(item => item.nodeId === issue.nodeId)
     if (item) {
+      if (item.ref || ['blocked', 'completed', 'paused'].includes(item.state)) continue
       item.title = issue.title; item.number = issue.number; item.url = issue.url
       if (!item.ref && item.state === 'skipped' && item.reason === 'Issue is outside the current authorized scope') { item.state = 'queued'; delete item.reason }
-    } else rule.items.push({ nodeId: issue.nodeId, title: issue.title, number: issue.number, url: issue.url, state: 'queued', attempts: 0 })
+    } else rule.items.push({ sourceId: source.id, nodeId: issue.nodeId, title: issue.title, number: issue.number, url: issue.url, state: 'queued', attempts: 0 })
   }
-  const plan = rule.planning?.plans.find(plan => plan.version === rule.planning!.enabledPlanVersion)
+  const plan = rule.queue ? undefined : rule.planning?.plans.find(plan => plan.version === rule.planning!.enabledPlanVersion)
   for (const item of rule.items) {
-    if (item.ref) continue // Block never kills accepted work or its safe closeout.
+    if (item.ref || ['blocked', 'completed', 'paused'].includes(item.state)) continue // Block never kills accepted work or its safe closeout.
     if (rule.planning?.blocks.includes(item.nodeId)) { item.state = 'blocked'; item.reason = 'Issue is excluded by the persistent Block list'; continue }
-    if (rule.planning) {
+    if (rule.planning && !rule.queue) {
       const step = plan?.steps.find(step => step.nodeId === item.nodeId)
       if (!step) { item.state = 'skipped'; item.reason = 'Issue is not in an explicitly enabled model plan' }
       else if (step.mode === 'wait') { item.state = 'waiting'; item.reason = step.nextAction }
       else if (eligible.has(item.nodeId) && ['skipped', 'waiting'].includes(item.state)) { item.state = 'queued'; delete item.reason }
     }
+  }
+  if (rule.queue) {
+    for (const item of rule.items) if (!item.ref && item.state === 'skipped' && item.reason === 'Issue is not in an explicitly enabled model plan' && eligible.has(item.nodeId)) { item.state = 'queued'; delete item.reason }
+    const observations = new Map(source.observations.map(row => [row.issue.nodeId, row.issue]))
+    const waiting = rule.items.filter(item => item.state === 'queued').sort((a, b) => {
+      const left = observations.get(a.nodeId), right = observations.get(b.nodeId)
+      const order = (left?.createdAt ?? '').localeCompare(right?.createdAt ?? '') || a.number - b.number || a.nodeId.localeCompare(b.nodeId)
+      return rule.queue!.order === 'newest' ? -order : order
+    })
+    let index = 0
+    rule.items = rule.items.map(item => item.state === 'queued' ? waiting[index++]! : item)
   }
   if (plan) rule.items.sort((a, b) => {
     const rank = (nodeId: string) => { const index = plan.steps.findIndex(step => step.nodeId === nodeId); return index < 0 ? Number.MAX_SAFE_INTEGER : index }
@@ -59,6 +99,17 @@ export function discoverContinuous(rule: ContinuousWorkRule, source: WorkSource)
   for (const item of rule.items) if (!item.ref && item.state === 'queued' && !eligible.has(item.nodeId)) {
     item.state = 'skipped'; item.reason = 'Issue is outside the current authorized scope'
   }
+}
+/** Resumable accepted work competes with new waiting work under the same ordering and capacity. */
+export function continuousCandidates(rule: ContinuousWorkRule, source: WorkSource | undefined): ContinuousWorkRule['items'] {
+  const candidates = rule.items.filter(item => (!rule.queue || rule.enabled || item.explicitResumeRequested) && (item.state === 'queued' || item.ref && item.executionId && item.resumeRequested && item.state !== 'completed'))
+  if (!rule.queue) return candidates.sort((a, b) => Number(!!b.resumeRequested) - Number(!!a.resumeRequested))
+  const observations = new Map(source?.observations.map(row => [row.issue.nodeId, row.issue]))
+  return candidates.sort((a, b) => {
+    const left = observations.get(a.nodeId), right = observations.get(b.nodeId)
+    const order = (left?.createdAt ?? '').localeCompare(right?.createdAt ?? '') || a.number - b.number || a.nodeId.localeCompare(b.nodeId)
+    return rule.queue!.order === 'newest' ? -order : order
+  })
 }
 export function continuousDependenciesReady(state: WorkSnapshot, rule: ContinuousWorkRule, nodeId: string): boolean {
   const source = state.sources.find(source => source.id === rule.sourceId)

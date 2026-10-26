@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import type { ContinuousWorkRule } from '../work-types.ts'
+import type { ReactNode } from 'react'
+import type { ContinuousWorkItem, ContinuousWorkRule } from '../work-types.ts'
 import type { WorkClient } from './work-api.ts'
+import type { WorkPanelController } from './work-panel-controller.ts'
 import { ContinuousDelegationController } from './continuous-controller.ts'
 import styles from './continuous-delegation.module.css'
 
@@ -8,71 +10,63 @@ export interface ContinuousDelegationProps {
   client: WorkClient
   projectId: string
   sourceId: string
+  projectTitle: string
   sourceTitle: string
   rule?: ContinuousWorkRule
   onRuleChanged?: (rule: ContinuousWorkRule) => void
+  navigation: WorkPanelController
+  onConfigure: () => void
+  configuring?: boolean
+  children?: ReactNode
 }
-/** Mount from the selected source header's right-side continuous-processing disclosure. */
+type Filter = 'all' | 'active' | 'queued' | 'human' | 'history'
+const category = (item: ContinuousWorkItem): Exclude<Filter, 'all'> => item.state === 'completed' || item.state === 'skipped' ? 'history' : item.state === 'active' ? 'active' : item.state === 'queued' ? 'queued' : 'human'
+const labels: Record<ContinuousWorkItem['state'], string> = { queued: '等待处理', active: '正在处理', completed: '已结束', waiting: '等待人工 / 外部条件', paused: 'Task 已暂停', blocked: '需人工处理', skipped: '已移出等待' }
+
+/** One Project queue; filters and links are local/read-only navigation. */
 export function ContinuousDelegation(props: ContinuousDelegationProps) {
   const controller = useMemo(() => new ContinuousDelegationController(props.client, { projectId: props.projectId, sourceId: props.sourceId }, props.rule), [props.client, props.projectId, props.sourceId])
   useEffect(() => { controller.updateRule(props.rule) }, [controller, props.rule])
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot)
   useEffect(() => { if (state.rule) props.onRuleChanged?.(state.rule) }, [state.rule, props.onRuleChanged])
+  const [filter, setFilter] = useState<Filter>('all')
   const [blockCandidate, setBlockCandidate] = useState('')
   useEffect(() => { setBlockCandidate('') }, [controller])
+  useEffect(() => { setFilter('all') }, [props.projectId])
   const rule = state.rule
-  const planning = rule?.planning
-  const plan = planning?.plans.at(-1)
-  const disabled = state.busy || !!state.pending || !rule
-  const canEnable = !!plan && plan.draftVersion === planning?.draftVersion && !state.draft.trim()
-  return <section className={styles.panel} aria-label={`${props.sourceTitle} 持续委托`} aria-busy={state.busy}>
+  const disabled = state.busy || !!state.pending || !rule || props.configuring
+  const items = rule?.items ?? []
+  const queueError = rule?.error && !items.some(item=>item.reason===rule.error?.message) ? rule.error : undefined
+  const filters: [Filter, string][] = [['all', '全部'], ['active', '正在处理'], ['queued', '等待处理'], ['human', '需人工处理'], ['history', '历史']]
+  const rows = items.map((item, index) => ({ item, index })).filter(({ item }) => filter === 'all' || category(item) === filter)
+  return <section className={styles.panel} aria-label="持续委托任务队列" aria-busy={state.busy}>
     <header className={styles.toolbar}>
-      <div><p>来源：{props.sourceTitle} · {rule?.enabled ? '已启用' : '接新工作已暂停'}</p></div>
-      {rule?.enabled && <button type="button" disabled={disabled} onClick={() => void controller.enable(false)}>暂停接新</button>}
+      <div><strong>任务队列</strong><span className={styles.status}>{!rule ? '尚未配置' : rule.enabled ? '自动处理已开启' : '后续执行已暂停'}</span>
+        <p className={styles.summary}>{props.projectTitle} · 来源：{props.sourceTitle}</p>
+      </div>
+      <div className={styles.actions}>
+        <button type="button" disabled={disabled} onClick={() => void controller.refresh()}>更新等待任务</button>
+        <button type="button" disabled={state.busy || !!state.pending || props.configuring} onClick={props.onConfigure}>队列设置</button>
+        <button type="button" disabled={disabled || (!rule?.queue && !rule?.enabled)} onClick={() => void controller.enable(!rule?.enabled)}>{rule?.enabled ? '暂停后续执行' : '继续处理队列'}</button>
+      </div>
     </header>
-    {!rule && <p role="status">请先确认此来源的执行目录、模型与权限，再保存委托。</p>}
-    {rule && <p>授权范围：{rule.scope.assignee === '@me' ? rule.scope.identity?.login ?? '当前账号' : '所有负责人'}；标签：{rule.scope.labels.join('、') || '不限'}。暂停接新会保留当前处理与必要收尾。</p>}
-    {planning && <details><summary>已保存委托与补充</summary><p>{planning.instruction}</p>{planning.supplements.map((text, index) => <p key={index}>{text}</p>)}</details>}
-    <label className={styles.form}> {planning ? '补充委托或纠偏' : '希望持续推进什么工作'}
-      <textarea value={state.draft} rows={4} maxLength={100_000} onChange={event => controller.setDraft(event.target.value)} placeholder="描述目标、优先事项与边界；保存后预览具体安排。" />
-    </label>
-    <div className={styles.actions}>
-      <button type="button" disabled={disabled || !state.draft.trim()} onClick={() => void controller.save()}>保存{planning ? '补充' : '委托'}</button>
-      <button type="button" disabled={disabled || !planning || !!state.draft.trim()} onClick={() => void controller.preview()}>{state.busy ? '请求处理中…' : '生成计划预览'}</button>
-      <button type="button" disabled={disabled || !canEnable || rule?.enabled} onClick={() => void controller.enable(true)}>启用此计划</button>
-    </div>
-    {state.draft.trim() && <p role="status">草稿已保留；先保存再预览，预览不会启动工作。</p>}
-    {(state.error || planning?.error || rule?.error) && <p role="alert" className={styles.cardError}>{state.error ?? (planning?.error ? `${planning.error.code}: ${planning.error.message}` : `${rule?.error?.code}: ${rule?.error?.message}`)}</p>}
-    {state.pending && !state.busy && <div><p>请求回执尚未确认。核对原请求后再继续操作。</p><button type="button" onClick={() => void controller.retry()}>核对并重试原请求</button></div>}
-    {plan && <div>
-      <h3>计划 v{plan.version}{planning?.enabledPlanVersion === plan.version ? ' · 已明确启用' : ' · 预览'}</h3>
-      <p>委托范围：{plan.basis.source.repository ? `仓库 ${plan.basis.source.repository.owner}/${plan.basis.source.repository.repository} 的完整可见开放 Issue` : `完整 Project ${plan.basis.source.projectSnapshot?.project.title ?? plan.basis.source.githubProject?.number}`} · 来源版本 {plan.basis.source.version} · 授权范围版本 {plan.basis.scopeVersion}。浏览视图不改变此范围。</p>
-      <p>依赖关系：来源接口未公开，状态未知。原生父子关系仅使用已观察事实；权限不可见对象不计作已覆盖。</p>
-      {plan.draftVersion !== planning?.draftVersion && <p role="status">委托或 Block 已变化，需要重新预览再启用。</p>}
-      <ol className={styles.queue}>{plan.steps.map(step => {
-        const issue = plan.basis.candidates.find(candidate => candidate.issue.nodeId === step.nodeId)?.issue
-        const existing = plan.basis.candidates.find(candidate => candidate.issue.nodeId === step.nodeId)?.execution as { resource?: { runtimeId: string; workspaceId: string }; model?: { provider: string; model: string }; permissionPreset?: string; agentPreset?: string; owner?: string; epoch?: number; policy?: unknown; session?: { sessionId: string } } | undefined
-        const blocked = planning?.blocks.includes(step.nodeId)
-        const item = rule?.items.find(item => item.nodeId === step.nodeId)
-        return <li key={step.nodeId} className={styles.card}>
-          <div className={styles.toolbar}><strong>{issue ? <a href={issue.url} target="_blank" rel="noreferrer">{issue.repository.owner}/{issue.repository.repository} #{issue.number} · {issue.title}</a> : step.nodeId}</strong><button type="button" disabled={disabled} onClick={() => void controller.block(step.nodeId, !blocked)}>{blocked ? '解除 Block' : 'Block 后续接入'}</button></div>
-          <p>{step.mode === 'existing' ? '复用已有执行' : step.mode === 'new' ? '新建执行' : '等待 / 观察'}{item ? ` · ${item.state}` : ''}{blocked ? ' · 已 Block' : ''}</p>
-          <p>纳入原因：{step.why}</p><p>下一步：{step.nextAction}</p>
-          {existing && <details><summary>已有执行与资源</summary><p>资源：{existing.resource?.runtimeId} / {existing.resource?.workspaceId}</p><p>模型：{existing.model?.provider}/{existing.model?.model} · 权限方案：{existing.permissionPreset}</p><p>当前会话：{existing.session?.sessionId}。启用将保留原执行的资源和策略。</p><p>协调负责人：{existing.owner ?? '未知'} · 代次：{existing.epoch ?? '未知'} · Agent 预设：{existing.agentPreset ?? '未知'}</p><details><summary>原执行策略</summary><pre>{JSON.stringify(existing.policy ?? '未知', null, 2)}</pre></details></details>}
-          {item?.reason && <p role="status">{item.reason}</p>}
-        </li>
-      })}</ol>
-      {!plan.steps.length && <p>当前计划没有可接入项；补充委托或调整 Block 后重新预览。</p>}
-    </div>}
-    <details open={!!planning?.blocks.length}><summary>Block 名单（{planning?.blocks.length ?? 0}）</summary>
-      <p>Block 约束后续安排；已在途工作保留当前会话和必要收尾。</p>
-      <div className={styles.actions}><select aria-label="选择要 Block 的 Issue" disabled={disabled || !planning} value={blockCandidate} onChange={event => setBlockCandidate(event.target.value)}>
-        <option value="">选择来源内的 Issue</option>{rule?.items.filter(item => !planning?.blocks.includes(item.nodeId)).map(item => <option key={item.nodeId} value={item.nodeId}>{item.url.replace('https://github.com/', '')} · {item.title}</option>)}
-      </select><button type="button" disabled={disabled || !planning || !blockCandidate} onClick={() => { void controller.block(blockCandidate, true); setBlockCandidate('') }}>加入 Block</button></div>
-      <ul>{planning?.blocks.map(nodeId => {
-        const issue = planning.plans.flatMap(plan => plan.basis.candidates).find(candidate => candidate.issue.nodeId === nodeId)?.issue
-        return <li key={nodeId}>{issue ? `${issue.repository.owner}/${issue.repository.repository} #${issue.number} ${issue.title}` : nodeId} <button type="button" disabled={disabled} onClick={() => void controller.block(nodeId, false)}>解除 Block</button></li>
-      })}</ul>
-    </details>
+    {rule && <p className={styles.summary}>负责人：{rule.scope.assignee === '@me' ? rule.scope.identity?.login ?? '当前账号' : '所有负责人'} · 标签：{rule.scope.labels.join('、') || '不限'}{rule.queue ? ` · 每 ${rule.queue.refreshMinutes} 分钟更新 · 并发上限 ${rule.queue.concurrency} · ${rule.queue.order === 'oldest' ? '较早创建优先' : '较新创建优先'}` : ''}</p>}
+    {(!rule || !rule.queue) && <p role="status">{rule ? '已有设置、在途工作与历史已保留。打开队列设置，确认后续等待任务的筛选与执行范围。' : '先保存队列设置，再继续处理队列。'}</p>}
+    {rule?.queue && !rule.enabled && <p className={styles.summary}>已暂停启动后续 Task；在途处理和历史保留。</p>}
+    {(state.error || queueError) && <p role="alert" className={styles.cardError}>{state.error ?? `${queueError?.code}: ${queueError?.message}`}</p>}
+    {state.pending && !state.busy && <div><p>请求回执尚未确认。</p><button type="button" onClick={() => void controller.retry()}>核对原请求</button></div>}
+    {props.children}
+    <div className={styles.toolbar}><nav className={styles.filters} aria-label="队列状态筛选">{filters.map(([id, label]) => <button type="button" key={id} aria-pressed={filter === id} onClick={() => setFilter(id)}>{label} <span>{items.filter(item => id === 'all' || category(item) === id).length}</span></button>)}</nav>{rule&&<p className={styles.summary}>并发占用 {(rule.slots??(rule.active?[rule.active]:[])).length} / {rule.queue?.concurrency??1}{rule.lastRefreshedAt?` · 最近更新 ${new Date(rule.lastRefreshedAt).toLocaleString('zh-CN')}`:''}</p>}</div>
+    {rows.length ? <table className={styles.queue} aria-label="持续委托队列"><thead><tr><th>顺序</th><th>Task</th><th>处理状态</th><th>处理会话</th></tr></thead>
+      <tbody>{rows.map(({ item, index }) => <tr key={item.nodeId} data-status={category(item)}>
+        <td data-cell="order">{index + 1}</td>
+        <td data-cell="task"><button className={styles.taskLink} onClick={() => void props.navigation.openQueueItem(item, props.sourceId)}>#{item.number} {item.title}</button></td>
+        <td data-cell="status"><span>{item.state==='completed'&&(rule?.slots??(rule?.active?[rule.active]:[])).some(ref=>ref.projectId===item.ref?.projectId&&ref.taskId===item.ref?.taskId)?'已验收 · 正在收口':labels[item.state]}</span>{item.reason && <details className={styles.problem}><summary>查看摘要</summary><p>{item.reason}</p></details>}</td>
+        <td data-cell="session">{item.ref && item.executionId ? <button className={styles.taskLink} onClick={() => void props.navigation.openQueueSession(item.ref!, item.state === 'completed')}>{item.state === 'completed' ? '会话记录' : '进入会话'}</button> : item.taskRef ? <button className={styles.taskLink} onClick={() => void props.navigation.openQueueSession(item.taskRef!, true)}>会话记录</button> : <span className={styles.summary}>尚未开始</span>}</td>
+      </tr>)}</tbody></table> : <div className={styles.empty} role="status"><strong>{filter === 'all' ? '队列当前为空' : '当前分类没有任务'}</strong><p>{filter === 'all' ? '保存设置并更新等待任务后，匹配工作会出现在这里。' : '状态筛选只改变展示内容。'}</p>{filter !== 'all' && <button onClick={() => setFilter('all')}>查看全部</button>}</div>}
+    {rule?.planning && <details><summary>已保存委托与排除项</summary><p>{rule.planning.instruction}</p>{rule.planning.supplements.map((text, index) => <p key={index}>{text}</p>)}
+      <div className={styles.actions}><select aria-label="选择后续排除项" disabled={disabled} value={blockCandidate} onChange={event=>setBlockCandidate(event.target.value)}><option value="">选择队列中的工作</option>{items.filter(item=>!rule.planning?.blocks.includes(item.nodeId)).map(item=><option key={item.nodeId} value={item.nodeId}>#{item.number} {item.title}</option>)}</select><button disabled={disabled||!blockCandidate} onClick={()=>{void controller.block(blockCandidate,true);setBlockCandidate('')}}>排除后续接入</button></div>
+      <ul>{rule.planning.blocks.map(nodeId => <li key={nodeId}>{items.find(item => item.nodeId === nodeId)?.title ?? nodeId} <button disabled={disabled} onClick={() => void controller.block(nodeId, false)}>解除后续排除</button></li>)}</ul>
+    </details>}
   </section>
 }

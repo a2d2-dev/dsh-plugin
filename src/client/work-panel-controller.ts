@@ -9,7 +9,7 @@ export type WorkIntent = WithoutCommandId<WorkCommand>
 
 export type DetailTab = 'overview' | 'sessions' | 'continuation' | 'related' | 'activity'
 export type LocalView = 'all' | 'unassociated' | 'associated'
-export type SourceTab = 'overview' | 'project' | 'issues' | 'prs'
+export type SourceTab = 'overview' | 'project' | 'issues' | 'prs' | 'delegation'
 export interface SourcePanelState extends IssuePageRequest {
   tab: SourceTab; catalog: SourceCatalog | null; viewNumber: number | null; viewPage: number
   sources: WorkSource[]; sourceId: string | null; listing: IssuePage | null; issue: GitHubIssue | null
@@ -427,6 +427,28 @@ export class WorkPanelController {
       if (binding) await this.openTask(binding.ref)
     } catch (error) { if (current()) this.update({ loading: false, error: message(error) }) }
   }
+  async openQueueItem(item: import('../work-types.ts').ContinuousWorkItem, sourceId: string): Promise<void> {
+    const ref = item.ref ?? item.taskRef
+    if (ref) { await this.openTask(ref); return }
+    sourceId = item.sourceId ?? sourceId
+    const projectId = this.state.projectId
+    if (!projectId) return
+    if (this.state.source.sourceId !== sourceId) {
+      await this.selectConnectedSource(projectId, sourceId)
+      if (this.state.projectId !== projectId || this.state.source.sourceId !== sourceId) return
+      await this.selectSourceTab('delegation')
+    }
+    await this.openIssue(item.number, false, item.nodeId)
+  }
+  /** Queue links observe the current session; they never invoke recovery/start. */
+  async openQueueSession(ref: TaskRef, history = false): Promise<void> {
+    if (history) {
+      await this.openTask(ref)
+      if (this.state.detail?.task?.id === ref.taskId && this.state.projectId === ref.projectId) this.setDetailTab('sessions')
+      return
+    }
+    await this.enterTask(ref)
+  }
   async enterTask(ref: TaskRef): Promise<void> {
     try { await this.openCurrentTask(ref) }
     catch (error) { this.update({ error: message(error) }) }
@@ -772,7 +794,7 @@ export class WorkPanelController {
     this.update({detail:null,loading:false,search:'',issueFilter:'all'})
     this.updateSource({tab,issue:null,issueTarget:null,error:null,loading:false})
     if(tab==='issues')await this.browseIssues({},!this.state.source.listing)
-    else await this.browseDirectory(false)
+    else if(tab!=='delegation')await this.browseDirectory(false)
   }
   setProjectView(viewNumber:number|null,viewPage=1):void { this.updateSource({viewNumber,viewPage}) }
   async browseDirectory(refresh=false):Promise<void> {

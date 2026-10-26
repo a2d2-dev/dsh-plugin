@@ -1,13 +1,45 @@
-.panel { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--border-color, #5555); border-radius: 10px; background: var(--background-color, transparent); color: inherit; min-width: 0; }
+.panel.panel { display: grid; gap: 14px; margin: 0; padding: 18px 0; border: 0; border-radius: 0; color: inherit; min-width: 0; }
 .panel p { margin: 6px 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .toolbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.form { display: grid; gap: 8px; }
-.form textarea { width: 100%; box-sizing: border-box; resize: vertical; padding: 10px; color: inherit; background: transparent; border: 1px solid var(--border-color, #7777); border-radius: 6px; font: inherit; }
-.actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.panel button { padding: 6px 10px; border: 1px solid var(--border-color, #7777); border-radius: 6px; color: inherit; background: transparent; font: inherit; cursor: pointer; }
+.toolbar strong { font-size: 18px; }
+.status { display: inline-block; margin-left: 12px; font-size: 12px; color: var(--dsw-alias-label-secondary, #687380); }
+.summary { color: var(--dsw-alias-label-secondary, #687380); font-size: 12px; }
+.actions, .filters { display: flex; gap: 8px; flex-wrap: wrap; }
+.actions select { min-width: 0; max-width: 100%; flex: 1 1 180px; }
+.panel button { padding: 6px 10px; border: 1px solid var(--work-line, #7777); border-radius: 6px; color: inherit; background: transparent; font: inherit; cursor: pointer; }
 .panel button:disabled { opacity: .5; cursor: default; }
-.panel a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
-.queue { display: grid; gap: 12px; padding-left: 24px; margin: 0; }
-.card { border: 1px solid var(--border-color, #5555); border-radius: 8px; padding: 12px; }
-.cardError { color: var(--error-color, #d85757); }
-@media (max-width: 600px) { .panel { padding: 10px; } .toolbar { display: grid; } .actions button { flex: 1 1 140px; } }
+.panel button:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary, #477eaa); outline-offset: 2px; }
+.filters { padding: 10px 0; border-block: 1px solid var(--work-line, #7773); }
+.filters button { border-color: transparent; font-size: 13px; }
+.filters button[aria-pressed=true] { background: var(--dsw-alias-interactive-bg-hover, #eceefa); font-weight: 600; }
+.filters span { margin-left: 4px; font-size: 12px; }
+.queue { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.queue th { color: var(--dsw-alias-label-secondary, #687380); font-size: 12px; font-weight: 500; text-align: left; }
+.panel .queue th, .panel .queue td { padding: 14px 10px; border-bottom: 1px solid var(--work-line, #7773); vertical-align: top; overflow-wrap: anywhere; }
+.queue.queue td:first-child { min-width: 0; }
+.queue th:first-child { width: 48px; }
+.queue th:nth-child(3) { width: 150px; }
+.queue th:nth-child(4) { width: 110px; }
+.panel .taskLink { padding: 0; border: 0; text-align: left; color: var(--dsw-alias-link-primary, #306858); overflow-wrap: anywhere; }
+.panel .taskLink:hover { text-decoration: underline; text-underline-offset: 3px; }
+.problem { margin-top: 6px; font-size: 12px; }
+.problem summary { cursor: pointer; }
+.problem p { max-width: 100%; }
+.queue tr[data-status=human] td[data-cell=status], .cardError { color: var(--dsw-alias-status-warning, #a26223); }
+.empty { padding: 28px 10px; text-align: center; }
+@media (max-width: 700px) {
+  .panel { padding: 12px 0; }
+  .toolbar { display: grid; }
+  .actions { gap: 6px; }
+  .actions button { font-size: 12px; padding: 6px 8px; }
+  .filters { gap: 2px; }
+  .filters button { padding: 6px; font-size: 12px; }
+  .panel .queue, .panel .queue tbody { display: block; }
+  .queue thead { display: none; }
+  .queue tr { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 8px; padding: 14px 0; border-bottom: 1px solid var(--work-line, #7773); }
+  .panel .queue td { padding: 0; border: 0; min-width: 0; }
+  .queue td[data-cell=order] { grid-column: 1; grid-row: 1; font-size: 12px; }
+  .queue td[data-cell=task] { grid-column: 2 / 4; }
+  .queue td[data-cell=status] { grid-column: 2; font-size: 12px; }
+  .queue td[data-cell=session] { grid-column: 3; font-size: 12px; }
+}

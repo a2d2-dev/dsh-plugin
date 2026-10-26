@@ -22,7 +22,7 @@ import { continuationInFlight, MANAGED_WORK_INSTRUCTIONS, materialRequest, reser
 import { applyTaskOrganization, taskStructureBlocker } from './work-organization.ts'
 import { isCanonicalChild } from './work-migrate.ts'
 import { applyTaskReport, projectProgress, taskProgressView } from './work-progress.ts'
-import { continuousDependenciesReady, continuousOwner, continuousMayAdvance, continuousCompleted, discoverContinuous, sourceScopeError, sameTask, continuousRetry, MAX_CONTINUOUS_ATTEMPTS } from './work-continuous.ts'
+import { continuousCandidates, continuousDependenciesReady, continuousOwner, continuousMayAdvance, continuousCompleted, observeContinuousTasks, discoverContinuous, sourceScopeError, sameTask, continuousRetry, continuousSlots, continuousHasSlot, continuousSetSlot, continuousProblem, MAX_CONTINUOUS_ATTEMPTS } from './work-continuous.ts'
 import { reconcileProjectSources } from './work-sources/discovery.ts'
 import { WorkDao } from './work-store/dao.ts'
 export { WorkDao } from './work-store/dao.ts'
@@ -129,7 +129,7 @@ export class WorkApplication {
           if (goalOwned(message) || owner!.events.some(item => item.id === message.id)) continue
           const text = message.content.flatMap(block => typeof block === 'object' && block !== null && 'type' in block && block.type === 'text' && 'text' in block && typeof block.text === 'string' ? [block.text] : []).join('\n')
           const managed = continuousOwner(current, owner!.ref)
-          if (managed && managed.item.state !== 'completed' && !continuousCompleted(current, owner!) && owner!.state !== 'paused' && !(owner!.control?.action === 'pause' && owner!.control.status === 'accepted')) { managed.item.resumeRequested = true; managed.item.attempts = 0; delete managed.item.retryAt; if (owner!.runtimeFailure) owner!.runtimeFailure.acknowledged = true }
+          if (managed && (!(owner!.error || owner!.continuation?.error || owner!.runtimeFailure || managed.item.recoveryBlocked) || typeof message.source === 'object' && message.source !== null && 'kind' in message.source && message.source.kind === 'user') && managed.item.state !== 'completed' && !continuousCompleted(current, owner!) && owner!.state !== 'paused' && !(owner!.control?.action === 'pause' && owner!.control.status === 'accepted')) { managed.item.resumeRequested = true; managed.item.attempts = 0; delete managed.item.retryAt; delete managed.item.recoveryBlocked; if (owner!.runtimeFailure) owner!.runtimeFailure.acknowledged = true }
           owner!.events.push({ id: message.id, text: text.trim() ? text.slice(0, 100_000) : 'Native Session input', kind: 'input', delivery: 'accepted', acceptance: 'unassessed', nativeMessage: structuredClone(message) })
         }
         return false
@@ -332,7 +332,7 @@ export class WorkApplication {
     // five-minute cadence never leaves a half-scanned view behind.
     if (this.source) await reconcileProjectSources(apply => this.sourceTransaction(apply), this.source, { maxPagesPerSource: 200 })
     const snapshot = await this.load()
-    const repositories = snapshot.sources.filter(source => source.enabled && source.repository && snapshot.continuousRules?.some(rule => rule.sourceId === source.id && rule.enabled && rule.planning))
+    const repositories = snapshot.sources.filter(source => source.enabled && source.repository && snapshot.continuousRules?.some(rule => rule.sourceId === source.id && rule.enabled && rule.planning && !rule.queue))
     if (repositories.length) {
       const lease = join(this.directory, 'continuous.planning')
       await withFileLock(lease, async () => {
@@ -355,11 +355,13 @@ export class WorkApplication {
     const project = state.projects.find(project => project.id === command.projectId)
     const source = state.sources.find(source => source.id === command.sourceId && source.projectId === command.projectId)
     if (!project || !source) return failed('unknown-source', 'Source does not belong to this project')
-    const previous = state.continuousRules?.find(rule => rule.sourceId === source.id)
+    const previous = state.continuousRules?.find(rule => rule.projectId === project.id)
     if (command.expectedVersion !== (previous?.version ?? 0)) return conflict(previous?.version ?? 0)
     if (command.type === 'continuous.set-enabled') {
       if (!previous) return failed('continuous-unconfigured', 'Configure the exact execution scope before enabling continuous work')
-      if (command.enabled && previous.planning) {
+      if (previous.sourceId !== source.id) return failed('continuous-source-mismatch', 'Use the Project queue source for this command')
+      if (command.enabled && previous.migrationConflict) return failed(previous.migrationConflict.code, previous.migrationConflict.message)
+      if (command.enabled && previous.planning && !previous.queue) {
         const plan = previous.planning.plans.at(-1)
         if (!plan || plan.draftVersion !== previous.planning.draftVersion) return failed('planning-preview-required', 'Preview the current instruction, scope and Block before enabling')
         try {
@@ -376,7 +378,9 @@ export class WorkApplication {
       previous.enabled = command.enabled; previous.version++
       return { status: 'completed', continuousRule: previous }
     }
-    if (source.repository && command.enabled) return failed('planning-preview-required', 'Save resources, preview the repository instruction, then explicitly enable its plan')
+    if (previous?.sourceId !== undefined && previous.sourceId !== source.id && !command.queue) return failed('continuous-source-mismatch', 'Save explicit queue settings to change the Project queue source')
+    if (previous?.migrationConflict && !command.queue) return failed(previous.migrationConflict.code, previous.migrationConflict.message)
+    if (source.repository && command.enabled && !command.queue && !previous?.queue) return failed('planning-preview-required', 'Save resources, preview the repository instruction, then explicitly enable its plan')
     if (command.assignee === '@me' && !source.identity) return failed('github-identity-unobserved', 'Refresh the GitHub Project before authorizing the current account')
     if (!choices?.models.some(model => model.provider === command.model.provider && model.model === command.model.model)) return failed('unavailable-model', 'Exact model is unavailable')
     if (!choices.agentPresets.includes(command.agentPreset) || !choices.permissionPresets.includes(command.permissionPreset)) return failed('disallowed-preset', 'Exact execution presets must be inherited host choices')
@@ -384,17 +388,55 @@ export class WorkApplication {
     if (agent.policy.modelCandidates.length && !agent.policy.modelCandidates.includes(`${command.model.provider}/${command.model.model}`)) return failed('disallowed-model', 'Model is not authorized by the Project Agent policy')
     if (state.projects.some(other => other.id !== project.id && other.resources.some(ref => sameResource(ref, command.resource)))) return failed('resource-in-use', 'Resource belongs to another project')
     if (!project.resources.some(ref => sameResource(ref, command.resource))) { project.resources.push(command.resource); project.version++ }
+    if (previous) observeContinuousTasks(state, previous)
     const rule: import('./work-types.ts').ContinuousWorkRule = {
       id: previous?.id ?? randomUUID(), projectId: project.id, sourceId: source.id, version: (previous?.version ?? 0) + 1, enabled: command.enabled,
       scope: { assignee: command.assignee, labels: [...new Set(command.labels)].sort(), ...(command.assignee === '@me' ? { identity: { login: source.identity!.login, nodeId: source.identity!.nodeId } } : {}) },
       resource: command.resource, model: command.model, agentPreset: command.agentPreset, permissionPreset: command.permissionPreset,
-      items: previous?.items ?? [], ...(previous?.active ? { active: previous.active } : {}),
-      ...(previous?.planning ? { planning: { ...previous.planning, scopeVersion: previous.planning.scopeVersion + 1, draftVersion: previous.planning.draftVersion + 1 }, enabled: false } : {}),
+      items: previous?.items ?? [], slots: previous ? continuousSlots(previous) : [], ...(previous?.active ? { active: previous.active } : {}),
+      ...(command.queue || previous?.queue ? { queue: command.queue ?? previous!.queue } : {}),
+      ...(previous?.legacyRules ? { legacyRules: previous.legacyRules } : {}),
+      ...(previous?.planning ? { planning: { ...previous.planning, scopeVersion: previous.planning.scopeVersion + 1, draftVersion: previous.planning.draftVersion + 1 }, ...(!command.queue && !previous.queue ? { enabled: false } : {}) } : {}),
     }
-    for (const item of rule.items) if (!item.ref && item.state === 'blocked') { item.state = 'queued'; item.attempts = 0; delete item.reason; delete item.retryAt }
+    if (command.queue && previous) { delete previous.migrationConflict; delete previous.error }
+    rule.error = sourceScopeError(rule, source)
+    if (!rule.error) discoverContinuous(rule, source)
+    observeContinuousTasks(state, rule)
     if (previous) Object.assign(previous, rule)
     else (state.continuousRules ??= []).push(rule)
     return { status: 'completed', continuousRule: previous ?? rule }
+  }
+  /** Complete source observation and waiting-only recalculation; never invokes a model or dispatches. */
+  private async refreshContinuous(scope: { projectId: string; sourceId: string; expectedVersion: number }, command?: Extract<WorkCommand, { type: 'continuous.refresh' }>): Promise<WorkResult> {
+    await mkdir(this.directory, { recursive: true, mode: 0o700 })
+    return withFileLock(join(this.directory, 'continuous.refresh'), async () => {
+      const before = await this.load()
+      if (command) {
+        const prior = before.commands.find(item => item.commandId === command.commandId)
+        if (prior) return prior.fingerprint === JSON.stringify(command) ? prior.result : failed('command-id-reused', 'Command identity has different content')
+      }
+      const rule = before.continuousRules?.find(rule => rule.projectId === scope.projectId)
+      if (!rule) return failed('continuous-unconfigured', 'Configure the Project queue first')
+      if (rule.version !== scope.expectedVersion) return conflict(rule.version)
+      if (rule.sourceId !== scope.sourceId) return failed('continuous-source-mismatch', 'Refresh the actual Project queue source')
+      if (rule.migrationConflict) return failed(rule.migrationConflict.code, rule.migrationConflict.message)
+      const source = before.sources.find(source => source.id === rule.sourceId)!
+      let scan: WorkResult = { status: 'completed' }
+      if (source.repository) scan = await refreshRepositoryCandidates(apply => this.sourceTransaction(apply), scope, this.source)
+      else await reconcileProjectSources(apply => this.sourceTransaction(apply), this.source, { ...scope, force: true, maxPagesPerSource: 200 })
+      return this.sourceTransaction(async state => {
+        const current = state.continuousRules!.find(item => item.id === rule.id)!
+        if (current.version !== scope.expectedVersion) return conflict(current.version)
+        const observed = state.sources.find(source => source.id === current.sourceId)!
+        current.error = scan.status !== 'completed' ? scan.error : sourceScopeError(current, observed)
+        if (current.queue) current.nextRefreshAt = new Date(Date.now() + current.queue.refreshMinutes * 60_000).toISOString()
+        if (!current.error) { discoverContinuous(current, observed); current.lastRefreshedAt = new Date(Date.now()).toISOString() }
+        observeContinuousTasks(state, current)
+        const result: WorkResult = { status: 'completed', continuousRule: current }
+        if (command) this.dao.recordCommand(state, command.commandId, JSON.stringify(command), result)
+        return result
+      })
+    })
   }
   private async previewContinuous(command: Extract<WorkCommand, { type: 'continuous.preview' }>): Promise<WorkResult> {
     await mkdir(this.directory, { recursive: true, mode: 0o700 })
@@ -445,21 +487,26 @@ export class WorkApplication {
       }
     })
   }
-  /** Single-host persistent serial dispatch. This uses the ordinary task.start reservation and execution driver. */
+  /** Persistent ordered dispatch reuses ordinary task.start reservations and execution drivers. */
   async reconcileContinuous(): Promise<void> {
     if (!this.host.execution) return
     const host = this.host.execution
-    if (!(await this.load()).continuousRules?.length) return
+    const configured = (await this.load()).continuousRules
+    if (!configured?.length) return
+    for (const rule of configured) if (rule.queue && rule.enabled && !rule.migrationConflict && (!rule.nextRefreshAt || Date.parse(rule.nextRefreshAt) <= Date.now())) {
+      await this.refreshContinuous({ projectId: rule.projectId, sourceId: rule.sourceId, expectedVersion: rule.version })
+    }
     const lease = join(this.directory, 'continuous.scheduler')
     await withFileLock(lease, async () => {
       await this.sourceTransaction(async state => {
         for (const rule of state.continuousRules ?? []) {
           const source = state.sources.find(source => source.id === rule.sourceId)
           rule.error = sourceScopeError(rule, source)
+          observeContinuousTasks(state, rule)
           const recovery = rule.items.find(item => item.recoveryBlocked)
           if (!rule.error && recovery) rule.error = { code: 'continuous-recovery-blocked', message: recovery.reason ?? 'Host recovery needs an explicit retry' }
           if (!rule.error && source) {
-            discoverContinuous(rule, source)
+            if (!rule.queue) { discoverContinuous(rule, source); observeContinuousTasks(state, rule) }
             if (rule.planning) for (const item of rule.items) if (item.state === 'queued') continuousDependenciesReady(state, rule, item.nodeId)
           }
         }
@@ -467,203 +514,212 @@ export class WorkApplication {
       for (const ruleId of (await this.load()).continuousRules!.map(rule => rule.id)) {
         let state = await this.load()
         let rule = state.continuousRules!.find(rule => rule.id === ruleId)!
-        let execution = rule.active ? state.executions.find(execution => sameTask(execution.ref, rule.active)) : undefined
-        if (rule.active && !execution) {
-          await this.sourceTransaction(async state => {
-            const current = state.continuousRules!.find(rule => rule.id === ruleId)!
-            current.error = { code: 'continuous-execution-missing', message: 'Reserved active execution is missing; explicit recovery is required' }
-          })
-          continue
-        }
-        if (execution) {
-          if (host.status(execution) === 'running') continue
-          const owner = continuousOwner(state, execution.ref)!
-          if (owner.item.recoveryBlocked || (owner.item.retryAt && Date.parse(owner.item.retryAt) > Date.now())) continue
-          try {
-            await this.observeRuntimeFailure(execution.id)
-            await this.observeContinuation(execution.id)
-            // Read back receipts before declaring an idle execution unfinished; observation never wakes it.
-            if (execution.actual && !['accepted', 'creating', 'failed'].includes(execution.state)) {
-              const deliveries = await Promise.all(execution.events.filter(pendingEvent).map(async event => ({ id: event.id, delivery: await host.observe(execution!, event) })))
-              await this.sourceTransaction(async state => {
-                const current = state.executions.find(item => item.id === execution!.id)!
-                if (current.epoch !== execution!.epoch) return
-                for (const result of deliveries) { const event = current.events.find(event => event.id === result.id); if (event) event.delivery = result.delivery }
-              })
-            }
-            state = await this.load(); execution = state.executions.find(item => item.id === execution!.id)!
-            // Stop requests remain actionable while completion already denies future model steps.
-            if (execution.control?.status === 'accepted' && execution.control.action !== 'resume') {
-              await this.ensureExecution(execution.id, execution.control.commandId)
-              state = await this.load(); execution = state.executions.find(item => item.id === execution!.id)!
-            }
-            if (host.status(execution) === 'running') continue
-            let currentOwner = continuousOwner(state, execution.ref)!
-            let release: import('./work-types.ts').ContinuousWorkItem['state'] | undefined
-            let reason: string | undefined
-            if (continuousCompleted(state, execution)) release = 'completed'
-            else if (execution.runtimeFailure && !execution.runtimeFailure.acknowledged) { release = 'blocked'; reason = execution.runtimeFailure.message }
-            else if (execution.continuationBlocked) { release = 'blocked'; reason = execution.continuationBlocked.message }
-            else if (['waiting', 'paused'].includes(execution.state) && !currentOwner.item.resumeRequested) { release = execution.state as 'waiting' | 'paused'; reason = execution.control?.reason }
-            else if (currentOwner.item.state === 'blocked' && !currentOwner.item.resumeRequested) { release = 'blocked'; reason = currentOwner.item.reason }
-            else if (!continuationInFlight(execution) && !execution.error && !currentOwner.item.resumeRequested && !['accepted', 'creating', 'failed'].includes(execution.state) && execution.events.every(event => !pendingEvent(event))) {
-              const task = taskAt(state, execution.ref)!
-              const progress = task.progress
-              const fingerprint = progress && createHash('sha256').update(JSON.stringify({ stage: progress.stage, summary: progress.summary, next: progress.next, blockers: progress.blockers, criteria: progress.criteria, breakdown: task.breakdown })).digest('hex')
-              if (progress?.specificationVersion === task.specification.version && progress.stage === 'in-progress' && progress.next.trim() && !progress.blockers.length && fingerprint && !currentOwner.item.followups?.includes(fingerprint)) {
-                await this.sourceTransaction(async state => {
-                  const current = state.executions.find(item => item.id === execution!.id)!
-                  const owner = continuousOwner(state, current.ref)!
-                  if (owner.item.followups?.includes(fingerprint) || continuousCompleted(state, current)) return
-                  ;(owner.item.followups ??= []).push(fingerprint)
-                  current.events.push({ id: `continuous-next:${current.id}:${fingerprint}`, text: `Continue the already authorized Issue work using the accepted next step: ${progress.next}\nReport concrete progress and evidence. If blocked, waiting or complete, report that state and stop. This message grants no additional permissions.`, kind: 'input', delivery: 'accepted', acceptance: 'unassessed' })
-                })
-              } else { release = 'blocked'; reason = 'Execution is idle without new actionable progress; send input or explicitly resume' }
-            }
-            if (release) {
-              // Fence native input before the safe host boundary, and retain the slot if settling fails.
-              const boundary = await this.sourceTransaction(async state => {
-                const current = state.executions.find(item => item.id === execution!.id)!
-                const owner = continuousOwner(state, current.ref)!
-                if (current.epoch !== execution!.epoch || host.status(current) === 'running' || (current.control?.status === 'accepted' && current.control.action === 'resume')) return undefined
-                if (continuationInFlight(current) && !continuousCompleted(state, current) && !['waiting', 'paused'].includes(current.state) && !current.continuation?.error && !current.continuationBlocked) return undefined
-                if (release === 'blocked' && !current.error && !current.runtimeFailure && !current.continuationBlocked && !current.continuation?.error && (owner.item.resumeRequested || current.events.some(pendingEvent))) return undefined
-                owner.item.state = release!; owner.item.reason = reason
-                return current
-              })
-              if (!boundary) continue
-              if (release === 'completed') {
-                if (taskAt(await this.load(), boundary.ref)?.completion?.closeout.status !== 'settled') continue
-              } else if (boundary.actual) await host.settle(boundary)
-              await this.sourceTransaction(async state => {
-                const current = state.executions.find(item => item.id === boundary.id)!
-                const owner = continuousOwner(state, current.ref)!
-                if (sameTask(owner.rule.active, current.ref) && current.epoch === boundary.epoch && owner.item.state === release && host.status(current) !== 'running') delete owner.rule.active
-              })
-            } else {
-              if (currentOwner.item.resumeRequested) {
-                await this.sourceTransaction(async state => {
-                  const current = state.executions.find(item => item.id === execution!.id)!
-                  const owner = continuousOwner(state, current.ref)!
-                  if (continuousCompleted(state, current)) return
-                  owner.item.state = 'active'; delete owner.item.resumeRequested; delete owner.item.reason
-                  if (['waiting', 'paused'].includes(current.state) || current.control?.action !== 'resume') current.control = { commandId: `continuous-resume:${current.id}:${current.events.length}`, action: 'resume', status: 'accepted' }
-                })
-              }
-              await this.observeContinuation(execution.id)
-              const result = await this.ensureExecution(execution.id, this.dao.firstHistory(execution)!.commandId)
-              if (result.status === 'completed' && (result.execution?.error || result.execution?.continuation?.error)) {
-                const error = result.execution.error ?? result.execution.continuation!.error!
-                await this.sourceTransaction(async state => { continuousRetry(continuousOwner(state, execution!.ref)!.item, error.message) })
-              } else {
-                await this.sourceTransaction(async state => { const item = continuousOwner(state, execution!.ref)!.item; item.attempts = 0; delete item.retryAt; delete item.reason })
-              }
-              // One advancement per active rule per tick. A newly idle result is classified next tick.
-              continue
-            }
-          } catch (error) {
+        for (const slot of continuousSlots(rule)) {
+          let execution = state.executions.find(execution => sameTask(execution.ref, slot))
+          if (!execution) {
             await this.sourceTransaction(async state => {
-              const owner = continuousOwner(state, execution!.ref)!
-              continuousRetry(owner.item, error instanceof Error ? error.message : 'Continuous recovery outcome is unknown')
-              if (owner.item.attempts >= MAX_CONTINUOUS_ATTEMPTS) owner.item.recoveryBlocked = true
-              owner.rule.error = { code: 'continuous-recovery-failed', message: owner.item.reason! }
+              const current = state.continuousRules!.find(rule => rule.id === ruleId)!
+              current.error = { code: 'continuous-execution-missing', message: 'Reserved active execution is missing; explicit recovery is required' }
             })
             continue
           }
+          if (execution) {
+            if (host.status(execution) === 'running') continue
+            const owner = continuousOwner(state, execution.ref)!
+            if (owner.item.recoveryBlocked && !owner.item.resumeRequested) continue
+            try {
+              await this.observeRuntimeFailure(execution.id)
+              await this.observeContinuation(execution.id)
+              // Read back receipts before declaring an idle execution unfinished; observation never wakes it.
+              if (execution.actual && !['accepted', 'creating'].includes(execution.state)) {
+                const deliveries = await Promise.all(execution.events.filter(pendingEvent).map(async event => ({ id: event.id, delivery: await host.observe(execution!, event) })))
+                await this.sourceTransaction(async state => {
+                  const current = state.executions.find(item => item.id === execution!.id)!
+                  if (current.epoch !== execution!.epoch) return
+                  for (const result of deliveries) { const event = current.events.find(event => event.id === result.id); if (event) event.delivery = result.delivery }
+                })
+              }
+              state = await this.load(); execution = state.executions.find(item => item.id === execution!.id)!
+              // Stop requests remain actionable while completion already denies future model steps.
+              if (execution.control?.status === 'accepted' && execution.control.action !== 'resume') {
+                await this.ensureExecution(execution.id, execution.control.commandId)
+                state = await this.load(); execution = state.executions.find(item => item.id === execution!.id)!
+              }
+              if (host.status(execution) === 'running') continue
+              let currentOwner = continuousOwner(state, execution.ref)!
+              let release: import('./work-types.ts').ContinuousWorkItem['state'] | undefined
+              let reason: string | undefined
+              if (continuousCompleted(state, execution)) release = 'completed'
+              else if ((execution.error || execution.continuation?.error) && !currentOwner.item.resumeRequested) { release = 'blocked'; reason = (execution.error ?? execution.continuation!.error)!.message }
+              else if (execution.runtimeFailure && !execution.runtimeFailure.acknowledged) { release = 'blocked'; reason = execution.runtimeFailure.message }
+              else if (execution.continuationBlocked) { release = 'blocked'; reason = execution.continuationBlocked.message }
+              else if (['waiting', 'paused'].includes(execution.state) && !currentOwner.item.resumeRequested) { release = execution.state as 'waiting' | 'paused'; reason = execution.control?.reason }
+              else if (currentOwner.item.state === 'blocked' && !currentOwner.item.resumeRequested) { release = 'blocked'; reason = currentOwner.item.reason }
+              else if (!continuationInFlight(execution) && !execution.error && !currentOwner.item.resumeRequested && !['accepted', 'creating', 'failed'].includes(execution.state) && execution.events.every(event => !pendingEvent(event))) {
+                const task = taskAt(state, execution.ref)!
+                const progress = task.progress
+                const fingerprint = progress && createHash('sha256').update(JSON.stringify({ stage: progress.stage, summary: progress.summary, next: progress.next, blockers: progress.blockers, criteria: progress.criteria, breakdown: task.breakdown })).digest('hex')
+                if (progress?.specificationVersion === task.specification.version && progress.stage === 'in-progress' && progress.next.trim() && !progress.blockers.length && fingerprint && !currentOwner.item.followups?.includes(fingerprint)) {
+                  await this.sourceTransaction(async state => {
+                    const current = state.executions.find(item => item.id === execution!.id)!
+                    const owner = continuousOwner(state, current.ref)!
+                    if (owner.item.followups?.includes(fingerprint) || continuousCompleted(state, current)) return
+                    ;(owner.item.followups ??= []).push(fingerprint)
+                    current.events.push({ id: `continuous-next:${current.id}:${fingerprint}`, text: `Continue the already authorized Issue work using the accepted next step: ${progress.next}\nReport concrete progress and evidence. If blocked, waiting or complete, report that state and stop. This message grants no additional permissions.`, kind: 'input', delivery: 'accepted', acceptance: 'unassessed' })
+                  })
+                } else { release = 'blocked'; reason = 'Execution is idle without new actionable progress; send input or explicitly resume' }
+              }
+              if (release) {
+                // Fence native input before the safe host boundary, and retain the slot if settling fails.
+                const boundary = await this.sourceTransaction(async state => {
+                  const current = state.executions.find(item => item.id === execution!.id)!
+                  const owner = continuousOwner(state, current.ref)!
+                  if (current.epoch !== execution!.epoch || host.status(current) === 'running' || (current.control?.status === 'accepted' && current.control.action === 'resume')) return undefined
+                  if (continuationInFlight(current) && !continuousCompleted(state, current) && !['waiting', 'paused'].includes(current.state) && !current.continuation?.error && !current.continuationBlocked) return undefined
+                  if (release === 'blocked' && !current.error && !current.runtimeFailure && !current.continuationBlocked && !current.continuation?.error && (owner.item.resumeRequested || current.events.some(pendingEvent))) return undefined
+                  owner.item.state = release!; owner.item.reason = reason
+                  return current
+                })
+                if (!boundary) continue
+                if (release === 'completed') {
+                  if (taskAt(await this.load(), boundary.ref)?.completion?.closeout.status !== 'settled') continue
+                } else await host.settle(boundary)
+                await this.sourceTransaction(async state => {
+                  const current = state.executions.find(item => item.id === boundary.id)!
+                  const owner = continuousOwner(state, current.ref)!
+                  if (continuousHasSlot(owner.rule, current.ref) && current.epoch === boundary.epoch && owner.item.state === release && host.status(current) !== 'running') continuousSetSlot(owner.rule, current.ref, false)
+                })
+              } else {
+                if (currentOwner.item.resumeRequested) {
+                  await this.sourceTransaction(async state => {
+                    const current = state.executions.find(item => item.id === execution!.id)!
+                    const owner = continuousOwner(state, current.ref)!
+                    if (continuousCompleted(state, current)) return
+                    owner.item.state = 'active'; delete owner.item.resumeRequested; delete owner.item.explicitResumeRequested; delete owner.item.reason
+                    if (['waiting', 'paused'].includes(current.state) || current.control?.action !== 'resume') current.control = { commandId: `continuous-resume:${current.id}:${current.events.length}`, action: 'resume', status: 'accepted' }
+                  })
+                }
+                await this.observeContinuation(execution.id)
+                const result = await this.ensureExecution(execution.id, this.dao.firstHistory(execution)!.commandId)
+                if (result.status === 'completed' && (result.execution?.error || result.execution?.continuation?.error)) {
+                  const error = result.execution.error ?? result.execution.continuation!.error!
+                  await this.sourceTransaction(async state => { continuousProblem(continuousOwner(state, execution!.ref)!.item, error.message) })
+                } else {
+                  await this.sourceTransaction(async state => { const item = continuousOwner(state, execution!.ref)!.item; item.attempts = 0; delete item.retryAt; delete item.reason })
+                }
+                // One advancement per active rule per tick. A newly idle result is classified next tick.
+                continue
+              }
+            } catch (error) {
+              await this.sourceTransaction(async state => {
+                const owner = continuousOwner(state, execution!.ref)!
+                continuousProblem(owner.item, error instanceof Error ? error.message : 'Continuous recovery outcome is unknown')
+                owner.item.recoveryBlocked = true
+                owner.rule.error = { code: 'continuous-recovery-failed', message: owner.item.reason! }
+              })
+              continue
+            }
+          }
         }
-        state = await this.load(); rule = state.continuousRules!.find(rule => rule.id === ruleId)!
-        if (rule.active) continue
-        // Previously accepted input participates in this slot even while new intake is disabled.
-        const resume = rule.items.find(item => item.ref && item.executionId && item.resumeRequested && item.state !== 'completed')
-        if (resume) {
-          await this.sourceTransaction(async state => {
+        for (let dispatch = 0; dispatch < (rule.queue?.concurrency ?? 1); dispatch++) {
+          state = await this.load(); rule = state.continuousRules!.find(rule => rule.id === ruleId)!
+          if (continuousSlots(rule).length >= (rule.queue?.concurrency ?? 1)) break
+          if (rule.migrationConflict) break
+          // Paused queues admit explicit existing-Task recovery only; accepted input waits.
+          const next = continuousCandidates(rule, state.sources.find(source => source.id === rule.sourceId)).find(item => item.resumeRequested || (!(rule.planning || rule.queue) || continuousDependenciesReady(state, rule, item.nodeId)))
+          const resume = next?.resumeRequested ? next : undefined
+          if (resume) {
+            await this.sourceTransaction(async state => {
+              const current = state.continuousRules!.find(rule => rule.id === ruleId)!
+              const item = current.items.find(item => item.nodeId === resume.nodeId)!
+              const execution = state.executions.find(execution => execution.id === item.executionId)!
+              if (continuousSlots(current).length >= (current.queue?.concurrency ?? 1) || continuousCompleted(state, execution) || current.queue && !current.enabled && !item.explicitResumeRequested) return
+              continuousSetSlot(current, item.ref!, true); item.state = 'active'; delete item.resumeRequested; delete item.explicitResumeRequested; delete item.reason
+              execution.control = { commandId: `continuous-resume:${execution.id}:${execution.events.length}`, action: 'resume', status: 'accepted' }
+            })
+            await this.ensureExecution(resume.executionId!, `continuous-resume:${resume.executionId}`)
+            continue
+          }
+          if (!rule.enabled || rule.error) continue
+          const candidate = next?.state === 'queued' ? next : undefined
+          if (!candidate) continue
+          let choices: import('./work-types.ts').HostExecutionChoices
+          try {
+            const canonical = state.externalBindings.find(binding => binding.nodeId === candidate.nodeId)
+            const existing = canonical && state.executions.find(execution => sameTask(execution.ref, canonical.ref))
+            const step = rule.queue ? undefined : rule.planning?.plans.find(plan => plan.version === rule.planning!.enabledPlanVersion)?.steps.find(step => step.nodeId === candidate.nodeId)
+            choices = await host.check(existing && (rule.queue || step && step.mode === 'existing')
+              ? { resource: existing.resource, model: existing.model, agentPreset: existing.agentPreset, permissionPreset: existing.permissionPreset, sessionMode: 'reuse', session: existing.session }
+              : { resource: rule.resource, model: rule.model, agentPreset: rule.agentPreset, permissionPreset: rule.permissionPreset,
+                  sessionMode: 'create', session: { runtimeId: rule.resource.runtimeId, sessionId: `continuous-check-${rule.id}` } })
+          } catch (error) {
+            await this.sourceTransaction(async state => {
+              const current = state.continuousRules!.find(rule => rule.id === ruleId)!
+              const item = current.items.find(item => item.nodeId === candidate.nodeId)!
+              continuousProblem(item, error instanceof Error ? error.message : 'Host admission failed')
+              current.error = { code: error instanceof WorkExecutionError ? error.code : 'host-admission-failed', message: item.reason! }
+            })
+            continue
+          }
+          const executionId = await this.sourceTransaction(async state => {
             const current = state.continuousRules!.find(rule => rule.id === ruleId)!
-            const item = current.items.find(item => item.nodeId === resume.nodeId)!
-            const execution = state.executions.find(execution => execution.id === item.executionId)!
-            if (current.active || continuousCompleted(state, execution)) return
-            current.active = item.ref; item.state = 'active'; delete item.resumeRequested; delete item.reason
-            execution.control = { commandId: `continuous-resume:${execution.id}:${execution.events.length}`, action: 'resume', status: 'accepted' }
-          })
-          await this.ensureExecution(resume.executionId!, `continuous-resume:${resume.executionId}`)
-          continue
-        }
-        if (!rule.enabled || rule.error) continue
-        const candidate = rule.items.find(item => item.state === 'queued' && (!rule.planning || continuousDependenciesReady(state, rule, item.nodeId)) && item.attempts < MAX_CONTINUOUS_ATTEMPTS && (!item.retryAt || Date.parse(item.retryAt) <= Date.now()))
-        if (!candidate) continue
-        let choices: import('./work-types.ts').HostExecutionChoices
-        try {
-          const canonical = state.externalBindings.find(binding => binding.nodeId === candidate.nodeId)
-          const existing = canonical && state.executions.find(execution => sameTask(execution.ref, canonical.ref))
-          const step = rule.planning?.plans.find(plan => plan.version === rule.planning!.enabledPlanVersion)?.steps.find(step => step.nodeId === candidate.nodeId)
-          choices = await host.check(existing && step?.mode === 'existing'
-            ? { resource: existing.resource, model: existing.model, agentPreset: existing.agentPreset, permissionPreset: existing.permissionPreset, sessionMode: 'reuse', session: existing.session }
-            : { resource: rule.resource, model: rule.model, agentPreset: rule.agentPreset, permissionPreset: rule.permissionPreset,
-                sessionMode: 'create', session: { runtimeId: rule.resource.runtimeId, sessionId: `continuous-check-${rule.id}` } })
-        } catch (error) {
-          await this.sourceTransaction(async state => {
-            const current = state.continuousRules!.find(rule => rule.id === ruleId)!
+            const freshSource = state.sources.find(source => source.id === current.sourceId)
+            if (freshSource && !sourceScopeError(current, freshSource)) discoverContinuous(current, freshSource)
+            observeContinuousTasks(state, current)
             const item = current.items.find(item => item.nodeId === candidate.nodeId)!
-            continuousRetry(item, error instanceof Error ? error.message : 'Host admission failed')
-            current.error = { code: error instanceof WorkExecutionError ? error.code : 'host-admission-failed', message: item.reason! }
-          })
-          continue
-        }
-        const executionId = await this.sourceTransaction(async state => {
-          const current = state.continuousRules!.find(rule => rule.id === ruleId)!
-          const freshSource = state.sources.find(source => source.id === current.sourceId)
-          if (freshSource && !sourceScopeError(current, freshSource)) discoverContinuous(current, freshSource)
-          const item = current.items.find(item => item.nodeId === candidate.nodeId)!
-          if (current.active || !current.enabled || current.version !== rule.version || item.state !== 'queued' || sourceScopeError(current, state.sources.find(source => source.id === current.sourceId))) return undefined
-          if (current.planning && !continuousDependenciesReady(state, current, item.nodeId)) return undefined
-          const commandId = `continuous:${current.id}:${createHash('sha256').update(item.nodeId).digest('hex')}`
-          // Reserve import, binding, execution and slot in one snapshot. No host side effects precede this commit.
-          const draft = this.dao.fork(state)
-          const canonical = draft.externalBindings.find(binding => binding.nodeId === item.nodeId)
-          const imported = canonical
-            ? { status: 'completed' as const, ref: canonical.ref, task: taskAt(draft, canonical.ref) }
-            : applySourceCommand(draft, { type: 'source.import', commandId: `${commandId}:import`, projectId: current.projectId, sourceId: current.sourceId, nodeId: item.nodeId })
-          if (imported.status !== 'completed' || !imported.ref || !imported.task) { item.state = 'blocked'; item.reason = imported.status !== 'completed' ? imported.error.message : 'Issue import returned no task'; return undefined }
-          const existing = draft.executions.find(execution => sameTask(execution.ref, imported.ref))
-          if (existing) {
-            const other = continuousOwner(draft, existing.ref)
-            if (other && other.rule.id !== current.id) { item.state = 'waiting'; item.reason = `Canonical Task is owned by rule ${other.rule.id}; observe without advancing`; return undefined }
-            const accepted = imported.task.progress?.stage === 'done' && imported.task.progress.specificationVersion === imported.task.specification.version
-            const plan = current.planning?.plans.find(plan => plan.version === current.planning!.enabledPlanVersion)
-            const step = plan?.steps.find(step => step.nodeId === item.nodeId)
-            if (current.planning && (step?.mode !== 'existing' || !samePlannedExecution(plan?.basis.candidates.find(candidate => candidate.issue.nodeId === item.nodeId)?.execution, existing))) { item.state = 'waiting'; item.reason = 'Canonical execution coordination changed after preview; preview again'; return undefined }
-            if ((!current.planning && (!sameResource(existing.resource, current.resource) || existing.permissionPreset !== current.permissionPreset || existing.agentPreset !== current.agentPreset)) || existing.agentId !== imported.task.agentId) { item.state = 'waiting'; item.reason = 'Canonical execution uses another authorized resource or policy; observe without changing owner'; return undefined }
-            if (existing.state === 'paused' || existing.control?.action === 'pause') { item.state = 'waiting'; item.reason = 'Canonical execution requires explicit resume'; return undefined }
+            if (continuousSlots(current).length >= (current.queue?.concurrency ?? 1) || !current.enabled || current.version !== rule.version || item.state !== 'queued' || sourceScopeError(current, state.sources.find(source => source.id === current.sourceId))) return undefined
+            if ((current.planning || current.queue) && !continuousDependenciesReady(state, current, item.nodeId)) return undefined
+            const commandId = `continuous:${current.id}:${createHash('sha256').update(item.nodeId).digest('hex')}`
+            // Reserve import, binding, execution and slot in one snapshot. No host side effects precede this commit.
+            const draft = this.dao.fork(state)
+            const canonical = draft.externalBindings.find(binding => binding.nodeId === item.nodeId)
+            const imported = canonical
+              ? { status: 'completed' as const, ref: canonical.ref, task: taskAt(draft, canonical.ref) }
+              : applySourceCommand(draft, { type: 'source.import', commandId: `${commandId}:import`, projectId: current.projectId, sourceId: current.sourceId, nodeId: item.nodeId })
+            if (imported.status !== 'completed' || !imported.ref || !imported.task) { item.state = 'blocked'; item.reason = imported.status !== 'completed' ? imported.error.message : 'Issue import returned no task'; return undefined }
+            const existing = draft.executions.find(execution => sameTask(execution.ref, imported.ref))
+            if (existing) {
+              const other = continuousOwner(draft, existing.ref)
+              if (other && other.rule.id !== current.id) { item.state = 'waiting'; item.reason = `Canonical Task is owned by rule ${other.rule.id}; observe without advancing`; return undefined }
+              const accepted = imported.task.progress?.stage === 'done' && imported.task.progress.specificationVersion === imported.task.specification.version
+              const plan = current.queue ? undefined : current.planning?.plans.find(plan => plan.version === current.planning!.enabledPlanVersion)
+              const step = plan && plan.steps.find(step => step.nodeId === item.nodeId)
+              if (current.planning && !current.queue && (step?.mode !== 'existing' || !samePlannedExecution((plan || undefined)?.basis.candidates.find(candidate => candidate.issue.nodeId === item.nodeId)?.execution, existing))) { item.state = 'waiting'; item.reason = 'Canonical execution coordination changed after preview; preview again'; return undefined }
+              if (((!current.planning || current.queue) && (!sameResource(existing.resource, current.resource) || existing.permissionPreset !== current.permissionPreset || existing.agentPreset !== current.agentPreset)) || existing.agentId !== imported.task.agentId) { item.state = 'waiting'; item.reason = 'Canonical execution uses another authorized resource or policy; observe without changing owner'; return undefined }
+              if (!current.queue && (existing.state === 'paused' || existing.control?.action === 'pause')) { item.state = 'waiting'; item.reason = 'Canonical execution requires explicit resume'; return undefined }
+              const reservedRule = draft.continuousRules!.find(rule => rule.id === ruleId)!
+              const reserved = reservedRule.items.find(candidate => candidate.nodeId === item.nodeId)!
+              reserved.ref = existing.ref; reserved.executionId = existing.id; reserved.state = accepted ? 'completed' : existing.error || existing.continuation?.error || existing.runtimeFailure && !existing.runtimeFailure.acknowledged || existing.continuationBlocked ? 'blocked' : existing.state === 'paused' || existing.control?.action === 'pause' ? 'paused' : existing.state === 'waiting' ? 'waiting' : 'active'
+              reserved.reason = (existing.error ?? existing.continuation?.error ?? existing.continuationBlocked ?? existing.runtimeFailure)?.message
+              if (!accepted || imported.task.completion?.closeout.status !== 'settled') continuousSetSlot(reservedRule, existing.ref, true)
+              if (reserved.state === 'active' && step && plan) existing.events.push({ id: `continuous-plan:${current.id}:${plan.version}:${item.nodeId}`, text: `Continue the already authorized canonical Issue work. Planned next action: ${step.nextAction}\nReason: ${step.why}\nPreserve existing decisions and acceptance requirements. This grants no additional permissions.`, kind: 'input', delivery: 'accepted', acceptance: 'unassessed' })
+              if (canonical && !canonical.sourceIds.includes(current.sourceId)) canonical.sourceIds.push(current.sourceId)
+              Object.assign(state, draft)
+              // Running/waiting/completed executions are observed through the same scheduler; never send another kickoff.
+              return reserved.state === 'active' && host.status(existing) !== 'running' ? existing.id : undefined
+            }
+            if (isTaskCompleted(imported.task)) { item.state = 'completed'; item.reason = 'Canonical Task is already accepted'; return undefined }
+            const result = await this.apply(draft, { type: 'task.start', commandId, ref: imported.ref, expectedVersion: imported.task.version, agentId: imported.task.agentId,
+              resource: current.resource, model: current.model, agentPreset: current.agentPreset, permissionPreset: current.permissionPreset }, choices)
+            if (result.status !== 'completed' || !result.execution) { continuousProblem(item, result.status !== 'completed' ? result.error.message : 'Start returned no execution'); return undefined }
             const reservedRule = draft.continuousRules!.find(rule => rule.id === ruleId)!
-            const reserved = reservedRule.items.find(candidate => candidate.nodeId === item.nodeId)!
-            reserved.ref = existing.ref; reserved.executionId = existing.id; reserved.state = accepted ? 'completed' : existing.state === 'waiting' ? 'waiting' : 'active'
-            delete reserved.reason
-            if (reserved.state === 'active' || accepted) reservedRule.active = existing.ref
-            if (reserved.state === 'active' && step && plan) existing.events.push({ id: `continuous-plan:${current.id}:${plan.version}:${item.nodeId}`, text: `Continue the already authorized canonical Issue work. Planned next action: ${step.nextAction}\nReason: ${step.why}\nPreserve existing decisions and acceptance requirements. This grants no additional permissions.`, kind: 'input', delivery: 'accepted', acceptance: 'unassessed' })
-            if (canonical && !canonical.sourceIds.includes(current.sourceId)) canonical.sourceIds.push(current.sourceId)
+            const planned = reservedRule.queue ? undefined : reservedRule.planning?.plans.find(plan => plan.version === reservedRule.planning!.enabledPlanVersion)?.steps.find(step => step.nodeId === candidate.nodeId)
+            if (planned) {
+              const kickoff = result.execution.events.find(event => event.id === `kickoff:${result.execution!.id}`)!
+              const suffix = `\nContinuous plan next action: ${planned.nextAction}\nReason: ${planned.why}\nPreserve the full accepted Issue requirements and existing permissions.`
+              if (kickoff.text.length + suffix.length > 100_000) { item.state = 'blocked'; item.reason = 'Planned next action exceeds the bounded kickoff limit'; return undefined }
+              kickoff.text += suffix
+            }
+            const reserved = reservedRule.items.find(item => item.nodeId === candidate.nodeId)!
+            reserved.ref = imported.ref; reserved.executionId = result.execution.id; reserved.state = 'active'; delete reserved.reason; delete reserved.retryAt
+            continuousSetSlot(reservedRule, imported.ref, true)
             Object.assign(state, draft)
-            // Running/waiting/completed executions are observed through the same scheduler; never send another kickoff.
-            return reserved.state === 'active' && host.status(existing) !== 'running' ? existing.id : undefined
+            return result.execution.id
+          })
+          if (executionId) {
+            const result = await this.ensureExecution(executionId, `continuous-start:${executionId}`)
+            if (result.status === 'completed' && result.execution?.error) await this.sourceTransaction(async state => { continuousProblem(continuousOwner(state, result.execution!.ref)!.item, result.execution!.error!.message) })
           }
-          const result = await this.apply(draft, { type: 'task.start', commandId, ref: imported.ref, expectedVersion: imported.task.version, agentId: imported.task.agentId,
-            resource: current.resource, model: current.model, agentPreset: current.agentPreset, permissionPreset: current.permissionPreset }, choices)
-          if (result.status !== 'completed' || !result.execution) { continuousRetry(item, result.status !== 'completed' ? result.error.message : 'Start returned no execution'); return undefined }
-          const reservedRule = draft.continuousRules!.find(rule => rule.id === ruleId)!
-          const planned = reservedRule.planning?.plans.find(plan => plan.version === reservedRule.planning!.enabledPlanVersion)?.steps.find(step => step.nodeId === candidate.nodeId)
-          if (planned) {
-            const kickoff = result.execution.events.find(event => event.id === `kickoff:${result.execution!.id}`)!
-            const suffix = `\nContinuous plan next action: ${planned.nextAction}\nReason: ${planned.why}\nPreserve the full accepted Issue requirements and existing permissions.`
-            if (kickoff.text.length + suffix.length > 100_000) { item.state = 'blocked'; item.reason = 'Planned next action exceeds the bounded kickoff limit'; return undefined }
-            kickoff.text += suffix
-          }
-          const reserved = reservedRule.items.find(item => item.nodeId === candidate.nodeId)!
-          reserved.ref = imported.ref; reserved.executionId = result.execution.id; reserved.state = 'active'; delete reserved.reason; delete reserved.retryAt
-          reservedRule.active = imported.ref
-          Object.assign(state, draft)
-          return result.execution.id
-        })
-        if (executionId) {
-          const result = await this.ensureExecution(executionId, `continuous-start:${executionId}`)
-          if (result.status === 'completed' && result.execution?.error) await this.sourceTransaction(async state => { continuousRetry(continuousOwner(state, result.execution!.ref)!.item, result.execution!.error!.message) })
         }
       }
     }, { waitMs: 0 }).catch(error => {
@@ -692,6 +748,7 @@ export class WorkApplication {
     if (!actor.operator && !('executionId' in command)) return failed('forbidden', 'Session actors can only control their current execution')
     const recorded = actor.operator ? (await this.load()).commands.find(item => item.commandId === command.commandId) : undefined
     if (recorded && recorded.fingerprint !== JSON.stringify(command)) return { status: 'conflict', error: { code: 'command-id-reused', message: 'Command ID already has different content' } }
+    if (command.type === 'continuous.refresh') return this.refreshContinuous(command, command)
     if (command.type === 'continuous.preview') return this.previewContinuous(command)
     if (!recorded && command.type === 'continuous.set-enabled' && command.enabled) {
       const state = await this.load()
@@ -726,12 +783,25 @@ export class WorkApplication {
       if (previous) return previous.fingerprint === fingerprint ? previous.result : { status: 'conflict', error: { code: 'command-id-reused', message: 'Command ID already has different content' } }
       const result = await this.apply(state, command, admissionChoices, sourceCandidate, actor.reporter)
       if (result.status !== 'completed') return result
+      // An explicit start from the existing Task page may resolve a pre-admission queue problem.
+      // Attach the same canonical execution and let the queue reserve capacity before dispatch.
+      if (command.type === 'task.start' && result.execution && !continuousOwner(state, result.execution.ref)) {
+        const binding = state.externalBindings.find(binding => sameTask(binding.ref, result.execution!.ref))
+        const rule = state.continuousRules?.find(rule => rule.projectId === command.ref.projectId)
+        const item = rule?.items.find(item => item.nodeId === binding?.nodeId && !item.ref && item.state !== 'completed')
+        if (rule?.queue && item && sameResource(rule.resource, result.execution.resource) && rule.agentPreset === result.execution.agentPreset && rule.permissionPreset === result.execution.permissionPreset) {
+          item.ref = result.execution.ref; item.executionId = result.execution.id
+          item.resumeRequested = true; item.explicitResumeRequested = true; item.attempts = 0; delete item.retryAt; delete item.recoveryBlocked
+          if (this.host.execution?.status(result.execution) === 'running') { continuousSetSlot(rule, result.execution.ref, true); item.state = 'active'; delete item.resumeRequested; delete item.explicitResumeRequested }
+        }
+      }
       // Receipt owns a detached snapshot: subsequent commands must not alter retry results.
       this.dao.recordCommand(state, command.commandId, fingerprint, result)
       return result
     }, result => result.status === 'completed')
     if (receipt.status === 'completed' && ['task.associate-session', 'task.link-child', 'source.link', 'source.import'].includes(command.type)) await this.refreshSessionTitles()
     if ((command.type === 'continuous.configure' || command.type === 'continuous.set-enabled') && receipt.status === 'completed') {
+      if (!recorded && command.type === 'continuous.configure' && receipt.continuousRule?.queue) await this.refreshContinuous({ projectId: command.projectId, sourceId: command.sourceId, expectedVersion: receipt.continuousRule.version })
       await this.reconcileContinuous()
       return this.query({ type: 'continuous.status', projectId: command.projectId, sourceId: command.sourceId }, actor)
     }
@@ -1014,7 +1084,7 @@ export class WorkApplication {
       if (execution.events.some(event => pendingEvent(event) && goalOwned(event.nativeMessage))) execution = await save(discardGoalEvents)
       if (isTaskCompleted(taskAt(state, execution.ref))) return { status: 'completed', execution }
       const owner = continuousOwner(state, execution.ref)
-      const stopping = owner && sameTask(owner.rule.active, execution.ref) && execution.control?.status === 'accepted' && execution.control.action !== 'resume'
+      const stopping = owner && continuousHasSlot(owner.rule, execution.ref) && execution.control?.status === 'accepted' && execution.control.action !== 'resume'
       if (owner && !continuousMayAdvance(state, execution) && !stopping) return { status: 'completed', execution }
       try {
         if (continuationInFlight(execution) && execution.control?.status !== 'accepted') {
@@ -1129,6 +1199,7 @@ export class WorkApplication {
       if (configured.status === 'completed' && configured.source) remember(configured.source)
       return configured.status === 'completed' ? { ...configured, project: created.project } : configured
     }
+    if (command.type === 'continuous.refresh') return failed('unsupported-command', 'Refresh requires source observation')
     if (command.type === 'continuous.instruct' || command.type === 'continuous.block') {
       const rule = state.continuousRules?.find(rule => rule.projectId === command.projectId && rule.sourceId === command.sourceId)
       if (!rule) return failed('continuous-unconfigured', 'Configure authorized scope and resources first')
@@ -1202,7 +1273,7 @@ export class WorkApplication {
       if (command.type === 'task.completion-sync') return task.completion ? { status: 'completed', task, execution } : failed('completion-required', 'Only an accepted Task can synchronize completion')
       if (command.type === 'task.organize') return applyTaskOrganization(state, execution, command.organization, command.commandId, randomUUID)
       const managed = continuousOwner(state, execution.ref)
-      if (managed && command.type === 'task.reconcile') { managed.item.attempts = 0; delete managed.item.retryAt; delete managed.item.recoveryBlocked }
+      if (managed && command.type === 'task.reconcile') { managed.item.resumeRequested = true; managed.item.explicitResumeRequested = true; managed.item.attempts = 0; delete managed.item.retryAt; delete managed.item.recoveryBlocked }
       if (managed && continuousCompleted(state, execution) && (command.type === 'task.input' || command.type === 'task.continue' || (command.type === 'task.control' && command.action === 'resume'))) return failed('continuous-completed', 'Completed continuous work cannot restart')
       if (command.type === 'task.report') {
         let reminders: string[] | undefined
@@ -1244,12 +1315,12 @@ export class WorkApplication {
         execution.continuation.phase = 'material-saved'
         delete execution.continuation.error
       }
-      if (execution.runtimeFailure && (command.type === 'task.input' || command.type === 'task.continue' || (command.type === 'task.control' && command.action === 'resume'))) execution.runtimeFailure.acknowledged = true
-      if (managed && (command.type === 'task.input' || (command.type === 'task.control' && command.action === 'resume'))) {
-        const ownsSlot = sameTask(managed.rule.active, execution.ref)
+      if (execution.runtimeFailure && ((command.type === 'task.input' && command.kind === 'input') || command.type === 'task.continue' || (command.type === 'task.control' && command.action === 'resume'))) execution.runtimeFailure.acknowledged = true
+      if (managed && ((command.type === 'task.input' && (command.kind === 'input' || !(execution.error || execution.continuation?.error || execution.runtimeFailure || managed.item.recoveryBlocked))) || (command.type === 'task.control' && command.action === 'resume'))) {
+        const ownsSlot = continuousHasSlot(managed.rule, execution.ref)
         const explicitlyPaused = execution.state === 'paused' || (execution.control?.action === 'pause' && execution.control.status === 'accepted')
         if (command.type === 'task.control') {
-          managed.item.resumeRequested = !ownsSlot
+          managed.item.resumeRequested = !ownsSlot; managed.item.explicitResumeRequested = !ownsSlot
           if (ownsSlot) managed.item.state = 'active'
           execution.events.push({ id: `continuous-resume:${command.commandId}`, text: command.text, kind: 'input', delivery: 'accepted', acceptance: 'unassessed' })
         } else if (!explicitlyPaused && (!ownsSlot || ['waiting', 'failed'].includes(execution.state) || managed.item.state !== 'active')) managed.item.resumeRequested = true
@@ -1260,7 +1331,7 @@ export class WorkApplication {
         if (command.action === 'progress') execution.progress = command.text
         else {
           execution.control = { commandId: command.commandId, action: command.action, status: 'accepted', reason: command.text }
-          if (managed && command.action !== 'resume') delete managed.item.resumeRequested
+          if (managed && command.action !== 'resume') { delete managed.item.resumeRequested; delete managed.item.explicitResumeRequested }
         }
       }
       return { status: 'completed', execution }
@@ -1426,7 +1497,9 @@ export class WorkApplication {
     if (query.type === 'continuous.status') {
       const source = state.sources.find(source => source.id === query.sourceId && source.projectId === query.projectId)
       if (!source) return failed('unknown-source', 'Source does not belong to this project')
-      return { status: 'completed', continuousRule: state.continuousRules?.find(rule => rule.sourceId === source.id && rule.projectId === source.projectId) }
+      const rule = structuredClone(state.continuousRules?.find(rule => rule.projectId === query.projectId))
+      if (rule) observeContinuousTasks(state, rule)
+      return { status: 'completed', continuousRule: rule }
     }
     if (query.type === 'task.execution-options' || query.type === 'source.execution-options') {
       const task = query.type === 'task.execution-options' ? taskAt(state, query.ref) : undefined

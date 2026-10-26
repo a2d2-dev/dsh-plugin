@@ -26,7 +26,7 @@ export function WorkPanel({ controller }: { controller: WorkPanelController }) {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot)
   const detailScroll=useRef<HTMLDivElement>(null)
   useEffect(()=>{if(detailScroll.current)detailScroll.current.scrollTop=0},[state.detailTab,state.source.issueTarget?.nodeId,state.detail?.task?.id])
-  const [connecting,setConnecting]=useState(false),[surface,setSurface]=useState<HTMLElement|null>(null),[panel,setPanel]=useState<'none'|'delegation'|'continuation'>('none')
+  const [connecting,setConnecting]=useState(false),[surface,setSurface]=useState<HTMLElement|null>(null),[panel,setPanel]=useState<'none'|'continuation'>('none')
   useEffect(() => { void controller.initialize(); return () => controller.leavePanel() }, [controller])
   useEffect(() => {
     if(connecting||!surface||typeof document==='undefined') return
@@ -51,7 +51,7 @@ export function WorkPanel({ controller }: { controller: WorkPanelController }) {
   const retryIssue=()=>void controller.refreshDetail()
   const issueRepository=issue?`${issue.repository.owner}/${issue.repository.repository}`:null
   const sourceRepository=source?.repository?`${source.repository.owner}/${source.repository.repository}`:null
-  return <main ref={setSurface} className={`${styles.panel} ${hasDetail&&!connecting?styles.detailPanel:''}`} aria-label="A²D² 控制面板">
+  return <main ref={setSurface} data-delegation={state.source.tab==='delegation'&&!hasDetail} className={`${styles.panel} ${hasDetail&&!connecting?styles.detailPanel:''}`} aria-label="A²D² 控制面板">
     <header className={styles.navigation}><div className={styles.panelContext}><SourceTabs controller={controller} onAdd={()=>setConnecting(!connecting)}/></div><div className={styles.panelUtilities}><GitHubAccountControl controller={controller} onManageSources={()=>setConnecting(true)}/><button className={styles.closePanel} aria-label="关闭面板" title="关闭面板" onClick={()=>controller.close()}><PanelIcon name="close" size={18}/></button></div></header>
     {state.error&&<p className={styles.failure} role="alert">{state.error} <button onClick={retryIssue}>重新读取</button></p>}
 
@@ -80,7 +80,7 @@ export function WorkPanel({ controller }: { controller: WorkPanelController }) {
       </div>
       <ErrorText error={state.source.error??''}/>
     </>:!connecting&&state.projectId&&<>
-      <SourceDirectory controller={controller} panel={panel} onPanel={setPanel} panelContent={panel==='delegation'&&source?<ContinuousProcessing key={`${state.projectId}/${source.id}`} controller={controller} onClose={()=>setPanel('none')}/>:panel==='continuation'&&project?<section className={styles.settingsPanel} aria-label="新执行默认自动接续"><div className={styles.delegationHeader}><strong>新执行默认自动接续</strong><button onClick={()=>setPanel('none')}>收起</button></div><ContinuationSettings key={`${project.id}/${project.continuationPolicy?.version??0}`} controller={controller} policy={project.continuationPolicy}/></section>:null} issues={<IssueSourcePanel key={source?.id} controller={controller}/>}/>
+      <SourceDirectory controller={controller} panel={panel} onPanel={setPanel} delegation={source?<ContinuousProcessing key={`${state.projectId}/${source.id}`} controller={controller}/>:null} panelContent={panel==='continuation'&&project?<section className={styles.settingsPanel} aria-label="新执行默认自动接续"><div className={styles.delegationHeader}><strong>新执行默认自动接续</strong><button onClick={()=>setPanel('none')}>收起</button></div><ContinuationSettings key={`${project.id}/${project.continuationPolicy?.version??0}`} controller={controller} policy={project.continuationPolicy}/></section>:null} issues={<IssueSourcePanel key={source?.id} controller={controller}/>}/>
     </>}
   </main>
 }
@@ -172,19 +172,22 @@ function IssueSourcePanel({controller}:{controller:WorkPanelController}) {
 
   </section>
 }
-function ContinuousProcessing({controller,onClose}:{controller:WorkPanelController;onClose:()=>void}) {
-  const snapshot=controller.getSnapshot(),projectId=snapshot.projectId!,sourceId=snapshot.source.sourceId!
+function ContinuousProcessing({controller}:{controller:WorkPanelController}) {
+  const snapshot=controller.getSnapshot(),projectId=snapshot.projectId!,browseSourceId=snapshot.source.sourceId!
   const [rule,setRule]=useState<ContinuousWorkRule|undefined>(undefined),[loaded,setLoaded]=useState(false),[editing,setEditing]=useState(false)
+  const sourceId=rule?.sourceId??browseSourceId
   const [options,setOptions]=useState<WorkExecutionOptions|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[statusError,setStatusError]=useState('')
   const [assignee,setAssignee]=useState<'@me'|'*'>('*'),[labels,setLabels]=useState(''),[resource,setResource]=useState(0),[model,setModel]=useState(0),[agentPreset,setAgentPreset]=useState(''),[permissionPreset,setPermissionPreset]=useState('')
+  const [configSourceId,setConfigSourceId]=useState(sourceId)
+  const [concurrency,setConcurrency]=useState(1),[refreshMinutes,setRefreshMinutes]=useState(10),[order,setOrder]=useState<'oldest'|'newest'>('oldest')
   const [scope]=useState(()=>new AbortController())
   useEffect(()=>()=>scope.abort(),[scope])
   useEffect(()=>{
     const abort=new AbortController();let reading=false
-    const read=async()=>{if(reading||editing||busy||abort.signal.aborted)return;reading=true;try{const result=await controller.client.query({type:'continuous.status',projectId,sourceId},abort.signal);if(!abort.signal.aborted){setRule(result.continuousRule);setLoaded(true);setStatusError('')}}catch(error){if(!abort.signal.aborted)setStatusError(message(error))}finally{reading=false}}
+    const read=async()=>{if(reading||editing||busy||abort.signal.aborted)return;reading=true;try{const result=await controller.client.query({type:'continuous.status',projectId,sourceId:browseSourceId},abort.signal);if(!abort.signal.aborted){setRule(result.continuousRule);setLoaded(true);setStatusError('')}}catch(error){if(!abort.signal.aborted)setStatusError(message(error))}finally{reading=false}}
     void read();const timer=setInterval(()=>{if(typeof document==='undefined'||document.visibilityState==='visible')void read()},5000)
     return()=>{abort.abort();clearInterval(timer)}
-  },[controller,projectId,sourceId,editing,busy])
+  },[controller,projectId,browseSourceId,editing,busy])
   async function configure() {
     if(busy)return;setBusy(true);setError('')
     try {
@@ -192,7 +195,8 @@ function ContinuousProcessing({controller,onClose}:{controller:WorkPanelControll
       if(scope.signal.aborted)return
       const choices=result.executionOptions
       if(!choices||!choices.resources.length||!choices.models.length||!choices.agentPresets.length||!choices.permissionPresets.length)throw Error('宿主尚无完整的执行目录、模型或预设配置')
-      setOptions(choices);setAssignee(rule?.scope.assignee??'*');setLabels(rule?.scope.labels.join(', ')??'')
+      setOptions(choices);setConfigSourceId(sourceId);setAssignee(rule?.scope.assignee??'*');setLabels(rule?.scope.labels.join(', ')??'')
+      setConcurrency(rule?.queue?.concurrency??1);setRefreshMinutes(rule?.queue?.refreshMinutes??10);setOrder(rule?.queue?.order??'oldest')
       setResource(Math.max(0,choices.resources.findIndex(item=>item.ref.runtimeId===rule?.resource.runtimeId&&item.ref.workspaceId===rule.resource.workspaceId)))
       const preferred=rule?.model??choices.defaults.model
       setModel(Math.max(0,choices.models.findIndex(item=>item.provider===preferred.provider&&item.model===preferred.model)))
@@ -207,23 +211,26 @@ function ContinuousProcessing({controller,onClose}:{controller:WorkPanelControll
       const selectedResource=options.resources[resource]?.ref, selectedModel=options.models[model]
       if(!selectedResource||!selectedModel)throw Error('请选择可用执行配置')
       const configuredModel=rule?.model.provider===selectedModel.provider&&rule.model.model===selectedModel.model?rule.model:options.defaults.model.provider===selectedModel.provider&&options.defaults.model.model===selectedModel.model?options.defaults.model:selectedModel
-      const result=await controller.submit({type:'continuous.configure',projectId,sourceId,expectedVersion:rule?.version??0,assignee,labels:[...new Set(labels.split(',').map(label=>label.trim()).filter(Boolean))],resource:selectedResource,model:configuredModel,agentPreset,permissionPreset,enabled:false})
+      const result=await controller.submit({type:'continuous.configure',projectId,sourceId:configSourceId,expectedVersion:rule?.version??0,assignee,labels:[...new Set(labels.split(',').map(label=>label.trim()).filter(Boolean))],resource:selectedResource,model:configuredModel,agentPreset,permissionPreset,enabled:rule?.enabled??false,queue:{concurrency,refreshMinutes,order}})
       if(!scope.signal.aborted){setRule(result.continuousRule);setEditing(false)}
     }catch(error){if(!scope.signal.aborted)setError(message(error))}finally{if(!scope.signal.aborted)setBusy(false)}
   }
-  return <section className={styles.delegation} aria-label="持续委托">
-    <div className={styles.delegationHeader}><strong>持续委托{rule?.enabled?' · 已启用':''}</strong><button onClick={onClose}>收起</button></div>
-    <ContinuousDelegation client={controller.client} projectId={projectId} sourceId={sourceId} sourceTitle={snapshot.source.sources.find(item=>item.id===sourceId)?.title??snapshot.source.sources.find(item=>item.id===sourceId)?.projectSnapshot?.project.title??'当前来源'} rule={rule} onRuleChanged={setRule}/>
-    <button disabled={busy||!loaded} onClick={()=>void configure()}>{rule?'执行目录与模型':'配置资源'}</button>
-    {rule?.active&&<button onClick={()=>void controller.openTask(rule.active!)}>当前执行</button>}
-    {rule?.error&&<ErrorText error={`${rule.error.code}: ${rule.error.message}`}/>}<ErrorText error={error}/><ErrorText error={statusError}/>
-    {editing&&options&&<form className={styles.form} onSubmit={event=>void save(event)}>
-      <p>授权整个当前来源的开放 Issue；浏览中的 Project view 与 Issue 筛选不改变委托范围。已有规则保留原负责人和标签约束。保存资源不会启用或启动工作。</p>
-       <div className={styles.formRow}><label>持续处理执行目录<select disabled={busy} value={resource} onChange={event=>setResource(Number(event.target.value))}>{options.resources.map((item,index)=><option key={index} value={index}>{item.title}</option>)}</select></label><label>持续处理模型<select disabled={busy} value={model} onChange={event=>setModel(Number(event.target.value))}>{options.models.map((item,index)=><option key={index} value={index}>{item.provider}/{item.model}</option>)}</select></label></div>
-      <details><summary>执行预设</summary><div className={styles.formRow}><label>Agent 预设<select disabled={busy} value={agentPreset} onChange={event=>setAgentPreset(event.target.value)}>{options.agentPresets.map(item=><option key={item}>{item}</option>)}</select></label><label>权限预设<select disabled={busy} value={permissionPreset} onChange={event=>setPermissionPreset(event.target.value)}>{options.permissionPresets.map(item=><option key={item}>{item}</option>)}</select></label></div></details>
-      <div className={styles.toolbar}><button className={styles.primary} type="submit" disabled={busy}>{busy?'正在保存…':'保存'}</button><button type="button" disabled={busy} onClick={()=>setEditing(false)}>取消</button></div>
-    </form>}
-    </section>
+  const source=snapshot.source.sources.find(item=>item.id===sourceId)
+  const sourceTitle=source?.title??source?.projectSnapshot?.project.title??(source?.repository?`${source.repository.owner}/${source.repository.repository}`:'当前来源')
+  return <>
+    <ErrorText error={error}/><ErrorText error={statusError}/>
+    {loaded?<ContinuousDelegation client={controller.client} projectId={projectId} sourceId={sourceId} projectTitle={snapshot.projects.find(item=>item.id===projectId)?.name??'当前 Project'} sourceTitle={sourceTitle} rule={rule} onRuleChanged={setRule} navigation={controller} onConfigure={()=>void configure()} configuring={busy||editing}>
+      {rule?.migrationConflict&&<p role="alert">{rule.migrationConflict.message}</p>}
+      {editing&&options&&<form className={styles.form} aria-label="队列设置" onSubmit={event=>void save(event)}>
+        <label>队列来源<select disabled={busy} value={configSourceId} onChange={event=>setConfigSourceId(event.target.value)}>{snapshot.source.sources.map(item=><option key={item.id} value={item.id}>{item.title??item.projectSnapshot?.project.title??(item.repository?`${item.repository.owner}/${item.repository.repository}`:item.id)}</option>)}</select></label>
+        <div className={styles.formRow}><label>负责人<select disabled={busy} value={assignee} onChange={event=>setAssignee(event.target.value as '@me'|'*')}><option value="*">所有负责人</option><option value="@me">分配给我</option></select></label><label>必须包含的标签<input disabled={busy} value={labels} onChange={event=>setLabels(event.target.value)} placeholder="逗号分隔；留空不限"/></label></div>
+        <div className={styles.formRow}><label>更新周期（分钟）<input type="number" min={1} max={10080} required disabled={busy} value={refreshMinutes} onChange={event=>setRefreshMinutes(Number(event.target.value))}/></label><label>并发上限<input type="number" min={1} max={32} required disabled={busy} value={concurrency} onChange={event=>setConcurrency(Number(event.target.value))}/></label><label>等待顺序<select disabled={busy} value={order} onChange={event=>setOrder(event.target.value as 'oldest'|'newest')}><option value="oldest">较早创建优先</option><option value="newest">较新创建优先</option></select></label></div>
+        <details><summary>执行目录、模型与权限</summary><div className={styles.formRow}><label>持续处理执行目录<select disabled={busy} value={resource} onChange={event=>setResource(Number(event.target.value))}>{options.resources.map((item,index)=><option key={index} value={index}>{item.title}</option>)}</select></label><label>持续处理模型<select disabled={busy} value={model} onChange={event=>setModel(Number(event.target.value))}>{options.models.map((item,index)=><option key={index} value={index}>{item.provider}/{item.model}</option>)}</select></label><label>Agent 预设<select disabled={busy} value={agentPreset} onChange={event=>setAgentPreset(event.target.value)}>{options.agentPresets.map(item=><option key={item}>{item}</option>)}</select></label><label>权限预设<select disabled={busy} value={permissionPreset} onChange={event=>setPermissionPreset(event.target.value)}>{options.permissionPresets.map(item=><option key={item}>{item}</option>)}</select></label></div></details>
+        <p>筛选上述来源的开放 Issue；保存后更新等待部分，在途执行、问题与历史保留。{rule?.enabled?'队列已开启，空余位置按新设置推进。':'保存后仍暂停，点击“继续处理队列”才启动。'}</p>
+        <div className={styles.toolbar}><button className={styles.primary} type="submit" disabled={busy}>{busy?'正在保存…':'保存并更新等待任务'}</button><button type="button" disabled={busy} onClick={()=>setEditing(false)}>取消</button></div>
+      </form>}
+    </ContinuousDelegation>:<p role="status">正在读取持续队列…</p>}
+  </>
 }
 function stageLabel(stage: import('../work-progress.ts').WorkStage): string { return ({planned:'待处理','in-progress':'处理中',review:'待验收',blocked:'受阻',done:'已验收完成'})[stage] }
 function CriteriaCount({criteria}:{criteria:import('../work-progress.ts').TaskProgressView['criteria']}) {

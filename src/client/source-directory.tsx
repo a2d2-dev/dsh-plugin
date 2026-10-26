@@ -63,13 +63,13 @@ export function SourceTabs({controller,onAdd}:{controller:WorkPanelController;on
     </div>}
   </div>
 }
-export function SourceDirectory({controller,issues,panelContent,panel,onPanel}:{controller:WorkPanelController;issues:ReactNode;panelContent?:ReactNode;panel:'none'|'delegation'|'continuation';onPanel:(panel:'none'|'delegation'|'continuation')=>void}) {
+export function SourceDirectory({controller,issues,delegation,panelContent,panel,onPanel}:{controller:WorkPanelController;issues:ReactNode;delegation?:ReactNode;panelContent?:ReactNode;panel:'none'|'continuation';onPanel:(panel:'none'|'continuation')=>void}) {
   const state=useSyncExternalStore(controller.subscribe,controller.getSnapshot,controller.getSnapshot), sourceState=state.source
   const [menu,setMenu]=useState(false)
   useEffect(()=>{ if(!menu)return; const close=()=>setMenu(false); document.addEventListener('click',close); return ()=>document.removeEventListener('click',close) },[menu])
   const source=sourceState.sources.find(source=>source.id===sourceState.sourceId)
   if(!source)return null
-  const tabs:[SourceTab,string][]=[['overview','概览'],...(source.githubProject?[['project','项目'] as [SourceTab,string]]:[]),['issues','Issue'],['prs','PR']]
+  const tabs:[SourceTab,string][]=[['overview','概览'],...(source.githubProject?[['project','项目'] as [SourceTab,string]]:[]),['issues','Issue'],['prs','PR'],['delegation','持续委托']]
   return <>
     <div className={styles.sourceHeader}>
       <nav className={styles.tabs} aria-label="来源目录">{tabs.map(([tab,label])=><button key={tab} aria-pressed={sourceState.tab===tab} onClick={()=>void controller.selectSourceTab(tab)}>{label}</button>)}</nav>
@@ -78,14 +78,14 @@ export function SourceDirectory({controller,issues,panelContent,panel,onPanel}:{
           <button className={styles.iconButton} aria-label="来源操作" aria-expanded={menu} title="来源设置：读取缓存 / 持续委托 / 自动接续" onClick={event=>{event.stopPropagation();setMenu(open=>!open)}}><MoreIcon/></button>
           {menu&&<div className={styles.menu} role="menu">
             <button role="menuitem" disabled={sourceState.loading} onClick={event=>{event.stopPropagation();setMenu(false);void controller.browseDirectory(false)}}>读取缓存</button>
-            <button role="menuitem" aria-pressed={panel==='delegation'} onClick={event=>{event.stopPropagation();setMenu(false);onPanel(panel==='delegation'?'none':'delegation')}}>持续委托</button>
+            <button role="menuitem" aria-pressed={sourceState.tab==='delegation'} onClick={event=>{event.stopPropagation();setMenu(false);void controller.selectSourceTab('delegation')}}>持续委托</button>
             <button role="menuitem" aria-pressed={panel==='continuation'} onClick={event=>{event.stopPropagation();setMenu(false);onPanel(panel==='continuation'?'none':'continuation')}}>自动接续</button>
           </div>}
         </div>
       </div>
     </div>
-    {panelContent}
-    {sourceState.tab==='issues'?issues:<>
+    {sourceState.tab!=='delegation'&&panelContent}
+    {sourceState.tab==='delegation'?delegation:sourceState.tab==='issues'?issues:<>
       {sourceState.loading&&<ScanProgressLine scan={sourceState.scan}/>}{!sourceState.loading&&sourceState.scan&&sourceState.scan.total!==undefined&&sourceState.scan.fetched<sourceState.scan.total&&<p role="status">Project 扫描未完成：已取 {sourceState.scan.fetched}/{sourceState.scan.total} 项，刷新来源可继续。</p>}{sourceState.error&&<p role="alert" className={styles.failure}>{sourceState.error}</p>}{!source.enabled&&<p role="status">来源已停用，保留已保存内容。</p>}
 
       {sourceState.catalog?.limitations.map(reason=><p role="status" key={reason}>{reason}</p>)}

@@ -79,16 +79,28 @@ export interface WorkExecution {
   error?: { code: string; message: string }
 }
 export interface ContinuousWorkItem {
-  nodeId: string; title: string; number: number; url: string; ref?: TaskRef; executionId?: string
+  nodeId: string; title: string; number: number; url: string
+  /** Canonical identity and discovery origin; neither grants queue execution ownership. */
+  taskRef?: TaskRef; sourceId?: string
+  ref?: TaskRef; executionId?: string
   state: 'queued' | 'active' | 'waiting' | 'paused' | 'blocked' | 'completed' | 'skipped'
   reason?: string; attempts: number; retryAt?: string; resumeRequested?: boolean; followups?: string[]; recoveryBlocked?: boolean
+  /** Explicit Task recovery may acquire capacity while intake is paused; input alone cannot. */
+  explicitResumeRequested?: boolean
 }
+export interface ContinuousQueueSettings { concurrency: number; refreshMinutes: number; order: 'oldest' | 'newest' }
 export interface ContinuousWorkRule {
   id: string; projectId: string; sourceId: string; version: number; enabled: boolean
   scope: { assignee: '@me' | '*'; labels: string[]; identity?: { login: string; nodeId: string } }
   resource: ResourceRef; model: { provider: string; model: string; reasoningEffort?: string }
   agentPreset: string; permissionPreset: string
   planning?: import('./work-planning.ts').WorkPlanning
+  queue?: ContinuousQueueSettings
+  lastRefreshedAt?: string; nextRefreshAt?: string
+  /** Retained until host settlement or completion closeout; active is a legacy first-slot projection. */
+  slots?: TaskRef[]
+  migrationConflict?: { code: string; message: string }
+  legacyRules?: Omit<ContinuousWorkRule, 'legacyRules'>[]
   items: ContinuousWorkItem[]; active?: TaskRef; error?: { code: string; message: string }
 }
 interface Command { commandId: string }
@@ -98,10 +110,11 @@ export type WorkCommand =
   | (Command & { type: 'github.logout'; login: string; nodeId: string })
   | (Command & { type: 'github.login'; action: 'start' | 'cancel' })
   | (Command & { type: 'continuous.instruct'; projectId: string; sourceId: string; expectedVersion: number; text: string })
+  | (Command & { type: 'continuous.refresh'; projectId: string; sourceId: string; expectedVersion: number })
   | (Command & { type: 'continuous.preview'; projectId: string; sourceId: string; expectedVersion: number })
   | (Command & { type: 'continuous.block'; projectId: string; sourceId: string; expectedVersion: number; nodeId: string; blocked: boolean })
   | (Command & { type: 'source.connect'; url?: string; githubProject?: { owner: string; type: 'org' | 'user'; number: number }; resource?: ResourceRef })
-  | (Command & { type: 'continuous.configure'; projectId: string; sourceId: string; expectedVersion: number; assignee: '@me' | '*'; labels: string[]; resource: ResourceRef; model: { provider: string; model: string; reasoningEffort?: string }; agentPreset: string; permissionPreset: string; enabled: boolean })
+  | (Command & { type: 'continuous.configure'; queue?: ContinuousQueueSettings; projectId: string; sourceId: string; expectedVersion: number; assignee: '@me' | '*'; labels: string[]; resource: ResourceRef; model: { provider: string; model: string; reasoningEffort?: string }; agentPreset: string; permissionPreset: string; enabled: boolean })
   | (Command & { type: 'continuous.set-enabled'; projectId: string; sourceId: string; expectedVersion: number; enabled: boolean })
   | (Command & { type: 'source.configure-project'; projectId: string; githubProject: { owner: string; type: 'org' | 'user'; number: number } })
   | (Command & { type: 'source.configure'; projectId: string; repository: { owner: string; repository: string } })

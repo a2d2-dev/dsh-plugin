@@ -81,7 +81,8 @@ body[data-ds-dark-theme] .panel { --work-link: var(--dsw-static-blue-400, #60a5f
 .sourceMeta { font-size: 12px; color: var(--work-muted); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
 .metaDot { color: var(--work-muted); opacity: .6; }
 .sourceIdentity strong { font-size: 14px; color: var(--dsw-alias-label-primary, #262a32); }
-.sourceHeader .tabs { margin: 0; align-self: stretch; align-items: center; }
+.sourceHeader .tabs { margin: 0; align-self: stretch; align-items: center; min-width: 0; flex-wrap: wrap; overflow: visible; }
+@media (max-width: 700px) { .sourceHeader { gap: 4px; } .sourceHeader .tabs { gap: 0; } .sourceHeader .tabs button { padding-inline: 7px; } }
 .menuWrap { position: relative; display: inline-flex; }
 .menu { position: absolute; top: calc(100% + 4px); right: 0; z-index: 30; display: flex; flex-direction: column; min-width: 190px; padding: 4px; border: 1px solid var(--work-line); border-radius: 8px; background: var(--dsw-alias-bg-layer-1, #fff); box-shadow: 0 8px 24px rgba(0,0,0,.12); }
 .panel .menu button { text-align: left; padding: 7px 10px !important; border: 0 !important; background: transparent !important; border-radius: 5px; white-space: nowrap; }
@@ -446,5 +447,15 @@ body[data-ds-dark-theme] .panel { --work-link: var(--dsw-static-blue-400, #60a5f
 .sourceSwitchOptions small { font-size: 11px; color: var(--work-muted); }
 .sourceSwitchOptions svg { flex: none; color: var(--work-muted); }
 .sourceSwitchOptions p { margin: 12px 8px; font-size: 12px; }
+
+@media (max-width: 600px) {
+  .panel[data-delegation=true] .navigation { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px; }
+  .panel[data-delegation=true] .panelContext, .panel[data-delegation=true] .sourceContext { display: contents; }
+  .panel[data-delegation=true] .sourcePicker { grid-column: 1 / -1; flex-wrap: nowrap; }
+  .panel[data-delegation=true] .sourceSync { grid-column: 1; justify-content: flex-start; }
+  .panel[data-delegation=true] .panelUtilities { grid-column: 2; gap: 8px; }
+  .panel[data-delegation=true] .navigation details { margin: 0; }
+  .panel[data-delegation=true] .sourceHeader .tabs button { padding-inline: 6px; }
+}
 
 .loadSentinel { min-height: 1px; flex: none; }

@@ -71,23 +71,31 @@ const externalReference = { nodeId: referenceId.optional(), url: z.string().max(
 const oneReference = (value: { nodeId?: string; url?: string }) => Boolean(value.nodeId) !== Boolean(value.url)
 const fence = { ...command, ref: taskRefSchema, executionId: id, owner: id, epoch: z.number().int().positive() }
 const githubProjectRef = z.object({ owner: referenceId, type: z.enum(['org', 'user']), number: z.number().int().positive() }).strict()
-export const continuousRuleSchema = z.object({
+export const continuousQueueSchema = z.object({ concurrency: z.number().int().min(1).max(32), refreshMinutes: z.number().int().min(1).max(10080), order: z.enum(['oldest', 'newest']) }).strict()
+const legacyContinuousRuleSchema = z.object({
   id, projectId: id, sourceId: id, version: z.number().int().positive(), enabled: z.boolean(),
   scope: z.object({ assignee: z.enum(['@me', '*']), labels: z.array(referenceId), identity: z.object({ login: referenceId, nodeId: referenceId }).strict().optional() }).strict(),
   resource: resourceRefSchema, model: modelSchema, agentPreset: referenceId, permissionPreset: referenceId,
-  items: z.array(z.object({ nodeId: referenceId, title: text, number: z.number().int().positive(), url: text, ref: taskRefSchema.optional(), executionId: id.optional(),
-    state: z.enum(['queued', 'active', 'waiting', 'paused', 'blocked', 'completed', 'skipped']), reason: text.optional(), attempts: z.number().int().nonnegative(), retryAt: z.string().datetime().optional(), resumeRequested: z.boolean().optional(), followups: z.array(referenceId).optional(), recoveryBlocked: z.boolean().optional() }).strict()),
+  items: z.array(z.object({ nodeId: referenceId, title: text, number: z.number().int().positive(), url: text, taskRef: taskRefSchema.optional(), sourceId: id.optional(), ref: taskRefSchema.optional(), executionId: id.optional(),
+    state: z.enum(['queued', 'active', 'waiting', 'paused', 'blocked', 'completed', 'skipped']), reason: text.optional(), attempts: z.number().int().nonnegative(), retryAt: z.string().datetime().optional(), resumeRequested: z.boolean().optional(), explicitResumeRequested: z.boolean().optional(), followups: z.array(referenceId).optional(), recoveryBlocked: z.boolean().optional() }).strict()),
   planning: planningSchema.optional(),
   active: taskRefSchema.optional(), error: z.object({ code: referenceId, message: text }).strict().optional(),
+}).strict()
+export const continuousRuleSchema = legacyContinuousRuleSchema.extend({
+  queue: continuousQueueSchema.optional(), slots: z.array(taskRefSchema).optional(),
+  lastRefreshedAt: z.string().datetime().optional(), nextRefreshAt: z.string().datetime().optional(),
+  migrationConflict: z.object({ code: referenceId, message: text }).strict().optional(),
+  legacyRules: z.array(legacyContinuousRuleSchema).optional(),
 }).strict()
 export const commandSchema = z.discriminatedUnion('type', [
   z.object({ ...command, type: z.literal('github.logout'), login: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9-]{0,38}$/), nodeId: referenceId }).strict(),
   z.object({ ...command, type: z.literal('github.login'), action: z.enum(['start', 'cancel']) }).strict(),
   z.object({ ...command, type: z.literal('continuous.instruct'), projectId: id, sourceId: id, expectedVersion: z.number().int().positive(), text }).strict(),
+  z.object({ ...command, type: z.literal('continuous.refresh'), projectId: id, sourceId: id, expectedVersion: z.number().int().positive() }).strict(),
   z.object({ ...command, type: z.literal('continuous.preview'), projectId: id, sourceId: id, expectedVersion: z.number().int().positive() }).strict(),
   z.object({ ...command, type: z.literal('continuous.block'), projectId: id, sourceId: id, expectedVersion: z.number().int().positive(), nodeId: referenceId, blocked: z.boolean() }).strict(),
   z.object({ ...command, type: z.literal('source.connect'), githubProject: githubProjectRef.optional(), url: z.string().max(2048).optional(), resource: resourceRefSchema.optional() }).strict().refine(value => Boolean(value.url) !== Boolean(value.githubProject)),
-  z.object({ ...command, type: z.literal('continuous.configure'), projectId: id, sourceId: id, expectedVersion: z.number().int().nonnegative(), assignee: z.enum(['@me', '*']), labels: z.array(referenceId).max(100), resource: resourceRefSchema, model: modelSchema, agentPreset: referenceId, permissionPreset: referenceId, enabled: z.boolean() }).strict(),
+  z.object({ ...command, type: z.literal('continuous.configure'), queue: continuousQueueSchema.optional(), projectId: id, sourceId: id, expectedVersion: z.number().int().nonnegative(), assignee: z.enum(['@me', '*']), labels: z.array(referenceId).max(100), resource: resourceRefSchema, model: modelSchema, agentPreset: referenceId, permissionPreset: referenceId, enabled: z.boolean() }).strict(),
   z.object({ ...command, type: z.literal('continuous.set-enabled'), projectId: id, sourceId: id, expectedVersion: z.number().int().positive(), enabled: z.boolean() }).strict(),
   z.object({ ...command, type: z.literal('source.configure-project'), projectId: id, githubProject: z.object({ owner: referenceId, type: z.enum(['org', 'user']), number: z.number().int().positive() }).strict() }).strict(),
   z.object({ ...command, type: z.literal('source.configure'), projectId: id, repository: repositorySchema }).strict(),
@@ -166,6 +174,8 @@ export const snapshotSchema = z.object({
   for (const rule of state.continuousRules ?? []) {
     if (ruleSources.has(rule.sourceId) || !state.sources.some(source => source.id === rule.sourceId && source.projectId === rule.projectId)) ctx.addIssue({ code: 'custom', message: 'Continuous rule source authority is inconsistent' })
     ruleSources.add(rule.sourceId)
+    const slots = rule.slots ?? (rule.active ? [rule.active] : [])
+    if (new Set(slots.map(ref => JSON.stringify(ref))).size !== slots.length) ctx.addIssue({ code: 'custom', message: 'Duplicate continuous dispatch slot' })
     const nodes = new Set<string>()
     for (const item of rule.items) {
       if (nodes.has(item.nodeId)) ctx.addIssue({ code: 'custom', message: 'Continuous queue contains a duplicate Issue' })
@@ -175,9 +185,9 @@ export const snapshotSchema = z.object({
         if (claimedTasks.has(key) || !state.executions.some(execution => execution.id === item.executionId && execution.ref.projectId === item.ref!.projectId && execution.ref.taskId === item.ref!.taskId)) ctx.addIssue({ code: 'custom', message: 'Continuous item execution authority is inconsistent' })
         claimedTasks.add(key)
       }
-      if (item.state === 'active' && (!item.ref || JSON.stringify(item.ref) !== JSON.stringify(rule.active))) ctx.addIssue({ code: 'custom', message: 'Active continuous item has no dispatch slot' })
+      if (item.state === 'active' && (!item.ref || !slots.some(ref => JSON.stringify(item.ref) === JSON.stringify(ref)))) ctx.addIssue({ code: 'custom', message: 'Active continuous item has no dispatch slot' })
     }
-    if (rule.active && !rule.items.some(item => JSON.stringify(item.ref) === JSON.stringify(rule.active))) ctx.addIssue({ code: 'custom', message: 'Continuous dispatch slot has no item' })
+    if (slots.some(ref => !rule.items.some(item => JSON.stringify(item.ref) === JSON.stringify(ref)))) ctx.addIssue({ code: 'custom', message: 'Continuous dispatch slot has no item' })
   }
   const expected = new Map<string, string>()
   for (const binding of state.externalBindings) {
