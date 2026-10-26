@@ -156,15 +156,26 @@ export function ExecutionContinuation({ graph, execution, policy, busy = false, 
     {!completed && (execution?.state === 'accepted' || execution?.state === 'creating') && <p role="status">原执行尚未就绪，请等待创建或恢复后刷新观察。</p>}
     {completed && <p role="status">任务阶段：done（已验收完成） · 任务已验收完成，不能继续接续</p>}
     {op?.phase === 'taken' && <p role={op.error ? 'alert' : 'status'}>后继已接任，但交接内容尚未确认送达。{op.error ? '接续尚未完成，请重试确认内容投递。' : '正在等待内容投递。'}</p>}
-    <dl className={styles.parameters}>
+    <details className={styles.group}><summary>生命周期与操作</summary>
+      <dl className={styles.parameters}>
+        <dt>创建</dt><dd>普通新建、浏览器协作交接或 Issue 协调绑定不会自动取得 TaskExecution 协调权，也不会撤销独立 Goal activation。已有 Task 请从当前协调会话的「A²D² 接续」或工作详情「接续」进入受控流程。</dd>
+        <dt>轮次运行与结束</dt><dd>输入触发模型与工具运行；本轮 Completed 只表示一轮结束。会话空闲、后台作业结束、结果正式收取和 Task 验收分别确认，不能互相替代。</dd>
+        <dt>等待与暂停</dt><dd>保留原因与恢复条件；查看页面和普通人工对话不会恢复自动处理。维护前提满足时可「仅换会话」，后继继承等待或暂停。</dd>
+        <dt>明确恢复</dt><dd>「恢复处理」才请求恢复 Task 业务，仍受权限和调度资格约束。Goal 的人类 pause/resume 权限独立保留。</dd>
+        <dt>受控接续</dt><dd>插件持续核验补收、结算、材料保存、固定后继、正式接任、投递与实际可读。正式接任才切换协调会话；旧 Goal activation 停用不等于持久 phase 暂停，不会跨会话迁移或自动 rearm。</dd>
+        <dt>出错与重试</dt><dd>按具体失败步骤与执行者修复缺口，再重试同一操作和固定后继；原执行失败先「重试原执行」。运行中、未知和待生效控制仍须结算核实。</dd>
+        <dt>Task 验收完成</dt><dd>按原规格和验收发布完成事实，停止该 Task 自动推进；会话仍可查看和讨论，讨论不会重开任务。</dd>
+        <dt>历史归档</dt><dd>只改变历史展示；不代替验收、不恢复业务或授予协调权。历史入口可进入真正当前协调会话。</dd>
+      </dl>
+    </details>
+    <details className={styles.group}><summary>接续参数</summary><dl className={styles.parameters}>
       <dt>自动接续</dt><dd>{policy ? policy.enabled ? '已开启' : '已关闭' : '尚未配置'}</dd>
       <dt>提前接续目标</dt><dd>{policy ? `${policy.targetTokens.toLocaleString('en-US')} tokens` : '未配置'}</dd>
       <dt>安全余量</dt><dd>{policy ? `${policy.reserveTokens.toLocaleString('en-US')} tokens` : '未配置'}</dd>
       <dt>当前上下文观察</dt><dd>{observation ? `${observation.totalTokens.toLocaleString('en-US')} / ${observation.capacity.toLocaleString('en-US')} tokens · ${observation.baseline} · ${observation.observedAt}` : '暂无宿主计量'}</dd>
       <dt>输出预留</dt><dd>{observation ? `${observation.outputReserve.toLocaleString('en-US')} tokens` : '未知'}</dd>
       <dt>执行结算</dt><dd>{graph?.settlement === 'settled' ? '相关执行已结算' : graph?.settlement === 'pending' ? '等待相关执行结算' : '相关执行结算未知'}</dd>
-    </dl>
-    <p>阈值为提前接续软目标；正式接任仍须宿主维护边界核验。原生 job_output 收取结果后再观察，收取不代表业务验收。</p>
+    </dl><p className={styles.limit}>阈值为提前接续软目标；正式接任仍须宿主维护边界核验。</p></details>
     {graph?.blockers.length ? <ul aria-label="接续等待项">{graph.blockers.map((blocker, index) => <li key={index}>{blocker.code} · {blocker.session.sessionId}{blocker.jobId && ` / ${blocker.jobId}`}</li>)}</ul> : null}
     {op && <article className={styles.card}>
       <h3>{phases[op.phase]}</h3>

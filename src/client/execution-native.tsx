@@ -90,6 +90,14 @@ function NativeTaskContinuation({ controller, sessionId, work }: { controller: W
     } catch (error) { if (!scope.signal.aborted) setError(error instanceof Error ? error.message : String(error)) }
     finally { if (!scope.signal.aborted) setBusy(false) }
   }
+  const enterCurrent = async () => {
+    const scope = lifetime.current
+    if (busy || !scope || scope.signal.aborted) return
+    setBusy(true); setError(null)
+    try { await controller.openCurrentTask(work.ref, scope.signal) }
+    catch (error) { if (!scope.signal.aborted) setError(error instanceof Error ? error.message : String(error)) }
+    finally { if (!scope.signal.aborted) setBusy(false) }
+  }
   const completed = Boolean(detail?.task?.completion || detail?.progress?.completion || detail?.progress?.processingState === 'completed')
   const purpose = work.purpose === 'control' ? '当前协调' : work.purpose === 'history' ? '已交接 · 可继续对话' : work.purpose === 'review' ? '评审关联' : '工作关联'
   return <section className={styles.nativeView}>
@@ -102,6 +110,7 @@ function NativeTaskContinuation({ controller, sessionId, work }: { controller: W
         </div>
         <div className={styles.taskActions}>
           <button type="button" onClick={() => void controller.revealTask(work.ref)}>返回工作</button>
+          {(work.purpose === 'history' || (detail?.execution && detail.execution.session.sessionId !== sessionId)) && <button type="button" disabled={busy} onClick={() => void enterCurrent()}>进入会话</button>}
           <button type="button" disabled={busy} onClick={() => setRevision(value => value + 1)}>刷新</button>
         </div>
         {error && <p role="alert">{error}</p>}

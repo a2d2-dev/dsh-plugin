@@ -160,6 +160,19 @@ it.each(['history', 'review', 'related', 'different-current', 'missing-actual'] 
   expect(view.text()).not.toContain('已验收完成')
 })
 
+it('lets the native history view enter the authoritative current coordinator without a control command', async () => {
+  const detail = taskDetail()
+  detail.execution!.session = { ...session, sessionId: 'successor' }
+  const { view, controller } = await nativeView(detail, 'history')
+  const enter = vi.spyOn(controller, 'openCurrentTask').mockResolvedValue(undefined)
+  expect(view.nodes('button').some(node => node.props.children === '进入会话')).toBe(true)
+  view.click('进入会话')
+  await expect.poll(() => enter.mock.calls.length).toBe(1)
+  expect(enter).toHaveBeenCalledWith(ref, expect.any(AbortSignal))
+  expect(controller.client.command).not.toHaveBeenCalled()
+  for (const term of ['生命周期与操作', '创建', '本轮 Completed', '明确恢复', '历史归档', '普通新建', 'Issue 协调绑定', 'Goal activation', '人类']) expect(view.text()).toContain(term)
+})
+
 it.each(['task.completion', 'progress.completed'])('Issue continuation shows the same disabled action and done reason from %s', async fact => {
   const detail = taskDetail()
   if (fact === 'task.completion') detail.task!.completion = completion
