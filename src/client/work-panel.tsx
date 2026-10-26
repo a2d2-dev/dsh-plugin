@@ -180,7 +180,7 @@ function ContinuousProcessing({controller}:{controller:WorkPanelController}) {
   const [assignee,setAssignee]=useState<'@me'|'*'>('*'),[labels,setLabels]=useState(''),[resource,setResource]=useState(0),[model,setModel]=useState(0),[agentPreset,setAgentPreset]=useState(''),[permissionPreset,setPermissionPreset]=useState('')
   const [filterPrompt,setFilterPrompt]=useState('')
   const [configSourceId,setConfigSourceId]=useState(sourceId)
-  const [concurrency,setConcurrency]=useState(1),[refreshMinutes,setRefreshMinutes]=useState(10),[order,setOrder]=useState<'oldest'|'newest'>('oldest')
+  const [concurrency,setConcurrency]=useState(1),[refreshMinutes,setRefreshMinutes]=useState(30),[order,setOrder]=useState<'oldest'|'newest'>('oldest')
   const [scope]=useState(()=>new AbortController())
   useEffect(()=>()=>scope.abort(),[scope])
   useEffect(()=>{
@@ -197,7 +197,7 @@ function ContinuousProcessing({controller}:{controller:WorkPanelController}) {
       const choices=result.executionOptions
       if(!choices||!choices.resources.length||!choices.models.length||!choices.agentPresets.length||!choices.permissionPresets.length)throw Error('宿主尚无完整的执行目录、模型或预设配置')
       setOptions(choices);setConfigSourceId(sourceId);setAssignee(rule?.scope.assignee??'*');setLabels(rule?.scope.labels.join(', ')??'')
-      setConcurrency(rule?.queue?.concurrency??1);setRefreshMinutes(rule?.queue?.refreshMinutes??10);setOrder(rule?.queue?.order??'oldest');setFilterPrompt(rule?.queue?.filterPrompt??'')
+      setConcurrency(rule?.queue?.concurrency??1);setRefreshMinutes(rule?.queue?.refreshMinutes??30);setOrder(rule?.queue?.order??'oldest');setFilterPrompt(rule?.queue?.filterPrompt??'')
       setResource(Math.max(0,choices.resources.findIndex(item=>item.ref.runtimeId===rule?.resource.runtimeId&&item.ref.workspaceId===rule.resource.workspaceId)))
       const preferred=rule?.model??choices.defaults.model
       setModel(Math.max(0,choices.models.findIndex(item=>item.provider===preferred.provider&&item.model===preferred.model)))

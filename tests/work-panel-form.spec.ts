@@ -223,7 +223,7 @@ describe('continuous processing production scope controls',()=>{
       await vi.waitFor(()=>expect(form.nodes('form')).toHaveLength(1))
       expect(form.nodes('select').find(node=>node.props.children?.some?.((child:any)=>[child?.props?.children].flat(Infinity).join('')==='real/quality'))?.props.value).toBe(1)
       form.submit();await vi.waitFor(()=>expect(h.command).toHaveBeenCalledOnce())
-      expect(h.command.mock.calls[0]![0]).toMatchObject({type:'continuous.configure',projectId:'p1',sourceId:'s1',expectedVersion:3,assignee:'*',labels:['ready-for-agent','approved'],resource,model:options.defaults.model,agentPreset:'standard',permissionPreset:'review',enabled:false,queue:{concurrency:1,refreshMinutes:10,order:'oldest'}})
+      expect(h.command.mock.calls[0]![0]).toMatchObject({type:'continuous.configure',projectId:'p1',sourceId:'s1',expectedVersion:3,assignee:'*',labels:['ready-for-agent','approved'],resource,model:options.defaults.model,agentPreset:'standard',permissionPreset:'review',enabled:false,queue:{concurrency:1,refreshMinutes:30,order:'oldest'}})
       await vi.waitFor(()=>expect(form.nodes('form')).toHaveLength(0))
       expect(form.textareas()).toHaveLength(0)
       expect(form.text()).not.toContain('计划 v1')
@@ -254,12 +254,18 @@ describe('continuous processing production scope controls',()=>{
     }finally{form.unmount()}
   })
   it('renders persisted queue reasons and opens its active Issue without starting or pausing it',async()=>{
-    const h=fixture(),rule=savedRule();h.setRule({...rule,planning:planned(rule)})
+    const h=fixture(),rule=savedRule(),screening={key:'k1',matches:false,reason:'不符合筛选条件'}
+    h.setRule({...rule,queue:{concurrency:1,refreshMinutes:30,order:'oldest',filterPrompt:'只处理缺陷'},planning:planned(rule),items:[...rule.items,{nodeId:'I2',number:2,title:'Excluded requirement',url:'https://github.com/acme/repo/issues/2',state:'skipped',reason:'不符合筛选条件',attempts:1,screening}]})
     await h.panel.load();const open=vi.spyOn(h.panel,'openTask').mockResolvedValue()
     const form=await mountWorkPanel({controller:h.panel,onClose(){}},'ContinuousProcessing')
     try {
       await vi.waitFor(()=>expect(form.nodes('td')).toHaveLength(4))
       expect(form.text()).toContain('Waiting for acceptance evidence')
+      expect(form.nodes('tbody')[0]?.props.children).toHaveLength(1)
+      expect(form.text()).not.toContain('已移出等待')
+      expect(form.text()).toContain('本次大模型筛选没有命中任何 Issue')
+      expect(form.text()).toContain('被排除的 1 项')
+      expect(form.text()).toContain('#2 Excluded requirement · 不符合筛选条件')
       form.click('#1 Requirement')
       expect(open).toHaveBeenCalledExactlyOnceWith({projectId:'p1',taskId:'t1'})
       expect(h.command).not.toHaveBeenCalled()
