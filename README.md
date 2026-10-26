@@ -18,6 +18,12 @@ The package retains the name `@a2d2/dsh-a2d2` and includes the complete work pan
 
 Native human conversations remain available while a Task waits, pauses, completes, or transfers to another Session. Old Sessions show the current Session entry. Conversation does not reopen completed work or regain coordination. Previously buffered, unconsumed human input is recovered with its original content and attachments on the next human input in that Session, without duplicate delivery.
 
+## Excalidraw file canvas
+
+With Better Sidebar installed, open a workspace `.excalidraw` file from its file tree or existing file-open entry. Move shapes and edit text and connectors, then use **保存** (Save) or Ctrl/Cmd+S inside the canvas to write back to that file. The toolbar reports unsaved changes, saving, success and failure. Save before closing the canvas; refreshing with unsaved changes prompts the browser's confirmation.
+
+**导出 PNG / SVG** exports the current canvas, including unsaved edits. The original file retains editing data and embedded images. Invalid, truncated or incomplete documents show an error and cannot overwrite the file through the canvas. Editor code and fonts ship with the plugin and load only when a canvas is opened. Workspace files are the sole diagram persistence; Agents use existing file tools and human edits are not automatically added to model context. Markdown/Mermaid behavior remains in Better Sidebar.
+
 ## GitHub Project and Issue workflow
 
 Open **A²D² Control Panel** in DSH and connect a GitHub repository or Project. Browse assigned Issues, open their original requirements and progress, and start or revisit the current processing Session. Browsing never starts a model. The execution directory can be chosen when connecting or at the first explicit start.

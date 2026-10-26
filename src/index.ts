@@ -28,6 +28,7 @@ import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-session'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { TaskId, taskIdForIssue } from './brand.ts'
+import { CANVAS_ASSET_PREFIX, createCanvasAssetHandler } from './canvas-assets.ts'
 import { CONFIG_ROUTE_PATH, createConfigHandler } from './config-page.ts'
 import { CONSULT_ROUTE_PATH, consultContextFactsFromProjectionValues, createConsultHandler } from './consult.ts'
 import { handedOff, memberOf, successorsOf } from './derive.ts'
@@ -1229,6 +1230,13 @@ export class A2d2Service extends Service {
         () => server.register({ kind: 'exact', path: CONFIG_ROUTE_PATH, handler }),
         'a2d2 config route',
       )
+      const assets = server as unknown as {
+        register(route: { kind: 'prefix'; path: string; handler: ReturnType<typeof createCanvasAssetHandler> }): () => void
+      }
+      routeCtx.effect(() => assets.register({
+        kind: 'prefix', path: CANVAS_ASSET_PREFIX,
+        handler: createCanvasAssetHandler(request => connection.requestRejection(request)),
+      }), 'a2d2 canvas assets')
     })
   }
 
