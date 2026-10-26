@@ -175,3 +175,53 @@ pnpm verify:pack-exports
 ```
 
 已记录第一条 graph 测试缺模块红 → 1/1 绿；真实 SessionController scope/maintenance 测试缺 connectObservation 红 → 绿。完整结果随实现提交及最终汇报记录，不以编译成功替代浏览器验收。首次 pnpm install 因 ignored build scripts exit 1；未授权脚本。corepack pnpm10 因 store v10/v11 不同 exit 1；随后现有 pnpm add --ignore-scripts 安装三项已授权 jobs 测试依赖 exit 0。相关测试并行时有超时，后续采用 maxWorkers=1 隔离，不增加 timeout、不 skip。
+
+
+## #274 后端实施验证（2026-10-26）
+
+**目的**：验证插件持续持有推进责任、waiting/paused 仅换会话保留业务控制、准确 owner 正式补收后刷新材料、真实读取回执、受控 Goal activation 退役及既有回归。本段是后端与正式宿主接口证据；父 #270 的现有 GUI 全流程验收仍待前端 #275 和集成验收切片。
+
+**基线与环境**：指定 worktree 分支 `feat/270-lifecycle-control` 从 `9c2b91e5c4b8235c1ec4db0bff0a8acb3bb8283c` 快进到实际 base `09d5685ab9bc475d13ea41615a9b3a9653889041`，保留 #273。`pnpm install --frozen-lockfile` exit 0，锁文件未改；主 checkout 的锁文件不同，未借用其依赖。普通 lane 使用 Node 22.23.1 / pnpm 10.26.2，official lane 使用 Node 24.22.1、官方干净构建 `22ddee3792402c3e70ec5f86a63c3e3e895a2f60` / 0.2.1-rc.3。
+
+**步骤**：以下命令均在唯一实施 worktree 运行，日志保留在其忽略目录 `.local/issue-274/`。最终 unit/host 分项目顺序执行；临时 fixture 使用本树 `.local/tmp`，不使用 tmpfs，不变更测试断言或 timeout。
+
+```sh
+pnpm install --frozen-lockfile
+
+TMPDIR="$PWD/.local/tmp" pnpm exec vitest run --configLoader runner --no-cache --maxWorkers=1 --project unit \
+  tests/work-continuous.spec.ts tests/work-execution-jobs.spec.ts \
+  tests/work-execution-lost-job.spec.ts tests/work-execution-official-jobs.spec.ts \
+  tests/work-execution-observation.spec.ts tests/client/execution-continuation-render.spec.ts \
+  tests/client/execution-components.spec.ts tests/client/session-handoff-entry.spec.ts
+
+TMPDIR="$PWD/.local/tmp" pnpm exec vitest run --configLoader runner --no-cache --maxWorkers=1 --project host \
+  tests/work-continuation.spec.ts tests/work-execution.spec.ts tests/work-execution-boundary.spec.ts \
+  tests/work-goal-replay.spec.ts tests/work-continuous-integration.spec.ts tests/work-execution-lifecycle.spec.ts
+
+pnpm typecheck
+
+PATH=/root/.nvm/versions/node/v24.22.1/bin:$PATH \
+TMPDIR="$PWD/.local/tmp" \
+DSH_OFFICIAL_HOST_ROOT=/data/src/github.com/deepseek-ai/deepseek-harness-dev.worktrees/dsh-upgrade-latest-20261024 \
+node node_modules/vitest/vitest.mjs run --configLoader runner --no-cache --config tests/official-jobs.config.ts
+```
+
+**红→绿记录**：
+
+| 行为 | 首个真实失败 | 实施后的验证 |
+| --- | --- | --- |
+| waiting/paused 仅换会话 | 两项返回 continuation-not-ready | 两项完成接任并确认 received，state/control/owner 保留、epoch 只增一次 |
+| 投递与可读分别确认 | delivered 无读取结果时不能达到 received | 真实 Session 成功 tool/result + flush 后达到 received |
+| 插件组织两个终态 pending jobs | 只返回 continuation-waiting-executions，没有补收步骤 | 官方 registry + 正式 model step/job_output + Session commit/flush 均真实完成 |
+| 补收后材料刷新 | 旧 materialRequestId 被复用，已消费请求不能再次运行 | 保留 operation/successor，新材料请求到达 source，旧材料不复用 |
+| 随机维护 marker 不恢复业务 | 被拒 marker 仍进入业务 inbox | 生命周期输入从业务 inbox 排除，不能写 resumeRequested |
+| 正常 source 仍欠材料时的业务准入 | 无关自动输入从 2 次模型请求增加到 4 次 | 仅固定维护步骤获准，未完成步骤不放行业务轮次 |
+| Goal 退役 | 没有公开生命周期接线方法 | 官方 goals.disarm 精确 live Agent，get 核实 active/revision 不变且 activation=disarmed；真实 Goal driver 不再产生旧轮次 |
+
+补充回归覆盖：材料请求消费但无保存、五个创建/接任/封口/投递失回执点、脱敏失败、两个真实后继、模型与 reasoning effort 恢复、慢详情刷新；missing/failed-commit 读取结果冷恢复保留同一 operation/successor/epoch；continuous waiting/paused 不领取 slot、不请求 resume。正式 lane 还断言消费后提交失败与空重读保持 pending、显式重试只更换步骤请求，不重建身份；缺少 goals.disarm 精确返回 capability-unavailable 且不改 Goal。
+
+**阶段记录（09d5685 基线）**：unit 8 文件 / 151 项、host 6 文件 / 71 项均通过，两个命令各 exit 0（`.local/issue-274/unit-final.log`、`.local/issue-274/host-final.log`）；随后 pnpm typecheck exit 0（`.local/issue-274/types-final.log`）。official-jobs 1 个完整场景通过，exit 0，包括真实材料读取工具的官方注册和提交兼容验证。后续最新主干与历史 delivered 兼容复核另记最终交付结果。
+
+**保留的失败记录**：前两次组合执行分别出现 work-continuous 的不同普通 unit 用例超出既有 5 秒预算，并在超时清理时出现 ENOTEMPTY；没有修改这些用例的 timeout 或断言。分项目最终 unit 151 项全部通过，证明该批断言可完成；不将前两次失败改写成通过。另一次新测试把 it.each 回调第二参数误当 context，已修正测试；一次新 fixture 的 callId 清理顺序错误、一处可选 observation 类型断言和新增 received 的前端穷尽映射均已修正并复验。
+
+**范围与未验证项**：生产改动限定 Work 后端、接续 host/tools/types/schema 与文档；前端只有 received phase 标签和对应终点/接任判断的必要兼容，没有实施 #275 UX。普通真实控制器/Session fixture 证明完整接任；official lane 的已接任 fixture 仅用于隔离读取工具与 Session commit 边界，不能声称该 fixture 验证了真实 GUI 接任。未部署、未构建发布产物、未启动替代服务、未修改 DSH 本体或其他 checkout，未操作 #265/#182/#2104 的真实业务状态。独立浏览器协作仍须进入正式受控接续；没有跨会话 Goal 自动迁移或 rearm 承诺。父 #270 仍不能据本切片判定全部完成。
