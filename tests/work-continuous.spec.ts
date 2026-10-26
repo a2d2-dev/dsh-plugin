@@ -414,6 +414,25 @@ it('enables only a reviewed plan and dispatches its order while Block fences fut
   expect((await h.status()).items.find(item => item.nodeId === 'ISSUE_1')?.reason).toContain('Block')
 })
 
+it('skips dependency-waiting parents on frozen snapshots and dispatches later eligible work', async () => {
+  const h = await setup(false)
+  const { nodeId, url, number, title, repository, state } = issue(99)
+  h.remote.issues[0]!.subIssues = { items: [{ nodeId, url, number, title, repository, state }], totalCount: 1, hasNextPage: false }
+  completed(await h.app.execute({ ...h.configure, queue: { concurrency: 1, refreshMinutes: 30, order: 'oldest' } }, operator))
+  const snapshot = await WorkDao.forDirectory(h.directory).read()
+  expect(Object.isFrozen(snapshot.continuousRules![0]!.items[0])).toBe(true)
+  completed(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'enable-dependent-queue', ...h.scope, expectedVersion: 1, enabled: true }, operator))
+  await h.app.reconcileContinuous()
+  expect((await h.status()).items.map(item => [item.number, item.state, item.reason])).toEqual([[1, 'queued', 'Issue ISSUE_1 is waiting for complete child/dependency acceptance'], [2, 'active', undefined]])
+  const active = await h.execution()
+  expect((await h.status()).items.map(item => [item.number, item.state])).toEqual([[1, 'queued'], [2, 'active']])
+  expect((await h.status()).items[0]!.reason).toBe('Issue ISSUE_1 is waiting for complete child/dependency acceptance')
+  await h.app.reconcileContinuous()
+  expect((await h.status()).items[0]!.reason).toContain('child/dependency acceptance')
+  expect((await h.execution())).toMatchObject({ id: active.id, owner: active.owner, epoch: active.epoch })
+  expect(h.host.sessionsCreated.size).toBe(1)
+})
+
 it('retains canonical resource conflicts across refresh and admits later eligible work without retry loops', async () => {
   const h = await setup(false)
   h.host.resources = async () => [{ ref: resource, title: 'Workspace' }, { ref: { ...resource, workspaceId: 'other-workspace' }, title: 'Other workspace' }]

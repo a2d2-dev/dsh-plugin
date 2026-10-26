@@ -629,7 +629,9 @@ export class WorkApplication {
           if (!rule.error && recovery) rule.error = { code: 'continuous-recovery-blocked', message: recovery.reason ?? 'Host recovery needs an explicit retry' }
           if (!rule.error && source) {
             if (!rule.queue) { discoverContinuous(rule, source); observeContinuousTasks(state, rule) }
-            if (rule.planning) for (const item of rule.items) if (item.state === 'queued') continuousDependenciesReady(state, rule, item.nodeId)
+            if (rule.planning || rule.queue) for (const item of rule.items) {
+              if (item.state === 'queued' && !continuousDependenciesReady(state, rule, item.nodeId)) item.reason = `Issue ${item.nodeId} is waiting for complete child/dependency acceptance`
+            }
           }
         }
       })

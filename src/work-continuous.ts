@@ -130,7 +130,6 @@ export function continuousCandidates(rule: ContinuousWorkRule, source: WorkSourc
 export function continuousDependenciesReady(state: WorkSnapshot, rule: ContinuousWorkRule, nodeId: string): boolean {
   const source = state.sources.find(source => source.id === rule.sourceId)
   const issue = source?.observations.find(item => item.issue.nodeId === nodeId)?.issue
-  const item = rule.items.find(item => item.nodeId === nodeId)
   const done = (ref: TaskRef) => {
     const task = state.tasks.find(task => task.id === ref.taskId && task.projectId === ref.projectId)
     return task?.progress?.stage === 'done' && task.progress.specificationVersion === task.specification.version
@@ -143,7 +142,6 @@ export function continuousDependenciesReady(state: WorkSnapshot, rule: Continuou
     const childBinding = state.externalBindings.find(binding => binding.nodeId === child.nodeId)
     return child.state === 'closed' || !!childBinding && done(childBinding.ref)
   }) && canonicalChildren.every(done)
-  if (!ready && item) item.reason = `Issue ${nodeId} is waiting for complete child/dependency acceptance`
   return ready
 }
 
