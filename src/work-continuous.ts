@@ -85,11 +85,12 @@ export function discoverContinuous(rule: ContinuousWorkRule, source: WorkSource)
   if (rule.queue) {
     for (const item of rule.items) if (!item.ref && item.state === 'skipped' && item.reason === 'Issue is not in an explicitly enabled model plan' && eligible.has(item.nodeId)) { item.state = 'queued'; delete item.reason }
     const observations = new Map(source.observations.map(row => [row.issue.nodeId, row.issue]))
+    const batchKey = rule.queue.filterPrompt?.trim() ? screeningKey(rule, source) : undefined
     for (const item of rule.items) {
       if (item.ref || ['blocked', 'completed', 'paused'].includes(item.state) || !eligible.has(item.nodeId)) continue
       if (rule.queue.filterPrompt?.trim()) {
         const decision = item.screening
-        if (decision?.key !== screeningKey(rule, source, observations.get(item.nodeId)!)) { item.state = 'waiting'; item.reason = SCREENING_PENDING }
+        if (!decision || decision.key !== batchKey) { item.state = 'waiting'; item.reason = SCREENING_PENDING }
         else { item.state = decision.matches ? 'queued' : 'skipped'; item.reason = decision.reason }
       } else if (item.screening || item.reason === SCREENING_PENDING) {
         item.state = 'queued'; delete item.reason; delete item.screening
@@ -113,10 +114,10 @@ export function discoverContinuous(rule: ContinuousWorkRule, source: WorkSource)
 }
 /** Resumable accepted work competes with new waiting work under the same ordering and capacity. */
 export function continuousCandidates(rule: ContinuousWorkRule, source: WorkSource | undefined): ContinuousWorkRule['items'] {
+  const batchKey = rule.queue?.filterPrompt?.trim() && source ? screeningKey(rule, source) : undefined
   const candidates = rule.items.filter(item => (!rule.queue || rule.enabled || item.explicitResumeRequested) && (item.state === 'queued' || item.ref && item.executionId && item.resumeRequested && item.state !== 'completed')).filter(item => {
     if (item.ref || !rule.queue?.filterPrompt?.trim()) return true
-    const issue = source?.observations.find(row => row.issue.nodeId === item.nodeId)?.issue
-    return !!source && !!issue && item.screening?.matches === true && item.screening.key === screeningKey(rule, source, issue)
+    return !!batchKey && item.screening?.matches === true && item.screening.key === batchKey
   })
   if (!rule.queue) return candidates.sort((a, b) => Number(!!b.resumeRequested) - Number(!!a.resumeRequested))
   const observations = new Map(source?.observations.map(row => [row.issue.nodeId, row.issue]))

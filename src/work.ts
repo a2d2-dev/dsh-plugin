@@ -1,4 +1,4 @@
-import { screeningBasis, screeningKey, validateScreening } from './work-screening.ts'
+import { screeningBasis, screeningKey, validateScreening, SCREENING_PENDING } from './work-screening.ts'
 import { workSessionTitles } from './work-session-titles.ts'
 import { refreshRepositoryCandidates } from './work-sources/repository-candidates.ts'
 import { buildExecutionGraph, type ExecutionObservation } from './work-execution/observation.ts'
@@ -480,7 +480,10 @@ export class WorkApplication {
         const observed = state.sources.find(source => source.id === current.sourceId)!
         current.error = scan.status !== 'completed' ? scan.error : sourceScopeError(current, observed)
         if (current.queue) current.nextRefreshAt = new Date(Date.now() + current.queue.refreshMinutes * 60_000).toISOString()
-        if (!current.error) { discoverContinuous(current, observed); current.lastRefreshedAt = new Date(Date.now()).toISOString(); delete current.screeningError }
+        if (!current.error) {
+          if (current.queue?.filterPrompt?.trim()) for (const item of current.items) if (!item.ref && !['blocked', 'completed', 'paused'].includes(item.state)) delete item.screening
+          discoverContinuous(current, observed); current.lastRefreshedAt = new Date(Date.now()).toISOString(); delete current.screeningError
+        }
         observeContinuousTasks(state, current)
         return { status: 'completed' as const, continuousRule: current }
       })
@@ -509,27 +512,19 @@ export class WorkApplication {
     const snapshot = await this.load(), rule = snapshot.continuousRules!.find(rule => rule.id === ruleId)!
     if (rule.version !== expectedVersion) return
     const source = snapshot.sources.find(source => source.id === rule.sourceId)!
-    const basis = screeningBasis(rule, source)
+    if (!rule.items.some(item => !item.ref && item.state === 'waiting' && item.reason === SCREENING_PENDING)) return
+    const basis = screeningBasis(rule, source), key = screeningKey(rule, source)
     try {
-      const decisions: import('./work-screening.ts').ScreeningOutput['decisions'] = []
-      for (let index = 0; index < basis.candidates.length; index += 20) {
-        const batch = { ...basis, candidates: basis.candidates.slice(index, index + 20) }
-        if (!this.planner?.screen) throw new Error('宿主大模型筛选能力不可用')
-        if (JSON.stringify(batch).length > 256 * 1024) throw new Error('候选正文超过模型筛选单批限制，请缩小来源或标签范围')
-        decisions.push(...validateScreening(await this.planner.screen(batch, rule.model), batch).decisions)
-      }
+      if (!this.planner?.screen) throw new Error('宿主大模型筛选能力不可用')
+      const { decisions } = validateScreening(await this.planner.screen(basis, rule.model), basis)
       await this.sourceTransaction(async state => {
         const current = state.continuousRules!.find(rule => rule.id === ruleId)!
         if (current.version !== expectedVersion) return
         const observed = state.sources.find(source => source.id === current.sourceId)!
-        const keys = new Map(source.observations.map(({ issue }) => [issue.nodeId, screeningKey(rule, source, issue)]))
-        if (sourceScopeError(current, observed) || decisions.some(decision => {
-          const issue = observed.observations.find(row => row.issue.nodeId === decision.nodeId)?.issue
-          return !issue || keys.get(decision.nodeId) !== screeningKey(current, observed, issue)
-        })) throw new Error('筛选期间候选内容发生变化，请刷新重试')
+        if (sourceScopeError(current, observed) || key !== screeningKey(current, observed)) throw new Error('筛选期间候选内容发生变化，请刷新重试')
         for (const decision of decisions) {
           const item = current.items.find(item => item.nodeId === decision.nodeId)!
-          if (!item.ref && !['blocked', 'completed', 'paused'].includes(item.state)) item.screening = { key: keys.get(decision.nodeId)!, matches: decision.matches, reason: decision.reason }
+          if (!item.ref && !['blocked', 'completed', 'paused'].includes(item.state)) item.screening = { key, matches: decision.matches, reason: decision.reason }
         }
         delete current.screeningError
         discoverContinuous(current, observed)
@@ -602,7 +597,7 @@ export class WorkApplication {
     const screeningSnapshot = await this.load()
     for (const rule of screeningSnapshot.continuousRules ?? []) {
       const source = screeningSnapshot.sources.find(source => source.id === rule.sourceId)
-      if (rule.enabled && rule.queue?.filterPrompt?.trim() && !rule.screeningError && !sourceScopeError(rule, source) && screeningBasis(rule, source!).candidates.length) {
+      if (rule.enabled && rule.queue?.filterPrompt?.trim() && !rule.screeningError && !sourceScopeError(rule, source) && rule.items.some(item => !item.ref && item.state === 'waiting' && item.reason === SCREENING_PENDING)) {
         void this.screenContinuous(rule.id, rule.version).catch(error => { console.warn(`Continuous screening persistence failed: ${planningModelErrorSummary(error)}`) })
       }
     }

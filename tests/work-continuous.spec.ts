@@ -1032,7 +1032,27 @@ it('screens only mandatory-scope Issues using full bodies and starts only matchi
   const rule = await h.status(restored)
   expect(rule.queue!.filterPrompt).toBe('只处理独立缺陷，排除文档')
   completed(await restored.execute({ type: 'continuous.refresh', commandId: 'cached-screen', ...h.scope, expectedVersion: rule.version }, operator))
+  expect(screen).toHaveBeenCalledTimes(2)
+})
+
+it('screens the complete mandatory-filter batch once on each changed scheduled scan', async () => {
+  const screen = vi.fn(async (basis: import('../src/work-screening.ts').ScreeningBasis) => ({ decisions: basis.candidates.map(candidate => ({ nodeId: candidate.nodeId, matches: candidate.number === Math.max(...basis.candidates.map(issue => issue.number)), reason: '整批比较后保留编号最大的一项' })) }))
+  const h = await setup(false, { generate: async () => ({ steps: [] }), screen })
+  h.remote.issues = Array.from({ length: 25 }, (_, index) => issue(index + 1))
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1, refreshMinutes: 1, filterPrompt: '比较整批候选，只保留编号最大的一项' } }, operator))
   expect(screen).toHaveBeenCalledOnce()
+  expect(screen.mock.calls[0]![0].candidates).toHaveLength(25)
+  expect((await h.status()).items.filter(item => item.state === 'queued').map(item => item.number)).toEqual([25])
+  completed(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'enable-batch-schedule', ...h.scope, expectedVersion: (await h.status()).version, enabled: true }, operator))
+  h.remote.issues.push(issue(26))
+  const now = Date.now(); vi.spyOn(Date, 'now').mockReturnValue(now + 61_000)
+  await h.app.reconcileContinuous()
+  await vi.waitFor(async () => {
+    expect(screen).toHaveBeenCalledTimes(2)
+    expect((await h.status()).items.find(item => item.number === 26)?.screening?.matches).toBe(true)
+  })
+  expect(screen.mock.calls[1]![0].candidates).toHaveLength(26)
+  expect(h.host.sessionsCreated.size).toBe(1)
 })
 
 it('holds incomplete or failed model screening and retries without starting unclassified work', async () => {
@@ -1061,10 +1081,10 @@ it('rescreens changed Issue bodies and prompts while preserving active work, and
   const active = await h.execution()
   h.remote.issues[1]!.body = '正文已改变，必须重新判定'
   completed(await h.app.execute({ type: 'continuous.refresh', commandId: 'body-change', ...h.scope, expectedVersion: (await h.status()).version }, operator))
-  expect(screen.mock.calls[1]![0].candidates.map(issue => issue.number)).toEqual([2])
+  expect(screen.mock.calls[1]![0].candidates.map(issue => issue.number)).toEqual([1, 2])
   completed(await h.app.execute({ ...h.configure, commandId: 'prompt-change', expectedVersion: (await h.status()).version, queue: { ...queue, concurrency: 1, filterPrompt: '只要缺陷' } }, operator))
   expect(screen.mock.calls.at(-1)![0].instruction).toBe('只要缺陷')
-  expect(screen.mock.calls.at(-1)![0].candidates.map(issue => issue.number)).toEqual([2])
+  expect(screen.mock.calls.at(-1)![0].candidates.map(issue => issue.number)).toEqual([1, 2])
   expect((await h.execution()).id).toBe(active.id)
   completed(await h.app.execute({ ...h.configure, commandId: 'clear-prompt', expectedVersion: (await h.status()).version, queue: { ...queue, concurrency: 1, filterPrompt: '' } }, operator))
   expect((await h.status()).items.find(item => item.number === 2)).toMatchObject({ state: 'queued' })
