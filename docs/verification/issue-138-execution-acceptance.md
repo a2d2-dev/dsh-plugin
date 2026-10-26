@@ -49,7 +49,7 @@
 
 - `issue-continuation.png`：真实 #138 页面只有一个“编辑自动接续设置”；接续 Tab 直接显示策略、目标、安全余量、上下文观察和执行结算。未配置／未知如实显示，没有静态成功值。
 - `execution-real-jobs.png`：真实当前协调、epoch、原生 childId 和本会话后台作业。
-- `native-child-returned.png`：真实只读验收委派 `ddef8947-7c00-4c1d-a98d-e68f3ba0c40a` 已返回，通知仍待消费；页面不把返回当作消费。
+- `native-child-returned.png`：真实只读验收委派 `ddef8947-7c00-4c1d-a98d-e68f3ba0c40a` 已返回，截图显示“结算通知已消费”。最终公开查询再次确认 `returned: true`、`result: consumed`、`status: inactive`；返回与消费分别呈现，业务验收另行记录。
 - 通过公开 `task.execution` 观察到测试作业 `bash-2773` 的 owner 为当前协调 Session，输出收取后 `delivery: delivered`，模型消费仍 `unknown`，验收仍 `unassessed`。之前的失败已收取作业没有继续占用 `job-unsettled`。
 - 原生聊天保留单个宿主标题、Chat／Trajectory／A²D² 接续、模型／权限选择与原生输入框；“返回工作详情”已实际返回 #138。
 
@@ -79,7 +79,7 @@
 | 后继打开接续页并展开材料 | `successor-material.png` 与 `preserved-unfinished-visible.png`，原有具体决定、证据、未完成项和下一步完整保留；旧“未完成”段落作为交接时的历史事实展示。 |
 | 从“返回工作”进入 #138 会话页 | `current-and-retired.png` 同页显示当前 epoch 2 与旧来源“接续历史 · 只读”，两个入口仍属于同一工作。 |
 | 点击旧来源“只读历史” | `task-readonly-history.png` 显示旧来源 transcript 和“查看记录不会启动旧会话”；历史区域只有关闭按钮。读取后公开查询再次确认 epoch 2、current successor 与 retired source 均不变。 |
-| 核对实际归属与来源范围 | `public-handoff-facts.json` 留存上述筛选事实。可信来源路由于 `2026-10-26T07:21:24.326Z` 再次确认 #138 没有原生子 Issue、分页完整，已保存该空范围；没有制造本地子 Task。 |
+| 核对实际归属与来源范围 | `public-handoff-facts.json` 留存上述筛选事实。可信来源查询在 `2026-10-26T07:21:24.326Z` 再次确认 #138 没有原生子 Issue、分页完整，已保存该空范围；没有制造本地子 Task。 |
 
 历史失权的拒绝合同由本次 60 项回归中的 `keeps retired conversations usable after cold restore without restoring Task coordination` 验证：真实冷恢复后读取历史不创建旧 Agent，人工旧聊天仍可对话，但旧 `work_control progress` 返回 forbidden；current/epoch/owner 不变。真实页面验收核验了 history 投影和读取后不改变身份，没有冒充旧来源发出写操作。
 
