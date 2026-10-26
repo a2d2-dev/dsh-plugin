@@ -490,7 +490,14 @@ export class WorkApplication {
     }), { waitMs: 30_000 })
     if (refreshed.status !== 'completed') return refreshed
     const refreshedRule = refreshed.continuousRule!
-    if (waitForScreening && !refreshedRule.error && refreshedRule.queue?.filterPrompt?.trim()) await this.screenContinuous(refreshedRule.id, scope.expectedVersion)
+    if (waitForScreening && !refreshedRule.error && refreshedRule.queue?.filterPrompt?.trim()) {
+      // Bound interactive latency: a slow model keeps running in the background
+      // while the queue's existing poll reports its decisions.
+      let timer: ReturnType<typeof setTimeout> | undefined
+      await Promise.race([this.screenContinuous(refreshedRule.id, scope.expectedVersion),
+        new Promise<void>(resolve => { timer = setTimeout(resolve, 1_500) })])
+      if (timer) clearTimeout(timer)
+    }
     return withFileLock(lease, () => this.sourceTransaction(async state => {
       const current = state.continuousRules!.find(item => item.id === refreshedRule.id)!
       if (current.version !== scope.expectedVersion) return conflict(current.version)

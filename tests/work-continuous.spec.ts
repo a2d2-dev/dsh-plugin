@@ -1149,6 +1149,23 @@ it('saves a prompt while another refresh still holds the shared refresh lease', 
   } finally { release(); await held }
 })
 
+it('keeps the save responsive while slow screening finishes in the background', async () => {
+  let release!: () => void
+  const screen = vi.fn(async (basis: import('../src/work-screening.ts').ScreeningBasis) => {
+    await new Promise<void>(done => { release = done })
+    return { decisions: basis.candidates.map(issue => ({ nodeId: issue.nodeId, matches: true, reason: '慢模型结果' })) }
+  })
+  const h = await setup(false, { generate: async () => ({ steps: [] }), screen })
+  completed(await h.app.execute(h.configure, operator))
+  const started = Date.now()
+  const saved = completed(await h.app.execute({ ...h.configure, commandId: 'slow-screen-save', expectedVersion: 1, queue: { ...queue, concurrency: 1, filterPrompt: '慢筛选' } }, operator))
+  expect(Date.now() - started).toBeLessThan(2_500)
+  expect(saved.continuousRule!.queue!.filterPrompt).toBe('慢筛选')
+  expect((await h.status()).items.every(item => item.state === 'waiting')).toBe(true)
+  release()
+  await vi.waitFor(async () => expect((await h.status()).items.some(item => item.screening?.reason === '慢模型结果')).toBe(true))
+})
+
 it('reflects explicit Task-page recovery of a pre-admission problem without bypassing queue capacity', async () => {
   const h = await setup(false)
   completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1 } }, operator))
