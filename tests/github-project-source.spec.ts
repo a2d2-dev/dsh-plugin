@@ -3,7 +3,7 @@ import { GitHubSource } from '../src/work-sources/github.ts'
 import { readGitHubProject } from '../src/work-sources/project.ts'
 const target = { owner: 'a2d2-dev', type: 'org' as const, number: 1 }
 const reference = (id = 'I_1', repository = 'one') => ({ id, number: 1, title: id, url: `https://github.com/a2d2-dev/${repository}/issues/1`, state: 'OPEN', repository: { name: repository, owner: { login: 'a2d2-dev' } } })
-function issue(id = 'I_1', repository = 'one') { return { ...reference(id, repository), __typename: 'Issue', body: 'Original\n  source', updatedAt: '2026-10-20T00:00:00Z', createdAt: '2026-10-01T00:00:00Z', closedAt: null,
+function issue(id = 'I_1', repository = 'one') { return { ...reference(id, repository), __typename: 'Issue', milestone: { number: 3, title: '3.0' }, body: 'Original\n  source', updatedAt: '2026-10-20T00:00:00Z', createdAt: '2026-10-01T00:00:00Z', closedAt: null,
   assignees: { nodes: [{ login: 'imneov' }] }, labels: { nodes: [{ name: 'ready-for-agent' }] }, parent: reference('I_parent', 'parent'),
   subIssues: { totalCount: 60, pageInfo: { hasNextPage: true }, nodes: [reference('I_child', 'child')] },
   subIssuesSummary: { total: 11, completed: 10 },
@@ -20,6 +20,7 @@ describe('GitHub Project source', () => {
   it('reads a fixed query with variables, authenticated identity, fields, and explicitly partial subissues', async () => {
     const source = new GitHubSource({ graphql: async (query, variables) => {
       expect(query).toContain('organization(login:$owner)')
+      expect(query).toContain('milestone { number title }')
       expect(query).not.toContain('mutation')
       expect(variables).toEqual({ owner: 'a2d2-dev', number: 1, first: 20, cursor: 'cursor-before' })
       return response([item(issue()), item(issue('I_other', 'two'), 'PVTI_2'), item(null, 'PVTI_private'), item({ __typename: 'DraftIssue', title: 'Draft' }, 'PVTI_draft'), item({ __typename: 'PullRequest', title: 'PR', url: 'https://github.com/a2d2-dev/one/pull/2' }, 'PVTI_pr')])
@@ -29,7 +30,7 @@ describe('GitHub Project source', () => {
     expect(page.nextCursor).toBe('cursor-next')
     expect(page.total).toBe(12)
     expect(page.issues).toHaveLength(2)
-    expect(page.issues[0]).toMatchObject({ nodeId: 'I_1', body: 'Original\n  source', createdAt: '2026-10-01T00:00:00Z', closedAt: null, parent: { nodeId: 'I_parent', repository: { repository: 'parent' } }, subIssues: { totalCount: 60, hasNextPage: true, items: [{ nodeId: 'I_child' }] }, subIssuesSummary: { total: 11, completed: 10 }, linkedPullRequests: [{ number: 143, state: 'merged', draft: false, url: 'https://github.com/a2d2-dev/one/pull/143' }] })
+    expect(page.issues[0]).toMatchObject({ nodeId: 'I_1', milestone: { number: 3, title: '3.0' }, body: 'Original\n  source', createdAt: '2026-10-01T00:00:00Z', closedAt: null, parent: { nodeId: 'I_parent', repository: { repository: 'parent' } }, subIssues: { totalCount: 60, hasNextPage: true, items: [{ nodeId: 'I_child' }] }, subIssuesSummary: { total: 11, completed: 10 }, linkedPullRequests: [{ number: 143, state: 'merged', draft: false, url: 'https://github.com/a2d2-dev/one/pull/143' }] })
     expect(page.issues[1]).toMatchObject({ nodeId: 'I_other', number: 1, repository: { repository: 'two' } })
     expect(page.items.map(item => item.kind)).toEqual(['issue', 'issue', 'restricted', 'draft', 'pull-request'])
     expect(page.items[0]?.fields).toEqual([{ id: 'F_status', name: 'Status', type: 'single-select', value: 'In progress' }, { id: 'F_priority', name: 'Priority', type: 'single-select', value: 'P1' }, { id: 'F_iteration', name: 'Iteration', type: 'iteration', value: 'Iteration 2' }])

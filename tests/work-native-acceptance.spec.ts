@@ -129,7 +129,7 @@ it('limits source reads to the current coordinator and known related identities 
 
 it('reads the real adapter native child endpoint completely before presenting a scope for explicit acceptance', async () => {
   const requests: string[] = []
-  const raw = (number: number) => ({ node_id: `I_${number}`, number, html_url: `https://github.com/example/repo/issues/${number}`, title: `Work ${number}`, body: 'verify', state: 'open', updated_at: '2026-10-21T00:00:00Z', labels: [], assignees: [] })
+  const raw = (number: number) => ({ node_id: `I_${number}`, number, html_url: `https://github.com/example/repo/issues/${number}`, title: `Work ${number}`, body: 'verify', state: 'open', milestone: null, updated_at: '2026-10-21T00:00:00Z', labels: [], assignees: [] })
   const adapter = new GitHubSource({ credential: async () => 'host-only-credential', fetch: async (input, init) => {
     const url = String(input); requests.push(url)
     expect(init?.method).toBe('GET'); expect(init?.redirect).toBe('manual')

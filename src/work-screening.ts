@@ -1,24 +1,30 @@
 import { z } from 'zod'
 import type { ContinuousWorkRule } from './work-types.ts'
-import type { GitHubIssue, WorkSource } from './work-sources/types.ts'
+import type { GitHubIssue, GitHubProjectItem, WorkSource } from './work-sources/types.ts'
 
 export const screeningOutputSchema = z.object({ decisions: z.array(z.object({ nodeId: z.string().min(1).max(256), matches: z.boolean(), reason: z.string().trim().min(1).max(2000) }).strict()).max(1000) }).strict()
 export interface ScreeningBasis {
   instruction: string
-  candidates: Pick<GitHubIssue, 'nodeId' | 'number' | 'title' | 'body' | 'repository' | 'labels' | 'assignees' | 'parent' | 'subIssues'>[]
+  candidates: (Pick<GitHubIssue, 'nodeId' | 'number' | 'title' | 'body' | 'repository' | 'labels' | 'assignees' | 'parent' | 'subIssues' | 'milestone'> & {
+    projectItem?: Pick<GitHubProjectItem, 'fields' | 'fieldsPartial'>
+  })[]
 }
 export type ScreeningOutput = z.infer<typeof screeningOutputSchema>
 export const SCREENING_PENDING = '等待大模型筛选'
 
 /** The complete mandatory-filter result is one semantic screening batch. */
 export function screeningBasis(rule: ContinuousWorkRule, source: WorkSource): ScreeningBasis {
-  const members = new Set(source.repository ? source.repositorySnapshot?.nodeIds : source.projectSnapshot?.items.filter(item => item.kind === 'issue' && !item.archived).map(item => item.issueNodeId))
+  const projectItems = new Map(source.projectSnapshot?.items.filter(item => item.kind === 'issue' && !item.archived).map(item => [item.issueNodeId, item]))
+  const members = new Set(source.repository ? source.repositorySnapshot?.nodeIds : projectItems.keys())
   return { instruction: rule.queue!.filterPrompt!.trim(), candidates: source.observations.filter(({ issue }) =>
     members.has(issue.nodeId) && issue.state === 'open' && rule.scope.labels.every(label => issue.labels.includes(label))
     && (rule.scope.assignee === '*' || issue.assignees.some(login => login.toLowerCase() === rule.scope.identity!.login.toLowerCase()))
     && !rule.planning?.blocks.includes(issue.nodeId)
-  ).map(({ issue: { nodeId, number, title, body, repository, labels, assignees, parent, subIssues } }) =>
-    ({ nodeId, number, title, body, repository, labels, assignees, parent, subIssues })) }
+  ).map(({ issue: { nodeId, number, title, body, repository, labels, assignees, parent, subIssues, milestone } }) => {
+    const item = source.githubProject ? projectItems.get(nodeId) : undefined
+    return { nodeId, number, title, body, repository, labels, assignees, parent, subIssues, milestone,
+      ...(item ? { projectItem: { fields: item.fields, fieldsPartial: item.fieldsPartial } } : {}) }
+  }) }
 }
 
 /** A change detector for the whole batch; sibling changes can change semantic selection. */

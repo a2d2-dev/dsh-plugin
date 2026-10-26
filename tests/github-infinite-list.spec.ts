@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { GitHubSource } from '../src/work-sources/github.ts'
-const rawIssue = (n: number) => ({ node_id: `I${n}`, number: n, title: `Issue ${n}`, body: '', html_url: `https://github.com/o/r/issues/${n}`, state: 'open', updated_at: '2026-10-24T00:00:00Z', assignees: [], labels: [] })
+const rawIssue = (n: number) => ({ node_id: `I${n}`, number: n, title: `Issue ${n}`, body: '', html_url: `https://github.com/o/r/issues/${n}`, state: 'open', milestone: null, updated_at: '2026-10-24T00:00:00Z', assignees: [], labels: [] })
 const scope = { owner: 'o', repository: 'r' }
 const request = { page: 1, perPage: 100, assignee: '*' as const, state: 'all' as const }
 function adapter(rows: unknown[]) {

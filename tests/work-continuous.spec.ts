@@ -7,7 +7,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { WorkApplication, WorkDao } from '../src/work.ts'
 import type { WorkHost } from '../src/work.ts'
 import type { ContinuousWorkRule, NativeWorkMessage, WorkCompleted, WorkExecution, WorkResult } from '../src/work-types.ts'
-import type { GitHubIssue, GitHubSourcePort } from '../src/work-sources/types.ts'
+import type { GitHubIssue, GitHubProjectField, GitHubSourcePort } from '../src/work-sources/types.ts'
 
 const roots: string[] = []
 afterEach(async () => { vi.restoreAllMocks(); for (const root of roots.splice(0)) {
@@ -71,7 +71,7 @@ function issue(number: number, assignees = ['alice'], labels = ['ready']): GitHu
 async function setup(enable = true, planner?: import('../src/work-planning.ts').WorkPlanner, repository = false) {
   const directory = await mkdtemp(join(tmpdir(), 'continuous-work-')); roots.push(directory)
   const host = new Host()
-  const remote = { identity: { login: 'alice', nodeId: 'ALICE', name: null }, issues: [issue(1), issue(2), issue(3, ['bob']), issue(4, ['alice'], ['other'])] }
+  const remote = { identity: { login: 'alice', nodeId: 'ALICE', name: null }, projectFields: {} as Record<string, GitHubProjectField[]>, issues: [issue(1), issue(2), issue(3, ['bob']), issue(4, ['alice'], ['other'])] }
   const source: GitHubSourcePort = {
     identify: async url => ({ kind: 'repository', nodeId: 'REPO', title: 'acme/repo', url, entryUrl: url, identity: remote.identity, repository: { owner: 'acme', repository: 'repo' } }),
     list: async (_repository, request) => {
@@ -81,7 +81,7 @@ async function setup(enable = true, planner?: import('../src/work-planning.ts').
       return { identity: remote.identity, items: issues.slice(start, start + 2), ...(start + 2 < issues.length ? { nextPage: request.page + 1 } : {}), observedAt: '2026-01-01T00:00:00.000Z' }
     }, detail: async () => { throw new Error('Project only') },
     project: async () => ({ identity: remote.identity, project: { nodeId: 'PROJECT', title: 'Roadmap', url: 'https://github.com/orgs/acme/projects/1', closed: false },
-      items: remote.issues.map(issue => ({ id: `ITEM_${issue.nodeId}`, kind: 'issue', archived: false, issueNodeId: issue.nodeId, fields: [], fieldsPartial: false })), issues: remote.issues, observedAt: '2026-01-01T00:00:00.000Z' }),
+      items: remote.issues.map(issue => ({ id: `ITEM_${issue.nodeId}`, kind: 'issue', archived: false, issueNodeId: issue.nodeId, fields: remote.projectFields[issue.nodeId] ?? [], fieldsPartial: false })), issues: remote.issues, observedAt: '2026-01-01T00:00:00.000Z' }),
   }
   const app = new WorkApplication(directory, host, source, planner)
   const connection = completed(await app.execute(repository ? { type: 'source.connect', commandId: 'connect', url: 'https://github.com/acme/repo' } : { type: 'source.connect', commandId: 'connect', githubProject: { owner: 'acme', type: 'org', number: 1 } }, operator))
@@ -1054,6 +1054,51 @@ it('screens the complete mandatory-filter batch once on each changed scheduled s
   })
   expect(screen.mock.calls[1]![0].candidates).toHaveLength(26)
   expect(h.host.sessionsCreated.size).toBe(1)
+})
+
+it.each(['repository milestone', 'Project Status', 'Project Milestone'])('rescreens a scheduled scan when only %s changes', async change => {
+  const screen = vi.fn(async (basis: import('../src/work-screening.ts').ScreeningBasis) => ({ decisions: basis.candidates.map(candidate => ({ nodeId: candidate.nodeId,
+    matches: change === 'repository milestone' ? candidate.milestone?.title === '3.0' : candidate.projectItem!.fields.some(field => field.value === (change === 'Project Status' ? 'Todo' : '3.0')),
+    reason: '按已观测的里程碑或项目状态筛选' })) }))
+  const h = await setup(false, { generate: async () => ({ steps: [] }), screen }, change === 'repository milestone')
+  const observed = h.remote.issues[0]!, updatedAt = observed.updatedAt
+  observed.milestone = { number: 4, title: '4.0' }
+  h.remote.projectFields[observed.nodeId] = [{ id: 'field', name: change === 'Project Status' ? 'Status' : 'Milestone', type: change === 'Project Status' ? 'single-select' : 'text', value: change === 'Project Status' ? 'Done' : '4.0' }]
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1, refreshMinutes: 1, filterPrompt: '需要milestone:3.0，状态为待处理或进行中' } }, operator))
+  expect(screen).toHaveBeenCalledOnce()
+  expect((await h.status()).items.every(item => item.state === 'skipped')).toBe(true)
+  const oldKey = (await h.status()).items[0]!.screening!.key
+  completed(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'enable-field-scan', ...h.scope, expectedVersion: (await h.status()).version, enabled: true }, operator))
+  expect(h.host.sessionsCreated.size).toBe(0)
+  if (change === 'repository milestone') observed.milestone = { number: 3, title: '3.0' }
+  else h.remote.projectFields[observed.nodeId]![0]!.value = change === 'Project Status' ? 'Todo' : '3.0'
+  expect(observed.updatedAt).toBe(updatedAt)
+  vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 61_000)
+  await h.app.reconcileContinuous()
+  await vi.waitFor(async () => {
+    expect(screen).toHaveBeenCalledTimes(2)
+    const current = (await h.status()).items.find(item => item.nodeId === observed.nodeId)!
+    expect(current.screening?.matches).toBe(true)
+    expect(current.screening?.key).not.toBe(oldKey)
+  })
+  await h.app.reconcileContinuous()
+  expect((await h.status()).items.find(item => item.nodeId === observed.nodeId)!.state).toBe('active')
+  expect(h.host.sessionsCreated.size).toBe(1)
+})
+
+it.each(['milestone', 'Project Status'])('rejects stale screening when only %s changes during generation', async change => {
+  let h: Awaited<ReturnType<typeof setup>>
+  const screen = async (basis: import('../src/work-screening.ts').ScreeningBasis) => {
+    if (change === 'milestone') h.remote.issues[0]!.milestone = { number: 4, title: '4.0' }
+    else h.remote.projectFields.ISSUE_1 = [{ id: 'status', name: 'Status', type: 'single-select', value: 'Done' }]
+    completed(await h.refresh())
+    return { decisions: basis.candidates.map(candidate => ({ nodeId: candidate.nodeId, matches: true, reason: '旧字段匹配' })) }
+  }
+  h = await setup(true, { generate: async () => ({ steps: [] }), screen })
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1, filterPrompt: '需要milestone:3.0，状态为待处理或进行中' } }, operator))
+  expect((await h.status()).screeningError?.message).toContain('候选内容发生变化')
+  expect((await h.status()).items.every(item => item.state === 'waiting')).toBe(true)
+  expect(h.host.sessionsCreated.size).toBe(0)
 })
 
 it('holds incomplete or failed model screening and retries without starting unclassified work', async () => {

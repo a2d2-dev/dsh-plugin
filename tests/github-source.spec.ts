@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { GitHubSource, SourceError } from '../src/work-sources/github.ts'
 const repository = { owner: 'a2d2-dev', repository: 'dsh-plugin' }
-const issue = { node_id: 'I_112', number: 112, title: 'Existing work', body: 'Original issue body', html_url: 'https://github.com/a2d2-dev/dsh-plugin/issues/112', state: 'open', updated_at: '2026-10-19T12:00:00Z', assignees: [{ login: 'imneov' }], labels: [{ name: 'ready-for-agent' }] }
+const issue = { node_id: 'I_112', number: 112, title: 'Existing work', body: 'Original issue body', milestone: null, html_url: 'https://github.com/a2d2-dev/dsh-plugin/issues/112', state: 'open', updated_at: '2026-10-19T12:00:00Z', assignees: [{ login: 'imneov' }], labels: [{ name: 'ready-for-agent' }] }
 const user = { login: 'imneov', node_id: 'U_1', name: 'LiuFeng' }
 describe('GitHub source boundary', () => {
   it.each(['.github', '_work', '-work', 'work.'])('reads legal repository %s with generated GitHub-only GETs', async name => {
@@ -18,6 +18,18 @@ describe('GitHub source boundary', () => {
     } })
     expect(await source.list(scope, { page: 1, perPage: 20, assignee: '*', state: 'open' })).toMatchObject({ items: [{ repository: scope, body: issue.body }] })
     expect(await source.detail(scope, 112)).toMatchObject({ issue: { repository: scope, body: issue.body } })
+  })
+  it.each([null, { number: 3, title: '3.0' }])('preserves milestone %j in repository list and detail observations', async milestone => {
+    const source = new GitHubSource({ credential: async () => 'secret', fetch: async url => {
+      if (String(url).endsWith('/user')) return Response.json(user)
+      return Response.json(new URL(String(url)).search ? [{ ...issue, milestone }] : { ...issue, milestone })
+    } })
+    expect((await source.list(repository, { page: 1, perPage: 20, assignee: '*', state: 'open' })).items[0]!.milestone).toEqual(milestone)
+    expect((await source.detail(repository, 112)).issue.milestone).toEqual(milestone)
+  })
+  it.each([undefined, { title: '3.0' }, { number: -1, title: '3.0' }])('rejects incomplete or invalid milestone %j at the API boundary', async milestone => {
+    const source = new GitHubSource({ credential: async () => 'secret', fetch: async url => Response.json(String(url).endsWith('/user') ? user : { ...issue, milestone }) })
+    await expect(source.detail(repository, 112)).rejects.toMatchObject({ code: 'github-invalid-response' })
   })
   it.each(['.', '..', '../repo', 'repo/child', 'repo\\child', '%2e%2e', '%252f', 'repo?x=1', 'repo#x', 'repo@evil.test', 'repo\n', ''])('rejects unsafe owner or repository component %j before credential or network access', async component => {
     let calls = 0

@@ -13,7 +13,7 @@ export type * from './types.ts'
 const exec = promisify(execFile)
 export function validRepository(value: GitHubRepository): boolean { return repositorySchema.safeParse(value).success }
 const identitySchema = z.object({ login: z.string().min(1), node_id: z.string().min(1), name: z.string().nullable().optional() })
-const issueSchema = z.object({ node_id: z.string().min(1), number: z.number().int().positive(), title: z.string().min(1), body: z.string().nullable(), html_url: z.string(), state: z.enum(['open', 'closed']), updated_at: z.iso.datetime(), assignees: z.array(z.object({ login: z.string() })), labels: z.array(z.object({ name: z.string() })) })
+const issueSchema = z.object({ node_id: z.string().min(1), number: z.number().int().positive(), title: z.string().min(1), body: z.string().nullable(), html_url: z.string(), state: z.enum(['open', 'closed']), updated_at: z.iso.datetime(), assignees: z.array(z.object({ login: z.string() })), labels: z.array(z.object({ name: z.string() })), milestone: z.object({ number: z.number().int().positive(), title: z.string() }).nullable() })
 /** Respect the host's explicit GH/XDG config; never search another account directory. */
 async function credential(): Promise<string> {
   try {
@@ -119,7 +119,7 @@ export class GitHubSource implements GitHubSourcePort {
     const value = result.data
     const match = /^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/issues\/([1-9][0-9]*)\/?$/i.exec(value.html_url)
     if (!match || Number(match[3]) !== value.number) throw new SourceError('github-invalid-response', 'GitHub returned an out-of-scope Issue URL')
-    return { nodeId: value.node_id, url: `https://github.com/${match[1]!.toLowerCase()}/${match[2]!.toLowerCase()}/issues/${value.number}`, number: value.number, repository: { owner: match[1]!, repository: match[2]! }, title: value.title, body: value.body, state: value.state, assignees: value.assignees.map(item => item.login), labels: value.labels.map(item => item.name), updatedAt: value.updated_at, observedAt: new Date().toISOString() }
+    return { nodeId: value.node_id, url: `https://github.com/${match[1]!.toLowerCase()}/${match[2]!.toLowerCase()}/issues/${value.number}`, number: value.number, repository: { owner: match[1]!, repository: match[2]! }, title: value.title, body: value.body, milestone: value.milestone, state: value.state, assignees: value.assignees.map(item => item.login), labels: value.labels.map(item => item.name), updatedAt: value.updated_at, observedAt: new Date().toISOString() }
   }
   /** Fixed Issue mutation; no external URL, credential, or repository path is accepted from a browser. */
   async close(input: import('../work-completion/index.ts').CloseTarget, operationId: string): Promise<import('../work-completion/index.ts').CloseReceipt> {

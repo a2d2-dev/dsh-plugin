@@ -8,6 +8,8 @@ export interface GitHubIssue {
   repository: GitHubRepository; assignees: string[]; labels: string[]; state: 'open' | 'closed'
   updatedAt: string; observedAt: string
   createdAt?: string; closedAt?: string | null
+  /** Absent in legacy observations; null means GitHub confirmed no milestone. */
+  milestone?: { number: number; title: string } | null
   parent?: GitHubIssueReference | null
   subIssues?: { items: GitHubIssueReference[]; totalCount: number; hasNextPage: boolean }
   subIssuesSummary?: { total: number; completed: number }

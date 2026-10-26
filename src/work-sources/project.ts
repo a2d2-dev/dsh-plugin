@@ -27,7 +27,7 @@ export function projectQuery(type: GitHubProjectRef['type']): string {
           ... on ProjectV2ItemFieldDateValue { date field { ... on ProjectV2FieldCommon { id name } } }
         } }
         content { __typename
-          ... on Issue { ${referenceFields} body updatedAt createdAt closedAt
+          ... on Issue { ${referenceFields} body updatedAt createdAt closedAt milestone { number title }
             assignees(first:100) { nodes { login } }
             labels(first:100) { nodes { name } }
             parent { ${referenceFields} }
@@ -88,7 +88,7 @@ const graphql: ProjectGraphQL = async (query, variables) => {
 }
 const refSchema = z.object({ id: z.string().min(1), number: z.number().int().positive(), title: z.string().min(1), url: z.string(), state: z.enum(['OPEN', 'CLOSED']), repository: z.object({ name: z.string(), owner: z.object({ login: z.string() }) }) })
 const linkedPullRequest = z.object({ number: z.number().int().positive(), title: z.string().min(1), url: z.string(), state: z.enum(['OPEN', 'CLOSED', 'MERGED']), isDraft: z.boolean() })
-const issue = refSchema.extend({ __typename: z.literal('Issue'), body: z.string().nullable(), updatedAt: z.iso.datetime(), createdAt: z.iso.datetime(), closedAt: z.iso.datetime().nullable(),
+const issue = refSchema.extend({ __typename: z.literal('Issue'), body: z.string().nullable(), milestone: z.object({ number: z.number().int().positive(), title: z.string() }).nullable(), updatedAt: z.iso.datetime(), createdAt: z.iso.datetime(), closedAt: z.iso.datetime().nullable(),
   assignees: z.object({ nodes: z.array(z.object({ login: z.string() })) }), labels: z.object({ nodes: z.array(z.object({ name: z.string() })) }),
   parent: refSchema.nullable(), subIssues: z.object({ totalCount: z.number().int().nonnegative(), pageInfo: z.object({ hasNextPage: z.boolean() }), nodes: z.array(refSchema) }),
   subIssuesSummary: z.object({ total: z.number().int().nonnegative(), completed: z.number().int().nonnegative() }),
@@ -145,7 +145,7 @@ export async function readGitHubProject(project: GitHubProjectRef, request: Proj
     const content = item.content
     if (!content) return { ...shared, kind: 'restricted' as const }
     if (content.__typename === 'Issue') {
-      issues.push({ ...reference(content), body: content.body, updatedAt: content.updatedAt, observedAt, createdAt: content.createdAt, closedAt: content.closedAt, assignees: content.assignees.nodes.map(item => item.login), labels: content.labels.nodes.map(item => item.name), parent: content.parent ? reference(content.parent) : null,
+      issues.push({ ...reference(content), body: content.body, milestone: content.milestone, updatedAt: content.updatedAt, observedAt, createdAt: content.createdAt, closedAt: content.closedAt, assignees: content.assignees.nodes.map(item => item.login), labels: content.labels.nodes.map(item => item.name), parent: content.parent ? reference(content.parent) : null,
         subIssues: { items: content.subIssues.nodes.map(reference), totalCount: content.subIssues.totalCount, hasNextPage: content.subIssues.pageInfo.hasNextPage },
         subIssuesSummary: content.subIssuesSummary,
         linkedPullRequests: content.closedByPullRequestsReferences.nodes.map(pull => ({ number: pull.number, title: pull.title, url: pull.url, state: pull.state.toLowerCase() as 'open' | 'closed' | 'merged', draft: pull.isDraft })) })
