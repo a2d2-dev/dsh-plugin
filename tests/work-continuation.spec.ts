@@ -284,6 +284,22 @@ async function rotate(h: Awaited<ReturnType<typeof setup>>) {
   await fixtures.run(() => h.ctx.agents.get(SessionId(current.execution!.session.sessionId))!.whenIdle())
   return current.execution
 }
+it.each(['danger-full-access', 'read-only'])('inherits the actual source permission %s into the reserved successor', async permission => {
+  const h = await setup()
+  const source = h.ctx.agents.get(SessionId(h.execution.session.sessionId))!
+  h.ctx.permissionPresets.set(source.session, permission)
+  await fixtures.run(() => h.ctx.sessions.flush(source.session))
+  const current = await rotate(h)
+  expect(current).toMatchObject({ id: h.execution.id, owner: h.execution.owner, epoch: 2, permissionPreset: permission,
+    actual: { permissionPreset: permission, sandbox: permission, approval: 'never' },
+    continuation: { phase: 'delivered', source: h.execution.session, successor: current.session },
+  })
+  expect(h.ctx.permissionPresets.current(h.ctx.agents.get(SessionId(current.session.sessionId))!.session)).toBe(permission)
+  expect(h.ctx.permissionPresets.current(source.session)).toBe(permission)
+  expect(h.ctx.permissionPresets.defaultPreset).toBe('workspace-write')
+  expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(2)
+})
+
 it('inherits the actual Session-local reasoning effort and Project Agent instructions', async () => {
   const h = await setup()
   const defaultSaves = vi.spyOn(h.ctx.agentDefaultModel, 'saveSelection')

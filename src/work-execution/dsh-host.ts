@@ -378,7 +378,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
         if (effective.provider !== model.provider || effective.model !== model.model || effective.reasoningEffort !== (selected ? expectedEffort : model.reasoningEffort)) throw new WorkExecutionError('incompatible-session', 'Existing Session local selection differs')
         using observation = await this.service('sessionQuery').observeSession(SessionId(request.session.sessionId))
         const permission = (observation.projections?.values as { permissions?: { currentValue: string } } | undefined)?.permissions
-        if (permission?.currentValue !== request.permissionPreset) throw new WorkExecutionError('incompatible-session', 'Existing Session effective permission differs')
+        if (!execution?.actual && permission?.currentValue !== request.permissionPreset) throw new WorkExecutionError('incompatible-session', 'Existing Session effective permission differs')
       }
     }
     return choices
@@ -428,7 +428,9 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       const events = await this.runtime.events(id)
       const started = events.some(item => item.type === 'turn/start')
       const profile = await rootSessionProfile(this.ctx, id)
-      if (started && profile.permission?.preset !== execution.permissionPreset) throw new WorkExecutionError('incompatible-session', 'Existing Session permission differs; silent reconfiguration refused')
+      // Owned, started Sessions retain their current host permissions. A blank
+      // successor still needs its inherited permission initialized before use.
+      if (started && !execution.actual && profile.permission?.preset !== execution.permissionPreset) throw new WorkExecutionError('incompatible-session', 'Existing Session permission differs; silent reconfiguration refused')
       if (!started && profile.permission?.preset !== execution.permissionPreset) this.service('permissionPresets').set(agent.session, execution.permissionPreset)
       const prior = installed.get(agent)
       if (prior && prior.executionId !== execution.id) throw new WorkExecutionError('session-in-use', 'Agent already belongs to another execution')
@@ -441,7 +443,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       const filesystem = this.service('agentPresets').serviceFor(agent, 'fs') ?? this.ctx.get('fs')
       const shell = this.service('agentPresets').serviceFor(agent, 'shell') ?? this.ctx.get('shell')
       if (filesystem?.sandboxMode === undefined || shell?.sandboxMode === undefined) throw new WorkExecutionError('host-permission-unenforced', 'Selected preset did not compose sandbox-aware filesystem and shell providers')
-      if (current.permissionPreset !== execution.permissionPreset || current.agentPreset !== execution.agentPreset) throw new WorkExecutionError('host-context-mismatch', 'Host did not compose the requested execution context')
+      if ((!execution.actual && current.permissionPreset !== execution.permissionPreset) || current.agentPreset !== execution.agentPreset) throw new WorkExecutionError('host-context-mismatch', 'Host did not compose the requested execution context')
       if (!prior) installed.set(agent, { executionId: execution.id })
       return current
     })

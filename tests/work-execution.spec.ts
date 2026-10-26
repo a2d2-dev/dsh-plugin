@@ -309,6 +309,71 @@ it('enforces read-only through the real filesystem tool without claiming OS shel
   expect(h.ctx.approval.overrideOf(agent.session)).toBe('never')
 })
 
+it.each([
+  { boundary: 'live', permission: 'danger-full-access', reuse: false },
+  { boundary: 'cold', permission: 'danger-full-access', reuse: false },
+  { boundary: 'live', permission: 'read-only', reuse: false },
+  { boundary: 'cold', permission: 'read-only', reuse: false },
+  { boundary: 'live', permission: 'danger-full-access', reuse: true },
+  { boundary: 'cold', permission: 'read-only', reuse: true },
+])('recovers a reserved handoff after an explicit permission change to $permission at $boundary (reuse=$reuse)', async ({ boundary, permission, reuse }) => {
+  const h = await setup()
+  const candidate = reuse ? await fixtures.run(() => h.ctx.sessionController.create({ workspaceId: h.workspace.id, agentPreset: 'contract' })) : undefined
+  if (candidate) {
+    const native = h.ctx.agents.get(candidate.sessionId)!
+    native.followup(createUserMessage({ content: [{ type: 'text', text: 'Existing native conversation before Task adoption' }], source: { kind: 'user' } }))
+    await fixtures.run(() => native.whenIdle())
+  }
+  const started = await h.app.execute({ type: 'task.start', commandId: 'permission-start', ref: h.ref, expectedVersion: 1, resource: h.resource,
+    ...(candidate ? { session: { runtimeId: 'runtime', sessionId: candidate.sessionId } } : {}),
+    agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: reuse ? 'default' : 'selected' }, permissionPreset: 'workspace-write' }, operator)
+  expect(started, JSON.stringify(started)).toMatchObject({ status: 'completed', execution: { state: 'ready' } })
+  if (started.status !== 'completed' || !started.execution) throw Error(JSON.stringify(started))
+  const execution = started.execution
+  const fence = { ref: h.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch }
+  const agent = h.ctx.agents.get(SessionId(execution.session.sessionId))!
+  await fixtures.run(() => agent.whenIdle())
+  const reserved = await h.app.execute({ type: 'task.continue', commandId: 'permission-reserve', ...fence }, { operator: false, session: execution.session, agentId: execution.agentId })
+  if (reserved.status !== 'completed' || !reserved.execution?.continuation) throw Error(JSON.stringify(reserved))
+  const operation = reserved.execution.continuation
+  h.ctx.permissionPresets.set(agent.session, permission)
+  await fixtures.run(() => h.ctx.sessions.flush(agent.session))
+  const before = await fixtures.run(() => h.ctx.sessionController.inspect(agent.id))
+  const permissions = before.events.filter(event => ['permission/preset', 'sandbox/mode', 'approval/policy'].includes(event.type))
+  let current: Pick<typeof h, 'ctx' | 'app'> = h
+  if (boundary === 'cold') { await fixtures.dispose(h.ctx); current = await fixtures.mount(h.workspace.path) }
+  const result = await current.app.execute({ type: 'task.control', commandId: 'permission-resume', ...fence, action: 'resume', text: 'Continue with the explicitly selected permission' }, operator)
+  expect(result, JSON.stringify(result)).toMatchObject({ status: 'completed', execution: {
+    id: execution.id, session: execution.session, owner: execution.owner, epoch: execution.epoch, state: 'ready',
+    permissionPreset: permission, actual: { permissionPreset: permission, sandbox: permission, approval: 'never' },
+    control: { status: 'applied' }, continuation: { phase: 'reserved', operationId: operation.operationId, successor: operation.successor },
+  } })
+  expect(result).not.toHaveProperty('execution.error')
+  const restored = current.ctx.agents.get(agent.id)!
+  await fixtures.run(() => restored.whenIdle())
+  const after = await fixtures.run(() => current.ctx.sessionController.inspect(agent.id))
+  expect(after.events.filter(event => ['permission/preset', 'sandbox/mode', 'approval/policy'].includes(event.type))).toEqual(permissions)
+  expect(current.ctx.permissionPresets.current(restored.session)).toBe(permission)
+  expect(await fixtures.run(() => current.ctx.sessionPersistence.list())).toHaveLength(1)
+  const independent = await fixtures.run(() => current.ctx.sessionController.create({ workspaceId: h.workspace.id, agentPreset: 'contract' }))
+  expect(current.ctx.permissionPresets.current(current.ctx.agents.get(independent.sessionId)!.session)).toBe('workspace-write')
+})
+
+it('refuses a different effective permission on first adoption without rewriting the native Session', async () => {
+  const h = await setup()
+  const created = await fixtures.run(() => h.ctx.sessionController.create({ workspaceId: h.workspace.id, agentPreset: 'contract' }))
+  const agent = h.ctx.agents.get(created.sessionId)!
+  agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Existing native conversation' }], source: { kind: 'user' } }))
+  await fixtures.run(() => agent.whenIdle())
+  h.ctx.permissionPresets.set(agent.session, 'read-only')
+  const result = await h.app.execute({ type: 'task.start', commandId: 'permission-adopt', ref: h.ref, expectedVersion: 1, resource: h.resource,
+    session: { runtimeId: 'runtime', sessionId: agent.id }, agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'default' }, permissionPreset: 'workspace-write' }, operator)
+  expect(result).toMatchObject({ status: 'failed', error: { code: 'incompatible-session' } })
+  expect(h.ctx.permissionPresets.current(agent.session)).toBe('read-only')
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).not.toHaveProperty('execution')
+  expect(h.model.requests).toHaveLength(1)
+})
+
 it.each(['selection', 'request', 'cold'] as const)('recovers the same Task after an explicit model switch at the %s boundary', async boundary => {
   const h = await setup()
   const started = await h.app.execute({ type: 'task.start', commandId: 'model-switch-start', ref: h.ref, expectedVersion: 1, resource: h.resource,
