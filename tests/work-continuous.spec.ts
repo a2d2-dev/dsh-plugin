@@ -1036,6 +1036,36 @@ it('screens only mandatory-scope Issues using full bodies and starts only matchi
   expect(screen).toHaveBeenCalledTimes(2)
 })
 
+it('rescreens cached queue candidates after session occupancy changes without waiting for source refresh', async () => {
+  const screen = vi.fn(async (basis: import('../src/work-screening.ts').ScreeningBasis) => ({ decisions: basis.candidates.map(candidate => ({ nodeId: candidate.nodeId, matches: !candidate.sessionOccupied, reason: '仅接入没有处理会话的工作' })) }))
+  const h = await setup(true, { generate: async () => ({ steps: [] }), screen })
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1, refreshMinutes: 30, filterPrompt: '仅接入没有处理会话的工作' } }, operator))
+  const first = await h.execution(), initial = await h.status()
+  const project = vi.spyOn(h.source, 'project')
+  expect(Date.parse(initial.nextRefreshAt!)).toBeGreaterThan(Date.now())
+  expect(screen.mock.calls[0]![0].candidates.map(candidate => candidate.sessionOccupied)).toEqual([false, false])
+  await Promise.all([h.app.reconcileContinuous(), h.app.reconcileContinuous()])
+  await vi.waitFor(async () => {
+    expect(screen).toHaveBeenCalledTimes(2)
+    expect((await h.status()).items.find(item => item.number === 2)?.screening?.key).not.toBe(initial.items[1]!.screening!.key)
+  })
+  expect(screen.mock.calls[1]![0].candidates.map(candidate => [candidate.number, candidate.sessionOccupied])).toEqual([[1, true], [2, false]])
+  expect(h.host.sessionsCreated.size).toBe(1)
+  h.host.idle(first); completed(await reportDone(h.app, first)); await h.app.reconcileControls()
+  await h.app.reconcileContinuous()
+  await vi.waitFor(async () => {
+    expect(screen).toHaveBeenCalledTimes(3)
+    expect((await h.status()).items.find(item => item.number === 2)?.screening?.key).toBe(initial.items[1]!.screening!.key)
+  })
+  expect(screen.mock.calls[2]![0].candidates.map(candidate => [candidate.number, candidate.sessionOccupied])).toEqual([[1, false], [2, false]])
+  await Promise.all([h.app.reconcileContinuous(), h.app.reconcileContinuous()])
+  expect((await h.status()).items.map(item => [item.number, item.state])).toEqual([[1, 'completed'], [2, 'active']])
+  expect((await h.execution(first.ref))).toMatchObject({ id: first.id, owner: first.owner, epoch: first.epoch })
+  expect(h.host.sessionsCreated.size).toBe(2)
+  expect((await h.status()).nextRefreshAt).toBe(initial.nextRefreshAt)
+  expect(project).not.toHaveBeenCalled()
+})
+
 it('screens the complete mandatory-filter batch once on each changed scheduled scan', async () => {
   const screen = vi.fn(async (basis: import('../src/work-screening.ts').ScreeningBasis) => ({ decisions: basis.candidates.map(candidate => ({ nodeId: candidate.nodeId, matches: candidate.number === Math.max(...basis.candidates.map(issue => issue.number)), reason: '整批比较后保留编号最大的一项' })) }))
   const h = await setup(false, { generate: async () => ({ steps: [] }), screen })
