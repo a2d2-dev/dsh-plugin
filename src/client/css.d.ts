@@ -11,6 +11,7 @@
 
 declare module '*.module.css' {
   const classes: {
+    readonly queueScroll: string
     readonly status: string
     readonly summary: string
     readonly filters: string

@@ -219,7 +219,7 @@ describe('continuous processing production scope controls',()=>{
     const form=await mountWorkPanel({controller:h.panel},'ContinuousProcessing')
     try {
       await vi.waitFor(()=>expect(form.text()).toContain('所有负责人 · 标签：ready-for-agent、approved'))
-      expect(h.command).not.toHaveBeenCalled();form.click('队列设置')
+      expect(h.command).not.toHaveBeenCalled();form.click('设置')
       await vi.waitFor(()=>expect(form.nodes('form')).toHaveLength(1))
       expect(form.nodes('select').find(node=>node.props.children?.some?.((child:any)=>[child?.props?.children].flat(Infinity).join('')==='real/quality'))?.props.value).toBe(1)
       form.submit();await vi.waitFor(()=>expect(h.command).toHaveBeenCalledOnce())
@@ -227,12 +227,13 @@ describe('continuous processing production scope controls',()=>{
       await vi.waitFor(()=>expect(form.nodes('form')).toHaveLength(0))
       expect(form.textareas()).toHaveLength(0)
       expect(form.text()).not.toContain('计划 v1')
-      form.click('继续处理队列');await vi.waitFor(()=>expect(h.getRule()?.enabled).toBe(true))
-      await vi.waitFor(()=>expect(form.nodes('button').some(node=>node.props.children==='暂停后续执行')).toBe(true))
-      form.click('暂停后续执行');await vi.waitFor(()=>expect(h.getRule()?.enabled).toBe(false))
+      form.click('继续处理');await vi.waitFor(()=>expect(h.getRule()?.enabled).toBe(true))
+      await vi.waitFor(()=>expect(form.nodes('button').some(node=>node.props.children==='暂停后续')).toBe(true))
+      form.click('暂停后续');await vi.waitFor(()=>expect(h.getRule()?.enabled).toBe(false))
       expect(h.command.mock.calls.slice(-2).map(([value])=>value)).toMatchObject([{type:'continuous.set-enabled',expectedVersion:4,enabled:true},{type:'continuous.set-enabled',expectedVersion:5,enabled:false}])
       expect(h.command.mock.calls.some(([value])=>value.type==='task.control'||value.type==='task.start')).toBe(false)
-      expect(form.text()).toContain('在途处理和历史保留')
+      expect(form.nodes('button').find(node=>node.props.children==='继续处理')?.props.title).toContain('在途处理和历史保留')
+      expect(form.nodes('div').find(node=>node.props['aria-label']==='持续委托队列 滚动区域')?.props).toMatchObject({role:'region',tabIndex:0})
     }finally{form.unmount()}
   })
   it('renders persisted queue reasons and opens its active Issue without starting or pausing it',async()=>{
