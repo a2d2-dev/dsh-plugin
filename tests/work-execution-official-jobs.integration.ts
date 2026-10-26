@@ -189,9 +189,16 @@ it('uses built official registry, job_output, committed Session results and cold
     await collectionCtx.plugin(m.goal.default)
     const priorGoal = collectionCtx.goals.create(collectionAgent, { objective: 'Unfinished independent fixture Goal', maxGoalRounds: 5 })
     const goalEvents = collectionAgent.session.snapshotEvents().filter((event: any) => event.type === 'goal/change')
+    const realDisarm = collectionCtx.goals.disarm
+    collectionCtx.goals.disarm = undefined
+    await expect(collectionHost.maintain(execution, () => collectionHost.disarmSource(execution))).rejects.toMatchObject({ code: 'continuation-goal-capability-unavailable' })
+    expect(collectionCtx.goals.get(collectionAgent)).toMatchObject({ phase: 'active', activation: 'armed', revision: priorGoal.revision })
+    collectionCtx.goals.disarm = realDisarm
+    const exactDisarm = vi.spyOn(collectionCtx.goals, 'disarm')
     await collectionHost.maintain(execution, async () => {
-      await (collectionHost as any).disarmSource(execution)
+      await collectionHost.disarmSource(execution)
     })
+    expect(exactDisarm).toHaveBeenCalledExactlyOnceWith(collectionAgent)
     expect(collectionCtx.goals.get(collectionAgent)).toMatchObject({ id: priorGoal.id, phase: 'active', revision: priorGoal.revision, activation: 'disarmed', roundsStarted: priorGoal.roundsStarted })
     expect(collectionAgent.session.snapshotEvents().filter((event: any) => event.type === 'goal/change')).toEqual(goalEvents)
     await collectionCtx.plugin(m.goalDriver)
@@ -201,6 +208,42 @@ it('uses built official registry, job_output, committed Session results and cold
     await collectionCtx.sessions.flush(collectionAgent.session)
     expect(collectionCtx.goals.get(collectionAgent)).toMatchObject({ phase: 'active', revision: priorGoal.revision, activation: 'disarmed', roundsStarted: priorGoal.roundsStarted })
     expect(collectionAdapter.requests).toHaveLength(3)
+    const failedCollection = collectionCtx.jobs.start({ kind: 'bash', owner: collectionAgent.id, label: 'consumed without a successful Session result', run(job: any) { job.append('must not be certified by an empty repeat'); return { done: Promise.resolve({ status: 'completed', result: 'lost committed result proof' }), cancel() {} } } })
+    await collectionCtx.jobs.wait(failedCollection, 1000, collectionAgent.id)
+    const scriptCollection = (callId: string) => collectionAdapter.script.push([
+      { type: 'block-start', index: 0, blockType: 'tool-call' },
+      { type: 'tool-call-delta', index: 0, id: m.llm.ToolCallId(callId), name: 'job_output', argumentsDelta: JSON.stringify({ job_id: failedCollection }) },
+      { type: 'block-end', index: 0, block: { type: 'tool-call', id: m.llm.ToolCallId(callId), name: 'job_output', arguments: JSON.stringify({ job_id: failedCollection }) } },
+      { type: 'finish', reason: { kind: 'tool-calls' } },
+    ], [{ type: 'finish', reason: { kind: 'stop' } }])
+    const denyCommit = collectionCtx.on('tools/post-execute', (exec: any, _result: any, next: any) => {
+      if (exec.callId === 'organized-consumed-failure') throw Error('Deterministic collection failure after read before successful commit')
+      return next()
+    })
+    scriptCollection('organized-consumed-failure')
+    await app.reconcileControls()
+    await collectionAgent.whenIdle()
+    denyCommit()
+    await app.reconcileControls()
+    const interrupted = await app.query({ type: 'task.execution', ref: execution.ref }, { operator: true })
+    expect(interrupted).toMatchObject({ execution: { state: 'waiting', epoch: 1, continuation: { error: { code: 'continuation-collection-unconfirmed' } } } })
+    if (interrupted.status !== 'completed' || !interrupted.execution?.continuation) throw Error('Missing interrupted collection')
+    const fixed = interrupted.execution.continuation
+    const missing = fixed.collections!.find(step => step.status === 'requested')!
+    expect(missing).toMatchObject({ session: execution.session, delivery: 'consumed' })
+    const requestsBeforeRecovery = collectionAdapter.requests.length
+    await app.reconcileControls()
+    expect(collectionAdapter.requests).toHaveLength(requestsBeforeRecovery)
+    scriptCollection('organized-empty-repeat')
+    await app.execute({ type: 'task.continue', commandId: 'retry-formal-collection', ref: execution.ref, executionId: execution.id, owner: execution.owner, epoch: 1 }, { operator: true })
+    await collectionAgent.whenIdle()
+    await app.reconcileControls()
+    const pendingRetry = await app.query({ type: 'task.execution', ref: execution.ref }, { operator: true })
+    expect(pendingRetry).toMatchObject({ execution: { epoch: 1, state: 'waiting', continuation: { operationId: fixed.operationId, successor: fixed.successor, error: { code: 'continuation-collection-unconfirmed' } } } })
+    if (pendingRetry.status !== 'completed' || !pendingRetry.execution?.continuation) throw Error('Missing collection retry')
+    expect(pendingRetry.execution.continuation.collections!.find(step => step.status === 'requested')!.requestId).not.toBe(missing.requestId)
+    const failedFacts = await new RuntimeHost(collectionCtx as PluginContext).executionFacts(collectionAgent.id, 'official-fixture', 'current')
+    expect(failedFacts.jobs.find(job => job.id === failedCollection)).toMatchObject({ delivery: 'pending' })
     await collectionHandle.dispose()
 
     const consumed = produce(agent.id)

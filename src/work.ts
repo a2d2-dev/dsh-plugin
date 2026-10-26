@@ -110,7 +110,7 @@ export class WorkApplication {
       const mayAdvance = (execution: import('./work-types.ts').WorkExecution | undefined) => !execution || (!isTaskCompleted(taskAt(state, execution.ref)) && continuousMayAdvance(state, execution) && !['accepted', 'creating', 'failed', 'waiting', 'paused'].includes(execution.state)
         && !(execution.control?.status === 'accepted' && execution.control.action !== 'resume')
         && !execution.continuationBlocked
-        && (!continuationInFlight(execution) || ['reserved', 'material-requested', 'taken'].includes(execution.continuation!.phase)))
+        && !continuationInFlight(execution))
       let state = await this.load()
       const initial = state.executions.find(item => item.session.sessionId === sessionId)
       if (initial && messages.length > 0 && initial.continuationPolicy?.enabled && !continuationInFlight(initial)) {

@@ -557,3 +557,20 @@ it('refreshes source material after the host reports newly collected result fact
   const log = await fixtures.run(() => h.ctx.sessionController.inspect(source.id))
   expect(log.events.filter(event => event.type === 'user/message' && event.data.id === refreshing.execution!.continuation!.materialRequestId)).toHaveLength(1)
 })
+
+it('keeps unrelated automatic business rounds fenced while an active source owes material', async () => {
+  const h = await setup()
+  await h.app.execute({ type: 'task.continue', commandId: 'active-material-step', ...fence(h.execution) }, operator)
+  const source = h.ctx.agents.get(SessionId(h.execution.session.sessionId))!
+  await fixtures.run(() => source.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  const before = h.model.requests.length
+  h.model.nextTool = { name: 'work_control', arguments: { action: 'progress', text: 'Business round bypassed the pending lifecycle step' } }
+  source.followup(createUserMessage({ content: [{ type: 'text', text: 'Unrelated automatic business work while material is missing' }], source: { kind: 'a2d2-work-dispatch' } }))
+  await fixtures.run(() => source.whenIdle())
+  expect(h.model.requests).toHaveLength(before)
+  const current = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(current).toMatchObject({ execution: { epoch: 1, state: 'ready', continuation: { phase: 'material-requested' } } })
+  if (current.status !== 'completed' || !current.execution) throw Error('Missing source')
+  expect(current.execution.progress).toBeUndefined()
+})
