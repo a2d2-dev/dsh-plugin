@@ -29,7 +29,13 @@ for (const file of ['README.md', 'README.zh.md', 'CONTRIBUTING.md', 'SECURITY.md
   assert.ok(existsSync(new URL(`../${file}`, import.meta.url)), `missing contributor document: ${file}`)
 }
 const tracked = git('ls-files', '-z').split('\0').filter(Boolean)
-const privatePaths = tracked.filter(file => /^(?:docs\/artifacts\/|docs\/architecture\/evidence\/|docs\/architecture\/[^/]+-smoke\.json$|\.claude\/|\.dsh\/|\.local\/|\.scratch\/)/.test(file))
+const sourceDiagrams = new Set([
+  'docs/artifacts/session-lifecycle-2026-10-25/session-lifecycle.html',
+  'docs/artifacts/session-lifecycle-2026-10-25/session-lifecycle-preview.png',
+  'docs/artifacts/session-lifecycle-2026-10-25/session-lifecycle-operations.html',
+  'docs/artifacts/session-lifecycle-2026-10-25/session-lifecycle-operations.png',
+])
+const privatePaths = tracked.filter(file => /^(?:docs\/artifacts\/|docs\/architecture\/evidence\/|docs\/architecture\/[^/]+-smoke\.json$|\.claude\/|\.dsh\/|\.local\/|\.scratch\/)/.test(file) && !sourceDiagrams.has(file))
 assert.deepEqual(privatePaths, [], 'local state and private acceptance captures belong in a2d2-dev/project')
 assert.equal(tracked.some(file => /^docs\/architecture\/project14-/.test(file)), false, 'external personal issue inventories must not ship')
 

@@ -24,3 +24,5 @@ LF 指定 [a2d2-dev/project](https://github.com/a2d2-dev/project) 统一存放 A
 该仓库当前私有。源码中的链接应标明这是访问受限的历史测试证据；公共 README 不能依赖它才能理解安装和使用。外部贡献者可在 PR 中提供已脱敏的最小截图或日志。不要把会话快照、私人项目清单、cookies、token 或整段未审查对话带入源码仓库。
 
 源码 checkout 中 `docs/artifacts/` 是忽略的临时工作区，不是发布目录。保存到证据库后再引用其 commit 固定链接；本地目录清理不表示旧 Git 历史、发行附件或图片已通过隐私审核。
+
+LF 明确要求保留原路径的生命周期架构规格图有四个精确例外：[流程源图](artifacts/session-lifecycle-2026-10-25/session-lifecycle.html)、[流程渲染图](artifacts/session-lifecycle-2026-10-25/session-lifecycle-preview.png)、[状态与操作源图](artifacts/session-lifecycle-2026-10-25/session-lifecycle-operations.html)、[状态与操作渲染图](artifacts/session-lifecycle-2026-10-25/session-lifecycle-operations.png)。它们是经审阅的纯架构说明及浏览器渲染图，不是产品 GUI 验收截图。`verify:repository` 仅按这四个完整文件路径放行，不豁免目录；真实会话、测试日志、验收截图和其他 `docs/artifacts/`、`.dsh/`、`.local/`、`.scratch/` 等内容仍遵循原排除和证据仓库规则。

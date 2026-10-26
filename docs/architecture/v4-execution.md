@@ -295,3 +295,23 @@ PATH=/root/.nvm/versions/node/v24.22.1/bin:$PATH TMPDIR="$PWD/.local/tmp" \
 ```
 
 已提交源码 `6e15e4e` 的 `pnpm verify:pack-exports` 也通过，exit 0（`.local/issue-274/recovery-pack-final.log`）：临时 git archive 构建含 32 个导出目标与两个 sidecar，安装 tarball 后 15 个 Node 入口均可 import，编译产物未进入工作树提交。本次后续只改测试与本文；远端全仓 CI 状态由交付 PR 链接回读。
+
+### PR #282 R1 最终隔离回归（2026-10-26）
+
+业务代码固定提交 `cbf44290bae09711017270c50246b3fad05dc2ab`；reviewed HEAD 为 `88fe92e6239a4b86e37a39beb91c5d82e22ef40d`。开工 clean HEAD `c2b140650f1e4ad973e1f77ca6b328640a620315`，保留 CEO 的公开架构图提交。回读最新 origin/main 与 merge-base 均为 `f80ab103d13882efbc370bbb119e1c7dcf01a9e1`。所有 lane 使用 Node 24.22.1，在唯一实施树顺序运行；测试文件、断言与 timeout 未放宽，无新增 skip。
+
+| 检查 | 结果 / 正式 job_output 退出码 | 原始日志（本树忽略目录 `.local/issue-274/r1/`） |
+| --- | --- | --- |
+| host：continuation、completion-native、execution、boundary、Goal replay、continuous、lifecycle、compact-results、source-freeze | 9 文件 / 106 pass，bash-375 / 0 | `host-final.log` |
+| unit：continuous、jobs/official-jobs/lost-job/observation、三个相关客户端文件 | 8 文件 / 151 pass，bash-421 / 0 | `unit-final.log` |
+| pnpm typecheck | 后端和客户端通过，bash-366 / 0 | `typecheck-final.log`；首次 JobId 类型错误 exit 2 保留于 `typecheck.log` |
+| official-jobs.config.ts 完整 lane | 2/2 pass，bash-425 / 0；干净 22ddee3792402c3e70ec5f86a63c3e3e895a2f60 / rc.3 | `official-final.log` |
+| pnpm verify:repository | 首次拒绝 CEO 公开规格图，bash-431 / 1；精确例外后 bash-445 / 0 | `repository-final.log`、`repository-allowlist-green.log` |
+| 窄例外的私有路径负例 | 临时独立 Git index 加入 6 个禁止路径；verifier 实际 exit 1，测试命令 bash-453 / 0 | `repository-negative.log` |
+| pnpm test:node | 28 pass / 2 个既有可选 real-host 默认 skip，bash-445 / 0 | `node-final.log` |
+
+host 命令在既有列表中加入 completion-native、compact-results、source-freeze；完整参数为 `TMPDIR="$PWD/.local/tmp" pnpm exec vitest run --configLoader runner --no-cache --maxWorkers=1 --project host`。unit 沿用本页八文件列表。official 命令为 `TMPDIR="$PWD/.local/tmp" DSH_OFFICIAL_HOST_ROOT=/data/src/github.com/deepseek-ai/deepseek-harness-dev.worktrees/dsh-upgrade-latest-20261024 node node_modules/vitest/vitest.mjs run --configLoader runner --no-cache --config tests/official-jobs.config.ts`，PATH 指向 Node 24.22.1；测试内部核实 HEAD、clean 和模块版本。
+
+仓库门禁失败与 R1 业务代码分开记证：LF 要求的四份纯架构规格 HTML/浏览器渲染图与原 `docs/artifacts/` 全禁规则冲突。CEO 明确裁决仅允许这四个完整文件路径，已在 `scripts/verify-repository.mjs` 和 `docs/testing.md` 补最小例外；同目录的其他文件、其他 artifacts、architecture/evidence、.dsh/.local/.scratch 均仍拒绝，负例不修改真实 index，也不豁免实际会话或产品验收截图。
+
+R1 第二路径的 [CEO 能力裁决](https://github.com/a2d2-dev/dsh-plugin/issues/274#issuecomment-6415979835) 接受当前宿主能力负例，不将其替换成真实 pending 补收成功；#268 普通准确 owner 的两个 pending jobs 原验收继续保留。新测试没有更改 DSH、伪造 turn/step、直接 append user/message、裸 jobs.read、跨 owner 收取或把 pending 改成 settled。#275/#276 及父 #270、#259/#268 的既有 GUI 完整模式尚未由本轮验证；未操作真实 #265/#182/#2104、未部署或另起服务，未合并或关闭任何票。
