@@ -31,7 +31,7 @@ function source(project: boolean): WorkSource {
 }
 it('joins fields by stable Issue identity, preserving partialness and excluding archived items', () => {
   const project = source(true)
-  expect(screeningBasis(rule, project).candidates).toEqual([expect.objectContaining({ nodeId: 'I1', milestone: { number: 3, title: '3.0' }, projectItem: { fields: project.projectSnapshot!.items[2]!.fields, fieldsPartial: true } })])
+  expect(screeningBasis(rule, project).candidates).toEqual([expect.objectContaining({ nodeId: 'I1', milestone: { number: 3, title: '3.0' }, projectFields: { Status: 'In Progress', Milestone: '3.0' }, milestoneTitle: '3.0', sessionOccupied: false, projectItem: { fields: project.projectSnapshot!.items[2]!.fields, fieldsPartial: true } })])
   project.projectSnapshot!.items[2]!.archived = true
   expect(screeningBasis(rule, project).candidates).toEqual([])
 })
@@ -58,4 +58,12 @@ it('invalidates the screening key on milestone, Project field and partialness ch
   project.projectSnapshot!.items[2]!.fieldsPartial = false
   expect(screeningKey(rule, project)).not.toBe(changed)
   expect(project.observations[0]!.issue.updatedAt).toBe(issue.updatedAt)
+})
+
+it('treats an existing Status field with no value as empty and reports session occupancy', () => {
+  const project = source(true)
+  project.catalog = { identity, observedAt: issue.observedAt, pullRequests: [], pullRequestsComplete: true, views: [], fields: [{ id: 'status', name: 'Status', dataType: 'SINGLE_SELECT' }], viewsComplete: true, limitations: [] }
+  project.projectSnapshot!.items[2]!.fields = [{ id: 'title', name: 'Title', type: 'text', value: 'Untitled' }]
+  ;(rule as { items: unknown[] }).items = [{ nodeId: 'I1', number: 1, title: 'Work', url: issue.url, state: 'active', attempts: 1, executionId: 'execution-1' }]
+  expect(screeningBasis(rule, project).candidates[0]).toMatchObject({ status: '', sessionOccupied: true })
 })
