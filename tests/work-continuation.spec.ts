@@ -475,6 +475,11 @@ it('keeps delivery distinct from a committed and flushed successor read receipt'
   expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { epoch: 2, continuation: { phase: 'received', readable: { materialCommandId: op.material!.commandId, callId: 'contract-call' } } } })
   const log = await fixtures.run(() => h.ctx.sessionController.inspect(SessionId(op.successor.sessionId)))
   expect(log.events).toContainEqual(expect.objectContaining({ type: 'tool/result', data: expect.objectContaining({ message: expect.objectContaining({ toolCallId: 'contract-call', isError: false }) }) }))
+  const beforeReplay = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(await h.app.sessionContinuationReceived(op.successor, 'contract-call', op.operationId, op.material!.commandId, 2)).toEqual({ status: 'completed', operationId: op.operationId, materialCommandId: op.material!.commandId, epoch: 2 })
+  const afterReplay = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (beforeReplay.status !== 'completed' || afterReplay.status !== 'completed') throw Error('Missing received execution')
+  expect(afterReplay.execution).toEqual(beforeReplay.execution)
 })
 
 it('rejects business tools and arbitrary maintenance markers during a waiting material step', async () => {

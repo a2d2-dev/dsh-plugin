@@ -299,10 +299,10 @@ export class WorkApplication {
     return this.sourceTransaction(async state => {
       const execution = state.executions.find(item => sameSession(item.session, session))
       const op = execution?.continuation
-      if (!execution || !op || op.protocolVersion !== 1 || op.operationId !== operationId || !['taken', 'delivered'].includes(op.phase)
+      if (!execution || !op || op.protocolVersion !== 1 || op.operationId !== operationId || !['taken', 'delivered', 'received'].includes(op.phase)
         || !sameSession(session, op.successor) || execution.epoch !== epoch || epoch !== op.sourceEpoch + 1
         || op.material?.commandId !== materialCommandId) return { status: 'failed' as const, error: { code: 'stale-continuation-receipt', message: 'Only the fixed current successor can acknowledge this exact material and epoch' } }
-      op.readable = { callId, materialCommandId }
+      if (op.phase !== 'received') op.readable = { callId, materialCommandId }
       return { status: 'completed' as const, operationId, materialCommandId, epoch }
     })
   }

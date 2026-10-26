@@ -116,7 +116,7 @@ observe(id, caller): {
 3. 结算后请求 source 仅调用 work_continuation_material。保存材料绑定 TaskRef、execution、source、epoch、specificationVersion 与已观察结果身份集合；补收或结果变化后重新请求材料。插件在相关 executor maintenance 锁内再次读取事实与材料新鲜度，通过后才创建固定 successor。
 4. source maintenance 内调用公开 goals.disarm(exactLiveAgent)，再 goals.get 核实 activation=disarmed 且 Goal id/phase/revision 未改变。无能力时精确记录宿主边界；不伪造人类 pause/resume、不 complete/blocked 未完成 Goal。正式事务才增加一次 epoch，并将 source 写为 retired。独立浏览器协作交接不具有此原生事务或自动 Goal 转移能力，须进入受控流程。
 5. 新操作保存 `protocolVersion=1`。缺少该字段的旧 `delivered` 保留历史终态和无读取凭据的事实，查询、冷加载和恢复均不自动重开或补标 received；旧未完结操作才在正常恢复中采用新屏障。对历史终态显式再次接续，会保留原历史并创建新的固定 operation。`taken` 后投递固定内容，`delivered` 仅表示投递事实。后继只调用 work_continuation_received，声明准确 operation/material command/epoch；插件 flush 并从其真实 Session 回读成功的 tool/call、tool/result，才进入 `received`。单独声明、deliver 返回、消费消息均不足以确认可读。
-6. received 后按原业务控制处理后续输入。waiting/paused 后继继续等待；正常可推进执行才投递业务下一步，并继续服从 continuous slot 与所有原权限。
+6. received 后按原业务控制处理后续输入。waiting/paused 后继继续等待；正常可推进执行才投递业务下一步，并继续服从 continuous slot 与所有原权限。相同 successor/operation/material/epoch 的成功回执可重放；保留原始读取凭据和业务事件，不重新接任或调度。
 
 **失败与恢复**：插件的 idle 事件、启动检查及既有低频恢复循环持续负责推进。已消费但缺材料、缺收取结果或缺读取回执时保留具体 error 和准确执行者，不重复空推；新的显式 task.continue 为缺失步骤生成新请求，保留 operation/successor/kickoff 与 epoch。创建/接任/投递失回执通过已固定身份与正式日志回读恢复，接任只提交一次。真实 Goal 的 activation 只退役旧会话，不承诺在后继自动 rearm。
 
@@ -242,3 +242,5 @@ PATH=/root/.nvm/versions/node/v24.22.1/bin:$PATH TMPDIR="$PWD/.local/tmp" \
 ```
 
 恢复原实现后，上述命令 6/6 通过（exit 0，`.local/issue-274/recovery-green-priority.log`）。历史 ready/waiting/paused 冷加载及重复 reconcile 均保留整个 operation/control、无新模型请求或伪读取确认；新显式接续归档旧操作并生成新身份。正常后继通过真实模型步骤调用 work_control(progress) 执行原 next，而 waiting/paused 在 received 后保持停止。最终隔离回归和正式宿主结果在完成后另记；此阶段不构成父票 GUI 验收。
+
+验收清单的重复读取确认另有真实红→绿：在成功提交且进入 received 后，重放同一准确回执原先返回 stale-continuation-receipt（exit 1，`recovery-red-receipt-replay.log`）。修复只让该已确认终态返回同一成功结果，仍核对准确 successor/operation/material/epoch，并保留原 readable 与整个 execution。定点 `-t 'keeps delivery distinct'` 1/1 通过（exit 0，`recovery-green-receipt-replay.log`）；重复确认不会新增业务事件或再次接任。
