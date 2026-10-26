@@ -1,4 +1,4 @@
-import { Children, isValidElement } from 'react'
+import { Children, createElement, isValidElement } from 'react'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
@@ -18,7 +18,8 @@ export function mountProductionComponent(props: Record<string, unknown>, compone
   let active: Instance
   const dependenciesMatch = (left?: unknown[], right?: unknown[]) => !!left && !!right && left.length === right.length && right.every((value, index) => Object.is(value, left[index]))
   const react = {
-    Children, isValidElement,
+    Children, createElement, isValidElement,
+    useCallback(callback: (...args: any[]) => any, dependencies: unknown[]) { return react.useMemo(() => callback, dependencies) },
     Fragment: Symbol.for('react.fragment'),
     useState(initial: any) {
       const instance = active, index = instance.cursor++
