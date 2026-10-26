@@ -56,7 +56,7 @@ export function mountProductionComponent(props: Record<string, unknown>, compone
       module, exports: module.exports, AbortController, URL, crypto: globalThis.crypto, setInterval, clearInterval, ...environment,
       require: (id: string) => {
         if (id === 'react') return react
-        if (id.endsWith('.css')) return { default: {} }
+        if (id.endsWith('.css')) return { default: (environment.cssModules as Record<string, unknown> | undefined)?.[id] ?? {} }
         if (id === './work-panel-controller.ts') return panelController
         if (id === './continuous-controller.ts') return continuousController
         if (id === './browser-uuid.ts') return uuid

@@ -32,13 +32,20 @@ it('shows an undelivered takeover as a delivery failure with a retry action', ()
   expect(html).not.toContain('接续内容已投递')
 })
 
-it('renders verified collection, settlement, profile, Goal activation and read proof without inferring receipt', () => {
+it('renders verified collection, settlement, profile, Goal activation and read proof without inferring receipt', async () => {
   const ref = { projectId: 'p', taskId: 't' }, source = { runtimeId: 'runtime', sessionId: 'source' }, successor = { ...source, sessionId: 'fixed-successor' }
   const execution: WorkExecution = { id: 'e', ref, owner: 'owner', epoch: 2, agentId: 'agent', resource: { runtimeId: 'runtime', workspaceId: 'ws' }, session: successor, sessionMode: 'create', agentPreset: 'standard', model: { provider: 'test', model: 'test' }, permissionPreset: 'read-only', policy: { version: 1, modelCandidates: [], instructions: '', capabilities: [] }, state: 'waiting', history: [], events: [], continuation: { protocolVersion: 1, operationId: 'fixed-operation', commandId: 'cmd', automatic: false, phase: 'delivered', source, successor, sourceEpoch: 1, materialRequestId: 'refresh-request', kickoffId: 'kickoff', goal: 'Continue', specification: { version: 1, text: 'Scope', acceptance: ['Accepted'] }, title: 'Long task title', history: { ref, session: source }, collections: [{ session: source, jobs: [{ id: 'bash-pending' }], requestId: 'collect-request', delivery: 'consumed', status: 'requested' }], settlements: [{ parent: source, child: { ...source, sessionId: 'native-child' }, endSeq: 42, messageId: 'notice', delivery: 'delivered' }], goalActivation: { status: 'disarmed', goalId: 'old-goal', revision: 4, phase: 'active' }, profile: { runtimeId: 'runtime', cwd: '/workspace', agentPreset: 'standard', provider: 'codex', model: 'gpt-6.1-sol', permissionPreset: 'read-only', sandbox: 'none', approval: 'never' } } }
   const html = renderToStaticMarkup(createElement(ExecutionContinuation, { execution }))
   for (const text of ['会话运行', 'Task 控制', '协调归属', 'fixed-operation', 'bash-pending', '补收未确认', 'native-child', '结算通知已投递', '旧 Goal activation 已停用', 'old-goal', '持久 phase：active', 'gpt-6.1-sol', '材料可读尚未确认', 'refresh-request', '插件持续负责接续流程']) expect(html).toContain(text)
   expect(html).not.toContain('原段仍负责')
   expect(html).not.toContain('后继已确认材料可读')
+  if (process.env.A2D2_LIFECYCLE_ARTIFACTS === '1') {
+    const directory = resolve('docs/artifacts/issue-270-2026-10-26')
+    await mkdir(directory, { recursive: true })
+    let css = await readFile(new URL('../../src/client/execution-components.module.css', import.meta.url), 'utf8')
+    for (const name of new Set([...css.matchAll(/\.([a-z][\w-]*)/g)].map(match => match[1]!))) css = css.replace(new RegExp(`\\.${name}\\b`, 'g'), `.${styles[name as keyof typeof styles]}`)
+    await writeFile(resolve(directory, 'operation-facts.html'), `<!doctype html><html lang="zh"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>#275 步骤事实合同</title><style>body{margin:0;background:Canvas;color:CanvasText;color-scheme:light dark;font:14px system-ui}main{max-width:1000px;margin:auto}header{padding:16px}${css}</style><main><header><h1>#275 步骤事实合同渲染</h1><p>合成合同夹具，真实生产组件与样式。3080 实例未更新；不代表部署或 Task 接任。</p></header>${html}</main></html>`)
+  }
   execution.continuation!.phase = 'received'
   execution.continuation!.readable = { callId: 'read-call', materialCommandId: 'material-command' }
   const received = renderToStaticMarkup(createElement(ExecutionContinuation, { execution }))
