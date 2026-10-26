@@ -128,6 +128,16 @@ observe(id, caller): {
 
 **真实晚到结果场景**：source idle 时启动正式 continuable child，以真实工具确定性挂起；先 `task.continue` 预留 operation，再释放 child。`Subagents` 自行生成结算通知，测试不直接创建通知或 append user/message。Node 22.23.1 下 `pnpm exec vitest run --project host tests/work-completion-native.spec.ts -t 'running native child'` 在修复前 ready/waiting/paused 三项均失败：准确父 user/message 数量为 0（exit 1，`.local/issue-274/r1/red-late-child-contract.log`）。首个 fixture 参数错误单列 `.local/issue-274/r1/red-late-child.log`，不算产品红灯。修复后完整同文件 5/5 通过（exit 0，`.local/issue-274/r1/green-late-child-attempt.log`），保留 control、owner 与 operation/successor，最终 received 且 epoch=2；正常控制执行原 next，waiting/paused 不写业务进展。第二条 job 补收与最终回归结果另记，不以该阶段通过代替全部验收。
 
+**同批输入与安全负例**：真实 Agent inbox 的 nextStep 自动输入与 nextTurn 原生通知会一起被 claim。最初只允许整批均为 subagent-settled，三种控制仍拒绝必要通知（exit 1，`.local/issue-274/r1/red-mixed-claimed-native.log`）。现在按准确通知子集准入；其余输入保留完整 payload 和稳定身份到业务 events，不设置 resumeRequested；宿主只将获准通知写入这次模型输入。正式模型在 settle 轮尝试 work_control 或业务分派工具时，真实 tool/result 为 isError，分派体未执行；已消费旧通知、错误 child 与伪 settle marker 逐项拒绝且没有新模型请求。
+
+Node 24.22.1 下 `TMPDIR="$PWD/.local/tmp" pnpm exec vitest run --configLoader runner --no-cache --maxWorkers=1 --project host tests/work-completion-native.spec.ts tests/work-continuous-integration.spec.ts` 完整 2 文件 / 10 项通过，exit 0（`.local/issue-274/r1/green-native-continuous.log`）。ready 实际沿原 next 写进展，waiting/paused 保留 control/state；真实 continuous 两种 hold 场景保持 slots、resumeRequested/explicitResumeRequested 未写，固定 operation/successor、epoch 只增一次。测试等待真实 whenIdle 后直接核验日志，没有扩大 timeout 或添加 skip。
+
+**returned child 的两个 pending jobs 能力边界**：不能把内存观察实验当成正式 Session 测试。匹配依赖的真实 native child 工具先创建准确 owner 的两个 completed jobs，Subagents 自行退役 activation 并发送旧结算通知；父消费后，LocalJobs 已删除两个记录，`jobs.get` 拒绝、观察 jobs=[]，普通 SessionController 对该 child 冷恢复返回 owned-by-subagent-routing。能力负例见同一 native suite；最初尝试构造该前置的失败单列 `.local/issue-274/r1/red-child-jobs.log`、`child-jobs-prerequisite.log`，不算产品红灯。
+
+同一边界已在指定干净官方 HEAD `22ddee3792402c3e70ec5f86a63c3e3e895a2f60` / 0.2.1-rc.3、Node 24.22.1 上用真实 startActivation、Agent loop、Jobs registry、正式父 user/message 与 flush 独立复核（exit 0，`.local/issue-274/r1/official-native-capability-attempt.log`）。两个准确 owner 作业只在 child 活跃时可达，返回后均移除；没有 job_output 或伪造 collected。该结果是公开宿主能力负例，**不是“补收两个 returned-child pending 结果并接任”的通过证据**。已有普通 owner 两 job 的正式补收 lane 继续单独验证；当前不通过改 DSH、假注册表、人类输入或私有路由制造此场景。
+
+保留的测试诊断：`.local/issue-274/r1/red-mixed-native.log` 的 followup FIFO 为两个独立 turn，本身不构成同批红灯；真正同批红灯使用 inject(nextStep)。`green-mixed-security-attempt.log` 首次含可选 control 字段断言错误及三个伪输入并排后停驻 FIFO；逐个拒绝确认后，`mixed-security-take-diagnostic.log` 的材料延迟也已消除。`green-native-final.log` 曾有一条默认 expect.poll 观察期未等到慢模型轮次，随后改为已知输入的真实 whenIdle 收口再核原断言，未更改测试预算。
+
 ### 已验收任务的接续入口
 
 原生会话「A²D² 接续」与 Issue「接续」页从 `task.detail` 的 `task.completion`、`progress.completion` 或 `progress.processingState === 'completed'` 读取 Task 完成事实，传入 `ExecutionContinuation.completed`。完成后保留置灰的「准备接续」，并显示「任务阶段：done（已验收完成）」和「任务已验收完成，不能继续接续」。该参数即使与 handler 同时传入也会禁用动作；handler 仍由当前协调关联等既有资格判断提供，缺少 handler 不伪造可用能力，未完成的历史或评审会话沿用隐藏行为。原生会话 Completed/idle、Goal 与 GitHub closed 均不推断 Task 完成；完成显示不改变 owner、epoch 或 Task 状态。

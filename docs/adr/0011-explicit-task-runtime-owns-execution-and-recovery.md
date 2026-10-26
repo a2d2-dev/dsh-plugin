@@ -17,6 +17,10 @@
 
 维护准入绑定持久 operation、准确 Session、固定请求身份及具体步骤。tools.guard 只允许 material 步骤保存材料、collect 步骤正式 job_output 指定 jobs、receive 步骤确认指定材料；任意 marker、业务工具和嵌套分派不取得准入。人类正常对话仍沿用宿主权限，对话、页面查看、完成和归档不解除 Task 控制。
 
+原生结算另有无工具的 settle 步骤：从真实父 catalog、child header/descriptor、最新 turn/end 及原通知首次 inbox insertion 核实 parent/child/endSeq/messageId，绑定当前 operation/source epoch。只让准确通知进入父 user/message；同批其他自动输入持久排队，不获得业务权限或设置 resumeRequested。旧通知重插不刷新首次入箱时间；消费通知、child returned 与 Task 验收仍分别核实，接任前保留原生结果消费门。材料新鲜度同时覆盖 job 身份与 child 最新结束身份。
+
+指定宿主 rc.3（22ddee3792402c3e70ec5f86a63c3e3e895a2f60）及匹配依赖的 LocalJobs 在准确 owner Agent 退役时删除其注册记录。真实原生 activation 返回且父已消费旧通知后，先前两个 completed 作业已经不可达；普通 SessionController 也不具有原生 child 冷恢复权限。不能把这个能力负例说成“returned child 的两个 reachable pending jobs 已补收”，不能伪造 pending 注册表、裸读结果或绕过子会话路由。本轮正式负例与已有准确 owner 正式补收 lane 分开记证；将来宿主支持该前置条件时，仍需原生新通知消费和新材料的完整实证。
+
 ## 接续与上下文
 
 - 使用宿主公开的安全维护边界；源会话达到可接续状态后，固定后继和操作身份，保存接续内容，创建或恢复后继，校验环境与配置，受控接任，再投递剩余事件。

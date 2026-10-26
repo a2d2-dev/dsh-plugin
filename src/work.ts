@@ -121,11 +121,11 @@ export class WorkApplication {
         const op = owner.continuation
         if (!op || !continuationInFlight(owner) || isTaskCompleted(taskAt(state, owner.ref))) continue
         if (owner.epoch === op.sourceEpoch && sameSession(owner.session, op.source) && messages.length && this.host.execution?.observation
-          && messages.every(message => (message.source as { kind?: string } | undefined)?.kind === 'subagent-settled')) {
+          && messages.some(message => (message.source as { kind?: string } | undefined)?.kind === 'subagent-settled')) {
           const facts = await this.host.execution.observation(owner)
           const parent = facts.sessions.find(row => row.session.sessionId === sessionId)
           const notices = parent?.children.filter(child => child.settlement && messages.some(message => JSON.stringify(message) === JSON.stringify(child.settlement!.message))) ?? []
-          if (notices.length === messages.length) return this.dao.transaction(async current => {
+          if (notices.length) return this.dao.transaction(async current => {
             const execution = current.executions.find(item => item.id === owner.id)!
             const operation = execution.continuation
             if (!operation || operation.operationId !== op.operationId || !continuationInFlight(execution) || execution.epoch !== op.sourceEpoch || !sameSession(execution.session, op.source)
@@ -134,7 +134,12 @@ export class WorkApplication {
               const notice = child.settlement!
               if (!operation.settlements?.some(step => step.messageId === notice.message.id)) (operation.settlements ??= []).push({ parent: parent!.session, child: child.session, endSeq: notice.endSeq, messageId: notice.message.id, delivery: 'delivered' })
             }
-            return { operationId: operation.operationId, step: 'settle' as const, messageIds: notices.map(child => child.settlement!.message.id) }
+            const messageIds = notices.map(child => child.settlement!.message.id)
+            for (const message of messages) {
+              if (messageIds.includes(message.id) || lifecycleOwned(message) || execution.events.some(event => event.id === message.id)) continue
+              execution.events.push({ id: message.id, text: 'Automatic input deferred during native settlement maintenance', kind: 'input', delivery: 'accepted', acceptance: 'unassessed', nativeMessage: structuredClone(message) })
+            }
+            return { operationId: operation.operationId, step: 'settle' as const, messageIds }
           })
         }
         const step = op.collections?.find(step => step.status === 'requested' && step.session.sessionId === sessionId)

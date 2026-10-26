@@ -127,10 +127,12 @@ export class Model extends LlmAdapter {
   requests: GenerateOptions[] = []
   acknowledgeContinuation = true
   nextTool?: { name: string; arguments: Record<string, unknown> }
+  selectTool?: (request: GenerateOptions) => Model['nextTool']
   async listModels(provider: string) { return ['default', 'selected'].map(id => ({ provider, id, name: id })) }
   async resolveModel(provider: string, model: string) { if (!['default', 'selected'].includes(model)) throw new Error('Unavailable model'); return { provider, id: model, name: model } }
   async *stream(request: GenerateOptions): AsyncIterable<StreamChunk> {
     this.requests.push(request)
+    this.nextTool ??= this.selectTool?.(request)
     const received = request.messages.findLast(message => message.role === 'user' && (message as { source?: { kind?: string; step?: string } }).source?.kind === 'a2d2-work-maintenance' && (message as { source?: { step?: string } }).source?.step === 'receive')
     const receiptId = received && `receipt-${received.id}`
     const text = received && JSON.stringify(received.content)

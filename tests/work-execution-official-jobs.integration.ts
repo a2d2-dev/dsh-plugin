@@ -38,13 +38,14 @@ async function officialModules() {
   const requireOfficial = createRequire(join(root, 'packages/jobs/jobs-local/package.json'))
   const cordis = await import(/* @vite-ignore */ pathToFileURL(requireOfficial.resolve('@deepseek-ai/cordis')).href)
   const pipeline = await import(/* @vite-ignore */ pathToFileURL(join(root, 'packages/core/tools/lib/pipeline.js')).href)
-  const [session, projection, query, persistence, prompt, tools, executor, agents, loop, llm, jobs, toolJobs, catalog, goal, goalDriver] = await Promise.all([
+  const [session, projection, query, persistence, prompt, tools, executor, agents, loop, llm, jobs, toolJobs, catalog, goal, goalDriver, subagent, workingDirectory, filesystem] = await Promise.all([
     'packages/core/session', 'packages/session/session-projection', 'packages/session-query/session-query', 'packages/session/session-persistence-jsonl',
     'packages/core/system-prompt', 'packages/core/tools', 'packages/core/tool-executor-native', 'packages/core/agent', 'packages/core/agent-loop',
     'packages/llm/llm', 'packages/jobs/jobs-local', 'packages/jobs/tool-jobs', 'packages/session/session-format-catalog', 'packages/goal/goal', 'packages/goal/goal-round-driver',
+    'packages/subagent/subagent', 'packages/session/working-directory', 'packages/fs/fs-local',
   ].map(load))
   console.log('Official jobs fixture provenance', JSON.stringify({ root, head: officialHead, node: process.version, jobs: join(root, 'packages/jobs/jobs-local/lib/index.js'), toolJobs: join(root, 'packages/jobs/tool-jobs/lib/index.js') }))
-  return { cordis, pipeline, session, projection, query, persistence, prompt, tools, executor, agents, loop, llm, jobs, toolJobs, catalog, goal, goalDriver }
+  return { cordis, pipeline, session, projection, query, persistence, prompt, tools, executor, agents, loop, llm, jobs, toolJobs, catalog, goal, goalDriver, subagent, workingDirectory, filesystem }
 }
 
 it('uses built official registry, job_output, committed Session results and cold journal without model activation during observation', async () => {
@@ -541,6 +542,93 @@ it('uses built official registry, job_output, committed Session results and cold
     if (handle) await handle.dispose()
     for (const ctx of contexts.reverse()) await ctx.fiber.dispose()
     if (dirname(directory) !== base || !basename(directory).startsWith('official-jobs-') || await realpath(directory) !== directory) throw Error(`Unexpected fixture cleanup target: ${directory}`)
+    await rm(directory, { recursive: true })
+  }
+})
+
+it('proves the official native returned owner cannot retain two reachable pending jobs', async ({ signal }) => {
+  const m = await officialModules()
+  const base = resolve(tmpdir())
+  expect(base).toBe(resolve('.local/tmp'))
+  const directory = await mkdtemp(join(base, 'official-native-'))
+  const ctx = new m.cordis.Context()
+  let parentHandle: any
+  let activation: any
+  try {
+    await ctx.plugin(m.llm.default)
+    await ctx.plugin(m.session.default)
+    await ctx.plugin(m.projection.default)
+    await ctx.plugin(m.persistence, { root: join(directory, 'sessions') })
+    class Query extends m.query.default {
+      async searchSessions() { throw Error('Search is outside native exact-read fixture') }
+      async searchEvents() { throw Error('Search is outside native exact-read fixture') }
+    }
+    await ctx.plugin(Query)
+    await ctx.plugin(m.prompt.default)
+    await ctx.plugin(m.tools.default)
+    await ctx.plugin(m.executor)
+    await ctx.plugin(m.agents.default)
+    await ctx.plugin(m.loop.default, { agents: [] })
+    await ctx.plugin(m.filesystem.default, { cwd: directory })
+    await ctx.plugin(m.workingDirectory.default, { defaultDirectory: directory })
+    await ctx.plugin(m.jobs.default)
+    await ctx.plugin(m.toolJobs, { completionDelivery: 'quiet', inlineOutputBytes: 0 })
+    ctx.provide('typert', { lookups: { configure: () => () => {} }, contexts: { configureHost: () => () => {} } })
+    await ctx.plugin(m.subagent.default, { maxActiveSubagents: 8, maxDepth: 1 })
+    ctx.subagents.registerProvider({ name: 'official-native', capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false }, inheritsParentContext: false,
+      async prepareContinuable() { return {} } })
+    const ids: string[] = []
+    ctx.tools.register(m.tools.defineTool({ name: 'produce_owned_jobs', description: 'Register two real terminal jobs in this exact native owner', parameters: {},
+      output: { schema: { type: 'object', additionalProperties: false, properties: { result: { type: 'string', required: true } } }, render: (_: unknown, value: any) => [{ type: 'text', text: value.result }] },
+      async execute(_: unknown, exec: any) {
+        for (const label of ['first', 'second']) {
+          const id = ctx.jobs.start({ kind: 'bash', owner: exec.agent.id, label, run(job: any) { job.append(`${label} native stream`); return { done: Promise.resolve({ status: 'completed', result: `${label} pending native result` }), cancel() {} } } })
+          ids.push(id)
+          await ctx.jobs.wait(id, 1000, exec.agent.id)
+          expect(ctx.jobs.get(id, exec.agent.id)).toMatchObject({ status: 'completed', owner: exec.agent.id })
+        }
+        return { result: 'Two terminal outputs remain uncollected' }
+      } }))
+    class Adapter extends m.llm.LlmAdapter {
+      produced = false
+      async *stream(request: any) {
+        if (!this.produced && JSON.stringify(request.messages).includes('Produce exact native jobs')) {
+          this.produced = true
+          const id = m.llm.ToolCallId('produce-native-jobs')
+          yield { type: 'block-start', index: 0, blockType: 'tool-call' }
+          yield { type: 'tool-call-delta', index: 0, id, name: 'produce_owned_jobs', argumentsDelta: '{}' }
+          yield { type: 'block-end', index: 0, block: { type: 'tool-call', id, name: 'produce_owned_jobs', arguments: '{}' } }
+          yield { type: 'finish', reason: { kind: 'tool-calls' } }
+          return
+        }
+        yield { type: 'block-start', index: 0, blockType: 'text' }
+        yield { type: 'text-delta', index: 0, text: 'Native owner result returned' }
+        yield { type: 'block-end', index: 0, block: { type: 'text', text: 'Native owner result returned' } }
+        yield { type: 'finish', reason: { kind: 'stop' } }
+      }
+    }
+    ctx.llm.registerAdapter(['official-native-fixture'], new Adapter())
+    parentHandle = await ctx.agents.create({ sessionId: m.session.SessionId('official-native-parent'), meta: { cwd: directory }, agentOptions: { provider: 'official-native-fixture', model: 'deterministic' } })
+    const parent = parentHandle.agent
+    activation = await ctx.subagents.startActivation({ provider: 'official-native', label: 'two pending outputs', request: { parent, prompt: [{ type: 'text', text: 'Produce exact native jobs' }] }, signal: signal!, delivery: 'parent' })
+    await activation.result
+    await parent.whenIdle()
+    await ctx.sessions.flush(parent.session)
+    const runtime = new RuntimeHost(ctx as PluginContext)
+    const facts = await runtime.executionFacts(parent.id, 'official-fixture', 'current')
+    expect(ids).toHaveLength(2)
+    expect(ctx.agents.get(activation.childId)).toBeUndefined()
+    expect(ctx.jobs.list(activation.childId)).toEqual([])
+    for (const id of ids) expect(() => ctx.jobs.get(id, activation.childId)).toThrow()
+    expect(facts.children).toContainEqual(expect.objectContaining({ session: { runtimeId: 'official-fixture', sessionId: activation.childId }, result: 'consumed', returned: true }))
+    expect((await runtime.events(parent.id)).filter(event => event.type === 'user/message' && event.data.source?.kind === 'subagent-settled' && event.data.source.senderSessionId === activation.childId)).toHaveLength(1)
+    expect((await runtime.events(activation.childId)).some(event => event.type === 'tool/call' && event.data.name === 'job_output')).toBe(false)
+    console.log('Official native owner capability', JSON.stringify({ child: activation.childId, terminalJobsBeforeReturn: ids, reachableJobsAfterReturn: 0, nativeNoticeConsumed: true, head: officialHead, node: process.version }))
+  } finally {
+    if (activation) await activation.dispose()
+    if (parentHandle) await parentHandle.dispose()
+    await ctx.fiber.dispose()
+    if (dirname(directory) !== base || !basename(directory).startsWith('official-native-') || await realpath(directory) !== directory) throw Error(`Unexpected fixture cleanup target: ${directory}`)
     await rm(directory, { recursive: true })
   }
 })
