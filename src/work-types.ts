@@ -94,9 +94,10 @@ export interface ContinuousWorkItem {
   state: 'queued' | 'active' | 'waiting' | 'paused' | 'blocked' | 'completed' | 'skipped'
   reason?: string; attempts: number; retryAt?: string; resumeRequested?: boolean; followups?: string[]; recoveryBlocked?: boolean
   /** Explicit Task recovery may acquire capacity while intake is paused; input alone cannot. */
+  screening?: { key: string; matches: boolean; reason: string }
   explicitResumeRequested?: boolean
 }
-export interface ContinuousQueueSettings { concurrency: number; refreshMinutes: number; order: 'oldest' | 'newest' }
+export interface ContinuousQueueSettings { concurrency: number; refreshMinutes: number; order: 'oldest' | 'newest'; filterPrompt?: string }
 export interface ContinuousWorkRule {
   id: string; projectId: string; sourceId: string; version: number; enabled: boolean
   scope: { assignee: '@me' | '*'; labels: string[]; identity?: { login: string; nodeId: string } }
@@ -104,6 +105,7 @@ export interface ContinuousWorkRule {
   agentPreset: string; permissionPreset: string
   planning?: import('./work-planning.ts').WorkPlanning
   queue?: ContinuousQueueSettings
+  screeningError?: { code: string; message: string }
   lastRefreshedAt?: string; nextRefreshAt?: string
   /** Retained until host settlement or completion closeout; active is a legacy first-slot projection. */
   slots?: TaskRef[]

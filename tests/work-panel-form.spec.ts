@@ -236,6 +236,23 @@ describe('continuous processing production scope controls',()=>{
       expect(form.nodes('div').find(node=>node.props['aria-label']==='持续委托队列 滚动区域')?.props).toMatchObject({role:'region',tabIndex:0})
     }finally{form.unmount()}
   })
+  it('saves, restores and clears the semantic screening prompt in the production settings form',async()=>{
+    const h=fixture();h.setRule(savedRule());await h.panel.load()
+    const form=await mountWorkPanel({controller:h.panel},'ContinuousProcessing')
+    try {
+      await vi.waitFor(()=>expect(form.text()).toContain('任务队列'))
+      form.click('设置');await vi.waitFor(()=>expect(form.textareas()).toHaveLength(1))
+      form.change(form.textareas()[0],'  只处理独立缺陷\n排除文档与产品决策  ')
+      form.submit();await vi.waitFor(()=>expect(h.command).toHaveBeenCalledOnce())
+      expect(h.command.mock.calls[0]![0]).toMatchObject({queue:{filterPrompt:'只处理独立缺陷\n排除文档与产品决策'}})
+      await vi.waitFor(()=>expect(form.nodes('form')).toHaveLength(0))
+      expect(form.text()).toContain('大模型筛选条件')
+      form.click('设置');await vi.waitFor(()=>expect(form.textareas()[0]?.props.value).toBe('只处理独立缺陷\n排除文档与产品决策'))
+      form.change(form.textareas()[0],'');form.submit()
+      await vi.waitFor(()=>expect(h.command).toHaveBeenCalledTimes(2))
+      expect(h.command.mock.calls[1]![0]).toMatchObject({queue:{filterPrompt:''}})
+    }finally{form.unmount()}
+  })
   it('renders persisted queue reasons and opens its active Issue without starting or pausing it',async()=>{
     const h=fixture(),rule=savedRule();h.setRule({...rule,planning:planned(rule)})
     await h.panel.load();const open=vi.spyOn(h.panel,'openTask').mockResolvedValue()
