@@ -24,6 +24,14 @@ Issue 和原生接续页共用后端事实：会话运行来自对应 Session �
 
 Orb 的「交接到新会话」确认卡在创建前直接说明上述边界，并指向当前协调会话「A²D² 接续」或工作详情「接续」。本次仅补可见指引，未改变普通协作动作；不以成功通知的 tooltip 代替确认说明。受控旧 Goal activation 停用仍不代表持久 phase 暂停、跨会话迁移或自动 rearm，人类 pause/resume 权限不变。生产组件交互红测先实际打开确认卡并因缺少 TaskExecution 失败，再在相同断言下变绿；查看和取消不发出创建或控制命令。
 
+## #275 恢复验证（2026-10-26）
+
+固定 base 为后端合并 `5d94000091f41488725226be8e349314616ad56e`；接手 `463bec8`、`92ba30f` 两个阶段及遗留历史入口测试均保留。验证代码为 `775347ef6f800a2bfd527c707d5a41a81b32266c`：受影响 6 文件 / 92 项（含六秒慢详情和五秒关联轮询）、`pnpm typecheck`、`pnpm verify:repository` 均 exit 0。Node 24 的干净 archive `pnpm verify:pack-exports` exit 0，32 个导出目标、两个 sidecar 完整，安装后 15 个 Node 入口可导入。
+
+native 历史入口、生产 HandoffOrb 真正确认卡与补收失败步骤均先红后绿。首次组合的投递文案回归及继承的非法 stopping 类型比较如实保留，修复未删除断言、扩大 timeout 或增加 skip。agent-browser 已检查深浅主题、390px、长标题、按需帮助、真实 CSS 匹配及可见键盘焦点；窄屏 document/viewport 均为 390。首次无样式截图属于 CSS 虚拟模块不可枚举的证据生成问题，修正 hash 类映射后重拍，旧图不计通过。
+
+[完整中文报告、红绿日志、合同截图及 SHA-256 清单](https://github.com/a2d2-dev/project/blob/c771514e1f3eb7cc9f3eb2a9da025d3ffbc65a1f/dsh-plugin/docs/artifacts/issue-270-2026-10-26/frontend-recovery/frontend-recovery-report.md)位于访问受限的证据仓库。截图明确是实际生产组件的合成合同渲染，**不是已部署 GUI 或真实 Task 接任验收**。本轮没有更新 3080 的包或 profile、重启服务、改动独立 canvas 源树，也没有调用 Goal 自动循环；保留 canvas 的组合包接线与 #270/#259/#268 完整 GUI 验收仍由 CEO/#276 完成，不据此将父票 Done。
+
 ## 验证记录
 
 - 初始真实宿主与组件回归 4 项稳定红；修复后绿，覆盖已选未请求、已请求、冷恢复与六秒详情/五秒关联轮询。
