@@ -47,6 +47,12 @@ LF指出，旧图把插件、原会话和新会话画成不断交棒的三条泳
 
 一条会话可以同时是“空闲、Task waiting、当前协调会话”。另有后台作业是否终态、结果是否正式收取、Task是否验收完成三个独立事实，不从空闲或Completed推断。
 
+### 会话生命周期与操作
+
+![会话运行、任务控制与协调归属的独立状态和操作](../artifacts/session-lifecycle-2026-10-25/session-lifecycle-operations.png)
+
+[打开生命周期与操作 HTML 图](../artifacts/session-lifecycle-2026-10-25/session-lifecycle-operations.html)。会话运行可以经历多轮；等待、暂停、恢复和Task验收属于任务控制及完成事实；正式接任才切换有效协调会话。仅换会话保留原控制意图，接任后继续分别确认投递与材料可读。
+
 ### 数据流程与恢复边界
 
 1. 插件读取持久接续进度、当前TaskExecution和宿主公开执行事实，判断当前步骤。
