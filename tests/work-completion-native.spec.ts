@@ -2,6 +2,8 @@ import { expect, it } from 'vitest'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import Subagents from '@deepseek-ai/dsh-subagent'
+import LocalJobs from '@deepseek-ai/dsh-jobs-local'
+import * as ToolJobs from '@deepseek-ai/dsh-tool-jobs'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { installWorkTools } from '../src/work-execution/tools.ts'
 import { installWorkProgressTools } from '../src/work-progress-tools.ts'
@@ -141,6 +143,57 @@ it('keeps native continuable result intake authorized until the settled notice r
   } finally { release?.(); await fixtures.close() }
 })
 
+it('records the native owner capability boundary when returned child jobs are removed with its activation', async ({ signal }) => {
+  const fixtures = new ExecutionFixtures(signal)
+  try {
+    const h = await fixtures.mount(await fixtures.root(), 'read-only')
+    await h.ctx.plugin(LocalJobs)
+    await h.ctx.plugin(ToolJobs, { completionDelivery: 'quiet' })
+    await h.ctx.plugin(Subagents, { maxActiveSubagents: 8, maxDepth: 1 })
+    h.ctx.subagents.registerProvider({ name: 'fresh-local', capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false }, inheritsParentContext: false,
+      async prepareContinuable() { return {} }, async start() { throw Error('Only native continuable creation is used') } })
+    installWorkTools(h.ctx, h.app, 'runtime')
+    const jobs: string[] = []
+    h.ctx.tools.register(defineTool({ name: 'produce_native_jobs', description: 'Produce real exact-owner terminal jobs', parameters: {},
+      output: { schema: { type: 'object', additionalProperties: false, properties: { result: { type: 'string', required: true } } }, render: (_, value) => [{ type: 'text', text: value.result }] },
+      async execute(_, exec) {
+        for (const label of ['first', 'second']) jobs.push(h.ctx.jobs.start({ kind: 'bash', owner: exec.agent!.id, label,
+          run(job) { job.append(`${label} native output`); return { done: Promise.resolve({ status: 'completed', result: `${label} exact child evidence` }), cancel() {} } } }))
+        for (const id of jobs) {
+          await h.ctx.jobs.wait(id, 1000, exec.agent!.id)
+          expect(h.ctx.jobs.get(id as never, exec.agent!.id)).toMatchObject({ status: 'completed', owner: exec.agent!.id })
+        }
+        return { result: 'Two native jobs are terminal; formal output remains pending.' }
+      } }))
+    const resource = { runtimeId: 'runtime', workspaceId: h.workspace.id }
+    const project = ok(await h.app.execute({ type: 'project.create', commandId: 'project', name: 'native jobs', resource }, operator)).project!
+    const task = ok(await h.app.execute({ type: 'task.create', commandId: 'task', projectId: project.id, title: 'native jobs', goal: 'verify', specification: 'two exact child results', acceptance: ['verified'] }, operator)).task!
+    const ref = { projectId: project.id, taskId: task.id }
+    const execution = ok(await h.app.execute({ type: 'task.start', commandId: 'start', ref, expectedVersion: task.version, agentId: task.agentId, resource, model: { provider: 'contract', model: 'default' }, agentPreset: 'contract', permissionPreset: 'read-only' }, operator)).execution!
+    const fence = { ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch }
+    const parent = h.ctx.agents.get(SessionId(execution.session.sessionId))!
+    const runtime = new RuntimeHost(h.ctx)
+    await fixtures.run(() => parent.whenIdle())
+    h.model.nextTool = { name: 'produce_native_jobs', arguments: {} }
+    const child = await fixtures.run(() => h.ctx.subagents.startContinuable({ provider: 'fresh-local', label: 'two job owner', request: { parent, prompt: [{ type: 'text', text: 'Produce two background verification results' }] }, signal: signal! }))
+    await expect.poll(async () => (await runtime.events(parent.id)).filter(event => event.type === 'user/message' && event.data.source?.kind === 'subagent-settled').length).toBe(1)
+    await fixtures.run(() => parent.whenIdle())
+    expect(h.ctx.agents.get(child.childId)).toBeUndefined()
+    expect(jobs).toHaveLength(2)
+    const before = await h.host.execution.observation!(execution)
+    expect(before.sessions.find(row => row.role === 'current')!.children[0]!).toMatchObject({ session: { runtimeId: 'runtime', sessionId: child.childId }, returned: true, result: 'consumed' })
+    // The installed formal Jobs provider ties registration to the exact live
+    // owner Agent. Natural native settlement disposes that Agent and removes
+    // both records; this is not a reachable completed/pending collection case.
+    expect(h.ctx.jobs.list(child.childId)).toEqual([])
+    for (const id of jobs) expect(() => h.ctx.jobs.get(id as never, child.childId)).toThrow()
+    expect(before.sessions.find(row => row.session.sessionId === child.childId)!.jobs).toEqual([])
+    await expect(h.host.execution.flushSession!({ runtimeId: 'runtime', sessionId: child.childId })).rejects.toThrow('owned by subagent routing')
+    expect((await runtime.events(child.childId)).some(event => event.type === 'tool/call' && event.data.name === 'job_output')).toBe(false)
+    console.log('R1 native owner capability', JSON.stringify({ child: child.childId, terminalJobsBeforeReturn: jobs, returned: true, noticeConsumed: true, reachableJobsAfterReturn: 0, genericResume: 'owned by subagent routing' }))
+  } finally { await fixtures.close() }
+})
+
 it.for(['ready', 'waiting', 'paused'] as const)('continues the same operation after a running native child settles under %s control', async (state, { signal }) => {
   const fixtures = new ExecutionFixtures(signal)
   let release!: () => void
@@ -175,8 +228,13 @@ it.for(['ready', 'waiting', 'paused'] as const)('continues the same operation af
     // Release only after reservation. Subagents itself must deliver the notice;
     // this test never creates a subagent-settled message or appends user/message.
     const childAgent = h.ctx.agents.get(child.childId)!
-    release()
-    await fixtures.run(() => childAgent.whenIdle())
+    const unrelated = createUserMessage({ content: [{ type: 'text', text: 'Unrelated automatic business input must stay queued.' }], source: { kind: 'a2d2-work-dispatch' } })
+    await fixtures.run(() => parent.runMaintenance(async () => {
+      release()
+      await childAgent.whenIdle()
+      await expect.poll(() => [...parent.inbox.nextTurn, ...parent.inbox.nextStep].some(message => message.source?.kind === 'subagent-settled')).toBe(true)
+      parent.inject(unrelated)
+    }))
     await expect.poll(async () => (await new RuntimeHost(h.ctx).events(parent.id)).filter(event => event.type === 'user/message' && event.data.source?.kind === 'subagent-settled' && event.data.source.senderSessionId === child.childId).length).toBe(1)
     await fixtures.run(() => parent.whenIdle())
     await fixtures.run(() => h.ctx.sessions.flush(parent.session))
