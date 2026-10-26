@@ -11,6 +11,11 @@
 
 declare module '*.module.css' {
   const classes: {
+    readonly status: string
+    readonly summary: string
+    readonly filters: string
+    readonly taskLink: string
+    readonly problem: string
     readonly listSearch: string
     readonly listScope: string
     readonly activeFilters: string

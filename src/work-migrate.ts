@@ -1,5 +1,5 @@
 import type { WorkSnapshot } from './work-schema.ts'
-import type { TaskRef } from './work-types.ts'
+import type { ContinuousWorkRule, TaskRef } from './work-types.ts'
 import { sameTask } from './work-continuous.ts'
 
 const key = (ref: TaskRef): string => `${ref.projectId}/${ref.taskId}`
@@ -15,6 +15,7 @@ const refOf = (task: { projectId: string; id: string }): TaskRef => ({ projectId
  * non-canonical children instead of reading them as necessary work.
  */
 export function normalizeLegacyLocalChildren(state: WorkSnapshot): WorkSnapshot {
+  state = normalizeContinuousQueues(state)
   const canonical = new Set(state.externalBindings.map(binding => key(binding.ref)))
   const hasLegacy = state.tasks.some(task => task.parent && !canonical.has(key(refOf(task))))
   if (!hasLegacy) return state
@@ -44,4 +45,40 @@ export function normalizeLegacyLocalChildren(state: WorkSnapshot): WorkSnapshot 
 /** Canonical children are the only necessary children: native sub-issue records. */
 export function isCanonicalChild(state: WorkSnapshot, ref: TaskRef): boolean {
   return state.externalBindings.some(binding => sameTask(binding.ref, ref))
+}
+
+/** Collapse legacy per-source rules without choosing a broader execution authority. */
+export function normalizeContinuousQueues(state: WorkSnapshot): WorkSnapshot {
+  if (!state.continuousRules?.some(rule => !rule.slots || rule.items.some(item => !item.sourceId)) && new Set(state.continuousRules?.map(rule => rule.projectId)).size === (state.continuousRules?.length ?? 0)) return state
+  const rules: ContinuousWorkRule[] = []
+  for (const old of state.continuousRules ?? []) {
+    const rule = structuredClone(old)
+    rule.slots ??= rule.active ? [rule.active] : []
+    for (const item of rule.items) item.sourceId ??= rule.sourceId
+    const current = rules.find(item => item.projectId === rule.projectId)
+    if (!current) { rules.push(rule); continue }
+    // Keep every original setting/plan/item for audit, including duplicate observations.
+    current.legacyRules ??= [legacySettings(current)]
+    current.legacyRules.push(legacySettings(rule))
+    if (!current.planning && rule.planning) current.planning = structuredClone(rule.planning)
+    else if (current.planning && rule.planning) current.planning.blocks = [...new Set([...current.planning.blocks, ...rule.planning.blocks])]
+    current.enabled = false
+    current.version = Math.max(current.version, rule.version) + 1
+    current.migrationConflict = { code: 'continuous-scope-conflict', message: 'Multiple legacy source scopes exist. Save explicit Project queue settings before starting further work; existing executions and legacy settings are retained.' }
+    current.error = current.migrationConflict
+    for (const item of rule.items) {
+      const duplicate = current.items.find(prior => prior.nodeId === item.nodeId)
+      if (!duplicate) current.items.push(item)
+      else if (item.ref && !duplicate.ref) Object.assign(duplicate, item)
+      else if (!duplicate.ref && (item.state === 'blocked' || item.state === 'completed')) Object.assign(duplicate, item)
+    }
+    for (const ref of rule.slots) if (!current.slots!.some(prior => sameTask(prior, ref))) current.slots!.push(ref)
+    current.active = current.slots![0]
+  }
+  return { ...state, continuousRules: rules as WorkSnapshot['continuousRules'] }
+}
+
+function legacySettings(rule: ContinuousWorkRule): Omit<ContinuousWorkRule, 'legacyRules'> {
+  const { queue, slots, lastRefreshedAt, nextRefreshAt, migrationConflict, legacyRules, ...legacy } = rule
+  return structuredClone(legacy)
 }

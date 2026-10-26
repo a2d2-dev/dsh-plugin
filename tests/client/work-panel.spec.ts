@@ -20,6 +20,64 @@ function setup() {
   return {panel:new WorkPanelController(client,navigation),client,queries,navigation}
 }
 describe('work panel public navigation',()=>{
+  it('opens the delegation tab without commands, remote refresh or execution admission',async()=>{
+    const {panel,client,queries}=setup()
+    await panel.load();queries.length=0
+    await panel.selectSourceTab('delegation')
+    expect(panel.getSnapshot().source.tab).toBe('delegation')
+    expect(queries).toEqual([])
+    expect(client.command).not.toHaveBeenCalled()
+  })
+  it('opens the queue current session with a fresh detail read and never reconciles execution',async()=>{
+    const {panel,client,navigation}=setup()
+    await panel.load()
+    const original=client.query
+    client.query=async query=>query.type==='task.detail'?{status:'completed',task,execution:{ref:{projectId:'p1',taskId:'t1'},actual:{runtimeId:'host'},session:{runtimeId:'host',sessionId:'current'}} as any}:original(query)
+    await panel.openQueueSession({projectId:'p1',taskId:'t1'})
+    expect(navigation.openSession).toHaveBeenCalledExactlyOnceWith('current')
+    expect(client.command).not.toHaveBeenCalled()
+  })
+  it('keeps an uncreated queue session on the existing page without implicit recovery',async()=>{
+    const {panel,client,navigation}=setup()
+    await panel.load()
+    const original=client.query
+    client.query=async query=>query.type==='task.detail'?{status:'completed',task,execution:{ref:{projectId:'p1',taskId:'t1'},session:{runtimeId:'host',sessionId:'reserved-only'}} as any}:original(query)
+    await panel.openQueueSession({projectId:'p1',taskId:'t1'})
+    expect(navigation.openSession).not.toHaveBeenCalled()
+    expect(panel.getSnapshot().error).toContain('当前处理会话暂不可进入')
+    expect(client.command).not.toHaveBeenCalled()
+  })
+  it('does not open a stale queue session after switching project during its read',async()=>{
+    const {panel,client,navigation}=setup()
+    await panel.load()
+    let release!:(result:any)=>void
+    const original=client.query
+    client.query=async query=>query.type==='task.detail'?new Promise(resolve=>{release=resolve}):original(query)
+    const pending=panel.openQueueSession({projectId:'p1',taskId:'t1'})
+    await panel.selectProject('p2')
+    release({status:'completed',task,execution:{session:{runtimeId:'host',sessionId:'stale'}}});await pending
+    expect(navigation.openSession).not.toHaveBeenCalled()
+    expect(client.command).not.toHaveBeenCalled()
+  })
+  it('opens the canonical Task of a retained queue problem independently of queue ownership',async()=>{
+    const {panel,client}=setup()
+    await panel.load()
+    const open=vi.spyOn(panel,'openTask').mockResolvedValue()
+    const select=vi.spyOn(panel,'selectConnectedSource')
+    await panel.openQueueItem({nodeId:'I1',number:1,title:'Retained problem',url:'https://github.com/acme/repo/issues/1',state:'blocked',attempts:1,taskRef:{projectId:'p1',taskId:'t1'},sourceId:'old-source'},'new-source')
+    expect(open).toHaveBeenCalledExactlyOnceWith({projectId:'p1',taskId:'t1'})
+    expect(select).not.toHaveBeenCalled()
+    expect(client.command).not.toHaveBeenCalled()
+  })
+  it('opens queue history in the existing Task session page and returns to the same queue tab',async()=>{
+    const {panel,client,navigation}=setup()
+    await panel.load();await panel.selectSourceTab('delegation')
+    await panel.openQueueSession({projectId:'p1',taskId:'t1'},true)
+    expect(panel.getSnapshot()).toMatchObject({detail:{task:{id:'t1'}},detailTab:'sessions'})
+    panel.back()
+    expect(panel.getSnapshot().source.tab).toBe('delegation')
+    expect(client.command).not.toHaveBeenCalled();expect(navigation.openSession).not.toHaveBeenCalled()
+  })
   it('initializes the mounted panel without superseding an in-flight task return',async()=>{
     const {panel}=setup()
     const reveal=panel.revealTask({projectId:'p1',taskId:'t1'})

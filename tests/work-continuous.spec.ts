@@ -1,9 +1,9 @@
 import { SourceError } from '../src/work-sources/errors.ts'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { WorkApplication } from '../src/work.ts'
+import { WorkApplication, WorkDao } from '../src/work.ts'
 import type { WorkHost } from '../src/work.ts'
 import type { ContinuousWorkRule, NativeWorkMessage, WorkCompleted, WorkExecution, WorkResult } from '../src/work-types.ts'
 import type { GitHubIssue, GitHubSourcePort } from '../src/work-sources/types.ts'
@@ -209,28 +209,29 @@ it('waiting yields after the safe boundary, and public/native input plus resume 
   expect(h.host.sends).toHaveLength(5)
 })
 
-it('recovers an unknown create outcome using the same persisted execution and Session after restart', async () => {
+it('requires explicit recovery of an unknown create outcome and retains the execution and Session after restart', async () => {
   const h = await setup(); h.host.failAfterCreation = 1
   completed(await h.app.execute(h.configure, operator)); const first = await h.execution()
   expect(first.state).toBe('failed'); expect(h.host.sessionsCreated.size).toBe(1)
   const restored = new WorkApplication(h.directory, h.host, h.source)
   const now = Date.now(); vi.spyOn(Date, 'now').mockReturnValue(now + 120_000)
+  completed(await restored.execute({ type: 'task.reconcile', commandId: 'explicit-create-recovery', ...fence(first) }, operator))
   await restored.reconcileControls()
   expect(await h.execution(first.ref, restored)).toMatchObject({ id: first.id, session: first.session, owner: first.owner, state: 'ready' })
   expect(h.host.sessionsCreated.size).toBe(1); expect(h.host.sends).toEqual([`kickoff:${first.id}`])
   await restored.reconcileControls(); expect(h.host.sends).toHaveLength(1)
 })
 
-it('bounds host failures with visible blocked state and proceeds to another candidate without empty model turns', async () => {
+it('records host failures for manual recovery without automatically retrying sessions', async () => {
   const h = await setup(); h.host.failEnsure = 100
   completed(await h.app.execute(h.configure, operator)); const first = await h.execution()
   let now = Date.now(); vi.spyOn(Date, 'now').mockImplementation(() => now)
   for (let tick = 0; tick < 3; tick++) { now += 120_000; await h.app.reconcileControls() }
   const rule = await h.status()
-  expect(rule.items[0]).toMatchObject({ state: 'blocked', attempts: 3, reason: expect.stringContaining('unknown') })
-  expect(h.host.ensures.filter(id => id === first.session.sessionId)).toHaveLength(3)
+  expect(rule.items[0]).toMatchObject({ state: 'blocked', attempts: 1, reason: expect.stringContaining('unknown') })
+  expect(h.host.ensures.filter(id => id === first.session.sessionId)).toHaveLength(1)
   expect(h.host.sends).toHaveLength(0)
-  expect(rule.items[1]!.state).toBe('active')
+  expect(rule.items[1]!.state).toBe('blocked')
 })
 
 it('blocks changed credential identity and disabled sources without losing existing queue or task owners', async () => {
@@ -349,7 +350,9 @@ it('recovers a lost delivery receipt without sending a second kickoff or creatin
   vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 120_000)
   await restored.reconcileControls()
   expect(await h.execution(first.ref, restored)).toMatchObject({ id: first.id, session: first.session, events: [{ id: `kickoff:${first.id}`, delivery: 'consumed' }] })
-  expect(h.host.sends).toHaveLength(1); expect(h.host.sessionsCreated.size).toBe(1)
+  expect(h.host.sends).toHaveLength(2); expect(h.host.sessionsCreated.size).toBe(2)
+  expect(h.host.ensures.filter(id => id === first.session.sessionId)).toHaveLength(1)
+  expect((await h.status(restored)).items[0]!.state).toBe('blocked')
 })
 
 it('freezes completed managed acceptance against later specification or report mutations', async () => {
@@ -408,6 +411,29 @@ it('enables only a reviewed plan and dispatches its order while Block fences fut
   h.host.idle(first); completed(await reportDone(h.app, first)); await h.app.reconcileControls()
   expect(h.host.sessionsCreated.size).toBe(1)
   expect((await h.status()).items.find(item => item.nodeId === 'ISSUE_1')?.reason).toContain('Block')
+})
+
+it('retains canonical resource conflicts across refresh and admits later eligible work without retry loops', async () => {
+  const h = await setup(false)
+  h.host.resources = async () => [{ ref: resource, title: 'Workspace' }, { ref: { ...resource, workspaceId: 'other-workspace' }, title: 'Other workspace' }]
+  const project = completed(await h.app.query({ type: 'project.detail', projectId: h.scope.projectId }, operator)).project!
+  completed(await h.app.execute({ type: 'project.attach-resource', commandId: 'conflict-resource', projectId: project.id, expectedVersion: project.version, resource: { ...resource, workspaceId: 'other-workspace' } }, operator))
+  h.remote.issues[2]!.assignees = ['alice']; completed(await h.refresh())
+  for (const number of [1, 2]) {
+    const imported = completed(await h.app.execute({ type: 'source.import', commandId: `conflict-import-${number}`, ...h.scope, nodeId: `ISSUE_${number}` }, operator))
+    completed(await h.app.execute({ type: 'task.start', commandId: `conflict-start-${number}`, ref: imported.ref!, expectedVersion: imported.task!.version, agentId: imported.task!.agentId, resource: { ...resource, workspaceId: 'other-workspace' }, model, agentPreset: 'agent', permissionPreset: 'safe' }, operator))
+  }
+  completed(await h.app.execute({ ...h.configure, enabled: true, queue: { concurrency: 2, refreshMinutes: 10, order: 'oldest' } }, operator))
+  await h.app.reconcileContinuous(); await h.app.reconcileContinuous()
+  const rule = await h.status()
+  expect(rule.items.filter(item => ['ISSUE_1','ISSUE_2'].includes(item.nodeId))).toEqual(expect.arrayContaining([
+    expect.objectContaining({nodeId:'ISSUE_1',state:'waiting',reason:expect.stringContaining('another authorized resource')}),
+    expect.objectContaining({nodeId:'ISSUE_2',state:'waiting',reason:expect.stringContaining('another authorized resource')}),
+  ]))
+  expect(rule.items.find(item => item.nodeId === 'ISSUE_3')?.state).toBe('active')
+  completed(await h.app.execute({ type: 'continuous.refresh', commandId: 'preserve-resource-conflicts', ...h.scope, expectedVersion: rule.version }, operator))
+  expect((await h.status()).items.filter(item => ['ISSUE_1','ISSUE_2'].includes(item.nodeId)).map(item => item.state)).toEqual(['waiting','waiting'])
+  expect(h.host.sessionsCreated.size).toBe(3)
 })
 
 it('adopts canonical existing execution without changing owner epoch resource or Session', async () => {
@@ -519,22 +545,17 @@ it('fences a model response when Block changes while generation is in flight', a
   expect(h.host.sessionsCreated.size).toBe(0)
 })
 
-it('observes a canonical Task already claimed by another source rule without taking its owner', async () => {
-  let mode = 'existing'
-  const h = await setup(true, { generate: async () => ({ steps: [{ nodeId: 'ISSUE_1', why: '同一任务', nextAction: '观察已有规则', mode }] }) })
-  completed(await h.app.execute(h.configure, operator)); const original = await h.execution()
+it('returns one Project queue across sources and requires an explicit scope switch', async () => {
+  const h = await setup(); completed(await h.app.execute(h.configure, operator)); const original = await h.execution()
   const second = completed(await h.app.execute({ type: 'source.configure-project', commandId: 'second-source', projectId: h.scope.projectId, githubProject: { owner: 'acme', type: 'org', number: 2 } }, operator)).source!
   const scope = { projectId: h.scope.projectId, sourceId: second.id }
+  const before = await h.status()
+  expect(completed(await h.app.query({ type: 'continuous.status', ...scope }, operator)).continuousRule).toEqual(before)
+  expect(await h.app.execute({ ...h.configure, ...scope, commandId: 'configure-second', expectedVersion: 1, enabled: false }, operator)).toMatchObject({ status: 'failed', error: { code: 'continuous-source-mismatch' } })
   completed(await h.app.query({ type: 'source.issues', ...scope, page: 1, perPage: 100, assignee: '@me', state: 'open', refresh: true }, operator))
-  completed(await h.app.execute({ ...h.configure, ...scope, commandId: 'configure-second', enabled: false }, operator))
-  completed(await h.app.execute({ type: 'continuous.instruct', commandId: 'instruct-second', ...scope, expectedVersion: 1, text: '继续同一个Issue' }, operator))
-  expect(await h.app.execute({ type: 'continuous.preview', commandId: 'invalid-owner', ...scope, expectedVersion: 2 }, operator)).toMatchObject({ status: 'failed', error: { code: 'planning-other-rule-owner' } })
-  mode = 'wait'
-  completed(await h.app.execute({ type: 'continuous.preview', commandId: 'wait-plan', ...scope, expectedVersion: 2 }, operator))
-  completed(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'enable-second', ...scope, expectedVersion: 3, enabled: true }, operator))
-  const rule = completed(await h.app.query({ type: 'continuous.status', ...scope }, operator)).continuousRule!
-  expect(rule.items[0]).toMatchObject({ nodeId: 'ISSUE_1', state: 'waiting' })
-  expect(rule.items[0]!.ref).toBeUndefined(); expect(rule.active).toBeUndefined()
+  completed(await h.app.execute({ ...h.configure, ...scope, commandId: 'switch-scope', expectedVersion: 1, queue: { concurrency: 1, refreshMinutes: 5, order: 'oldest' } }, operator))
+  expect((await h.status()).id).toBe(before.id)
+  expect((await h.status()).sourceId).toBe(second.id)
   expect(await h.execution()).toMatchObject({ id: original.id, owner: original.owner, epoch: original.epoch, session: original.session })
   expect(h.host.sessionsCreated.size).toBe(1)
 })
@@ -649,4 +670,371 @@ it('discards a Repo scan when its source is disabled during pagination', async (
   release()
   expect(await pending).toMatchObject({ status: 'failed', error: { code: 'source-observation-superseded' } })
   expect(generate).not.toHaveBeenCalled(); expect(h.host.sessionsCreated.size).toBe(0)
+})
+
+
+const queue = { concurrency: 2, refreshMinutes: 5, order: 'oldest' as const }
+it('fills concurrent slots in order and lowering capacity or pausing preserves running identities', async () => {
+  const h = await setup()
+  h.remote.issues = [issue(3), issue(1), issue(2), issue(4)]
+  completed(await h.app.execute({ ...h.configure, queue }, operator))
+  const initial = await h.status()
+  expect(initial.items.filter(item => item.state === 'active').map(item => item.number)).toEqual([1, 2])
+  expect(initial.slots).toHaveLength(2)
+  const executions = await Promise.all(initial.slots!.map(ref => h.execution(ref)))
+  completed(await h.app.execute({ ...h.configure, commandId: 'lower-limit', expectedVersion: 1, queue: { ...queue, concurrency: 1, order: 'newest' } }, operator))
+  expect((await h.status()).slots).toEqual(initial.slots)
+  expect(h.host.sessionsCreated.size).toBe(2)
+  completed(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'pause-next', ...h.scope, expectedVersion: 2, enabled: false }, operator))
+  for (const execution of executions) {
+    expect(await h.execution(execution.ref)).toMatchObject({ id: execution.id, owner: execution.owner, epoch: execution.epoch, session: execution.session })
+    expect(await h.host.authorize(execution.session.sessionId)).toBe(true)
+  }
+  h.host.idle(executions[0]!); completed(await reportDone(h.app, executions[0]!)); await h.app.reconcileControls()
+  expect((await h.status()).slots).toHaveLength(1)
+  expect(h.host.sessionsCreated.size).toBe(2)
+  completed(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'resume-next', ...h.scope, expectedVersion: 3, enabled: true }, operator))
+  expect(h.host.sessionsCreated.size).toBe(2)
+  h.host.idle(executions[1]!); completed(await reportDone(h.app, executions[1]!)); await h.app.reconcileControls()
+  expect((await h.status()).items.filter(item => item.state === 'active').map(item => item.number)).toEqual([4])
+  expect((await h.status()).items.filter(item => item.state === 'completed')).toHaveLength(2)
+  expect(h.host.sessionsCreated.size).toBe(3)
+})
+
+it('manual refresh recalculates only waiting, preserves problems/history and makes no model or execution calls', async () => {
+  const generate = vi.fn(async () => ({ steps: [] }))
+  const h = await setup(true, { generate })
+  h.remote.issues = [issue(1), issue(2), issue(3)]
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1 } }, operator))
+  const first = await h.execution()
+  h.host.idle(first); completed(await reportDone(h.app, first)); await h.app.reconcileControls()
+  const second = await h.execution()
+  h.host.idle(second); await h.app.reconcileControls()
+  const third = await h.execution()
+  const before = await h.status()
+  expect(before.items.map(item => item.state)).toEqual(['completed', 'blocked', 'active'])
+  h.remote.issues = [issue(4), issue(5)]
+  const calls = [h.host.ensures.length, h.host.sends.length, h.host.wakes.length]
+  const command = { type: 'continuous.refresh', commandId: 'refresh-waiting', ...h.scope, expectedVersion: 1 }
+  completed(await h.app.execute(command, operator))
+  const refreshed = await h.status()
+  expect(refreshed.items.slice(0, 3)).toEqual(before.items)
+  expect(refreshed.items.filter(item => item.state === 'queued').map(item => item.number)).toEqual([4, 5])
+  expect(refreshed.slots).toEqual([third.ref])
+  expect([h.host.ensures.length, h.host.sends.length, h.host.wakes.length]).toEqual(calls)
+  expect(generate).not.toHaveBeenCalled()
+  h.remote.issues = [issue(5), issue(6)]
+  completed(await h.app.execute({ ...command, commandId: 'refresh-again' }, operator))
+  expect((await h.status()).items.filter(item => item.state === 'queued').map(item => item.number)).toEqual([5, 6])
+  expect((await h.status()).items.find(item => item.number === 4)?.state).toBe('skipped')
+  expect(completed(await h.app.query({ type: 'project.detail', projectId: h.scope.projectId }, operator)).tasks).toHaveLength(3)
+  const restored = new WorkApplication(h.directory, h.host, h.source)
+  expect(await h.status(restored)).toEqual(await h.status())
+  completed(await restored.execute(command, operator)) // old receipt cannot recreate a list
+  expect((await h.status(restored)).items.filter(item => item.state === 'queued').map(item => item.number)).toEqual([5, 6])
+})
+
+it('periodic refresh honors the saved interval and updates the existing queue after restart', async () => {
+  const h = await setup()
+  const scans = vi.spyOn(h.source, 'project')
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1, refreshMinutes: 2 } }, operator))
+  const before = await h.status(), calls = scans.mock.calls.length
+  h.remote.issues.push(issue(5))
+  const restored = new WorkApplication(h.directory, h.host, h.source)
+  vi.spyOn(Date, 'now').mockReturnValue(Date.parse(before.nextRefreshAt!) - 1)
+  await restored.reconcileControls()
+  expect(scans).toHaveBeenCalledTimes(calls)
+  expect((await h.status(restored)).items.some(item => item.number === 5)).toBe(false)
+  vi.mocked(Date.now).mockReturnValue(Date.parse(before.nextRefreshAt!))
+  await restored.reconcileControls()
+  expect(scans).toHaveBeenCalledTimes(calls + 1)
+  expect((await h.status(restored)).items.find(item => item.number === 5)?.state).toBe('queued')
+  expect((await h.status(restored)).id).toBe(before.id)
+  expect((await h.status(restored)).slots).toEqual(before.slots)
+})
+
+it('retains failed settlement capacity until an explicit task recovery and never retries the session', async () => {
+  const h = await setup()
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1 } }, operator))
+  const first = await h.execution()
+  completed(await h.app.sessionControl(first.session, 'wait-before-settle', 'wait', 'Need input'))
+  h.host.idle(first)
+  const settle = vi.spyOn(h.host.execution, 'settle').mockRejectedValue(new Error('Settlement unknown'))
+  await h.app.reconcileControls()
+  const calls = h.host.ensures.length
+  expect((await h.status()).slots).toEqual([first.ref])
+  expect((await h.status()).items[0]).toMatchObject({ state: 'blocked' })
+  await h.app.reconcileControls(); await h.app.reconcileControls()
+  expect(h.host.ensures).toHaveLength(calls)
+  expect(h.host.sessionsCreated.size).toBe(1)
+  completed(await h.app.execute({ ...h.configure, commandId: 'save-with-problem', expectedVersion: 1, queue: { ...queue, concurrency: 1 } }, operator))
+  completed(await h.app.execute({ type: 'continuous.refresh', commandId: 'refresh-with-problem', ...h.scope, expectedVersion: 2 }, operator))
+  expect(h.host.ensures).toHaveLength(calls)
+  expect((await h.status()).slots).toEqual([first.ref])
+  settle.mockImplementation(async () => {})
+  completed(await h.app.execute({ type: 'task.control', commandId: 'human-recovers', ...fence(first), action: 'resume', text: 'Continue after checking session' }, operator))
+  await h.app.reconcileControls()
+  expect(await h.execution(first.ref)).toMatchObject({ id: first.id, session: first.session, owner: first.owner, epoch: first.epoch, state: 'ready' })
+})
+
+it('explicit queue save preserves legacy instruction, plans and blocks without requiring new model planning', async () => {
+  const generate = vi.fn(async () => ({ steps: [{ nodeId: 'ISSUE_2', why: 'Selected', nextAction: 'Work', mode: 'new' }] }))
+  const h = await setup(false, { generate }, true)
+  completed(await h.app.execute(h.configure, operator))
+  completed(await h.app.execute({ type: 'continuous.instruct', commandId: 'legacy-instruction', ...h.scope, expectedVersion: 1, text: 'Only the reviewed plan' }, operator))
+  completed(await h.app.execute({ type: 'continuous.block', commandId: 'legacy-block', ...h.scope, expectedVersion: 2, nodeId: 'ISSUE_1', blocked: true }, operator))
+  completed(await h.app.execute({ type: 'continuous.preview', commandId: 'legacy-preview', ...h.scope, expectedVersion: 3 }, operator))
+  const planning = (await h.status()).planning!
+  completed(await h.app.execute({ type: 'continuous.refresh', commandId: 'legacy-refresh', ...h.scope, expectedVersion: 4 }, operator))
+  expect(h.host.sessionsCreated.size).toBe(0)
+  expect((await h.status()).queue).toBeUndefined()
+  completed(await h.app.execute({ ...h.configure, commandId: 'save-queue-mode', expectedVersion: 4, enabled: true, queue }, operator))
+  expect((await h.status()).planning).toMatchObject({ instruction: planning.instruction, plans: planning.plans, blocks: planning.blocks })
+  expect((await h.status()).items.find(item => item.number === 1)?.state).toBe('blocked')
+  expect((await h.status()).items.find(item => item.number === 2)?.state).toBe('active')
+  expect(generate).toHaveBeenCalledTimes(1)
+})
+
+it('migrates multiple legacy scopes into a paused Project queue without dropping executions, problems or restrictions', async () => {
+  const h = await setup(); completed(await h.app.execute(h.configure, operator)); const first = await h.execution()
+  const secondSource = completed(await h.app.execute({ type: 'source.configure-project', commandId: 'migration-source', projectId: h.scope.projectId, githubProject: { owner: 'acme', type: 'org', number: 2 } }, operator)).source!
+  const imported = completed(await h.app.execute({ type: 'source.import', commandId: 'migration-import', ...h.scope, nodeId: 'ISSUE_2' }, operator))
+  const second = completed(await h.app.execute({ type: 'task.start', commandId: 'migration-start', ref: imported.ref!, expectedVersion: imported.task!.version, agentId: imported.task!.agentId, resource, model, agentPreset: 'agent', permissionPreset: 'safe' }, operator)).execution!
+  const snapshot = structuredClone(await WorkDao.forDirectory(h.directory).read())
+  delete snapshot.storage; snapshot.commands = []
+  const original = snapshot.continuousRules![0]!
+  delete original.slots
+  original.items = original.items.filter(item => item.number === 1)
+  const legacy = structuredClone(original)
+  legacy.id = second.id; legacy.sourceId = secondSource.id; legacy.active = second.ref
+  legacy.items = [{ nodeId: 'ISSUE_2', title: 'Issue 2', number: 2, url: issue(2).url, ref: second.ref, executionId: second.id, state: 'active', attempts: 0 }, { nodeId: 'ISSUE_4', title: 'Issue 4', number: 4, url: issue(4).url, state: 'blocked', reason: 'Explicit exclusion', attempts: 0 }]
+  legacy.planning = { instruction: 'Preserve this restriction', supplements: [], blocks: ['ISSUE_4'], scopeVersion: 1, draftVersion: 1, plans: [] }
+  snapshot.continuousRules!.push(legacy)
+  const directory = await mkdtemp(join(tmpdir(), 'continuous-work-')); roots.push(directory)
+  await writeFile(join(directory, 'work-v3.json'), JSON.stringify(snapshot))
+  const restored = new WorkApplication(directory, h.host, h.source)
+  const migrated = await h.status(restored)
+  expect(migrated).toMatchObject({ id: original.id, enabled: false, migrationConflict: { code: 'continuous-scope-conflict' } })
+  expect(migrated.slots).toEqual([first.ref, second.ref])
+  expect(migrated.legacyRules).toHaveLength(2)
+  expect(migrated.legacyRules![1]!.planning).toEqual(legacy.planning)
+  expect(migrated.items.find(item => item.number === 4)).toMatchObject({ state: 'blocked', reason: 'Explicit exclusion' })
+  await restored.reconcileControls()
+  expect(h.host.sessionsCreated.size).toBe(2)
+  for (const execution of [first, second]) expect(await h.execution(execution.ref, restored)).toMatchObject({ id: execution.id, session: execution.session, owner: execution.owner, epoch: execution.epoch })
+  expect(await restored.execute({ type: 'continuous.set-enabled', commandId: 'migration-enable', ...h.scope, expectedVersion: migrated.version, enabled: true }, operator)).toMatchObject({ status: 'failed', error: { code: 'continuous-scope-conflict' } })
+  completed(await restored.execute({ ...h.configure, commandId: 'migration-save', expectedVersion: migrated.version, queue }, operator))
+  expect((await h.status(restored)).migrationConflict).toBeUndefined()
+  expect((await h.status(restored)).slots).toEqual([first.ref, second.ref])
+  expect((await h.status(restored)).items.find(item => item.number === 4)?.state).toBe('blocked')
+  expect((await WorkDao.forDirectory(directory).read()).continuousRules).toHaveLength(1)
+})
+
+
+it('counts completed-but-unsettled slots against concurrency before filling vacancies', async () => {
+  const h = await setup()
+  h.remote.issues = [issue(1), issue(2), issue(3)]
+  completed(await h.app.execute({ ...h.configure, queue }, operator))
+  const first = await h.execution((await h.status()).slots![0])
+  h.host.idle(first); completed(await reportDone(h.app, first))
+  h.host.settlements.set(first.id, 'unknown')
+  await h.app.reconcileControls()
+  expect((await h.status()).items[0]!.state).toBe('completed')
+  expect((await h.status()).slots).toHaveLength(2)
+  expect((await h.status()).items.find(item => item.number === 3)?.state).toBe('queued')
+  expect(h.host.sessionsCreated.size).toBe(2)
+  h.host.settlements.set(first.id, 'settled')
+  await h.app.reconcileControls()
+  expect((await h.status()).slots).toHaveLength(2)
+  expect((await h.status()).items.find(item => item.number === 3)?.state).toBe('active')
+  expect(h.host.sessionsCreated.size).toBe(3)
+})
+
+it('orders resumed work with new waiting work and keeps pause-next effective for released slots', async () => {
+  const h = await setup()
+  h.remote.issues = [issue(1), issue(2), issue(3)]
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1 } }, operator))
+  const first = await h.execution()
+  completed(await h.app.sessionControl(first.session, 'ordered-wait', 'wait', 'Wait for user'))
+  h.host.idle(first); await h.app.reconcileControls()
+  const second = await h.execution()
+  completed(await h.app.execute({ type: 'task.input', commandId: 'ordered-answer', ...fence(first), text: 'Proceed', kind: 'input' }, operator))
+  completed(await h.app.execute({ ...h.configure, commandId: 'newest-order', expectedVersion: 1, queue: { ...queue, concurrency: 1, order: 'newest' } }, operator))
+  completed(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'ordered-pause', ...h.scope, expectedVersion: 2, enabled: false }, operator))
+  h.host.idle(second); completed(await reportDone(h.app, second)); await h.app.reconcileControls()
+  expect((await h.status()).slots).toEqual([])
+  expect(h.host.sessionsCreated.size).toBe(2)
+  completed(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'ordered-enable', ...h.scope, expectedVersion: 3, enabled: true }, operator))
+  expect((await h.status()).items.find(item => item.state === 'active')?.number).toBe(3)
+  expect((await h.status()).items.find(item => item.number === 1)?.resumeRequested).toBe(true)
+  expect((await h.execution(first.ref)).owner).toBe(first.owner)
+})
+
+it.each(['resume', 'reconcile'] as const)('allows explicit Task %s through a paused queue subject to capacity after restart', async action => {
+  const h = await setup()
+  h.remote.issues = [issue(1), issue(2), issue(3)]
+  if (action === 'reconcile') h.host.failAfterCreation = 1
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1 } }, operator))
+  const first = await h.execution()
+  if (action === 'resume') completed(await h.app.sessionControl(first.session, 'paused-recovery-wait', 'wait', 'Need a decision'))
+  h.host.idle(first); await h.app.reconcileControls()
+  const second = await h.execution()
+  expect(second.id).not.toBe(first.id)
+  completed(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'paused-recovery-intake', ...h.scope, expectedVersion: 1, enabled: false }, operator))
+  const calls = { ensures: h.host.ensures.length, sends: h.host.sends.length, wakes: h.host.wakes.length }
+  completed(await h.app.execute(action === 'resume'
+    ? { type: 'task.control', commandId: 'paused-recovery-explicit', ...fence(first), action: 'resume', text: 'Recover this existing Task' }
+    : { type: 'task.reconcile', commandId: 'paused-recovery-explicit', ...fence(first) }, operator))
+  await h.app.reconcileControls()
+  expect((await h.status()).slots).toEqual([second.ref])
+  expect({ ensures: h.host.ensures.length, sends: h.host.sends.length, wakes: h.host.wakes.length }).toEqual(calls)
+  const restored = new WorkApplication(h.directory, h.host, h.source)
+  h.host.idle(second); completed(await reportDone(restored, second)); await restored.reconcileControls()
+  expect((await h.status(restored))).toMatchObject({ enabled: false, slots: [first.ref] })
+  expect((await h.status(restored)).items.find(item => item.number === 3)?.state).toBe('queued')
+  expect(await h.execution(first.ref, restored)).toMatchObject({ id: first.id, session: first.session, owner: first.owner, epoch: first.epoch, state: 'ready' })
+  expect(h.host.sessionsCreated.size).toBe(2)
+  h.host.idle(await h.execution(first.ref, restored)); completed(await reportDone(restored, first)); await restored.reconcileControls()
+  expect((await h.status(restored))).toMatchObject({ enabled: false, slots: [] })
+  expect((await h.status(restored)).items.find(item => item.number === 3)?.state).toBe('queued')
+})
+
+it('automatic result messages cannot retry a failed session; explicit input recovers the reserved identity', async () => {
+  const h = await setup()
+  h.remote.issues = [issue(1)]
+  h.host.failAfterCreation = 1
+  completed(await h.app.execute({ ...h.configure, queue }, operator))
+  const first = await h.execution()
+  await h.app.reconcileControls()
+  completed(await h.app.execute({ type: 'task.input', commandId: 'automatic-result', ...fence(first), text: 'Child result arrived', kind: 'result' }, operator))
+  await h.app.reconcileControls()
+  expect(h.host.ensures).toHaveLength(1)
+  expect((await h.status()).items[0]).toMatchObject({ state: 'blocked' })
+  completed(await h.app.execute({ type: 'task.input', commandId: 'human-input', ...fence(first), text: 'I checked the session; proceed', kind: 'input' }, operator))
+  await h.app.reconcileControls()
+  expect(await h.execution(first.ref)).toMatchObject({ id: first.id, session: first.session, owner: first.owner, epoch: first.epoch, state: 'ready' })
+  expect(h.host.sessionsCreated.size).toBe(1)
+})
+
+
+it('keeps Task-page recovery on a different resource outside queue execution ownership', async () => {
+  const h = await setup(false)
+  const otherResource = { ...resource, workspaceId: 'manual-workspace' }
+  h.host.resources = async () => [{ ref: resource, title: 'Queue' }, { ref: otherResource, title: 'Manual' }]
+  const project = completed(await h.app.query({ type: 'project.detail', projectId: h.scope.projectId }, operator)).project!
+  completed(await h.app.execute({ type: 'project.attach-resource', commandId: 'manual-resource', projectId: project.id, expectedVersion: project.version, resource: otherResource }, operator))
+  const imported = completed(await h.app.execute({ type: 'source.import', commandId: 'manual-resource-import', ...h.scope, nodeId: 'ISSUE_1' }, operator))
+  const start = { type: 'task.start' as const, commandId: 'manual-resource-start', ref: imported.ref!, expectedVersion: imported.task!.version, agentId: imported.task!.agentId, resource: otherResource, model, agentPreset: 'agent', permissionPreset: 'safe' }
+  const original = completed(await h.app.execute(start, operator)).execution!
+  completed(await h.app.execute({ ...h.configure, enabled: true, queue: { ...queue, concurrency: 1 } }, operator))
+  expect((await h.status()).items[0]).toMatchObject({ state: 'waiting', taskRef: original.ref })
+  completed(await h.app.execute({ ...start, commandId: 'manual-resource-recover' }, operator))
+  const observed = (await h.status()).items[0]!
+  expect(observed).toMatchObject({ state: 'waiting', taskRef: original.ref, reason: expect.stringContaining('another authorized resource') })
+  expect(observed.ref).toBeUndefined(); expect(observed.executionId).toBeUndefined()
+  expect((await h.status()).slots).not.toContainEqual(original.ref)
+  expect(await h.execution(original.ref)).toMatchObject({ resource: otherResource, owner: original.owner, epoch: original.epoch, session: original.session })
+})
+
+it('projects accepted foreign-resource Tasks as history before admission without claiming their owner', async () => {
+  const h = await setup()
+  h.remote.issues = [issue(1)]
+  const otherResource = { ...resource, workspaceId: 'history-workspace' }
+  h.host.resources = async () => [{ ref: resource, title: 'Original' }, { ref: otherResource, title: 'History' }]
+  completed(await h.app.execute({ ...h.configure, queue }, operator))
+  const original = await h.execution()
+  h.host.idle(original); completed(await reportDone(h.app, original))
+  const connected = completed(await h.app.execute({ type: 'source.connect', commandId: 'history-project', githubProject: { owner: 'acme', type: 'org', number: 2 } }, operator))
+  const scope = { projectId: connected.project!.id, sourceId: connected.source!.id }
+  completed(await h.app.query({ type: 'source.issues', ...scope, page: 1, perPage: 100, assignee: '@me', state: 'open', refresh: true }, operator))
+  completed(await h.app.execute({ ...h.configure, ...scope, commandId: 'history-configure', resource: otherResource, enabled: false, queue }, operator))
+  h.host.failAdmission = true
+  const admission = vi.spyOn(h.host.execution, 'check')
+  const calls = { ensures: h.host.ensures.length, sends: h.host.sends.length, wakes: h.host.wakes.length }
+  const rule = completed(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'history-enable', ...scope, expectedVersion: 1, enabled: true }, operator)).continuousRule!
+  expect(rule.items[0]).toMatchObject({ state: 'completed', taskRef: original.ref, sourceId: scope.sourceId })
+  expect(rule.items[0]!.ref).toBeUndefined(); expect(rule.items[0]!.executionId).toBeUndefined()
+  expect(rule.slots).toEqual([])
+  expect(admission).not.toHaveBeenCalled()
+  expect({ ensures: h.host.ensures.length, sends: h.host.sends.length, wakes: h.host.wakes.length }).toEqual(calls)
+  expect(await h.execution(original.ref)).toMatchObject({ owner: original.owner, epoch: original.epoch, session: original.session, resource })
+})
+
+it('retains the original Issue source for unbound problems across a source switch and restart', async () => {
+  const h = await setup(false)
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1 } }, operator))
+  h.host.failAdmission = true
+  completed(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'unbound-enable', ...h.scope, expectedVersion: 1, enabled: true }, operator))
+  const problem = (await h.status()).items[0]!
+  expect(problem).toMatchObject({ state: 'blocked', sourceId: h.scope.sourceId })
+  expect(problem.taskRef).toBeUndefined(); expect(problem.ref).toBeUndefined()
+  h.host.failAdmission = false
+  h.remote.issues = [issue(9)]
+  const second = completed(await h.app.execute({ type: 'source.configure-project', commandId: 'unbound-source', projectId: h.scope.projectId, githubProject: { owner: 'acme', type: 'org', number: 2 } }, operator)).source!
+  const scope = { projectId: h.scope.projectId, sourceId: second.id }
+  completed(await h.app.query({ type: 'source.issues', ...scope, page: 1, perPage: 100, assignee: '@me', state: 'open', refresh: true }, operator))
+  completed(await h.app.execute({ ...h.configure, ...scope, commandId: 'unbound-switch', expectedVersion: 2, queue }, operator))
+  const restored = new WorkApplication(h.directory, h.host, h.source)
+  const retained = (await h.status(restored)).items.find(item => item.number === 1)!
+  expect(retained).toMatchObject(problem)
+  const originalIssue = completed(await restored.query({ type: 'source.issue', projectId: h.scope.projectId, sourceId: retained.sourceId!, nodeId: retained.nodeId, number: retained.number }, operator))
+  expect(originalIssue.issue?.nodeId).toBe('ISSUE_1')
+  expect(h.host.sessionsCreated.size).toBe(0)
+})
+
+it('projects canonical completion after pre-admission failure through the original Task across source switches', async () => {
+  const h = await setup(false)
+  const project = completed(await h.app.query({ type: 'project.detail', projectId: h.scope.projectId }, operator)).project!
+  completed(await h.app.execute({ type: 'project.attach-resource', commandId: 'observed-resource', projectId: project.id, expectedVersion: project.version, resource }, operator))
+  const imported = completed(await h.app.execute({ type: 'source.import', commandId: 'observed-import', ...h.scope, nodeId: 'ISSUE_1' }, operator))
+  const original = completed(await h.app.execute({ type: 'task.start', commandId: 'observed-start', ref: imported.ref!, expectedVersion: imported.task!.version, agentId: imported.task!.agentId, resource, model, agentPreset: 'agent', permissionPreset: 'safe' }, operator)).execution!
+  h.host.idle(original)
+  completed(await h.app.execute({ type: 'task.control', commandId: 'observed-wait', ...fence(original), action: 'wait', text: 'Need a decision' }, operator))
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1 } }, operator))
+  h.host.failAdmission = true
+  completed(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'observed-enable', ...h.scope, expectedVersion: 1, enabled: true }, operator))
+  const blocked = (await h.status()).items[0]!
+  expect(blocked).toMatchObject({ state: 'blocked', taskRef: original.ref, sourceId: h.scope.sourceId })
+  expect(blocked.ref).toBeUndefined(); expect(blocked.executionId).toBeUndefined()
+  h.host.failAdmission = false
+  h.remote.issues = [issue(9)]
+  const second = completed(await h.app.execute({ type: 'source.configure-project', commandId: 'observed-source', projectId: h.scope.projectId, githubProject: { owner: 'acme', type: 'org', number: 2 } }, operator)).source!
+  const scope = { projectId: h.scope.projectId, sourceId: second.id }
+  completed(await h.app.query({ type: 'source.issues', ...scope, page: 1, perPage: 100, assignee: '@me', state: 'open', refresh: true }, operator))
+  completed(await h.app.execute({ ...h.configure, ...scope, commandId: 'observed-switch', expectedVersion: 2, queue: { ...queue, concurrency: 1 } }, operator))
+  const restored = new WorkApplication(h.directory, h.host, h.source)
+  expect((await h.status(restored)).items.find(item => item.number === 1)).toMatchObject({ state: 'blocked', taskRef: original.ref, sourceId: h.scope.sourceId, reason: blocked.reason })
+  const calls = { ensures: h.host.ensures.length, sends: h.host.sends.length, wakes: h.host.wakes.length }
+  await restored.reconcileContinuous()
+  expect({ ensures: h.host.ensures.length, sends: h.host.sends.length, wakes: h.host.wakes.length }).toEqual(calls)
+  completed(await restored.execute({ type: 'task.control', commandId: 'observed-resume', ...fence(original), action: 'resume', text: 'Decision resolved' }, operator))
+  h.host.idle(await h.execution(original.ref, restored))
+  completed(await reportDone(restored, original))
+  // Read-only status reflects the real Task result even before a scheduler tick.
+  expect((await h.status(restored)).items.find(item => item.number === 1)).toMatchObject({ state: 'completed', taskRef: original.ref, sourceId: h.scope.sourceId })
+  await restored.reconcileContinuous()
+  const history = (await h.status(restored)).items.find(item => item.number === 1)!
+  expect(history.state).toBe('completed'); expect(history.ref).toBeUndefined(); expect(history.executionId).toBeUndefined()
+  expect((await h.execution(original.ref, restored))).toMatchObject({ id: original.id, owner: original.owner, epoch: original.epoch, resource: original.resource, session: original.session })
+  expect(h.host.sessionsCreated.size).toBe(1)
+})
+
+it('reflects explicit Task-page recovery of a pre-admission problem without bypassing queue capacity', async () => {
+  const h = await setup(false)
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1 } }, operator))
+  h.host.failAdmission = true
+  completed(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'fail-intake', ...h.scope, expectedVersion: 1, enabled: true }, operator))
+  expect((await h.status()).items[0]).toMatchObject({ state: 'blocked' })
+  expect((await h.status()).items[0]!.ref).toBeUndefined()
+  h.host.failAdmission = false
+  await h.app.reconcileControls()
+  const second = await h.execution()
+  const imported = completed(await h.app.execute({ type: 'source.import', commandId: 'manual-fix-import', ...h.scope, nodeId: 'ISSUE_1' }, operator))
+  const recovered = completed(await h.app.execute({ type: 'task.start', commandId: 'manual-fix-start', ref: imported.ref!, expectedVersion: imported.task!.version, agentId: imported.task!.agentId, resource, model, agentPreset: 'agent', permissionPreset: 'safe' }, operator)).execution!
+  expect((await h.status()).items[0]).toMatchObject({ ref: recovered.ref, executionId: recovered.id, resumeRequested: true })
+  expect(h.host.sessionsCreated.size).toBe(1)
+  h.host.idle(second); completed(await reportDone(h.app, second)); await h.app.reconcileControls()
+  expect((await h.status()).items[0]).toMatchObject({ ref: recovered.ref, executionId: recovered.id, state: 'active' })
+  expect(h.host.sessionsCreated.size).toBe(2)
+  expect((await h.execution(recovered.ref)).session).toEqual(recovered.session)
 })
