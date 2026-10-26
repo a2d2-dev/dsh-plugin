@@ -600,6 +600,17 @@ export class WorkApplication {
     for (const rule of configured) if (rule.queue && rule.enabled && !rule.migrationConflict && (!rule.nextRefreshAt || Date.parse(rule.nextRefreshAt) <= Date.now())) {
       await this.refreshContinuous({ projectId: rule.projectId, sourceId: rule.sourceId, expectedVersion: rule.version }, undefined, false)
     }
+    // Session occupancy changes the screening batch independently of source polling.
+    // Reclassify cached candidates so stale decisions enter the existing screening path.
+    await this.sourceTransaction(async state => {
+      for (const rule of state.continuousRules ?? []) {
+        const source = state.sources.find(source => source.id === rule.sourceId)
+        if (rule.enabled && rule.queue?.filterPrompt?.trim() && source && !sourceScopeError(rule, source)) {
+          discoverContinuous(rule, source)
+          observeContinuousTasks(state, rule)
+        }
+      }
+    })
     const screeningSnapshot = await this.load()
     for (const rule of screeningSnapshot.continuousRules ?? []) {
       const source = screeningSnapshot.sources.find(source => source.id === rule.sourceId)

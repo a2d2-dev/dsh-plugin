@@ -23,7 +23,7 @@ it('uses the host LLM for semantic screening with complete candidate bodies and 
   expect(request).toMatchObject({ provider: 'real', model: 'semantic', reasoningEffort: 'high' })
   expect(JSON.stringify(request!.messages)).toContain('这是完整正文，不截断。')
   expect(JSON.stringify(request!.messages)).toContain(JSON.stringify(JSON.stringify(screening)).slice(1, -1))
-  expect(request!.system).toContain('Project Status is a workflow field')
+  expect(request!.system).toContain('milestoneTitle is the effective milestone')
   expect(request!.system).toContain('exactly one decision')
   expect(request).not.toHaveProperty('tools')
   expect(request!.messages).toHaveLength(1)
