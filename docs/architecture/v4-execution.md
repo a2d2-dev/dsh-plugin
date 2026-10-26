@@ -262,4 +262,20 @@ PATH=/root/.nvm/versions/node/v24.22.1/bin:$PATH TMPDIR="$PWD/.local/tmp" \
 
 **记录**：host 的 execution 38 项包含主干 #277 的 live/cold、create/reuse、danger-full-access/read-only 权限恢复；continuation 34 项包含历史终态、真实 next、材料请求刷新、读取失败冷恢复与成功回执重放。official provenance 为 Node v24.22.1、HEAD `22ddee3792402c3e70ec5f86a63c3e3e895a2f60`、0.2.1-rc.3；真实准确 owner 正式补收、Session 提交/flush、读取工具、失败提交与空重读仍 pending、Goal activation 不改持久状态均通过。所有本会话验证作业的退出结果均通过正式 job_output 收取；未跨 owner 操作旧作业。
 
-本轮完整回归没有非预期测试失败、超时或 ENOTEMPTY；先前两次组合失败记录仍保留，未修改 timeout、断言或配置，也不据本轮通过推断旧超时根因。这里只验证所列后端和组件合同，没有执行完整仓库 pnpm test 或既有 GUI 实测；完整前端、真实浏览器协作方式与 #259/#268 原完整模式仍待 #275/#276，不提前确认父票全部验收。
+前述指定的 unit/host/official 回归没有非预期测试失败、超时或 ENOTEMPTY；先前两次组合失败记录仍保留，未修改 timeout、断言或配置，也不据本轮通过推断旧超时根因。这里只验证所列后端和组件合同，没有执行完整仓库 pnpm test 或既有 GUI 实测；完整前端、真实浏览器协作方式与 #259/#268 原完整模式仍待 #275/#276，不提前确认父票全部验收。
+
+### 全仓 CI 的读取屏障配套回归
+
+首次推送代码提交 eabdd62 的全仓 CI [40306215804](https://github.com/a2d2-dev/dsh-plugin/actions/runs/40306215804) 在 Node 22/24 均为 3 fail / 1434 pass，失败不是超时：work-compact-results 的多代接续在 delivered 后继续写下一代规格，触发 continuation-in-progress；work-source-freeze 的父/子两项仍以 delivered 为解冻点，且夹具未注册新读取工具。原失败日志保留在 `.local/issue-274/ci-eabdd62-failed.log`。相同三项在本地原样复现（exit 1，`recovery-red-ci-contract.log`）。
+
+修正只补足真实测试步骤：注册该准确应用的正式 Work 工具，等待后继成功读取工具结果，再由插件 reconcile 确认 received 后继续规格更新或来源导入；delivered 仍保留中间态断言，来源回归新增读取确认前依旧冻结的断言。生产准入、回执屏障、大小上限与原关系端点断言均保留，没有扩大测试 timeout 或新增跳过。
+
+以下完整两文件回归 16/16 通过，exit 0（`.local/issue-274/recovery-green-ci-contract.log`），包含原大回执上限与父/子两端关系断言：
+
+```sh
+PATH=/root/.nvm/versions/node/v24.22.1/bin:$PATH TMPDIR="$PWD/.local/tmp" \
+  pnpm exec vitest run --configLoader runner --no-cache --maxWorkers=1 --project host \
+  tests/work-compact-results.spec.ts tests/work-source-freeze.spec.ts
+```
+
+已提交源码 `6e15e4e` 的 `pnpm verify:pack-exports` 也通过，exit 0（`.local/issue-274/recovery-pack-final.log`）：临时 git archive 构建含 32 个导出目标与两个 sidecar，安装 tarball 后 15 个 Node 入口均可 import，编译产物未进入工作树提交。本次后续只改测试与本文；远端全仓 CI 状态由交付 PR 链接回读。

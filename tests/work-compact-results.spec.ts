@@ -141,6 +141,10 @@ it('keeps receipts bounded through large specification and handoff histories on 
     expect(JSON.stringify(oldRead)).toContain('forbidden')
     execution = current
     await fixtures.run(() => h.ctx.agents.get(SessionId(execution.session.sessionId))!.whenIdle())
+    await fixtures.run(() => h.app.reconcileControls())
+    execution = completed(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).execution!
+    expect(execution.continuation!.phase).toBe('received')
+    await fixtures.run(() => h.ctx.agents.get(SessionId(execution.session.sessionId))!.whenIdle())
   }
   await measure('large-history')
   const final = await h.detail()
