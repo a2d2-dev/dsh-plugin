@@ -1,4 +1,8 @@
 import { afterEach, expect, it, vi } from 'vitest'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
+import { renderToStaticMarkup } from 'react-dom/server'
+import styles from '../../src/client/execution-components.module.css'
 import type { AssociatedWork, WorkCompleted } from '../../src/work-types.ts'
 import { WorkPanelController } from '../../src/client/work-panel-controller.ts'
 import { mountProductionComponent } from './production-component-harness.ts'
@@ -18,7 +22,7 @@ function controllerFor(detail: WorkCompleted, purpose: AssociatedWork['purpose']
     query: async query => {
       if (query.type === 'task.detail') return detail
       if (query.type === 'resources.list') return { status: 'completed', resources: [{ ref: { runtimeId: 'runtime', workspaceId: 'ws' }, title: 'Workspace' }] }
-      if (query.type === 'session.work') return { status: 'completed', work: [{ ref, title: 'Task continuation', projectName: 'Project', purpose }] }
+      if (query.type === 'session.work') return { status: 'completed', work: [{ ref, title: detail.task?.title ?? 'Task continuation', projectName: 'Project', purpose }] }
       return { status: 'completed' }
     },
   }, { selectPanel: () => {}, openSession: () => {} })
@@ -27,7 +31,7 @@ const mounted: ReturnType<typeof mountProductionComponent>[] = []
 afterEach(() => { mounted.splice(0).forEach(view => view.unmount()) })
 async function nativeView(detail: WorkCompleted, purpose: AssociatedWork['purpose'] = 'control') {
   const controller = controllerFor(detail, purpose)
-  const view = mountProductionComponent({ controller, sessionId: 'current' }, 'ExecutionConversationContinuation', new URL('../../src/client/execution-native.tsx', import.meta.url))
+  const view = mountProductionComponent({ controller, sessionId: 'current' }, 'ExecutionConversationContinuation', new URL('../../src/client/execution-native.tsx', import.meta.url), { cssModules: { './execution-components.module.css': styles } })
   mounted.push(view)
   await expect.poll(() => view.text()).toContain('自动接续')
   return { view, controller }
@@ -49,7 +53,7 @@ it('finishes a slow detail read while equal session associations refresh every f
       }
       return query(value, signal)
     }
-    const view = mountProductionComponent({ controller, sessionId: 'current' }, 'ExecutionConversationContinuation', new URL('../../src/client/execution-native.tsx', import.meta.url))
+    const view = mountProductionComponent({ controller, sessionId: 'current' }, 'ExecutionConversationContinuation', new URL('../../src/client/execution-native.tsx', import.meta.url), { cssModules: { './execution-components.module.css': styles } })
     mounted.push(view)
     await vi.advanceTimersByTimeAsync(0)
     view.render()
@@ -84,7 +88,48 @@ it.each(['idle', 'inactive'] as const)('keeps an unfinished current Task availab
   expect(view.text()).not.toContain('已验收完成')
 })
 
-it.each(['failed', 'waiting', 'paused', 'accepted', 'creating'] as const)('explains why %s execution cannot prepare continuation', async state => {
+it.each(['waiting', 'paused'] as const)('changes only the session while preserving %s control and using a fresh fence', async state => {
+  const detail = taskDetail()
+  detail.task!.title = '生命周期接续与独立 Goal 边界：保留等待暂停原因和全部原验收的长任务名称'
+  detail.execution!.state = state
+  detail.execution!.control = { commandId: 'hold', action: state === 'waiting' ? 'wait' : 'pause', status: 'applied', reason: '等待审查\n恢复条件：批准方案后明确恢复' }
+  detail.executionGraph = { ref, executionId: 'e', sessions: [{ session, role: 'current', status: 'idle', children: [], jobs: [] }], childTasks: [], events: [], history: [], settlement: 'settled', blockers: [], reminders: [], limitations: [] }
+  const { view, controller } = await nativeView(detail)
+  const command = vi.fn(async (_value: unknown) => detail)
+  controller.client.command = command
+  const button = view.nodes('button').find(node => node.props.children === '仅换会话')
+  expect(button).toBeDefined()
+  expect(button?.props.disabled).toBe(false)
+  expect(view.text()).toContain('恢复条件：批准方案后明确恢复')
+  expect(view.text()).not.toContain('请先恢复处理，再准备接续')
+  expect(view.nodes('button').some(node => node.props.children === '恢复处理')).toBe(true)
+  if (process.env.A2D2_LIFECYCLE_ARTIFACTS === '1') {
+    const directory = resolve('docs/artifacts/issue-270-2026-10-26')
+    await mkdir(directory, { recursive: true })
+    let css = await readFile(new URL('../../src/client/execution-components.module.css', import.meta.url), 'utf8')
+    for (const name of new Set([...css.matchAll(/\.([a-z][\w-]*)/g)].map(match => match[1]!))) css = css.replace(new RegExp(`\\.${name}\\b`, 'g'), `.${styles[name as keyof typeof styles]}`)
+    await writeFile(resolve(directory, `native-${state}.html`), `<!doctype html><html lang="zh"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>#275 ${state} 合同渲染</title><style>body{margin:0;background:Canvas;color:CanvasText;color-scheme:light dark;font:14px system-ui}main{max-width:1040px;margin:auto}header{padding:16px}h1{font-size:18px}${css}</style><main><header><h1>#275 ${state} 合同渲染</h1><p>合成合同夹具，使用真实生产组件与样式。3080 实例未更新；本页不证明部署或 Task 接任。</p></header>${renderToStaticMarkup(view.render())}</main></html>`)
+  }
+  view.click('仅换会话')
+  await expect.poll(() => command.mock.calls.length).toBe(1)
+  expect(command.mock.calls[0]![0]).toMatchObject({ type: 'task.continue', ref, executionId: 'e', owner: 'owner', epoch: 1 })
+  expect(detail.execution!.state).toBe(state)
+  expect(detail.execution!.control?.status).toBe('applied')
+})
+
+it.each(['running', 'unknown', 'pending-control'] as const)('keeps the session action short and explains the %s maintenance fence', async prerequisite => {
+  const detail = taskDetail()
+  detail.execution!.state = 'waiting'
+  detail.executionGraph = { ref, executionId: 'e', sessions: [{ session, role: 'current', status: prerequisite === 'running' ? 'running' : 'idle', children: [], jobs: [] }], childTasks: [], events: [], history: [], settlement: prerequisite === 'unknown' ? 'unknown' : 'settled', blockers: [], reminders: [], limitations: [] }
+  if (prerequisite === 'pending-control') detail.execution!.control = { commandId: 'hold', action: 'wait', status: 'accepted', reason: '等待审查' }
+  const { view, controller } = await nativeView(detail)
+  const button = view.nodes('button').find(node => node.props.children === '仅换会话')
+  expect(button?.props.disabled).toBe(true)
+  expect(button?.props.title).toContain(prerequisite === 'running' ? '等待本轮结束' : prerequisite === 'unknown' ? '刷新' : '请求尚未生效')
+  expect(controller.client.command).not.toHaveBeenCalled()
+})
+
+it.each(['failed', 'accepted', 'creating'] as const)('explains why %s execution cannot prepare continuation', async state => {
   const detail = taskDetail()
   detail.execution!.state = state
   if (state === 'failed') detail.execution!.error = { code: 'incompatible-session', message: 'Existing Session model differs' }
@@ -93,9 +138,6 @@ it.each(['failed', 'waiting', 'paused', 'accepted', 'creating'] as const)('expla
   if (state === 'failed') {
     expect(view.text()).toContain('原执行恢复失败：incompatible-session')
     expect(view.nodes('button').some(node => node.props.children === '重试原执行')).toBe(true)
-  } else if (state === 'waiting' || state === 'paused') {
-    expect(view.text()).toContain('请先恢复处理，再准备接续')
-    expect(view.nodes('button').some(node => node.props.children === '恢复处理')).toBe(true)
   } else expect(view.text()).toContain('原执行尚未就绪')
   expect(controller.client.command).not.toHaveBeenCalled()
 })
@@ -128,6 +170,19 @@ it.each(['history', 'review', 'related', 'different-current', 'missing-actual'] 
   const button = prepareButton(view)
   expect(!button || button.props.disabled === true).toBe(true)
   expect(view.text()).not.toContain('已验收完成')
+})
+
+it('lets the native history view enter the authoritative current coordinator without a control command', async () => {
+  const detail = taskDetail()
+  detail.execution!.session = { ...session, sessionId: 'successor' }
+  const { view, controller } = await nativeView(detail, 'history')
+  const enter = vi.spyOn(controller, 'openCurrentTask').mockResolvedValue(undefined)
+  expect(view.nodes('button').some(node => node.props.children === '进入会话')).toBe(true)
+  view.click('进入会话')
+  await expect.poll(() => enter.mock.calls.length).toBe(1)
+  expect(enter).toHaveBeenCalledWith(ref, expect.any(AbortSignal))
+  expect(controller.client.command).not.toHaveBeenCalled()
+  for (const term of ['生命周期与操作', '创建', '本轮 Completed', '明确恢复', '历史归档', '普通新建', 'Issue 协调绑定', 'Goal activation', '人类']) expect(view.text()).toContain(term)
 })
 
 it.each(['task.completion', 'progress.completed'])('Issue continuation shows the same disabled action and done reason from %s', async fact => {
