@@ -12,6 +12,14 @@
 - 失败和创建中的执行显示原因，先重试原执行或等待创建就绪。#270/#275 将等待/暂停改为独立的“仅换会话”和“恢复处理”：前者保留完整 control 原因与恢复条件，提交 task.continue，不写 ready/resume；后者才明确恢复业务。恢复失败不描述为等待生效。
 - #275 在原生接续组件交互边界先记录 waiting/paused 两项红灯（找不到“仅换会话”），同一回归随后两项通过；命令使用重新读取的 execution/owner/epoch，保持原控制。记录在本地忽略目录 `docs/artifacts/issue-270-2026-10-26/` 的 red-hold.log / green-hold.log；该组件合同证据不代表既有 GUI 已加载新包。
 
+## #275 生命周期与接续状态
+
+Issue 和原生接续页共用后端事实：会话运行来自对应 Session 观察，Task 控制来自 execution/control 与独立完成事实，当前协调只认 execution.session/epoch。操作中的原会话、固定后继与正式当前分别呈现；创建后继不授予协调权。
+
+操作详情展示 collections 的准确执行者、作业、请求消费与核实收取；settlements 的父/子会话、结束序号及通知投递/消费；材料请求、保存命令与新鲜度依据；已核实 profile；旧 Goal activation、持久 phase/revision；投递及真实读取凭据。没有凭据即未确认；旧协议 delivered 明确保留历史投递语义。插件持续负责流程，正式接任前原会话只保留业务协调身份。步骤失败显示后端 code/message 与当时步骤，修复缺口后重试同 operation/successor。
+
+运行中/停止中、已知结算 unknown、等待/暂停控制待生效、创建及失败均保留前提与恢复说明。终态 pending 结果允许请求插件补收，不在前端写 collected/ready/resume。组件事实回归 red-facts → green-facts 为 1 fail → 1 pass；围栏交互 red-fence → green-fence 为 3 fail → 5 pass（含仅换会话两项），均未扩大 timeout。
+
 ## 验证记录
 
 - 初始真实宿主与组件回归 4 项稳定红；修复后绿，覆盖已选未请求、已请求、冷恢复与六秒详情/五秒关联轮询。

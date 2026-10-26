@@ -32,6 +32,24 @@ it('shows an undelivered takeover as a delivery failure with a retry action', ()
   expect(html).not.toContain('接续内容已投递')
 })
 
+it('renders verified collection, settlement, profile, Goal activation and read proof without inferring receipt', () => {
+  const ref = { projectId: 'p', taskId: 't' }, source = { runtimeId: 'runtime', sessionId: 'source' }, successor = { ...source, sessionId: 'fixed-successor' }
+  const execution: WorkExecution = { id: 'e', ref, owner: 'owner', epoch: 2, agentId: 'agent', resource: { runtimeId: 'runtime', workspaceId: 'ws' }, session: successor, sessionMode: 'create', agentPreset: 'standard', model: { provider: 'test', model: 'test' }, permissionPreset: 'read-only', policy: { version: 1, modelCandidates: [], instructions: '', capabilities: [] }, state: 'waiting', history: [], events: [], continuation: { protocolVersion: 1, operationId: 'fixed-operation', commandId: 'cmd', automatic: false, phase: 'delivered', source, successor, sourceEpoch: 1, materialRequestId: 'refresh-request', kickoffId: 'kickoff', goal: 'Continue', specification: { version: 1, text: 'Scope', acceptance: ['Accepted'] }, title: 'Long task title', history: { ref, session: source }, collections: [{ session: source, jobs: [{ id: 'bash-pending' }], requestId: 'collect-request', delivery: 'consumed', status: 'requested' }], settlements: [{ parent: source, child: { ...source, sessionId: 'native-child' }, endSeq: 42, messageId: 'notice', delivery: 'delivered' }], goalActivation: { status: 'disarmed', goalId: 'old-goal', revision: 4, phase: 'active' }, profile: { runtimeId: 'runtime', cwd: '/workspace', agentPreset: 'standard', provider: 'codex', model: 'gpt-6.1-sol', permissionPreset: 'read-only', sandbox: 'none', approval: 'never' } } }
+  const html = renderToStaticMarkup(createElement(ExecutionContinuation, { execution }))
+  for (const text of ['会话运行', 'Task 控制', '协调归属', 'fixed-operation', 'bash-pending', '补收未确认', 'native-child', '结算通知已投递', '旧 Goal activation 已停用', 'old-goal', '持久 phase：active', 'gpt-6.1-sol', '材料可读尚未确认', 'refresh-request', '插件持续负责接续流程']) expect(html).toContain(text)
+  expect(html).not.toContain('原段仍负责')
+  expect(html).not.toContain('后继已确认材料可读')
+  execution.continuation!.phase = 'received'
+  execution.continuation!.readable = { callId: 'read-call', materialCommandId: 'material-command' }
+  const received = renderToStaticMarkup(createElement(ExecutionContinuation, { execution }))
+  expect(received).toContain('后继已确认材料可读')
+  expect(received).toContain('read-call')
+  delete execution.continuation!.protocolVersion
+  execution.continuation!.phase = 'delivered'
+  delete execution.continuation!.readable
+  expect(renderToStaticMarkup(createElement(ExecutionContinuation, { execution }))).toContain('历史协议：已投递，无读取凭据')
+})
+
 it('renders independent child entry, real job owner and distinct delivery/consumption with visible continuation parameters', async () => {
   const session = { runtimeId: 'runtime', sessionId: 'current' }
   const graph: ExecutionGraph = { settlement: 'pending', ref: { projectId: 'p', taskId: 't' }, executionId: 'execution', owner: { id: 'owner', epoch: 2, agentId: 'agent' }, currentSession: session, childTasks: [{ ref: { projectId: 'p', taskId: 'child' }, title: 'Independent issue', agentId: 'child-agent', owner: 'child-owner', currentSession: { ...session, sessionId: 'child-current' } }], sessions: [{ session, role: 'current', status: 'idle', children: [], jobs: [{ id: 'bash-1', owner: session, label: 'checks', kind: 'bash', status: 'completed', delivery: 'delivered', result: 'unknown', acceptance: 'unassessed', persistence: 'process-local' }] }], events: [], history: [], blockers: [], reminders: ['作业 bash-641 的注册表实例已不可达，只提醒不阻断完成。'], limitations: [] }

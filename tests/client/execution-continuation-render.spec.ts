@@ -105,6 +105,18 @@ it.each(['waiting', 'paused'] as const)('changes only the session while preservi
   expect(detail.execution!.control?.status).toBe('applied')
 })
 
+it.each(['running', 'unknown', 'pending-control'] as const)('keeps the session action short and explains the %s maintenance fence', async prerequisite => {
+  const detail = taskDetail()
+  detail.execution!.state = 'waiting'
+  detail.executionGraph = { ref, executionId: 'e', sessions: [{ session, role: 'current', status: prerequisite === 'running' ? 'running' : 'idle', children: [], jobs: [] }], childTasks: [], events: [], history: [], settlement: prerequisite === 'unknown' ? 'unknown' : 'settled', blockers: [], reminders: [], limitations: [] }
+  if (prerequisite === 'pending-control') detail.execution!.control = { commandId: 'hold', action: 'wait', status: 'accepted', reason: '等待审查' }
+  const { view, controller } = await nativeView(detail)
+  const button = view.nodes('button').find(node => node.props.children === '仅换会话')
+  expect(button?.props.disabled).toBe(true)
+  expect(button?.props.title).toContain(prerequisite === 'running' ? '等待本轮结束' : prerequisite === 'unknown' ? '刷新' : '请求尚未生效')
+  expect(controller.client.command).not.toHaveBeenCalled()
+})
+
 it.each(['failed', 'accepted', 'creating'] as const)('explains why %s execution cannot prepare continuation', async state => {
   const detail = taskDetail()
   detail.execution!.state = state

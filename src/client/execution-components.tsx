@@ -134,13 +134,21 @@ export function ExecutionContinuation({ graph, execution, policy, busy = false, 
   const failed = execution?.state === 'failed'
   const suspended = execution?.state === 'waiting' || execution?.state === 'paused'
   const pendingControl = execution?.control?.status === 'accepted' && execution.control.action !== 'resume'
-  const blocked = failed || pendingControl || execution?.state === 'accepted' || execution?.state === 'creating'
+  const current = graph?.sessions.find(row => row.session.runtimeId === execution?.session.runtimeId && row.session.sessionId === execution?.session.sessionId)
+  const disabledReason = completed ? '任务已验收完成，不能继续接续' : busy ? '请求处理中' : failed ? '先重试原执行，恢复成功后再接续' : pendingControl ? '等待或暂停请求尚未生效，结算后刷新' : execution?.state === 'accepted' || execution?.state === 'creating' ? '等待创建或恢复后刷新' : current?.status === 'running' || current?.status === 'stopping' ? '等待本轮结束后刷新' : graph?.settlement === 'unknown' ? '结算未知，请核实宿主能力和执行者后刷新' : !execution?.actual ? '实际执行配置尚未核实' : !onContinue ? '请从当前协调会话发起接续' : undefined
+  const blocked = Boolean(disabledReason)
   return <section className={styles.surface} aria-label="接续">
+    <dl className={styles.parameters} aria-label="生命周期状态">
+      <dt>会话运行</dt><dd>{current ? statuses[current.status] : '尚无宿主观察'}{current?.attempt && ` · 第 ${current.attempt.turn} 轮：${reasonLabel(current.attempt.reason)}`}</dd>
+      <dt>Task 控制</dt><dd>{completed ? '已验收完成' : execution ? ({ accepted: '启动已接受', creating: '创建中', ready: '允许处理', running: '允许处理', waiting: '等待', paused: '暂停', failed: '执行失败' }[execution.state]) : '尚未启动'}{execution?.control && ` · ${execution.control.action} / ${execution.control.status === 'accepted' ? '请求待生效' : '已生效'}`}</dd>
+      <dt>协调归属</dt><dd>{execution ? <><code>{sessionId(execution.session)}</code> · 当前协调 · 代次 {execution.epoch}</> : '尚无有效协调会话'}</dd>
+    </dl>
     <div className={styles.sectionHead}><h2>接续</h2>
-      {(onContinue || completed) && <button type="button" className={styles.primaryAction} disabled={completed || busy || blocked || !execution?.actual || !onContinue} onClick={completed ? undefined : onContinue}>{completed ? '准备接续' : busy ? '处理中…' : op?.phase === 'taken' ? '重试投递' : execution && continuationInFlight(execution) ? '重试接续' : suspended ? '仅换会话' : '准备接续'}</button>}
+      {(onContinue || completed) && <button type="button" className={styles.primaryAction} title={disabledReason} disabled={blocked} onClick={completed ? undefined : onContinue}>{completed ? '准备接续' : busy ? '处理中…' : op?.phase === 'taken' ? '重试投递' : execution && continuationInFlight(execution) ? '重试接续' : suspended ? '仅换会话' : '准备接续'}</button>}
       {!completed && failed && onRecover && <button type="button" disabled={busy} onClick={onRecover}>重试原执行</button>}
       {!completed && suspended && !pendingControl && onResume && <button type="button" disabled={busy} onClick={onResume}>恢复处理</button>}
     </div>
+    {disabledReason && !completed && !failed && !pendingControl && <p role="status">{disabledReason}</p>}
     {!completed && failed && <p role="alert">原执行恢复失败：{execution?.error ? `${execution.error.code}：${execution.error.message}` : '原因未知'}。请先重试原执行，恢复成功后再准备接续。</p>}
     {!completed && suspended && <p role="status">仅换会话保留{execution?.state === 'paused' ? '暂停' : '等待'}，后继不会自动恢复业务。</p>}
     {execution?.control?.reason && <p className={styles.eventText}>控制原因与恢复条件：{execution.control.reason}</p>}
@@ -158,7 +166,25 @@ export function ExecutionContinuation({ graph, execution, policy, busy = false, 
     </dl>
     <p>阈值为提前接续软目标；正式接任仍须宿主维护边界核验。原生 job_output 收取结果后再观察，收取不代表业务验收。</p>
     {graph?.blockers.length ? <ul aria-label="接续等待项">{graph.blockers.map((blocker, index) => <li key={index}>{blocker.code} · {blocker.session.sessionId}{blocker.jobId && ` / ${blocker.jobId}`}</li>)}</ul> : null}
-    {op && <article className={styles.card}><h3>{phases[op.phase]}</h3><p>原段：{sessionId(op.source)}</p><p>固定后继：{sessionId(op.successor)}</p><p>{['taken', 'delivered', 'received'].includes(op.phase) ? '正式接任已提交，当前入口以有效协调记录为准。' : '原段仍负责，准备后继不切换当前入口。'}</p>{op.error && <p role="alert">{op.error.code}：{op.error.message} · 重试复用同一操作与后继。</p>}{op.material && <details><summary>已保存决定与未完成项</summary><p>决定：{op.material.decisions}</p><p>证据：{op.material.evidence}</p><p>未完成：{op.material.unfinished}</p><p>下一步：{op.material.next}</p></details>}</article>}
+    {op && <article className={styles.card}>
+      <h3>{phases[op.phase]}</h3>
+      <p className={styles.identity}>操作：<code>{op.operationId}</code></p>
+      <dl className={styles.parameters}>
+        <dt>原会话</dt><dd>{sessionId(op.source)}</dd>
+        <dt>固定后继</dt><dd>{sessionId(op.successor)} · {['taken', 'delivered', 'received'].includes(op.phase) ? '已提交接任' : '准备中，尚无协调权'}</dd>
+        <dt>材料请求</dt><dd>{op.materialRequestId} · {op.requestDelivery ?? '尚无交付凭据'}</dd>
+        <dt>材料保存</dt><dd>{op.material ? `已保存 · ${op.material.commandId} · 规格 v${op.material.specificationVersion}` : '尚未保存'}{op.materialFactsKey && ' · 已记录结果新鲜度依据'}</dd>
+        <dt>后继配置</dt><dd>{op.profile ? `${op.profile.provider} / ${op.profile.model}${op.profile.reasoningEffort ? ` / ${op.profile.reasoningEffort}` : ''} · ${op.profile.agentPreset} · ${op.profile.permissionPreset}` : '尚未核实'}</dd>
+        <dt>旧 Goal</dt><dd>{op.goalActivation ? op.goalActivation.status === 'disarmed' ? <>旧 Goal activation 已停用 · {op.goalActivation.goalId} · 持久 phase：{op.goalActivation.phase} / revision：{op.goalActivation.revision}</> : '已核实无旧 Goal' : 'activation 尚未核实'}</dd>
+        <dt>材料投递</dt><dd>{op.kickoffDelivery ?? '尚无交付凭据'} · 请求 {op.kickoffId}</dd>
+        <dt>可读确认</dt><dd>{op.readable ? <>读取凭据：{op.readable.callId} · 材料 {op.readable.materialCommandId}</> : !op.protocolVersion && op.phase === 'delivered' ? '历史协议：已投递，无读取凭据' : '材料可读尚未确认'}{op.readRequestId && ` · 请求 ${op.readRequestId}`}</dd>
+      </dl>
+      {!!op.collections?.length && <div><h3>结果补收</h3><ul>{op.collections.map(item => <li key={item.requestId}>执行者：{sessionId(item.session)} · {item.jobs.map(job => job.id).join('、')} · {item.status === 'collected' ? '已核实收取' : '补收未确认'} · 请求{item.delivery === 'consumed' ? '已消费' : item.delivery === 'delivered' ? '已投递' : '已接受'} · {item.requestId}</li>)}</ul></div>}
+      {!!op.settlements?.length && <div><h3>原生结果结算</h3><ul>{op.settlements.map(item => <li key={item.messageId}>执行者：{sessionId(item.parent)} · 子会话 {sessionId(item.child)} · 结束序号 {item.endSeq} · 结算通知{item.delivery === 'consumed' ? '已消费' : item.delivery === 'delivered' ? '已投递' : '已接受'}</li>)}</ul></div>}
+      <p className={styles.limit}>插件持续负责接续流程；{['taken', 'delivered', 'received'].includes(op.phase) ? '正式接任已提交，当前协调以有效记录为准。' : '正式接任前原会话保留业务协调身份。'}</p>
+      {op.error && <p role="alert">{op.error.code}：{op.error.message} · 当前步骤：{phases[op.phase]}。修复该缺口后重试接续，复用同一操作与后继。</p>}
+      {op.material && <details><summary>接续材料</summary><p className={styles.eventText}>{op.material.body}</p><p>决定：{op.material.decisions}</p><p>证据：{op.material.evidence}</p><p>未完成：{op.material.unfinished}</p><p>下一步：{op.material.next}</p></details>}
+    </article>}
     {execution?.continuationBlocked && <p role="status">{execution.continuationBlocked.code}：{execution.continuationBlocked.message}</p>}
     {!!execution?.continuationHistory?.length && <details><summary>接续历史 · 只读</summary>{execution.continuationHistory.map(item => <p key={item.operationId}>{phases[item.phase]} · {item.source.sessionId} → {item.successor.sessionId}{item.error && ` · ${item.error.message}`}</p>)}</details>}
   </section>
