@@ -51,7 +51,7 @@ export function WorkPanel({ controller }: { controller: WorkPanelController }) {
   const retryIssue=()=>void controller.refreshDetail()
   const issueRepository=issue?`${issue.repository.owner}/${issue.repository.repository}`:null
   const sourceRepository=source?.repository?`${source.repository.owner}/${source.repository.repository}`:null
-  return <main ref={setSurface} className={`${styles.panel} ${hasDetail&&!connecting?styles.detailPanel:''}`} aria-label="A²D² 控制面板">
+  return <main ref={setSurface} data-delegation={state.source.tab==='delegation'&&!hasDetail} className={`${styles.panel} ${hasDetail&&!connecting?styles.detailPanel:''}`} aria-label="A²D² 控制面板">
     <header className={styles.navigation}><div className={styles.panelContext}><SourceTabs controller={controller} onAdd={()=>setConnecting(!connecting)}/></div><div className={styles.panelUtilities}><GitHubAccountControl controller={controller} onManageSources={()=>setConnecting(true)}/><button className={styles.closePanel} aria-label="关闭面板" title="关闭面板" onClick={()=>controller.close()}><PanelIcon name="close" size={18}/></button></div></header>
     {state.error&&<p className={styles.failure} role="alert">{state.error} <button onClick={retryIssue}>重新读取</button></p>}
 

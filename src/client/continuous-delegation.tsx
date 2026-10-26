@@ -36,6 +36,7 @@ export function ContinuousDelegation(props: ContinuousDelegationProps) {
   const rule = state.rule
   const disabled = state.busy || !!state.pending || !rule || props.configuring
   const items = rule?.items ?? []
+  const queueError = rule?.error && !items.some(item=>item.reason===rule.error?.message) ? rule.error : undefined
   const filters: [Filter, string][] = [['all', '全部'], ['active', '正在处理'], ['queued', '等待处理'], ['human', '需人工处理'], ['history', '历史']]
   const rows = items.map((item, index) => ({ item, index })).filter(({ item }) => filter === 'all' || category(item) === filter)
   return <section className={styles.panel} aria-label="持续委托任务队列" aria-busy={state.busy}>
@@ -44,15 +45,15 @@ export function ContinuousDelegation(props: ContinuousDelegationProps) {
         <p className={styles.summary}>{props.projectTitle} · 来源：{props.sourceTitle}</p>
       </div>
       <div className={styles.actions}>
-        <button type="button" disabled={disabled || !rule?.queue} onClick={() => void controller.refresh()}>更新等待任务</button>
+        <button type="button" disabled={disabled} onClick={() => void controller.refresh()}>更新等待任务</button>
         <button type="button" disabled={state.busy || !!state.pending || props.configuring} onClick={props.onConfigure}>队列设置</button>
         <button type="button" disabled={disabled || (!rule?.queue && !rule?.enabled)} onClick={() => void controller.enable(!rule?.enabled)}>{rule?.enabled ? '暂停后续执行' : '继续处理队列'}</button>
       </div>
     </header>
     {rule && <p className={styles.summary}>负责人：{rule.scope.assignee === '@me' ? rule.scope.identity?.login ?? '当前账号' : '所有负责人'} · 标签：{rule.scope.labels.join('、') || '不限'}{rule.queue ? ` · 每 ${rule.queue.refreshMinutes} 分钟更新 · 并发上限 ${rule.queue.concurrency} · ${rule.queue.order === 'oldest' ? '较早创建优先' : '较新创建优先'}` : ''}</p>}
     {(!rule || !rule.queue) && <p role="status">{rule ? '已有设置、在途工作与历史已保留。打开队列设置，确认后续等待任务的筛选与执行范围。' : '先保存队列设置，再继续处理队列。'}</p>}
-    {rule && !rule.enabled && <p className={styles.summary}>已暂停启动后续 Task；在途处理和历史保留。</p>}
-    {(state.error || rule?.error) && <p role="alert" className={styles.cardError}>{state.error ?? `${rule?.error?.code}: ${rule?.error?.message}`}</p>}
+    {rule?.queue && !rule.enabled && <p className={styles.summary}>已暂停启动后续 Task；在途处理和历史保留。</p>}
+    {(state.error || queueError) && <p role="alert" className={styles.cardError}>{state.error ?? `${queueError?.code}: ${queueError?.message}`}</p>}
     {state.pending && !state.busy && <div><p>请求回执尚未确认。</p><button type="button" onClick={() => void controller.retry()}>核对原请求</button></div>}
     {props.children}
     <div className={styles.toolbar}><nav className={styles.filters} aria-label="队列状态筛选">{filters.map(([id, label]) => <button type="button" key={id} aria-pressed={filter === id} onClick={() => setFilter(id)}>{label} <span>{items.filter(item => id === 'all' || category(item) === id).length}</span></button>)}</nav>{rule&&<p className={styles.summary}>并发占用 {(rule.slots??(rule.active?[rule.active]:[])).length} / {rule.queue?.concurrency??1}{rule.lastRefreshedAt?` · 最近更新 ${new Date(rule.lastRefreshedAt).toLocaleString('zh-CN')}`:''}</p>}</div>

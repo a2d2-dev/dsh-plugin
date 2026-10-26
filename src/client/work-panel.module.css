@@ -448,4 +448,14 @@ body[data-ds-dark-theme] .panel { --work-link: var(--dsw-static-blue-400, #60a5f
 .sourceSwitchOptions svg { flex: none; color: var(--work-muted); }
 .sourceSwitchOptions p { margin: 12px 8px; font-size: 12px; }
 
+@media (max-width: 600px) {
+  .panel[data-delegation=true] .navigation { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px; }
+  .panel[data-delegation=true] .panelContext, .panel[data-delegation=true] .sourceContext { display: contents; }
+  .panel[data-delegation=true] .sourcePicker { grid-column: 1 / -1; flex-wrap: nowrap; }
+  .panel[data-delegation=true] .sourceSync { grid-column: 1; justify-content: flex-start; }
+  .panel[data-delegation=true] .panelUtilities { grid-column: 2; gap: 8px; }
+  .panel[data-delegation=true] .navigation details { margin: 0; }
+  .panel[data-delegation=true] .sourceHeader .tabs button { padding-inline: 6px; }
+}
+
 .loadSentinel { min-height: 1px; flex: none; }
