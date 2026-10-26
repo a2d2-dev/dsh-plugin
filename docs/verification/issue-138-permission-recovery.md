@@ -43,4 +43,10 @@ error.message: Existing Session permission differs; silent reconfiguration refus
 
 修复前截图为 `docs/artifacts/issue-138-permission-2026-10-26/permission-failed-before.png`。现有 GUI 为 [DSH](http://10.126.126.12:3080)，未新建替代服务器。
 
-公开插件清单确认当前工作协调挂载是 `include:a2d2-work-265-618629d`，来自已验证的 #265 release。部署将使用独立的新 release 与正式 Cordis patch／plugin-manager 生命周期替换这一工作协调挂载，保留旧 release 以便回退；保留当前前端，避免覆盖正在进行的界面工作。运行恢复和同后继正式接任尚需完成，未据测试或提交宣称 #138 已验收。
+修复通过 [PR #277](https://github.com/a2d2-dev/dsh-plugin/pull/277) 合并为 `8a1dc4b51931a40b7b807858dc06f2ed43dc3b66`，Node 22／Node 24／secrets CI 全部成功。正式 Host/profile 公开解析预检通过后，使用独立 release `a2d2-138-permission-a0dd06e` 与 Cordis patch／`pluginManager/setPluginEnabled` 正式生命周期热重载；回执为 `application: applied`、`warnings: []`。公开 `listPlugins` 确认唯一启用的工作协调挂载为 `include:a2d2-work-138-permission-a0dd06e`、fiber phase 为 active；旧 #265 挂载已禁用，旧 release 保留。当前前端保留，Host 未重启，未修改宿主内部 Session／tool 存储。
+
+运行恢复已经完成：同一来源、owner、epoch 1 从 `incompatible-session` 恢复为 `ready`，`permissionPreset` 与 `actual` 均为 `danger-full-access`／`never`，`reasoningEffort: high` 保留。随后从真实原生页面点击“重试本次接续”，宿主发出正式材料请求，来源保存后停止；固定操作 `e55b31d6…` 与固定后继 `session-7f523df6…` 均复用。修复前后截图为同目录的 `permission-failed-before.png` 和 `permission-recovered-after.png`。
+
+2026-10-26，固定后继实际接任同一个 Task，公开 `task.detail` 为 `ready`、epoch 2、continuation phase `delivered`，请求和 kickoff 均 `delivered`；后继 actual 保持 Full access／never／high。旧来源列在 `retired`，其 `session.work` 投影为 `purpose: history` 并指向这个后继。原 GUI 刷新后显示“接续内容已投递”，旧来源关联入口实际打开当前后继；Task 的“只读历史”显示旧来源记录，读取后 epoch／current／retired 保持不变。决定与具体未完成项在后继页面可以展开。最终截图和筛选后的公开事实保存在 `docs/artifacts/issue-138-final-2026-10-26/`，详见[整票验收记录](issue-138-execution-acceptance.md)。
+
+运行页面初次点击后立即读取曾抓到投递前快照，等待刷新完成后已确认 delivered；等待脚本曾返回 DOM 对象而触发 CDP 序列化错误，改为布尔条件后通过。这些是观察脚本／时序问题，没有将其算成产品回归，也未以旧诊断回执覆盖当前权威查询。
