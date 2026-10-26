@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, expect, it } from 'vitest'
-import { createCanvasAssetHandler } from '../src/canvas-assets.ts'
+import { CANVAS_ASSET_PREFIX, createCanvasAssetHandler } from '../src/canvas-assets.ts'
 
 let directory: string | undefined
 // Only deletes the exact mkdtemp directory created in this test.
@@ -16,6 +16,8 @@ it('serves only bundled resources behind browser authentication', async () => {
   await writeFile(join(directory, 'fonts', 'Virgil', 'Virgil-Regular.woff2'), 'font')
   const root = pathToFileURL(`${directory}/`)
   async function request(path: string, method = 'GET', reject?: 401 | 403) {
+    // DSH WebServer matches a prefix p as p itself or p + '/' + a suffix.
+    if (path !== CANVAS_ASSET_PREFIX && !path.startsWith(`${CANVAS_ASSET_PREFIX}/`)) return { status: 404 }
     let status = 0
     let body: Uint8Array | string | undefined
     let headers: Record<string, string> | undefined
