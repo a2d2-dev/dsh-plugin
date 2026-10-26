@@ -1,3 +1,4 @@
+import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
 import { SourceError } from '../src/work-sources/errors.ts'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -1129,6 +1130,40 @@ it('maintains owned work and saves a new prompt while an earlier screening call 
   } finally { release(); await slow }
   expect((await h.execution(original.ref)).control?.action).toBe('pause')
   expect((await h.status()).items.find(item => item.number === 2)!.screening?.reason).toBe('新筛选')
+})
+
+it('saves a prompt while another refresh still holds the shared refresh lease', async () => {
+  const h = await setup(false)
+  completed(await h.app.execute(h.configure, operator))
+  const lease = join(h.directory, 'continuous.refresh')
+  let release!: () => void
+  const held = withFileLock(lease, () => new Promise<void>(done => { release = done }))
+  try {
+    await new Promise(done => setTimeout(done, 50))
+    const saving = h.app.execute({ ...h.configure, commandId: 'save-under-lease', expectedVersion: 1, queue: { ...queue, concurrency: 1, filterPrompt: '只处理独立缺陷' } }, operator)
+    await new Promise(done => setTimeout(done, 2_200))
+    release()
+    const saved = completed(await saving)
+    expect(saved.continuousRule!.queue!.filterPrompt).toBe('只处理独立缺陷')
+    expect((await h.status()).queue!.filterPrompt).toBe('只处理独立缺陷')
+  } finally { release(); await held }
+})
+
+it('keeps the save responsive while slow screening finishes in the background', async () => {
+  let release!: () => void
+  const screen = vi.fn(async (basis: import('../src/work-screening.ts').ScreeningBasis) => {
+    await new Promise<void>(done => { release = done })
+    return { decisions: basis.candidates.map(issue => ({ nodeId: issue.nodeId, matches: true, reason: '慢模型结果' })) }
+  })
+  const h = await setup(false, { generate: async () => ({ steps: [] }), screen })
+  completed(await h.app.execute(h.configure, operator))
+  const started = Date.now()
+  const saved = completed(await h.app.execute({ ...h.configure, commandId: 'slow-screen-save', expectedVersion: 1, queue: { ...queue, concurrency: 1, filterPrompt: '慢筛选' } }, operator))
+  expect(Date.now() - started).toBeLessThan(2_500)
+  expect(saved.continuousRule!.queue!.filterPrompt).toBe('慢筛选')
+  expect((await h.status()).items.every(item => item.state === 'waiting')).toBe(true)
+  release()
+  await vi.waitFor(async () => expect((await h.status()).items.some(item => item.screening?.reason === '慢模型结果')).toBe(true))
 })
 
 it('reflects explicit Task-page recovery of a pre-admission problem without bypassing queue capacity', async () => {
