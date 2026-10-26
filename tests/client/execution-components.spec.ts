@@ -50,6 +50,15 @@ it('renders verified collection, settlement, profile, Goal activation and read p
   expect(renderToStaticMarkup(createElement(ExecutionContinuation, { execution }))).toContain('历史协议：已投递，无读取凭据')
 })
 
+it('locates an unconfirmed collection at its real step and exact owner rather than the reserved phase', () => {
+  const source = { runtimeId: 'runtime', sessionId: 'source' }, collector = { ...source, sessionId: 'exact-owner' }
+  const execution: WorkExecution = { id: 'e', ref: { projectId: 'p', taskId: 't' }, owner: 'owner', epoch: 1, agentId: 'agent', resource: { runtimeId: 'runtime', workspaceId: 'ws' }, session: source, sessionMode: 'create', agentPreset: 'standard', model: { provider: 'test', model: 'test' }, permissionPreset: 'read-only', policy: { version: 1, modelCandidates: [], instructions: '', capabilities: [] }, state: 'paused', history: [], events: [], continuation: { operationId: 'same-operation', commandId: 'cmd', automatic: false, phase: 'reserved', source, successor: { ...source, sessionId: 'same-successor' }, sourceEpoch: 1, materialRequestId: 'material', kickoffId: 'kickoff', goal: 'Keep scope', specification: { version: 1, text: 'Scope', acceptance: ['accepted'] }, title: 'Task', history: { ref: { projectId: 'p', taskId: 't' }, session: source }, collections: [{ session: collector, jobs: [{ id: 'job-1' }, { id: 'job-2' }], requestId: 'collect', delivery: 'consumed', status: 'requested' }], error: { code: 'continuation-collection-unconfirmed', message: 'Owner exact-owner consumed the collection request without formal output delivery' } } }
+  const html = renderToStaticMarkup(createElement(ExecutionContinuation, { execution, onContinue: () => {} }))
+  for (const term of ['失败步骤：结果补收', '执行者：runtime / exact-owner', '正式 job_output', '同一操作与后继', 'same-operation', 'same-successor']) expect(html).toContain(term)
+  expect(html).not.toContain('当前步骤：准备接续')
+  expect(html).toContain('补收未确认')
+})
+
 it('renders independent child entry, real job owner and distinct delivery/consumption with visible continuation parameters', async () => {
   const session = { runtimeId: 'runtime', sessionId: 'current' }
   const graph: ExecutionGraph = { settlement: 'pending', ref: { projectId: 'p', taskId: 't' }, executionId: 'execution', owner: { id: 'owner', epoch: 2, agentId: 'agent' }, currentSession: session, childTasks: [{ ref: { projectId: 'p', taskId: 'child' }, title: 'Independent issue', agentId: 'child-agent', owner: 'child-owner', currentSession: { ...session, sessionId: 'child-current' } }], sessions: [{ session, role: 'current', status: 'idle', children: [], jobs: [{ id: 'bash-1', owner: session, label: 'checks', kind: 'bash', status: 'completed', delivery: 'delivered', result: 'unknown', acceptance: 'unassessed', persistence: 'process-local' }] }], events: [], history: [], blockers: [], reminders: ['作业 bash-641 的注册表实例已不可达，只提醒不阻断完成。'], limitations: [] }

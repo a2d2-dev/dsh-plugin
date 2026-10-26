@@ -135,8 +135,17 @@ export function ExecutionContinuation({ graph, execution, policy, busy = false, 
   const suspended = execution?.state === 'waiting' || execution?.state === 'paused'
   const pendingControl = execution?.control?.status === 'accepted' && execution.control.action !== 'resume'
   const current = graph?.sessions.find(row => row.session.runtimeId === execution?.session.runtimeId && row.session.sessionId === execution?.session.sessionId)
-  const disabledReason = completed ? '任务已验收完成，不能继续接续' : busy ? '请求处理中' : failed ? '先重试原执行，恢复成功后再接续' : pendingControl ? '等待或暂停请求尚未生效，结算后刷新' : execution?.state === 'accepted' || execution?.state === 'creating' ? '等待创建或恢复后刷新' : current?.status === 'running' || current?.status === 'stopping' ? '等待本轮结束后刷新' : graph?.settlement === 'unknown' ? '结算未知，请核实宿主能力和执行者后刷新' : !execution?.actual ? '实际执行配置尚未核实' : !onContinue ? '请从当前协调会话发起接续' : undefined
+  const disabledReason = completed ? '任务已验收完成，不能继续接续' : busy ? '请求处理中' : failed ? '先重试原执行，恢复成功后再接续' : pendingControl ? '等待或暂停请求尚未生效，结算后刷新' : execution?.state === 'accepted' || execution?.state === 'creating' ? '等待创建或恢复后刷新' : current?.status === 'running' ? '等待本轮结束后刷新' : graph?.settlement === 'unknown' ? '结算未知，请核实宿主能力和执行者后刷新' : !execution?.actual ? '实际执行配置尚未核实' : !onContinue ? '请从当前协调会话发起接续' : undefined
   const blocked = Boolean(disabledReason)
+  const failure = op?.error && (op.error.code.startsWith('continuation-collection-')
+    ? { step: '结果补收', executor: op.collections?.filter(item => item.status !== 'collected').map(item => sessionId(item.session)).join('、') || '未记录', recovery: '检查准确执行者的正式 job_output 结果与宿主持久提交，核实后重试。' }
+    : op.error.code.startsWith('continuation-material-')
+      ? { step: '材料保存与刷新', executor: sessionId(op.source), recovery: '检查原会话材料保存结果及最新结算事实，修复后重试。' }
+      : op.error.code.startsWith('continuation-read-')
+        ? { step: '材料读取确认', executor: sessionId(op.successor), recovery: '检查固定后继的正式读取工具结果与持久提交，再重试请求读取确认。' }
+        : op.error.code.startsWith('continuation-goal-')
+          ? { step: '旧 Goal activation 核验', executor: `插件 · 原会话 ${sessionId(op.source)}`, recovery: '核实宿主公开 Goal 能力及准确原会话后重试；不得绕过人类 pause/resume 权限。' }
+          : undefined)
   return <section className={styles.surface} aria-label="接续">
     <dl className={styles.parameters} aria-label="生命周期状态">
       <dt>会话运行</dt><dd>{current ? statuses[current.status] : '尚无宿主观察'}{current?.attempt && ` · 第 ${current.attempt.turn} 轮：${reasonLabel(current.attempt.reason)}`}</dd>
@@ -155,7 +164,7 @@ export function ExecutionContinuation({ graph, execution, policy, busy = false, 
     {!completed && pendingControl && !failed && <p role="status">原执行的等待或暂停请求尚未生效，请等待结算后刷新观察。</p>}
     {!completed && (execution?.state === 'accepted' || execution?.state === 'creating') && <p role="status">原执行尚未就绪，请等待创建或恢复后刷新观察。</p>}
     {completed && <p role="status">任务阶段：done（已验收完成） · 任务已验收完成，不能继续接续</p>}
-    {op?.phase === 'taken' && <p role={op.error ? 'alert' : 'status'}>后继已接任，但交接内容尚未确认送达。{op.error ? '接续尚未完成，请重试确认内容投递。' : '正在等待内容投递。'}</p>}
+    {op?.phase === 'taken' && <p role={op.error ? 'alert' : 'status'}>后继已接任，但交接内容尚未确认送达。{op.error ? '接续尚未完成，请重试内容投递。' : '正在等待内容投递。'}</p>}
     <details className={styles.group}><summary>生命周期与操作</summary>
       <dl className={styles.parameters}>
         <dt>创建</dt><dd>普通新建、浏览器协作交接或 Issue 协调绑定不会自动取得 TaskExecution 协调权，也不会撤销独立 Goal activation。已有 Task 请从当前协调会话的「A²D² 接续」或工作详情「接续」进入受控流程。</dd>
@@ -193,7 +202,7 @@ export function ExecutionContinuation({ graph, execution, policy, busy = false, 
       {!!op.collections?.length && <div><h3>结果补收</h3><ul>{op.collections.map(item => <li key={item.requestId}>执行者：{sessionId(item.session)} · {item.jobs.map(job => job.id).join('、')} · {item.status === 'collected' ? '已核实收取' : '补收未确认'} · 请求{item.delivery === 'consumed' ? '已消费' : item.delivery === 'delivered' ? '已投递' : '已接受'} · {item.requestId}</li>)}</ul></div>}
       {!!op.settlements?.length && <div><h3>原生结果结算</h3><ul>{op.settlements.map(item => <li key={item.messageId}>执行者：{sessionId(item.parent)} · 子会话 {sessionId(item.child)} · 结束序号 {item.endSeq} · 结算通知{item.delivery === 'consumed' ? '已消费' : item.delivery === 'delivered' ? '已投递' : '已接受'}</li>)}</ul></div>}
       <p className={styles.limit}>插件持续负责接续流程；{['taken', 'delivered', 'received'].includes(op.phase) ? '正式接任已提交，当前协调以有效记录为准。' : '正式接任前原会话保留业务协调身份。'}</p>
-      {op.error && <p role="alert">{op.error.code}：{op.error.message} · 当前步骤：{phases[op.phase]}。修复该缺口后重试接续，复用同一操作与后继。</p>}
+      {op.error && <div role="alert"><p>{op.error.code}：{op.error.message} · 停留阶段：{phases[op.phase]}</p>{failure && <p>失败步骤：{failure.step} · 执行者：{failure.executor}。{failure.recovery}</p>}<p>修复该缺口后重试接续，复用同一操作与后继。</p></div>}
       {op.material && <details><summary>接续材料</summary><p className={styles.eventText}>{op.material.body}</p><p>决定：{op.material.decisions}</p><p>证据：{op.material.evidence}</p><p>未完成：{op.material.unfinished}</p><p>下一步：{op.material.next}</p></details>}
     </article>}
     {execution?.continuationBlocked && <p role="status">{execution.continuationBlocked.code}：{execution.continuationBlocked.message}</p>}
