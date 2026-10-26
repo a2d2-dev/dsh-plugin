@@ -103,6 +103,41 @@ observe(id, caller): {
 
 操作沿用 `task.continue`。固定 operation 与 successor 先保留，准备不修改当前入口。`maintain` 等当前 idle，取得 source maintenance 并 flush；观察相关执行者，再对其 live idle Agent 取得 maintenance 并逐一 flush，最后重读公开事实。如果获取锁时出现新的相关 live 执行者，先补锁与 flush 再重读。body 已在这一持久屏障内，禁止再次调用 settle/whenIdle/runMaintenance 造成嵌套等待。pending/unknown 拒绝 body，释放维护窗口，让原生工具继续结算。settled 才进入已有 take；失败重试复用原 operation/successor，不另建入口。不可达作业只提醒，不计入这里的 pending/unknown。
 
+### waiting/paused 仅换会话与步骤恢复（#274）
+
+**前置条件**：真实 source 已 idle，Task 尚未验收完成；命令携带当前 execution/owner/epoch。普通聊天、页面、完成及归档不授予业务调度资格。
+
+**操作**：显式提交 `task.continue`。插件持久保存唯一 operation、固定 successor、materialRequestId 与 kickoffId；原 source 仍是业务协调者。waiting/paused 保留 state、完整 control（原因及恢复条件）、Task/Execution/owner、全部规格与验收。continuous 维护不领取 slot、不写 resumeRequested；接任不把等待/暂停设为 ready。
+
+**步骤与数据走向**：
+
+1. 插件读取完整执行范围。遇到可达终态 pending jobs，在任何 executor maintenance 锁外，将 `collection:<operation>:<request>` 请求发给准确 owner Session。准入同时绑定 operation、准确会话、固定 request 与 collect 步骤；tools.guard 只允许这些 job 的正式 job_output，不允许业务工具或嵌套分派。running/unknown/权限拒绝等保留具体阻塞。
+2. 正式 Agent loop 提交真实 tool/call、tool/result；插件 flush 准确 owner 后复查公开交付事实，以 owner/job/registryEpoch/instanceId 识别同一结果。消费后无结果、无 Session 提交和空重读保留 pending，不伪造 collected。持久 collections 保存执行者、目标 jobs、请求交付/消费和核实结果。
+3. 结算后请求 source 仅调用 work_continuation_material。保存材料绑定 TaskRef、execution、source、epoch、specificationVersion 与已观察结果身份集合；补收或结果变化后重新请求材料。插件在相关 executor maintenance 锁内再次读取事实与材料新鲜度，通过后才创建固定 successor。
+4. source maintenance 内调用公开 goals.disarm(exactLiveAgent)，再 goals.get 核实 activation=disarmed 且 Goal id/phase/revision 未改变。无能力时精确记录宿主边界；不伪造人类 pause/resume、不 complete/blocked 未完成 Goal。正式事务才增加一次 epoch，并将 source 写为 retired。独立浏览器协作交接不具有此原生事务或自动 Goal 转移能力，须进入受控流程。
+5. 新操作保存 `protocolVersion=1`。缺少该字段的旧 `delivered` 保留历史终态和无读取凭据的事实，查询、冷加载和恢复均不自动重开或补标 received；旧未完结操作才在正常恢复中采用新屏障。对历史终态显式再次接续，会保留原历史并创建新的固定 operation。`taken` 后投递固定内容，`delivered` 仅表示投递事实。后继只调用 work_continuation_received，声明准确 operation/material command/epoch；插件 flush 并从其真实 Session 回读成功的 tool/call、tool/result，才进入 `received`。单独声明、deliver 返回、消费消息均不足以确认可读。
+6. received 后按原业务控制处理后续输入。waiting/paused 后继继续等待；正常可推进执行才投递业务下一步，并继续服从 continuous slot 与所有原权限。相同 successor/operation/material/epoch 的成功回执可重放；保留原始读取凭据和业务事件，不重新接任或调度。
+
+**失败与恢复**：插件的 idle 事件、启动检查及既有低频恢复循环持续负责推进。已消费但缺材料、缺收取结果或缺读取回执时保留具体 error 和准确执行者，不重复空推；新的显式 task.continue 为缺失步骤生成新请求，保留 operation/successor/kickoff 与 epoch。创建/接任/投递失回执通过已固定身份与正式日志回读恢复，接任只提交一次。真实 Goal 的 activation 只退役旧会话，不承诺在后继自动 rearm。
+
+**完成判据**：当前协调记录指向固定 successor、epoch 恰增一次、正式收到并可读的材料已核实、原控制及槽位资格保留。后端测试与正式 jobs/Goal lane 使用明确的隔离 fixture，不能替代父 #270 要求的既有 GUI 实测；本切片不部署或改动任何真实业务 Task。
+
+### 原生子会话结算维护（PR #282 R1）
+
+接续 reservation 会关闭普通自动业务轮次，但原生 child 的最新结算仍须进入准确父 Session 的 `user/message`。`settle` 维护步读取父 `subagent/catalog`、child 的 `origin/parentSession/descriptor`、最新 `turn/end` 与原生通知首次 durable inbox insertion，绑定同一 operation、准确 parent/child、endSeq 和 messageId；重放旧通知不能刷新其首次入箱时间。该轮只准入核验过的完整通知，所有工具（含嵌套工具）均被围栏拒绝。任意维护 marker 不取得此准入。插件持久保存 settlements 的交付进度，恢复检查可经原生 inbox 重投尚未消费的原通知；只有正式父日志消费并覆盖 child 最新结束后，原生结果门才解除。jobs 和 child 最新结束身份一起构成材料新鲜度，不能复用旧结算材料。
+
+**真实晚到结果场景**：source idle 时启动正式 continuable child，以真实工具确定性挂起；先 `task.continue` 预留 operation，再释放 child。`Subagents` 自行生成结算通知，测试不直接创建通知或 append user/message。Node 22.23.1 下 `pnpm exec vitest run --project host tests/work-completion-native.spec.ts -t 'running native child'` 在修复前 ready/waiting/paused 三项均失败：准确父 user/message 数量为 0（exit 1，`.local/issue-274/r1/red-late-child-contract.log`）。首个 fixture 参数错误单列 `.local/issue-274/r1/red-late-child.log`，不算产品红灯。修复后完整同文件 5/5 通过（exit 0，`.local/issue-274/r1/green-late-child-attempt.log`），保留 control、owner 与 operation/successor，最终 received 且 epoch=2；正常控制执行原 next，waiting/paused 不写业务进展。第二条 job 补收与最终回归结果另记，不以该阶段通过代替全部验收。
+
+**同批输入与安全负例**：真实 Agent inbox 的 nextStep 自动输入与 nextTurn 原生通知会一起被 claim。最初只允许整批均为 subagent-settled，三种控制仍拒绝必要通知（exit 1，`.local/issue-274/r1/red-mixed-claimed-native.log`）。现在按准确通知子集准入；其余输入保留完整 payload 和稳定身份到业务 events，不设置 resumeRequested；宿主只将获准通知写入这次模型输入。正式模型在 settle 轮尝试 work_control 或业务分派工具时，真实 tool/result 为 isError，分派体未执行；已消费旧通知、错误 child 与伪 settle marker 逐项拒绝且没有新模型请求。
+
+Node 24.22.1 下 `TMPDIR="$PWD/.local/tmp" pnpm exec vitest run --configLoader runner --no-cache --maxWorkers=1 --project host tests/work-completion-native.spec.ts tests/work-continuous-integration.spec.ts` 完整 2 文件 / 10 项通过，exit 0（`.local/issue-274/r1/green-native-continuous.log`）。ready 实际沿原 next 写进展，waiting/paused 保留 control/state；真实 continuous 两种 hold 场景保持 slots、resumeRequested/explicitResumeRequested 未写，固定 operation/successor、epoch 只增一次。测试等待真实 whenIdle 后直接核验日志，没有扩大 timeout 或添加 skip。
+
+**returned child 的两个 pending jobs 能力边界**：不能把内存观察实验当成正式 Session 测试。匹配依赖的真实 native child 工具先创建准确 owner 的两个 completed jobs，Subagents 自行退役 activation 并发送旧结算通知；父消费后，LocalJobs 已删除两个记录，`jobs.get` 拒绝、观察 jobs=[]，普通 SessionController 对该 child 冷恢复返回 owned-by-subagent-routing。能力负例见同一 native suite；最初尝试构造该前置的失败单列 `.local/issue-274/r1/red-child-jobs.log`、`child-jobs-prerequisite.log`，不算产品红灯。
+
+同一边界已在指定干净官方 HEAD `22ddee3792402c3e70ec5f86a63c3e3e895a2f60` / 0.2.1-rc.3、Node 24.22.1 上用真实 startActivation、Agent loop、Jobs registry、正式父 user/message 与 flush 独立复核（exit 0，`.local/issue-274/r1/official-native-capability-attempt.log`）。两个准确 owner 作业只在 child 活跃时可达，返回后均移除；没有 job_output 或伪造 collected。该结果是公开宿主能力负例，**不是“补收两个 returned-child pending 结果并接任”的通过证据**。已有普通 owner 两 job 的正式补收 lane 继续单独验证；当前不通过改 DSH、假注册表、人类输入或私有路由制造此场景。
+
+保留的测试诊断：`.local/issue-274/r1/red-mixed-native.log` 的 followup FIFO 为两个独立 turn，本身不构成同批红灯；真正同批红灯使用 inject(nextStep)。`green-mixed-security-attempt.log` 首次含可选 control 字段断言错误及三个伪输入并排后停驻 FIFO；逐个拒绝确认后，`mixed-security-take-diagnostic.log` 的材料延迟也已消除。`green-native-final.log` 曾有一条默认 expect.poll 观察期未等到慢模型轮次，随后改为已知输入的真实 whenIdle 收口再核原断言，未更改测试预算。
+
 ### 已验收任务的接续入口
 
 原生会话「A²D² 接续」与 Issue「接续」页从 `task.detail` 的 `task.completion`、`progress.completion` 或 `progress.processingState === 'completed'` 读取 Task 完成事实，传入 `ExecutionContinuation.completed`。完成后保留置灰的「准备接续」，并显示「任务阶段：done（已验收完成）」和「任务已验收完成，不能继续接续」。该参数即使与 handler 同时传入也会禁用动作；handler 仍由当前协调关联等既有资格判断提供，缺少 handler 不伪造可用能力，未完成的历史或评审会话沿用隐藏行为。原生会话 Completed/idle、Goal 与 GitHub closed 均不推断 Task 完成；完成显示不改变 owner、epoch 或 Task 状态。
@@ -156,3 +191,127 @@ pnpm verify:pack-exports
 ```
 
 已记录第一条 graph 测试缺模块红 → 1/1 绿；真实 SessionController scope/maintenance 测试缺 connectObservation 红 → 绿。完整结果随实现提交及最终汇报记录，不以编译成功替代浏览器验收。首次 pnpm install 因 ignored build scripts exit 1；未授权脚本。corepack pnpm10 因 store v10/v11 不同 exit 1；随后现有 pnpm add --ignore-scripts 安装三项已授权 jobs 测试依赖 exit 0。相关测试并行时有超时，后续采用 maxWorkers=1 隔离，不增加 timeout、不 skip。
+
+
+## #274 后端实施验证（2026-10-26）
+
+**目的**：验证插件持续持有推进责任、waiting/paused 仅换会话保留业务控制、准确 owner 正式补收后刷新材料、真实读取回执、受控 Goal activation 退役及既有回归。本段是后端与正式宿主接口证据；父 #270 的现有 GUI 全流程验收仍待前端 #275 和集成验收切片。
+
+**基线与环境**：指定 worktree 分支 `feat/270-lifecycle-control` 从 `9c2b91e5c4b8235c1ec4db0bff0a8acb3bb8283c` 快进到实际 base `09d5685ab9bc475d13ea41615a9b3a9653889041`，保留 #273。`pnpm install --frozen-lockfile` exit 0，锁文件未改；主 checkout 的锁文件不同，未借用其依赖。普通 lane 使用 Node 22.23.1 / pnpm 10.26.2，official lane 使用 Node 24.22.1、官方干净构建 `22ddee3792402c3e70ec5f86a63c3e3e895a2f60` / 0.2.1-rc.3。
+
+**步骤**：以下命令均在唯一实施 worktree 运行，日志保留在其忽略目录 `.local/issue-274/`。最终 unit/host 分项目顺序执行；临时 fixture 使用本树 `.local/tmp`，不使用 tmpfs，不变更测试断言或 timeout。
+
+```sh
+pnpm install --frozen-lockfile
+
+TMPDIR="$PWD/.local/tmp" pnpm exec vitest run --configLoader runner --no-cache --maxWorkers=1 --project unit \
+  tests/work-continuous.spec.ts tests/work-execution-jobs.spec.ts \
+  tests/work-execution-lost-job.spec.ts tests/work-execution-official-jobs.spec.ts \
+  tests/work-execution-observation.spec.ts tests/client/execution-continuation-render.spec.ts \
+  tests/client/execution-components.spec.ts tests/client/session-handoff-entry.spec.ts
+
+TMPDIR="$PWD/.local/tmp" pnpm exec vitest run --configLoader runner --no-cache --maxWorkers=1 --project host \
+  tests/work-continuation.spec.ts tests/work-execution.spec.ts tests/work-execution-boundary.spec.ts \
+  tests/work-goal-replay.spec.ts tests/work-continuous-integration.spec.ts tests/work-execution-lifecycle.spec.ts
+
+pnpm typecheck
+
+PATH=/root/.nvm/versions/node/v24.22.1/bin:$PATH \
+TMPDIR="$PWD/.local/tmp" \
+DSH_OFFICIAL_HOST_ROOT=/data/src/github.com/deepseek-ai/deepseek-harness-dev.worktrees/dsh-upgrade-latest-20261024 \
+node node_modules/vitest/vitest.mjs run --configLoader runner --no-cache --config tests/official-jobs.config.ts
+```
+
+**红→绿记录**：
+
+| 行为 | 首个真实失败 | 实施后的验证 |
+| --- | --- | --- |
+| waiting/paused 仅换会话 | 两项返回 continuation-not-ready | 两项完成接任并确认 received，state/control/owner 保留、epoch 只增一次 |
+| 投递与可读分别确认 | delivered 无读取结果时不能达到 received | 真实 Session 成功 tool/result + flush 后达到 received |
+| 插件组织两个终态 pending jobs | 只返回 continuation-waiting-executions，没有补收步骤 | 官方 registry + 正式 model step/job_output + Session commit/flush 均真实完成 |
+| 补收后材料刷新 | 旧 materialRequestId 被复用，已消费请求不能再次运行 | 保留 operation/successor，新材料请求到达 source，旧材料不复用 |
+| 随机维护 marker 不恢复业务 | 被拒 marker 仍进入业务 inbox | 生命周期输入从业务 inbox 排除，不能写 resumeRequested |
+| 正常 source 仍欠材料时的业务准入 | 无关自动输入从 2 次模型请求增加到 4 次 | 仅固定维护步骤获准，未完成步骤不放行业务轮次 |
+| Goal 退役 | 没有公开生命周期接线方法 | 官方 goals.disarm 精确 live Agent，get 核实 active/revision 不变且 activation=disarmed；真实 Goal driver 不再产生旧轮次 |
+
+补充回归覆盖：材料请求消费但无保存、五个创建/接任/封口/投递失回执点、脱敏失败、两个真实后继、模型与 reasoning effort 恢复、慢详情刷新；missing/failed-commit 读取结果冷恢复保留同一 operation/successor/epoch；continuous waiting/paused 不领取 slot、不请求 resume。正式 lane 还断言消费后提交失败与空重读保持 pending、显式重试只更换步骤请求，不重建身份；缺少 goals.disarm 精确返回 capability-unavailable 且不改 Goal。
+
+**阶段记录（09d5685 基线）**：unit 8 文件 / 151 项、host 6 文件 / 71 项均通过，两个命令各 exit 0（`.local/issue-274/unit-final.log`、`.local/issue-274/host-final.log`）；随后 pnpm typecheck exit 0（`.local/issue-274/types-final.log`）。official-jobs 1 个完整场景通过，exit 0，包括真实材料读取工具的官方注册和提交兼容验证。后续最新主干与历史 delivered 兼容复核另记最终交付结果。
+
+**保留的失败记录**：前两次组合执行分别出现 work-continuous 的不同普通 unit 用例超出既有 5 秒预算，并在超时清理时出现 ENOTEMPTY；没有修改这些用例的 timeout 或断言。分项目最终 unit 151 项全部通过，证明该批断言可完成；不将前两次失败改写成通过。另一次新测试把 it.each 回调第二参数误当 context，已修正测试；一次新 fixture 的 callId 清理顺序错误、一处可选 observation 类型断言和新增 received 的前端穷尽映射均已修正并复验。
+
+**范围与未验证项**：生产改动限定 Work 后端、接续 host/tools/types/schema 与文档；前端只有 received phase 标签和对应终点/接任判断的必要兼容，没有实施 #275 UX。普通真实控制器/Session fixture 证明完整接任；official lane 的已接任 fixture 仅用于隔离读取工具与 Session commit 边界，不能声称该 fixture 验证了真实 GUI 接任。未部署、未构建发布产物、未启动替代服务、未修改 DSH 本体或其他 checkout，未操作 #265/#182/#2104 的真实业务状态。独立浏览器协作仍须进入正式受控接续；没有跨会话 Goal 自动迁移或 rearm 承诺。父 #270 仍不能据本切片判定全部完成。
+
+### 恢复收尾：历史终态与正常推进
+
+**目的与现场**：前实施会话在最终交付前退出。恢复首检为 `00d20bcf9caccf9d9bfa8c373332855b20165e7d`（合入 main `f80ab103d13882efbc370bbb119e1c7dcf01a9e1`），恰有交接列出的 10 个未提交文件，全部保留。本节记录恢复会话新执行的验证，不将先前阶段结果当作当前 head 最终验收。
+
+**根因与行为**：旧协议以 delivered 为终态，直接改为 received 才结束会让 reconcile 重开历史记录；新操作用 protocolVersion=1 进入读取屏障，旧 delivered 保留原始事实。正常操作确认读取后，还须投递 continuation-business 事件，才会执行材料中的 next；waiting/paused 不生成该业务事件。
+
+**步骤与记录**：使用 Node 24.22.1、本树依赖及 `.local/tmp`，先运行现有两项行为测试，4/4 通过（exit 0）。为核实回归敏感性，在同一工作树逐项临时撤去关键行为并立即恢复：移除历史 delivered 终态判定时，三项冷恢复均因实际新增 continuation-read-unconfirmed 失败（exit 1，`.local/issue-274/recovery-red-legacy-behavior.log`）；移除 received 后业务事件时，正常后继虽为 ready/received，却没有写入原 next 的 progress（1 项失败，exit 1，`recovery-red-next-step.log`）。未修改断言或 timeout 来制造通过。
+
+```sh
+PATH=/root/.nvm/versions/node/v24.22.1/bin:$PATH TMPDIR="$PWD/.local/tmp" \
+  pnpm exec vitest run --configLoader runner --no-cache --project host \
+  tests/work-continuation.spec.ts \
+  -t 'legacy delivered|automatically executes the accepted next step|explicitly replaces'
+```
+
+恢复原实现后，上述命令 6/6 通过（exit 0，`.local/issue-274/recovery-green-priority.log`）。历史 ready/waiting/paused 冷加载及重复 reconcile 均保留整个 operation/control、无新模型请求或伪读取确认；新显式接续归档旧操作并生成新身份。正常后继通过真实模型步骤调用 work_control(progress) 执行原 next，而 waiting/paused 在 received 后保持停止。最终隔离回归和正式宿主结果在完成后另记；此阶段不构成父票 GUI 验收。
+
+验收清单的重复读取确认另有真实红→绿：在成功提交且进入 received 后，重放同一准确回执原先返回 stale-continuation-receipt（exit 1，`recovery-red-receipt-replay.log`）。修复只让该已确认终态返回同一成功结果，仍核对准确 successor/operation/material/epoch，并保留原 readable 与整个 execution。定点 `-t 'keeps delivery distinct'` 1/1 通过（exit 0，`recovery-green-receipt-replay.log`）；重复确认不会新增业务事件或再次接任。
+
+### 恢复后的最终后端验证
+
+**目的**：对最终代码提交 `eabdd628a1aec7a4b7e10f1cabd15089b1d6ed05` 重新验收，不使用旧会话最后未知结果或旧基线成功替代。本轮从本树已安装的 frozen-lock 依赖运行；锁文件未改。后续提交仅补充本验证文档。
+
+**步骤**：沿用上节完整 unit/host 文件清单，显式指定 `--configLoader runner --no-cache --maxWorkers=1 --project unit` 或 `--project host`；两项目与 official lane 顺序运行，PATH 指向 Node 24.22.1，TMPDIR 为本树 ext2/ext3 的 `.local/tmp`。`pnpm typecheck` 也在最终代码上执行。official 命令仍指定上节相同的 DSH_OFFICIAL_HOST_ROOT，场景内部断言正式 checkout 干净、HEAD 与版本一致。
+
+| 检查 | 结果 | 退出码 | 忽略目录中的原始日志 |
+| --- | --- | --- | --- |
+| unit：continuous、jobs/正式收取/失联/观察、三个相关客户端组件文件 | 8 文件，151 项通过 | 0 | `.local/issue-274/recovery-unit-eabdd62.log` |
+| host：continuation、execution、boundary、Goal replay、continuous integration、lifecycle | 6 文件，84 项通过 | 0 | `.local/issue-274/recovery-host-final.log` |
+| pnpm typecheck | 后端与客户端 tsc 均通过 | 0 | `.local/issue-274/recovery-typecheck-final.log` |
+| official-jobs.config.ts | 1 个完整场景通过，9318ms | 0 | `.local/issue-274/recovery-official-final.log` |
+| pnpm verify:repository | 元数据、10 个 mount rows 与源排除规则通过 | 0 | `.local/issue-274/recovery-repository.log` |
+| pnpm test:node | 28 项通过，2 项既有可选 real-host 测试按默认条件跳过 | 0 | `.local/issue-274/recovery-node.log` |
+
+**记录**：host 的 execution 38 项包含主干 #277 的 live/cold、create/reuse、danger-full-access/read-only 权限恢复；continuation 34 项包含历史终态、真实 next、材料请求刷新、读取失败冷恢复与成功回执重放。official provenance 为 Node v24.22.1、HEAD `22ddee3792402c3e70ec5f86a63c3e3e895a2f60`、0.2.1-rc.3；真实准确 owner 正式补收、Session 提交/flush、读取工具、失败提交与空重读仍 pending、Goal activation 不改持久状态均通过。所有本会话验证作业的退出结果均通过正式 job_output 收取；未跨 owner 操作旧作业。
+
+前述指定的 unit/host/official 回归没有非预期测试失败、超时或 ENOTEMPTY；先前两次组合失败记录仍保留，未修改 timeout、断言或配置，也不据本轮通过推断旧超时根因。这里只验证所列后端和组件合同，没有执行完整仓库 pnpm test 或既有 GUI 实测；完整前端、真实浏览器协作方式与 #259/#268 原完整模式仍待 #275/#276，不提前确认父票全部验收。
+
+### 全仓 CI 的读取屏障配套回归
+
+首次推送代码提交 eabdd62 的全仓 CI [40306215804](https://github.com/a2d2-dev/dsh-plugin/actions/runs/40306215804) 在 Node 22/24 均为 3 fail / 1434 pass，失败不是超时：work-compact-results 的多代接续在 delivered 后继续写下一代规格，触发 continuation-in-progress；work-source-freeze 的父/子两项仍以 delivered 为解冻点，且夹具未注册新读取工具。原失败日志保留在 `.local/issue-274/ci-eabdd62-failed.log`。相同三项在本地原样复现（exit 1，`recovery-red-ci-contract.log`）。
+
+修正只补足真实测试步骤：注册该准确应用的正式 Work 工具，等待后继成功读取工具结果，再由插件 reconcile 确认 received 后继续规格更新或来源导入；delivered 仍保留中间态断言，来源回归新增读取确认前依旧冻结的断言。生产准入、回执屏障、大小上限与原关系端点断言均保留，没有扩大测试 timeout 或新增跳过。
+
+以下完整两文件回归 16/16 通过，exit 0（`.local/issue-274/recovery-green-ci-contract.log`），包含原大回执上限与父/子两端关系断言：
+
+```sh
+PATH=/root/.nvm/versions/node/v24.22.1/bin:$PATH TMPDIR="$PWD/.local/tmp" \
+  pnpm exec vitest run --configLoader runner --no-cache --maxWorkers=1 --project host \
+  tests/work-compact-results.spec.ts tests/work-source-freeze.spec.ts
+```
+
+已提交源码 `6e15e4e` 的 `pnpm verify:pack-exports` 也通过，exit 0（`.local/issue-274/recovery-pack-final.log`）：临时 git archive 构建含 32 个导出目标与两个 sidecar，安装 tarball 后 15 个 Node 入口均可 import，编译产物未进入工作树提交。本次后续只改测试与本文；远端全仓 CI 状态由交付 PR 链接回读。
+
+### PR #282 R1 最终隔离回归（2026-10-26）
+
+业务代码固定提交 `cbf44290bae09711017270c50246b3fad05dc2ab`；reviewed HEAD 为 `88fe92e6239a4b86e37a39beb91c5d82e22ef40d`。开工 clean HEAD `c2b140650f1e4ad973e1f77ca6b328640a620315`，保留 CEO 的公开架构图提交。回读最新 origin/main 与 merge-base 均为 `f80ab103d13882efbc370bbb119e1c7dcf01a9e1`。所有 lane 使用 Node 24.22.1，在唯一实施树顺序运行；测试文件、断言与 timeout 未放宽，无新增 skip。
+
+| 检查 | 结果 / 正式 job_output 退出码 | 原始日志（本树忽略目录 `.local/issue-274/r1/`） |
+| --- | --- | --- |
+| host：continuation、completion-native、execution、boundary、Goal replay、continuous、lifecycle、compact-results、source-freeze | 9 文件 / 106 pass，bash-375 / 0 | `host-final.log` |
+| unit：continuous、jobs/official-jobs/lost-job/observation、三个相关客户端文件 | 8 文件 / 151 pass，bash-421 / 0 | `unit-final.log` |
+| pnpm typecheck | 后端和客户端通过，bash-366 / 0 | `typecheck-final.log`；首次 JobId 类型错误 exit 2 保留于 `typecheck.log` |
+| official-jobs.config.ts 完整 lane | 2/2 pass，bash-425 / 0；干净 22ddee3792402c3e70ec5f86a63c3e3e895a2f60 / rc.3 | `official-final.log` |
+| pnpm verify:repository | 首次拒绝 CEO 公开规格图，bash-431 / 1；精确例外后 bash-445 / 0 | `repository-final.log`、`repository-allowlist-green.log` |
+| 窄例外的私有路径负例 | 临时独立 Git index 加入 6 个禁止路径；verifier 实际 exit 1，测试命令 bash-453 / 0 | `repository-negative.log` |
+| pnpm test:node | 28 pass / 2 个既有可选 real-host 默认 skip，bash-445 / 0 | `node-final.log` |
+
+host 命令在既有列表中加入 completion-native、compact-results、source-freeze；完整参数为 `TMPDIR="$PWD/.local/tmp" pnpm exec vitest run --configLoader runner --no-cache --maxWorkers=1 --project host`。unit 沿用本页八文件列表。official 命令为 `TMPDIR="$PWD/.local/tmp" DSH_OFFICIAL_HOST_ROOT=/data/src/github.com/deepseek-ai/deepseek-harness-dev.worktrees/dsh-upgrade-latest-20261024 node node_modules/vitest/vitest.mjs run --configLoader runner --no-cache --config tests/official-jobs.config.ts`，PATH 指向 Node 24.22.1；测试内部核实 HEAD、clean 和模块版本。
+
+仓库门禁失败与 R1 业务代码分开记证：LF 要求的四份纯架构规格 HTML/浏览器渲染图与原 `docs/artifacts/` 全禁规则冲突。CEO 明确裁决仅允许这四个完整文件路径，已在 `scripts/verify-repository.mjs` 和 `docs/testing.md` 补最小例外；同目录的其他文件、其他 artifacts、architecture/evidence、.dsh/.local/.scratch 均仍拒绝，负例不修改真实 index，也不豁免实际会话或产品验收截图。
+
+R1 第二路径的 [CEO 能力裁决](https://github.com/a2d2-dev/dsh-plugin/issues/274#issuecomment-6415979835) 接受当前宿主能力负例，不将其替换成真实 pending 补收成功；#268 普通准确 owner 的两个 pending jobs 原验收继续保留。新测试没有更改 DSH、伪造 turn/step、直接 append user/message、裸 jobs.read、跨 owner 收取或把 pending 改成 settled。#275/#276 及父 #270、#259/#268 的既有 GUI 完整模式尚未由本轮验证；未操作真实 #265/#182/#2104、未部署或另起服务，未合并或关闭任何票。

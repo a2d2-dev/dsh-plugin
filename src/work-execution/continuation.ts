@@ -1,6 +1,6 @@
 import { continuationInFlight } from './state.ts'
 export { continuationInFlight } from './state.ts'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { redactText } from '../handoff.ts'
 import type { ContinuationOperation, WorkExecution, WorkTask } from '../work-types.ts'
 
@@ -17,11 +17,17 @@ export function reserveContinuation(execution: WorkExecution, task: WorkTask, co
       operation.requestDelivery = 'accepted'
       delete operation.error
     }
+    if (!automatic) for (const step of operation.collections ?? []) if (step.status === 'requested' && step.delivery === 'consumed') { step.requestId = `collection:${operation.operationId}:${randomUUID()}`; step.delivery = 'accepted'; delete operation.error }
+    if (!automatic && operation.phase === 'delivered' && operation.kickoffDelivery === 'consumed') {
+      operation.readRequestId = `continuation-read:${operation.operationId}:${randomUUID()}`
+      delete operation.readable
+      delete operation.error
+    }
     return
   }
   if (execution.continuation) (execution.continuationHistory ??= []).push(execution.continuation)
   const operationId = randomUUID()
-  execution.continuation = { operationId, commandId, automatic, phase: 'reserved', source: { ...execution.session },
+  execution.continuation = { protocolVersion: 1, operationId, commandId, automatic, phase: 'reserved', source: { ...execution.session },
     successor: { runtimeId: execution.session.runtimeId, sessionId: `session-${randomUUID()}` }, sourceEpoch: execution.epoch,
     materialRequestId: `material-request:${operationId}`, kickoffId: `continuation:${operationId}`,
     ...(execution.actual ? { profile: structuredClone(execution.actual) } : {}),
@@ -34,5 +40,21 @@ export function materialRequest(operation: ContinuationOperation): string {
 export function successorMessage(operation: ContinuationOperation, policyInstructions: string): string {
   if (!operation.material) throw new Error('Cannot continue without saved source material')
   const m = operation.material
-  return redactText(`${policyInstructions}\n\n${MANAGED_WORK_INSTRUCTIONS}\n\nContinue the same Task from its saved source material. Completion still requires accepted evidence.\n\nTask: ${operation.title}\nGoal: ${operation.goal}\nSpecification version: ${operation.specification.version}\nMissing material: ${JSON.stringify(operation.specification.missing ?? [])}\nSpecification: ${operation.specification.text}\nAcceptance:\n${operation.specification.acceptance.join('\n')}\n\nOriginal material:\n${m.body}\n\nDecisions:\n${m.decisions}\n\nEvidence:\n${m.evidence}\n\nUnfinished:\n${m.unfinished}\n\nNext:\n${m.next}\n\nLocal read-only history: task.history ${JSON.stringify(operation.history)}\nSource epoch: ${operation.sourceEpoch}`).text
+  return redactText(`${policyInstructions}\n\n${MANAGED_WORK_INSTRUCTIONS}\n\nReceive the same Task from its saved source material. Preserve the current waiting/paused control and reason; this request only transfers context and never authorizes business work. Completion still requires accepted evidence.\n\nTask: ${operation.title}\nGoal: ${operation.goal}\nSpecification version: ${operation.specification.version}\nMissing material: ${JSON.stringify(operation.specification.missing ?? [])}\nSpecification: ${operation.specification.text}\nAcceptance:\n${operation.specification.acceptance.join('\n')}\n\nOriginal material:\n${m.body}\n\nDecisions:\n${m.decisions}\n\nEvidence:\n${m.evidence}\n\nUnfinished:\n${m.unfinished}\n\nNext:\n${m.next}\n\nLocal read-only history: task.history ${JSON.stringify(operation.history)}\nSource epoch: ${operation.sourceEpoch}\n\nRead this supplied material, then call work_continuation_received with operation_id ${operation.operationId}, material_command_id ${m.commandId}, expected_epoch ${operation.sourceEpoch + 1}. Stop after this receipt; the plugin owns further scheduling.`).text
+}
+
+/** Only persisted operation requests receive maintenance admission. */
+export function maintenanceEvent(operation: ContinuationOperation, step: 'material' | 'collect' | 'receive', id: string, text: string): import('../work-types.ts').WorkEvent {
+  return { id, text, kind: 'input', delivery: 'accepted', acceptance: 'unassessed', nativeMessage: { id, role: 'user', content: [{ type: 'text', text }], source: { kind: 'a2d2-work-maintenance', operationId: operation.operationId, step } } }
+}
+
+/** Identity/freshness proof, independent of registry iteration order and labels. */
+export function continuationFactsKey(facts: import('./observation.ts').ExecutionObservation): string {
+  return createHash('sha256').update(JSON.stringify({
+    jobs: facts.sessions.flatMap(row => row.jobs.map(job => [row.session.runtimeId, row.session.sessionId, job.id, job.registryEpoch ?? null, job.instanceId ?? null, job.status, job.availability ?? null, job.delivery])).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+    children: facts.sessions.flatMap(row => row.children.map(child => [row.session.runtimeId, row.session.sessionId, child.session.runtimeId, child.session.sessionId, child.mode, child.endSeq ?? null, child.attempt?.turn ?? null, child.result])).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+  })).digest('hex')
+}
+export function collectionRequest(operation: ContinuationOperation, step: NonNullable<ContinuationOperation['collections']>[number]): string {
+  return `Lifecycle maintenance only for operation ${operation.operationId}. In this exact owner Session, call the formal job_output tool for each of these completed jobs: ${step.jobs.map(job => job.id).join(', ')}. Keep every full real result in this Session. Do not call jobs.read, no-log tools.execute or invent a turn/step. Stop after collection; do not save material or resume business work. The plugin will flush, re-observe delivery, and separately request fresh source material. Existing waiting/paused control remains effective.`
 }

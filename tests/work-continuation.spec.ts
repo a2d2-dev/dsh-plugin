@@ -1,6 +1,7 @@
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { createUserMessage, ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { WorkDao } from '../src/work.ts'
 import { ExecutionFixtures } from './work-execution-fixture.ts'
 import { installWorkTools } from '../src/work-execution/tools.ts'
 import type { WorkExecution } from '../src/work-types.ts'
@@ -85,8 +86,11 @@ it.each(['material-request', 'successor-create', 'source-take', 'source-seal', '
     expect(JSON.stringify(restored.model.requests[0]!.messages)).toContain(operation.successor.sessionId)
   }
   await fixtures.run(() => restored.app.reconcileControls())
-  const recovered = await restored.app.execute(command, operator)
-  expect(recovered, JSON.stringify(recovered)).toMatchObject({ execution: { id: h.execution.id, epoch: 2, session: operation.successor, continuation: { operationId: operation.operationId, materialRequestId: operation.materialRequestId, kickoffId: operation.kickoffId, phase: 'delivered' } } })
+  await restored.app.execute(command, operator)
+  await fixtures.run(() => restored.ctx.agents.get(SessionId(operation.successor.sessionId))!.whenIdle())
+  await fixtures.run(() => restored.app.reconcileControls())
+  const recovered = await restored.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(recovered, JSON.stringify(recovered)).toMatchObject({ execution: { id: h.execution.id, epoch: 2, session: operation.successor, continuation: { operationId: operation.operationId, materialRequestId: operation.materialRequestId, kickoffId: operation.kickoffId, phase: 'received' } } })
   await fixtures.run(() => restored.ctx.agents.get(SessionId(operation.successor.sessionId))!.whenIdle())
   expect(await fixtures.run(() => restored.ctx.sessionPersistence.list())).toHaveLength(2)
   const sourceLog = await fixtures.run(() => restored.ctx.sessionController.inspect(SessionId(operation.source.sessionId)))
@@ -266,6 +270,10 @@ it('hands the same Task to two real successor Sessions with source-authored deci
     const previous = await h.ctx.sessionController.inspect(SessionId(originals.at(-1)!))
     expect(previous.events.findLast(event => event.type === 'session/title')?.data.title).toBe(`T:${h.ref.taskId.replaceAll('-', '').slice(0, 8)} · 会话 ${generation - 1} · Continue work`)
     expect(JSON.stringify(inspection.events)).toContain(material.decisions)
+    await fixtures.run(() => h.app.reconcileControls())
+    await fixtures.run(() => h.ctx.agents.get(SessionId(execution.session.sessionId))!.whenIdle())
+    const confirmed = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+    expect(confirmed).toMatchObject({ execution: { continuation: { phase: 'received' } } })
   }
   expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(3)
   expect(execution.retired?.map(item => item.session.sessionId)).toEqual(originals)
@@ -361,6 +369,8 @@ it.each([100, 200_001])('automatically continues at a 200K soft target and obser
   if (result.status !== 'completed' || !result.execution) throw new Error('No successor')
   await fixtures.run(() => h.ctx.agents.get(SessionId(result.execution!.session.sessionId))!.whenIdle())
   await fixtures.run(() => h.app.reconcileControls())
+  await fixtures.run(() => h.ctx.agents.get(SessionId(result.execution!.session.sessionId))!.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
   expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { epoch: 2, continuationObservation: { totalTokens: successorTokens, baseline: 'estimated', capacity: 512_000, outputReserve: 8_000 }, ...(successorTokens > 200_000 ? { continuationBlocked: { code: 'continuation-target-too-small' } } : {}) } })
   await fixtures.run(() => h.app.reconcileControls())
   expect(seen).toContain(h.execution.session.sessionId)
@@ -404,12 +414,35 @@ it.each(['unknown', 'invalid', 'changed', 'stale'] as const)('blocks automatic a
   expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(1)
 })
 
+it.each(['wait', 'pause'] as const)('explicitly replaces a %s Session while preserving business control and authority', async action => {
+  const h = await setup()
+  await h.app.execute({ type: 'task.control', commandId: 'hold', ...fence(h.execution), action, text: 'Keep original reason and await LF resume' }, operator)
+  const held = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (held.status !== 'completed' || !held.execution) throw Error('Missing held execution')
+  h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+  const requested = await h.app.execute({ type: 'task.continue', commandId: 'replace-only', ...fence(held.execution) }, operator)
+  expect(requested).toMatchObject({ status: 'completed', execution: { state: held.execution.state, control: held.execution.control, continuation: { phase: 'material-requested' } } })
+  await fixtures.run(() => h.ctx.agents.get(SessionId(h.execution.session.sessionId))!.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  const result = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(result).toMatchObject({ execution: { id: h.execution.id, owner: h.execution.owner, epoch: 2, state: held.execution.state, control: held.execution.control, continuation: { phase: 'delivered', material } } })
+  if (result.status !== 'completed' || !result.execution) throw Error('Missing successor')
+  await fixtures.run(() => h.ctx.agents.get(SessionId(result.execution!.session.sessionId))!.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { continuation: { phase: 'received' } } })
+  const before = h.model.requests.length
+  h.ctx.agents.get(SessionId(result.execution.session.sessionId))!.followup(createUserMessage({ content: [{ type: 'text', text: 'Unapproved business automation' }], source: { kind: 'a2d2-work-dispatch' } }))
+  await fixtures.run(() => h.ctx.agents.get(SessionId(result.execution!.session.sessionId))!.whenIdle())
+  expect(h.model.requests).toHaveLength(before)
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { state: held.execution.state, control: held.execution.control, owner: h.execution.owner, epoch: 2 } })
+})
+
 it('does not prompt or rotate while explicitly waiting and does not rotate without source material', async () => {
   const h = await setup()
   await h.app.execute({ type: 'task.control', commandId: 'wait', ...fence(h.execution), action: 'wait', text: 'Need accepted human decision' }, operator)
   await h.app.execute({ type: 'task.configure-continuation', commandId: 'policy', ...fence(h.execution), policy: { version: 1, enabled: true, targetTokens: 200_000, reserveTokens: 16_000 } }, operator)
   await fixtures.run(() => h.app.reconcileControls())
-  expect(await h.app.execute({ type: 'task.continue', commandId: 'waiting-continue', ...fence(h.execution) }, operator)).toMatchObject({ status: 'failed', error: { code: 'continuation-not-ready' } })
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { state: 'waiting' } })
   expect(h.model.requests).toHaveLength(1)
   await h.app.execute({ type: 'task.configure-continuation', commandId: 'disable-policy', ...fence(h.execution), policy: { version: 2, enabled: false, targetTokens: 200_000, reserveTokens: 16_000 } }, operator)
   await h.app.execute({ type: 'task.control', commandId: 'resume', ...fence(h.execution), action: 'resume', text: 'Human decision accepted' }, operator)
@@ -424,3 +457,217 @@ it('does not prompt or rotate while explicitly waiting and does not rotate witho
 
 
 
+
+it('keeps delivery distinct from a committed and flushed successor read receipt', async () => {
+  const h = await setup()
+  h.model.acknowledgeContinuation = false
+  h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+  await h.app.execute({ type: 'task.continue', commandId: 'read-confirmation', ...fence(h.execution) }, operator)
+  await fixtures.run(() => h.ctx.agents.get(SessionId(h.execution.session.sessionId))!.whenIdle())
+  const saved = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (saved.status !== 'completed' || !saved.execution?.continuation?.material) throw Error('No source material')
+  const op = saved.execution.continuation
+  h.model.nextTool = { name: 'work_continuation_received', arguments: { operation_id: op.operationId, material_command_id: op.material!.commandId, expected_epoch: 2 } }
+  await fixtures.run(() => h.app.reconcileControls())
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { continuation: { phase: 'delivered' } } })
+  await fixtures.run(() => h.ctx.agents.get(SessionId(op.successor.sessionId))!.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { epoch: 2, continuation: { phase: 'received', readable: { materialCommandId: op.material!.commandId, callId: 'contract-call' } } } })
+  const log = await fixtures.run(() => h.ctx.sessionController.inspect(SessionId(op.successor.sessionId)))
+  expect(log.events).toContainEqual(expect.objectContaining({ type: 'tool/result', data: expect.objectContaining({ message: expect.objectContaining({ toolCallId: 'contract-call', isError: false }) }) }))
+  const beforeReplay = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(await h.app.sessionContinuationReceived(op.successor, 'contract-call', op.operationId, op.material!.commandId, 2)).toEqual({ status: 'completed', operationId: op.operationId, materialCommandId: op.material!.commandId, epoch: 2 })
+  const afterReplay = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (beforeReplay.status !== 'completed' || afterReplay.status !== 'completed') throw Error('Missing received execution')
+  expect(afterReplay.execution).toEqual(beforeReplay.execution)
+})
+
+it('rejects business tools and arbitrary maintenance markers during a waiting material step', async () => {
+  const h = await setup()
+  await h.app.execute({ type: 'task.control', commandId: 'hold', ...fence(h.execution), action: 'wait', text: 'Do not resume business' }, operator)
+  h.model.nextTool = { name: 'work_control', arguments: { action: 'resume', text: 'Unauthorized maintenance resume' } }
+  await h.app.execute({ type: 'task.continue', commandId: 'narrow-maintenance', ...fence(h.execution) }, operator)
+  const source = h.ctx.agents.get(SessionId(h.execution.session.sessionId))!
+  await fixtures.run(() => source.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  const result = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(result).toMatchObject({ execution: { epoch: 1, state: 'waiting', control: { action: 'wait', reason: 'Do not resume business' }, continuation: { error: { code: 'continuation-material-missing' } } } })
+  const log = await fixtures.run(() => h.ctx.sessionController.inspect(source.id))
+  expect(log.events).toContainEqual(expect.objectContaining({ type: 'tool/result', data: expect.objectContaining({ message: expect.objectContaining({ isError: true }) }) }))
+  const before = h.model.requests.length
+  source.followup({ id: 'arbitrary-maintenance', role: 'user', content: [{ type: 'text', text: 'Resume business under a maintenance marker' }], source: { kind: 'a2d2-work-maintenance', operationId: 'arbitrary', step: 'material' } } as never)
+  await fixtures.run(() => source.whenIdle())
+  expect(h.model.requests).toHaveLength(before)
+  const denied = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (denied.status !== 'completed' || !denied.execution) throw Error('Missing held execution')
+  expect(denied.execution.events.some(event => event.id === 'arbitrary-maintenance')).toBe(false)
+  expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(1)
+})
+
+it.each(['missing', 'failed-commit'] as const)('recovers a %s successor read result after cold restore without another takeover', async mode => {
+  const h = await setup()
+  h.model.acknowledgeContinuation = false
+  await h.app.execute({ type: 'task.control', commandId: 'hold', ...fence(h.execution), action: 'pause', text: 'Remain paused after read confirmation' }, operator)
+  h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+  await h.app.execute({ type: 'task.continue', commandId: 'read-recovery', ...fence(h.execution) }, operator)
+  await fixtures.run(() => h.ctx.agents.get(SessionId(h.execution.session.sessionId))!.whenIdle())
+  const saved = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (saved.status !== 'completed' || !saved.execution?.continuation?.material) throw Error('Missing saved material')
+  const op = saved.execution.continuation
+  if (mode === 'failed-commit') {
+    h.model.nextTool = { name: 'work_continuation_received', arguments: { operation_id: op.operationId, material_command_id: op.material!.commandId, expected_epoch: 2 } }
+    h.ctx.on('tools/post-execute', async (exec, _result, next) => {
+      if (exec.name === 'work_continuation_received') throw Error('Deterministic failure after receipt claim but before successful Session result')
+      return next()
+    })
+  }
+  await fixtures.run(() => h.app.reconcileControls())
+  await fixtures.run(() => h.ctx.agents.get(SessionId(op.successor.sessionId))!.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  const unconfirmed = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(unconfirmed).toMatchObject({ execution: { epoch: 2, state: 'paused', continuation: { phase: 'delivered', error: { code: 'continuation-read-unconfirmed' } } } })
+  const turns = h.model.requests.length
+  await fixtures.run(() => h.app.reconcileControls())
+  expect(h.model.requests).toHaveLength(turns)
+  await fixtures.dispose(h.ctx)
+  const restored = await fixtures.mount(h.workspace.path)
+  installWorkTools(restored.ctx, restored.app, 'runtime')
+  await fixtures.run(() => restored.app.reconcileControls())
+  const held = await restored.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (held.status !== 'completed' || !held.execution) throw Error('Missing cold continuation')
+  expect(held.execution.continuation?.operationId).toBe(op.operationId)
+  await restored.app.execute({ type: 'task.continue', commandId: 'retry-read', ...fence(held.execution) }, operator)
+  await fixtures.run(() => restored.ctx.agents.get(SessionId(op.successor.sessionId))!.whenIdle())
+  await fixtures.run(() => restored.app.reconcileControls())
+  const final = await restored.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(final).toMatchObject({ execution: { id: h.execution.id, owner: h.execution.owner, epoch: 2, state: 'paused', control: held.execution.control, continuation: { phase: 'received', operationId: op.operationId, successor: op.successor, kickoffId: op.kickoffId } } })
+  if (final.status !== 'completed' || !final.execution) throw Error('Missing final continuation')
+  expect(final.execution.retired).toHaveLength(1)
+  expect(final.execution.continuation!.readRequestId).toBeTruthy()
+  expect(await fixtures.run(() => restored.ctx.sessionPersistence.list())).toHaveLength(2)
+})
+
+it('refreshes source material after the host reports newly collected result facts', async () => {
+  const h = await setup()
+  h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+  await h.app.execute({ type: 'task.continue', commandId: 'fresh-material', ...fence(h.execution) }, operator)
+  const source = h.ctx.agents.get(SessionId(h.execution.session.sessionId))!
+  await fixtures.run(() => source.whenIdle())
+  const saved = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (saved.status !== 'completed' || !saved.execution?.continuation?.material) throw Error('No material')
+  const op = saved.execution.continuation
+  // Domain seam fixture for changing external host facts. The official lane
+  // separately proves the real registry/tool/result/flush delivery contract.
+  const observe = h.host.execution.observation!.bind(h.host.execution)
+  let delivery: 'pending' | 'delivered' = 'pending'
+  vi.spyOn(h.host.execution, 'observation').mockImplementation(async (...args) => {
+    const facts = await observe(...args)
+    facts.sessions.find(row => row.session.sessionId === source.id)!.jobs.push({ id: 'fixture-new-result', owner: h.execution.session, registryEpoch: 'fixture-registry', instanceId: 'fixture-instance', kind: 'bash', label: 'new result facts', status: 'completed', delivery, result: 'unknown', acceptance: 'unassessed', persistence: 'session-journal', availability: 'live' })
+    if (delivery === 'pending') { facts.settlement = 'pending'; facts.blockers.push({ code: 'job-unsettled', session: h.execution.session, jobId: 'fixture-new-result' }) }
+    return facts
+  })
+  await fixtures.run(() => h.app.reconcileControls())
+  await fixtures.run(() => source.whenIdle())
+  delivery = 'delivered'
+  await fixtures.run(() => h.app.reconcileControls())
+  const refreshing = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(refreshing).toMatchObject({ execution: { epoch: 1, session: h.execution.session, continuation: { operationId: op.operationId, successor: op.successor, phase: 'material-requested', collections: [{ status: 'collected' }] } } })
+  if (refreshing.status !== 'completed' || !refreshing.execution?.continuation) throw Error('Missing refresh')
+  expect(refreshing.execution.continuation.materialRequestId).not.toBe(op.materialRequestId)
+  expect(refreshing.execution.continuation.material).toBeUndefined()
+  await fixtures.run(() => source.whenIdle())
+  const log = await fixtures.run(() => h.ctx.sessionController.inspect(source.id))
+  expect(log.events.filter(event => event.type === 'user/message' && event.data.id === refreshing.execution!.continuation!.materialRequestId)).toHaveLength(1)
+})
+
+it('keeps unrelated automatic business rounds fenced while an active source owes material', async () => {
+  const h = await setup()
+  await h.app.execute({ type: 'task.continue', commandId: 'active-material-step', ...fence(h.execution) }, operator)
+  const source = h.ctx.agents.get(SessionId(h.execution.session.sessionId))!
+  await fixtures.run(() => source.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  const before = h.model.requests.length
+  h.model.nextTool = { name: 'work_control', arguments: { action: 'progress', text: 'Business round bypassed the pending lifecycle step' } }
+  source.followup(createUserMessage({ content: [{ type: 'text', text: 'Unrelated automatic business work while material is missing' }], source: { kind: 'a2d2-work-dispatch' } }))
+  await fixtures.run(() => source.whenIdle())
+  expect(h.model.requests).toHaveLength(before)
+  const current = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(current).toMatchObject({ execution: { epoch: 1, state: 'ready', continuation: { phase: 'material-requested' } } })
+  if (current.status !== 'completed' || !current.execution) throw Error('Missing source')
+  expect(current.execution.progress).toBeUndefined()
+})
+
+it.each(['ready', 'waiting', 'paused'] as const)('does not reopen or certify a legacy delivered operation after cold load of %s work', async state => {
+  const h = await setup()
+  h.model.acknowledgeContinuation = false
+  if (state !== 'ready') await h.app.execute({ type: 'task.control', commandId: 'legacy-hold', ...fence(h.execution), action: state === 'waiting' ? 'wait' : 'pause', text: 'Retain the legacy control condition' }, operator)
+  h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+  await h.app.execute({ type: 'task.continue', commandId: 'legacy-delivery-fixture', ...fence(h.execution) }, operator)
+  await fixtures.run(() => h.ctx.agents.get(SessionId(h.execution.session.sessionId))!.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  const delivered = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (delivered.status !== 'completed' || !delivered.execution?.continuation) throw Error('Missing delivered fixture')
+  const successor = delivered.execution.session
+  await fixtures.run(() => h.ctx.agents.get(SessionId(successor.sessionId))!.whenIdle())
+  // Serialize the actual operation using the pre-#274 schema shape. It has
+  // real take/delivery evidence, with no receipt and no protocol discriminator.
+  await WorkDao.forDirectory(h.app.directory).transaction(async snapshot => {
+    const op = snapshot.executions.find(item => item.id === h.execution.id)!.continuation!
+    delete (op as { protocolVersion?: number }).protocolVersion
+    delete op.readable
+    delete op.collections
+    delete op.materialFactsKey
+    delete op.goalActivation
+    delete op.readRequestId
+    if (op.material) delete op.material.settlementKey
+  })
+  await fixtures.dispose(h.ctx)
+  const restored = await fixtures.mount(h.workspace.path)
+  installWorkTools(restored.ctx, restored.app, 'runtime')
+  for (let pass = 0; pass < 2; pass++) {
+    const observed = await restored.app.query({ type: 'task.execution', ref: h.ref }, operator)
+    if (observed.status !== 'completed' || !observed.execution) throw Error('Missing legacy operation')
+    await fixtures.run(() => restored.app.reconcileControls())
+    const reconciled = await restored.app.query({ type: 'task.execution', ref: h.ref }, operator)
+    if (reconciled.status !== 'completed' || !reconciled.execution) throw Error('Missing reconciled legacy operation')
+    expect(reconciled.execution.continuation).toEqual(observed.execution.continuation)
+    expect(continuation.continuationInFlight(observed.execution)).toBe(false)
+  }
+  const legacy = await restored.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(legacy).toMatchObject({ execution: { id: h.execution.id, owner: h.execution.owner, epoch: 2, state, continuation: { operationId: delivered.execution.continuation.operationId, phase: 'delivered' } } })
+  if (legacy.status !== 'completed' || !legacy.execution) throw Error('Missing legacy state')
+  expect(legacy.execution.control).toEqual(delivered.execution.control)
+  expect(legacy.execution.continuation!.readable).toBeUndefined()
+  expect(await restored.app.sessionContinuationReceived(successor, 'late-legacy-receipt', legacy.execution.continuation!.operationId, legacy.execution.continuation!.material!.commandId, 2)).toMatchObject({ status: 'failed', error: { code: 'stale-continuation-receipt' } })
+  expect(restored.model.requests).toHaveLength(0)
+  expect(await fixtures.run(() => restored.ctx.sessionPersistence.list())).toHaveLength(2)
+  const explicitlyStarted = await restored.app.execute({ type: 'task.continue', commandId: 'explicit-new-handoff', ...fence(legacy.execution) }, operator)
+  if (explicitlyStarted.status !== 'completed' || !explicitlyStarted.execution?.continuation) throw Error('New continuation failed')
+  expect(explicitlyStarted.execution.continuation.operationId).not.toBe(legacy.execution.continuation!.operationId)
+  expect(explicitlyStarted.execution.continuation).toMatchObject({ protocolVersion: 1, sourceEpoch: 2 })
+  expect(explicitlyStarted.execution.continuationHistory?.at(-1)).toMatchObject({ phase: 'delivered', operationId: legacy.execution.continuation!.operationId })
+  await fixtures.run(() => restored.ctx.agents.get(SessionId(successor.sessionId))!.whenIdle())
+})
+
+it('automatically executes the accepted next step after a normal successor confirms material', async () => {
+  const h = await setup()
+  h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+  await h.app.execute({ type: 'task.continue', commandId: 'normal-next-step', ...fence(h.execution) }, operator)
+  await fixtures.run(() => h.ctx.agents.get(SessionId(h.execution.session.sessionId))!.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  const delivered = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (delivered.status !== 'completed' || !delivered.execution?.continuation) throw Error('No successor')
+  const successor = h.ctx.agents.get(SessionId(delivered.execution.session.sessionId))!
+  await fixtures.run(() => successor.whenIdle())
+  h.model.nextTool = { name: 'work_control', arguments: { action: 'progress', text: material.next } }
+  await fixtures.run(() => h.app.reconcileControls())
+  await fixtures.run(() => successor.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  const final = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(final).toMatchObject({ execution: { state: 'ready', epoch: 2, owner: h.execution.owner, progress: material.next, continuation: { phase: 'received' } } })
+  if (final.status !== 'completed' || !final.execution) throw Error('Missing final execution')
+  const business = final.execution.events.find(event => event.id === `continuation-business:${delivered.execution!.continuation!.operationId}`)!
+  expect(business.delivery).toBe('consumed')
+  const request = h.model.requests.find(request => request.messages.some(message => message.id === business.id))!
+  expect(JSON.stringify(request.messages)).toContain(material.next)
+})

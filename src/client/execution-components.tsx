@@ -1,5 +1,6 @@
 import type { ContinuationPolicy, SessionRef, TaskRef, WorkExecution } from '../work-types.ts'
 import type { ExecutionGraph, ExecutionJob, ObservedSession } from '../work-execution/observation.ts'
+import { continuationInFlight } from '../work-execution/state.ts'
 import styles from './execution-components.module.css'
 
 export interface ExecutionNavigation {
@@ -125,7 +126,7 @@ export function ExecutionSessions({ graph, ...navigation }: { graph: ExecutionGr
   </section>
 }
 
-const phases = { reserved: '准备接续', 'material-requested': '等待原段保存决定与未完成项', 'material-saved': '已保存接续材料', 'successor-created': '后继已准备，等待安全接任', taken: '已正式接任，等待投递', delivered: '接续内容已投递' }
+const phases = { reserved: '准备接续', 'material-requested': '等待原段保存决定与未完成项', 'material-saved': '已保存接续材料', 'successor-created': '后继已准备，等待安全接任', taken: '已正式接任，等待投递', delivered: '接续内容已投递', received: '后继已确认材料可读' }
 /** Read-only parameters stay visible; the Issue header owns the unique policy editor. */
 export function ExecutionContinuation({ graph, execution, policy, busy = false, completed = false, onContinue, onRecover, onResume }: { graph?: ExecutionGraph; execution?: WorkExecution; policy?: ContinuationPolicy; busy?: boolean; completed?: boolean; onContinue?: () => void; onRecover?: () => void; onResume?: () => void }) {
   const op = execution?.continuation
@@ -136,7 +137,7 @@ export function ExecutionContinuation({ graph, execution, policy, busy = false, 
   const blocked = failed || suspended || pendingControl || execution?.state === 'accepted' || execution?.state === 'creating'
   return <section className={styles.surface} aria-label="接续">
     <div className={styles.sectionHead}><h2>接续</h2>
-      {(onContinue || completed) && <button type="button" className={styles.primaryAction} disabled={completed || busy || blocked || !execution?.actual || !onContinue} onClick={completed ? undefined : onContinue}>{completed ? '准备接续' : busy ? '正在准备接续…' : op?.phase === 'taken' ? '重试内容投递' : op && op.phase !== 'delivered' ? '重试本次接续' : '准备接续'}</button>}
+      {(onContinue || completed) && <button type="button" className={styles.primaryAction} disabled={completed || busy || blocked || !execution?.actual || !onContinue} onClick={completed ? undefined : onContinue}>{completed ? '准备接续' : busy ? '正在准备接续…' : op?.phase === 'taken' ? '重试内容投递' : execution && continuationInFlight(execution) ? '重试本次接续' : '准备接续'}</button>}
       {!completed && failed && onRecover && <button type="button" disabled={busy} onClick={onRecover}>重试原执行</button>}
       {!completed && suspended && !pendingControl && onResume && <button type="button" disabled={busy} onClick={onResume}>恢复处理</button>}
     </div>
@@ -156,7 +157,7 @@ export function ExecutionContinuation({ graph, execution, policy, busy = false, 
     </dl>
     <p>阈值为提前接续软目标；正式接任仍须宿主维护边界核验。原生 job_output 收取结果后再观察，收取不代表业务验收。</p>
     {graph?.blockers.length ? <ul aria-label="接续等待项">{graph.blockers.map((blocker, index) => <li key={index}>{blocker.code} · {blocker.session.sessionId}{blocker.jobId && ` / ${blocker.jobId}`}</li>)}</ul> : null}
-    {op && <article className={styles.card}><h3>{phases[op.phase]}</h3><p>原段：{sessionId(op.source)}</p><p>固定后继：{sessionId(op.successor)}</p><p>{['taken', 'delivered'].includes(op.phase) ? '正式接任已提交，当前入口以有效协调记录为准。' : '原段仍负责，准备后继不切换当前入口。'}</p>{op.error && <p role="alert">{op.error.code}：{op.error.message} · 重试复用同一操作与后继。</p>}{op.material && <details><summary>已保存决定与未完成项</summary><p>决定：{op.material.decisions}</p><p>证据：{op.material.evidence}</p><p>未完成：{op.material.unfinished}</p><p>下一步：{op.material.next}</p></details>}</article>}
+    {op && <article className={styles.card}><h3>{phases[op.phase]}</h3><p>原段：{sessionId(op.source)}</p><p>固定后继：{sessionId(op.successor)}</p><p>{['taken', 'delivered', 'received'].includes(op.phase) ? '正式接任已提交，当前入口以有效协调记录为准。' : '原段仍负责，准备后继不切换当前入口。'}</p>{op.error && <p role="alert">{op.error.code}：{op.error.message} · 重试复用同一操作与后继。</p>}{op.material && <details><summary>已保存决定与未完成项</summary><p>决定：{op.material.decisions}</p><p>证据：{op.material.evidence}</p><p>未完成：{op.material.unfinished}</p><p>下一步：{op.material.next}</p></details>}</article>}
     {execution?.continuationBlocked && <p role="status">{execution.continuationBlocked.code}：{execution.continuationBlocked.message}</p>}
     {!!execution?.continuationHistory?.length && <details><summary>接续历史 · 只读</summary>{execution.continuationHistory.map(item => <p key={item.operationId}>{phases[item.phase]} · {item.source.sessionId} → {item.successor.sessionId}{item.error && ` · ${item.error.message}`}</p>)}</details>}
   </section>

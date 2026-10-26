@@ -16,7 +16,7 @@ import { RuntimeHost } from '../task-runtime/host.ts'
 import { rootSessionProfile } from '../root-session.ts'
 import { resolveSessionAgent } from '../official-session.ts'
 import { WorkExecutionError } from './host.ts'
-import type { WorkExecutionHost } from './host.ts'
+import type { WorkAdmission, MaintenanceAdmission, WorkExecutionHost } from './host.ts'
 import { settleUncollectedJob } from './job-observation.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
@@ -41,14 +41,15 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     }
     return service as NonNullable<Context[K]>
   }
-  private authorize?: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<boolean>
+  private authorize?: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<WorkAdmission>
   private conversation?: (sessionId: string) => Promise<string | undefined>
   private pendingHumanInput?: (sessionId: string) => Promise<readonly import('../work-types.ts').NativeWorkMessage[]>
+  private readonly maintenanceTurns = new WeakMap<Agent, MaintenanceAdmission>()
   private readonly admittedTurns = new WeakMap<Agent, number>()
   private readonly conversationSnapshots = new WeakMap<Agent, string>()
   private readonly activeTools = new Map<import('@deepseek-ai/dsh-tools').ToolExecutionToken, import('@deepseek-ai/dsh-tools').ToolExecution>()
   private connected = false
-  connect(authorize: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<boolean>, conversation?: (sessionId: string) => Promise<string | undefined>, pendingHumanInput?: (sessionId: string) => Promise<readonly import('../work-types.ts').NativeWorkMessage[]>): void {
+  connect(authorize: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<WorkAdmission>, conversation?: (sessionId: string) => Promise<string | undefined>, pendingHumanInput?: (sessionId: string) => Promise<readonly import('../work-types.ts').NativeWorkMessage[]>): void {
     this.authorize = authorize
     this.conversation = conversation
     this.pendingHumanInput = pendingHumanInput
@@ -58,9 +59,17 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       // Task scheduling controls automatic turns, never the native human conversation.
       // An admitted turn can finish its tool results and final answer after wait/done.
       const human = messages.some(message => message.source?.kind === 'user')
-      if (!human && this.admittedTurns.get(agent) !== turn && !await this.authorize!(agent.id, messages)) return { kind: 'reject' }
+      if (human) this.maintenanceTurns.delete(agent)
+      else if (this.admittedTurns.get(agent) !== turn) {
+        const admission = await this.authorize!(agent.id, messages)
+        if (!admission) return { kind: 'reject' }
+        if (typeof admission === 'object') this.maintenanceTurns.set(agent, admission)
+        else this.maintenanceTurns.delete(agent)
+      }
       const decision = await next()
       if (decision.kind === 'reject') return decision
+      const scope = this.maintenanceTurns.get(agent)
+      if (scope?.step === 'settle') decision.messages = decision.messages.filter(message => scope.messageIds!.includes(message.id))
       this.admittedTurns.set(agent, turn)
       if (human && this.pendingHumanInput) {
         const pending = await this.pendingHumanInput(agent.id)
@@ -81,7 +90,15 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       }
       return decision
     }, { prepend: true })
-    this.ctx.on('agent/status', ({ agent, status }) => { if (status === 'idle') this.admittedTurns.delete(agent) })
+    this.ctx.on('agent/status', ({ agent, status }) => { if (status === 'idle') { this.admittedTurns.delete(agent); this.maintenanceTurns.delete(agent) } })
+    this.ctx.inject(['tools'], toolsCtx => { toolsCtx.effect(() => toolsCtx.tools.guard(exec => {
+      const scope = exec.agent && this.maintenanceTurns.get(exec.agent)
+      if (!scope) return
+      const allowed = scope.step === 'material' ? exec.name === 'work_continuation_material'
+        : scope.step === 'receive' ? exec.name === 'work_continuation_received'
+        : scope.step === 'collect' && exec.name === 'job_output' && scope.jobIds?.includes(String((exec.arguments as { job_id?: unknown } | undefined)?.job_id))
+      if (!allowed || exec.parent) return `Continuation ${scope.operationId} permits only its ${scope.step} maintenance step; business tools require explicit Task resume`
+    }), 'narrow continuation maintenance tools') })
     this.ctx.on('tools/result', exec => { this.activeTools.delete(exec.token) })
     this.ctx.on('tools/pre-execute', async (exec, next) => {
       // Observation includes admission still in flight. Task writes authorize in WorkApplication.
@@ -392,6 +409,48 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     const state = await this.runtime.deliveryState(SessionId(execution.session.sessionId), this.delivery(event))
     return state === 'missing' ? 'accepted' : state === 'queued' ? 'delivered' : 'consumed'
   }
+  /** Called while the exact source lifecycle is held in settled maintenance. */
+  async disarmSource(execution: WorkExecution): Promise<NonNullable<NonNullable<WorkExecution['continuation']>['goalActivation']>> {
+    const agent = this.service('agents').get(SessionId(execution.session.sessionId))
+    if (!agent || agent.session.id !== agent.id) throw new WorkExecutionError('continuation-goal-agent-unavailable', 'The exact live source Agent is required to retire Goal activation')
+    const goals = (this.ctx.get as (name: string) => unknown).call(this.ctx, 'goals') as {
+      get(agent: Agent): { id: string; revision: number; phase: string; activation: string } | undefined
+      disarm?(agent: Agent): unknown
+    } | undefined
+    if (!goals) {
+      if ((await this.runtime.events(agent.id)).some(event => event.type === 'goal/change')) throw new WorkExecutionError('continuation-goal-capability-unavailable', 'Source has Goal history but its public lifecycle service is unavailable; controlled takeover cannot prove activation retirement')
+      return { status: 'none' }
+    }
+    if (typeof goals.get !== 'function') throw new WorkExecutionError('continuation-goal-capability-unavailable', 'Public goals.get(exactLiveAgent) is unavailable')
+    const before = goals.get(agent)
+    if (!before) return { status: 'none' }
+    if (typeof goals.disarm !== 'function') throw new WorkExecutionError('continuation-goal-capability-unavailable', 'Public goals.disarm(exactLiveAgent) is unavailable; human pause/resume is a separate authority')
+    goals.disarm(agent)
+    const after = goals.get(agent)
+    if (!after || after.id !== before.id || after.revision !== before.revision || after.phase !== before.phase || after.activation !== 'disarmed'
+      || this.service('agents').get(agent.id) !== agent) throw new WorkExecutionError('continuation-goal-unconfirmed', 'Exact source Goal activation could not be verified without changing durable identity, phase or revision')
+    return { status: 'disarmed', goalId: after.id, revision: after.revision, phase: after.phase }
+  }
+  async flushSession(session: import('../work-types.ts').SessionRef): Promise<void> {
+    if (session.runtimeId !== this.runtimeId) throw new WorkExecutionError('executor-runtime-unavailable', 'Collection owner belongs to another runtime')
+    const agent = await this.runtime.agent(SessionId(session.sessionId))
+    if (agent.status !== 'idle') throw new WorkExecutionError('continuation-waiting-executions', 'The exact collection owner is still running')
+    await this.runtime.flush(agent)
+  }
+  async received(execution: WorkExecution): Promise<boolean> {
+    const op = execution.continuation!
+    const agent = await this.runtime.agent(SessionId(execution.session.sessionId))
+    await this.runtime.flush(agent)
+    if (!op.readable) return false
+    const events = await this.runtime.events(agent.id)
+    const requestId = op.readRequestId ?? op.kickoffId
+    const message = events.findLast(event => event.type === 'user/message' && event.data.id === requestId)
+    const call = events.findLast(event => event.type === 'tool/call' && event.data.callId === op.readable!.callId && event.data.name === 'work_continuation_received')
+    const result = events.findLast(event => event.type === 'tool/result' && event.data.message?.toolCallId === op.readable!.callId)
+    const expected = JSON.stringify({ status: 'completed', operationId: op.operationId, materialCommandId: op.material!.commandId, epoch: execution.epoch })
+    return !!message && !!call && !!result && call.seq > message.seq && result.seq > call.seq && result.data.message.isError === false
+      && result.data.message.content.some((block: { type: string; text?: string }) => block.type === 'text' && block.text === expected)
+  }
   async settle(execution: WorkExecution): Promise<void> {
     const agent = await this.runtime.agent(SessionId(execution.session.sessionId))
     await agent.whenIdle()
@@ -403,7 +462,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     await this.runtime.deliver(id, delivery, inMaintenance)
     return await this.runtime.deliveryState(id, delivery) === 'consumed' ? 'consumed' : 'delivered'
   }
-  async ensure(execution: WorkExecution, _allowed?: () => Promise<boolean>): Promise<NonNullable<WorkExecution['actual']>> {
+  async ensure(execution: WorkExecution, _allowed?: () => Promise<WorkAdmission>): Promise<NonNullable<WorkExecution['actual']>> {
     await this.check(execution, execution)
     const id = SessionId(execution.session.sessionId)
     if (!await this.service('sessionPersistence').stat(id) && !this.service('agents').get(id)) {

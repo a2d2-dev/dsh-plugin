@@ -10,6 +10,7 @@ import type { PublicJobRegistry } from '../work-execution/job-observation.ts'
 
 interface Event { type: string; seq: number; time: number; data: Record<string, any>; ignorable?: boolean }
 interface Observation extends Disposable {
+  header?: { origin?: string; parentSession?: string }
   events: readonly Event[]
   inheritedEventCount: number
   projections?: { values: Record<string, unknown> }
@@ -89,7 +90,8 @@ export class RuntimeHost {
     for (const event of events) if (event.type === 'subagent/catalog' && typeof event.data.childId === 'string') catalog.set(event.data.childId, event)
     const children: import('../work-execution/observation.ts').NativeExecution[] = []
     for (const [childId, catalogEvent] of catalog) {
-      const childEvents = await this.events(childId as SessionId)
+      using childObservation = await this.query.observeSession(childId as SessionId)
+      const childEvents = childObservation.events.slice(childObservation.inheritedEventCount)
       const end = childEvents.findLast(event => event.type === 'turn/end')
       const start = childEvents.findLast(event => event.type === 'turn/start')
       const childStatus = this.agents.get(childId as SessionId)?.status ?? (start && (!end || start.seq > end.seq) ? 'unknown' : 'inactive')
@@ -99,8 +101,22 @@ export class RuntimeHost {
       const notice = events.findLast(event => event.type === 'user/message' && event.data.source?.kind === 'subagent-settled' && event.data.source.senderSessionId === childId)
       const result = !end || (start && start.seq > end.seq) || childStatus === 'running' ? 'pending'
         : mode === 'continuable' ? (notice && notice.time >= end.time ? 'consumed' : 'pending') : 'unknown'
+      // Only the first durable insertion of an original native notice can cover
+      // an end. Re-inserting an old id after a newer child turn cannot freshen it.
+      const inserted = new Map<string, { message: import('../work-types.ts').NativeWorkMessage; time: number }>()
+      for (const event of events) if (event.type === 'agent/inbox/spliced') for (const message of event.data.inserted ?? []) {
+        if (!inserted.has(message.id)) inserted.set(message.id, { message, time: event.time })
+      }
+      const consumed = new Set(events.filter(event => event.type === 'user/message').map(event => event.data.id))
+      const descriptor = childEvents.findLast(event => event.type === 'subagent/descriptor')
+      const native = childObservation.header?.origin === 'subagent' && childObservation.header.parentSession === id && descriptor?.data.mode === 'continuable'
+      const pending = native && mode === 'continuable' && end && result === 'pending' && childStatus !== 'running' && !(start && start.seq > end.seq)
+        ? [...inserted.values()].find(({ message, time }) => !consumed.has(message.id) && time >= end.time && message.role === 'user'
+          && (message.source as { kind?: string; form?: string; senderSessionId?: string } | undefined)?.kind === 'subagent-settled'
+          && (message.source as { form?: string }).form === 'notice' && (message.source as { senderSessionId?: string }).senderSessionId === childId) : undefined
       children.push({ session: { runtimeId, sessionId: childId }, mode, status: childStatus, result, returned: !!end && !(start && start.seq > end.seq),
-        ...(end ? { attempt: { turn: end.data.turn, reason: end.data.reason?.kind } } : {}) })
+        ...(end ? { endSeq: end.seq, attempt: { turn: end.data.turn, reason: end.data.reason?.kind } } : {}),
+        ...(pending ? { settlement: { message: structuredClone(pending.message), endSeq: end!.seq } } : {}) })
     }
     const registry = (this.ctx.get as (key: string) => unknown).call(this.ctx, 'jobs') as PublicJobRegistry | undefined
     // Official V3→V4 restoration retains unknown ignorable fork records under

@@ -1,5 +1,9 @@
 import { expect, it } from 'vitest'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import Subagents from '@deepseek-ai/dsh-subagent'
+import { defineTool } from '@deepseek-ai/dsh-tools'
+import { RuntimeHost } from '../src/task-runtime/host.ts'
 import { WorkApplication } from '../src/work.ts'
 import { installWorkTools } from '../src/work-execution/tools.ts'
 import { ExecutionFixtures } from './work-execution-fixture.ts'
@@ -128,7 +132,7 @@ it('automatically hands a queued Issue to its successor without giving its slot 
     await fixtures.run(() => app.reconcileControls())
     const successor = (await query({ type: 'task.detail', ref })).execution!
     expect(successor).toMatchObject({ id: first.id, owner: first.owner, ref, epoch: 2,
-      continuation: { automatic: true, phase: 'delivered', material: { decisions: material.decisions } } })
+      continuation: { automatic: true, phase: 'received', material: { decisions: material.decisions } } })
     await fixtures.run(() => h.ctx.agents.get(SessionId(successor.session.sessionId))!.whenIdle())
     expect(successor.session.sessionId).not.toBe(first.session.sessionId)
     expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(2)
@@ -139,4 +143,75 @@ it('automatically hands a queued Issue to its successor without giving its slot 
     expect(JSON.stringify(h.model.requests.at(-1)!.messages)).toContain(material.decisions)
     expect(await app.sessionControl(first.session, 'retired-status', 'status')).toMatchObject({ status: 'failed', error: { code: 'forbidden' } })
   } finally { await fixtures.close() }
+})
+
+it.each(['wait', 'pause'] as const)('replaces a continuous %s Session without acquiring a business slot or requesting resume', async action => {
+  const fixtures = new ExecutionFixtures()
+  let release = () => {}
+  try {
+    const h = await fixtures.mount(await fixtures.root(), 'read-only')
+    const app = new WorkApplication(h.app.directory, h.host, source)
+    installWorkTools(h.ctx, app, 'runtime')
+    const execute = (command: unknown) => fixtures.run(async () => completed(await app.execute(command, actor)))
+    const query = (request: unknown) => fixtures.run(async () => completed(await app.query(request, actor)))
+    const connected = await execute({ type: 'source.connect', commandId: 'connect', githubProject: { owner: 'example', type: 'org', number: 1 } })
+    const projectId = connected.project!.id, sourceId = connected.source!.id
+    await query({ type: 'source.issues', projectId, sourceId, page: 1, perPage: 20, assignee: '@me', state: 'open', refresh: true })
+    const options = (await query({ type: 'source.execution-options', projectId, sourceId })).executionOptions!
+    h.model.nextTool = { name: 'work_control', arguments: { action, text: 'Keep explicit business hold across session replacement' } }
+    await execute({ type: 'continuous.configure', commandId: 'enable', projectId, sourceId, expectedVersion: 0, assignee: '@me', labels: ['bug'], resource: options.resources[0]!.ref, model: options.defaults.model, agentPreset: options.defaults.agentPreset, permissionPreset: options.defaults.permissionPreset, enabled: true })
+    const active = (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!
+    const ref = active.active!
+    const first = (await query({ type: 'task.detail', ref })).execution!
+    await fixtures.run(() => h.ctx.agents.get(SessionId(first.session.sessionId))!.whenIdle())
+    await execute({ type: 'continuous.set-enabled', commandId: 'pause-intake', projectId, sourceId, expectedVersion: active.version, enabled: false })
+    await fixtures.run(() => app.reconcileControls())
+    const held = (await query({ type: 'task.detail', ref })).execution!
+    const beforeRule = (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!
+    expect(beforeRule.active).toBeUndefined()
+    await h.ctx.plugin(Subagents, { maxActiveSubagents: 8, maxDepth: 1 })
+    h.ctx.subagents.registerProvider({ name: 'fresh-local', capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false }, inheritsParentContext: false,
+      async prepareContinuable() { return {} }, async start() { throw Error('Only native continuable creation is used') } })
+    let entered!: () => void
+    const started = new Promise<void>(resolve => { entered = resolve })
+    const gate = new Promise<void>(resolve => { release = resolve })
+    h.ctx.tools.register(defineTool({ name: 'hold_native', description: 'A native result arriving after reservation', parameters: {},
+      output: { schema: { type: 'object', additionalProperties: false, properties: { result: { type: 'string', required: true } } }, render: (_, value) => [{ type: 'text', text: value.result }] },
+      async execute() { entered(); await gate; return { result: 'Required continuous native result' } } }))
+    const parent = h.ctx.agents.get(SessionId(first.session.sessionId))!
+    h.model.nextTool = { name: 'hold_native', arguments: {} }
+    const child = await h.ctx.subagents.startContinuable({ provider: 'fresh-local', label: 'held continuous verification', request: { parent, prompt: [{ type: 'text', text: 'Return the required native result' }] }, signal: new AbortController().signal })
+    await started
+    const childAgent = h.ctx.agents.get(child.childId)!
+    await execute({ type: 'task.continue', commandId: 'replace-only', ref, executionId: held.id, owner: held.owner, epoch: held.epoch })
+    const unrelated = createUserMessage({ content: [{ type: 'text', text: 'Keep this automatic work queued under the original hold.' }], source: { kind: 'a2d2-work-dispatch' } })
+    await fixtures.run(() => parent.runMaintenance(async () => {
+      release()
+      await childAgent.whenIdle()
+      await expect.poll(() => [...parent.inbox.nextTurn, ...parent.inbox.nextStep].some(message => message.source?.kind === 'subagent-settled')).toBe(true)
+      parent.inject(unrelated)
+    }))
+    await fixtures.run(() => parent.whenIdle())
+    const log = await new RuntimeHost(h.ctx).events(parent.id)
+    expect(log.filter(event => event.type === 'user/message' && event.data.source?.kind === 'subagent-settled' && event.data.source.senderSessionId === child.childId)).toHaveLength(1)
+    expect(log.some(event => event.type === 'user/message' && event.data.id === unrelated.id)).toBe(false)
+    const intakeRule = (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!
+    expect(intakeRule.slots ?? []).toEqual(beforeRule.slots ?? [])
+    expect(intakeRule.items[0]!.resumeRequested).toBeUndefined()
+    h.model.nextTool = { name: 'work_continuation_material', arguments: { body: 'Preserve the accepted Issue and explicit hold.', decisions: 'No business work until explicit resume.', evidence: 'Original hold and native result are applied.', unfinished: 'Wait for LF.', next: 'Remain waiting for explicit resume.' } }
+    await fixtures.run(() => app.reconcileControls())
+    await fixtures.run(() => h.ctx.agents.get(SessionId(first.session.sessionId))!.whenIdle())
+    await fixtures.run(() => app.reconcileControls())
+    const successor = (await query({ type: 'task.detail', ref })).execution!
+    await fixtures.run(() => h.ctx.agents.get(SessionId(successor.session.sessionId))!.whenIdle())
+    await fixtures.run(() => app.reconcileControls())
+    const final = (await query({ type: 'task.detail', ref })).execution!
+    expect(final).toMatchObject({ id: held.id, owner: held.owner, epoch: 2, state: held.state, control: held.control, continuation: { phase: 'received' } })
+    const afterRule = (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!
+    expect(afterRule.active).toBeUndefined()
+    expect(afterRule.slots ?? []).toEqual(beforeRule.slots ?? [])
+    expect(afterRule.items[0]!.resumeRequested).toBeUndefined()
+    expect(afterRule.items[0]!.explicitResumeRequested).toBeUndefined()
+    expect(afterRule.items[0]!.state).toBe(action === 'wait' ? 'waiting' : 'paused')
+  } finally { release(); await fixtures.close() }
 })

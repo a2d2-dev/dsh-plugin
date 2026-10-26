@@ -2,6 +2,7 @@ import { expect, it } from 'vitest'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { ExecutionFixtures } from './work-execution-fixture.ts'
 import { WorkApplication } from '../src/work.ts'
+import { installWorkTools } from '../src/work-execution/tools.ts'
 import type { GitHubIssue, GitHubSourcePort } from '../src/work-sources/types.ts'
 import type { WorkResult, WorkTask } from '../src/work-types.ts'
 const operator = { operator: true }
@@ -15,6 +16,7 @@ async function setup(fixtures: ExecutionFixtures) {
   const parent = issue(1), child = issue(2)
   const source: GitHubSourcePort = { list: async () => ({ identity, items: [parent, child], observedAt: parent.observedAt }), detail: async (_, number) => ({ identity, issue: number === 1 ? parent : child }) }
   const app = new WorkApplication(h.app.directory, h.host, source)
+  installWorkTools(h.ctx, app, 'runtime')
   const resource = { runtimeId: 'runtime', workspaceId: h.workspace.id }
   const project = ok(await app.execute({ type: 'project.create', commandId: 'project', name: 'freeze', resource }, operator)).project!
   const configured = ok(await app.execute({ type: 'source.configure', commandId: 'source', projectId: project.id, repository }, operator)).source!
@@ -94,6 +96,11 @@ it.for(['parent', 'child'] as const)('preserves both relation endpoints while th
     await h.app.reconcileControls()
     const successor = (await h.detail(frozen)).execution!
     expect(successor.continuation!.phase).toBe('delivered')
+    await h.imported(h[side], 'observe-before-readable')
+    expect((await h.detail(frozen)).executionGraph!.limitations.join('\n')).toContain('source-hierarchy-frozen')
+    await fixtures.run(() => h.ctx.agents.get(SessionId(successor.session.sessionId))!.whenIdle())
+    await fixtures.run(() => h.app.reconcileControls())
+    expect((await h.detail(frozen)).execution!.continuation!.phase).toBe('received')
     await fixtures.run(() => h.ctx.agents.get(SessionId(successor.session.sessionId))!.whenIdle())
     await h.imported(h[side], 'accept-after-handoff')
     expect((await h.detail(frozen)).executionGraph!.limitations.join('\n')).not.toContain('source-hierarchy-frozen')

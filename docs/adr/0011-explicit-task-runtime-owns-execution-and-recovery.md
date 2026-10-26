@@ -11,6 +11,16 @@
 - 旧协调会话在接任提交后失去对原 Task 的协调写入资格。具体 Task 操作校验 owner/epoch 并说明当前会话；旧会话显示交接提示和新会话入口，仍接收并回应人工输入。等待、暂停、完成和交接都不得封禁原生对话或统一禁用宿主工具（#120、#122、#139；2026-10-23 用户裁决）。
 - 暂停、取消请求和工具真正停止分别可见。运行器不得杀死无关会话或把正在执行的外部副作用假称已经撤销。
 
+## 生命周期维护与业务准入
+
+插件对同一 Task 持续持有接续推进责任；当前业务主会话身份只在正式接任事务切换。会话只执行插件指定的收取、保存或读取确认步骤。显式 `task.continue` 允许 idle 且相关事实满足条件的 waiting/paused 执行仅换会话，保留 Task、Execution、owner、全部规格验收与完整 control 原因；维护不取得 continuous slot，不设置 resumeRequested，不把 waiting/paused 改为 ready。
+
+维护准入绑定持久 operation、准确 Session、固定请求身份及具体步骤。tools.guard 只允许 material 步骤保存材料、collect 步骤正式 job_output 指定 jobs、receive 步骤确认指定材料；任意 marker、业务工具和嵌套分派不取得准入。人类正常对话仍沿用宿主权限，对话、页面查看、完成和归档不解除 Task 控制。
+
+原生结算另有无工具的 settle 步骤：从真实父 catalog、child header/descriptor、最新 turn/end 及原通知首次 inbox insertion 核实 parent/child/endSeq/messageId，绑定当前 operation/source epoch。只让准确通知进入父 user/message；同批其他自动输入持久排队，不获得业务权限或设置 resumeRequested。旧通知重插不刷新首次入箱时间；消费通知、child returned 与 Task 验收仍分别核实，接任前保留原生结果消费门。材料新鲜度同时覆盖 job 身份与 child 最新结束身份。
+
+指定宿主 rc.3（22ddee3792402c3e70ec5f86a63c3e3e895a2f60）及匹配依赖的 LocalJobs 在准确 owner Agent 退役时删除其注册记录。真实原生 activation 返回且父已消费旧通知后，先前两个 completed 作业已经不可达；普通 SessionController 也不具有原生 child 冷恢复权限。不能把这个能力负例说成“returned child 的两个 reachable pending jobs 已补收”，不能伪造 pending 注册表、裸读结果或绕过子会话路由。本轮正式负例与已有准确 owner 正式补收 lane 分开记证；将来宿主支持该前置条件时，仍需原生新通知消费和新材料的完整实证。
+
 ## 接续与上下文
 
 - 使用宿主公开的安全维护边界；源会话达到可接续状态后，固定后继和操作身份，保存接续内容，创建或恢复后继，校验环境与配置，受控接任，再投递剩余事件。
@@ -29,6 +39,12 @@
 - 不把浏览器定时器或模型反复空推作为后台生命周期。来源适配可按明确能力使用推送或受控增量拉取，状态查询不调用模型。
 - 明确等待人类、结果或外部条件时停止无意义模型推进。规则的可推进槽位与 Task 协调资格分开：等待项在安全边界让出自动推进槽位但保留 owner 和会话，规则继续处理其他合法候选；回复/结果先落入事件记录，再按有序调度恢复，不能绕过并发门槛自动唤醒。业务完成以验收事实为准；模型停止、无进展指纹和工具返回不能替代验收。
 - 暂停接新工作停止新领取，当前受管执行按自身状态继续。来源暂不可用保留已有候选、当前执行与恢复点，不清空工作列表。
+
+终态 pending jobs 先在维护锁外向准确 owner 发出补收请求，由该会话的真实模型步骤调用正式 job_output。插件 flush owner Session 后复查正式交付事实；运行中、unknown、权限拒绝、消费后未提交成功结果和空重读均不伪造 collected。补收后的材料按 execution/source/epoch/specification 与结果身份集合校验，结果改变即重新请求材料；随后才进入相关执行者锁内重查并接任。
+
+新操作持久写入 protocolVersion=1，投递与可读分别持久记录：`taken → delivered → received`。后继用 work_continuation_received 声明读取准确 material command；插件读取该准确 Session 中成功提交的 tool/call、tool/result 并 flush 后确认。投递返回或单独写入声明不足以进入 received。旧记录没有 protocolVersion；其中 delivered 继续保留历史终态“已投递、没有新读取确认”，冷加载/观察/恢复不重开，也不改标 received。只有未完结旧操作在合法恢复时采用新屏障；对旧终态显式新接续则归档原历史并预留一个新操作。消费但未产生结果保留具体错误，新显式重试只换该步骤请求身份，沿用 operation/successor/epoch。
+
+受控接任在 source maintenance 内通过公开 goals.disarm(exactLiveAgent) 撤销旧 activation，并 goals.get 回读确认 id/phase/revision 不变、activation=disarmed。无公开能力且无法证明旧 Goal 已退役时保留准确宿主能力阻塞；不修改 DSH，不冒充人类 pause/resume，不以 complete/blocked 收口未完成 Goal。独立浏览器协作不会自动成为原生接任，须使用该受控流程；这里不提供跨会话 Goal 迁移或自动 rearm。
 
 ## 持久化与恢复
 
