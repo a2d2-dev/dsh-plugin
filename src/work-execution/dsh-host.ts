@@ -89,14 +89,14 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       return decision
     }, { prepend: true })
     this.ctx.on('agent/status', ({ agent, status }) => { if (status === 'idle') { this.admittedTurns.delete(agent); this.maintenanceTurns.delete(agent) } })
-    this.ctx.effect(() => this.service('tools').guard(exec => {
+    this.ctx.inject(['tools'], toolsCtx => { toolsCtx.effect(() => toolsCtx.tools.guard(exec => {
       const scope = exec.agent && this.maintenanceTurns.get(exec.agent)
       if (!scope) return
       const allowed = scope.step === 'material' ? exec.name === 'work_continuation_material'
         : scope.step === 'receive' ? exec.name === 'work_continuation_received'
         : exec.name === 'job_output' && scope.jobIds?.includes(String((exec.arguments as { job_id?: unknown } | undefined)?.job_id))
       if (!allowed || exec.parent) return `Continuation ${scope.operationId} permits only its ${scope.step} maintenance step; business tools require explicit Task resume`
-    }), 'narrow continuation maintenance tools')
+    }), 'narrow continuation maintenance tools') })
     this.ctx.on('tools/result', exec => { this.activeTools.delete(exec.token) })
     this.ctx.on('tools/pre-execute', async (exec, next) => {
       // Observation includes admission still in flight. Task writes authorize in WorkApplication.
@@ -406,6 +406,48 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
   async observe(execution: WorkExecution, event: WorkEvent): Promise<'accepted' | 'delivered' | 'consumed'> {
     const state = await this.runtime.deliveryState(SessionId(execution.session.sessionId), this.delivery(event))
     return state === 'missing' ? 'accepted' : state === 'queued' ? 'delivered' : 'consumed'
+  }
+  /** Called while the exact source lifecycle is held in settled maintenance. */
+  async disarmSource(execution: WorkExecution): Promise<NonNullable<NonNullable<WorkExecution['continuation']>['goalActivation']>> {
+    const agent = this.service('agents').get(SessionId(execution.session.sessionId))
+    if (!agent || agent.session.id !== agent.id) throw new WorkExecutionError('continuation-goal-agent-unavailable', 'The exact live source Agent is required to retire Goal activation')
+    const goals = (this.ctx.get as (name: string) => unknown).call(this.ctx, 'goals') as {
+      get(agent: Agent): { id: string; revision: number; phase: string; activation: string } | undefined
+      disarm?(agent: Agent): unknown
+    } | undefined
+    if (!goals) {
+      if ((await this.runtime.events(agent.id)).some(event => event.type === 'goal/change')) throw new WorkExecutionError('continuation-goal-capability-unavailable', 'Source has Goal history but its public lifecycle service is unavailable; controlled takeover cannot prove activation retirement')
+      return { status: 'none' }
+    }
+    if (typeof goals.get !== 'function') throw new WorkExecutionError('continuation-goal-capability-unavailable', 'Public goals.get(exactLiveAgent) is unavailable')
+    const before = goals.get(agent)
+    if (!before) return { status: 'none' }
+    if (typeof goals.disarm !== 'function') throw new WorkExecutionError('continuation-goal-capability-unavailable', 'Public goals.disarm(exactLiveAgent) is unavailable; human pause/resume is a separate authority')
+    goals.disarm(agent)
+    const after = goals.get(agent)
+    if (!after || after.id !== before.id || after.revision !== before.revision || after.phase !== before.phase || after.activation !== 'disarmed'
+      || this.service('agents').get(agent.id) !== agent) throw new WorkExecutionError('continuation-goal-unconfirmed', 'Exact source Goal activation could not be verified without changing durable identity, phase or revision')
+    return { status: 'disarmed', goalId: after.id, revision: after.revision, phase: after.phase }
+  }
+  async flushSession(session: import('../work-types.ts').SessionRef): Promise<void> {
+    if (session.runtimeId !== this.runtimeId) throw new WorkExecutionError('executor-runtime-unavailable', 'Collection owner belongs to another runtime')
+    const agent = await this.runtime.agent(SessionId(session.sessionId))
+    if (agent.status !== 'idle') throw new WorkExecutionError('continuation-waiting-executions', 'The exact collection owner is still running')
+    await this.runtime.flush(agent)
+  }
+  async received(execution: WorkExecution): Promise<boolean> {
+    const op = execution.continuation!
+    const agent = await this.runtime.agent(SessionId(execution.session.sessionId))
+    await this.runtime.flush(agent)
+    if (!op.readable) return false
+    const events = await this.runtime.events(agent.id)
+    const requestId = op.readRequestId ?? op.kickoffId
+    const message = events.findLast(event => event.type === 'user/message' && event.data.id === requestId)
+    const call = events.findLast(event => event.type === 'tool/call' && event.data.callId === op.readable!.callId && event.data.name === 'work_continuation_received')
+    const result = events.findLast(event => event.type === 'tool/result' && event.data.message?.toolCallId === op.readable!.callId)
+    const expected = JSON.stringify({ status: 'completed', operationId: op.operationId, materialCommandId: op.material!.commandId, epoch: execution.epoch })
+    return !!message && !!call && !!result && call.seq > message.seq && result.seq > call.seq && result.data.message.isError === false
+      && result.data.message.content.some((block: { type: string; text?: string }) => block.type === 'text' && block.text === expected)
   }
   async settle(execution: WorkExecution): Promise<void> {
     const agent = await this.runtime.agent(SessionId(execution.session.sessionId))

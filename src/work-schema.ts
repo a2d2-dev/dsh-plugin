@@ -31,15 +31,20 @@ export const taskSchema = z.object({
 export const modelSchema = z.object({ provider: referenceId, model: referenceId, reasoningEffort: referenceId.optional() }).strict()
 export const continuationContentSchema = z.object({ body: text, decisions: text, evidence: text, unfinished: text, next: text }).strict()
 const actualSchema = z.object({ runtimeId: referenceId, cwd: text, agentPreset: referenceId, provider: referenceId, model: referenceId, reasoningEffort: referenceId.optional(), permissionPreset: referenceId, sandbox: referenceId, approval: referenceId }).strict()
-const materialSchema = continuationContentSchema.extend({ commandId: referenceId, ref: taskRefSchema, executionId: id, source: sessionRefSchema, epoch: z.number().int().positive(), taskVersion: z.number().int().positive(), specificationVersion: z.number().int().positive() }).strict()
+const materialSchema = continuationContentSchema.extend({ commandId: referenceId, ref: taskRefSchema, executionId: id, source: sessionRefSchema, epoch: z.number().int().positive(), taskVersion: z.number().int().positive(), specificationVersion: z.number().int().positive(), settlementKey: text.optional() }).strict()
 const deliverySchema = z.enum(['accepted', 'delivered', 'consumed'])
 const continuationOperationSchema = z.object({
   operationId: id, commandId: referenceId, automatic: z.boolean(),
-  phase: z.enum(['reserved', 'material-requested', 'material-saved', 'successor-created', 'taken', 'delivered']),
+  phase: z.enum(['reserved', 'material-requested', 'material-saved', 'successor-created', 'taken', 'delivered', 'received']),
   source: sessionRefSchema, successor: sessionRefSchema, sourceEpoch: z.number().int().positive(),
   materialRequestId: referenceId, kickoffId: referenceId, profile: actualSchema.optional(), material: materialSchema.optional(),
   goal: text, specification: specificationSchema, title: text,
   history: z.object({ ref: taskRefSchema, session: sessionRefSchema }).strict(),
+  collections: z.array(z.object({ session: sessionRefSchema, jobs: z.array(z.object({ id: referenceId, registryEpoch: referenceId.optional(), instanceId: referenceId.optional() }).strict()), requestId: referenceId, delivery: deliverySchema, status: z.enum(['requested', 'collected']) }).strict()).optional(),
+  materialFactsKey: text.optional(),
+  goalActivation: z.object({ status: z.enum(['none', 'disarmed']), goalId: referenceId.optional(), revision: z.number().int().positive().optional(), phase: referenceId.optional() }).strict().optional(),
+  readable: z.object({ callId: referenceId, materialCommandId: referenceId }).strict().optional(),
+  readRequestId: referenceId.optional(),
   inputSeal: z.number().int().nonnegative().optional(),
   requestDelivery: deliverySchema.optional(), kickoffDelivery: deliverySchema.optional(),
   error: z.object({ code: referenceId, message: text }).strict().optional(),

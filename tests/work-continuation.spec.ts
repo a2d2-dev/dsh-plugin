@@ -85,8 +85,11 @@ it.each(['material-request', 'successor-create', 'source-take', 'source-seal', '
     expect(JSON.stringify(restored.model.requests[0]!.messages)).toContain(operation.successor.sessionId)
   }
   await fixtures.run(() => restored.app.reconcileControls())
-  const recovered = await restored.app.execute(command, operator)
-  expect(recovered, JSON.stringify(recovered)).toMatchObject({ execution: { id: h.execution.id, epoch: 2, session: operation.successor, continuation: { operationId: operation.operationId, materialRequestId: operation.materialRequestId, kickoffId: operation.kickoffId, phase: 'delivered' } } })
+  await restored.app.execute(command, operator)
+  await fixtures.run(() => restored.ctx.agents.get(SessionId(operation.successor.sessionId))!.whenIdle())
+  await fixtures.run(() => restored.app.reconcileControls())
+  const recovered = await restored.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(recovered, JSON.stringify(recovered)).toMatchObject({ execution: { id: h.execution.id, epoch: 2, session: operation.successor, continuation: { operationId: operation.operationId, materialRequestId: operation.materialRequestId, kickoffId: operation.kickoffId, phase: 'received' } } })
   await fixtures.run(() => restored.ctx.agents.get(SessionId(operation.successor.sessionId))!.whenIdle())
   expect(await fixtures.run(() => restored.ctx.sessionPersistence.list())).toHaveLength(2)
   const sourceLog = await fixtures.run(() => restored.ctx.sessionController.inspect(SessionId(operation.source.sessionId)))
@@ -266,6 +269,10 @@ it('hands the same Task to two real successor Sessions with source-authored deci
     const previous = await h.ctx.sessionController.inspect(SessionId(originals.at(-1)!))
     expect(previous.events.findLast(event => event.type === 'session/title')?.data.title).toBe(`T:${h.ref.taskId.replaceAll('-', '').slice(0, 8)} · 会话 ${generation - 1} · Continue work`)
     expect(JSON.stringify(inspection.events)).toContain(material.decisions)
+    await fixtures.run(() => h.app.reconcileControls())
+    await fixtures.run(() => h.ctx.agents.get(SessionId(execution.session.sessionId))!.whenIdle())
+    const confirmed = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+    expect(confirmed).toMatchObject({ execution: { continuation: { phase: 'received' } } })
   }
   expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(3)
   expect(execution.retired?.map(item => item.session.sessionId)).toEqual(originals)
@@ -345,6 +352,8 @@ it.each([100, 200_001])('automatically continues at a 200K soft target and obser
   if (result.status !== 'completed' || !result.execution) throw new Error('No successor')
   await fixtures.run(() => h.ctx.agents.get(SessionId(result.execution!.session.sessionId))!.whenIdle())
   await fixtures.run(() => h.app.reconcileControls())
+  await fixtures.run(() => h.ctx.agents.get(SessionId(result.execution!.session.sessionId))!.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
   expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { epoch: 2, continuationObservation: { totalTokens: successorTokens, baseline: 'estimated', capacity: 512_000, outputReserve: 8_000 }, ...(successorTokens > 200_000 ? { continuationBlocked: { code: 'continuation-target-too-small' } } : {}) } })
   await fixtures.run(() => h.app.reconcileControls())
   expect(seen).toContain(h.execution.session.sessionId)
@@ -402,6 +411,8 @@ it.each(['wait', 'pause'] as const)('explicitly replaces a %s Session while pres
   expect(result).toMatchObject({ execution: { id: h.execution.id, owner: h.execution.owner, epoch: 2, state: held.execution.state, control: held.execution.control, continuation: { phase: 'delivered', material } } })
   if (result.status !== 'completed' || !result.execution) throw Error('Missing successor')
   await fixtures.run(() => h.ctx.agents.get(SessionId(result.execution!.session.sessionId))!.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { continuation: { phase: 'received' } } })
   const before = h.model.requests.length
   h.ctx.agents.get(SessionId(result.execution.session.sessionId))!.followup(createUserMessage({ content: [{ type: 'text', text: 'Unapproved business automation' }], source: { kind: 'a2d2-work-dispatch' } }))
   await fixtures.run(() => h.ctx.agents.get(SessionId(result.execution!.session.sessionId))!.whenIdle())
@@ -429,3 +440,117 @@ it('does not prompt or rotate while explicitly waiting and does not rotate witho
 
 
 
+
+it('keeps delivery distinct from a committed and flushed successor read receipt', async () => {
+  const h = await setup()
+  h.model.acknowledgeContinuation = false
+  h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+  await h.app.execute({ type: 'task.continue', commandId: 'read-confirmation', ...fence(h.execution) }, operator)
+  await fixtures.run(() => h.ctx.agents.get(SessionId(h.execution.session.sessionId))!.whenIdle())
+  const saved = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (saved.status !== 'completed' || !saved.execution?.continuation?.material) throw Error('No source material')
+  const op = saved.execution.continuation
+  h.model.nextTool = { name: 'work_continuation_received', arguments: { operation_id: op.operationId, material_command_id: op.material!.commandId, expected_epoch: 2 } }
+  await fixtures.run(() => h.app.reconcileControls())
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { continuation: { phase: 'delivered' } } })
+  await fixtures.run(() => h.ctx.agents.get(SessionId(op.successor.sessionId))!.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { epoch: 2, continuation: { phase: 'received', readable: { materialCommandId: op.material!.commandId, callId: 'contract-call' } } } })
+  const log = await fixtures.run(() => h.ctx.sessionController.inspect(SessionId(op.successor.sessionId)))
+  expect(log.events).toContainEqual(expect.objectContaining({ type: 'tool/result', data: expect.objectContaining({ message: expect.objectContaining({ toolCallId: 'contract-call', isError: false }) }) }))
+})
+
+it('rejects business tools and arbitrary maintenance markers during a waiting material step', async () => {
+  const h = await setup()
+  await h.app.execute({ type: 'task.control', commandId: 'hold', ...fence(h.execution), action: 'wait', text: 'Do not resume business' }, operator)
+  h.model.nextTool = { name: 'work_control', arguments: { action: 'resume', text: 'Unauthorized maintenance resume' } }
+  await h.app.execute({ type: 'task.continue', commandId: 'narrow-maintenance', ...fence(h.execution) }, operator)
+  const source = h.ctx.agents.get(SessionId(h.execution.session.sessionId))!
+  await fixtures.run(() => source.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  const result = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(result).toMatchObject({ execution: { epoch: 1, state: 'waiting', control: { action: 'wait', reason: 'Do not resume business' }, continuation: { error: { code: 'continuation-material-missing' } } } })
+  const log = await fixtures.run(() => h.ctx.sessionController.inspect(source.id))
+  expect(log.events).toContainEqual(expect.objectContaining({ type: 'tool/result', data: expect.objectContaining({ message: expect.objectContaining({ isError: true }) }) }))
+  const before = h.model.requests.length
+  source.followup({ id: 'arbitrary-maintenance', role: 'user', content: [{ type: 'text', text: 'Resume business under a maintenance marker' }], source: { kind: 'a2d2-work-maintenance', operationId: 'arbitrary', step: 'material' } } as never)
+  await fixtures.run(() => source.whenIdle())
+  expect(h.model.requests).toHaveLength(before)
+  expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(1)
+})
+
+it.each(['missing', 'failed-commit'] as const)('recovers a %s successor read result after cold restore without another takeover', async mode => {
+  const h = await setup()
+  h.model.acknowledgeContinuation = false
+  await h.app.execute({ type: 'task.control', commandId: 'hold', ...fence(h.execution), action: 'pause', text: 'Remain paused after read confirmation' }, operator)
+  h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+  await h.app.execute({ type: 'task.continue', commandId: 'read-recovery', ...fence(h.execution) }, operator)
+  await fixtures.run(() => h.ctx.agents.get(SessionId(h.execution.session.sessionId))!.whenIdle())
+  const saved = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (saved.status !== 'completed' || !saved.execution?.continuation?.material) throw Error('Missing saved material')
+  const op = saved.execution.continuation
+  if (mode === 'failed-commit') {
+    h.model.nextTool = { name: 'work_continuation_received', arguments: { operation_id: op.operationId, material_command_id: op.material!.commandId, expected_epoch: 2 } }
+    h.ctx.on('tools/post-execute', async (exec, _result, next) => {
+      if (exec.name === 'work_continuation_received') throw Error('Deterministic failure after receipt claim but before successful Session result')
+      return next()
+    })
+  }
+  await fixtures.run(() => h.app.reconcileControls())
+  await fixtures.run(() => h.ctx.agents.get(SessionId(op.successor.sessionId))!.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  const unconfirmed = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(unconfirmed).toMatchObject({ execution: { epoch: 2, state: 'paused', continuation: { phase: 'delivered', error: { code: 'continuation-read-unconfirmed' } } } })
+  const turns = h.model.requests.length
+  await fixtures.run(() => h.app.reconcileControls())
+  expect(h.model.requests).toHaveLength(turns)
+  await fixtures.dispose(h.ctx)
+  const restored = await fixtures.mount(h.workspace.path)
+  installWorkTools(restored.ctx, restored.app, 'runtime')
+  await fixtures.run(() => restored.app.reconcileControls())
+  const held = await restored.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (held.status !== 'completed' || !held.execution) throw Error('Missing cold continuation')
+  expect(held.execution.continuation?.operationId).toBe(op.operationId)
+  await restored.app.execute({ type: 'task.continue', commandId: 'retry-read', ...fence(held.execution) }, operator)
+  await fixtures.run(() => restored.ctx.agents.get(SessionId(op.successor.sessionId))!.whenIdle())
+  await fixtures.run(() => restored.app.reconcileControls())
+  const final = await restored.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(final).toMatchObject({ execution: { id: h.execution.id, owner: h.execution.owner, epoch: 2, state: 'paused', control: held.execution.control, continuation: { phase: 'received', operationId: op.operationId, successor: op.successor, kickoffId: op.kickoffId } } })
+  if (final.status !== 'completed' || !final.execution) throw Error('Missing final continuation')
+  expect(final.execution.retired).toHaveLength(1)
+  expect(final.execution.continuation!.readRequestId).toBeTruthy()
+  expect(await fixtures.run(() => restored.ctx.sessionPersistence.list())).toHaveLength(2)
+})
+
+it('refreshes source material after the host reports newly collected result facts', async () => {
+  const h = await setup()
+  h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+  await h.app.execute({ type: 'task.continue', commandId: 'fresh-material', ...fence(h.execution) }, operator)
+  const source = h.ctx.agents.get(SessionId(h.execution.session.sessionId))!
+  await fixtures.run(() => source.whenIdle())
+  const saved = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (saved.status !== 'completed' || !saved.execution?.continuation?.material) throw Error('No material')
+  const op = saved.execution.continuation
+  // Domain seam fixture for changing external host facts. The official lane
+  // separately proves the real registry/tool/result/flush delivery contract.
+  const observe = h.host.execution.observation.bind(h.host.execution)
+  let delivery: 'pending' | 'delivered' = 'pending'
+  vi.spyOn(h.host.execution, 'observation').mockImplementation(async (...args) => {
+    const facts = await observe(...args)
+    facts.sessions.find(row => row.session.sessionId === source.id)!.jobs.push({ id: 'fixture-new-result', owner: h.execution.session, registryEpoch: 'fixture-registry', instanceId: 'fixture-instance', kind: 'bash', label: 'new result facts', status: 'completed', delivery, result: 'unknown', acceptance: 'unassessed', persistence: 'session-journal', availability: 'live' })
+    if (delivery === 'pending') { facts.settlement = 'pending'; facts.blockers.push({ code: 'job-unsettled', session: h.execution.session, jobId: 'fixture-new-result' }) }
+    return facts
+  })
+  await fixtures.run(() => h.app.reconcileControls())
+  await fixtures.run(() => source.whenIdle())
+  delivery = 'delivered'
+  await fixtures.run(() => h.app.reconcileControls())
+  const refreshing = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(refreshing).toMatchObject({ execution: { epoch: 1, session: h.execution.session, continuation: { operationId: op.operationId, successor: op.successor, phase: 'material-requested', collections: [{ status: 'collected' }] } } })
+  if (refreshing.status !== 'completed' || !refreshing.execution?.continuation) throw Error('Missing refresh')
+  expect(refreshing.execution.continuation.materialRequestId).not.toBe(op.materialRequestId)
+  expect(refreshing.execution.continuation.material).toBeUndefined()
+  await fixtures.run(() => source.whenIdle())
+  const log = await fixtures.run(() => h.ctx.sessionController.inspect(source.id))
+  expect(log.events.filter(event => event.type === 'user/message' && event.data.id === refreshing.execution!.continuation!.materialRequestId)).toHaveLength(1)
+})

@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto'
+import { WorkApplication, WorkDao } from '../src/work.ts'
+import { DshWorkExecutionHost } from '../src/work-execution/dsh-host.ts'
 import { expect, it, vi } from 'vitest'
 import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
@@ -34,13 +37,13 @@ async function officialModules() {
   const requireOfficial = createRequire(join(root, 'packages/jobs/jobs-local/package.json'))
   const cordis = await import(/* @vite-ignore */ pathToFileURL(requireOfficial.resolve('@deepseek-ai/cordis')).href)
   const pipeline = await import(/* @vite-ignore */ pathToFileURL(join(root, 'packages/core/tools/lib/pipeline.js')).href)
-  const [session, projection, query, persistence, prompt, tools, executor, agents, loop, llm, jobs, toolJobs, catalog] = await Promise.all([
+  const [session, projection, query, persistence, prompt, tools, executor, agents, loop, llm, jobs, toolJobs, catalog, goal, goalDriver] = await Promise.all([
     'packages/core/session', 'packages/session/session-projection', 'packages/session-query/session-query', 'packages/session/session-persistence-jsonl',
     'packages/core/system-prompt', 'packages/core/tools', 'packages/core/tool-executor-native', 'packages/core/agent', 'packages/core/agent-loop',
-    'packages/llm/llm', 'packages/jobs/jobs-local', 'packages/jobs/tool-jobs', 'packages/session/session-format-catalog',
+    'packages/llm/llm', 'packages/jobs/jobs-local', 'packages/jobs/tool-jobs', 'packages/session/session-format-catalog', 'packages/goal/goal', 'packages/goal/goal-round-driver',
   ].map(load))
   console.log('Official jobs fixture provenance', JSON.stringify({ root, head: officialHead, node: process.version, jobs: join(root, 'packages/jobs/jobs-local/lib/index.js'), toolJobs: join(root, 'packages/jobs/tool-jobs/lib/index.js') }))
-  return { cordis, pipeline, session, projection, query, persistence, prompt, tools, executor, agents, loop, llm, jobs, toolJobs, catalog }
+  return { cordis, pipeline, session, projection, query, persistence, prompt, tools, executor, agents, loop, llm, jobs, toolJobs, catalog, goal, goalDriver }
 }
 
 it('uses built official registry, job_output, committed Session results and cold journal without model activation during observation', async () => {
@@ -148,6 +151,57 @@ it('uses built official registry, job_output, committed Session results and cold
     expect((await facts()).jobs[0]).toMatchObject({ delivery: 'delivered', result: 'unknown', acceptance: 'unassessed' })
     await runRead(own.id, 'duplicate-read')
     expect((await facts()).jobs[0]!.delivery).toBe('delivered')
+
+    // Isolated fixture Task: exercise plugin-organized collection through the
+    // official model step, never tools.execute without a Session log.
+    const collectionCtx = await mount(true)
+    const collectionAdapter = new ScriptedAdapter()
+    collectionCtx.llm.registerAdapter(['official-fixture'], collectionAdapter)
+    const collectionHandle = await collectionCtx.agents.create({ sessionId: m.session.SessionId('lifecycle-collection-owner'), agentOptions: { provider: 'official-fixture', model: 'deterministic' } })
+    const collectionAgent = collectionHandle.agent
+    const collectionHost = new DshWorkExecutionHost(collectionCtx as PluginContext, 'official-fixture')
+    const resource = { runtimeId: 'official-fixture', workspaceId: 'isolated-fixture' }
+    const app = new WorkApplication(join(directory, 'work'), { execution: collectionHost, resources: async () => [{ ref: resource, title: 'Isolated official fixture' }], sessions: async () => [] })
+    const project = await app.execute({ type: 'project.create', commandId: 'project', name: 'Official lifecycle fixture', resource }, { operator: true })
+    if (project.status !== 'completed' || !project.project) throw Error('Fixture project failed')
+    const task = await app.execute({ type: 'task.create', commandId: 'task', projectId: project.project.id, title: 'Collect formal results', goal: 'Keep waiting control', specification: 'Collect two exact-owner jobs', acceptance: ['Formal Session results persist'] }, { operator: true })
+    if (task.status !== 'completed' || !task.task) throw Error('Fixture task failed')
+    const execution = { id: randomUUID(), owner: randomUUID(), agentId: project.project.defaultAgentId, epoch: 1, ref: { projectId: project.project.id, taskId: task.task.id }, resource, session: { runtimeId: 'official-fixture', sessionId: collectionAgent.id }, sessionMode: 'create' as const, agentPreset: 'fixture', permissionPreset: 'fixture', model: { provider: 'official-fixture', model: 'deterministic' }, policy: { version: 1, modelCandidates: [], instructions: '', capabilities: ['coordination'] }, state: 'waiting' as const, control: { commandId: 'wait', action: 'wait' as const, status: 'applied' as const, reason: 'Keep this waiting condition' }, history: [{ state: 'waiting' as const, commandId: 'fixture-start' }], events: [] }
+    await WorkDao.forDirectory(app.directory).transaction(async state => { state.executions.push(execution) })
+    const collectionIds = ['first', 'second'].map(label => collectionCtx.jobs.start({ kind: 'bash', owner: collectionAgent.id, label, run(job: any) { job.append(`${label} stream`); return { done: Promise.resolve({ status: 'completed', result: `${label} terminal evidence` }), cancel() {} } } }))
+    for (const id of collectionIds) await collectionCtx.jobs.wait(id, 1000, collectionAgent.id)
+    collectionAdapter.script.push(collectionIds.flatMap((id: string, index: number) => [
+      { type: 'block-start', index, blockType: 'tool-call' },
+      { type: 'tool-call-delta', index, id: m.llm.ToolCallId(`organized-${index}`), name: 'job_output', argumentsDelta: JSON.stringify({ job_id: id }) },
+      { type: 'block-end', index, block: { type: 'tool-call', id: m.llm.ToolCallId(`organized-${index}`), name: 'job_output', arguments: JSON.stringify({ job_id: id }) } },
+    ]).concat([{ type: 'finish', reason: { kind: 'tool-calls' } }] as any), [{ type: 'finish', reason: { kind: 'stop' } }])
+    const organized = await app.execute({ type: 'task.continue', commandId: 'collect-before-material', ref: execution.ref, executionId: execution.id, owner: execution.owner, epoch: 1 }, { operator: true })
+    expect(organized).toMatchObject({ status: 'completed', execution: { state: 'waiting', epoch: 1, continuation: { collections: [{ session: execution.session, jobs: expect.arrayContaining(collectionIds.map((id: string) => expect.objectContaining({ id }))) }] } } })
+    await collectionAgent.whenIdle()
+    await collectionCtx.sessions.flush(collectionAgent.session)
+    const collected = await new RuntimeHost(collectionCtx as PluginContext).executionFacts(collectionAgent.id, 'official-fixture', 'current')
+    expect(collected.jobs).toHaveLength(2)
+    expect(collected.jobs.every(job => job.delivery === 'delivered')).toBe(true)
+    using collectionLog = await collectionCtx.sessionQuery.observeSession(collectionAgent.id)
+    expect(collectionLog.events.filter((event: any) => event.type === 'tool/result' && event.data.message.isError === false)).toHaveLength(2)
+    expect(collectionAdapter.requests).toHaveLength(2)
+    expect(await app.query({ type: 'task.execution', ref: execution.ref }, { operator: true })).toMatchObject({ execution: { state: 'waiting', control: execution.control, epoch: 1 } })
+    await collectionCtx.plugin(m.goal.default)
+    const priorGoal = collectionCtx.goals.create(collectionAgent, { objective: 'Unfinished independent fixture Goal', maxGoalRounds: 5 })
+    const goalEvents = collectionAgent.session.snapshotEvents().filter((event: any) => event.type === 'goal/change')
+    await collectionHost.maintain(execution, async () => {
+      await (collectionHost as any).disarmSource(execution)
+    })
+    expect(collectionCtx.goals.get(collectionAgent)).toMatchObject({ id: priorGoal.id, phase: 'active', revision: priorGoal.revision, activation: 'disarmed', roundsStarted: priorGoal.roundsStarted })
+    expect(collectionAgent.session.snapshotEvents().filter((event: any) => event.type === 'goal/change')).toEqual(goalEvents)
+    await collectionCtx.plugin(m.goalDriver)
+    collectionAdapter.script.push([{ type: 'finish', reason: { kind: 'stop' } }])
+    collectionAgent.followup(m.llm.createUserMessage({ content: [{ type: 'text', text: 'Discuss this unchanged waiting Task without resuming it.' }], source: { kind: 'user' } }))
+    await collectionAgent.whenIdle()
+    await collectionCtx.sessions.flush(collectionAgent.session)
+    expect(collectionCtx.goals.get(collectionAgent)).toMatchObject({ phase: 'active', revision: priorGoal.revision, activation: 'disarmed', roundsStarted: priorGoal.roundsStarted })
+    expect(collectionAdapter.requests).toHaveLength(3)
+    await collectionHandle.dispose()
 
     const consumed = produce(agent.id)
     consumed.done.resolve({ status: 'completed', result: 'one-shot evidence' })

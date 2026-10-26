@@ -103,6 +103,25 @@ observe(id, caller): {
 
 操作沿用 `task.continue`。固定 operation 与 successor 先保留，准备不修改当前入口。`maintain` 等当前 idle，取得 source maintenance 并 flush；观察相关执行者，再对其 live idle Agent 取得 maintenance 并逐一 flush，最后重读公开事实。如果获取锁时出现新的相关 live 执行者，先补锁与 flush 再重读。body 已在这一持久屏障内，禁止再次调用 settle/whenIdle/runMaintenance 造成嵌套等待。pending/unknown 拒绝 body，释放维护窗口，让原生工具继续结算。settled 才进入已有 take；失败重试复用原 operation/successor，不另建入口。不可达作业只提醒，不计入这里的 pending/unknown。
 
+### waiting/paused 仅换会话与步骤恢复（#274）
+
+**前置条件**：真实 source 已 idle，Task 尚未验收完成；命令携带当前 execution/owner/epoch。普通聊天、页面、完成及归档不授予业务调度资格。
+
+**操作**：显式提交 `task.continue`。插件持久保存唯一 operation、固定 successor、materialRequestId 与 kickoffId；原 source 仍是业务协调者。waiting/paused 保留 state、完整 control（原因及恢复条件）、Task/Execution/owner、全部规格与验收。continuous 维护不领取 slot、不写 resumeRequested；接任不把等待/暂停设为 ready。
+
+**步骤与数据走向**：
+
+1. 插件读取完整执行范围。遇到可达终态 pending jobs，在任何 executor maintenance 锁外，将 `collection:<operation>:<request>` 请求发给准确 owner Session。准入同时绑定 operation、准确会话、固定 request 与 collect 步骤；tools.guard 只允许这些 job 的正式 job_output，不允许业务工具或嵌套分派。running/unknown/权限拒绝等保留具体阻塞。
+2. 正式 Agent loop 提交真实 tool/call、tool/result；插件 flush 准确 owner 后复查公开交付事实，以 owner/job/registryEpoch/instanceId 识别同一结果。消费后无结果、无 Session 提交和空重读保留 pending，不伪造 collected。持久 collections 保存执行者、目标 jobs、请求交付/消费和核实结果。
+3. 结算后请求 source 仅调用 work_continuation_material。保存材料绑定 TaskRef、execution、source、epoch、specificationVersion 与已观察结果身份集合；补收或结果变化后重新请求材料。插件在相关 executor maintenance 锁内再次读取事实与材料新鲜度，通过后才创建固定 successor。
+4. source maintenance 内调用公开 goals.disarm(exactLiveAgent)，再 goals.get 核实 activation=disarmed 且 Goal id/phase/revision 未改变。无能力时精确记录宿主边界；不伪造人类 pause/resume、不 complete/blocked 未完成 Goal。正式事务才增加一次 epoch，并将 source 写为 retired。独立浏览器协作交接不具有此原生事务或自动 Goal 转移能力，须进入受控流程。
+5. `taken` 后投递固定内容，`delivered` 仅表示投递事实。后继只调用 work_continuation_received，声明准确 operation/material command/epoch；插件 flush 并从其真实 Session 回读成功的 tool/call、tool/result，才进入 `received`。单独声明、deliver 返回、消费消息均不足以确认可读。
+6. received 后按原业务控制处理后续输入。waiting/paused 后继继续等待；正常可推进执行才投递业务下一步，并继续服从 continuous slot 与所有原权限。
+
+**失败与恢复**：插件的 idle 事件、启动检查及既有低频恢复循环持续负责推进。已消费但缺材料、缺收取结果或缺读取回执时保留具体 error 和准确执行者，不重复空推；新的显式 task.continue 为缺失步骤生成新请求，保留 operation/successor/kickoff 与 epoch。创建/接任/投递失回执通过已固定身份与正式日志回读恢复，接任只提交一次。真实 Goal 的 activation 只退役旧会话，不承诺在后继自动 rearm。
+
+**完成判据**：当前协调记录指向固定 successor、epoch 恰增一次、正式收到并可读的材料已核实、原控制及槽位资格保留。后端测试与正式 jobs/Goal lane 使用明确的隔离 fixture，不能替代父 #270 要求的既有 GUI 实测；本切片不部署或改动任何真实业务 Task。
+
 ### 已验收任务的接续入口
 
 原生会话「A²D² 接续」与 Issue「接续」页从 `task.detail` 的 `task.completion`、`progress.completion` 或 `progress.processingState === 'completed'` 读取 Task 完成事实，传入 `ExecutionContinuation.completed`。完成后保留置灰的「准备接续」，并显示「任务阶段：done（已验收完成）」和「任务已验收完成，不能继续接续」。该参数即使与 handler 同时传入也会禁用动作；handler 仍由当前协调关联等既有资格判断提供，缺少 handler 不伪造可用能力，未完成的历史或评审会话沿用隐藏行为。原生会话 Completed/idle、Goal 与 GitHub closed 均不推断 Task 完成；完成显示不改变 owner、epoch 或 Task 状态。

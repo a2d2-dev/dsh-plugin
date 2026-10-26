@@ -125,15 +125,21 @@ class Query extends SessionQuery {
 }
 export class Model extends LlmAdapter {
   requests: GenerateOptions[] = []
+  acknowledgeContinuation = true
   nextTool?: { name: string; arguments: Record<string, unknown> }
   async listModels(provider: string) { return ['default', 'selected'].map(id => ({ provider, id, name: id })) }
   async resolveModel(provider: string, model: string) { if (!['default', 'selected'].includes(model)) throw new Error('Unavailable model'); return { provider, id: model, name: model } }
   async *stream(request: GenerateOptions): AsyncIterable<StreamChunk> {
     this.requests.push(request)
-    if (this.nextTool) {
-      const tool = this.nextTool
+    const received = request.messages.findLast(message => message.role === 'user' && (message as { source?: { kind?: string; step?: string } }).source?.kind === 'a2d2-work-maintenance' && (message as { source?: { step?: string } }).source?.step === 'receive')
+    const receiptId = received && `receipt-${received.id}`
+    const text = received && JSON.stringify(received.content)
+    const acknowledgement = this.acknowledgeContinuation && received && !request.messages.some(message => message.role === 'tool' && message.toolCallId === receiptId)
+      ? { name: 'work_continuation_received', arguments: { operation_id: text!.match(/operation_id ([a-f0-9-]+)/)![1], material_command_id: text!.match(/material_command_id ([^, ]+)/)![1], expected_epoch: Number(text!.match(/expected_epoch ([0-9]+)/)![1]) } } : undefined
+    if (this.nextTool || acknowledgement) {
+      const tool = this.nextTool ?? acknowledgement!
+      const id = ToolCallId(this.nextTool ? 'contract-call' : receiptId!)
       this.nextTool = undefined
-      const id = ToolCallId('contract-call')
       const args = JSON.stringify(tool.arguments)
       yield { type: 'block-start', index: 0, blockType: 'tool-call' }
       yield { type: 'tool-call-delta', index: 0, id, name: tool.name, argumentsDelta: args }

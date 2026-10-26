@@ -18,7 +18,7 @@ import { applySourceCommand, refreshSource, sourceResult } from './work-sources/
 import type { GitHubSourcePort } from './work-sources/types.ts'
 import type { WorkSnapshot } from './work-schema.ts'
 import { WorkExecutionError } from './work-execution/host.ts'
-import { continuationInFlight, MANAGED_WORK_INSTRUCTIONS, maintenanceEvent, materialRequest, reserveContinuation, successorMessage } from './work-execution/continuation.ts'
+import { continuationInFlight, continuationFactsKey, collectionRequest, MANAGED_WORK_INSTRUCTIONS, maintenanceEvent, materialRequest, reserveContinuation, successorMessage } from './work-execution/continuation.ts'
 import { applyTaskOrganization, taskStructureBlocker } from './work-organization.ts'
 import { isCanonicalChild } from './work-migrate.ts'
 import { applyTaskReport, projectProgress, taskProgressView } from './work-progress.ts'
@@ -117,11 +117,17 @@ export class WorkApplication {
         await this.observeContinuation(initial.id)
         state = await this.load()
       }
+      for (const owner of state.executions) {
+        const op = owner.continuation
+        if (!op || !continuationInFlight(owner) || isTaskCompleted(taskAt(state, owner.ref))) continue
+        const step = op.collections?.find(step => step.status === 'requested' && step.session.sessionId === sessionId)
+        if (step && messages.some(message => message.id === step.requestId && JSON.stringify(message.source) === JSON.stringify({ kind: 'a2d2-work-maintenance', operationId: op.operationId, step: 'collect' }))) return { operationId: op.operationId, step: 'collect', jobIds: step.jobs.map(job => job.id) }
+      }
       const maintenance = state.executions.find(item => item.continuation && item.session.sessionId === sessionId)
       const operation = maintenance?.continuation
       if (operation && !isTaskCompleted(taskAt(state, maintenance!.ref))) {
-        const step = operation.phase === 'material-requested' ? 'material' : operation.phase === 'taken' ? 'receive' : undefined
-        const id = step === 'material' ? operation.materialRequestId : operation.kickoffId
+        const step = operation.phase === 'material-requested' ? 'material' : ['taken', 'delivered'].includes(operation.phase) ? 'receive' : undefined
+        const id = step === 'material' ? operation.materialRequestId : operation.readRequestId ?? operation.kickoffId
         if (step && messages.some(message => message.id === id && JSON.stringify(message.source) === JSON.stringify({ kind: 'a2d2-work-maintenance', operationId: operation.operationId, step }))) return { operationId: operation.operationId, step }
       }
       if (state.executions.some(item => item.retired?.some(old => old.session.sessionId === sessionId) || (item.continuation?.successor.sessionId === sessionId && item.session.sessionId !== sessionId))) return false
@@ -287,6 +293,18 @@ export class WorkApplication {
     return this.execute({ type: 'task.continuation-material', commandId, ref: execution.ref,
       executionId: execution.id, owner: execution.owner, epoch: expectedEpoch ?? execution.epoch, content },
     { operator: false, session, agentId: execution.agentId })
+  }
+  /** A claim is not readable until the host finds its successful committed result. */
+  async sessionContinuationReceived(session: import('./work-types.ts').SessionRef, callId: string, operationId: string, materialCommandId: string, epoch: number) {
+    return this.sourceTransaction(async state => {
+      const execution = state.executions.find(item => sameSession(item.session, session))
+      const op = execution?.continuation
+      if (!execution || !op || op.operationId !== operationId || !['taken', 'delivered'].includes(op.phase)
+        || !sameSession(session, op.successor) || execution.epoch !== epoch || epoch !== op.sourceEpoch + 1
+        || op.material?.commandId !== materialCommandId) return { status: 'failed' as const, error: { code: 'stale-continuation-receipt', message: 'Only the fixed current successor can acknowledge this exact material and epoch' } }
+      op.readable = { callId, materialCommandId }
+      return { status: 'completed' as const, operationId, materialCommandId, epoch }
+    })
   }
   async sessionReport(session: import('./work-types.ts').SessionRef, callId: string, report: import('./work-progress.ts').TaskReport, expectedEpoch?: number, reporter?: import('@deepseek-ai/dsh-tools').ToolExecutionToken): Promise<WorkResult> {
     const execution = (await this.load()).executions.find(item => sameSession(item.session, session))
@@ -941,7 +959,7 @@ export class WorkApplication {
     try {
       if (!this.host.execution?.measure) throw new WorkExecutionError('continuation-meter-unavailable', 'Automatic continuation requires public host token measurement')
       observation = await this.host.execution.measure(execution)
-      if (!execution.continuationObservation && execution.continuation?.phase === 'delivered' && execution.continuation.sourceEpoch + 1 === execution.epoch && observation.totalTokens >= policy.targetTokens) throw new WorkExecutionError('continuation-target-too-small', 'The first measured successor context already reaches this soft target; increase the target or continue manually instead of repeatedly rotating the same material')
+      if (!execution.continuationObservation && execution.continuation?.phase === 'received' && execution.continuation.sourceEpoch + 1 === execution.epoch && observation.totalTokens >= policy.targetTokens) throw new WorkExecutionError('continuation-target-too-small', 'The first measured successor context already reaches this soft target; increase the target or continue manually instead of repeatedly rotating the same material')
       if (policy.targetTokens + policy.reserveTokens + observation.outputReserve > observation.capacity) throw new WorkExecutionError('continuation-policy-invalid', 'Context target plus handoff reserve and model output reserve exceeds exact model capacity')
       if (execution.continuationObservation && observation.routeKey !== execution.continuationObservation.routeKey) throw new WorkExecutionError('continuation-route-changed', 'Exact model route or capacity changed; explicitly reconfigure continuation before advancing')
     } catch (cause) { error = { code: cause instanceof WorkExecutionError ? cause.code : 'continuation-observation-failed', message: cause instanceof Error ? cause.message : 'Continuation observation failed' } }
@@ -970,18 +988,92 @@ export class WorkApplication {
       execution = await save(current => {
         if (current.continuation!.inputSeal !== undefined && current.continuation!.inputSeal !== sealed.seq) throw new WorkExecutionError('continuation-seal-conflict', 'Source intake seal changed')
         for (const message of sealed.messages) {
-          if (goalOwned(message) || message.id === operation.materialRequestId || current.events.some(item => item.id === message.id)) continue
+          if (goalOwned(message) || message.id === operation.materialRequestId || operation.collections?.some(step => step.requestId === message.id) || current.events.some(item => item.id === message.id)) continue
           current.events.push({ id: message.id, text: 'Input accepted before source intake was sealed', kind: 'input', delivery: 'accepted', acceptance: 'unassessed', nativeMessage: message })
         }
         current.continuation!.inputSeal = sealed.seq
       })
     }
     if (execution.control?.status === 'accepted' && execution.control.action !== 'resume') return execution
-    if (execution.continuation!.automatic && execution.runtimeFailure && !execution.runtimeFailure.acknowledged) return save(current => { current.continuation!.error = { code: 'continuation-source-failed', message: 'The source model turn failed or was cancelled; explicit resume, input or manual continuation is required' } })
-    if (execution.continuation!.automatic && !execution.continuationPolicy?.enabled) return save(current => { current.continuation!.error = { code: 'continuation-disabled', message: 'Automatic continuation is disabled; explicit manual continuation can resume this same operation' } })
+    if (execution.epoch === execution.continuation!.sourceEpoch && execution.continuation!.automatic && execution.runtimeFailure && !execution.runtimeFailure.acknowledged) return save(current => { current.continuation!.error = { code: 'continuation-source-failed', message: 'The source model turn failed or was cancelled; explicit resume, input or manual continuation is required' } })
+    if (execution.epoch === execution.continuation!.sourceEpoch && execution.continuation!.automatic && !execution.continuationPolicy?.enabled) return save(current => { current.continuation!.error = { code: 'continuation-disabled', message: 'Automatic continuation is disabled; explicit manual continuation can resume this same operation' } })
     let kickoffText: string | undefined
     try {
       if (!host.maintain || !host.profile) throw new WorkExecutionError('host-capability-unavailable', 'Safe continuation host boundary is unavailable')
+      if (execution.continuation!.phase === 'delivered') {
+        if (!host.received) throw new WorkExecutionError('host-capability-unavailable', 'Committed successor read receipts are unavailable')
+        if (await host.received(execution)) {
+          return save(current => {
+            current.continuation!.phase = 'received'
+            delete current.continuation!.error
+            if (!['waiting', 'paused'].includes(current.state)) current.events.push({ id: `continuation-business:${operationId}`, text: 'Continue the same Task using the received material and its accepted next step, under the current Task control and permissions.', kind: 'input', delivery: 'accepted', acceptance: 'unassessed' })
+          })
+        }
+        const op = execution.continuation!
+        const request = maintenanceEvent(op, 'receive', op.readRequestId ?? op.kickoffId, successorMessage(op, execution.policy.instructions))
+        const observed = await host.observe(execution, request)
+        if (observed === 'consumed') return save(current => { current.continuation!.kickoffDelivery = observed; current.continuation!.error = { code: 'continuation-read-unconfirmed', message: 'The successor consumed material without a committed readable receipt; explicitly retry this operation to request acknowledgement again' } })
+        const delivered = await host.deliver(execution, request)
+        return save(current => { current.continuation!.kickoffDelivery = delivered })
+      }
+      // Collection runs outside every executor maintenance lock. Its only proof
+      // is a fresh formal observation after exact-owner Session persistence.
+      if (execution.continuation!.phase !== 'taken') {
+        if (!host.observation || !host.flushSession) throw new WorkExecutionError('host-capability-unavailable', 'Formal collection observation and exact-owner flush are required')
+        for (const step of execution.continuation!.collections ?? []) await host.flushSession(step.session)
+        const facts = await host.observation(execution)
+        const jobs = facts.sessions.flatMap(row => row.jobs)
+        for (const step of execution.continuation!.collections ?? []) {
+          const delivered = step.jobs.every(expected => jobs.some(job => sameSession(job.owner, step.session) && job.id === expected.id && job.registryEpoch === expected.registryEpoch && job.instanceId === expected.instanceId && job.delivery === 'delivered'))
+          if (delivered && step.status !== 'collected') execution = await save(current => { current.continuation!.collections!.find(item => item.requestId === step.requestId)!.status = 'collected'; delete current.continuation!.error })
+        }
+        if (facts.settlement !== 'settled') {
+          const pending = facts.blockers.filter(blocker => blocker.code === 'job-unsettled')
+          if (!pending.length || facts.blockers.length !== pending.length) throw new WorkExecutionError('continuation-waiting-executions', `Lifecycle prerequisites remain unresolved: ${facts.blockers.map(blocker => `${blocker.code}:${blocker.session.sessionId}:${blocker.jobId ?? ''}`).join(', ')}`)
+          for (const blocker of pending) {
+            const job = jobs.find(job => sameSession(job.owner, blocker.session) && job.id === blocker.jobId)
+            if (!job || job.availability !== 'live' || !['completed', 'failed', 'killed'].includes(job.status) || job.delivery !== 'pending') throw new WorkExecutionError('continuation-collection-unavailable', 'Only reachable terminal jobs with pending formal output can be collected')
+          }
+          execution = await save(current => {
+            const op = current.continuation!
+            for (const blocker of pending) {
+              const job = jobs.find(job => sameSession(job.owner, blocker.session) && job.id === blocker.jobId)!
+              let step = op.collections?.find(step => step.status === 'requested' && sameSession(step.session, job.owner))
+              if (!step) { step = { session: job.owner, jobs: [], requestId: `collection:${op.operationId}:${randomUUID()}`, delivery: 'accepted', status: 'requested' }; (op.collections ??= []).push(step) }
+              if (!step.jobs.some(item => item.id === job.id && item.registryEpoch === job.registryEpoch && item.instanceId === job.instanceId)) step.jobs.push({ id: job.id, ...(job.registryEpoch ? { registryEpoch: job.registryEpoch } : {}), ...(job.instanceId ? { instanceId: job.instanceId } : {}) })
+            }
+            // Any collection after saved material invalidates that snapshot.
+            if (op.material) {
+              delete op.material
+              op.phase = 'reserved'
+              op.materialRequestId = `material-request:${op.operationId}:${randomUUID()}`
+              op.requestDelivery = 'accepted'
+              delete op.materialFactsKey
+            }
+          })
+          for (const step of execution.continuation!.collections!.filter(step => step.status === 'requested')) {
+            const owner = { ...execution, session: step.session }
+            const event = maintenanceEvent(execution.continuation!, 'collect', step.requestId, collectionRequest(execution.continuation!, step))
+            const observed = await host.observe(owner, event)
+            if (observed === 'consumed') {
+              execution = await save(current => { current.continuation!.collections!.find(item => item.requestId === step.requestId)!.delivery = observed })
+              throw new WorkExecutionError('continuation-collection-unconfirmed', `Owner ${step.session.sessionId} consumed the collection request without formal output delivery; inspect the tool result and explicitly retry this same operation after repairing the concrete host failure`)
+            }
+            const delivery = await host.deliver(owner, event)
+            execution = await save(current => { current.continuation!.collections!.find(item => item.requestId === step.requestId)!.delivery = delivery })
+          }
+          return execution
+        }
+        const key = continuationFactsKey(facts)
+        if (execution.continuation!.material && execution.continuation!.material.settlementKey !== key) execution = await save(current => {
+          const op = current.continuation!
+          delete op.material
+          op.phase = 'material-requested'
+          op.materialRequestId = `material-request:${op.operationId}:${randomUUID()}`
+          op.requestDelivery = 'accepted'
+        })
+        execution = await save(current => { current.continuation!.materialFactsKey = key })
+      }
       if (execution.continuation!.phase !== 'taken') await host.maintain(execution, async () => {
         execution = (await this.load()).executions.find(item => item.id === execution.id)!
         if (execution.control?.status === 'accepted' && execution.control.action !== 'resume') return
@@ -1012,7 +1104,9 @@ export class WorkApplication {
           }
           return
         }
-        if (!operation.material) throw new WorkExecutionError('continuation-material-missing', 'Saved source material is required before creating a successor')
+        const fresh = await host.observation!(execution)
+        if (continuationFactsKey(fresh) !== operation.materialFactsKey) throw new WorkExecutionError('continuation-material-stale', 'Execution results changed after material preparation; the plugin will collect and refresh material before takeover')
+        if (!operation.material || operation.material.executionId !== execution.id || !sameTask(operation.material.ref, execution.ref) || operation.material.specificationVersion !== operation.specification.version || !sameSession(operation.material.source, operation.source) || operation.material.epoch !== operation.sourceEpoch || operation.material.settlementKey !== operation.materialFactsKey) throw new WorkExecutionError('continuation-material-missing', 'Saved source material is required before creating a successor')
         // Validate message preparation before any successor creation or authority transfer.
         kickoffText = successorMessage(operation, execution.policy.instructions)
         if (operation.phase === 'material-saved' || operation.phase === 'successor-created') {
@@ -1032,6 +1126,8 @@ export class WorkApplication {
             const delivery = await host.observe(execution, event)
             execution = await save(current => { current.events.find(item => item.id === event.id)!.delivery = delivery === 'consumed' ? 'consumed' : 'accepted' })
           }
+          if (!host.disarmSource) throw new WorkExecutionError('host-capability-unavailable', 'Exact source Goal lifecycle retirement is unavailable')
+          const goalActivation = await host.disarmSource(execution)
           execution = await this.sourceTransaction(async state => {
             const current = state.executions.find(item => item.id === execution.id)!
             const op = current.continuation!
@@ -1049,6 +1145,7 @@ export class WorkApplication {
             current.model = { provider: profile.provider, model: profile.model, ...(profile.reasoningEffort ? { reasoningEffort: profile.reasoningEffort } : {}) }
             current.permissionPreset = profile.permissionPreset
             if (!['waiting', 'paused'].includes(current.state)) current.state = 'ready'
+            op.goalActivation = goalActivation
             op.phase = 'taken'
             delete op.error
             delete current.continuationObservation
@@ -1309,14 +1406,14 @@ export class WorkApplication {
       }
       if (command.type === 'task.continue') {
         if (['accepted', 'creating', 'failed'].includes(execution.state) || (execution.control?.status === 'accepted' && execution.control.action !== 'resume')) return failed('continuation-not-ready', 'Resume or recover the current execution before requesting continuation')
-        if (!this.host.execution?.maintain || !this.host.execution.profile || !this.host.execution.sealInput) return failed('host-capability-unavailable', 'Safe continuation maintenance is unavailable')
+        if (!this.host.execution?.maintain || !this.host.execution.profile || !this.host.execution.sealInput || !this.host.execution.received) return failed('host-capability-unavailable', 'Safe continuation maintenance is unavailable')
         reserveContinuation(execution, task, command.commandId, false)
         execution.continuation!.automatic = false
         delete execution.continuationBlocked
       }
       if (command.type === 'task.continuation-material') execution.continuationMaterial = { ...command.content,
         commandId: command.commandId, ref: execution.ref, executionId: execution.id, source: execution.session, epoch: execution.epoch,
-        taskVersion: task.version, specificationVersion: task.specification.version }
+        taskVersion: task.version, specificationVersion: task.specification.version, ...(execution.continuation?.materialFactsKey ? { settlementKey: execution.continuation.materialFactsKey } : {}) }
       if (command.type === 'task.continuation-material' && execution.continuation?.phase === 'material-requested') {
         execution.continuation.material = structuredClone(execution.continuationMaterial!)
         execution.continuation.phase = 'material-saved'

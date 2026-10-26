@@ -14,13 +14,18 @@ export interface ContinuationPolicy { version: number; enabled: boolean; targetT
 export interface ContinuationObservation { totalTokens: number; logRevision: number; baseline: 'usage' | 'estimated' | 'none'; capacity: number; outputReserve: number; routeKey: string; observedAt: string }
 export interface ContinuationOperation {
   operationId: string; commandId: string; automatic: boolean
-  phase: 'reserved' | 'material-requested' | 'material-saved' | 'successor-created' | 'taken' | 'delivered'
+  phase: 'reserved' | 'material-requested' | 'material-saved' | 'successor-created' | 'taken' | 'delivered' | 'received'
   source: SessionRef; successor: SessionRef; sourceEpoch: number
   materialRequestId: string; kickoffId: string
   profile?: NonNullable<WorkExecution['actual']>
   material?: ContinuationMaterial
   goal: string; specification: WorkSpecification; title: string
   history: { ref: TaskRef; session: SessionRef }
+  collections?: { session: SessionRef; jobs: { id: string; registryEpoch?: string; instanceId?: string }[]; requestId: string; delivery: 'accepted' | 'delivered' | 'consumed'; status: 'requested' | 'collected' }[]
+  materialFactsKey?: string
+  goalActivation?: { status: 'none' | 'disarmed'; goalId?: string; revision?: number; phase?: string }
+  readable?: { callId: string; materialCommandId: string }
+  readRequestId?: string
   inputSeal?: number
   requestDelivery?: Exclude<WorkEvent['delivery'], 'discarded'>; kickoffDelivery?: Exclude<WorkEvent['delivery'], 'discarded'>
   error?: { code: string; message: string }
@@ -56,7 +61,7 @@ export interface WorkEvent { id: string; text: string; kind: 'input' | 'result';
 export interface ContinuationContent { body: string; decisions: string; evidence: string; unfinished: string; next: string }
 export interface ContinuationMaterial extends ContinuationContent {
   commandId: string; ref: TaskRef; executionId: string; source: SessionRef; epoch: number
-  taskVersion: number; specificationVersion: number
+  taskVersion: number; specificationVersion: number; settlementKey?: string
 }
 export interface WorkExecution {
   id: string; ref: TaskRef; agentId: string; owner: string; epoch: number

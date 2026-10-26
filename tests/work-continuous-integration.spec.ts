@@ -128,7 +128,7 @@ it('automatically hands a queued Issue to its successor without giving its slot 
     await fixtures.run(() => app.reconcileControls())
     const successor = (await query({ type: 'task.detail', ref })).execution!
     expect(successor).toMatchObject({ id: first.id, owner: first.owner, ref, epoch: 2,
-      continuation: { automatic: true, phase: 'delivered', material: { decisions: material.decisions } } })
+      continuation: { automatic: true, phase: 'received', material: { decisions: material.decisions } } })
     await fixtures.run(() => h.ctx.agents.get(SessionId(successor.session.sessionId))!.whenIdle())
     expect(successor.session.sessionId).not.toBe(first.session.sessionId)
     expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(2)
@@ -138,5 +138,46 @@ it('automatically hands a queued Issue to its successor without giving its slot 
     expect((await query({ type: 'project.detail', projectId })).tasks).toHaveLength(1)
     expect(JSON.stringify(h.model.requests.at(-1)!.messages)).toContain(material.decisions)
     expect(await app.sessionControl(first.session, 'retired-status', 'status')).toMatchObject({ status: 'failed', error: { code: 'forbidden' } })
+  } finally { await fixtures.close() }
+})
+
+it.each(['wait', 'pause'] as const)('replaces a continuous %s Session without acquiring a business slot or requesting resume', async action => {
+  const fixtures = new ExecutionFixtures()
+  try {
+    const h = await fixtures.mount(await fixtures.root(), 'read-only')
+    const app = new WorkApplication(h.app.directory, h.host, source)
+    installWorkTools(h.ctx, app, 'runtime')
+    const execute = (command: unknown) => fixtures.run(async () => completed(await app.execute(command, actor)))
+    const query = (request: unknown) => fixtures.run(async () => completed(await app.query(request, actor)))
+    const connected = await execute({ type: 'source.connect', commandId: 'connect', githubProject: { owner: 'example', type: 'org', number: 1 } })
+    const projectId = connected.project!.id, sourceId = connected.source!.id
+    await query({ type: 'source.issues', projectId, sourceId, page: 1, perPage: 20, assignee: '@me', state: 'open', refresh: true })
+    const options = (await query({ type: 'source.execution-options', projectId, sourceId })).executionOptions!
+    h.model.nextTool = { name: 'work_control', arguments: { action, text: 'Keep explicit business hold across session replacement' } }
+    await execute({ type: 'continuous.configure', commandId: 'enable', projectId, sourceId, expectedVersion: 0, assignee: '@me', labels: ['bug'], resource: options.resources[0]!.ref, model: options.defaults.model, agentPreset: options.defaults.agentPreset, permissionPreset: options.defaults.permissionPreset, enabled: true })
+    const active = (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!
+    const ref = active.active!
+    const first = (await query({ type: 'task.detail', ref })).execution!
+    await fixtures.run(() => h.ctx.agents.get(SessionId(first.session.sessionId))!.whenIdle())
+    await execute({ type: 'continuous.set-enabled', commandId: 'pause-intake', projectId, sourceId, expectedVersion: active.version, enabled: false })
+    await fixtures.run(() => app.reconcileControls())
+    const held = (await query({ type: 'task.detail', ref })).execution!
+    const beforeRule = (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!
+    expect(beforeRule.active).toBeUndefined()
+    h.model.nextTool = { name: 'work_continuation_material', arguments: { body: 'Preserve the accepted Issue and explicit hold.', decisions: 'No business work until explicit resume.', evidence: 'Original hold is applied.', unfinished: 'Wait for LF.', next: 'Remain waiting for explicit resume.' } }
+    await execute({ type: 'task.continue', commandId: 'replace-only', ref, executionId: held.id, owner: held.owner, epoch: held.epoch })
+    await fixtures.run(() => h.ctx.agents.get(SessionId(first.session.sessionId))!.whenIdle())
+    await fixtures.run(() => app.reconcileControls())
+    const successor = (await query({ type: 'task.detail', ref })).execution!
+    await fixtures.run(() => h.ctx.agents.get(SessionId(successor.session.sessionId))!.whenIdle())
+    await fixtures.run(() => app.reconcileControls())
+    const final = (await query({ type: 'task.detail', ref })).execution!
+    expect(final).toMatchObject({ id: held.id, owner: held.owner, epoch: 2, state: held.state, control: held.control, continuation: { phase: 'received' } })
+    const afterRule = (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!
+    expect(afterRule.active).toBeUndefined()
+    expect(afterRule.slots ?? []).toEqual(beforeRule.slots ?? [])
+    expect(afterRule.items[0]!.resumeRequested).toBeUndefined()
+    expect(afterRule.items[0]!.explicitResumeRequested).toBeUndefined()
+    expect(afterRule.items[0]!.state).toBe(action === 'wait' ? 'waiting' : 'paused')
   } finally { await fixtures.close() }
 })

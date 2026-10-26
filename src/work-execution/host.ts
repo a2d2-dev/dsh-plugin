@@ -24,6 +24,9 @@ export interface WorkExecutionHost {
    * not call settle/whenIdle/runMaintenance on these already-held executors. */
   maintain?<T>(execution: WorkExecution, body: () => Promise<T>): Promise<T>
   sealInput?(execution: WorkExecution, operationId: string): Promise<{ seq: number; messages: readonly import('../work-types.ts').NativeWorkMessage[] }>
+  disarmSource?(execution: WorkExecution): Promise<NonNullable<NonNullable<WorkExecution['continuation']>['goalActivation']>>
+  flushSession?(session: import('../work-types.ts').SessionRef): Promise<void>
+  received?(execution: WorkExecution): Promise<boolean>
   pending?(execution: WorkExecution): readonly import('../work-types.ts').NativeWorkMessage[]
   history?(execution: WorkExecution, session: import('../work-types.ts').SessionRef, cursor?: number, limit?: number): Promise<{ events: unknown[]; nextCursor?: number }>
 }

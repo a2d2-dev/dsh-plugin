@@ -74,6 +74,20 @@ export function installWorkTools(ctx: Context, app: WorkApplication, runtimeId: 
     presentCall: args => ({ card: 'generic', title: 'Save continuation material', kind: 'other', rawInput: args }),
   })), 'managed work continuation material tool')
   ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'work_continuation_received',
+    description: 'Acknowledge that you read the exact supplied Task continuation material. Only the fixed successor at its current epoch may report this maintenance result. This does not resume business work; stop after acknowledging.',
+    parameters: {
+      operation_id: { type: 'string', required: true },
+      material_command_id: { type: 'string', required: true },
+      expected_epoch: { type: 'integer', required: true },
+    },
+    output: { schema: { type: 'object', additionalProperties: false, properties: { result: { type: 'string', required: true } } }, render: (_args, value) => [{ type: 'text', text: value.result }] },
+    async execute(args, exec) {
+      if (!exec.agent || exec.agent.session.id !== exec.agent.id) throw new Error('Continuation receipt requires a real calling Agent Session')
+      return { result: JSON.stringify(await app.sessionContinuationReceived({ runtimeId, sessionId: exec.agent.id }, exec.callId, args.operation_id, args.material_command_id, args.expected_epoch)) }
+    },
+  })), 'managed continuation readable receipt')
+  ctx.effect(() => ctx.tools.register(defineTool({
     name: 'work_control',
     description: 'Check current-session ownership and Task/specification versions with status (no Task material); use work_read for explicit paginated details when supplied material is missing or changed. Status remains available after startup. Report progress, ask/wait, pause or explicitly resume your current managed Task. Waiting and pausing are durably accepted now and applied after this turn, which may still finish its reply. Automatic task input waits for explicit resume; native human conversation remains available and does not itself resume the task. Task identity and execution authority come from your calling Session.',
     parameters: {
