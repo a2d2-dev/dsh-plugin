@@ -18,10 +18,12 @@ it('uses the host LLM for semantic screening with complete candidate bodies and 
     yield { type: 'text-delta', index: 0, text: '{"decisions":[{"nodeId":"I1","matches":false,"reason":"仅文档，不符合独立缺陷要求"}]}' }
     yield { type: 'finish', reason: { kind: 'stop' } }
   })
-  const screening = { instruction: '只处理独立缺陷，排除文档', candidates: [{ nodeId: 'I1', number: 1, title: '修改说明', body: '这是完整正文，不截断。', repository: { owner: 'acme', repository: 'repo' }, labels: ['ready'], assignees: [] }] }
+  const screening = { instruction: '只处理独立缺陷，排除文档', candidates: [{ nodeId: 'I1', number: 1, title: '修改说明', body: '这是完整正文，不截断。', repository: { owner: 'acme', repository: 'repo' }, labels: ['ready'], assignees: [], milestone: { number: 3, title: '3.0' }, projectItem: { fields: [{ id: 'status', name: 'Status', type: 'single-select' as const, value: 'In Progress' }], fieldsPartial: false } }] }
   expect(await planner.screen!(screening, { provider: 'real', model: 'semantic', reasoningEffort: 'high' })).toEqual({ decisions: [{ nodeId: 'I1', matches: false, reason: '仅文档，不符合独立缺陷要求' }] })
   expect(request).toMatchObject({ provider: 'real', model: 'semantic', reasoningEffort: 'high' })
   expect(JSON.stringify(request!.messages)).toContain('这是完整正文，不截断。')
+  expect(JSON.stringify(request!.messages)).toContain(JSON.stringify(JSON.stringify(screening)).slice(1, -1))
+  expect(request!.system).toContain('Project Status is a workflow field')
   expect(request!.system).toContain('exactly one decision')
   expect(request).not.toHaveProperty('tools')
   expect(request!.messages).toHaveLength(1)

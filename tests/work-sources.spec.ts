@@ -31,7 +31,7 @@ it('configures, reads and imports a legal .github repository through the product
     expect(init?.redirect).toBe('manual')
     if (String(input) === 'https://api.github.com/user') return Response.json({ login: identity.login, node_id: identity.nodeId, name: identity.name })
     expect(String(input)).toBe('https://api.github.com/repos/a2d2-dev/.github/issues/1')
-    return Response.json({ node_id: 'I_dotgithub', number: 1, title: 'Repository guidance', body: 'Accepted original guidance', html_url: url, state: 'open', updated_at: issue.updatedAt, labels: [], assignees: [] })
+    return Response.json({ node_id: 'I_dotgithub', number: 1, title: 'Repository guidance', body: 'Accepted original guidance', html_url: url, state: 'open', milestone: null, updated_at: issue.updatedAt, labels: [], assignees: [] })
   } })
   const app = new WorkApplication(directory, noHost, adapter)
   const configured = completed(await app.execute({ type: 'source.configure', commandId: 'dotgithub-source', projectId: project.id, repository }, operator)).source!

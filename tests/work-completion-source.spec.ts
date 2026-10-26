@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import { GitHubSource } from '../src/work-sources/github.ts'
 const target={nodeId:'I_contract',repository:{owner:'example',repository:'repo'},number:139,expectedUpdatedAt:'2026-10-21T00:00:00Z',expectedAssignees:['developer']}
-const raw={node_id:'I_contract',number:139,title:'contract',body:'verify',html_url:'https://github.com/example/repo/issues/139',state:'open',updated_at:target.expectedUpdatedAt,assignees:[{login:'developer'}],labels:[]}
+const raw={node_id:'I_contract',number:139,title:'contract',body:'verify',html_url:'https://github.com/example/repo/issues/139',state:'open',milestone:null,updated_at:target.expectedUpdatedAt,assignees:[{login:'developer'}],labels:[]}
 it('uses host credentials and a fixed canonical node mutation and classifies a lost mutation receipt as unknown',async()=>{
  const requests:{url:string;init?:RequestInit}[]=[]
  const source=new GitHubSource({credential:async()=> 'host-only-token',fetch:async(input,init)=>{
