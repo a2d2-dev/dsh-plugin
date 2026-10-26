@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { WorkApplication, WorkDao } from '../src/work.ts'
+import { installWorkTools } from '../src/work-execution/tools.ts'
 import { DshWorkExecutionHost } from '../src/work-execution/dsh-host.ts'
 import { expect, it, vi } from 'vitest'
 import { createRequire } from 'node:module'
@@ -245,6 +246,41 @@ it('uses built official registry, job_output, committed Session results and cold
     const failedFacts = await new RuntimeHost(collectionCtx as PluginContext).executionFacts(collectionAgent.id, 'official-fixture', 'current')
     expect(failedFacts.jobs.find(job => job.id === failedCollection)).toMatchObject({ delivery: 'pending' })
     await collectionHandle.dispose()
+
+    // Seed an explicitly already-taken isolated fixture to verify the real
+    // official work tool / Session-commit receipt boundary independently of
+    // preset/workspace composition (covered by the controller integration).
+    const readCtx = await mount(true)
+    const readAdapter = new ScriptedAdapter()
+    readCtx.llm.registerAdapter(['official-fixture'], readAdapter)
+    const readSource = await readCtx.agents.create({ sessionId: m.session.SessionId('lifecycle-read-source'), agentOptions: { provider: 'official-fixture', model: 'deterministic' } })
+    const readSuccessor = await readCtx.agents.create({ sessionId: m.session.SessionId('lifecycle-read-successor'), agentOptions: { provider: 'official-fixture', model: 'deterministic' } })
+    const readHost = new DshWorkExecutionHost(readCtx as PluginContext, 'official-fixture')
+    const readApp = new WorkApplication(join(directory, 'read-work'), { execution: readHost, resources: async () => [{ ref: resource, title: 'Isolated receipt fixture' }], sessions: async () => [] })
+    installWorkTools(readCtx as PluginContext, readApp, 'official-fixture')
+    const readProject = await readApp.execute({ type: 'project.create', commandId: 'read-project', name: 'Formal read receipt', resource }, { operator: true })
+    if (readProject.status !== 'completed' || !readProject.project) throw Error('Missing receipt project')
+    const readTask = await readApp.execute({ type: 'task.create', commandId: 'read-task', projectId: readProject.project.id, title: 'Read supplied material', goal: 'Keep paused control', specification: 'Read the exact source material', acceptance: ['Committed receipt is required'] }, { operator: true })
+    if (readTask.status !== 'completed' || !readTask.task) throw Error('Missing receipt Task')
+    const readRef = { projectId: readProject.project.id, taskId: readTask.task.id }
+    const readId = randomUUID(), readOwner = randomUUID(), readOperation = randomUUID()
+    const readMaterial = { body: 'Exact source material', decisions: 'Retain the original paused Task', evidence: 'Official fixture Session log', unfinished: 'Remain paused', next: 'Await explicit resume', commandId: 'official-material-command', ref: readRef, executionId: readId, source: { runtimeId: 'official-fixture', sessionId: readSource.agent.id }, epoch: 1, taskVersion: 1, specificationVersion: 1 }
+    await WorkDao.forDirectory(readApp.directory).transaction(async state => { state.executions.push({ ...execution, id: readId, owner: readOwner, agentId: readProject.project!.defaultAgentId, ref: readRef, epoch: 2, state: 'paused', control: { commandId: 'pause', action: 'pause', status: 'applied', reason: 'Keep the formal fixture paused' }, session: { runtimeId: 'official-fixture', sessionId: readSuccessor.agent.id }, continuation: { operationId: readOperation, commandId: 'take-fixture', automatic: false, phase: 'delivered', source: readMaterial.source, successor: { runtimeId: 'official-fixture', sessionId: readSuccessor.agent.id }, sourceEpoch: 1, materialRequestId: `material-request:${readOperation}`, kickoffId: `continuation:${readOperation}`, material: readMaterial, goal: readTask.task!.goal, specification: readTask.task!.specification, title: readTask.task!.title, history: { ref: readRef, session: readMaterial.source } }, retired: [{ session: readMaterial.source, epoch: 1, operationId: readOperation }] }) })
+    const readArgs = JSON.stringify({ operation_id: readOperation, material_command_id: readMaterial.commandId, expected_epoch: 2 })
+    readAdapter.script.push([
+      { type: 'block-start', index: 0, blockType: 'tool-call' },
+      { type: 'tool-call-delta', index: 0, id: m.llm.ToolCallId('official-readable-receipt'), name: 'work_continuation_received', argumentsDelta: readArgs },
+      { type: 'block-end', index: 0, block: { type: 'tool-call', id: m.llm.ToolCallId('official-readable-receipt'), name: 'work_continuation_received', arguments: readArgs } },
+      { type: 'finish', reason: { kind: 'tool-calls' } },
+    ], [{ type: 'finish', reason: { kind: 'stop' } }])
+    await readApp.execute({ type: 'task.continue', commandId: 'deliver-fixture-material', ref: readRef, executionId: readId, owner: readOwner, epoch: 2 }, { operator: true })
+    await readSuccessor.agent.whenIdle()
+    await readApp.reconcileControls()
+    const confirmedRead = await readApp.query({ type: 'task.execution', ref: readRef }, { operator: true })
+    expect(confirmedRead).toMatchObject({ execution: { state: 'paused', owner: readOwner, epoch: 2, continuation: { operationId: readOperation, phase: 'received', readable: { callId: 'official-readable-receipt', materialCommandId: readMaterial.commandId } } } })
+    expect(readAdapter.requests).toHaveLength(2)
+    await readSuccessor.dispose()
+    await readSource.dispose()
 
     const consumed = produce(agent.id)
     consumed.done.resolve({ status: 'completed', result: 'one-shot evidence' })
