@@ -11,6 +11,8 @@
 
 declare module '*.module.css' {
   const classes: {
+    readonly error: string
+    readonly canvas: string
     readonly queueScroll: string
     readonly status: string
     readonly summary: string

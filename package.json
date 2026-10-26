@@ -90,6 +90,7 @@
   },
   "files": [
     "lib/*.js",
+    "lib/canvas/**/*",
     "lib/types/**/*.d.ts",
     "cordis.patch.yml",
     "dsh.plugin.json",
@@ -142,6 +143,7 @@
     }
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "0.18.1",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
     "yaml": "^2.9.0"

@@ -4,6 +4,8 @@
  * All composition and navigation use published host services and slots.
  */
 
+import { CanvasViewer } from './canvas-viewer.tsx'
+import type { CanvasSidebar } from './canvas-contract.ts'
 import { createElement } from 'react'
 import { A2d2ConfigSection, loadModelRouteCatalog } from './config-page.tsx'
 import { IconA2d2AgentsOutline16 } from './icons.tsx'
@@ -41,6 +43,14 @@ export const inject = ['slots', 'sessions', 'remote', 'remote.session', 'remote.
  * @param ctx - the client context carrying the slot registry, the sessions service, and the optional sidebar.
  */
 export function apply(ctx: A2d2ClientContext): void {
+  ctx.inject(['betterSidebar', 'modules'], sidebarCtx => {
+    const sidebar = sidebarCtx.get('betterSidebar') as CanvasSidebar
+    sidebarCtx.effect(() => sidebar.registerFileViewer({
+      id: 'a2d2-excalidraw', title: 'Excalidraw', exts: ['excalidraw'],
+      priority: 10, fetchStrategy: 'fsRead',
+      component: props => createElement(CanvasViewer, { ...props, ctx: sidebarCtx }),
+    }), 'a2d2 excalidraw viewer')
+  })
   ctx.effect(() => ctx.slots.inject('conversation.composer.dock', () => ctx.slots.register({
     name: 'conversation.composer.dock',
     id: 'a2d2-handoff-orb',

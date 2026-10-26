@@ -24,7 +24,7 @@
  * Declarations ship from lib/types, emitted by `tsc -p tsconfig.build.json`, so
  * tsdown leaves them alone (`dts: false`, `clean: false`).
  */
-import { readFile } from 'node:fs/promises'
+import { cp, readFile } from 'node:fs/promises'
 import { basename, dirname, resolve as resolvePath } from 'node:path'
 import { builtinModules, createRequire } from 'node:module'
 import type { UserConfig } from 'tsdown'
@@ -104,7 +104,7 @@ function purityGatePlugin(): BuildPlugin {
       }
       if (NODE_BUILTINS.has(source)) {
         throw new Error(
-          `client bundle purity: Node builtin "${source}" cannot run in the browser module table — `
+          `client bundle purity: Node builtin "${source}" imported by "${importer}" cannot run in the browser module table — `
           + 'select the dependency browser export or add an explicit browser implementation',
         )
       }
@@ -125,9 +125,11 @@ function cssPlugin(): BuildPlugin {
     name: 'dsh-css-inline',
     resolveId(source: string, importer: string | undefined) {
       if (!source.endsWith('.css')) return null
-      const abs = source.startsWith('.') || source.startsWith('/')
-        ? (importer === undefined ? source : resolvePath(dirname(importer), source))
-        : require.resolve(source)
+      const abs = source === '@excalidraw/excalidraw/index.css'
+        ? resolvePath(dirname(require.resolve('@excalidraw/excalidraw')), 'index.css')
+        : source.startsWith('.') || source.startsWith('/')
+          ? (importer === undefined ? source : resolvePath(dirname(importer), source))
+          : require.resolve(source)
       return CSS_VIRTUAL_PREFIX + abs + CSS_VIRTUAL_SUFFIX
     },
     async load(virtualId: string) {
@@ -153,12 +155,15 @@ function cssPlugin(): BuildPlugin {
           `export default ${JSON.stringify(classMap)};`,
         ].join('\n')
       }
-      return [injectTag(fileId, source.toString('utf8')), 'export default "";'].join('\n')
+      const cssText = fileId.includes('/@excalidraw/excalidraw/')
+        ? source.toString('utf8').replaceAll('url("./fonts/', 'url("/a2d2/canvas/assets/fonts/')
+        : source.toString('utf8')
+      return [injectTag(fileId, cssText), 'export default "";'].join('\n')
     },
   }
 }
 
-export default [
+const builds: UserConfig[] = [
   {
     entry: { 'work-sources': 'src/work-sources.ts', work: 'src/work.ts', 'work-types': 'src/work-types.ts', 'work-plugin': 'src/work-plugin.ts', 'session-title-live': 'src/session-title-live.ts', 'task-runtime': 'src/task-runtime.ts', index: 'src/index.ts', command: 'src/command.ts', tools: 'src/tools.ts', 'open-subtask-tools': 'src/open-subtask-tools.ts', 'complete-task-tools': 'src/complete-task-tools.ts', 'ceo-prompt': 'src/ceo-prompt.ts', 'agent-prompt': 'src/agent-prompt.ts', 'github-watch': 'src/github-watch.ts', invariant: 'src/invariant.ts' },
     outDir: 'lib',
@@ -200,3 +205,31 @@ export default [
     },
   },
 ] satisfies UserConfig[]
+
+export default [...builds, {
+  ...builds[1],
+  entry: { editor: 'src/client/canvas-editor.tsx' },
+  outDir: 'lib/canvas',
+  sourcemap: false,
+  define: { ...builds[1]!.define, 'import.meta.url': 'undefined' },
+  plugins: [purityGatePlugin(), cssPlugin(), {
+    name: 'a2d2-canvas-browser-uuid',
+    resolveId(source: string, importer: string | undefined) {
+      if (source !== 'uuid' || importer === undefined) return null
+      return resolvePath(dirname(require.resolve('uuid', { paths: [dirname(importer)] })), '../dist/index.js')
+    },
+  }, {
+    name: 'a2d2-canvas-fonts',
+    async writeBundle() {
+      const distDir = dirname(require.resolve('@excalidraw/excalidraw'))
+      await cp(resolvePath(distDir, 'fonts'), 'lib/canvas/fonts', { recursive: true })
+    },
+  }],
+  outputOptions: {
+    entryFileNames: 'editor.js',
+    banner: 'globalThis.__a2d2CanvasFactory__ = (require) => {',
+    footer: 'return module.exports; };',
+    intro: 'var module = { exports: {} }; var exports = module.exports;',
+    codeSplitting: false,
+  },
+}] satisfies UserConfig[]

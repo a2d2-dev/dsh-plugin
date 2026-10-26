@@ -1,0 +1,14 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "a2d2-canvas-acceptance",
+  "elements": [
+    {"id":"box","type":"rectangle","x":0,"y":0,"width":180,"height":100,"angle":0,"strokeColor":"#1e1e1e","backgroundColor":"#d0ebff","fillStyle":"solid","strokeWidth":2,"strokeStyle":"solid","roughness":1,"opacity":100,"groupIds":[],"frameId":null,"roundness":{"type":3},"seed":100,"version":1,"versionNonce":10,"isDeleted":false,"boundElements":[],"updated":1,"link":null,"locked":false,"customData":{"acceptance":"preserve"}},
+    {"id":"label","type":"text","x":25,"y":30,"width":112,"height":25,"angle":0,"strokeColor":"#1e1e1e","backgroundColor":"transparent","fillStyle":"solid","strokeWidth":1,"strokeStyle":"solid","roughness":1,"opacity":100,"groupIds":[],"frameId":null,"roundness":null,"seed":101,"version":1,"versionNonce":11,"isDeleted":false,"boundElements":null,"updated":1,"link":null,"locked":false,"text":"原始文字","originalText":"原始文字","fontSize":24,"fontFamily":1,"textAlign":"left","verticalAlign":"top","containerId":null,"autoResize":true,"lineHeight":1.25},
+    {"id":"connector","type":"arrow","x":200,"y":50,"width":100,"height":0,"angle":0,"strokeColor":"#1971c2","backgroundColor":"transparent","fillStyle":"solid","strokeWidth":2,"strokeStyle":"solid","roughness":1,"opacity":100,"groupIds":[],"frameId":null,"roundness":{"type":2},"seed":102,"version":1,"versionNonce":12,"isDeleted":false,"boundElements":null,"updated":1,"link":null,"locked":false,"points":[[0,0],[100,0]],"startBinding":null,"endBinding":null,"startArrowhead":null,"endArrowhead":"arrow","elbowed":false},
+    {"id":"target","type":"ellipse","x":320,"y":0,"width":120,"height":100,"angle":0,"strokeColor":"#2f9e44","backgroundColor":"#d3f9d8","fillStyle":"solid","strokeWidth":2,"strokeStyle":"solid","roughness":1,"opacity":100,"groupIds":[],"frameId":null,"roundness":null,"seed":103,"version":1,"versionNonce":13,"isDeleted":false,"boundElements":null,"updated":1,"link":null,"locked":false}
+  ],
+  "appState": {"viewBackgroundColor":"#ffffff","gridSize":null},
+  "files": {},
+  "customMetadata": {"acceptance":"must survive save"}
+}
