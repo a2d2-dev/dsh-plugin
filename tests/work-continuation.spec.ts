@@ -476,6 +476,9 @@ it('rejects business tools and arbitrary maintenance markers during a waiting ma
   source.followup({ id: 'arbitrary-maintenance', role: 'user', content: [{ type: 'text', text: 'Resume business under a maintenance marker' }], source: { kind: 'a2d2-work-maintenance', operationId: 'arbitrary', step: 'material' } } as never)
   await fixtures.run(() => source.whenIdle())
   expect(h.model.requests).toHaveLength(before)
+  const denied = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (denied.status !== 'completed' || !denied.execution) throw Error('Missing held execution')
+  expect(denied.execution.events.some(event => event.id === 'arbitrary-maintenance')).toBe(false)
   expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(1)
 })
 
@@ -533,7 +536,7 @@ it('refreshes source material after the host reports newly collected result fact
   const op = saved.execution.continuation
   // Domain seam fixture for changing external host facts. The official lane
   // separately proves the real registry/tool/result/flush delivery contract.
-  const observe = h.host.execution.observation.bind(h.host.execution)
+  const observe = h.host.execution.observation!.bind(h.host.execution)
   let delivery: 'pending' | 'delivered' = 'pending'
   vi.spyOn(h.host.execution, 'observation').mockImplementation(async (...args) => {
     const facts = await observe(...args)

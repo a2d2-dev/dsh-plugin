@@ -45,13 +45,13 @@ function failed(code: string, message: string): WorkResult { return { status: 'f
 function conflict(currentVersion: number): WorkResult {
   return { status: 'conflict', error: { code: 'version-conflict', message: 'Expected version is stale', currentVersion } }
 }
-function goalOwned(message: NativeWorkMessage | undefined): boolean {
+function lifecycleOwned(message: NativeWorkMessage | undefined): boolean {
   const source = message?.source
-  return typeof source === 'object' && source !== null && 'kind' in source && source.kind === 'goal'
+  return typeof source === 'object' && source !== null && 'kind' in source && (source.kind === 'goal' || source.kind === 'a2d2-work-maintenance')
 }
 function pendingEvent(event: WorkEvent): boolean { return event.delivery !== 'consumed' && event.delivery !== 'discarded' }
-function discardGoalEvents(execution: import('./work-types.ts').WorkExecution): void {
-  for (const event of execution.events) if (pendingEvent(event) && goalOwned(event.nativeMessage)) event.delivery = 'discarded'
+function discardLifecycleEvents(execution: import('./work-types.ts').WorkExecution): void {
+  for (const event of execution.events) if (pendingEvent(event) && lifecycleOwned(event.nativeMessage)) event.delivery = 'discarded'
 }
 function legacyKey(address: { runtimeId: string; projectRoot: string; taskId: string }): string { return JSON.stringify([address.runtimeId, address.projectRoot, address.taskId]) }
 function sameResource(a: ResourceRef, b: ResourceRef): boolean { return a.runtimeId === b.runtimeId && a.workspaceId === b.workspaceId }
@@ -139,7 +139,7 @@ export class WorkApplication {
         state = current
         if (mayAdvance(owner)) return true
         for (const message of messages) {
-          if (goalOwned(message) || owner!.events.some(item => item.id === message.id)) continue
+          if (lifecycleOwned(message) || owner!.events.some(item => item.id === message.id)) continue
           const text = message.content.flatMap(block => typeof block === 'object' && block !== null && 'type' in block && block.type === 'text' && 'text' in block && typeof block.text === 'string' ? [block.text] : []).join('\n')
           const managed = continuousOwner(current, owner!.ref)
           if (managed && (!(owner!.error || owner!.continuation?.error || owner!.runtimeFailure || managed.item.recoveryBlocked) || typeof message.source === 'object' && message.source !== null && 'kind' in message.source && message.source.kind === 'user') && managed.item.state !== 'completed' && !continuousCompleted(current, owner!) && owner!.state !== 'paused' && !(owner!.control?.action === 'pause' && owner!.control.status === 'accepted')) { managed.item.resumeRequested = true; managed.item.attempts = 0; delete managed.item.retryAt; delete managed.item.recoveryBlocked; if (owner!.runtimeFailure) owner!.runtimeFailure.acknowledged = true }
@@ -915,8 +915,8 @@ export class WorkApplication {
   /** Host lifecycle recovery includes starts, handoffs, controls and task-owned titles. */
   async reconcileControls(): Promise<void> {
     const before = await this.load()
-    if (before.executions.some(execution => execution.events.some(event => pendingEvent(event) && goalOwned(event.nativeMessage)))) {
-      await this.sourceTransaction(async state => { for (const execution of state.executions) discardGoalEvents(execution) })
+    if (before.executions.some(execution => execution.events.some(event => pendingEvent(event) && lifecycleOwned(event.nativeMessage)))) {
+      await this.sourceTransaction(async state => { for (const execution of state.executions) discardLifecycleEvents(execution) })
     }
     await this.refreshSessionTitles()
     await this.reconcileCompletions()
@@ -988,7 +988,7 @@ export class WorkApplication {
       execution = await save(current => {
         if (current.continuation!.inputSeal !== undefined && current.continuation!.inputSeal !== sealed.seq) throw new WorkExecutionError('continuation-seal-conflict', 'Source intake seal changed')
         for (const message of sealed.messages) {
-          if (goalOwned(message) || message.id === operation.materialRequestId || operation.collections?.some(step => step.requestId === message.id) || current.events.some(item => item.id === message.id)) continue
+          if (lifecycleOwned(message) || message.id === operation.materialRequestId || operation.collections?.some(step => step.requestId === message.id) || current.events.some(item => item.id === message.id)) continue
           current.events.push({ id: message.id, text: 'Input accepted before source intake was sealed', kind: 'input', delivery: 'accepted', acceptance: 'unassessed', nativeMessage: message })
         }
         current.continuation!.inputSeal = sealed.seq
@@ -1185,7 +1185,7 @@ export class WorkApplication {
       })
       const state = await this.load()
       let execution = state.executions.find(item => item.id === id)!
-      if (execution.events.some(event => pendingEvent(event) && goalOwned(event.nativeMessage))) execution = await save(discardGoalEvents)
+      if (execution.events.some(event => pendingEvent(event) && lifecycleOwned(event.nativeMessage))) execution = await save(discardLifecycleEvents)
       if (isTaskCompleted(taskAt(state, execution.ref))) return { status: 'completed', execution }
       const owner = continuousOwner(state, execution.ref)
       const stopping = owner && continuousHasSlot(owner.rule, execution.ref) && execution.control?.status === 'accepted' && execution.control.action !== 'resume'
