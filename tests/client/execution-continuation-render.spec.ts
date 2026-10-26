@@ -84,7 +84,28 @@ it.each(['idle', 'inactive'] as const)('keeps an unfinished current Task availab
   expect(view.text()).not.toContain('已验收完成')
 })
 
-it.each(['failed', 'waiting', 'paused', 'accepted', 'creating'] as const)('explains why %s execution cannot prepare continuation', async state => {
+it.each(['waiting', 'paused'] as const)('changes only the session while preserving %s control and using a fresh fence', async state => {
+  const detail = taskDetail()
+  detail.execution!.state = state
+  detail.execution!.control = { commandId: 'hold', action: state === 'waiting' ? 'wait' : 'pause', status: 'applied', reason: '等待审查\n恢复条件：批准方案后明确恢复' }
+  detail.executionGraph = { ref, executionId: 'e', sessions: [{ session, role: 'current', status: 'idle', children: [], jobs: [] }], childTasks: [], events: [], history: [], settlement: 'settled', blockers: [], reminders: [], limitations: [] }
+  const { view, controller } = await nativeView(detail)
+  const command = vi.fn(async (_value: unknown) => detail)
+  controller.client.command = command
+  const button = view.nodes('button').find(node => node.props.children === '仅换会话')
+  expect(button).toBeDefined()
+  expect(button?.props.disabled).toBe(false)
+  expect(view.text()).toContain('恢复条件：批准方案后明确恢复')
+  expect(view.text()).not.toContain('请先恢复处理，再准备接续')
+  expect(view.nodes('button').some(node => node.props.children === '恢复处理')).toBe(true)
+  view.click('仅换会话')
+  await expect.poll(() => command.mock.calls.length).toBe(1)
+  expect(command.mock.calls[0]![0]).toMatchObject({ type: 'task.continue', ref, executionId: 'e', owner: 'owner', epoch: 1 })
+  expect(detail.execution!.state).toBe(state)
+  expect(detail.execution!.control?.status).toBe('applied')
+})
+
+it.each(['failed', 'accepted', 'creating'] as const)('explains why %s execution cannot prepare continuation', async state => {
   const detail = taskDetail()
   detail.execution!.state = state
   if (state === 'failed') detail.execution!.error = { code: 'incompatible-session', message: 'Existing Session model differs' }
@@ -93,9 +114,6 @@ it.each(['failed', 'waiting', 'paused', 'accepted', 'creating'] as const)('expla
   if (state === 'failed') {
     expect(view.text()).toContain('原执行恢复失败：incompatible-session')
     expect(view.nodes('button').some(node => node.props.children === '重试原执行')).toBe(true)
-  } else if (state === 'waiting' || state === 'paused') {
-    expect(view.text()).toContain('请先恢复处理，再准备接续')
-    expect(view.nodes('button').some(node => node.props.children === '恢复处理')).toBe(true)
   } else expect(view.text()).toContain('原执行尚未就绪')
   expect(controller.client.command).not.toHaveBeenCalled()
 })
