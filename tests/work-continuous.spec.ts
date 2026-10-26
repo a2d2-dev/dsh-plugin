@@ -1,3 +1,4 @@
+import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
 import { SourceError } from '../src/work-sources/errors.ts'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -1129,6 +1130,23 @@ it('maintains owned work and saves a new prompt while an earlier screening call 
   } finally { release(); await slow }
   expect((await h.execution(original.ref)).control?.action).toBe('pause')
   expect((await h.status()).items.find(item => item.number === 2)!.screening?.reason).toBe('新筛选')
+})
+
+it('saves a prompt while another refresh still holds the shared refresh lease', async () => {
+  const h = await setup(false)
+  completed(await h.app.execute(h.configure, operator))
+  const lease = join(h.directory, 'continuous.refresh')
+  let release!: () => void
+  const held = withFileLock(lease, () => new Promise<void>(done => { release = done }))
+  try {
+    await new Promise(done => setTimeout(done, 50))
+    const saving = h.app.execute({ ...h.configure, commandId: 'save-under-lease', expectedVersion: 1, queue: { ...queue, concurrency: 1, filterPrompt: '只处理独立缺陷' } }, operator)
+    await new Promise(done => setTimeout(done, 2_200))
+    release()
+    const saved = completed(await saving)
+    expect(saved.continuousRule!.queue!.filterPrompt).toBe('只处理独立缺陷')
+    expect((await h.status()).queue!.filterPrompt).toBe('只处理独立缺陷')
+  } finally { release(); await held }
 })
 
 it('reflects explicit Task-page recovery of a pre-admission problem without bypassing queue capacity', async () => {

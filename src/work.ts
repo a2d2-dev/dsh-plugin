@@ -458,47 +458,46 @@ export class WorkApplication {
   /** Complete source observation and waiting-only model screening; never dispatches. */
   private async refreshContinuous(scope: { projectId: string; sourceId: string; expectedVersion: number }, command?: Extract<WorkCommand, { type: 'continuous.refresh' }>, waitForScreening = true): Promise<WorkResult> {
     await mkdir(this.directory, { recursive: true, mode: 0o700 })
-    let replayed = false
-    const refreshed = await withFileLock(join(this.directory, 'continuous.refresh'), async () => {
-      const before = await this.load()
-      if (command) {
-        const prior = before.commands.find(item => item.commandId === command.commandId)
-        if (prior) { replayed = true; return prior.fingerprint === JSON.stringify(command) ? prior.result : failed('command-id-reused', 'Command identity has different content') }
+    const lease = join(this.directory, 'continuous.refresh')
+    const before = await this.load()
+    if (command) {
+      const prior = before.commands.find(item => item.commandId === command.commandId)
+      if (prior) return prior.fingerprint === JSON.stringify(command) ? prior.result : failed('command-id-reused', 'Command identity has different content')
+    }
+    const rule = before.continuousRules?.find(rule => rule.projectId === scope.projectId)
+    if (!rule) return failed('continuous-unconfigured', 'Configure the Project queue first')
+    if (rule.version !== scope.expectedVersion) return conflict(rule.version)
+    if (rule.sourceId !== scope.sourceId) return failed('continuous-source-mismatch', 'Refresh the actual Project queue source')
+    if (rule.migrationConflict) return failed(rule.migrationConflict.code, rule.migrationConflict.message)
+    const source = before.sources.find(source => source.id === rule.sourceId)!
+    // Network observation never holds the refresh lease: each source reserves its own
+    // request identity, so a concurrent pass coalesces instead of failing on a lock.
+    let scan: WorkResult = { status: 'completed' }
+    if (source.repository) scan = await refreshRepositoryCandidates(apply => this.sourceTransaction(apply), scope, this.source)
+    else await reconcileProjectSources(apply => this.sourceTransaction(apply), this.source, { ...scope, force: true, maxPagesPerSource: 200 })
+    const refreshed = await withFileLock(lease, () => this.sourceTransaction(async state => {
+      const current = state.continuousRules!.find(item => item.id === rule.id)!
+      if (current.version !== scope.expectedVersion) return conflict(current.version)
+      const observed = state.sources.find(source => source.id === current.sourceId)!
+      current.error = scan.status !== 'completed' ? scan.error : sourceScopeError(current, observed)
+      if (current.queue) current.nextRefreshAt = new Date(Date.now() + current.queue.refreshMinutes * 60_000).toISOString()
+      if (!current.error) {
+        if (current.queue?.filterPrompt?.trim()) for (const item of current.items) if (!item.ref && !['blocked', 'completed', 'paused'].includes(item.state)) delete item.screening
+        discoverContinuous(current, observed); current.lastRefreshedAt = new Date(Date.now()).toISOString(); delete current.screeningError
       }
-      const rule = before.continuousRules?.find(rule => rule.projectId === scope.projectId)
-      if (!rule) return failed('continuous-unconfigured', 'Configure the Project queue first')
-      if (rule.version !== scope.expectedVersion) return conflict(rule.version)
-      if (rule.sourceId !== scope.sourceId) return failed('continuous-source-mismatch', 'Refresh the actual Project queue source')
-      if (rule.migrationConflict) return failed(rule.migrationConflict.code, rule.migrationConflict.message)
-      const source = before.sources.find(source => source.id === rule.sourceId)!
-      let scan: WorkResult = { status: 'completed' }
-      if (source.repository) scan = await refreshRepositoryCandidates(apply => this.sourceTransaction(apply), scope, this.source)
-      else await reconcileProjectSources(apply => this.sourceTransaction(apply), this.source, { ...scope, force: true, maxPagesPerSource: 200 })
-      const refreshed = await this.sourceTransaction(async state => {
-        const current = state.continuousRules!.find(item => item.id === rule.id)!
-        if (current.version !== scope.expectedVersion) return conflict(current.version)
-        const observed = state.sources.find(source => source.id === current.sourceId)!
-        current.error = scan.status !== 'completed' ? scan.error : sourceScopeError(current, observed)
-        if (current.queue) current.nextRefreshAt = new Date(Date.now() + current.queue.refreshMinutes * 60_000).toISOString()
-        if (!current.error) {
-          if (current.queue?.filterPrompt?.trim()) for (const item of current.items) if (!item.ref && !['blocked', 'completed', 'paused'].includes(item.state)) delete item.screening
-          discoverContinuous(current, observed); current.lastRefreshedAt = new Date(Date.now()).toISOString(); delete current.screeningError
-        }
-        observeContinuousTasks(state, current)
-        return { status: 'completed' as const, continuousRule: current }
-      })
-      return refreshed
-    })
-    if (replayed || refreshed.status !== 'completed') return refreshed
+      observeContinuousTasks(state, current)
+      return { status: 'completed' as const, continuousRule: current }
+    }), { waitMs: 30_000 })
+    if (refreshed.status !== 'completed') return refreshed
     const refreshedRule = refreshed.continuousRule!
     if (waitForScreening && !refreshedRule.error && refreshedRule.queue?.filterPrompt?.trim()) await this.screenContinuous(refreshedRule.id, scope.expectedVersion)
-    return this.sourceTransaction(async state => {
+    return withFileLock(lease, () => this.sourceTransaction(async state => {
       const current = state.continuousRules!.find(item => item.id === refreshedRule.id)!
       if (current.version !== scope.expectedVersion) return conflict(current.version)
       const result: WorkResult = { status: 'completed', continuousRule: current }
-      if (command) this.dao.recordCommand(state, command.commandId, JSON.stringify(command), result)
+      if (command && !state.commands.some(item => item.commandId === command.commandId)) this.dao.recordCommand(state, command.commandId, JSON.stringify(command), result)
       return result
-    })
+    }), { waitMs: 30_000 })
   }
   private screenContinuous(ruleId: string, expectedVersion: number): Promise<void> {
     const key = `${ruleId}:${expectedVersion}`
