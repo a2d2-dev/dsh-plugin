@@ -11,6 +11,22 @@ const basis: PlanningBasis = {
   candidates: [],
 }
 
+it('uses the host LLM for semantic screening with complete candidate bodies and no tools or Session history', async () => {
+  let request: GenerateOptions | undefined
+  const planner = createLlmPlanner(async function* (options): AsyncIterable<StreamChunk> {
+    request = options
+    yield { type: 'text-delta', index: 0, text: '{"decisions":[{"nodeId":"I1","matches":false,"reason":"仅文档，不符合独立缺陷要求"}]}' }
+    yield { type: 'finish', reason: { kind: 'stop' } }
+  })
+  const screening = { instruction: '只处理独立缺陷，排除文档', candidates: [{ nodeId: 'I1', number: 1, title: '修改说明', body: '这是完整正文，不截断。', repository: { owner: 'acme', repository: 'repo' }, labels: ['ready'], assignees: [] }] }
+  expect(await planner.screen!(screening, { provider: 'real', model: 'semantic', reasoningEffort: 'high' })).toEqual({ decisions: [{ nodeId: 'I1', matches: false, reason: '仅文档，不符合独立缺陷要求' }] })
+  expect(request).toMatchObject({ provider: 'real', model: 'semantic', reasoningEffort: 'high' })
+  expect(JSON.stringify(request!.messages)).toContain('这是完整正文，不截断。')
+  expect(request!.system).toContain('exactly one decision')
+  expect(request).not.toHaveProperty('tools')
+  expect(request!.messages).toHaveLength(1)
+})
+
 it.each(['error', 'aborted'] as const)('retains a safe provider failure summary for a %s finish', async kind => {
   let request: GenerateOptions | undefined
   const planner = createLlmPlanner(async function* (options): AsyncIterable<StreamChunk> {

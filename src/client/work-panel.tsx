@@ -178,6 +178,7 @@ function ContinuousProcessing({controller}:{controller:WorkPanelController}) {
   const sourceId=rule?.sourceId??browseSourceId
   const [options,setOptions]=useState<WorkExecutionOptions|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[statusError,setStatusError]=useState('')
   const [assignee,setAssignee]=useState<'@me'|'*'>('*'),[labels,setLabels]=useState(''),[resource,setResource]=useState(0),[model,setModel]=useState(0),[agentPreset,setAgentPreset]=useState(''),[permissionPreset,setPermissionPreset]=useState('')
+  const [filterPrompt,setFilterPrompt]=useState('')
   const [configSourceId,setConfigSourceId]=useState(sourceId)
   const [concurrency,setConcurrency]=useState(1),[refreshMinutes,setRefreshMinutes]=useState(10),[order,setOrder]=useState<'oldest'|'newest'>('oldest')
   const [scope]=useState(()=>new AbortController())
@@ -196,7 +197,7 @@ function ContinuousProcessing({controller}:{controller:WorkPanelController}) {
       const choices=result.executionOptions
       if(!choices||!choices.resources.length||!choices.models.length||!choices.agentPresets.length||!choices.permissionPresets.length)throw Error('宿主尚无完整的执行目录、模型或预设配置')
       setOptions(choices);setConfigSourceId(sourceId);setAssignee(rule?.scope.assignee??'*');setLabels(rule?.scope.labels.join(', ')??'')
-      setConcurrency(rule?.queue?.concurrency??1);setRefreshMinutes(rule?.queue?.refreshMinutes??10);setOrder(rule?.queue?.order??'oldest')
+      setConcurrency(rule?.queue?.concurrency??1);setRefreshMinutes(rule?.queue?.refreshMinutes??10);setOrder(rule?.queue?.order??'oldest');setFilterPrompt(rule?.queue?.filterPrompt??'')
       setResource(Math.max(0,choices.resources.findIndex(item=>item.ref.runtimeId===rule?.resource.runtimeId&&item.ref.workspaceId===rule.resource.workspaceId)))
       const preferred=rule?.model??choices.defaults.model
       setModel(Math.max(0,choices.models.findIndex(item=>item.provider===preferred.provider&&item.model===preferred.model)))
@@ -211,7 +212,7 @@ function ContinuousProcessing({controller}:{controller:WorkPanelController}) {
       const selectedResource=options.resources[resource]?.ref, selectedModel=options.models[model]
       if(!selectedResource||!selectedModel)throw Error('请选择可用执行配置')
       const configuredModel=rule?.model.provider===selectedModel.provider&&rule.model.model===selectedModel.model?rule.model:options.defaults.model.provider===selectedModel.provider&&options.defaults.model.model===selectedModel.model?options.defaults.model:selectedModel
-      const result=await controller.submit({type:'continuous.configure',projectId,sourceId:configSourceId,expectedVersion:rule?.version??0,assignee,labels:[...new Set(labels.split(',').map(label=>label.trim()).filter(Boolean))],resource:selectedResource,model:configuredModel,agentPreset,permissionPreset,enabled:rule?.enabled??false,queue:{concurrency,refreshMinutes,order}})
+      const result=await controller.submit({type:'continuous.configure',projectId,sourceId:configSourceId,expectedVersion:rule?.version??0,assignee,labels:[...new Set(labels.split(',').map(label=>label.trim()).filter(Boolean))],resource:selectedResource,model:configuredModel,agentPreset,permissionPreset,enabled:rule?.enabled??false,queue:{concurrency,refreshMinutes,order,filterPrompt:filterPrompt.trim()}})
       if(!scope.signal.aborted){setRule(result.continuousRule);setEditing(false)}
     }catch(error){if(!scope.signal.aborted)setError(message(error))}finally{if(!scope.signal.aborted)setBusy(false)}
   }
@@ -224,6 +225,8 @@ function ContinuousProcessing({controller}:{controller:WorkPanelController}) {
       {editing&&options&&<form className={styles.form} aria-label="队列设置" onSubmit={event=>void save(event)}>
         <label>队列来源<select disabled={busy} value={configSourceId} onChange={event=>setConfigSourceId(event.target.value)}>{snapshot.source.sources.map(item=><option key={item.id} value={item.id}>{item.title??item.projectSnapshot?.project.title??(item.repository?`${item.repository.owner}/${item.repository.repository}`:item.id)}</option>)}</select></label>
         <div className={styles.formRow}><label>负责人<select disabled={busy} value={assignee} onChange={event=>setAssignee(event.target.value as '@me'|'*')}><option value="*">所有负责人</option><option value="@me">分配给我</option></select></label><label>必须包含的标签<input disabled={busy} value={labels} onChange={event=>setLabels(event.target.value)} placeholder="逗号分隔；留空不限"/></label></div>
+        <label>大模型筛选提示词<textarea disabled={busy} rows={4} maxLength={10000} value={filterPrompt} onChange={event=>setFilterPrompt(event.target.value)} placeholder="例如：只处理能独立完成的缺陷；排除纯文档、依赖未完成或需要产品决策的事项。"/></label>
+        <p>通过负责人和标签条件后，再由持续处理模型按提示词筛选。留空则只使用上述条件。</p>
         <div className={styles.formRow}><label>更新周期（分钟）<input type="number" min={1} max={10080} required disabled={busy} value={refreshMinutes} onChange={event=>setRefreshMinutes(Number(event.target.value))}/></label><label>并发上限<input type="number" min={1} max={32} required disabled={busy} value={concurrency} onChange={event=>setConcurrency(Number(event.target.value))}/></label><label>等待顺序<select disabled={busy} value={order} onChange={event=>setOrder(event.target.value as 'oldest'|'newest')}><option value="oldest">较早创建优先</option><option value="newest">较新创建优先</option></select></label></div>
         <details><summary>执行目录、模型与权限</summary><div className={styles.formRow}><label>持续处理执行目录<select disabled={busy} value={resource} onChange={event=>setResource(Number(event.target.value))}>{options.resources.map((item,index)=><option key={index} value={index}>{item.title}</option>)}</select></label><label>持续处理模型<select disabled={busy} value={model} onChange={event=>setModel(Number(event.target.value))}>{options.models.map((item,index)=><option key={index} value={index}>{item.provider}/{item.model}</option>)}</select></label><label>Agent 预设<select disabled={busy} value={agentPreset} onChange={event=>setAgentPreset(event.target.value)}>{options.agentPresets.map(item=><option key={item}>{item}</option>)}</select></label><label>权限预设<select disabled={busy} value={permissionPreset} onChange={event=>setPermissionPreset(event.target.value)}>{options.permissionPresets.map(item=><option key={item}>{item}</option>)}</select></label></div></details>
         <p>筛选上述来源的开放 Issue；保存后更新等待部分，在途执行、问题与历史保留。{rule?.enabled?'队列已开启，空余位置按新设置推进。':'保存后仍暂停，点击“继续处理”才启动。'}</p>

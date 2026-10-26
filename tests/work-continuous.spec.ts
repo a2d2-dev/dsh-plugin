@@ -1019,6 +1019,98 @@ it('projects canonical completion after pre-admission failure through the origin
   expect(h.host.sessionsCreated.size).toBe(1)
 })
 
+it('screens only mandatory-scope Issues using full bodies and starts only matching candidates', async () => {
+  const screen = vi.fn(async (basis: import('../src/work-screening.ts').ScreeningBasis) => ({ decisions: basis.candidates.map(issue => ({ nodeId: issue.nodeId, matches: issue.number === 2, reason: issue.number === 2 ? '独立缺陷，可处理' : '纯文档，排除' })) }))
+  const h = await setup(true, { generate: async () => ({ steps: [] }), screen })
+  h.remote.issues[0]!.body = '仅修改文档'; h.remote.issues[1]!.body = '修复可复现的独立缺陷'
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1, filterPrompt: '只处理独立缺陷，排除文档' } }, operator))
+  expect(screen).toHaveBeenCalledOnce()
+  expect(screen.mock.calls[0]![0].candidates.map(issue => [issue.number, issue.body])).toEqual([[1, '仅修改文档'], [2, '修复可复现的独立缺陷']])
+  expect((await h.status()).items.map(item => [item.number, item.state, item.reason ?? item.screening?.reason])).toEqual([[1, 'skipped', '纯文档，排除'], [2, 'active', '独立缺陷，可处理']])
+  expect(h.host.sessionsCreated.size).toBe(1)
+  const restored = new WorkApplication(h.directory, h.host, h.source, { generate: async () => ({ steps: [] }), screen })
+  const rule = await h.status(restored)
+  expect(rule.queue!.filterPrompt).toBe('只处理独立缺陷，排除文档')
+  completed(await restored.execute({ type: 'continuous.refresh', commandId: 'cached-screen', ...h.scope, expectedVersion: rule.version }, operator))
+  expect(screen).toHaveBeenCalledOnce()
+})
+
+it('holds incomplete or failed model screening and retries without starting unclassified work', async () => {
+  const screen = vi.fn(async (): Promise<unknown> => ({ decisions: [] }))
+  const h = await setup(true, { generate: async () => ({ steps: [] }), screen })
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1, filterPrompt: '只处理独立缺陷' } }, operator))
+  expect(h.host.sessionsCreated.size).toBe(0)
+  expect((await h.status()).screeningError?.message).toContain('缺少部分候选')
+  expect((await h.status()).items.every(item => item.state === 'waiting')).toBe(true)
+  screen.mockRejectedValueOnce(new Error('Model temporarily unavailable'))
+  completed(await h.app.execute({ type: 'continuous.refresh', commandId: 'screen-error', ...h.scope, expectedVersion: (await h.status()).version }, operator))
+  expect((await h.status()).screeningError?.message).toContain('temporarily unavailable')
+  expect(h.host.sessionsCreated.size).toBe(0)
+  screen.mockImplementation(async () => ({ decisions: [{ nodeId: 'ISSUE_1', matches: true, reason: '符合独立缺陷条件' }, { nodeId: 'ISSUE_2', matches: false, reason: '不符合' }] }))
+  completed(await h.app.execute({ type: 'continuous.refresh', commandId: 'screen-retry', ...h.scope, expectedVersion: (await h.status()).version }, operator))
+  await h.app.reconcileContinuous()
+  expect((await h.status()).screeningError).toBeUndefined()
+  expect((await h.status()).items[0]!.state).toBe('active')
+  expect(h.host.sessionsCreated.size).toBe(1)
+})
+
+it('rescreens changed Issue bodies and prompts while preserving active work, and clears filtering when empty', async () => {
+  const screen = vi.fn(async (basis: import('../src/work-screening.ts').ScreeningBasis) => ({ decisions: basis.candidates.map(issue => ({ nodeId: issue.nodeId, matches: issue.number === 1, reason: '语义筛选结果' })) }))
+  const h = await setup(true, { generate: async () => ({ steps: [] }), screen })
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1, filterPrompt: '排除文档' } }, operator))
+  const active = await h.execution()
+  h.remote.issues[1]!.body = '正文已改变，必须重新判定'
+  completed(await h.app.execute({ type: 'continuous.refresh', commandId: 'body-change', ...h.scope, expectedVersion: (await h.status()).version }, operator))
+  expect(screen.mock.calls[1]![0].candidates.map(issue => issue.number)).toEqual([2])
+  completed(await h.app.execute({ ...h.configure, commandId: 'prompt-change', expectedVersion: (await h.status()).version, queue: { ...queue, concurrency: 1, filterPrompt: '只要缺陷' } }, operator))
+  expect(screen.mock.calls.at(-1)![0].instruction).toBe('只要缺陷')
+  expect(screen.mock.calls.at(-1)![0].candidates.map(issue => issue.number)).toEqual([2])
+  expect((await h.execution()).id).toBe(active.id)
+  completed(await h.app.execute({ ...h.configure, commandId: 'clear-prompt', expectedVersion: (await h.status()).version, queue: { ...queue, concurrency: 1, filterPrompt: '' } }, operator))
+  expect((await h.status()).items.find(item => item.number === 2)).toMatchObject({ state: 'queued' })
+  expect((await h.status()).items.find(item => item.number === 2)!.screening).toBeUndefined()
+  expect(h.host.sessionsCreated.size).toBe(1)
+})
+
+it('rejects screening results when source content changes while the model is generating', async () => {
+  let h: Awaited<ReturnType<typeof setup>>
+  const screen = vi.fn(async (basis: import('../src/work-screening.ts').ScreeningBasis) => {
+    h.remote.issues[0]!.body = '模型调用期间修改的正文'
+    h.remote.issues[0]!.updatedAt = '2026-01-02T00:00:00.000Z'
+    completed(await h.refresh())
+    return { decisions: basis.candidates.map(issue => ({ nodeId: issue.nodeId, matches: true, reason: '旧正文匹配' })) }
+  })
+  h = await setup(true, { generate: async () => ({ steps: [] }), screen })
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1, filterPrompt: '只处理明确缺陷' } }, operator))
+  expect(h.host.sessionsCreated.size).toBe(0)
+  expect((await h.status()).screeningError?.message).toContain('候选内容发生变化')
+  expect((await h.status()).items.every(item => item.state === 'waiting')).toBe(true)
+})
+
+it('maintains owned work and saves a new prompt while an earlier screening call is still pending', async () => {
+  let release!: () => void, started!: () => void
+  const pending = new Promise<void>(done => { release = done }), entered = new Promise<void>(done => { started = done })
+  const screen = vi.fn(async (basis: import('../src/work-screening.ts').ScreeningBasis) => {
+    if (basis.instruction === '慢筛选') { started(); await pending }
+    return { decisions: basis.candidates.map(issue => ({ nodeId: issue.nodeId, matches: true, reason: basis.instruction })) }
+  })
+  const h = await setup(true, { generate: async () => ({ steps: [] }), screen })
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1 } }, operator))
+  const original = await h.execution(); h.host.idle(original)
+  const slow = h.app.execute({ ...h.configure, commandId: 'slow-prompt', expectedVersion: 1, queue: { ...queue, concurrency: 1, filterPrompt: '慢筛选' } }, operator)
+  try {
+    await entered
+    // No screening result exists yet; control maintenance must still settle owned work.
+    completed(await h.app.execute({ type: 'task.control', commandId: 'pause-during-screen', ...fence(original), action: 'pause', text: '保持既有暂停' }, operator))
+    expect((await h.execution(original.ref)).control?.status).toBe('applied')
+    completed(await h.app.execute({ ...h.configure, commandId: 'new-prompt-during-screen', expectedVersion: 2, queue: { ...queue, concurrency: 1, filterPrompt: '新筛选' } }, operator))
+    expect((await h.status()).queue!.filterPrompt).toBe('新筛选')
+    expect((await h.status()).items.find(item => item.number === 2)!.screening?.reason).toBe('新筛选')
+  } finally { release(); await slow }
+  expect((await h.execution(original.ref)).control?.action).toBe('pause')
+  expect((await h.status()).items.find(item => item.number === 2)!.screening?.reason).toBe('新筛选')
+})
+
 it('reflects explicit Task-page recovery of a pre-admission problem without bypassing queue capacity', async () => {
   const h = await setup(false)
   completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1 } }, operator))

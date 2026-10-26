@@ -1,3 +1,4 @@
+import { SCREENING_PENDING } from '../work-screening.ts'
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import type { ContinuousWorkItem, ContinuousWorkRule } from '../work-types.ts'
@@ -22,7 +23,7 @@ export interface ContinuousDelegationProps {
   children?: ReactNode
 }
 type Filter = 'all' | 'active' | 'queued' | 'human' | 'history'
-const category = (item: ContinuousWorkItem): Exclude<Filter, 'all'> => item.state === 'completed' || item.state === 'skipped' ? 'history' : item.state === 'active' ? 'active' : item.state === 'queued' ? 'queued' : 'human'
+const category = (item: ContinuousWorkItem): Exclude<Filter, 'all'> => item.state === 'completed' || item.state === 'skipped' ? 'history' : item.state === 'active' ? 'active' : item.state === 'queued' || item.reason === SCREENING_PENDING ? 'queued' : 'human'
 const labels: Record<ContinuousWorkItem['state'], string> = { queued: '等待处理', active: '正在处理', completed: '已结束', waiting: '等待人工 / 外部条件', paused: 'Task 已暂停', blocked: '需人工处理', skipped: '已移出等待' }
 
 /** One Project queue; filters and links are local/read-only navigation. */
@@ -53,6 +54,8 @@ export function ContinuousDelegation(props: ContinuousDelegationProps) {
       </div>
     </header>
     {rule && <p className={styles.summary}>负责人：{rule.scope.assignee === '@me' ? rule.scope.identity?.login ?? '当前账号' : '所有负责人'} · 标签：{rule.scope.labels.join('、') || '不限'}{rule.queue ? ` · 每 ${rule.queue.refreshMinutes} 分钟更新 · 并发上限 ${rule.queue.concurrency} · ${rule.queue.order === 'oldest' ? '较早创建优先' : '较新创建优先'}` : ''}</p>}
+    {rule?.queue?.filterPrompt && <details><summary>大模型筛选条件</summary><p style={{whiteSpace:'pre-wrap'}}>{rule.queue.filterPrompt}</p></details>}
+    {rule?.screeningError && <p role="alert" className={styles.cardError}>{rule.screeningError.message}</p>}
     {rule && !rule.queue && <p role="status" className={styles.summary}>旧设置与历史已保留；请在设置中确认后续执行范围。</p>}
     {(state.error || queueError) && <p role="alert" className={styles.cardError}>{state.error ?? `${queueError?.code}: ${queueError?.message}`}</p>}
     {state.pending && !state.busy && <div><p>请求回执尚未确认。</p><button type="button" onClick={() => void controller.retry()}>核对原请求</button></div>}
@@ -62,7 +65,7 @@ export function ContinuousDelegation(props: ContinuousDelegationProps) {
       <tbody>{rows.map(({ item, index }) => <tr key={item.nodeId} data-status={category(item)}>
         <td data-cell="order">{index + 1}</td>
         <td data-cell="task"><button className={styles.taskLink} onClick={() => void props.navigation.openQueueItem(item, props.sourceId)}>#{item.number} {item.title}</button></td>
-        <td data-cell="status"><span>{item.state==='completed'&&(rule?.slots??(rule?.active?[rule.active]:[])).some(ref=>ref.projectId===item.ref?.projectId&&ref.taskId===item.ref?.taskId)?'已验收 · 正在收口':labels[item.state]}</span>{item.reason && <details className={styles.problem}><summary>查看摘要</summary><p>{item.reason}</p></details>}</td>
+        <td data-cell="status"><span>{item.state==='completed'&&(rule?.slots??(rule?.active?[rule.active]:[])).some(ref=>ref.projectId===item.ref?.projectId&&ref.taskId===item.ref?.taskId)?'已验收 · 正在收口':item.reason===SCREENING_PENDING?SCREENING_PENDING:labels[item.state]}</span>{(item.reason || item.screening?.reason) && <details className={styles.problem}><summary>查看摘要</summary><p>{item.reason || item.screening?.reason}</p></details>}</td>
         <td data-cell="session">{item.ref && item.executionId ? <button className={styles.taskLink} onClick={() => void props.navigation.openQueueSession(item.ref!, item.state === 'completed')}>{item.state === 'completed' ? '会话记录' : '进入会话'}</button> : item.taskRef ? <button className={styles.taskLink} onClick={() => void props.navigation.openQueueSession(item.taskRef!, true)}>会话记录</button> : <span className={styles.summary}>尚未开始</span>}</td>
       </tr>)}</tbody></table></div> : <div className={styles.empty} role="status"><strong>{filter === 'all' ? '队列当前为空' : '当前分类没有任务'}</strong><p>{filter === 'all' ? '保存设置并更新等待任务，匹配工作会出现在这里。' : '可切换到全部查看其他任务。'}</p>{filter !== 'all' && <button onClick={() => setFilter('all')}>查看全部</button>}</div>}
     {rule?.planning && <details><summary>已保存委托与排除项</summary><p>{rule.planning.instruction}</p>{rule.planning.supplements.map((text, index) => <p key={index}>{text}</p>)}

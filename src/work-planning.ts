@@ -40,7 +40,10 @@ export type WorkPlanning = z.infer<typeof planningSchema>
 export type PlanningBasis = z.infer<typeof planningBasisSchema>
 export type PlanOutput = z.infer<typeof planOutputSchema>
 /** Explicit test injection or the real host LLM adapter. No heuristic implementation. */
-export interface WorkPlanner { generate(basis: PlanningBasis, model: ContinuousWorkRule['model']): Promise<unknown> }
+export interface WorkPlanner {
+  generate(basis: PlanningBasis, model: ContinuousWorkRule['model']): Promise<unknown>
+  screen?(basis: import('./work-screening.ts').ScreeningBasis, model: ContinuousWorkRule['model']): Promise<unknown>
+}
 export class PlanningError extends Error { constructor(readonly code: string, message: string) { super(message) } }
 
 /** Summarize only error messages, never stacks, generated blocks or request bodies. */

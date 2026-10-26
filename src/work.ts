@@ -1,3 +1,4 @@
+import { screeningBasis, screeningKey, validateScreening } from './work-screening.ts'
 import { workSessionTitles } from './work-session-titles.ts'
 import { refreshRepositoryCandidates } from './work-sources/repository-candidates.ts'
 import { buildExecutionGraph, type ExecutionObservation } from './work-execution/observation.ts'
@@ -86,6 +87,7 @@ export class WorkApplication {
   private readonly dao: WorkDao
   private readonly discoverySchedule = new Map<string, { version: number; persisted: string; next: string }>()
   /** User-triggered source reads currently running; the scheduled pass yields to them. */
+  private readonly screeningJobs = new Map<string, Promise<void>>()
   private refreshCount = 0
   constructor(readonly directory: string, readonly host: WorkHost, readonly source?: GitHubSourcePort, readonly planner?: WorkPlanner) {
     if (!isAbsolute(directory)) throw new Error('Work record directory must be absolute')
@@ -445,7 +447,7 @@ export class WorkApplication {
       ...(previous?.legacyRules ? { legacyRules: previous.legacyRules } : {}),
       ...(previous?.planning ? { planning: { ...previous.planning, scopeVersion: previous.planning.scopeVersion + 1, draftVersion: previous.planning.draftVersion + 1 }, ...(!command.queue && !previous.queue ? { enabled: false } : {}) } : {}),
     }
-    if (command.queue && previous) { delete previous.migrationConflict; delete previous.error }
+    if (command.queue && previous) { delete previous.migrationConflict; delete previous.error; delete previous.screeningError }
     rule.error = sourceScopeError(rule, source)
     if (!rule.error) discoverContinuous(rule, source)
     observeContinuousTasks(state, rule)
@@ -453,14 +455,15 @@ export class WorkApplication {
     else (state.continuousRules ??= []).push(rule)
     return { status: 'completed', continuousRule: previous ?? rule }
   }
-  /** Complete source observation and waiting-only recalculation; never invokes a model or dispatches. */
-  private async refreshContinuous(scope: { projectId: string; sourceId: string; expectedVersion: number }, command?: Extract<WorkCommand, { type: 'continuous.refresh' }>): Promise<WorkResult> {
+  /** Complete source observation and waiting-only model screening; never dispatches. */
+  private async refreshContinuous(scope: { projectId: string; sourceId: string; expectedVersion: number }, command?: Extract<WorkCommand, { type: 'continuous.refresh' }>, waitForScreening = true): Promise<WorkResult> {
     await mkdir(this.directory, { recursive: true, mode: 0o700 })
-    return withFileLock(join(this.directory, 'continuous.refresh'), async () => {
+    let replayed = false
+    const refreshed = await withFileLock(join(this.directory, 'continuous.refresh'), async () => {
       const before = await this.load()
       if (command) {
         const prior = before.commands.find(item => item.commandId === command.commandId)
-        if (prior) return prior.fingerprint === JSON.stringify(command) ? prior.result : failed('command-id-reused', 'Command identity has different content')
+        if (prior) { replayed = true; return prior.fingerprint === JSON.stringify(command) ? prior.result : failed('command-id-reused', 'Command identity has different content') }
       }
       const rule = before.continuousRules?.find(rule => rule.projectId === scope.projectId)
       if (!rule) return failed('continuous-unconfigured', 'Configure the Project queue first')
@@ -471,19 +474,72 @@ export class WorkApplication {
       let scan: WorkResult = { status: 'completed' }
       if (source.repository) scan = await refreshRepositoryCandidates(apply => this.sourceTransaction(apply), scope, this.source)
       else await reconcileProjectSources(apply => this.sourceTransaction(apply), this.source, { ...scope, force: true, maxPagesPerSource: 200 })
-      return this.sourceTransaction(async state => {
+      const refreshed = await this.sourceTransaction(async state => {
         const current = state.continuousRules!.find(item => item.id === rule.id)!
         if (current.version !== scope.expectedVersion) return conflict(current.version)
         const observed = state.sources.find(source => source.id === current.sourceId)!
         current.error = scan.status !== 'completed' ? scan.error : sourceScopeError(current, observed)
         if (current.queue) current.nextRefreshAt = new Date(Date.now() + current.queue.refreshMinutes * 60_000).toISOString()
-        if (!current.error) { discoverContinuous(current, observed); current.lastRefreshedAt = new Date(Date.now()).toISOString() }
+        if (!current.error) { discoverContinuous(current, observed); current.lastRefreshedAt = new Date(Date.now()).toISOString(); delete current.screeningError }
         observeContinuousTasks(state, current)
-        const result: WorkResult = { status: 'completed', continuousRule: current }
-        if (command) this.dao.recordCommand(state, command.commandId, JSON.stringify(command), result)
-        return result
+        return { status: 'completed' as const, continuousRule: current }
       })
+      return refreshed
     })
+    if (replayed || refreshed.status !== 'completed') return refreshed
+    const refreshedRule = refreshed.continuousRule!
+    if (waitForScreening && !refreshedRule.error && refreshedRule.queue?.filterPrompt?.trim()) await this.screenContinuous(refreshedRule.id, scope.expectedVersion)
+    return this.sourceTransaction(async state => {
+      const current = state.continuousRules!.find(item => item.id === refreshedRule.id)!
+      if (current.version !== scope.expectedVersion) return conflict(current.version)
+      const result: WorkResult = { status: 'completed', continuousRule: current }
+      if (command) this.dao.recordCommand(state, command.commandId, JSON.stringify(command), result)
+      return result
+    })
+  }
+  private screenContinuous(ruleId: string, expectedVersion: number): Promise<void> {
+    const key = `${ruleId}:${expectedVersion}`
+    const pending = this.screeningJobs.get(key)
+    if (pending) return pending
+    const job = this.runScreenContinuous(ruleId, expectedVersion).finally(() => { this.screeningJobs.delete(key) })
+    this.screeningJobs.set(key, job)
+    return job
+  }
+  private async runScreenContinuous(ruleId: string, expectedVersion: number): Promise<void> {
+    const snapshot = await this.load(), rule = snapshot.continuousRules!.find(rule => rule.id === ruleId)!
+    if (rule.version !== expectedVersion) return
+    const source = snapshot.sources.find(source => source.id === rule.sourceId)!
+    const basis = screeningBasis(rule, source)
+    try {
+      const decisions: import('./work-screening.ts').ScreeningOutput['decisions'] = []
+      for (let index = 0; index < basis.candidates.length; index += 20) {
+        const batch = { ...basis, candidates: basis.candidates.slice(index, index + 20) }
+        if (!this.planner?.screen) throw new Error('宿主大模型筛选能力不可用')
+        if (JSON.stringify(batch).length > 256 * 1024) throw new Error('候选正文超过模型筛选单批限制，请缩小来源或标签范围')
+        decisions.push(...validateScreening(await this.planner.screen(batch, rule.model), batch).decisions)
+      }
+      await this.sourceTransaction(async state => {
+        const current = state.continuousRules!.find(rule => rule.id === ruleId)!
+        if (current.version !== expectedVersion) return
+        const observed = state.sources.find(source => source.id === current.sourceId)!
+        const keys = new Map(source.observations.map(({ issue }) => [issue.nodeId, screeningKey(rule, source, issue)]))
+        if (sourceScopeError(current, observed) || decisions.some(decision => {
+          const issue = observed.observations.find(row => row.issue.nodeId === decision.nodeId)?.issue
+          return !issue || keys.get(decision.nodeId) !== screeningKey(current, observed, issue)
+        })) throw new Error('筛选期间候选内容发生变化，请刷新重试')
+        for (const decision of decisions) {
+          const item = current.items.find(item => item.nodeId === decision.nodeId)!
+          if (!item.ref && !['blocked', 'completed', 'paused'].includes(item.state)) item.screening = { key: keys.get(decision.nodeId)!, matches: decision.matches, reason: decision.reason }
+        }
+        delete current.screeningError
+        discoverContinuous(current, observed)
+      })
+    } catch (error) {
+      await this.sourceTransaction(async state => {
+        const current = state.continuousRules!.find(rule => rule.id === ruleId)!
+        if (current.version === expectedVersion) current.screeningError = { code: 'screening-failed', message: `大模型筛选失败：${planningModelErrorSummary(error)}。刷新可重试。` }
+      })
+    }
   }
   private async previewContinuous(command: Extract<WorkCommand, { type: 'continuous.preview' }>): Promise<WorkResult> {
     await mkdir(this.directory, { recursive: true, mode: 0o700 })
@@ -541,7 +597,14 @@ export class WorkApplication {
     const configured = (await this.load()).continuousRules
     if (!configured?.length) return
     for (const rule of configured) if (rule.queue && rule.enabled && !rule.migrationConflict && (!rule.nextRefreshAt || Date.parse(rule.nextRefreshAt) <= Date.now())) {
-      await this.refreshContinuous({ projectId: rule.projectId, sourceId: rule.sourceId, expectedVersion: rule.version })
+      await this.refreshContinuous({ projectId: rule.projectId, sourceId: rule.sourceId, expectedVersion: rule.version }, undefined, false)
+    }
+    const screeningSnapshot = await this.load()
+    for (const rule of screeningSnapshot.continuousRules ?? []) {
+      const source = screeningSnapshot.sources.find(source => source.id === rule.sourceId)
+      if (rule.enabled && rule.queue?.filterPrompt?.trim() && !rule.screeningError && !sourceScopeError(rule, source) && screeningBasis(rule, source!).candidates.length) {
+        void this.screenContinuous(rule.id, rule.version).catch(error => { console.warn(`Continuous screening persistence failed: ${planningModelErrorSummary(error)}`) })
+      }
     }
     const lease = join(this.directory, 'continuous.scheduler')
     await withFileLock(lease, async () => {
