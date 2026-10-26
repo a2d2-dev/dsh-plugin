@@ -115,7 +115,7 @@ observe(id, caller): {
 2. 正式 Agent loop 提交真实 tool/call、tool/result；插件 flush 准确 owner 后复查公开交付事实，以 owner/job/registryEpoch/instanceId 识别同一结果。消费后无结果、无 Session 提交和空重读保留 pending，不伪造 collected。持久 collections 保存执行者、目标 jobs、请求交付/消费和核实结果。
 3. 结算后请求 source 仅调用 work_continuation_material。保存材料绑定 TaskRef、execution、source、epoch、specificationVersion 与已观察结果身份集合；补收或结果变化后重新请求材料。插件在相关 executor maintenance 锁内再次读取事实与材料新鲜度，通过后才创建固定 successor。
 4. source maintenance 内调用公开 goals.disarm(exactLiveAgent)，再 goals.get 核实 activation=disarmed 且 Goal id/phase/revision 未改变。无能力时精确记录宿主边界；不伪造人类 pause/resume、不 complete/blocked 未完成 Goal。正式事务才增加一次 epoch，并将 source 写为 retired。独立浏览器协作交接不具有此原生事务或自动 Goal 转移能力，须进入受控流程。
-5. `taken` 后投递固定内容，`delivered` 仅表示投递事实。后继只调用 work_continuation_received，声明准确 operation/material command/epoch；插件 flush 并从其真实 Session 回读成功的 tool/call、tool/result，才进入 `received`。单独声明、deliver 返回、消费消息均不足以确认可读。
+5. 新操作保存 `protocolVersion=1`。缺少该字段的旧 `delivered` 保留历史终态和无读取凭据的事实，查询、冷加载和恢复均不自动重开或补标 received；旧未完结操作才在正常恢复中采用新屏障。对历史终态显式再次接续，会保留原历史并创建新的固定 operation。`taken` 后投递固定内容，`delivered` 仅表示投递事实。后继只调用 work_continuation_received，声明准确 operation/material command/epoch；插件 flush 并从其真实 Session 回读成功的 tool/call、tool/result，才进入 `received`。单独声明、deliver 返回、消费消息均不足以确认可读。
 6. received 后按原业务控制处理后续输入。waiting/paused 后继继续等待；正常可推进执行才投递业务下一步，并继续服从 continuous slot 与所有原权限。
 
 **失败与恢复**：插件的 idle 事件、启动检查及既有低频恢复循环持续负责推进。已消费但缺材料、缺收取结果或缺读取回执时保留具体 error 和准确执行者，不重复空推；新的显式 task.continue 为缺失步骤生成新请求，保留 operation/successor/kickoff 与 epoch。创建/接任/投递失回执通过已固定身份与正式日志回读恢复，接任只提交一次。真实 Goal 的 activation 只退役旧会话，不承诺在后继自动 rearm。
@@ -225,3 +225,20 @@ node node_modules/vitest/vitest.mjs run --configLoader runner --no-cache --confi
 **保留的失败记录**：前两次组合执行分别出现 work-continuous 的不同普通 unit 用例超出既有 5 秒预算，并在超时清理时出现 ENOTEMPTY；没有修改这些用例的 timeout 或断言。分项目最终 unit 151 项全部通过，证明该批断言可完成；不将前两次失败改写成通过。另一次新测试把 it.each 回调第二参数误当 context，已修正测试；一次新 fixture 的 callId 清理顺序错误、一处可选 observation 类型断言和新增 received 的前端穷尽映射均已修正并复验。
 
 **范围与未验证项**：生产改动限定 Work 后端、接续 host/tools/types/schema 与文档；前端只有 received phase 标签和对应终点/接任判断的必要兼容，没有实施 #275 UX。普通真实控制器/Session fixture 证明完整接任；official lane 的已接任 fixture 仅用于隔离读取工具与 Session commit 边界，不能声称该 fixture 验证了真实 GUI 接任。未部署、未构建发布产物、未启动替代服务、未修改 DSH 本体或其他 checkout，未操作 #265/#182/#2104 的真实业务状态。独立浏览器协作仍须进入正式受控接续；没有跨会话 Goal 自动迁移或 rearm 承诺。父 #270 仍不能据本切片判定全部完成。
+
+### 恢复收尾：历史终态与正常推进
+
+**目的与现场**：前实施会话在最终交付前退出。恢复首检为 `00d20bcf9caccf9d9bfa8c373332855b20165e7d`（合入 main `f80ab103d13882efbc370bbb119e1c7dcf01a9e1`），恰有交接列出的 10 个未提交文件，全部保留。本节记录恢复会话新执行的验证，不将先前阶段结果当作当前 head 最终验收。
+
+**根因与行为**：旧协议以 delivered 为终态，直接改为 received 才结束会让 reconcile 重开历史记录；新操作用 protocolVersion=1 进入读取屏障，旧 delivered 保留原始事实。正常操作确认读取后，还须投递 continuation-business 事件，才会执行材料中的 next；waiting/paused 不生成该业务事件。
+
+**步骤与记录**：使用 Node 24.22.1、本树依赖及 `.local/tmp`，先运行现有两项行为测试，4/4 通过（exit 0）。为核实回归敏感性，在同一工作树逐项临时撤去关键行为并立即恢复：移除历史 delivered 终态判定时，三项冷恢复均因实际新增 continuation-read-unconfirmed 失败（exit 1，`.local/issue-274/recovery-red-legacy-behavior.log`）；移除 received 后业务事件时，正常后继虽为 ready/received，却没有写入原 next 的 progress（1 项失败，exit 1，`recovery-red-next-step.log`）。未修改断言或 timeout 来制造通过。
+
+```sh
+PATH=/root/.nvm/versions/node/v24.22.1/bin:$PATH TMPDIR="$PWD/.local/tmp" \
+  pnpm exec vitest run --configLoader runner --no-cache --project host \
+  tests/work-continuation.spec.ts \
+  -t 'legacy delivered|automatically executes the accepted next step|explicitly replaces'
+```
+
+恢复原实现后，上述命令 6/6 通过（exit 0，`.local/issue-274/recovery-green-priority.log`）。历史 ready/waiting/paused 冷加载及重复 reconcile 均保留整个 operation/control、无新模型请求或伪读取确认；新显式接续归档旧操作并生成新身份。正常后继通过真实模型步骤调用 work_control(progress) 执行原 next，而 waiting/paused 在 received 后保持停止。最终隔离回归和正式宿主结果在完成后另记；此阶段不构成父票 GUI 验收。

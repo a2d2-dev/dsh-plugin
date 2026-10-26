@@ -27,7 +27,7 @@ export function reserveContinuation(execution: WorkExecution, task: WorkTask, co
   }
   if (execution.continuation) (execution.continuationHistory ??= []).push(execution.continuation)
   const operationId = randomUUID()
-  execution.continuation = { operationId, commandId, automatic, phase: 'reserved', source: { ...execution.session },
+  execution.continuation = { protocolVersion: 1, operationId, commandId, automatic, phase: 'reserved', source: { ...execution.session },
     successor: { runtimeId: execution.session.runtimeId, sessionId: `session-${randomUUID()}` }, sourceEpoch: execution.epoch,
     materialRequestId: `material-request:${operationId}`, kickoffId: `continuation:${operationId}`,
     ...(execution.actual ? { profile: structuredClone(execution.actual) } : {}),

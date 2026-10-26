@@ -34,6 +34,7 @@ const actualSchema = z.object({ runtimeId: referenceId, cwd: text, agentPreset: 
 const materialSchema = continuationContentSchema.extend({ commandId: referenceId, ref: taskRefSchema, executionId: id, source: sessionRefSchema, epoch: z.number().int().positive(), taskVersion: z.number().int().positive(), specificationVersion: z.number().int().positive(), settlementKey: text.optional() }).strict()
 const deliverySchema = z.enum(['accepted', 'delivered', 'consumed'])
 const continuationOperationSchema = z.object({
+  protocolVersion: z.literal(1).optional(),
   operationId: id, commandId: referenceId, automatic: z.boolean(),
   phase: z.enum(['reserved', 'material-requested', 'material-saved', 'successor-created', 'taken', 'delivered', 'received']),
   source: sessionRefSchema, successor: sessionRefSchema, sourceEpoch: z.number().int().positive(),
@@ -48,7 +49,7 @@ const continuationOperationSchema = z.object({
   inputSeal: z.number().int().nonnegative().optional(),
   requestDelivery: deliverySchema.optional(), kickoffDelivery: deliverySchema.optional(),
   error: z.object({ code: referenceId, message: text }).strict().optional(),
-}).strict()
+}).strict().refine(operation => operation.phase !== 'received' || operation.protocolVersion === 1, 'Readable confirmation requires the versioned step protocol')
 export const executionSchema = z.object({
   id, ref: taskRefSchema, agentId: id, owner: id, epoch: z.number().int().positive(), resource: resourceRefSchema,
   session: sessionRefSchema, sessionMode: z.enum(['create', 'reuse']).default('create'), agentPreset: referenceId, model: modelSchema, permissionPreset: referenceId, policy: policySchema,

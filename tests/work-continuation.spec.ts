@@ -1,6 +1,7 @@
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { createUserMessage, ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { WorkDao } from '../src/work.ts'
 import { ExecutionFixtures } from './work-execution-fixture.ts'
 import { installWorkTools } from '../src/work-execution/tools.ts'
 import type { WorkExecution } from '../src/work-types.ts'
@@ -589,4 +590,79 @@ it('keeps unrelated automatic business rounds fenced while an active source owes
   expect(current).toMatchObject({ execution: { epoch: 1, state: 'ready', continuation: { phase: 'material-requested' } } })
   if (current.status !== 'completed' || !current.execution) throw Error('Missing source')
   expect(current.execution.progress).toBeUndefined()
+})
+
+it.each(['ready', 'waiting', 'paused'] as const)('does not reopen or certify a legacy delivered operation after cold load of %s work', async state => {
+  const h = await setup()
+  h.model.acknowledgeContinuation = false
+  if (state !== 'ready') await h.app.execute({ type: 'task.control', commandId: 'legacy-hold', ...fence(h.execution), action: state === 'waiting' ? 'wait' : 'pause', text: 'Retain the legacy control condition' }, operator)
+  h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+  await h.app.execute({ type: 'task.continue', commandId: 'legacy-delivery-fixture', ...fence(h.execution) }, operator)
+  await fixtures.run(() => h.ctx.agents.get(SessionId(h.execution.session.sessionId))!.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  const delivered = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (delivered.status !== 'completed' || !delivered.execution?.continuation) throw Error('Missing delivered fixture')
+  const successor = delivered.execution.session
+  await fixtures.run(() => h.ctx.agents.get(SessionId(successor.sessionId))!.whenIdle())
+  // Serialize the actual operation using the pre-#274 schema shape. It has
+  // real take/delivery evidence, with no receipt and no protocol discriminator.
+  await WorkDao.forDirectory(h.app.directory).transaction(async snapshot => {
+    const op = snapshot.executions.find(item => item.id === h.execution.id)!.continuation!
+    delete (op as { protocolVersion?: number }).protocolVersion
+    delete op.readable
+    delete op.collections
+    delete op.materialFactsKey
+    delete op.goalActivation
+    delete op.readRequestId
+    if (op.material) delete op.material.settlementKey
+  })
+  await fixtures.dispose(h.ctx)
+  const restored = await fixtures.mount(h.workspace.path)
+  installWorkTools(restored.ctx, restored.app, 'runtime')
+  for (let pass = 0; pass < 2; pass++) {
+    const observed = await restored.app.query({ type: 'task.execution', ref: h.ref }, operator)
+    if (observed.status !== 'completed' || !observed.execution) throw Error('Missing legacy operation')
+    await fixtures.run(() => restored.app.reconcileControls())
+    const reconciled = await restored.app.query({ type: 'task.execution', ref: h.ref }, operator)
+    if (reconciled.status !== 'completed' || !reconciled.execution) throw Error('Missing reconciled legacy operation')
+    expect(reconciled.execution.continuation).toEqual(observed.execution.continuation)
+    expect(continuation.continuationInFlight(observed.execution)).toBe(false)
+  }
+  const legacy = await restored.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(legacy).toMatchObject({ execution: { id: h.execution.id, owner: h.execution.owner, epoch: 2, state, continuation: { operationId: delivered.execution.continuation.operationId, phase: 'delivered' } } })
+  if (legacy.status !== 'completed' || !legacy.execution) throw Error('Missing legacy state')
+  expect(legacy.execution.control).toEqual(delivered.execution.control)
+  expect(legacy.execution.continuation!.readable).toBeUndefined()
+  expect(await restored.app.sessionContinuationReceived(successor, 'late-legacy-receipt', legacy.execution.continuation!.operationId, legacy.execution.continuation!.material!.commandId, 2)).toMatchObject({ status: 'failed', error: { code: 'stale-continuation-receipt' } })
+  expect(restored.model.requests).toHaveLength(0)
+  expect(await fixtures.run(() => restored.ctx.sessionPersistence.list())).toHaveLength(2)
+  const explicitlyStarted = await restored.app.execute({ type: 'task.continue', commandId: 'explicit-new-handoff', ...fence(legacy.execution) }, operator)
+  if (explicitlyStarted.status !== 'completed' || !explicitlyStarted.execution?.continuation) throw Error('New continuation failed')
+  expect(explicitlyStarted.execution.continuation.operationId).not.toBe(legacy.execution.continuation!.operationId)
+  expect(explicitlyStarted.execution.continuation).toMatchObject({ protocolVersion: 1, sourceEpoch: 2 })
+  expect(explicitlyStarted.execution.continuationHistory?.at(-1)).toMatchObject({ phase: 'delivered', operationId: legacy.execution.continuation!.operationId })
+  await fixtures.run(() => restored.ctx.agents.get(SessionId(successor.sessionId))!.whenIdle())
+})
+
+it('automatically executes the accepted next step after a normal successor confirms material', async () => {
+  const h = await setup()
+  h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+  await h.app.execute({ type: 'task.continue', commandId: 'normal-next-step', ...fence(h.execution) }, operator)
+  await fixtures.run(() => h.ctx.agents.get(SessionId(h.execution.session.sessionId))!.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  const delivered = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (delivered.status !== 'completed' || !delivered.execution?.continuation) throw Error('No successor')
+  const successor = h.ctx.agents.get(SessionId(delivered.execution.session.sessionId))!
+  await fixtures.run(() => successor.whenIdle())
+  h.model.nextTool = { name: 'work_control', arguments: { action: 'progress', text: material.next } }
+  await fixtures.run(() => h.app.reconcileControls())
+  await fixtures.run(() => successor.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  const final = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(final).toMatchObject({ execution: { state: 'ready', epoch: 2, owner: h.execution.owner, progress: material.next, continuation: { phase: 'received' } } })
+  if (final.status !== 'completed' || !final.execution) throw Error('Missing final execution')
+  const business = final.execution.events.find(event => event.id === `continuation-business:${delivered.execution!.continuation!.operationId}`)!
+  expect(business.delivery).toBe('consumed')
+  const request = h.model.requests.find(request => request.messages.some(message => message.id === business.id))!
+  expect(JSON.stringify(request.messages)).toContain(material.next)
 })

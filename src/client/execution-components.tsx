@@ -1,5 +1,6 @@
 import type { ContinuationPolicy, SessionRef, TaskRef, WorkExecution } from '../work-types.ts'
 import type { ExecutionGraph, ExecutionJob, ObservedSession } from '../work-execution/observation.ts'
+import { continuationInFlight } from '../work-execution/state.ts'
 import styles from './execution-components.module.css'
 
 export interface ExecutionNavigation {
@@ -136,7 +137,7 @@ export function ExecutionContinuation({ graph, execution, policy, busy = false, 
   const blocked = failed || suspended || pendingControl || execution?.state === 'accepted' || execution?.state === 'creating'
   return <section className={styles.surface} aria-label="接续">
     <div className={styles.sectionHead}><h2>接续</h2>
-      {(onContinue || completed) && <button type="button" className={styles.primaryAction} disabled={completed || busy || blocked || !execution?.actual || !onContinue} onClick={completed ? undefined : onContinue}>{completed ? '准备接续' : busy ? '正在准备接续…' : op?.phase === 'taken' ? '重试内容投递' : op && op.phase !== 'received' ? '重试本次接续' : '准备接续'}</button>}
+      {(onContinue || completed) && <button type="button" className={styles.primaryAction} disabled={completed || busy || blocked || !execution?.actual || !onContinue} onClick={completed ? undefined : onContinue}>{completed ? '准备接续' : busy ? '正在准备接续…' : op?.phase === 'taken' ? '重试内容投递' : execution && continuationInFlight(execution) ? '重试本次接续' : '准备接续'}</button>}
       {!completed && failed && onRecover && <button type="button" disabled={busy} onClick={onRecover}>重试原执行</button>}
       {!completed && suspended && !pendingControl && onResume && <button type="button" disabled={busy} onClick={onResume}>恢复处理</button>}
     </div>

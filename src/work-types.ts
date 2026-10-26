@@ -13,6 +13,8 @@ export interface ProjectAgent { id: string; projectId: string; role: 'coordinato
 export interface ContinuationPolicy { version: number; enabled: boolean; targetTokens: number; reserveTokens: number }
 export interface ContinuationObservation { totalTokens: number; logRevision: number; baseline: 'usage' | 'estimated' | 'none'; capacity: number; outputReserve: number; routeKey: string; observedAt: string }
 export interface ContinuationOperation {
+  /** Absent means the pre-#274 contract: delivered is terminal without read proof. */
+  protocolVersion?: 1
   operationId: string; commandId: string; automatic: boolean
   phase: 'reserved' | 'material-requested' | 'material-saved' | 'successor-created' | 'taken' | 'delivered' | 'received'
   source: SessionRef; successor: SessionRef; sourceEpoch: number

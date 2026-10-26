@@ -38,7 +38,7 @@
 
 终态 pending jobs 先在维护锁外向准确 owner 发出补收请求，由该会话的真实模型步骤调用正式 job_output。插件 flush owner Session 后复查正式交付事实；运行中、unknown、权限拒绝、消费后未提交成功结果和空重读均不伪造 collected。补收后的材料按 execution/source/epoch/specification 与结果身份集合校验，结果改变即重新请求材料；随后才进入相关执行者锁内重查并接任。
 
-投递与可读分别持久记录：`taken → delivered → received`。后继用 work_continuation_received 声明读取准确 material command；插件读取该准确 Session 中成功提交的 tool/call、tool/result 并 flush 后确认。投递返回或单独写入声明不足以进入 received。消费但未产生结果保留具体错误，新显式重试只换该步骤请求身份，沿用 operation/successor/epoch。
+新操作持久写入 protocolVersion=1，投递与可读分别持久记录：`taken → delivered → received`。后继用 work_continuation_received 声明读取准确 material command；插件读取该准确 Session 中成功提交的 tool/call、tool/result 并 flush 后确认。投递返回或单独写入声明不足以进入 received。旧记录没有 protocolVersion；其中 delivered 继续保留历史终态“已投递、没有新读取确认”，冷加载/观察/恢复不重开，也不改标 received。只有未完结旧操作在合法恢复时采用新屏障；对旧终态显式新接续则归档原历史并预留一个新操作。消费但未产生结果保留具体错误，新显式重试只换该步骤请求身份，沿用 operation/successor/epoch。
 
 受控接任在 source maintenance 内通过公开 goals.disarm(exactLiveAgent) 撤销旧 activation，并 goals.get 回读确认 id/phase/revision 不变、activation=disarmed。无公开能力且无法证明旧 Goal 已退役时保留准确宿主能力阻塞；不修改 DSH，不冒充人类 pause/resume，不以 complete/blocked 收口未完成 Goal。独立浏览器协作不会自动成为原生接任，须使用该受控流程；这里不提供跨会话 Goal 迁移或自动 rearm。
 

@@ -299,7 +299,7 @@ export class WorkApplication {
     return this.sourceTransaction(async state => {
       const execution = state.executions.find(item => sameSession(item.session, session))
       const op = execution?.continuation
-      if (!execution || !op || op.operationId !== operationId || !['taken', 'delivered'].includes(op.phase)
+      if (!execution || !op || op.protocolVersion !== 1 || op.operationId !== operationId || !['taken', 'delivered'].includes(op.phase)
         || !sameSession(session, op.successor) || execution.epoch !== epoch || epoch !== op.sourceEpoch + 1
         || op.material?.commandId !== materialCommandId) return { status: 'failed' as const, error: { code: 'stale-continuation-receipt', message: 'Only the fixed current successor can acknowledge this exact material and epoch' } }
       op.readable = { callId, materialCommandId }
@@ -959,7 +959,7 @@ export class WorkApplication {
     try {
       if (!this.host.execution?.measure) throw new WorkExecutionError('continuation-meter-unavailable', 'Automatic continuation requires public host token measurement')
       observation = await this.host.execution.measure(execution)
-      if (!execution.continuationObservation && execution.continuation?.phase === 'received' && execution.continuation.sourceEpoch + 1 === execution.epoch && observation.totalTokens >= policy.targetTokens) throw new WorkExecutionError('continuation-target-too-small', 'The first measured successor context already reaches this soft target; increase the target or continue manually instead of repeatedly rotating the same material')
+      if (!execution.continuationObservation && execution.continuation && ['received', 'delivered'].includes(execution.continuation.phase) && execution.continuation.sourceEpoch + 1 === execution.epoch && observation.totalTokens >= policy.targetTokens) throw new WorkExecutionError('continuation-target-too-small', 'The first measured successor context already reaches this soft target; increase the target or continue manually instead of repeatedly rotating the same material')
       if (policy.targetTokens + policy.reserveTokens + observation.outputReserve > observation.capacity) throw new WorkExecutionError('continuation-policy-invalid', 'Context target plus handoff reserve and model output reserve exceeds exact model capacity')
       if (execution.continuationObservation && observation.routeKey !== execution.continuationObservation.routeKey) throw new WorkExecutionError('continuation-route-changed', 'Exact model route or capacity changed; explicitly reconfigure continuation before advancing')
     } catch (cause) { error = { code: cause instanceof WorkExecutionError ? cause.code : 'continuation-observation-failed', message: cause instanceof Error ? cause.message : 'Continuation observation failed' } }
@@ -980,6 +980,9 @@ export class WorkApplication {
       change(current)
       return current
     })
+    // Only unfinished legacy operations adopt the new barrier. Historical
+    // delivered records remain terminal and never enter this recovery path.
+    if (execution.continuation!.protocolVersion === undefined && execution.continuation!.phase !== 'delivered') execution = await save(current => { current.continuation!.protocolVersion = 1 })
     const sealInput = async () => {
       if (!host.sealInput) throw new WorkExecutionError('host-capability-unavailable', 'Durable source intake sealing is unavailable')
       const operation = execution.continuation!
