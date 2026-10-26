@@ -3,6 +3,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import Subagents from '@deepseek-ai/dsh-subagent'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import { installWorkTools } from '../src/work-execution/tools.ts'
 import { installWorkProgressTools } from '../src/work-progress-tools.ts'
 import { RuntimeHost } from '../src/task-runtime/host.ts'
 import { ExecutionFixtures } from './work-execution-fixture.ts'
@@ -137,5 +138,64 @@ it('keeps native continuable result intake authorized until the settled notice r
     const final = ok(await h.app.query({ type: 'task.detail', ref }, operator))
     expect(final.task!.completion!.closeout.status).toBe('settled')
     expect(final.execution).toMatchObject({ id: execution.id, owner: execution.owner, epoch: execution.epoch, session: execution.session })
+  } finally { release?.(); await fixtures.close() }
+})
+
+it.for(['ready', 'waiting', 'paused'] as const)('continues the same operation after a running native child settles under %s control', async (state, { signal }) => {
+  const fixtures = new ExecutionFixtures(signal)
+  let release!: () => void
+  try {
+    const h = await fixtures.mount(await fixtures.root(), 'read-only')
+    await h.ctx.plugin(Subagents, { maxActiveSubagents: 8, maxDepth: 1 })
+    h.ctx.subagents.registerProvider({ name: 'fresh-local', capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false }, inheritsParentContext: false,
+      async prepareContinuable() { return {} }, async start() { throw Error('Only native continuable creation is used') } })
+    installWorkTools(h.ctx, h.app, 'runtime')
+    let entered!: () => void
+    const started = new Promise<void>(resolve => { entered = resolve })
+    const gate = new Promise<void>(resolve => { release = resolve })
+    h.ctx.tools.register(defineTool({ name: 'hold_native', description: 'Deterministic result producer', parameters: {},
+      output: { schema: { type: 'object', additionalProperties: false, properties: { result: { type: 'string', required: true } } }, render: (_, value) => [{ type: 'text', text: value.result }] },
+      async execute() { entered(); await gate; return { result: 'late native evidence' } } }))
+    const resource = { runtimeId: 'runtime', workspaceId: h.workspace.id }
+    const project = ok(await h.app.execute({ type: 'project.create', commandId: 'project', name: 'native continuation', resource }, operator)).project!
+    const task = ok(await h.app.execute({ type: 'task.create', commandId: 'task', projectId: project.id, title: 'native', goal: 'verify', specification: 'native continuation', acceptance: ['verified'] }, operator)).task!
+    const ref = { projectId: project.id, taskId: task.id }
+    const execution = ok(await h.app.execute({ type: 'task.start', commandId: 'start', ref, expectedVersion: task.version, agentId: task.agentId, resource, model: { provider: 'contract', model: 'default' }, agentPreset: 'contract', permissionPreset: 'read-only' }, operator)).execution!
+    const fence = { ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch }
+    const parent = h.ctx.agents.get(SessionId(execution.session.sessionId))!
+    await fixtures.run(() => parent.whenIdle())
+    if (state !== 'ready') await h.app.execute({ type: 'task.control', commandId: 'hold', ...fence, action: state === 'waiting' ? 'wait' : 'pause', text: 'Keep original control' }, operator)
+    const held = ok(await h.app.query({ type: 'task.execution', ref }, operator)).execution!
+    h.model.nextTool = { name: 'hold_native', arguments: {} }
+    const child = await fixtures.run(() => h.ctx.subagents.startContinuable({ provider: 'fresh-local', label: 'late verification', request: { parent, prompt: [{ type: 'text', text: 'Produce late native evidence' }] }, signal: signal! }))
+    await started
+    const reserved = ok(await h.app.execute({ type: 'task.continue', commandId: 'continue-with-live-child', ...fence }, operator)).execution!
+    const op = reserved.continuation!
+    expect(reserved).toMatchObject({ epoch: 1, continuation: { phase: 'reserved', error: { code: 'continuation-waiting-executions' } } })
+    // Release only after reservation. Subagents itself must deliver the notice;
+    // this test never creates a subagent-settled message or appends user/message.
+    const childAgent = h.ctx.agents.get(child.childId)!
+    release()
+    await fixtures.run(() => childAgent.whenIdle())
+    await expect.poll(async () => (await new RuntimeHost(h.ctx).events(parent.id)).filter(event => event.type === 'user/message' && event.data.source?.kind === 'subagent-settled' && event.data.source.senderSessionId === child.childId).length).toBe(1)
+    await fixtures.run(() => parent.whenIdle())
+    await fixtures.run(() => h.ctx.sessions.flush(parent.session))
+    expect((await h.host.execution.observation!(reserved)).sessions.find(row => row.role === 'current')!.children).toContainEqual(expect.objectContaining({ session: { runtimeId: 'runtime', sessionId: child.childId }, result: 'consumed' }))
+    const material = { body: 'Keep late native evidence from the exact child history.', decisions: 'Retain original Task and owner.', evidence: `Child ${child.childId} returned late native evidence.`, unfinished: 'Verify successor', next: 'Use the late native result to advance the original acceptance.' }
+    h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+    await h.app.reconcileControls()
+    await fixtures.run(() => parent.whenIdle())
+    await h.app.reconcileControls()
+    await fixtures.run(() => h.ctx.agents.get(SessionId(op.successor.sessionId))!.whenIdle())
+    if (state === 'ready') h.model.nextTool = { name: 'work_control', arguments: { action: 'progress', text: material.next } }
+    await h.app.reconcileControls()
+    await fixtures.run(() => h.ctx.agents.get(SessionId(op.successor.sessionId))!.whenIdle())
+    await h.app.reconcileControls()
+    const final = ok(await h.app.query({ type: 'task.execution', ref }, operator)).execution!
+    expect(final).toMatchObject({ id: execution.id, owner: execution.owner, epoch: 2, session: op.successor, state, continuation: { operationId: op.operationId, successor: op.successor, phase: 'received', material } })
+    expect(final.control).toEqual(held.control)
+    expect(final.progress).toBe(state === 'ready' ? material.next : undefined)
+    await h.app.reconcileControls()
+    expect(ok(await h.app.query({ type: 'task.execution', ref }, operator)).execution!.epoch).toBe(2)
   } finally { release?.(); await fixtures.close() }
 })
