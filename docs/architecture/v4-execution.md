@@ -244,3 +244,22 @@ PATH=/root/.nvm/versions/node/v24.22.1/bin:$PATH TMPDIR="$PWD/.local/tmp" \
 恢复原实现后，上述命令 6/6 通过（exit 0，`.local/issue-274/recovery-green-priority.log`）。历史 ready/waiting/paused 冷加载及重复 reconcile 均保留整个 operation/control、无新模型请求或伪读取确认；新显式接续归档旧操作并生成新身份。正常后继通过真实模型步骤调用 work_control(progress) 执行原 next，而 waiting/paused 在 received 后保持停止。最终隔离回归和正式宿主结果在完成后另记；此阶段不构成父票 GUI 验收。
 
 验收清单的重复读取确认另有真实红→绿：在成功提交且进入 received 后，重放同一准确回执原先返回 stale-continuation-receipt（exit 1，`recovery-red-receipt-replay.log`）。修复只让该已确认终态返回同一成功结果，仍核对准确 successor/operation/material/epoch，并保留原 readable 与整个 execution。定点 `-t 'keeps delivery distinct'` 1/1 通过（exit 0，`recovery-green-receipt-replay.log`）；重复确认不会新增业务事件或再次接任。
+
+### 恢复后的最终后端验证
+
+**目的**：对最终代码提交 `eabdd628a1aec7a4b7e10f1cabd15089b1d6ed05` 重新验收，不使用旧会话最后未知结果或旧基线成功替代。本轮从本树已安装的 frozen-lock 依赖运行；锁文件未改。后续提交仅补充本验证文档。
+
+**步骤**：沿用上节完整 unit/host 文件清单，显式指定 `--configLoader runner --no-cache --maxWorkers=1 --project unit` 或 `--project host`；两项目与 official lane 顺序运行，PATH 指向 Node 24.22.1，TMPDIR 为本树 ext2/ext3 的 `.local/tmp`。`pnpm typecheck` 也在最终代码上执行。official 命令仍指定上节相同的 DSH_OFFICIAL_HOST_ROOT，场景内部断言正式 checkout 干净、HEAD 与版本一致。
+
+| 检查 | 结果 | 退出码 | 忽略目录中的原始日志 |
+| --- | --- | --- | --- |
+| unit：continuous、jobs/正式收取/失联/观察、三个相关客户端组件文件 | 8 文件，151 项通过 | 0 | `.local/issue-274/recovery-unit-eabdd62.log` |
+| host：continuation、execution、boundary、Goal replay、continuous integration、lifecycle | 6 文件，84 项通过 | 0 | `.local/issue-274/recovery-host-final.log` |
+| pnpm typecheck | 后端与客户端 tsc 均通过 | 0 | `.local/issue-274/recovery-typecheck-final.log` |
+| official-jobs.config.ts | 1 个完整场景通过，9318ms | 0 | `.local/issue-274/recovery-official-final.log` |
+| pnpm verify:repository | 元数据、10 个 mount rows 与源排除规则通过 | 0 | `.local/issue-274/recovery-repository.log` |
+| pnpm test:node | 28 项通过，2 项既有可选 real-host 测试按默认条件跳过 | 0 | `.local/issue-274/recovery-node.log` |
+
+**记录**：host 的 execution 38 项包含主干 #277 的 live/cold、create/reuse、danger-full-access/read-only 权限恢复；continuation 34 项包含历史终态、真实 next、材料请求刷新、读取失败冷恢复与成功回执重放。official provenance 为 Node v24.22.1、HEAD `22ddee3792402c3e70ec5f86a63c3e3e895a2f60`、0.2.1-rc.3；真实准确 owner 正式补收、Session 提交/flush、读取工具、失败提交与空重读仍 pending、Goal activation 不改持久状态均通过。所有本会话验证作业的退出结果均通过正式 job_output 收取；未跨 owner 操作旧作业。
+
+本轮完整回归没有非预期测试失败、超时或 ENOTEMPTY；先前两次组合失败记录仍保留，未修改 timeout、断言或配置，也不据本轮通过推断旧超时根因。这里只验证所列后端和组件合同，没有执行完整仓库 pnpm test 或既有 GUI 实测；完整前端、真实浏览器协作方式与 #259/#268 原完整模式仍待 #275/#276，不提前确认父票全部验收。
