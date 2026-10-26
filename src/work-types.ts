@@ -24,6 +24,7 @@ export interface ContinuationOperation {
   goal: string; specification: WorkSpecification; title: string
   history: { ref: TaskRef; session: SessionRef }
   collections?: { session: SessionRef; jobs: { id: string; registryEpoch?: string; instanceId?: string }[]; requestId: string; delivery: 'accepted' | 'delivered' | 'consumed'; status: 'requested' | 'collected' }[]
+  settlements?: { parent: SessionRef; child: SessionRef; endSeq: number; messageId: string; delivery: 'accepted' | 'delivered' | 'consumed' }[]
   materialFactsKey?: string
   goalActivation?: { status: 'none' | 'disarmed'; goalId?: string; revision?: number; phase?: string }
   readable?: { callId: string; materialCommandId: string }

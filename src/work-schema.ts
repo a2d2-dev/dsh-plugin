@@ -42,6 +42,7 @@ const continuationOperationSchema = z.object({
   goal: text, specification: specificationSchema, title: text,
   history: z.object({ ref: taskRefSchema, session: sessionRefSchema }).strict(),
   collections: z.array(z.object({ session: sessionRefSchema, jobs: z.array(z.object({ id: referenceId, registryEpoch: referenceId.optional(), instanceId: referenceId.optional() }).strict()), requestId: referenceId, delivery: deliverySchema, status: z.enum(['requested', 'collected']) }).strict()).optional(),
+  settlements: z.array(z.object({ parent: sessionRefSchema, child: sessionRefSchema, endSeq: z.number().int().nonnegative(), messageId: referenceId, delivery: deliverySchema }).strict()).optional(),
   materialFactsKey: text.optional(),
   goalActivation: z.object({ status: z.enum(['none', 'disarmed']), goalId: referenceId.optional(), revision: z.number().int().positive().optional(), phase: referenceId.optional() }).strict().optional(),
   readable: z.object({ callId: referenceId, materialCommandId: referenceId }).strict().optional(),

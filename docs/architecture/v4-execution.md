@@ -122,6 +122,12 @@ observe(id, caller): {
 
 **完成判据**：当前协调记录指向固定 successor、epoch 恰增一次、正式收到并可读的材料已核实、原控制及槽位资格保留。后端测试与正式 jobs/Goal lane 使用明确的隔离 fixture，不能替代父 #270 要求的既有 GUI 实测；本切片不部署或改动任何真实业务 Task。
 
+### 原生子会话结算维护（PR #282 R1）
+
+接续 reservation 会关闭普通自动业务轮次，但原生 child 的最新结算仍须进入准确父 Session 的 `user/message`。`settle` 维护步读取父 `subagent/catalog`、child 的 `origin/parentSession/descriptor`、最新 `turn/end` 与原生通知首次 durable inbox insertion，绑定同一 operation、准确 parent/child、endSeq 和 messageId；重放旧通知不能刷新其首次入箱时间。该轮只准入核验过的完整通知，所有工具（含嵌套工具）均被围栏拒绝。任意维护 marker 不取得此准入。插件持久保存 settlements 的交付进度，恢复检查可经原生 inbox 重投尚未消费的原通知；只有正式父日志消费并覆盖 child 最新结束后，原生结果门才解除。jobs 和 child 最新结束身份一起构成材料新鲜度，不能复用旧结算材料。
+
+**真实晚到结果场景**：source idle 时启动正式 continuable child，以真实工具确定性挂起；先 `task.continue` 预留 operation，再释放 child。`Subagents` 自行生成结算通知，测试不直接创建通知或 append user/message。Node 22.23.1 下 `pnpm exec vitest run --project host tests/work-completion-native.spec.ts -t 'running native child'` 在修复前 ready/waiting/paused 三项均失败：准确父 user/message 数量为 0（exit 1，`.local/issue-274/r1/red-late-child-contract.log`）。首个 fixture 参数错误单列 `.local/issue-274/r1/red-late-child.log`，不算产品红灯。修复后完整同文件 5/5 通过（exit 0，`.local/issue-274/r1/green-late-child-attempt.log`），保留 control、owner 与 operation/successor，最终 received 且 epoch=2；正常控制执行原 next，waiting/paused 不写业务进展。第二条 job 补收与最终回归结果另记，不以该阶段通过代替全部验收。
+
 ### 已验收任务的接续入口
 
 原生会话「A²D² 接续」与 Issue「接续」页从 `task.detail` 的 `task.completion`、`progress.completion` 或 `progress.processingState === 'completed'` 读取 Task 完成事实，传入 `ExecutionContinuation.completed`。完成后保留置灰的「准备接续」，并显示「任务阶段：done（已验收完成）」和「任务已验收完成，不能继续接续」。该参数即使与 handler 同时传入也会禁用动作；handler 仍由当前协调关联等既有资格判断提供，缺少 handler 不伪造可用能力，未完成的历史或评审会话沿用隐藏行为。原生会话 Completed/idle、Goal 与 GitHub closed 均不推断 Task 完成；完成显示不改变 owner、epoch 或 Task 状态。

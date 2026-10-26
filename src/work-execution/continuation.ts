@@ -50,7 +50,10 @@ export function maintenanceEvent(operation: ContinuationOperation, step: 'materi
 
 /** Identity/freshness proof, independent of registry iteration order and labels. */
 export function continuationFactsKey(facts: import('./observation.ts').ExecutionObservation): string {
-  return createHash('sha256').update(JSON.stringify(facts.sessions.flatMap(row => row.jobs.map(job => [row.session.runtimeId, row.session.sessionId, job.id, job.registryEpoch ?? null, job.instanceId ?? null, job.status, job.availability ?? null, job.delivery])).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))))).digest('hex')
+  return createHash('sha256').update(JSON.stringify({
+    jobs: facts.sessions.flatMap(row => row.jobs.map(job => [row.session.runtimeId, row.session.sessionId, job.id, job.registryEpoch ?? null, job.instanceId ?? null, job.status, job.availability ?? null, job.delivery])).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+    children: facts.sessions.flatMap(row => row.children.map(child => [row.session.runtimeId, row.session.sessionId, child.session.runtimeId, child.session.sessionId, child.mode, child.endSeq ?? null, child.attempt?.turn ?? null, child.result])).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+  })).digest('hex')
 }
 export function collectionRequest(operation: ContinuationOperation, step: NonNullable<ContinuationOperation['collections']>[number]): string {
   return `Lifecycle maintenance only for operation ${operation.operationId}. In this exact owner Session, call the formal job_output tool for each of these completed jobs: ${step.jobs.map(job => job.id).join(', ')}. Keep every full real result in this Session. Do not call jobs.read, no-log tools.execute or invent a turn/step. Stop after collection; do not save material or resume business work. The plugin will flush, re-observe delivery, and separately request fresh source material. Existing waiting/paused control remains effective.`

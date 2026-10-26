@@ -68,6 +68,8 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       }
       const decision = await next()
       if (decision.kind === 'reject') return decision
+      const scope = this.maintenanceTurns.get(agent)
+      if (scope?.step === 'settle') decision.messages = decision.messages.filter(message => scope.messageIds!.includes(message.id))
       this.admittedTurns.set(agent, turn)
       if (human && this.pendingHumanInput) {
         const pending = await this.pendingHumanInput(agent.id)
@@ -94,7 +96,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       if (!scope) return
       const allowed = scope.step === 'material' ? exec.name === 'work_continuation_material'
         : scope.step === 'receive' ? exec.name === 'work_continuation_received'
-        : exec.name === 'job_output' && scope.jobIds?.includes(String((exec.arguments as { job_id?: unknown } | undefined)?.job_id))
+        : scope.step === 'collect' && exec.name === 'job_output' && scope.jobIds?.includes(String((exec.arguments as { job_id?: unknown } | undefined)?.job_id))
       if (!allowed || exec.parent) return `Continuation ${scope.operationId} permits only its ${scope.step} maintenance step; business tools require explicit Task resume`
     }), 'narrow continuation maintenance tools') })
     this.ctx.on('tools/result', exec => { this.activeTools.delete(exec.token) })

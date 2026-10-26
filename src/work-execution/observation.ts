@@ -25,6 +25,9 @@ export interface NativeExecution {
   result: ResultState
   returned?: boolean
   attempt?: { turn: number; reason?: string }
+  endSeq?: number
+  /** Original unconsumed native inbox notice, covering this exact latest end. */
+  settlement?: { message: import('../work-types.ts').NativeWorkMessage; endSeq: number }
 }
 export interface ObservedSession {
   session: SessionRef

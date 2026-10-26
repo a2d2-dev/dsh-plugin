@@ -120,6 +120,23 @@ export class WorkApplication {
       for (const owner of state.executions) {
         const op = owner.continuation
         if (!op || !continuationInFlight(owner) || isTaskCompleted(taskAt(state, owner.ref))) continue
+        if (owner.epoch === op.sourceEpoch && sameSession(owner.session, op.source) && messages.length && this.host.execution?.observation
+          && messages.every(message => (message.source as { kind?: string } | undefined)?.kind === 'subagent-settled')) {
+          const facts = await this.host.execution.observation(owner)
+          const parent = facts.sessions.find(row => row.session.sessionId === sessionId)
+          const notices = parent?.children.filter(child => child.settlement && messages.some(message => JSON.stringify(message) === JSON.stringify(child.settlement!.message))) ?? []
+          if (notices.length === messages.length) return this.dao.transaction(async current => {
+            const execution = current.executions.find(item => item.id === owner.id)!
+            const operation = execution.continuation
+            if (!operation || operation.operationId !== op.operationId || !continuationInFlight(execution) || execution.epoch !== op.sourceEpoch || !sameSession(execution.session, op.source)
+              || isTaskCompleted(taskAt(current, execution.ref))) return false
+            for (const child of notices) {
+              const notice = child.settlement!
+              if (!operation.settlements?.some(step => step.messageId === notice.message.id)) (operation.settlements ??= []).push({ parent: parent!.session, child: child.session, endSeq: notice.endSeq, messageId: notice.message.id, delivery: 'delivered' })
+            }
+            return { operationId: operation.operationId, step: 'settle' as const, messageIds: notices.map(child => child.settlement!.message.id) }
+          })
+        }
         const step = op.collections?.find(step => step.status === 'requested' && step.session.sessionId === sessionId)
         if (step && messages.some(message => message.id === step.requestId && JSON.stringify(message.source) === JSON.stringify({ kind: 'a2d2-work-maintenance', operationId: op.operationId, step: 'collect' }))) return { operationId: op.operationId, step: 'collect', jobIds: step.jobs.map(job => job.id) }
       }
@@ -1030,7 +1047,27 @@ export class WorkApplication {
           const delivered = step.jobs.every(expected => jobs.some(job => sameSession(job.owner, step.session) && job.id === expected.id && job.registryEpoch === expected.registryEpoch && job.instanceId === expected.instanceId && job.delivery === 'delivered'))
           if (delivered && step.status !== 'collected') execution = await save(current => { current.continuation!.collections!.find(item => item.requestId === step.requestId)!.status = 'collected'; delete current.continuation!.error })
         }
+        for (const step of execution.continuation!.settlements ?? []) {
+          await host.flushSession(step.parent)
+          const delivery = await host.observe({ ...execution, session: step.parent }, { id: step.messageId, text: 'Native child settlement', kind: 'result', delivery: step.delivery, acceptance: 'unassessed' })
+          execution = await save(current => {
+            current.continuation!.settlements!.find(item => item.messageId === step.messageId)!.delivery = delivery
+            if (delivery === 'consumed') for (const event of current.events) if (event.id === step.messageId) event.delivery = 'consumed'
+          })
+        }
         if (facts.settlement !== 'settled') {
+          const notices = facts.sessions.flatMap(parent => parent.children.flatMap(child => child.settlement ? [{ parent: parent.session, child: child.session, ...child.settlement }] : []))
+          if (notices.length) {
+            execution = await save(current => {
+              const op = current.continuation!
+              for (const notice of notices) if (!op.settlements?.some(step => step.messageId === notice.message.id)) (op.settlements ??= []).push({ parent: notice.parent, child: notice.child, endSeq: notice.endSeq, messageId: notice.message.id, delivery: 'accepted' })
+            })
+            for (const notice of notices) {
+              const delivery = await host.deliver({ ...execution, session: notice.parent }, { id: notice.message.id, text: 'Native child settlement', kind: 'result', delivery: 'accepted', acceptance: 'unassessed', nativeMessage: notice.message })
+              execution = await save(current => { current.continuation!.settlements!.find(step => step.messageId === notice.message.id)!.delivery = delivery })
+            }
+            return execution
+          }
           const pending = facts.blockers.filter(blocker => blocker.code === 'job-unsettled')
           if (!pending.length || facts.blockers.length !== pending.length) throw new WorkExecutionError('continuation-waiting-executions', `Lifecycle prerequisites remain unresolved: ${facts.blockers.map(blocker => `${blocker.code}:${blocker.session.sessionId}:${blocker.jobId ?? ''}`).join(', ')}`)
           for (const blocker of pending) {
