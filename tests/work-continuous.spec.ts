@@ -20,7 +20,7 @@ const model = { provider: 'fake', model: 'exact', reasoningEffort: 'high' }
 const choices = { agentPresets: ['agent'], permissionPresets: ['safe'], models: [model], defaults: { agentPreset: 'agent', permissionPreset: 'safe', model } }
 function completed(result: WorkResult): WorkCompleted { expect(result, JSON.stringify(result)).toHaveProperty('status', 'completed'); return result as WorkCompleted }
 class Host implements WorkHost {
-  authorize!: (session: string, messages?: readonly NativeWorkMessage[]) => Promise<boolean>
+  authorize!: (session: string, messages?: readonly NativeWorkMessage[]) => Promise<import('../src/work-execution/host.ts').WorkAdmission>
   allowed = new Map<string, () => Promise<boolean>>()
   sessionsCreated = new Set<string>()
   statuses = new Map<string, 'running' | 'idle'>()

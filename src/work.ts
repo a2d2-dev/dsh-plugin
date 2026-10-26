@@ -18,7 +18,7 @@ import { applySourceCommand, refreshSource, sourceResult } from './work-sources/
 import type { GitHubSourcePort } from './work-sources/types.ts'
 import type { WorkSnapshot } from './work-schema.ts'
 import { WorkExecutionError } from './work-execution/host.ts'
-import { continuationInFlight, MANAGED_WORK_INSTRUCTIONS, materialRequest, reserveContinuation, successorMessage } from './work-execution/continuation.ts'
+import { continuationInFlight, MANAGED_WORK_INSTRUCTIONS, maintenanceEvent, materialRequest, reserveContinuation, successorMessage } from './work-execution/continuation.ts'
 import { applyTaskOrganization, taskStructureBlocker } from './work-organization.ts'
 import { isCanonicalChild } from './work-migrate.ts'
 import { applyTaskReport, projectProgress, taskProgressView } from './work-progress.ts'
@@ -116,6 +116,13 @@ export class WorkApplication {
       if (initial && messages.length > 0 && initial.continuationPolicy?.enabled && !continuationInFlight(initial)) {
         await this.observeContinuation(initial.id)
         state = await this.load()
+      }
+      const maintenance = state.executions.find(item => item.continuation && item.session.sessionId === sessionId)
+      const operation = maintenance?.continuation
+      if (operation && !isTaskCompleted(taskAt(state, maintenance!.ref))) {
+        const step = operation.phase === 'material-requested' ? 'material' : operation.phase === 'taken' ? 'receive' : undefined
+        const id = step === 'material' ? operation.materialRequestId : operation.kickoffId
+        if (step && messages.some(message => message.id === id && JSON.stringify(message.source) === JSON.stringify({ kind: 'a2d2-work-maintenance', operationId: operation.operationId, step }))) return { operationId: operation.operationId, step }
       }
       if (state.executions.some(item => item.retired?.some(old => old.session.sessionId === sessionId) || (item.continuation?.successor.sessionId === sessionId && item.session.sessionId !== sessionId))) return false
       const execution = state.executions.find(item => item.session.sessionId === sessionId)
@@ -899,7 +906,7 @@ export class WorkApplication {
     await this.reconcileContinuous()
     const snapshot = await this.load()
     for (const initial of snapshot.executions) {
-      if (isTaskCompleted(taskAt(snapshot, initial.ref)) || continuousOwner(snapshot, initial.ref)) continue
+      if (isTaskCompleted(taskAt(snapshot, initial.ref)) || (continuousOwner(snapshot, initial.ref) && !continuationInFlight(initial))) continue
       if (this.host.execution.status(initial) === 'running') continue
       await this.observeRuntimeFailure(initial.id)
       await this.observeContinuation(initial.id)
@@ -969,7 +976,7 @@ export class WorkApplication {
         current.continuation!.inputSeal = sealed.seq
       })
     }
-    if (['waiting', 'paused'].includes(execution.state) || (execution.control?.status === 'accepted' && execution.control.action !== 'resume')) return execution
+    if (execution.control?.status === 'accepted' && execution.control.action !== 'resume') return execution
     if (execution.continuation!.automatic && execution.runtimeFailure && !execution.runtimeFailure.acknowledged) return save(current => { current.continuation!.error = { code: 'continuation-source-failed', message: 'The source model turn failed or was cancelled; explicit resume, input or manual continuation is required' } })
     if (execution.continuation!.automatic && !execution.continuationPolicy?.enabled) return save(current => { current.continuation!.error = { code: 'continuation-disabled', message: 'Automatic continuation is disabled; explicit manual continuation can resume this same operation' } })
     let kickoffText: string | undefined
@@ -977,7 +984,7 @@ export class WorkApplication {
       if (!host.maintain || !host.profile) throw new WorkExecutionError('host-capability-unavailable', 'Safe continuation host boundary is unavailable')
       if (execution.continuation!.phase !== 'taken') await host.maintain(execution, async () => {
         execution = (await this.load()).executions.find(item => item.id === execution.id)!
-        if (['waiting', 'paused'].includes(execution.state) || (execution.control?.status === 'accepted' && execution.control.action !== 'resume')) return
+        if (execution.control?.status === 'accepted' && execution.control.action !== 'resume') return
         let operation = execution.continuation!
         const actual = await host.profile!(execution)
         if (operation.automatic) {
@@ -995,7 +1002,7 @@ export class WorkApplication {
           operation = execution.continuation!
         } else if (JSON.stringify(actual) !== JSON.stringify(operation.profile)) throw new WorkExecutionError('continuation-profile-changed', 'Source model, preset, permissions or workspace changed during handoff')
         if (operation.phase === 'material-requested') {
-          const request = { id: operation.materialRequestId, text: materialRequest(operation), kind: 'input' as const, delivery: operation.requestDelivery ?? 'accepted' as const, acceptance: 'unassessed' as const }
+          const request = maintenanceEvent(operation, 'material', operation.materialRequestId, materialRequest(operation))
           const observed = await host.observe(execution, request)
           if (observed === 'consumed') {
             execution = await save(current => { current.continuation!.requestDelivery = observed; current.continuation!.error = { code: 'continuation-material-missing', message: 'The source consumed the material request but did not save material; no successor will be created' } })
@@ -1031,7 +1038,7 @@ export class WorkApplication {
             if (op.operationId !== operationId || current.epoch !== op.sourceEpoch || !sameSession(current.session, op.source)) throw new WorkExecutionError('stale-execution-authority', 'Source lost authority before takeover')
             const task = taskAt(state, current.ref)!
             if (task.specification.version !== op.specification.version || task.goal !== op.goal || op.material?.specificationVersion !== op.specification.version) throw new WorkExecutionError('continuation-specification-changed', 'Task specification changed during handoff; source material must be refreshed before takeover')
-            if (['waiting', 'paused'].includes(current.state) || (current.control?.status === 'accepted' && current.control.action !== 'resume')) return current
+            if (current.control?.status === 'accepted' && current.control.action !== 'resume') return current
             if (state.executions.some(item => item.id !== current.id && (sameSession(item.session, op.successor) || item.retired?.some(old => sameSession(old.session, op.successor))))) throw new WorkExecutionError('session-in-use', 'Reserved successor belongs to another execution')
             ;(current.retired ??= []).push({ session: op.source, epoch: op.sourceEpoch, operationId })
             current.session = op.successor
@@ -1041,7 +1048,7 @@ export class WorkApplication {
             current.agentPreset = profile.agentPreset
             current.model = { provider: profile.provider, model: profile.model, ...(profile.reasoningEffort ? { reasoningEffort: profile.reasoningEffort } : {}) }
             current.permissionPreset = profile.permissionPreset
-            current.state = 'ready'
+            if (!['waiting', 'paused'].includes(current.state)) current.state = 'ready'
             op.phase = 'taken'
             delete op.error
             delete current.continuationObservation
@@ -1057,7 +1064,7 @@ export class WorkApplication {
           await host.maintain(source, sealInput)
         }
         const op = execution.continuation!
-        const event = { id: op.kickoffId, text: kickoffText ?? successorMessage(op, execution.policy.instructions), kind: 'input' as const, delivery: op.kickoffDelivery ?? 'accepted' as const, acceptance: 'unassessed' as const }
+        const event = maintenanceEvent(op, 'receive', op.kickoffId, kickoffText ?? successorMessage(op, execution.policy.instructions))
         // Source authority was retired in the same transaction as the epoch change.
         const delivered = await host.deliver(execution, event)
         execution = await save(current => { current.continuation!.kickoffDelivery = delivered; current.continuation!.phase = 'delivered'; delete current.continuation!.error })
@@ -1085,11 +1092,11 @@ export class WorkApplication {
       if (isTaskCompleted(taskAt(state, execution.ref))) return { status: 'completed', execution }
       const owner = continuousOwner(state, execution.ref)
       const stopping = owner && continuousHasSlot(owner.rule, execution.ref) && execution.control?.status === 'accepted' && execution.control.action !== 'resume'
-      if (owner && !continuousMayAdvance(state, execution) && !stopping) return { status: 'completed', execution }
+      if (owner && !continuousMayAdvance(state, execution) && !stopping && !continuationInFlight(execution)) return { status: 'completed', execution }
       try {
         if (continuationInFlight(execution) && execution.control?.status !== 'accepted') {
           execution = await this.advanceContinuation(execution)
-          if (continuationInFlight(execution)) return { status: 'completed', execution }
+          if (continuationInFlight(execution) || ['waiting', 'paused'].includes(execution.state) || !continuousMayAdvance(state, execution)) return { status: 'completed', execution }
         }
         if (['accepted', 'creating', 'failed'].includes(execution.state)) execution = await save(item => { item.state = 'creating'; delete item.error; this.dao.appendHistory(item, { state: 'creating', commandId }) })
         const actual = await this.host.execution!.ensure(execution, async () => {
@@ -1301,7 +1308,7 @@ export class WorkApplication {
         delete execution.continuationBlocked
       }
       if (command.type === 'task.continue') {
-        if (['paused', 'waiting', 'accepted', 'creating', 'failed'].includes(execution.state) || (execution.control?.status === 'accepted' && execution.control.action !== 'resume')) return failed('continuation-not-ready', 'Resume or recover the current execution before requesting continuation')
+        if (['accepted', 'creating', 'failed'].includes(execution.state) || (execution.control?.status === 'accepted' && execution.control.action !== 'resume')) return failed('continuation-not-ready', 'Resume or recover the current execution before requesting continuation')
         if (!this.host.execution?.maintain || !this.host.execution.profile || !this.host.execution.sealInput) return failed('host-capability-unavailable', 'Safe continuation maintenance is unavailable')
         reserveContinuation(execution, task, command.commandId, false)
         execution.continuation!.automatic = false

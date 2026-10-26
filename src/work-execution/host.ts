@@ -1,8 +1,11 @@
 import type { WorkExecution } from '../work-types.ts'
 
+export interface MaintenanceAdmission { operationId: string; step: 'material' | 'collect' | 'receive'; jobIds?: string[] }
+export type WorkAdmission = boolean | MaintenanceAdmission
+
 /** Trusted host boundary. check must be read-only and reject missing capabilities before reservation. */
 export interface WorkExecutionHost {
-  connect(authorize: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<boolean>, conversation?: (sessionId: string) => Promise<string | undefined>, pendingHumanInput?: (sessionId: string) => Promise<readonly import('../work-types.ts').NativeWorkMessage[]>): void
+  connect(authorize: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<WorkAdmission>, conversation?: (sessionId: string) => Promise<string | undefined>, pendingHumanInput?: (sessionId: string) => Promise<readonly import('../work-types.ts').NativeWorkMessage[]>): void
   connectObservation?(scope: import('./observation.ts').ObservationScope): void
   observation?(execution: WorkExecution, associations?: readonly import('../work-types.ts').SessionAssociation[], reporter?: import('@deepseek-ai/dsh-tools').ToolExecutionToken): Promise<import('./observation.ts').ExecutionObservation>
   wake(execution: WorkExecution): Promise<void>

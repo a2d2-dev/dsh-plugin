@@ -16,7 +16,7 @@ import { RuntimeHost } from '../task-runtime/host.ts'
 import { rootSessionProfile } from '../root-session.ts'
 import { resolveSessionAgent } from '../official-session.ts'
 import { WorkExecutionError } from './host.ts'
-import type { WorkExecutionHost } from './host.ts'
+import type { WorkAdmission, MaintenanceAdmission, WorkExecutionHost } from './host.ts'
 import { settleUncollectedJob } from './job-observation.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
@@ -41,14 +41,15 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     }
     return service as NonNullable<Context[K]>
   }
-  private authorize?: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<boolean>
+  private authorize?: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<WorkAdmission>
   private conversation?: (sessionId: string) => Promise<string | undefined>
   private pendingHumanInput?: (sessionId: string) => Promise<readonly import('../work-types.ts').NativeWorkMessage[]>
+  private readonly maintenanceTurns = new WeakMap<Agent, MaintenanceAdmission>()
   private readonly admittedTurns = new WeakMap<Agent, number>()
   private readonly conversationSnapshots = new WeakMap<Agent, string>()
   private readonly activeTools = new Map<import('@deepseek-ai/dsh-tools').ToolExecutionToken, import('@deepseek-ai/dsh-tools').ToolExecution>()
   private connected = false
-  connect(authorize: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<boolean>, conversation?: (sessionId: string) => Promise<string | undefined>, pendingHumanInput?: (sessionId: string) => Promise<readonly import('../work-types.ts').NativeWorkMessage[]>): void {
+  connect(authorize: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<WorkAdmission>, conversation?: (sessionId: string) => Promise<string | undefined>, pendingHumanInput?: (sessionId: string) => Promise<readonly import('../work-types.ts').NativeWorkMessage[]>): void {
     this.authorize = authorize
     this.conversation = conversation
     this.pendingHumanInput = pendingHumanInput
@@ -58,7 +59,13 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       // Task scheduling controls automatic turns, never the native human conversation.
       // An admitted turn can finish its tool results and final answer after wait/done.
       const human = messages.some(message => message.source?.kind === 'user')
-      if (!human && this.admittedTurns.get(agent) !== turn && !await this.authorize!(agent.id, messages)) return { kind: 'reject' }
+      if (human) this.maintenanceTurns.delete(agent)
+      else if (this.admittedTurns.get(agent) !== turn) {
+        const admission = await this.authorize!(agent.id, messages)
+        if (!admission) return { kind: 'reject' }
+        if (typeof admission === 'object') this.maintenanceTurns.set(agent, admission)
+        else this.maintenanceTurns.delete(agent)
+      }
       const decision = await next()
       if (decision.kind === 'reject') return decision
       this.admittedTurns.set(agent, turn)
@@ -81,7 +88,15 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       }
       return decision
     }, { prepend: true })
-    this.ctx.on('agent/status', ({ agent, status }) => { if (status === 'idle') this.admittedTurns.delete(agent) })
+    this.ctx.on('agent/status', ({ agent, status }) => { if (status === 'idle') { this.admittedTurns.delete(agent); this.maintenanceTurns.delete(agent) } })
+    this.ctx.effect(() => this.service('tools').guard(exec => {
+      const scope = exec.agent && this.maintenanceTurns.get(exec.agent)
+      if (!scope) return
+      const allowed = scope.step === 'material' ? exec.name === 'work_continuation_material'
+        : scope.step === 'receive' ? exec.name === 'work_continuation_received'
+        : exec.name === 'job_output' && scope.jobIds?.includes(String((exec.arguments as { job_id?: unknown } | undefined)?.job_id))
+      if (!allowed || exec.parent) return `Continuation ${scope.operationId} permits only its ${scope.step} maintenance step; business tools require explicit Task resume`
+    }), 'narrow continuation maintenance tools')
     this.ctx.on('tools/result', exec => { this.activeTools.delete(exec.token) })
     this.ctx.on('tools/pre-execute', async (exec, next) => {
       // Observation includes admission still in flight. Task writes authorize in WorkApplication.
@@ -403,7 +418,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     await this.runtime.deliver(id, delivery, inMaintenance)
     return await this.runtime.deliveryState(id, delivery) === 'consumed' ? 'consumed' : 'delivered'
   }
-  async ensure(execution: WorkExecution, _allowed?: () => Promise<boolean>): Promise<NonNullable<WorkExecution['actual']>> {
+  async ensure(execution: WorkExecution, _allowed?: () => Promise<WorkAdmission>): Promise<NonNullable<WorkExecution['actual']>> {
     await this.check(execution, execution)
     const id = SessionId(execution.session.sessionId)
     if (!await this.service('sessionPersistence').stat(id) && !this.service('agents').get(id)) {

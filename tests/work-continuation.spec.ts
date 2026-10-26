@@ -388,12 +388,33 @@ it.each(['unknown', 'invalid', 'changed', 'stale'] as const)('blocks automatic a
   expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(1)
 })
 
+it.each(['wait', 'pause'] as const)('explicitly replaces a %s Session while preserving business control and authority', async action => {
+  const h = await setup()
+  await h.app.execute({ type: 'task.control', commandId: 'hold', ...fence(h.execution), action, text: 'Keep original reason and await LF resume' }, operator)
+  const held = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (held.status !== 'completed' || !held.execution) throw Error('Missing held execution')
+  h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+  const requested = await h.app.execute({ type: 'task.continue', commandId: 'replace-only', ...fence(held.execution) }, operator)
+  expect(requested).toMatchObject({ status: 'completed', execution: { state: held.execution.state, control: held.execution.control, continuation: { phase: 'material-requested' } } })
+  await fixtures.run(() => h.ctx.agents.get(SessionId(h.execution.session.sessionId))!.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  const result = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(result).toMatchObject({ execution: { id: h.execution.id, owner: h.execution.owner, epoch: 2, state: held.execution.state, control: held.execution.control, continuation: { phase: 'delivered', material } } })
+  if (result.status !== 'completed' || !result.execution) throw Error('Missing successor')
+  await fixtures.run(() => h.ctx.agents.get(SessionId(result.execution!.session.sessionId))!.whenIdle())
+  const before = h.model.requests.length
+  h.ctx.agents.get(SessionId(result.execution.session.sessionId))!.followup(createUserMessage({ content: [{ type: 'text', text: 'Unapproved business automation' }], source: { kind: 'a2d2-work-dispatch' } }))
+  await fixtures.run(() => h.ctx.agents.get(SessionId(result.execution!.session.sessionId))!.whenIdle())
+  expect(h.model.requests).toHaveLength(before)
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { state: held.execution.state, control: held.execution.control, owner: h.execution.owner, epoch: 2 } })
+})
+
 it('does not prompt or rotate while explicitly waiting and does not rotate without source material', async () => {
   const h = await setup()
   await h.app.execute({ type: 'task.control', commandId: 'wait', ...fence(h.execution), action: 'wait', text: 'Need accepted human decision' }, operator)
   await h.app.execute({ type: 'task.configure-continuation', commandId: 'policy', ...fence(h.execution), policy: { version: 1, enabled: true, targetTokens: 200_000, reserveTokens: 16_000 } }, operator)
   await fixtures.run(() => h.app.reconcileControls())
-  expect(await h.app.execute({ type: 'task.continue', commandId: 'waiting-continue', ...fence(h.execution) }, operator)).toMatchObject({ status: 'failed', error: { code: 'continuation-not-ready' } })
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { state: 'waiting' } })
   expect(h.model.requests).toHaveLength(1)
   await h.app.execute({ type: 'task.configure-continuation', commandId: 'disable-policy', ...fence(h.execution), policy: { version: 2, enabled: false, targetTokens: 200_000, reserveTokens: 16_000 } }, operator)
   await h.app.execute({ type: 'task.control', commandId: 'resume', ...fence(h.execution), action: 'resume', text: 'Human decision accepted' }, operator)
