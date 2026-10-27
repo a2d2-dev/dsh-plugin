@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, dirname, basename } from 'node:path'
 import { WorkApplication, type WorkHost } from '../src/work.ts'
 import type { WorkCompleted, WorkResult, WorkTask, WorkExecution } from '../src/work-types.ts'
-import type { GitHubSourcePort } from '../src/work-sources/types.ts'
+import type { GitHubIssue, GitHubSourcePort } from '../src/work-sources/types.ts'
 const operator={operator:true}
 const roots:string[]=[]
 afterEach(async()=>{for(const root of roots.splice(0)){if(dirname(root)!==tmpdir()||!basename(root).startsWith('completion-contract-')||await realpath(root)!==root)throw Error('Unsafe cleanup');await rm(root,{recursive:true,force:true})}})
@@ -35,10 +35,15 @@ async function setup(source?:GitHubSourcePort){
 /** A subtask is a native sub-issue in this stage: import it through the source route, then link it. */
 async function canonicalChild(h:Awaited<ReturnType<typeof setup>>,parent:WorkTask,parentExecution:WorkExecution){
  const number=700+h.app.directory.length
- const childIssue={subIssues:{items:[],totalCount:0,hasNextPage:false},nodeId:`I_child_${number}`,url:`https://github.com/example/repo/issues/${number}`,number,title:'child issue',body:'verify',repository:{owner:'example',repository:'repo'},assignees:[],labels:[],state:'open' as const,updatedAt:'2026-10-21T00:00:00Z',observedAt:'2026-10-21T00:01:00Z'}
- const source:GitHubSourcePort={list:async()=>({identity,items:[childIssue],observedAt:childIssue.observedAt}),detail:async()=>({identity,issue:structuredClone(childIssue)})}
+ const childIssue:GitHubIssue={subIssues:{items:[],totalCount:0,hasNextPage:false},nodeId:`I_child_${number}`,url:`https://github.com/example/repo/issues/${number}`,number,title:'child issue',body:'verify',repository:{owner:'example',repository:'repo'},assignees:[],labels:[],state:'open',updatedAt:'2026-10-21T00:00:00Z',observedAt:'2026-10-21T00:01:00Z'}
+ const parentIssue:GitHubIssue={...childIssue,nodeId:`I_parent_${number}`,number:number-1,url:`https://github.com/example/repo/issues/${number-1}`,title:'parent issue',parent:null,subIssues:{items:[{nodeId:childIssue.nodeId,number,url:childIssue.url,title:childIssue.title,repository:childIssue.repository,state:'open'}],totalCount:1,hasNextPage:false}}
+ childIssue.parent={nodeId:parentIssue.nodeId,number:parentIssue.number,url:parentIssue.url,title:parentIssue.title,repository:parentIssue.repository,state:'open'}
+ const source:GitHubSourcePort={list:async()=>({identity,items:[parentIssue,childIssue],observedAt:childIssue.observedAt}),detail:async(_,selected)=>({identity,issue:structuredClone(selected===parentIssue.number?parentIssue:childIssue)})}
  const importer=new WorkApplication(h.app.directory,h.host,source)
  const sourceId=ok(await importer.execute({type:'source.configure',commandId:`child-source-${number}`,projectId:parent.projectId,repository:childIssue.repository},operator)).source!.id
+ ok(await importer.query({type:'source.issue',projectId:parent.projectId,sourceId,number:parentIssue.number,refresh:true},operator))
+ const parentCurrent=(await h.detail(parent)).task!
+ ok(await importer.execute({type:'source.link',commandId:`parent-link-${number}`,ref:parentExecution.ref,expectedVersion:parentCurrent.version,sourceId,nodeId:parentIssue.nodeId},operator))
  ok(await importer.query({type:'source.issue',projectId:parent.projectId,sourceId,number:childIssue.number,refresh:true},operator))
  const imported=ok(await importer.execute({type:'source.import',commandId:`child-import-${number}`,projectId:parent.projectId,sourceId,nodeId:childIssue.nodeId},operator))
  ok(await h.app.execute({type:'task.update-spec',commandId:`child-spec-${number}`,ref:imported.ref!,expectedVersion:imported.task!.version,goal:'verify',specification:'verify',acceptance:['verified']},operator))

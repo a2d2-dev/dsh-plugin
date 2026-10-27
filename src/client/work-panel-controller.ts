@@ -378,8 +378,8 @@ export class WorkPanelController {
   currentSession(): SessionRef | null {
     const { detail, loading } = this.state, execution = detail?.execution
     return !loading && execution?.actual && execution.ref.projectId === detail?.task?.projectId
-      && execution.ref.taskId === detail.task.id && execution.actual.runtimeId === execution.session.runtimeId
-      && ['ready', 'running', 'waiting', 'paused'].includes(execution.state) ? execution.session : null
+      && execution.ref.taskId === detail.task.id && !!execution.session.sessionId && !!execution.session.runtimeId
+      && execution.actual.runtimeId === execution.session.runtimeId ? execution.session : null
   }
   openCurrentSession(): void { const session = this.currentSession(); if (session) this.openSession(session) }
   async controlExecution(action: 'pause' | 'resume' | 'reconcile' | 'continue'): Promise<void> {

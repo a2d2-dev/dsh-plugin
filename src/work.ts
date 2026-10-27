@@ -21,7 +21,7 @@ import type { GitHubSourcePort } from './work-sources/types.ts'
 import type { WorkSnapshot } from './work-schema.ts'
 import { WorkExecutionError } from './work-execution/host.ts'
 import { continuationInFlight, continuationFactsKey, collectionRequest, MANAGED_WORK_INSTRUCTIONS, maintenanceEvent, materialRequest, reserveContinuation, successorMessage } from './work-execution/continuation.ts'
-import { applyTaskOrganization, taskStructureBlocker } from './work-organization.ts'
+import { applyTaskOrganization, isAcceptedNativeChild, taskStructureBlocker } from './work-organization.ts'
 import { isCanonicalChild } from './work-migrate.ts'
 import { applyTaskReport, projectProgress, taskProgressView } from './work-progress.ts'
 import { continuousCandidates, continuousDependenciesReady, continuousOwner, continuousMayAdvance, continuousCompleted, observeContinuousTasks, discoverContinuous, sourceScopeError, sameTask, continuousRetry, continuousSlots, continuousHasSlot, continuousSetSlot, continuousProblem, MAX_CONTINUOUS_ATTEMPTS } from './work-continuous.ts'
@@ -1769,6 +1769,7 @@ export class WorkApplication {
       const blocked = taskStructureBlocker(state, child)
       if (blocked && !task.children.some(ref => sameTask(ref, command.child))) return failed(blocked.code, blocked.message)
       if (!isCanonicalChild(state, command.child)) return failed('subtask-not-in-primary-store', '只能关联已有主存 sub-issue 记录的子任务；本地 Task 不是业务子任务')
+      if (!isAcceptedNativeChild(state, command.ref, command.child)) return failed('native-child-relationship-required', '只能关联已接受完整原生子项范围中的 Task；请先读取并采纳真实 GitHub sub-issue 关系')
       if (child.parent && child.parent.taskId !== task.id) return failed('child-already-linked', 'Child already has another parent')
       if (task.children.some(ref => ref.taskId === child.id)) return { status: 'completed', task }
       child.parent = command.ref

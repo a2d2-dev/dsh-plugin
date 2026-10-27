@@ -112,13 +112,19 @@ it('blocks URL-only work that has never been fetched, then reuses normalized URL
 })
 it('reuses an imported child after repeated pages while same-number Issues in another repository remain distinct', async () => {
   const otherIssue = { ...issue, nodeId: 'I_other_repo_112', url: 'https://github.com/a2d2-dev/other/issues/112', repository: { owner: 'a2d2-dev', repository: 'other' } }
-  const { app, project, source } = await open({ ...port, list: async repository => ({ identity, items: repository.repository === 'other' ? [otherIssue] : [issue, issue], observedAt: issue.observedAt }) })
+  const parentIssue: GitHubIssue = { ...issue, nodeId: 'I_parent', number: 111, url: 'https://github.com/a2d2-dev/dsh-plugin/issues/111', title: 'Parent', parent: null,
+    subIssues: { items: [{ nodeId: issue.nodeId, number: issue.number, url: issue.url, title: issue.title, repository: issue.repository, state: issue.state }], totalCount: 1, hasNextPage: false } }
+  const { app, project, source } = await open({ ...port, list: async repository => ({ identity, items: repository.repository === 'other' ? [otherIssue] : [issue, issue, parentIssue], observedAt: issue.observedAt }) })
   await app.query(pageQuery(source), operator)
   const command = { type: 'source.import', projectId: project.id, sourceId: source.id, nodeId: issue.nodeId }
   const child = completed(await app.execute({ ...command, commandId: 'child-import' }, operator)).task!
   const parent = completed(await app.execute({ type: 'task.create', commandId: 'parent', projectId: project.id, title: 'Parent', goal: 'Organize child', specification: 'Keep unique child work', acceptance: ['One child identity'] }, operator)).task!
   const ref = { projectId: project.id, taskId: parent.id }
-  await app.execute({ type: 'task.link-child', commandId: 'link-child', ref, expectedVersion: 1, child: { projectId: project.id, taskId: child.id }, childExpectedVersion: 1 }, operator)
+  completed(await app.execute({ type: 'source.link', commandId: 'bind-parent', ref, expectedVersion: parent.version, sourceId: source.id, nodeId: parentIssue.nodeId }, operator))
+  const currentParent = completed(await app.query({ type: 'task.detail', ref }, operator)).task!
+  const childRef = { projectId: project.id, taskId: child.id }
+  const currentChild = completed(await app.query({ type: 'task.detail', ref: childRef }, operator)).task!
+  completed(await app.execute({ type: 'task.link-child', commandId: 'link-child', ref, expectedVersion: currentParent.version, child: childRef, childExpectedVersion: currentChild.version }, operator))
   await app.query(pageQuery(source, true, 2), operator)
   expect(await app.execute({ ...command, commandId: 'repeat-child' }, operator)).toMatchObject({ status: 'completed', task: { id: child.id, parent: ref } })
   const other = completed(await app.execute({ type: 'source.configure', commandId: 'same-number-source', projectId: project.id, repository: otherIssue.repository }, operator)).source!
