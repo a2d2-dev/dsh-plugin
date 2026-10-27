@@ -85,10 +85,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
           human = true
           this.maintenanceTurns.delete(agent)
         } else if (typeof admission === 'object') this.maintenanceTurns.set(agent, admission)
-        else {
-          this.maintenanceTurns.delete(agent)
-          this.guardIntent.set(agent, { answerOnly: false, recheckWait: true })
-        }
+        else this.maintenanceTurns.delete(agent)
       }
       if (human) {
         this.maintenanceTurns.delete(agent)

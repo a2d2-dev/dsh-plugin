@@ -205,11 +205,6 @@ it('waiting yields after the safe boundary, and public/native input plus resume 
   h.host.idle(first); await h.app.reconcileControls(); const second = await h.execution()
   expect(second.id).not.toBe(first.id)
   expect((await h.execution(first.ref)).owner).toBe(first.owner)
-  const observation = { id: 'scheduled-wait-check', role: 'user' as const, content: [{ type: 'text' as const, text: 'Check the dependency' }], source: { kind: 'schedule' } }
-  expect(await h.host.authorize(first.session.sessionId, [observation])).toBe(true)
-  expect((await h.status()).active).toEqual(second.ref)
-  expect((await h.status()).items.find(item => item.executionId === first.id)?.resumeRequested).not.toBe(true)
-  expect((await h.execution(first.ref)).events.some(event => event.id === observation.id)).toBe(false)
   completed(await h.app.execute({ type: 'task.input', commandId: 'answer-first', ...fence(first), text: 'Decision arrived', kind: 'input' }, operator))
   completed(await h.app.execute({ type: 'task.control', commandId: 'resume-first', ...fence(first), action: 'resume', text: 'Use the answer' }, operator))
   expect(await h.host.authorize(first.session.sessionId, [{ id: 'native-answer', role: 'user', content: [{ type: 'text', text: 'Native answer' }], source: { kind: 'user' } }])).toBe(false)
@@ -1545,7 +1540,7 @@ it('rechecks an end accepted after resume candidate selection inside the real di
   const first = await h.execution(); h.host.idle(first)
   completed(await h.app.execute({ type: 'task.control', commandId: 'dispatch-race-wait', ...fence(first), action: 'wait', text: '等待外部结果' }, operator))
   await h.app.reconcileContinuous()
-  completed(await h.app.execute({ type: 'task.input', commandId: 'automatic-before-end', ...fence(first), kind: 'input', text: 'new external result' }, operator))
+  expect(await h.host.authorize(first.session.sessionId, [{ id: 'automatic-before-end', role: 'user', content: [{ type: 'text', text: 'new external result' }], source: { kind: 'external-result' } }])).toBe(false)
   expect((await h.status()).items[0]!.resumeRequested).toBe(true)
   const dao = WorkDao.forDirectory(h.directory), transaction = dao.transaction.bind(dao), candidates = continuous.continuousCandidates
   let selected = false, used = false, entered!: () => void, release!: () => void

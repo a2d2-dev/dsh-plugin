@@ -332,42 +332,14 @@ it.each(['wait', 'pause'] as const)('consumes real queued schedule/dispatch befo
   expect(delivered.filter(id => humans.some(message => message.id === id))).toEqual(humans.map(message => message.id))
   for (const human of humans) expect(delivered.filter(id => id === human.id)).toHaveLength(1)
   expect(agent.inbox.nextTurn).toHaveLength(0)
-  if (action === 'wait') for (const auto of automatic) expect(delivered.filter(id => id === auto.id)).toHaveLength(1)
+  for (const auto of automatic) expect(delivered.filter(id => id === auto.id)).toHaveLength(0)
   const result = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
   expect(result).toMatchObject({ execution: { id: execution.id, owner: execution.owner, epoch: execution.epoch, state: action === 'wait' ? 'waiting' : 'paused', control: { action } } })
+  if (result.status !== 'completed' || !result.execution) throw Error('Missing execution')
+  for (const auto of automatic) expect(result.execution.events.filter(event => event.id === auto.id)).toMatchObject([{ nativeMessage: auto, delivery: 'accepted' }])
   const requests = h.model.requests.length
   expect(requests - before).toBeLessThanOrEqual(4)
   for (let i = 0; i < 3; i++) await h.app.reconcileControls()
   await fixtures.run(() => agent.whenIdle())
   expect(h.model.requests).toHaveLength(requests)
-}, 15000)
-
-it('lets the waiting current owner inspect a changed condition and recover its own wait from schedule alone', async () => {
-  const h = await setup()
-  h.model.nextTool = { name: 'work_control', arguments: { action: 'wait', text: 'External approval unavailable', yield_reason: 'external', checked_facts: ['Approval absent'], wake_condition: 'dependency.txt contains READY-315' } }
-  const agent = await h.start()
-  await h.app.reconcileControls()
-  const before = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
-  if (before.status !== 'completed' || !before.execution) throw Error('Missing execution')
-  await writeFile(join(h.root, 'dependency.txt'), 'READY-315')
-  const tools = [
-    { name: 'read', arguments: { file_path: 'dependency.txt' } },
-    { name: 'work_control', arguments: { action: 'resume', text: 'Read READY-315; the original external condition is resolved' } },
-    { name: 'write', arguments: { file_path: 'schedule-proof.txt', content: 'READY-315' } },
-  ]
-  h.model.selectTool = () => tools.shift()
-  const scheduled = createUserMessage({ content: [{ type: 'text', text: 'Check the original wait condition, and continue within original authority if it is resolved.' }], source: { kind: 'schedule' } as never })
-  agent.followup(scheduled)
-  await fixtures.run(() => agent.whenIdle())
-  await h.app.reconcileControls()
-  expect(await readFile(join(h.root, 'schedule-proof.txt'), 'utf8')).toBe('READY-315')
-  const after = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
-  expect(after).toMatchObject({ execution: { id: before.execution.id, session: before.execution.session, owner: before.execution.owner, epoch: before.execution.epoch, state: 'ready', control: { action: 'resume' } } })
-  expect(after.status === 'completed' && after.execution?.events.filter(event => event.id === scheduled.id)).toEqual([])
-  const consumed = agent.session.snapshotEvents().filter(event => event.type === 'user/message' && event.data.id === scheduled.id)
-  expect(consumed).toHaveLength(1)
-  const count = h.model.requests.length
-  for (let i = 0; i < 3; i++) await h.app.reconcileControls()
-  await fixtures.run(() => agent.whenIdle())
-  expect(h.model.requests).toHaveLength(count)
 }, 15000)
