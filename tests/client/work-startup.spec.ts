@@ -74,14 +74,57 @@ describe('explicit work startup', () => {
     expect(h.command).not.toHaveBeenCalled()
     expect(h.navigation.openSession).toHaveBeenCalledExactlyOnceWith('native-current')
   })
+  it('opens a created failed Session from overview and reuse without resuming or changing execution authority', async () => {
+    const h = setup()
+    const execution: WorkExecution = { ...running(), state: 'failed', error: { code: 'model-error', message: '模型请求失败' }, control: { commandId: 'pause', action: 'pause', status: 'applied', reason: '等待人工检查' } }
+    const before = structuredClone(execution)
+    h.setExecution(execution); await h.panel.openTask(ref)
+    expect(h.panel.currentSession()).toEqual(execution.session)
+    expect(html(h.panel)).toContain('>进入会话</button>')
+    expect(html(h.panel)).toContain('重试原执行')
+    expect(html(h.panel)).not.toContain('当前会话暂不可进入')
+    h.panel.openCurrentSession()
+    expect(h.navigation.openSession).toHaveBeenCalledExactlyOnceWith('native-current')
+    h.navigation.openSession.mockClear(); vi.mocked(h.client.query).mockClear()
+    await h.panel.prepareStart()
+    expect(h.navigation.openSession).toHaveBeenCalledExactlyOnceWith('native-current')
+    expect(h.panel.getSnapshot().detail?.execution?.error?.code).toBe('model-error')
+    expect(h.panel.getSnapshot().detail?.execution).toEqual(before)
+    expect(execution).toEqual(before)
+    expect(h.command).not.toHaveBeenCalled()
+    expect(vi.mocked(h.client.query).mock.calls.map(([query]) => query)).toEqual([{ type: 'task.detail', ref }])
+  })
   it('shows HTTP completed plus execution.failed as a failure and never opens its reserved Session', async () => {
     const h = setup(); await h.panel.openTask(ref)
-    h.command.mockImplementation(async () => { const execution = { ...running(), state: 'failed' as const, error: { code: 'host-create-unknown', message: '需要恢复原会话' } }; h.setExecution(execution); return { status: 'completed', execution } })
+    h.command.mockImplementation(async () => { const execution = { ...running(), actual: undefined, state: 'failed' as const, error: { code: 'host-create-unknown', message: '需要恢复原会话' } }; h.setExecution(execution); return { status: 'completed', execution } })
     await h.panel.prepareStart()
     expect(h.panel.getSnapshot().startup.error).toContain('host-create-unknown')
     expect(h.navigation.openSession).not.toHaveBeenCalled()
     expect(html(h.panel)).toContain('重试原执行')
     expect(html(h.panel)).not.toContain('Task 已完成')
+  })
+  it.each(['accepted', 'creating', 'failed'] as const)('does not enter an uncreated %s Session from overview or reuse', async state => {
+    const h = setup(); h.setExecution({ ...running(), state, actual: undefined })
+    await h.panel.openTask(ref)
+    expect(h.panel.currentSession()).toBeNull()
+    expect(html(h.panel)).not.toContain('>进入会话</button>')
+    h.panel.openCurrentSession(); await h.panel.prepareStart()
+    expect(h.navigation.openSession).not.toHaveBeenCalled()
+    expect(h.command).not.toHaveBeenCalled()
+  })
+  it.each(['task', 'project', 'runtime', 'session-id', 'runtime-id'] as const)('refuses a created failed Session with a mismatched or missing %s identity', async mode => {
+    const h = setup(), execution: WorkExecution = { ...running(), state: 'failed' }
+    if (mode === 'task') execution.ref = { ...ref, taskId: 'foreign' }
+    if (mode === 'project') execution.ref = { ...ref, projectId: 'foreign' }
+    if (mode === 'runtime') execution.actual!.runtimeId = 'foreign'
+    if (mode === 'session-id') execution.session.sessionId = ''
+    if (mode === 'runtime-id') execution.session.runtimeId = ''
+    h.setExecution(execution); await h.panel.openTask(ref)
+    expect(h.panel.currentSession()).toBeNull()
+    expect(html(h.panel)).not.toContain('>进入会话</button>')
+    h.panel.openCurrentSession(); await h.panel.prepareStart()
+    expect(h.navigation.openSession).not.toHaveBeenCalled()
+    expect(h.command).not.toHaveBeenCalled()
   })
   it('does not navigate or start after an Issue import resolves on a different page', async () => {
     const h = setup(); await openIssue(h.panel)

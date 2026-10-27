@@ -2,7 +2,19 @@ import { continuationInFlight } from './work-execution/state.ts'
 import { isTaskCompleted } from './work-completion/index.ts'
 import { z } from 'zod'
 import type { WorkSnapshot } from './work-schema.ts'
-import type { WorkExecution, WorkResult, WorkTask } from './work-types.ts'
+import type { TaskRef, WorkExecution, WorkResult, WorkTask } from './work-types.ts'
+
+/** A local edge cannot establish necessity; use the explicitly accepted native scope. */
+export function isAcceptedNativeChild(state: WorkSnapshot, parent: TaskRef, child: TaskRef): boolean {
+  const parents = state.externalBindings.filter(binding => binding.ref.projectId === parent.projectId && binding.ref.taskId === parent.taskId)
+  const children = state.externalBindings.filter(binding => binding.ref.projectId === child.projectId && binding.ref.taskId === child.taskId)
+  if (parents.length !== 1 || children.length !== 1) return false
+  const scope = parents[0]!.acceptedChildren ?? parents[0]!.accepted.subIssues, binding = children[0]!
+  if (!scope || scope.hasNextPage || scope.totalCount !== scope.items.length || new Set(scope.items.map(item => item.nodeId)).size !== scope.items.length) return false
+  return scope.items.some(item => item.nodeId === binding.nodeId && item.number === binding.accepted.number
+    && item.repository.owner.toLowerCase() === binding.accepted.repository.owner.toLowerCase()
+    && item.repository.repository.toLowerCase() === binding.accepted.repository.repository.toLowerCase())
+}
 const text=z.string().trim().min(1).max(100_000)
 const specification={goal:text,specification:text,acceptance:z.array(text).min(1).max(1000)}
 export const taskOrganizationSchema=z.discriminatedUnion('kind',[

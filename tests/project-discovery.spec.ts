@@ -270,13 +270,18 @@ it('rejects native cycles without persisting a second Task or partial parent cha
   expect(complete(await state.app.query({ type: 'source.issue', projectId: state.project.id, sourceId: state.source.id, nodeId: child.nodeId, number: child.number }, actor)).bindings).toEqual([])
 })
 
-it('preserves an explicitly established local parent when a conflicting native parent is imported', async () => {
+it('preserves a legacy local parent for audit when a conflicting native parent is imported', async () => {
   const { parent, child } = nativePair(), sourcePort = { ...port, project: async () => page([parent, child]) }, state = await setup(sourcePort)
   await state.app.query(query(state.source, true), actor)
   const imported = complete(await state.app.execute({ type: 'source.import', commandId: 'child-before-conflict', projectId: state.project.id, sourceId: state.source.id, nodeId: child.nodeId }, actor))
   const local = complete(await state.app.execute({ type: 'task.create', commandId: 'local-parent', projectId: state.project.id, title: 'Accepted local parent', goal: 'Keep relationship', specification: 'User decision', acceptance: ['Preserve child'] }, actor)).task!
   const localRef = { projectId: state.project.id, taskId: local.id }
-  complete(await state.app.execute({ type: 'task.link-child', commandId: 'local-link', ref: localRef, expectedVersion: local.version, child: imported.ref!, childExpectedVersion: imported.task!.version }, actor))
+  expect(await state.app.execute({ type: 'task.link-child', commandId: 'local-link', ref: localRef, expectedVersion: local.version, child: imported.ref!, childExpectedVersion: imported.task!.version }, actor)).toMatchObject({ status: 'failed', error: { code: 'native-child-relationship-required' } })
+  // An old release could persist this invalid edge. Import still preserves the conflict for audit.
+  await state.transaction(async snapshot => {
+    snapshot.tasks.find(task => task.id === local.id)!.children = [imported.ref!]
+    snapshot.tasks.find(task => task.id === imported.ref!.taskId)!.parent = localRef
+  })
   const before = complete(await state.app.query({ type: 'project.detail', projectId: state.project.id }, actor)).tasks
   expect(await state.app.execute({ type: 'source.import', commandId: 'conflicting-native-parent', projectId: state.project.id, sourceId: state.source.id, nodeId: parent.nodeId }, actor)).toMatchObject({ status: 'conflict', error: { code: 'source-hierarchy-conflict' } })
   expect(complete(await state.app.query({ type: 'project.detail', projectId: state.project.id }, actor)).tasks).toEqual(before)
