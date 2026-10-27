@@ -15,6 +15,8 @@ export interface WorkExecutionHost {
   ensure(execution: WorkExecution, allowed: () => Promise<boolean>): Promise<NonNullable<WorkExecution['actual']>>
   deliver(execution: WorkExecution, event: import('../work-types.ts').WorkEvent, inMaintenance?: boolean): Promise<'delivered' | 'consumed'>
   observe(execution: WorkExecution, event: import('../work-types.ts').WorkEvent): Promise<'accepted' | 'delivered' | 'consumed'>
+  /** Stop only this execution and its native children; pending results remain a visible retryable barrier. */
+  end?(execution: WorkExecution): Promise<void>
   settle(execution: WorkExecution): Promise<void>
   failure?(execution: WorkExecution): Promise<{ id: string; message: string; userCancelled: boolean } | undefined>
   profile?(execution: WorkExecution): Promise<NonNullable<WorkExecution['actual']>>

@@ -30,6 +30,7 @@ export function continuousCompleted(state: WorkSnapshot, execution: WorkExecutio
 /** The native pre-step and per-session maintenance guard use the same durable slot. */
 export function continuousMayAdvance(state: WorkSnapshot, execution: WorkExecution): boolean {
   const owner = continuousOwner(state, execution.ref)
+  if (execution.control?.action === 'end' || owner?.item.end) return false
   return !owner || (!continuousCompleted(state, execution) && owner.item.state === 'active' && continuousHasSlot(owner.rule, execution.ref))
 }
 export function sourceScopeError(rule: ContinuousWorkRule, source: WorkSource | undefined): { code: string; message: string } | undefined {
@@ -115,7 +116,7 @@ export function discoverContinuous(rule: ContinuousWorkRule, source: WorkSource)
 /** Resumable accepted work competes with new waiting work under the same ordering and capacity. */
 export function continuousCandidates(rule: ContinuousWorkRule, source: WorkSource | undefined): ContinuousWorkRule['items'] {
   const batchKey = rule.queue?.filterPrompt?.trim() && source ? screeningKey(rule, source) : undefined
-  const candidates = rule.items.filter(item => (!rule.queue || rule.enabled || item.explicitResumeRequested) && (item.state === 'queued' || item.ref && item.executionId && item.resumeRequested && item.state !== 'completed')).filter(item => {
+  const candidates = rule.items.filter(item => !item.end && (!rule.queue || rule.enabled || item.explicitResumeRequested) && (item.state === 'queued' || item.ref && item.executionId && item.resumeRequested && item.state !== 'completed')).filter(item => {
     if (item.ref || !rule.queue?.filterPrompt?.trim()) return true
     return !!batchKey && item.screening?.matches === true && item.screening.key === batchKey
   })
