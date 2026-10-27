@@ -253,16 +253,16 @@ function CurrentExecution({controller}:{controller:WorkPanelController}) {
   if(!execution&&!options&&!completed)return null
   return <Section title="会话" className={!execution&&!options?styles.idleExecution:undefined}>
     {execution ? <>
-      <p>{(()=>{const task=state.detail?.task;if(!task)return null;const counts=controller.sessionCounts(task);return `${counts.total} 个会话 · 当前 ${counts.current} · 历史 ${counts.historical} · 其他关联 ${counts.associated}`})()}</p><p>执行状态：{state.detail?.task?.completion?({pending:'等待执行收口',settled:'执行已安全收口',error:'执行收口失败'})[state.detail.task.completion.closeout.status]:executionLabel(execution.state,progress,execution.control?.status)}{executionRuntime ? ` · 会话：${({running:'正在运行',idle:'空闲',inactive:'未激活'})[executionRuntime]}` : ''}</p>
+      <p>{(()=>{const task=state.detail?.task;if(!task)return null;const counts=controller.sessionCounts(task);return `${counts.total} 个会话 · 当前 ${counts.current} · 历史 ${counts.historical} · 其他关联 ${counts.associated}`})()}</p><p>执行状态：{execution.control?.action === 'end' ? (execution.control.status === 'applied' ? '队列已结束，业务验收未确认' : '正在结束队列处理') : state.detail?.task?.completion?({pending:'等待执行收口',settled:'执行已安全收口',error:'执行收口失败'})[state.detail.task.completion.closeout.status]:executionLabel(execution.state,progress,execution.control?.status)}{executionRuntime ? ` · 会话：${({running:'正在运行',idle:'空闲',inactive:'未激活'})[executionRuntime]}` : ''}</p>
       {execution.progress && <p>工作进展：{execution.progress}</p>}
-      {execution.control && !completed && <p>{({wait:'等待',pause:'暂停',resume:'恢复'})[execution.control.action]}请求{execution.control.status==='accepted'?(execution.state==='failed'?'未生效，执行失败':'已接受，等待生效'):'已生效'}{execution.control.reason?`：${execution.control.reason}`:''}</p>}
+      {execution.control && !completed && <p>{({wait:'等待',pause:'暂停',resume:'恢复',end:'结束队列处理'})[execution.control.action]}请求{execution.control.status==='accepted'?(execution.state==='failed'?'未生效，执行失败':'已接受，等待生效'):'已生效'}{execution.control.reason?`：${execution.control.reason}`:''}</p>}
       {execution.error && <ErrorText error={`${execution.error.code}: ${execution.error.message}`}/>}
       <div className={styles.toolbar}>
         {controller.currentSession() && <button disabled={busy} onClick={()=>controller.openCurrentSession()}>进入会话</button>}
-        {!completed && ['ready','running'].includes(execution.state) && <button disabled={busy||execution.control?.status==='accepted'} onClick={()=>void controller.controlExecution('pause')}>暂停处理</button>}
-        {!completed && progress?.processingState==='blocked' && ['ready','running'].includes(execution.state) && <button disabled={busy||execution.control?.status==='accepted'} onClick={()=>void controller.controlExecution('resume')}>继续处理</button>}
-        {!completed && ['waiting','paused'].includes(execution.state) && <button disabled={busy||execution.control?.status==='accepted'} onClick={()=>void controller.controlExecution('resume')}>恢复处理</button>}
-        {!completed && execution.state==='failed' && <button disabled={busy} onClick={()=>void controller.controlExecution('reconcile')}>重试原执行</button>}
+        {!completed && execution.control?.action !== 'end' && ['ready','running'].includes(execution.state) && <button disabled={busy||execution.control?.status==='accepted'} onClick={()=>void controller.controlExecution('pause')}>暂停处理</button>}
+        {!completed && execution.control?.action !== 'end' && progress?.processingState==='blocked' && ['ready','running'].includes(execution.state) && <button disabled={busy||execution.control?.status==='accepted'} onClick={()=>void controller.controlExecution('resume')}>继续处理</button>}
+        {!completed && execution.control?.action !== 'end' && ['waiting','paused'].includes(execution.state) && <button disabled={busy||execution.control?.status==='accepted'} onClick={()=>void controller.controlExecution('resume')}>恢复处理</button>}
+        {!completed && execution.control?.action !== 'end' && execution.state==='failed' && <button disabled={busy} onClick={()=>void controller.controlExecution('reconcile')}>重试原执行</button>}
         <button disabled={busy} onClick={()=>void controller.refreshTask()}>刷新</button>
       </div>
       {!controller.currentSession() && <p>当前会话暂不可进入；刷新可查看创建或恢复结果。</p>}

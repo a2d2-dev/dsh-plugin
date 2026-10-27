@@ -1,10 +1,12 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import Subagents from '@deepseek-ai/dsh-subagent'
+import LocalJobs from '@deepseek-ai/dsh-jobs-local'
+import * as ToolJobs from '@deepseek-ai/dsh-tool-jobs'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { RuntimeHost } from '../src/task-runtime/host.ts'
-import { WorkApplication } from '../src/work.ts'
+import { WorkApplication, WorkDao } from '../src/work.ts'
 import { installWorkTools } from '../src/work-execution/tools.ts'
 import { ExecutionFixtures } from './work-execution-fixture.ts'
 import type { GitHubIssue, GitHubSourcePort } from '../src/work-sources/types.ts'
@@ -216,3 +218,151 @@ it.each(['wait', 'pause'] as const)('replaces a continuous %s Session without ac
     expect(afterRule.items[0]!.state).toBe(action === 'wait' ? 'waiting' : 'paused')
   } finally { release(); await fixtures.close() }
 })
+
+
+it('reconciles legacy protection against the real current running Agent without interrupting its tool or duplicating work', async () => {
+  const fixtures = new ExecutionFixtures()
+  let release = () => {}
+  try {
+    const h = await fixtures.mount(await fixtures.root(), 'read-only')
+    const app = new WorkApplication(h.app.directory, h.host, source)
+    const execute = (command: unknown) => fixtures.run(async () => completed(await app.execute(command, actor)))
+    const query = (request: unknown) => fixtures.run(async () => completed(await app.query(request, actor)))
+    const connected = await execute({ type: 'source.connect', commandId: 'connect', githubProject: { owner: 'example', type: 'org', number: 1 } })
+    const projectId = connected.project!.id, sourceId = connected.source!.id
+    await query({ type: 'source.issues', projectId, sourceId, page: 1, perPage: 20, assignee: '@me', state: 'open', refresh: true })
+    const options = (await query({ type: 'source.execution-options', projectId, sourceId })).executionOptions!
+    let entered!: () => void
+    const started = new Promise<void>(resolve => { entered = resolve })
+    const gate = new Promise<void>(resolve => { release = resolve })
+    h.ctx.tools.register(defineTool({ name: 'hold_recovery', description: 'Keep a real running tool across queue reconciliation', parameters: {},
+      output: { schema: { type: 'object', additionalProperties: false, properties: { result: { type: 'string', required: true } } }, render: (_, value) => [{ type: 'text', text: value.result }] },
+      async execute() { entered(); await gate; return { result: 'Original tool completed' } } }))
+    h.model.nextTool = { name: 'hold_recovery', arguments: {} }
+    await execute({ type: 'continuous.configure', commandId: 'enable', projectId, sourceId, expectedVersion: 0, assignee: '@me', labels: ['bug'], resource: options.resources[0]!.ref, model: options.defaults.model, agentPreset: options.defaults.agentPreset, permissionPreset: options.defaults.permissionPreset, enabled: true })
+    await started
+    const rule = (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!
+    const ref = rule.active!
+    const first = (await query({ type: 'task.detail', ref })).execution!
+    const agent = h.ctx.agents.get(SessionId(first.session.sessionId))!
+    const requests = h.model.requests.length
+    await WorkDao.forDirectory(h.app.directory).transaction(async state => {
+      const item = state.continuousRules![0]!.items[0]!
+      item.state = 'blocked'; item.recoveryBlocked = true
+      item.reason = "Cannot read properties of undefined (reading 'observeSession')"
+    })
+    await fixtures.run(() => app.reconcileContinuous())
+    const after = (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!
+    expect(after.items[0]).toMatchObject({ state: 'active', ref, executionId: first.id })
+    expect(after.items[0]!.recoveryBlocked).toBeUndefined()
+    expect(after.error).toBeUndefined()
+    expect(after.slots).toEqual([ref])
+    expect(agent.status).toBe('running')
+    expect(h.ctx.agents.get(agent.id)).toBe(agent)
+    expect(h.model.requests).toHaveLength(requests)
+    expect((await query({ type: 'project.detail', projectId })).tasks).toHaveLength(1)
+    expect((await query({ type: 'task.detail', ref })).execution).toMatchObject({ id: first.id, session: first.session, owner: first.owner, epoch: first.epoch, model: first.model, permissionPreset: first.permissionPreset })
+    release()
+    await fixtures.run(() => agent.whenIdle())
+    await fixtures.run(() => app.reconcileControls())
+    expect((await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!.items[0]).toMatchObject({ state: 'blocked', reason: expect.stringContaining('idle without new actionable progress') })
+  } finally { release(); await fixtures.close() }
+}, 20_000)
+
+it('ends a real running root and native child through public cancellation, retaining capacity until owner jobs stop', async ({ signal }) => {
+  const fixtures = new ExecutionFixtures(signal)
+  const releaseTools = new Map<string, () => void>()
+  let finishJob = () => {}
+  try {
+    const h = await fixtures.mount(await fixtures.root(), 'read-only')
+    await h.ctx.plugin(LocalJobs)
+    await h.ctx.plugin(ToolJobs, { completionDelivery: 'quiet' })
+    await h.ctx.plugin(Subagents, { maxActiveSubagents: 8, maxDepth: 1 })
+    h.ctx.subagents.registerProvider({ name: 'queue-end-native', capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false }, inheritsParentContext: false,
+      async prepareContinuable() { return {} }, async start() { throw Error('Only native continuable creation is used') } })
+    const app = new WorkApplication(h.app.directory, h.host, source)
+    const execute = (command: unknown) => fixtures.run(async () => completed(await app.execute(command, actor)))
+    const query = (request: unknown) => fixtures.run(async () => completed(await app.query(request, actor)))
+    installWorkTools(h.ctx, app, 'runtime')
+    const connected = await execute({ type: 'source.connect', commandId: 'end-connect', githubProject: { owner: 'example', type: 'org', number: 1 } })
+    const projectId = connected.project!.id, sourceId = connected.source!.id
+    await query({ type: 'source.issues', projectId, sourceId, page: 1, perPage: 20, assignee: '@me', state: 'open', refresh: true })
+    const options = (await query({ type: 'source.execution-options', projectId, sourceId })).executionOptions!
+    await execute({ type: 'continuous.configure', commandId: 'end-configure', projectId, sourceId, expectedVersion: 0, assignee: '@me', labels: ['bug'], resource: options.resources[0]!.ref, model: options.defaults.model, agentPreset: options.defaults.agentPreset, permissionPreset: options.defaults.permissionPreset, enabled: true })
+    const rule = (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!, ref = rule.active!
+    const execution = (await query({ type: 'task.detail', ref })).execution!
+    const parent = h.ctx.agents.get(SessionId(execution.session.sessionId))!
+    await fixtures.run(() => parent.whenIdle())
+    const jobIds: ReturnType<typeof h.ctx.jobs.start>[] = []
+    let jobCancelled = false
+    h.ctx.tools.register(defineTool({ name: 'hold_queue_end', description: 'Held cancellation-aware real tool', parameters: {},
+      output: { schema: { type: 'object', additionalProperties: false, properties: { result: { type: 'string', required: true } } }, render: (_, value) => [{ type: 'text', text: value.result }] },
+      async execute(_, exec) {
+        if (exec.agent!.id === parent.id) {
+          jobIds.push(h.ctx.jobs.start({ kind: 'bash', owner: parent.id, label: 'retained terminal output', run(job) { job.append('unconsumed terminal evidence'); return { done: Promise.resolve({ status: 'completed', result: 'unaccepted evidence' }), cancel() {} } } }))
+          jobIds.push(h.ctx.jobs.start({ kind: 'bash', owner: parent.id, label: 'cooperative stop pending', run(job) {
+            job.append('partial output retained')
+            const done = new Promise<{ status: 'killed'; result: string }>(resolve => { finishJob = () => resolve({ status: 'killed', result: 'stopped without acceptance' }) })
+            return { done, cancel() { jobCancelled = true } }
+          } }))
+        }
+        await new Promise<void>(resolve => { releaseTools.set(exec.agent!.id, resolve); exec.signal.addEventListener('abort', () => resolve(), { once: true }) })
+        return { result: 'held tool settled' }
+      } }))
+    h.model.nextTool = { name: 'hold_queue_end', arguments: {} }
+    const child = await fixtures.run(() => h.ctx.subagents.startContinuable({ provider: 'queue-end-native', label: 'owned native work', request: { parent, prompt: [{ type: 'text', text: 'Hold until cancelled' }] }, signal: signal! }))
+    await vi.waitFor(() => expect(releaseTools.has(child.childId)).toBe(true))
+    const unrelated = await fixtures.run(() => h.ctx.sessionController.create({ workspaceId: h.workspace.id, agentPreset: 'contract' }))
+    const other = h.ctx.agents.get(unrelated.sessionId)!
+    h.model.nextTool = { name: 'hold_queue_end', arguments: {} }
+    other.followup(createUserMessage({ content: [{ type: 'text', text: 'Independent held work' }], source: { kind: 'user' } }))
+    await vi.waitFor(() => expect(releaseTools.has(other.id)).toBe(true))
+    await execute({ type: 'task.associate-session', commandId: 'end-review', ref, expectedVersion: (await query({ type: 'task.detail', ref })).task!.version, session: { runtimeId: 'runtime', sessionId: other.id }, purpose: 'review' })
+    h.model.nextTool = { name: 'hold_queue_end', arguments: {} }
+    parent.followup(createUserMessage({ content: [{ type: 'text', text: 'Hold root work too' }], source: { kind: 'user' } }))
+    await vi.waitFor(() => expect(releaseTools.has(parent.id)).toBe(true))
+    await execute({ type: 'continuous.set-enabled', commandId: 'end-pause-intake', projectId, sourceId, expectedVersion: (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!.version, enabled: false })
+    const taskBefore = (await query({ type: 'task.detail', ref })).task!
+    const beforeLog = parent.session.snapshotEvents()
+    const end = { type: 'task.control', commandId: 'real-end', ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch, action: 'end', text: '明确结束这条队列处理，不声明验收' }
+    const pending = await execute(end)
+    expect(pending.execution).toMatchObject({ control: { action: 'end', status: 'accepted' }, error: { code: expect.stringMatching(/^queue-end-/) } })
+    expect(jobCancelled).toBe(true)
+    await vi.waitFor(() => expect(parent.status).toBe('idle'))
+    expect(h.ctx.agents.get(child.childId)?.status ?? 'inactive').not.toBe('running')
+    expect(other.status).not.toBe('idle')
+    expect((await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!.slots).toContainEqual(ref)
+    finishJob()
+    await fixtures.run(() => h.ctx.jobs.wait(jobIds[1]!, 1000, parent.id))
+    await vi.waitFor(() => expect(h.ctx.agents.get(child.childId)).toBeUndefined())
+    await fixtures.run(() => app.reconcileControls())
+    const ended = await query({ type: 'task.detail', ref })
+    expect(ended.execution, JSON.stringify(ended.execution?.error)).toMatchObject({ control: { action: 'end', status: 'applied' }, state: 'paused' })
+    const finalRule = (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!
+    expect(finalRule.slots).not.toContainEqual(ref)
+    expect(finalRule.items[0]).toMatchObject({ state: 'completed', end: { status: 'applied' } })
+    expect(finalRule.items.slice(1)).toEqual(rule.items.slice(1))
+    const detail = await query({ type: 'task.detail', ref })
+    expect(detail.task).toEqual(taskBefore)
+    expect(detail.task!.completion).toBeUndefined()
+    expect(detail.execution!.events).toEqual(expect.arrayContaining(execution.events))
+    expect(detail.execution!.events).toContainEqual(expect.objectContaining({ delivery: 'accepted', acceptance: 'unassessed', nativeMessage: expect.objectContaining({ source: expect.objectContaining({ kind: 'subagent-settled', senderSessionId: child.childId }) }) }))
+    expect(h.ctx.jobs.get(jobIds[0]!, parent.id).status).toBe('completed')
+    expect(h.ctx.jobs.get(jobIds[1]!, parent.id).status).toBe('killed')
+    expect(h.ctx.jobs.readAt(jobIds[0]!, 0, parent.id).chunks.map(chunk => chunk.text).join('')).toContain('unconsumed terminal evidence')
+    const persisted = await fixtures.run(() => h.ctx.sessionController.inspect(parent.id))
+    expect(persisted.events.slice(0, beforeLog.length)).toEqual(beforeLog)
+    expect(persisted.events.some(event => event.type === 'tool/call' && event.data.name === 'job_output')).toBe(false)
+    expect(persisted.events.some(event => event.type === 'turn/end' && event.data.reason.kind === 'aborted')).toBe(true)
+    expect(other.session.snapshotEvents().some(event => event.type === 'turn/end' && event.data.reason.kind === 'aborted')).toBe(false)
+    const requestCount = h.model.requests.length
+    await fixtures.run(() => app.reconcileControls())
+    expect(h.model.requests).toHaveLength(requestCount)
+    expect((await query({ type: 'task.detail', ref })).execution).toMatchObject({ id: execution.id, control: { action: 'end', status: 'applied' } })
+    console.log('real queue end', JSON.stringify({ root: parent.id, child: child.childId, jobs: jobIds.map(id => h.ctx.jobs.get(id, parent.id)), terminal: finalRule.items[0]!.end, unrelatedRunning: other.status, completion: detail.task!.completion ?? null }))
+  } finally {
+    finishJob()
+    for (const release of releaseTools.values()) release()
+    await fixtures.close()
+  }
+}, 15000)

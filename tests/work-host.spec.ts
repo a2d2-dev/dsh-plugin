@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { Context, Service } from '@deepseek-ai/cordis'
+import SessionQuery from '@deepseek-ai/dsh-session-query'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import Storage from '@deepseek-ai/dsh-storage'
@@ -24,6 +25,11 @@ import { SourceError } from '../src/work-sources/github.ts'
 const githubPort: GitHubSourcePort = {
   list: async () => ({ identity: { login: 'imneov', nodeId: 'U_1', name: 'LiuFeng' }, items: [], observedAt: '2026-10-20T00:00:00Z' }),
   detail: async (repository, number) => ({ identity: { login: 'imneov', nodeId: 'U_1', name: 'LiuFeng' }, issue: { nodeId: 'I_112', url: `https://github.com/${repository.owner}/${repository.repository}/issues/${number}`, number, repository, title: 'Existing issue', body: 'External source body', labels: [], assignees: ['imneov'], state: 'open', updatedAt: '2026-10-19T00:00:00Z', observedAt: '2026-10-20T00:00:00Z' } }),
+}
+
+class Query extends SessionQuery {
+  async searchSessions(): Promise<never> { throw new Error('Search is outside this observation regression') }
+  async searchEvents(): Promise<never> { throw new Error('Search is outside this observation regression') }
 }
 
 const roots: string[] = []
@@ -93,7 +99,7 @@ function completed(result: WorkResult): WorkCompleted {
   return result
 }
 
-it('starts managed recovery only after the public session controller is activated', async () => {
+it('starts managed recovery only after controller and actual session query services are activated', async () => {
   const recovery = vi.spyOn(WorkApplication.prototype, 'reconcileControls')
   try {
     const { ctx } = await mount(await root(), undefined, false)
@@ -103,6 +109,9 @@ it('starts managed recovery only after the public session controller is activate
     expect(recovery).not.toHaveBeenCalled()
     // Real Cordis service activation releases the production recovery injection.
     ctx.provide('sessionController', {} as never)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(recovery).not.toHaveBeenCalled()
+    await ctx.plugin(Query)
     await vi.waitFor(() => expect(recovery).toHaveBeenCalled())
     await expect(recovery.mock.results[0]!.value).resolves.toBeUndefined()
   } finally { recovery.mockRestore() }

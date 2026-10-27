@@ -167,7 +167,7 @@ export class WorkApplication {
           if (lifecycleOwned(message) || owner!.events.some(item => item.id === message.id)) continue
           const text = message.content.flatMap(block => typeof block === 'object' && block !== null && 'type' in block && block.type === 'text' && 'text' in block && typeof block.text === 'string' ? [block.text] : []).join('\n')
           const managed = continuousOwner(current, owner!.ref)
-          if (managed && (!(owner!.error || owner!.continuation?.error || owner!.runtimeFailure || managed.item.recoveryBlocked) || typeof message.source === 'object' && message.source !== null && 'kind' in message.source && message.source.kind === 'user') && managed.item.state !== 'completed' && !continuousCompleted(current, owner!) && owner!.state !== 'paused' && !(owner!.control?.action === 'pause' && owner!.control.status === 'accepted')) { managed.item.resumeRequested = true; managed.item.attempts = 0; delete managed.item.retryAt; delete managed.item.recoveryBlocked; if (owner!.runtimeFailure) owner!.runtimeFailure.acknowledged = true }
+          if (managed && !managed.item.end && owner!.control?.action !== 'end' && (!(owner!.error || owner!.continuation?.error || owner!.runtimeFailure || managed.item.recoveryBlocked) || typeof message.source === 'object' && message.source !== null && 'kind' in message.source && message.source.kind === 'user') && managed.item.state !== 'completed' && !continuousCompleted(current, owner!) && owner!.state !== 'paused' && !(owner!.control?.action === 'pause' && owner!.control.status === 'accepted')) { managed.item.resumeRequested = true; managed.item.attempts = 0; delete managed.item.retryAt; delete managed.item.recoveryBlocked; if (owner!.runtimeFailure) owner!.runtimeFailure.acknowledged = true }
           owner!.events.push({ id: message.id, text: text.trim() ? text.slice(0, 100_000) : 'Native Session input', kind: 'input', delivery: 'accepted', acceptance: 'unassessed', nativeMessage: structuredClone(message) })
         }
         return false
@@ -190,7 +190,7 @@ export class WorkApplication {
     if (!execution) return undefined
     const task = taskAt(state, execution.ref)
     const current = execution.session.sessionId === sessionId
-    const status = isTaskCompleted(task) ? '已完成' : execution.control?.status === 'accepted' && execution.control.action !== 'resume'
+    const status = isTaskCompleted(task) ? '已完成' : execution.control?.action === 'end' ? (execution.control.status === 'applied' ? '队列已结束，业务验收未确认' : '正在结束队列处理') : execution.control?.status === 'accepted' && execution.control.action !== 'resume'
       ? execution.control.action === 'pause' ? '暂停中' : '等待中'
       : execution.state === 'waiting' ? '等待中' : execution.state === 'paused' ? '已暂停' : execution.state
     return [
@@ -660,8 +660,44 @@ export class WorkApplication {
             continue
           }
           if (execution) {
+            if (execution.control?.action === 'end') {
+              if (execution.control.status === 'accepted' && host.status(execution) !== 'running') await this.ensureExecution(execution.id, execution.control.commandId)
+              continue
+            }
+            let owner = continuousOwner(state, execution.ref)!
+            // Older hosts could activate the controller before sessionQuery. Only
+            // that proven read-only failure is safe to re-observe automatically;
+            // unknown settlement/creation outcomes still require explicit recovery.
+            if (owner.item.recoveryBlocked && execution.actual && owner.item.executionId === execution.id
+              && owner.item.reason === "Cannot read properties of undefined (reading 'observeSession')" && host.failure) {
+              try {
+                await this.observeRuntimeFailure(execution.id)
+              } catch { continue } // The required observation is still unavailable.
+              await this.sourceTransaction(async state => {
+                const current = state.executions.find(item => item.id === execution!.id)!
+                const managed = continuousOwner(state, current.ref)!
+                if (current.control?.action === 'end' || continuousCompleted(state, current)
+                  || current.epoch !== execution!.epoch || !sameSession(current.session, execution!.session)
+                  || managed.item.executionId !== current.id || !continuousHasSlot(managed.rule, current.ref)
+                  || managed.item.reason !== "Cannot read properties of undefined (reading 'observeSession')") return
+                delete managed.item.recoveryBlocked; delete managed.item.reason
+                managed.item.attempts = 0
+                if (!continuousCompleted(state, current) && current.state !== 'failed' && !current.error && !current.continuation?.error
+                  && !current.continuationBlocked && !(current.runtimeFailure && !current.runtimeFailure.acknowledged)) {
+                  managed.item.state = ['waiting', 'paused'].includes(current.state) ? current.state as 'waiting' | 'paused'
+                    : current.control?.status === 'accepted' && current.control.action !== 'resume' ? 'blocked' : 'active'
+                }
+                managed.item.reason = (current.error ?? current.continuation?.error ?? current.continuationBlocked
+                  ?? (current.runtimeFailure && !current.runtimeFailure.acknowledged ? current.runtimeFailure : undefined))?.message
+                  ?? (['waiting', 'paused'].includes(current.state) || current.control?.status === 'accepted' && current.control.action !== 'resume' ? current.control?.reason : undefined)
+                const remaining = managed.rule.items.find(item => item.recoveryBlocked)
+                managed.rule.error = sourceScopeError(managed.rule, state.sources.find(source => source.id === managed.rule.sourceId))
+                  ?? (remaining ? { code: 'continuous-recovery-blocked', message: remaining.reason ?? 'Host recovery needs an explicit retry' } : undefined)
+              })
+              state = await this.load(); execution = state.executions.find(item => item.id === execution!.id)!
+              owner = continuousOwner(state, execution.ref)!
+            }
             if (host.status(execution) === 'running') continue
-            const owner = continuousOwner(state, execution.ref)!
             if (owner.item.recoveryBlocked && !owner.item.resumeRequested) continue
             try {
               await this.observeRuntimeFailure(execution.id)
@@ -730,7 +766,7 @@ export class WorkApplication {
                   await this.sourceTransaction(async state => {
                     const current = state.executions.find(item => item.id === execution!.id)!
                     const owner = continuousOwner(state, current.ref)!
-                    if (continuousCompleted(state, current)) return
+                    if (continuousCompleted(state, current) || owner.item.end || current.control?.action === 'end') return
                     owner.item.state = 'active'; delete owner.item.resumeRequested; delete owner.item.explicitResumeRequested; delete owner.item.reason
                     if (['waiting', 'paused'].includes(current.state) || current.control?.action !== 'resume') current.control = { commandId: `continuous-resume:${current.id}:${current.events.length}`, action: 'resume', status: 'accepted' }
                   })
@@ -769,7 +805,7 @@ export class WorkApplication {
               const current = state.continuousRules!.find(rule => rule.id === ruleId)!
               const item = current.items.find(item => item.nodeId === resume.nodeId)!
               const execution = state.executions.find(execution => execution.id === item.executionId)!
-              if (continuousSlots(current).length >= (current.queue?.concurrency ?? 1) || continuousCompleted(state, execution) || current.queue && !current.enabled && !item.explicitResumeRequested) return
+              if (item.end || execution.control?.action === 'end' || continuousSlots(current).length >= (current.queue?.concurrency ?? 1) || continuousCompleted(state, execution) || current.queue && !current.enabled && !item.explicitResumeRequested) return
               continuousSetSlot(current, item.ref!, true); item.state = 'active'; delete item.resumeRequested; delete item.explicitResumeRequested; delete item.reason
               execution.control = { commandId: `continuous-resume:${execution.id}:${execution.events.length}`, action: 'resume', status: 'accepted' }
             })
@@ -803,7 +839,7 @@ export class WorkApplication {
             if (freshSource && !sourceScopeError(current, freshSource)) discoverContinuous(current, freshSource, state)
             observeContinuousTasks(state, current)
             const item = current.items.find(item => item.nodeId === candidate.nodeId)!
-            if (continuousSlots(current).length >= (current.queue?.concurrency ?? 1) || !current.enabled || current.version !== rule.version || item.state !== 'queued' || sourceScopeError(current, state.sources.find(source => source.id === current.sourceId))) return undefined
+            if (item.end || continuousSlots(current).length >= (current.queue?.concurrency ?? 1) || !current.enabled || current.version !== rule.version || item.state !== 'queued' || sourceScopeError(current, state.sources.find(source => source.id === current.sourceId))) return undefined
             if (!continuousDependenciesReady(state, current, item.nodeId)) return undefined
             const commandId = `continuous:${current.id}:${createHash('sha256').update(item.nodeId).digest('hex')}`
             // Reserve import, binding, execution and slot in one snapshot. No host side effects precede this commit.
@@ -815,6 +851,7 @@ export class WorkApplication {
             if (imported.status !== 'completed' || !imported.ref || !imported.task) { item.state = 'blocked'; item.reason = imported.status !== 'completed' ? imported.error.message : 'Issue import returned no task'; return undefined }
             const existing = draft.executions.find(execution => sameTask(execution.ref, imported.ref))
             if (existing) {
+              if (existing.control?.action === 'end') return undefined
               const other = continuousOwner(draft, existing.ref)
               if (other && other.rule.id !== current.id) { item.state = 'waiting'; item.reason = `Canonical Task is owned by rule ${other.rule.id}; observe without advancing`; return undefined }
               const accepted = imported.task.progress?.stage === 'done' && imported.task.progress.specificationVersion === imported.task.specification.version
@@ -947,6 +984,10 @@ export class WorkApplication {
       const state = await this.load()
       return { status: 'completed', task: taskAt(state, receipt.execution.ref), execution: state.executions.find(item => item.id === receipt.execution!.id) }
     }
+    if (command.type === 'continuous.end' && receipt.status === 'completed') {
+      if (receipt.execution) await this.ensureExecution(receipt.execution.id, command.commandId)
+      return this.query({ type: 'continuous.status', projectId: command.projectId, sourceId: command.sourceId }, actor)
+    }
     if (command.type === 'task.continuation-material' || command.type === 'task.organize' || command.type === 'task.report' || command.type === 'task.configure-continuation') return receipt
     if (command.type === 'task.continue' && !actor.operator) return receipt
     if (command.type === 'task.control' && (!actor.operator || command.action === 'progress')) return receipt
@@ -1032,6 +1073,10 @@ export class WorkApplication {
     await this.refreshSessionTitles()
     await this.reconcileCompletions()
     if (!this.host.execution) return
+    // Explicit ends also recover items that already released a pause/blocked slot.
+    for (const execution of (await this.load()).executions) {
+      if (execution.control?.action === 'end' && execution.control.status === 'accepted' && this.host.execution.status(execution) !== 'running') await this.ensureExecution(execution.id, execution.control.commandId)
+    }
     await this.reconcileContinuous()
     const snapshot = await this.load()
     for (const initial of snapshot.executions) {
@@ -1319,6 +1364,35 @@ export class WorkApplication {
       })
       const state = await this.load()
       let execution = state.executions.find(item => item.id === id)!
+      if (execution.control?.action === 'end') {
+        if (execution.control.status === 'applied') return { status: 'completed', execution }
+        const control = execution.control
+        try {
+          if (!this.host.execution?.end) throw new WorkExecutionError('queue-end-capability-unavailable', '宿主不支持安全结束；请在能力恢复后重试结束')
+          await this.host.execution.end(execution)
+          execution = await this.dao.transaction(async state => {
+            const current = state.executions.find(item => item.id === id)!
+            if (current.control?.commandId !== control.commandId || current.epoch !== execution.epoch) return current
+            const owner = continuousOwner(state, current.ref)!
+            current.state = 'paused'; current.control.status = 'applied'; delete current.error
+            owner.item.end = { commandId: control.commandId, status: 'applied' }
+            owner.rule.version++
+            owner.item.state = 'completed'; owner.item.reason = `${control.reason || '明确结束本项队列处理'}；队列已结束，业务验收未确认，历史结果保留`
+            delete owner.item.resumeRequested; delete owner.item.explicitResumeRequested; delete owner.item.retryAt; delete owner.item.recoveryBlocked
+            continuousSetSlot(owner.rule, current.ref, false)
+            this.dao.appendHistory(current, { state: 'paused', commandId: control.commandId })
+            return current
+          })
+        } catch (error) {
+          execution = await this.dao.transaction(async state => {
+            const current = state.executions.find(item => item.id === id)!
+            current.error = { code: error instanceof WorkExecutionError ? error.code : 'queue-end-unknown', message: error instanceof Error ? error.message : '停止结果未知，请重试结束' }
+            continuousOwner(state, current.ref)!.item.reason = `结束尚未完成：${current.error.message}；可重试结束`
+            return current
+          })
+        }
+        return { status: 'completed', execution }
+      }
       if (execution.events.some(event => pendingEvent(event) && lifecycleOwned(event.nativeMessage))) execution = await save(discardLifecycleEvents)
       if (isTaskCompleted(taskAt(state, execution.ref))) return { status: 'completed', execution }
       const owner = continuousOwner(state, execution.ref)
@@ -1344,6 +1418,9 @@ export class WorkApplication {
           item.model = { provider: actual.provider, model: actual.model, ...(actual.reasoningEffort ? { reasoningEffort: actual.reasoningEffort } : {}) }
           if (item.state === 'creating') { item.state = 'ready'; this.dao.appendHistory(item, { state: 'ready', commandId }) }
         })
+        // Host ensure/title writes may have raced a newly accepted end. Leave it
+        // pending for the dedicated end pass after this execution lease releases.
+        if (execution.control?.action === 'end') return { status: 'completed', execution }
         const control = execution.control
         if (control?.status === 'accepted') {
           await this.host.execution!.settle(execution)
@@ -1353,7 +1430,10 @@ export class WorkApplication {
             item.control!.status = 'applied'
             this.dao.appendHistory(item, { state: item.state, commandId })
           })
-          if (control.action === 'resume' && execution.control?.commandId === control.commandId) await this.host.execution!.wake(execution)
+          // A new control accepted during settle owns the next pass, including
+          // its input delivery. Never apply or dispatch under the old receipt.
+          if (execution.control?.commandId !== control.commandId) return { status: 'completed', execution }
+          if (control.action === 'resume') await this.host.execution!.wake(execution)
         }
         for (const event of execution.events) {
           if (!pendingEvent(event)) continue
@@ -1438,6 +1518,24 @@ export class WorkApplication {
       if (configured.status === 'completed' && configured.source) remember(configured.source)
       return configured.status === 'completed' ? { ...configured, project: created.project } : configured
     }
+    if (command.type === 'continuous.end') {
+      const rule = state.continuousRules?.find(rule => rule.projectId === command.projectId && rule.sourceId === command.sourceId)
+      if (!rule) return failed('continuous-unconfigured', '队列尚未配置')
+      const item = rule.items.find(item => item.nodeId === command.nodeId)
+      if (!item) return failed('continuous-item-missing', '队列中没有本项工作')
+      if (item.state === 'completed') return { status: 'completed', continuousRule: rule }
+      if (rule.version !== command.expectedVersion) return conflict(rule.version)
+      const execution = state.executions.find(execution => execution.id === item.executionId && sameTask(execution.ref, item.ref))
+      if (execution) {
+        const result = await this.apply(state, { type: 'task.control', commandId: command.commandId, ref: execution.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch, action: 'end', text: '用户明确结束本项队列处理' })
+        return result.status === 'completed' ? { ...result, continuousRule: rule } : result
+      }
+      if (item.ref || item.executionId) return failed('continuous-execution-missing', '关联执行缺失，无法核实安全结束')
+      item.end = { commandId: command.commandId, status: 'applied' }; item.state = 'completed'; item.reason = '用户明确结束本项队列处理；业务验收未确认'
+      delete item.resumeRequested; delete item.explicitResumeRequested; delete item.retryAt; delete item.recoveryBlocked
+      rule.version++
+      return { status: 'completed', continuousRule: rule }
+    }
     if (command.type === 'continuous.refresh') return failed('unsupported-command', 'Refresh requires source observation')
     if (command.type === 'continuous.instruct' || command.type === 'continuous.block') {
       const rule = state.continuousRules?.find(rule => rule.projectId === command.projectId && rule.sourceId === command.sourceId)
@@ -1512,9 +1610,15 @@ export class WorkApplication {
         if (managed) { managed.item.attempts = 0; delete managed.item.retryAt; delete managed.item.recoveryBlocked }
       }
       if (command.type === 'task.completion-sync') return task.completion ? { status: 'completed', task, execution } : failed('completion-required', 'Only an accepted Task can synchronize completion')
-      if (command.type === 'task.organize') return applyTaskOrganization(state, execution, command.organization, command.commandId, randomUUID)
       const managed = continuousOwner(state, execution.ref)
-      if (managed && command.type === 'task.reconcile') { managed.item.resumeRequested = true; managed.item.explicitResumeRequested = true; managed.item.attempts = 0; delete managed.item.retryAt; delete managed.item.recoveryBlocked }
+      if (command.type === 'task.control' && command.action === 'end' && managed?.item.state === 'completed') return { status: 'completed', execution }
+      if (command.type === 'task.control' && command.action === 'end' && !managed) return failed('continuous-required', '只有持续队列中的工作可以结束队列处理')
+      if (execution.control?.action === 'end') {
+        if (command.type === 'task.control' && command.action === 'end') return { status: 'completed', execution }
+        if (command.type !== 'task.reconcile') return failed('continuous-ended', '本项队列已明确结束，不能恢复业务处理；历史记录仍可查看')
+      }
+      if (command.type === 'task.organize') return applyTaskOrganization(state, execution, command.organization, command.commandId, randomUUID)
+      if (managed && command.type === 'task.reconcile' && execution.control?.action !== 'end') { managed.item.resumeRequested = true; managed.item.explicitResumeRequested = true; managed.item.attempts = 0; delete managed.item.retryAt; delete managed.item.recoveryBlocked }
       if (managed && continuousCompleted(state, execution) && (command.type === 'task.input' || command.type === 'task.continue' || (command.type === 'task.control' && command.action === 'resume'))) return failed('continuous-completed', 'Completed continuous work cannot restart')
       if (command.type === 'task.report') {
         let reminders: string[] | undefined
@@ -1572,6 +1676,7 @@ export class WorkApplication {
         if (command.action === 'progress') execution.progress = command.text
         else {
           execution.control = { commandId: command.commandId, action: command.action, status: 'accepted', reason: command.text }
+          if (managed && command.action === 'end') { managed.item.end = { commandId: command.commandId, status: 'accepted' }; managed.item.reason = '结束中；等待本项执行安全停止'; managed.rule.version++ }
           if (managed && command.action !== 'resume') { delete managed.item.resumeRequested; delete managed.item.explicitResumeRequested }
         }
       }
