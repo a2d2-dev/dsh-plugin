@@ -64,10 +64,10 @@ export class ExecutionFixtures {
       return path
     })
   }
-  mount(path: string, permissionPreset = 'workspace-write') {
+  mount(path: string, permissionPreset = 'workspace-write', executionGuard = false) {
     return this.run(async () => {
       if (!this.roots.has(path)) throw new Error('Execution fixture does not own this directory')
-      const h = await mountExecution(path, permissionPreset, ctx => this.contexts.add(ctx))
+      const h = await mountExecution(path, permissionPreset, ctx => this.contexts.add(ctx), executionGuard)
       this.trackApplication(h.app)
       return h
     })
@@ -126,6 +126,7 @@ class Query extends SessionQuery {
 export class Model extends LlmAdapter {
   requests: GenerateOptions[] = []
   acknowledgeContinuation = true
+  uniqueToolIds = false
   nextTool?: { name: string; arguments: Record<string, unknown> }
   selectTool?: (request: GenerateOptions) => Model['nextTool']
   async listModels(provider: string) { return ['default', 'selected'].map(id => ({ provider, id, name: id })) }
@@ -140,7 +141,7 @@ export class Model extends LlmAdapter {
       ? { name: 'work_continuation_received', arguments: { operation_id: text!.match(/operation_id ([a-f0-9-]+)/)![1], material_command_id: text!.match(/material_command_id ([^, ]+)/)![1], expected_epoch: Number(text!.match(/expected_epoch ([0-9]+)/)![1]) } } : undefined
     if (this.nextTool || acknowledgement) {
       const tool = this.nextTool ?? acknowledgement!
-      const id = ToolCallId(this.nextTool ? 'contract-call' : receiptId!)
+      const id = ToolCallId(this.nextTool ? this.uniqueToolIds ? `contract-call-${this.requests.length}` : 'contract-call' : receiptId!)
       this.nextTool = undefined
       const args = JSON.stringify(tool.arguments)
       yield { type: 'block-start', index: 0, blockType: 'tool-call' }
@@ -155,7 +156,7 @@ export class Model extends LlmAdapter {
     yield { type: 'finish', reason: { kind: 'stop' } }
   }
 }
-export async function mountExecution(path: string, permissionPreset = 'workspace-write', register: (ctx: Context) => void = () => {}) {
+export async function mountExecution(path: string, permissionPreset = 'workspace-write', register: (ctx: Context) => void = () => {}, executionGuard = false) {
   const ctx = new Context()
   register(ctx)
   await ctx.plugin(LlmRuntime)
@@ -201,6 +202,8 @@ export async function mountExecution(path: string, permissionPreset = 'workspace
   await ctx.plugin(A2d2Service, { root: path })
   const workspace = await ctx.workspaceRegistry.create(path)
   const host = new DshWorkHost(ctx, 'runtime')
+  // Legacy host tests use a text-only model; guard-on behavior has its own real AgentLoop suite.
+  if (!executionGuard) host.execution.connectGuard = undefined
   const app = new WorkApplication(join(path, 'work'), host)
   return { ctx, model, host, app, workspace }
 }

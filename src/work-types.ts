@@ -83,7 +83,8 @@ export interface WorkExecution {
   retired?: { session: SessionRef; epoch: number; operationId: string }[]
   continuationMaterial?: ContinuationMaterial
   progress?: string
-  control?: { commandId: string; action: 'wait' | 'pause' | 'resume' | 'end'; status: 'accepted' | 'applied'; reason?: string }
+  executionGuard?: { corrections: number; progress: string[]; exhausted?: boolean }
+  control?: { commandId: string; action: 'wait' | 'pause' | 'resume' | 'end'; status: 'accepted' | 'applied'; reason?: string; yield?: import('./work-execution/guard.ts').WorkYield }
   error?: { code: string; message: string }
 }
 export interface ContinuousWorkItem {
@@ -151,7 +152,7 @@ export type WorkCommand =
   | (Command & ExecutionRef & { type: 'task.organize'; owner: string; epoch: number; organization: import('./work-organization.ts').TaskOrganization })
   | (Command & ExecutionRef & { type: 'task.report'; owner: string; epoch: number; report: TaskReport })
   | (Command & ExecutionRef & { type: 'task.continuation-material'; owner: string; epoch: number; content: ContinuationContent })
-  | (Command & ExecutionRef & { type: 'task.control'; owner: string; epoch: number; action: 'progress' | 'wait' | 'pause' | 'resume' | 'end'; text: string })
+  | (Command & ExecutionRef & { type: 'task.control'; owner: string; epoch: number; action: 'progress' | 'wait' | 'pause' | 'resume' | 'end'; text: string; yield?: import('./work-execution/guard.ts').WorkYield })
   | (Command & ExecutionRef & { type: 'task.input'; owner: string; epoch: number; text: string; kind: 'input' | 'result' })
   | (Command & ExecutionRef & { type: 'task.completion-sync'; owner: string; epoch: number })
   | (Command & ExecutionRef & { type: 'task.reconcile'; owner: string; epoch: number })

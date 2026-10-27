@@ -1,3 +1,5 @@
+import { CONTINUE_AUTHORIZED_WORK } from './work-execution/guard.ts'
+import type { WorkGuardInput, WorkGuardOptions, WorkYield } from './work-execution/guard.ts'
 import { continuousBlocks } from './work-blocks.ts'
 import { screeningBasis, screeningKey, validateScreening, SCREENING_PENDING } from './work-screening.ts'
 import { workSessionTitles } from './work-session-titles.ts'
@@ -90,9 +92,10 @@ export class WorkApplication {
   /** User-triggered source reads currently running; the scheduled pass yields to them. */
   private readonly screeningJobs = new Map<string, Promise<void>>()
   private refreshCount = 0
-  constructor(readonly directory: string, readonly host: WorkHost, readonly source?: GitHubSourcePort, readonly planner?: WorkPlanner) {
+  constructor(readonly directory: string, readonly host: WorkHost, readonly source?: GitHubSourcePort, readonly planner?: WorkPlanner, readonly guardOptions: WorkGuardOptions = {}) {
     if (!isAbsolute(directory)) throw new Error('Work record directory must be absolute')
     this.dao = WorkDao.forDirectory(directory)
+    if (guardOptions.enabled !== false) this.host.execution?.connectGuard?.((sessionId, input) => this.guardExecution(sessionId, input))
     this.host.execution?.connectObservation?.(async requested => {
       const state = await this.load()
       const current = state.executions.find(item => item.id === requested.id && sameTask(item.ref, requested.ref))
@@ -181,6 +184,55 @@ export class WorkApplication {
       })
     })
   }
+  /** Only the current authorized execution can receive a correction, never its history. */
+  private async guardExecution(sessionId: string, input: WorkGuardInput): Promise<string | undefined> {
+    if (input.kind === 'ingress') return undefined
+    // Observe without the DAO writer lock. No maintenance/whenIdle calls here:
+    // this callback runs inside the exact Agent's stopping boundary.
+    const observed = input.kind === 'stopping' ? (await this.load()).executions.find(item => item.session.sessionId === sessionId) : undefined
+    const facts = observed && this.host.execution?.observation ? await this.host.execution.observation(observed) : undefined
+    return this.dao.transaction(async state => {
+      const execution = state.executions.find(item => item.session.sessionId === sessionId)
+      if (!execution || isTaskCompleted(taskAt(state, execution.ref)) || continuousCompleted(state, execution)
+        || continuationInFlight(execution) || execution.continuationBlocked || execution.error
+        || execution.runtimeFailure && !execution.runtimeFailure.acknowledged
+        || ['accepted', 'creating', 'failed', 'paused'].includes(execution.state)
+        || execution.control?.action === 'pause' || execution.control?.action === 'end') return undefined
+      if (observed && (observed.id !== execution.id || observed.owner !== execution.owner || observed.epoch !== execution.epoch)) return undefined
+      const pendingExecutor = facts?.sessions.some(row => ['current', 'native-child'].includes(row.role) && (row.waitingHuman
+        || row.children.some(child => !child.returned && child.status === 'running')
+        || row.jobs.some(job => job.availability !== 'lost' && ['running', 'stopping'].includes(job.status))))
+      if (pendingExecutor) return undefined
+      const waiting = execution.state === 'waiting' || execution.control?.action === 'wait'
+      const ownWait = execution.control?.action === 'wait' && execution.control.commandId.startsWith('tool:')
+      if (waiting && (!ownWait || execution.control?.yield && execution.control.yield.reason !== 'internal' && !(input.kind === 'stopping' && input.recheckWait))) return undefined
+      if (input.kind === 'resume') {
+        if (waiting || !continuousMayAdvance(state, execution) || execution.executionGuard?.exhausted) return undefined
+        return CONTINUE_AUTHORIZED_WORK
+      }
+      if (input.answerOnly || waiting && !input.recheckWait && execution.control?.status !== 'accepted') return undefined
+      if (!waiting && !continuousMayAdvance(state, execution)) return undefined
+      const guard = execution.executionGuard ??= { corrections: 0, progress: [] }
+      const fresh = input.progress.filter(key => !guard.progress.includes(key))
+      if (fresh.length) {
+        guard.progress.push(...fresh)
+        guard.corrections = 0
+        delete guard.exhausted
+        return undefined
+      }
+      if (guard.exhausted) return undefined
+      if (guard.corrections < (this.guardOptions.maxCorrections ?? 2)) {
+        guard.corrections++
+        return CONTINUE_AUTHORIZED_WORK
+      }
+      guard.exhausted = true
+      execution.control = { commandId: `guard:${execution.id}:${execution.epoch}`, action: 'wait', status: 'accepted',
+        reason: `运行器已 ${guard.corrections} 次要求执行下一步，仍未观察到新的实际工具结果。任务未完成；自动纠正已停止，需检查本次会话为何没有执行。` }
+      const managed = continuousOwner(state, execution.ref)
+      if (managed) { delete managed.item.resumeRequested; delete managed.item.explicitResumeRequested; managed.item.reason = execution.control.reason }
+      return undefined
+    })
+  }
   /** Inform native conversations without changing Task state or coordinator identity. */
   private async conversationContext(sessionId: string): Promise<string | undefined> {
     const state = await this.load()
@@ -197,9 +249,10 @@ export class WorkApplication {
       current ? `关联任务：${task?.title ?? execution.ref.taskId}；状态：${status}。你可以继续在此对话。`
         : `任务已转到会话 ${execution.session.sessionId}；此会话仍可继续对话。`,
       `当前任务处理会话：${execution.session.sessionId}。可从“关联任务 → 进入当前处理会话”打开。`,
-      `Task ${execution.ref.taskId}；协调代次 ${execution.epoch}。${current ? '此会话仍是当前协调会话。' : '此会话不再负责该 Task；不要继续自动推进原任务或冒充当前协调者写入 Task 记录。'}`,
+      `以下是供工具核对的内部上下文，不是用户进展说明，请勿照抄。任务 ${execution.ref.taskId}；epoch ${execution.epoch}。${current ? '此会话仍负责当前任务。' : '此会话已移交任务；不要自动推进原任务或写入其记录。'}`,
       ...(execution.control?.reason ? [`最近控制说明：${execution.control.reason.slice(0, 1200)}`] : []),
-      '这是当前协调事实，优先于历史启动消息的过期身份说明。正常接收并回答人工消息，可按用户请求使用宿主已有工具和权限；不需要先恢复 Task 才能对话。人工对话本身不解除暂停、不重开已完成任务、不恢复自动调度或改变协调归属。等待或完成工具返回后，向用户交代结果再结束本轮。Task 写操作按各自规则检查当前身份和状态。',
+      ...state.externalBindings.filter(binding => sameTask(binding.ref, execution.ref)).map(binding => `可只读核实的已接受来源：${JSON.stringify([binding.accepted, ...((binding.acceptedChildren ?? binding.accepted.subIssues)?.items ?? []), ...(binding.accepted.dependencies?.availability === 'available' ? binding.accepted.dependencies.blockedBy.items : [])].map(({ nodeId, number, repository }) => ({ nodeId, number, repository })))}。用 work_related_issue 读取；读取不授予修改权限。`),
+      '正常回答人工消息。用户追问状态或指出执行方式有误时，简短交代后继续已授权且未完成的工作。不要把状态问题当成暂停，也不要要求用户说“继续”。人工明确暂停、停止或只作答时服从；已完成、旧会话和接续维护不取得业务执行权。模型自己设错等待时，先核实再解除自己的等待；历史人工暂停或真实外部阻塞不得自行解除。核实证据是工作，不是等人的理由。权限模式只说明工具能力，不扩大任务授权。用日常中文说明结果和下一步，少用内部术语。',
     ].join('\n')
   }
   /** Reads authoritative execution facts without collecting jobs or starting any executor. */
@@ -299,14 +352,23 @@ export class WorkApplication {
       : 'Calling Session is not a current Task coordinator')
   }
   /** Trusted ToolRunContext adapter supplies only its real Session and call identity. */
-  async sessionControl(session: import('./work-types.ts').SessionRef, callId: string, action: string, text?: string, expectedEpoch?: number): Promise<WorkResult> {
+  async sessionControl(session: import('./work-types.ts').SessionRef, callId: string, action: string, text?: string, expectedEpoch?: number, yieldInfo?: WorkYield): Promise<WorkResult> {
     const state = await this.load()
     const execution = state.executions.find(item => sameSession(item.session, session))
     if (!execution) return this.coordinatorUnavailable(session)
     if (action === 'status') return { status: 'completed', task: taskAt(state, execution.ref), bindings: state.externalBindings.filter(item => sameTask(item.ref, execution.ref)), sourceIssues: sourceIssuesAt(state, execution.ref), execution, executionRuntime: this.host.execution?.status(execution) ?? 'inactive' }
+    if (action === 'wait' && yieldInfo) {
+      if (yieldInfo.reason === 'internal') return failed('wait-actionable', '读取资料、核实证据和检查自己的等待都属于当前工作。请立即执行下一项检查；无需用户说“继续”。')
+      if (yieldInfo.reason === 'executor') {
+        const facts = await this.host.execution?.observation?.(execution)
+        const tracked = facts?.sessions.some(row => (yieldInfo.executor && sameSession(row.session, yieldInfo.executor!) && row.role === 'native-child' && row.status === 'running')
+          || (yieldInfo.jobId && row.jobs.some(job => job.id === yieldInfo.jobId && ['running', 'stopping'].includes(job.status) && (!yieldInfo.executor || sameSession(row.session, yieldInfo.executor)))))
+        if (!tracked) return failed('wait-executor-unverified', '没有核实到仍在执行的准确子会话或作业。请检查实际执行者和恢复条件，不能只登记等待。')
+      }
+    }
     const commandId = `tool:${createHash('sha256').update(JSON.stringify([session.runtimeId, session.sessionId, callId])).digest('hex')}`
     return this.execute({ type: 'task.control', commandId, ref: execution.ref,
-      executionId: execution.id, owner: execution.owner, epoch: expectedEpoch ?? execution.epoch, action, text },
+      executionId: execution.id, owner: execution.owner, epoch: expectedEpoch ?? execution.epoch, action, text, ...(yieldInfo ? { yield: yieldInfo } : {}) },
     { operator: false, session, agentId: execution.agentId })
   }
   /** Public trusted adapter: source identity and Task references are resolved on the server. */
@@ -345,9 +407,9 @@ export class WorkApplication {
     const bindings = state.externalBindings.filter(item => sameTask(item.ref, execution.ref))
     if (bindings.length !== 1) return failed('native-child-binding-required', 'A unique accepted source is required')
     const binding = bindings[0]!
-    const known = [binding.accepted, ...((binding.acceptedChildren ?? binding.accepted.subIssues)?.items ?? [])]
+    const known = [binding.accepted, ...((binding.acceptedChildren ?? binding.accepted.subIssues)?.items ?? []), ...(binding.accepted.dependencies?.availability === 'available' ? binding.accepted.dependencies.blockedBy.items : [])]
     const ref = known.find(item => item.nodeId === (nodeId ?? binding.nodeId))
-    if (!ref) return failed('source-reference-unrelated', 'Only this Task source and its accepted native children may be read')
+    if (!ref) return failed('source-reference-unrelated', 'Only this Task source, accepted native children and accepted native dependencies may be read')
     if (!this.source) return failed('github-capability-unavailable', 'Trusted source reading is unavailable')
     try {
       const response = await this.source.detail(ref.repository, ref.number, ref.nodeId === binding.nodeId ? { nativeChildren: true } : undefined)
@@ -1675,7 +1737,7 @@ export class WorkApplication {
       if (command.type === 'task.control') {
         if (command.action === 'progress') execution.progress = command.text
         else {
-          execution.control = { commandId: command.commandId, action: command.action, status: 'accepted', reason: command.text }
+          execution.control = { commandId: command.commandId, action: command.action, status: 'accepted', reason: command.text, ...(command.yield ? { yield: command.yield } : {}) }
           if (managed && command.action === 'end') { managed.item.end = { commandId: command.commandId, status: 'accepted' }; managed.item.reason = '结束中；等待本项执行安全停止'; managed.rule.version++ }
           if (managed && command.action !== 'resume') { delete managed.item.resumeRequested; delete managed.item.explicitResumeRequested }
         }

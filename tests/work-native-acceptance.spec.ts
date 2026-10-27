@@ -250,3 +250,19 @@ it('requires current externally observed material after the necessary child chan
   expect(await h.app.sessionReport(h.execution.session, 'stale-external-result', { ...report, externalChildren })).toMatchObject({ status: 'failed', error: { code: 'native-child-evidence-unobserved' } })
   expect((await h.detail()).task!.completion).toBeUndefined()
 })
+
+it('reads only accepted native dependencies without granting mutations or accepting later unrelated references', async () => {
+  const h = await setup((parent, child) => {
+    parent.subIssues = { items: [], totalCount: 0, hasNextPage: false }
+    parent.dependencies = { availability: 'available', blockedBy: { items: [{ nodeId: child.nodeId, number: child.number, url: child.url, title: child.title, repository: child.repository, state: child.state }], totalCount: 1, hasNextPage: false } }
+  })
+  const before = (await h.detail()).task
+  expect(await h.app.sessionReadRelatedIssue(h.execution.session, h.child.nodeId)).toMatchObject({ status: 'completed', issue: { nodeId: h.child.nodeId } })
+  expect(h.reads).toContain('example/repo#2')
+  expect(h.writes()).toBe(0)
+  expect((await h.detail()).task).toEqual(before)
+  expect(await h.app.sessionReadRelatedIssue(h.execution.session, 'I_unrelated')).toMatchObject({ status: 'failed', error: { code: 'source-reference-unrelated' } })
+  expect(await h.app.sessionReadRelatedIssue(h.execution.session, h.child.nodeId, 999)).toMatchObject({ status: 'failed', error: { code: 'forbidden' } })
+  h.child.nodeId = 'I_identity_changed'
+  expect(await h.app.sessionReadRelatedIssue(h.execution.session, 'I_2')).toMatchObject({ status: 'failed', error: { code: 'source-identity-changed' } })
+})

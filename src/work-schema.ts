@@ -52,6 +52,7 @@ const continuationOperationSchema = z.object({
   requestDelivery: deliverySchema.optional(), kickoffDelivery: deliverySchema.optional(),
   error: z.object({ code: referenceId, message: text }).strict().optional(),
 }).strict().refine(operation => operation.phase !== 'received' || operation.protocolVersion === 1, 'Readable confirmation requires the versioned step protocol')
+export const workYieldSchema = z.object({ reason: z.enum(['human', 'external', 'executor', 'internal']), checkedFacts: z.array(text).min(1), wakeCondition: text, executor: sessionRefSchema.optional(), jobId: referenceId.optional() }).strict()
 export const executionSchema = z.object({
   id, ref: taskRefSchema, agentId: id, owner: id, epoch: z.number().int().positive(), resource: resourceRefSchema,
   session: sessionRefSchema, sessionMode: z.enum(['create', 'reuse']).default('create'), agentPreset: referenceId, model: modelSchema, permissionPreset: referenceId, policy: policySchema,
@@ -69,7 +70,8 @@ export const executionSchema = z.object({
   continuationHistory: z.array(continuationOperationSchema).optional(),
   retired: z.array(z.object({ session: sessionRefSchema, epoch: z.number().int().positive(), operationId: id }).strict()).optional(),
   progress: text.optional(),
-  control: z.object({ commandId: referenceId, action: z.enum(['wait', 'pause', 'resume', 'end']), status: z.enum(['accepted', 'applied']), reason: text.optional() }).strict().optional(),
+  executionGuard: z.object({ corrections: z.number().int().nonnegative(), progress: z.array(referenceId), exhausted: z.boolean().optional() }).strict().optional(),
+  control: z.object({ commandId: referenceId, action: z.enum(['wait', 'pause', 'resume', 'end']), status: z.enum(['accepted', 'applied']), reason: text.optional(), yield: workYieldSchema.optional() }).strict().optional(),
   error: z.object({ code: referenceId, message: text }).strict().optional(),
 }).strict()
 const command = { commandId: referenceId }
@@ -118,7 +120,7 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ ...fence, type: z.literal('task.organize'), organization: taskOrganizationSchema }).strict(),
   z.object({ ...fence, type: z.literal('task.report'), report: taskReportSchema }).strict(),
   z.object({ ...fence, type: z.literal('task.continuation-material'), content: continuationContentSchema }).strict(),
-  z.object({ ...fence, type: z.literal('task.control'), action: z.enum(['progress', 'wait', 'pause', 'resume', 'end']), text }).strict(),
+  z.object({ ...fence, type: z.literal('task.control'), action: z.enum(['progress', 'wait', 'pause', 'resume', 'end']), text, yield: workYieldSchema.optional() }).strict(),
   z.object({ ...fence, type: z.literal('task.input'), text, kind: z.enum(['input', 'result']) }).strict(),
   z.object({ ...fence, type: z.literal('task.completion-sync') }).strict(),
   z.object({ ...fence, type: z.literal('task.reconcile') }).strict(),

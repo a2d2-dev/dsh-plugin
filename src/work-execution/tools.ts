@@ -1,3 +1,4 @@
+import { workYieldSchema } from '../work-schema.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { WorkApplication } from '../work.ts'
@@ -89,11 +90,16 @@ export function installWorkTools(ctx: Context, app: WorkApplication, runtimeId: 
   })), 'managed continuation readable receipt')
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'work_control',
-    description: 'Check current-session ownership and Task/specification versions with status (no Task material); use work_read for explicit paginated details when supplied material is missing or changed. Status remains available after startup. Report progress, ask/wait, pause or explicitly resume your current managed Task. Use end only for an explicit decision to permanently end this continuous queue item, without claiming Task acceptance or closing its Issue. Waiting and pausing are durably accepted now and applied after this turn, which may still finish its reply. Automatic task input waits for explicit resume; native human conversation remains available and does not itself resume the task. Task identity and execution authority come from your calling Session.',
+    description: 'Check current-session ownership and Task/specification versions with status (no Task material); use work_read for explicit paginated details when supplied material is missing or changed. Status remains available after startup. Report progress, ask/wait, pause or explicitly resume your current managed Task. Use end only for an explicit decision to permanently end this continuous queue item, without claiming Task acceptance or closing its Issue. Waiting and pausing are durably accepted now and applied after this turn, which may still finish its reply. User status questions do not pause authorized work. Correct your own invalid wait after checking it; do not require a magic continue phrase. Real waits must include yield_reason, checked_facts and wake_condition. Internal evidence checks are work, not an external blocker. User pause/end and answer-only requests remain binding. Task identity and execution authority come from your calling Session.',
     parameters: {
       known_specification_version: { type: 'integer', description: 'Specification version supplied at startup or fully read with work_read; status flags changed or missing material.' },
       action: { type: 'string', required: true, enum: ['status', 'progress', 'wait', 'pause', 'resume', 'end'] },
       text: { type: 'string', description: 'Concrete progress, question, or reason for the control request.' },
+      yield_reason: { type: 'string', enum: ['human', 'external', 'executor', 'internal'], description: 'For wait: a human decision, external condition, or verified running executor. Internal checks must be executed instead of waiting.' },
+      checked_facts: { type: 'array', items: { type: 'string' }, description: 'For wait: concrete checks already performed and their actual results.' },
+      wake_condition: { type: 'string', description: 'For wait: observable external event, exact human action, or tracked executor return that permits continuation.' },
+      executor_session_id: { type: 'string', description: 'For executor wait: exact running native child or job owner Session.' },
+      job_id: { type: 'string', description: 'For executor wait: exact running job identity.' },
       expected_epoch: { type: 'integer', description: 'Optional epoch precondition from status. A mismatch rejects the write; this never grants ownership.' },
     },
     output: { schema: { type: 'object', additionalProperties: false, properties: { result: { type: 'string', required: true } } },
@@ -101,7 +107,9 @@ export function installWorkTools(ctx: Context, app: WorkApplication, runtimeId: 
     async execute(args, exec) {
       if (!exec.agent || exec.agent.session.id !== exec.agent.id) throw new Error('work_control requires a real calling Agent Session')
       const session = { runtimeId, sessionId: exec.agent.id }
-      return { result: JSON.stringify(await modelWorkResult(app, session, await app.sessionControl(session, exec.callId, args.action, args.text, args.expected_epoch), args.action === 'status' ? 'status' : 'control', args.known_specification_version)) }
+      const yieldInfo = args.action === 'wait' && args.yield_reason ? workYieldSchema.parse({ reason: args.yield_reason, checkedFacts: args.checked_facts, wakeCondition: args.wake_condition,
+        ...(args.executor_session_id ? { executor: { runtimeId, sessionId: args.executor_session_id } } : {}), ...(args.job_id ? { jobId: args.job_id } : {}) }) : undefined
+      return { result: JSON.stringify(await modelWorkResult(app, session, await app.sessionControl(session, exec.callId, args.action, args.text, args.expected_epoch, yieldInfo), args.action === 'status' ? 'status' : 'control', args.known_specification_version)) }
     },
     presentCall: args => ({ card: 'generic', title: `Work: ${args.action}`, kind: 'other', rawInput: args }),
   })), 'managed work model tool')
