@@ -486,7 +486,9 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     // terminal job output and unconsumed child notices stay retained and unassessed.
     const stopped = await this.observation(execution)
     controlled = scope(stopped)
-    const blockers = stopped.blockers.filter(row => (controlled.has(row.session.sessionId) || row.code === 'execution-scope-unavailable') && row.code !== 'job-result-unknown' && /unavailable|unknown/.test(row.code))
+    // Output-delivery observation may be unsupported while public list/get still
+    // report each reachable job's real lifecycle. Termination needs that lifecycle.
+    const blockers = stopped.blockers.filter(row => (controlled.has(row.session.sessionId) || row.code === 'execution-scope-unavailable') && !['job-result-unknown', 'job-observation-unavailable'].includes(row.code) && /unavailable|unknown/.test(row.code))
     for (const row of stopped.sessions.filter(row => controlled.has(row.session.sessionId))) {
       if (row.status === 'running' || row.status === 'unknown' || row.waitingHuman) blockers.push({ code: 'executor-unsettled', session: row.session })
       if ([...this.activeTools.values()].some(call => call.agent?.id === row.session.sessionId)) blockers.push({ code: 'tool-result-pending', session: row.session })
