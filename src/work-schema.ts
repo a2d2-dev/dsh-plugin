@@ -1,4 +1,4 @@
-import { screeningReviewSchema } from './work-screening-record.ts'
+import { screeningReviewRefSchema } from './work-screening-record.ts'
 import { planningSchema } from './work-planning.ts'
 import { z } from 'zod'
 import { completionSchema, childCompletionSchema } from './work-completion/index.ts'
@@ -92,7 +92,7 @@ const legacyContinuousRuleSchema = z.object({
 }).strict()
 export const continuousRuleSchema = legacyContinuousRuleSchema.extend({
   queue: continuousQueueSchema.optional(), slots: z.array(taskRefSchema).optional(),
-  screeningError: z.object({ code: referenceId, message: text }).strict().optional(), screeningReviews: z.array(screeningReviewSchema).optional(),
+  screeningError: z.object({ code: referenceId, message: text }).strict().optional(), screeningReview: screeningReviewRefSchema.optional(),
   lastRefreshedAt: z.string().datetime().optional(), nextRefreshAt: z.string().datetime().optional(),
   migrationConflict: z.object({ code: referenceId, message: text }).strict().optional(),
   legacyRules: z.array(legacyContinuousRuleSchema).optional(),
@@ -140,7 +140,7 @@ export const querySchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('source.catalog'), projectId: id, sourceId: id, refresh: z.boolean().optional() }).strict(),
   z.object({ type: z.literal('source.identify'), url: z.string().min(1).max(2048) }).strict(),
   z.object({ type: z.literal('source.execution-options'), projectId: id, sourceId: id }).strict(),
-  z.object({ type: z.literal('continuous.status'), projectId: id, sourceId: id }).strict(),
+  z.object({ type: z.enum(['continuous.status', 'continuous.review']), projectId: id, sourceId: id }).strict(),
   z.object({ type: z.literal('work.capabilities') }).strict(),
   z.object({ type: z.literal('source.list'), projectId: id }).strict(),
   z.object({ type: z.literal('source.progress'), projectId: id, sourceId: id }).strict(),

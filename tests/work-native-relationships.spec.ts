@@ -45,7 +45,7 @@ async function observed(kind: 'repository' | 'project', options: { dependencySta
   if (kind === 'repository') ok(await refreshRepositoryCandidates(apply => dao.transaction(apply), { projectId: project.id, sourceId: source.id }, adapter))
   else ok(await app.query({ type: 'source.issues', projectId: project.id, sourceId: source.id, page: 1, perPage: 20, assignee: '*', state: 'open', refresh: true }, actor))
   const state = await dao.read()
-  return { requests, state, rule: rule(source.id), issue: state.sources[0]!.observations[0]!.issue }
+  return { requests, state, app, dao, scope: { projectId: project.id, sourceId: source.id }, rule: rule(source.id), issue: state.sources[0]!.observations[0]!.issue }
 }
 
 it.each(['repository', 'project'] as const)('hydrates %s observations through the production adapter before admission', async kind => {
@@ -56,6 +56,17 @@ it.each(['repository', 'project'] as const)('hydrates %s observations through th
   expect(screeningBasis(h.rule, h.state.sources[0]!).candidates[0]!.dependencies).toEqual(h.issue.dependencies)
   expect(h.state.tasks).toEqual([]); expect(h.state.executions).toEqual([])
   expect(JSON.stringify(h.state)).not.toContain('host-only-test-token')
+})
+it.each(['list', 'detail'] as const)('retains current native readiness after an ordinary repository %s refresh', async kind => {
+  const h = await observed('repository', { blockerState: 'closed' })
+  expect(continuousDependenciesReady(h.state, h.rule, 'I_1')).toBe(true)
+  ok(await h.app.query(kind === 'list'
+    ? { type: 'source.issues', ...h.scope, page: 1, perPage: 20, assignee: '*', state: 'open', refresh: true }
+    : { type: 'source.issue', ...h.scope, number: 1, nodeId: 'I_1', refresh: true }, actor))
+  const refreshed = await h.dao.read()
+  expect(refreshed.sources[0]!.observations[0]!.issue.dependencies).toEqual(h.issue.dependencies)
+  expect(continuousDependenciesReady(refreshed, h.rule, 'I_1')).toBe(true)
+  expect(h.requests.filter(path => path.includes('/dependencies/blocked_by'))).toHaveLength(2)
 })
 it.each([403, 404, 422, 503])('records unavailable dependency API HTTP %s without admitting or hiding candidate work', async dependencyStatus => {
   const h = await observed('repository', { dependencyStatus })

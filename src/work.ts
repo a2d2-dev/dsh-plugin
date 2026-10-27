@@ -445,7 +445,7 @@ export class WorkApplication {
       resource: command.resource, model: command.model, agentPreset: command.agentPreset, permissionPreset: command.permissionPreset,
       items: previous?.items ?? [], slots: previous ? continuousSlots(previous) : [], ...(previous?.active ? { active: previous.active } : {}),
       ...(previous?.blocks ? { blocks: previous.blocks } : {}),
-      ...(previous?.screeningReviews ? { screeningReviews: previous.screeningReviews } : {}),
+      ...(previous?.screeningReview ? { screeningReview: previous.screeningReview } : {}),
       ...(command.queue || previous?.queue ? { queue: command.queue ?? previous!.queue } : {}),
       ...(previous?.legacyRules ? { legacyRules: previous.legacyRules } : {}),
       ...(previous?.planning ? { planning: { ...previous.planning, scopeVersion: previous.planning.scopeVersion + 1, draftVersion: previous.planning.draftVersion + 1 }, ...(!command.queue && !previous.queue ? { enabled: false } : {}) } : {}),
@@ -535,9 +535,15 @@ export class WorkApplication {
           const item = current.items.find(item => item.nodeId === decision.nodeId)!
           if (!item.ref && !['blocked', 'completed', 'paused'].includes(item.state)) item.screening = { key, matches: decision.matches, reason: decision.reason }
         }
-        const reviews = current.screeningReviews ??= []
-        reviews.push({ version: reviews.length + 1, key, generatedAt: new Date().toISOString(), ruleVersion: current.version, sourceId: current.sourceId, sourceVersion: observed.version,
-          basis: JSON.parse(JSON.stringify(basis)), authorization: JSON.parse(JSON.stringify({ scope: current.scope, resource: current.resource, model: current.model, agentPreset: current.agentPreset, permissionPreset: current.permissionPreset })), decisions })
+        const authorization = { scope: current.scope, resource: current.resource, model: current.model, agentPreset: current.agentPreset, permissionPreset: current.permissionPreset }
+        const fingerprint = createHash('sha256').update(JSON.stringify([basis, authorization, decisions])).digest('hex')
+        if (current.screeningReview?.fingerprint !== fingerprint) {
+          const review = { version: (current.screeningReview?.version ?? 0) + 1, key, generatedAt: new Date().toISOString(), ruleVersion: current.version, sourceId: current.sourceId, sourceVersion: observed.version,
+            basis: JSON.parse(JSON.stringify(basis)), authorization: JSON.parse(JSON.stringify(authorization)), decisions }
+          const ref = await this.dao.archiveScreening(review, current.screeningReview?.ref)
+          const { basis: _basis, authorization: _authorization, decisions: _decisions, ...summary } = review
+          current.screeningReview = { ...summary, fingerprint, ref }
+        }
         delete current.screeningError
         discoverContinuous(current, observed, state)
       })
@@ -1729,10 +1735,14 @@ export class WorkApplication {
       } }
     }
     if (query.type === 'source.issues' || query.type === 'source.issue') return tableResult(sourceResult(state, query))
-    if (query.type === 'continuous.status') {
+    if (query.type === 'continuous.status' || query.type === 'continuous.review') {
       const source = state.sources.find(source => source.id === query.sourceId && source.projectId === query.projectId)
       if (!source) return failed('unknown-source', 'Source does not belong to this project')
       const rule = structuredClone(state.continuousRules?.find(rule => rule.projectId === query.projectId))
+      if (query.type === 'continuous.review') {
+        if (!rule || rule.sourceId !== source.id) return failed('continuous-source-mismatch', 'Read the actual Project queue source')
+        return { status: 'completed', ...(rule.screeningReview ? { screeningReview: this.dao.readScreening(rule.screeningReview.ref) } : {}) }
+      }
       if (rule) observeContinuousTasks(state, rule)
       return { status: 'completed', continuousRule: rule }
     }

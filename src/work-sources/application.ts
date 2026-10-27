@@ -1,3 +1,4 @@
+import { hydrateCandidateRelationships } from './relationships.ts'
 import { taskStructureBlocker } from '../work-organization.ts'
 import { randomUUID } from 'node:crypto'
 import type { WorkSnapshot } from '../work-schema.ts'
@@ -221,10 +222,14 @@ export async function refreshSource(transaction: SourceTransaction, query: Sourc
     if (!reserved.repository) throw new SourceError('github-invalid-scope', 'Source does not contain a repository')
     const number = query.type === 'source.issue' ? query.number ?? reserved.observations.find(item => item.issue.nodeId === query.nodeId)?.issue.number : undefined
     if (query.type === 'source.issue' && number === undefined) throw new SourceError('source-content-unavailable', 'Issue node has not been observed in this repository')
-    result = query.type === 'source.issues' ? await port!.list(reserved.repository, query) : await port!.detail(reserved.repository, number!)
+    result = query.type === 'source.issues' ? await port!.list(reserved.repository, query) : await port!.detail(reserved.repository, number!, reserved.repositorySnapshot ? { nativeRelationships: true } : undefined)
     if (query.type === 'source.issue' && query.nodeId && 'issue' in result && result.issue.nodeId !== query.nodeId) throw new SourceError('github-invalid-response', 'GitHub returned a different Issue node')
     const items = 'items' in result ? result.items : [result.issue]
     for (const item of items) issueSchema.parse(item)
+    if (reserved.repositorySnapshot && 'items' in result) {
+      const members = new Set(reserved.repositorySnapshot.nodeIds)
+      for (let index = 0; index < result.items.length; index++) if (members.has(result.items[index]!.nodeId)) result.items[index] = await hydrateCandidateRelationships(result.items[index]!, result.identity, port!)
+    }
   } catch (caught) { error = caught instanceof SourceError ? caught : new SourceError('github-invalid-response', 'GitHub source did not return a usable observation') }
   return transaction(async state => {
     const source = sourceAt(state, query.projectId, query.sourceId)!

@@ -108,7 +108,7 @@ export interface ContinuousWorkRule {
   blocks?: string[]
   queue?: ContinuousQueueSettings
   screeningError?: { code: string; message: string }
-  screeningReviews?: import('./work-screening-record.ts').ScreeningReview[]
+  screeningReview?: import('./work-screening-record.ts').ScreeningReviewRef
   lastRefreshedAt?: string; nextRefreshAt?: string
   /** Retained until host settlement or completion closeout; active is a legacy first-slot projection. */
   slots?: TaskRef[]
@@ -160,7 +160,7 @@ export type WorkQuery =
   | { type: 'source.catalog'; projectId: string; sourceId: string; refresh?: boolean }
   | { type: 'source.identify'; url: string }
   | { type: 'source.execution-options'; projectId: string; sourceId: string }
-  | { type: 'continuous.status'; projectId: string; sourceId: string }
+  | { type: 'continuous.status' | 'continuous.review'; projectId: string; sourceId: string }
   | { type: 'source.list'; projectId: string }
   | { type: 'source.progress'; projectId: string; sourceId: string }
   | { type: 'source.issues'; projectId: string; sourceId: string; page: number; perPage: number; assignee: '@me' | '*'; state: 'open' | 'closed' | 'all'; labels?: string[]; search?: string; refresh?: boolean }
@@ -191,6 +191,7 @@ export interface SourceResultFields {
 }
 export interface WorkCompleted extends SourceResultFields {
   continuousRule?: ContinuousWorkRule
+  screeningReview?: import('./work-screening-record.ts').ScreeningReview
   status: 'completed'
   /** Non-blocking completion notices, e.g. an unreachable job whose result can no longer be collected. */
   reminders?: string[]
