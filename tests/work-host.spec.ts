@@ -229,12 +229,17 @@ it('starts through the production plugin Context with real execution services an
   const execution = completed(started.body).execution!
   const agent = ctx.agents.get(SessionId(execution.session.sessionId))!
   await agent.whenIdle()
-  expect(model.requests).toHaveLength(1)
+  // The deterministic provider only replies with text. Production defaults
+  // correct that twice in the same turn without creating another kickoff.
+  expect(model.requests).toHaveLength(3)
+  expect(agent.session.snapshotEvents().filter(event => event.type === 'turn/start')).toHaveLength(1)
+  expect(agent.session.snapshotEvents().filter(event => event.type === 'user/message' && event.data.id === `kickoff:${execution.id}`)).toHaveLength(1)
+  expect((await call(server, { kind: 'query', value: { type: 'task.execution', ref } })).body).toMatchObject({ execution: { executionGuard: { corrections: 2, exhausted: true } } })
   expect(model.requests[0]).toMatchObject({ provider: 'contract', model: 'selected' })
   expect(ctx.agentDefaultModel.currentSelection()).toEqual({ provider: 'contract', model: 'default' })
   expect((await call(server, command)).body).toMatchObject({ execution: { id: execution.id, session: execution.session } })
   await agent.whenIdle()
-  expect(model.requests).toHaveLength(1)
+  expect(model.requests).toHaveLength(3)
   expect(await ctx.sessionPersistence.list()).toHaveLength(1)
 })
 
