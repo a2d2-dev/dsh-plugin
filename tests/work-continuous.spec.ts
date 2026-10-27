@@ -394,6 +394,54 @@ it('persists a natural language model plan without dispatching on preview or res
   expect(generate).toHaveBeenCalledTimes(1); expect(h.host.sessionsCreated.size).toBe(0)
 })
 
+it.each(['new', 'existing'] as const)('passes pre-instruction queue Block to preview and rejects %s authorization', async mode => {
+  const generate = vi.fn(async (_basis: import('../src/work-planning.ts').PlanningBasis) => ({ steps: [{ nodeId: 'ISSUE_1', why: 'Must remain excluded', nextAction: 'Work', mode }] }))
+  const h = await setup(false, { generate })
+  completed(await h.app.execute({ ...h.configure, queue: { concurrency: 1, refreshMinutes: 30, order: 'oldest' } }, operator))
+  if (mode === 'existing') {
+    const imported = completed(await h.app.execute({ type: 'source.import', commandId: 'blocked-import', ...h.scope, nodeId: 'ISSUE_1' }, operator))
+    completed(await h.app.execute({ type: 'task.start', commandId: 'blocked-start', ref: imported.ref!, expectedVersion: imported.task!.version, agentId: imported.task!.agentId, resource, model, agentPreset: 'agent', permissionPreset: 'safe' }, operator))
+  }
+  completed(await h.app.execute({ type: 'continuous.block', commandId: 'queue-block', ...h.scope, expectedVersion: 1, nodeId: 'ISSUE_1', blocked: true }, operator))
+  expect((await h.status()).planning).toBeUndefined()
+  completed(await h.app.execute({ type: 'continuous.instruct', commandId: 'queue-instruct', ...h.scope, expectedVersion: 2, text: '预览安排，保留已有 Block。' }, operator))
+  const calls = { ensures: h.host.ensures.length, sends: h.host.sends.length, wakes: h.host.wakes.length }
+  const refs = (await h.status()).items.map(item => item.ref)
+  const result = await h.app.execute({ type: 'continuous.preview', commandId: 'queue-preview', ...h.scope, expectedVersion: 3 }, operator)
+  expect(generate).toHaveBeenCalledTimes(1)
+  expect.soft(generate.mock.calls[0]![0].blocks).toEqual(['ISSUE_1'])
+  expect.soft(result).toMatchObject({ status: 'failed', error: { code: 'planning-blocked-issue' } })
+  const rule = await h.status()
+  expect.soft(rule).toMatchObject({ enabled: false, blocks: ['ISSUE_1'], planning: { plans: [] } })
+  expect(rule.items.map(item => item.ref)).toEqual(refs)
+  expect({ ensures: h.host.ensures.length, sends: h.host.sends.length, wakes: h.host.wakes.length }).toEqual(calls)
+})
+
+it('previews the union of saved legacy planning and queue Blocks without rewriting history', async () => {
+  let output: unknown = { steps: [] }
+  const generate = vi.fn(async (_basis: import('../src/work-planning.ts').PlanningBasis) => output)
+  const h = await setup(false, { generate })
+  completed(await h.app.execute(h.configure, operator))
+  completed(await h.app.execute({ type: 'continuous.instruct', commandId: 'legacy-instruct', ...h.scope, expectedVersion: 1, text: '保留旧委托和计划。' }, operator))
+  completed(await h.app.execute({ type: 'continuous.block', commandId: 'legacy-block', ...h.scope, expectedVersion: 2, nodeId: 'ISSUE_2', blocked: true }, operator))
+  completed(await h.app.execute({ type: 'continuous.preview', commandId: 'legacy-plan', ...h.scope, expectedVersion: 3 }, operator))
+  const history = (await h.status()).planning!.plans
+  completed(await h.app.execute({ ...h.configure, commandId: 'legacy-queue', expectedVersion: 4, queue: { concurrency: 1, refreshMinutes: 30, order: 'oldest' } }, operator))
+  // Restore an existing mixed record: exclusions can reside in either saved field.
+  await WorkDao.forDirectory(h.directory).transaction(async state => { state.continuousRules![0]!.blocks = ['ISSUE_1'] })
+  const restored = new WorkApplication(h.directory, h.host, h.source, { generate })
+  completed(await restored.execute({ type: 'continuous.instruct', commandId: 'legacy-supplement', ...h.scope, expectedVersion: 5, text: '补充预览，保留所有 Block。' }, operator))
+  for (const nodeId of ['ISSUE_1', 'ISSUE_2']) {
+    output = { steps: [{ nodeId, why: 'Must remain excluded', nextAction: 'Work', mode: 'new' }] }
+    const result = await restored.execute({ type: 'continuous.preview', commandId: `legacy-preview:${nodeId}`, ...h.scope, expectedVersion: 6 }, operator)
+    expect(generate.mock.calls.at(-1)![0].blocks).toEqual(['ISSUE_1', 'ISSUE_2'])
+    expect(result).toMatchObject({ status: 'failed', error: { code: 'planning-blocked-issue' } })
+  }
+  expect(await h.status(restored)).toMatchObject({ enabled: false, blocks: ['ISSUE_1'], planning: { instruction: '保留旧委托和计划。', supplements: ['补充预览，保留所有 Block。'], blocks: ['ISSUE_2'], plans: history } })
+  expect(h.host.sessionsCreated.size).toBe(0)
+  expect(h.host.sends).toHaveLength(0)
+})
+
 it('rejects blocked, foreign, malformed and assignee-violating model plans with named errors', async () => {
   let output: unknown = { steps: [] }
   const h = await setup(false, { generate: async () => output }); completed(await h.app.execute(h.configure, operator))

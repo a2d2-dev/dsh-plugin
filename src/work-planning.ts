@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { continuousBlocks } from './work-blocks.ts'
 import { issueSchema, sourceSchema, repositorySchema, githubProjectSchema } from './work-sources/schema.ts'
 import type { WorkSnapshot } from './work-schema.ts'
 import type { ContinuousWorkRule } from './work-types.ts'
@@ -112,7 +113,7 @@ export function planningBasis(state: WorkSnapshot, rule: ContinuousWorkRule): Pl
     repositorySnapshot: source!.repositorySnapshot && { sourceVersion: source!.repositorySnapshot.sourceVersion, identity: identity(source!.repositorySnapshot.identity) },
     projectSnapshot: source!.projectSnapshot && { identity: identity(source!.projectSnapshot.identity), project: { nodeId: source!.projectSnapshot.project.nodeId, title: source!.projectSnapshot.project.title.slice(0, 300), url: source!.projectSnapshot.project.url, closed: source!.projectSnapshot.project.closed } },
   }
-  const basis = planningBasisSchema.parse({ instruction: rule.planning.instruction, supplements: rule.planning.supplements, blocks: rule.planning.blocks, scopeVersion: rule.planning.scopeVersion, scope: rule.scope, executionStrategy: { resource: rule.resource, model: rule.model, agentPreset: rule.agentPreset, permissionPreset: rule.permissionPreset }, relationshipAvailability: { nativeParentChildren: 'per-candidate', nativeDependencies: 'per-candidate' }, source: summary, candidates })
+  const basis = planningBasisSchema.parse({ instruction: rule.planning.instruction, supplements: rule.planning.supplements, blocks: continuousBlocks(rule), scopeVersion: rule.planning.scopeVersion, scope: rule.scope, executionStrategy: { resource: rule.resource, model: rule.model, agentPreset: rule.agentPreset, permissionPreset: rule.permissionPreset }, relationshipAvailability: { nativeParentChildren: 'per-candidate', nativeDependencies: 'per-candidate' }, source: summary, candidates })
   const limit = planningBasisCharacterLimit(candidates.length)
   // Check serialized length: JSON escaping can multiply the size of bounded strings.
   // Remove why-related goal text first, then titles, always in stable nodeId order.
