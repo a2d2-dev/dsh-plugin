@@ -45,6 +45,19 @@ Issue Open 与工作未验收分别判断。#138 已验收，不因等待人工�
 | 8. 双尺寸截图和中文报告 | 本轮准备报告与概览基线已有；全流程目的／步骤／记录与产品限制仍须补全。 |
 | 9. 一轮 fresh 安全评审整改、PR／tracker 与验收一致 | 核对单轮评审及整改对最终版本的覆盖；只按实际验收和合并事实收口。 |
 
+## 2026-10-27：queue Block 进入规划依据的最小修复
+
+目的：修复暂停 queue 已有 `rule.blocks`、尚无 planning 时，保存委托后预览只读取空 `planning.blocks` 的现场缺口。基线为远端已核 `main eb0a772563aee7d04691f52531ddb74a73482113`，独立分支 `fix/141-preview-block`；本轮不部署、不启用真实规则、不写 GitHub，整体验收状态不因本修复改变。
+
+步骤与记录：
+
+- 先复用真实 `WorkApplication` fixture，连续执行 configure queue（暂停）→Block→instruct→preview，捕获 planner basis。修复前 new/existing 两个分支均出现 `blocks=[]`，并错误接受被 Block 的步骤为有效计划，原规则名单仍保留。既有手动执行的关联只要求预览前后不变，不要求消失。
+- `planningBasis` 每次通过既有 `continuousBlocks(rule)` 读取 queue 与 legacy planning 的合并名单，让模型输入、提交前 fingerprint 重验和 `validatePlan` 共用同一依据。无需初始化复制或改动存储；不清旧 Block、旧计划，不迁移 UI。既有 `planning-blocked-issue` 契约保持，包含 wait 的现有拒绝逻辑不变。
+- 增补混合旧记录恢复场景：两个字段分别保存不同 Block，预览必须同时传入并拒绝两项；原委托、补充、旧计划历史与原名单保持。
+- `pnpm exec vitest run tests/work-continuous.spec.ts -t 'pre-instruction queue Block|union of saved legacy'`：3 passed；`pnpm exec vitest run tests/work-continuous.spec.ts tests/work-planning.spec.ts tests/work-planning-payload.spec.ts tests/work-native-relationships.spec.ts tests/work-continuous-integration.spec.ts`：5 文件、157 passed；`pnpm typecheck`：exit 0。
+
+原始日志位于本独立工作树忽略目录 `docs/artifacts/issue-141-preview-block-2026-10-27/`：`red.log` 为改生产代码前的失败证据，`green-final.log` 为三个最小回归通过，`affected-tests.log` 为受影响测试，`typecheck.log` 为类型检查，`install.log` 为锁定依赖安装。中间 `green.log` 如实保留测试对手动执行关联的错误假设，随后已改成验证关联不变。真实模型和既有实例的复验由父任务继续，本轮没有替代该证据。
+
 ## 原始材料与下一步
 
 准备报告、筛选后的身份快照及截图保存在本工作树忽略目录 `docs/artifacts/v4-141-2026-10-26/`。原始 Session 截图、日志、认证文件不进入 Git；本文件只保留不含凭据的结论与索引。
