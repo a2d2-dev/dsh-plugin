@@ -1428,3 +1428,58 @@ it('rechecks an end accepted after resume candidate selection inside the real di
     expect({ ensures: h.host.ensures.length, sends: h.host.sends.length, wakes: h.host.wakes.length }).toEqual(before)
   } finally { release(); await dispatch }
 })
+
+it('keeps end accepted when host ensure rereads it, then uses the dedicated stop path', async () => {
+  const h = await setup(); completed(await h.app.execute(h.configure, operator))
+  const first = await h.execution(); h.host.idle(first)
+  const ensure = h.host.execution.ensure
+  let entered!: () => void, release!: () => void
+  const started = new Promise<void>(resolve => { entered = resolve })
+  const gate = new Promise<void>(resolve => { release = resolve })
+  h.host.execution.ensure = async (...args) => { entered(); await gate; return ensure(...args) }
+  const stop = vi.fn(async (execution: WorkExecution) => { h.host.idle(execution) })
+  h.host.execution.end = stop
+  const settled = vi.spyOn(h.host.execution, 'settle')
+  const pending = h.app.execute({ type: 'task.reconcile', commandId: 'ensure-before-end', ...fence(first) }, operator)
+  try {
+    await started
+    completed(await h.app.sessionControl(first.session, 'end-during-ensure', 'end', '明确结束本项'))
+    release(); completed(await pending)
+    expect((await h.execution(first.ref)).control).toMatchObject({ action: 'end', status: 'accepted' })
+    expect((await h.status()).items[0]!.end?.status).toBe('accepted')
+    expect((await h.status()).slots).toContainEqual(first.ref)
+    expect(settled).not.toHaveBeenCalled()
+    expect(stop).not.toHaveBeenCalled()
+    await h.app.reconcileControls()
+    expect(stop).toHaveBeenCalledTimes(1)
+    expect((await h.execution(first.ref)).control).toMatchObject({ action: 'end', status: 'applied' })
+    expect((await h.status()).items[0]).toMatchObject({ state: 'completed', end: { status: 'applied' } })
+    expect((await h.status()).slots).not.toContainEqual(first.ref)
+  } finally { release(); await pending }
+})
+
+it('does not apply or dispatch an old resume receipt after end replaces it during settle', async () => {
+  const h = await setup(); completed(await h.app.execute(h.configure, operator))
+  const first = await h.execution(); h.host.idle(first)
+  let entered!: () => void, release!: () => void
+  const started = new Promise<void>(resolve => { entered = resolve })
+  const gate = new Promise<void>(resolve => { release = resolve })
+  h.host.execution.settle = async () => { entered(); await gate }
+  const stop = vi.fn(async (execution: WorkExecution) => { h.host.idle(execution) })
+  h.host.execution.end = stop
+  const before = { sends: h.host.sends.length, wakes: h.host.wakes.length }
+  const pending = h.app.execute({ type: 'task.control', commandId: 'resume-before-end', ...fence(first), action: 'resume', text: '继续处理' }, operator)
+  try {
+    await started
+    completed(await h.app.sessionControl(first.session, 'end-during-settle', 'end', '明确结束本项'))
+    const ended = (await h.execution(first.ref)).control!
+    release(); completed(await pending)
+    expect((await h.execution(first.ref)).control).toEqual(ended)
+    expect({ sends: h.host.sends.length, wakes: h.host.wakes.length }).toEqual(before)
+    await h.app.reconcileControls()
+    expect(stop).toHaveBeenCalledTimes(1)
+    expect((await h.execution(first.ref)).control).toMatchObject({ action: 'end', status: 'applied' })
+    expect((await h.status()).items[0]).toMatchObject({ state: 'completed', end: { status: 'applied' } })
+    expect((await h.status()).slots).not.toContainEqual(first.ref)
+  } finally { release(); await pending }
+})
