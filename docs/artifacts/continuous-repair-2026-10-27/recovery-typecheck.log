@@ -1,4 +1,0 @@
-
-> @a2d2/dsh-a2d2@0.0.23 typecheck /data/src/github.com/a2d2-dev/dsh-plugin.worktrees/fix-continuous-recovery-20261027
-> tsc --noEmit && tsc -p tsconfig.client.json
-

@@ -1,9 +1,0 @@
-
- RUN  v4.1.11 /data/src/github.com/a2d2-dev/dsh-plugin.worktrees/fix-continuous-recovery-20261027
-
-
- Test Files  1 passed (1)
-      Tests  1 passed | 77 skipped (78)
-   Start at  20:06:09
-   Duration  1.88s (transform 834ms, setup 0ms, import 1.22s, tests 414ms, environment 0ms)
-
