@@ -1406,6 +1406,9 @@ export class WorkApplication {
           item.model = { provider: actual.provider, model: actual.model, ...(actual.reasoningEffort ? { reasoningEffort: actual.reasoningEffort } : {}) }
           if (item.state === 'creating') { item.state = 'ready'; this.dao.appendHistory(item, { state: 'ready', commandId }) }
         })
+        // Host ensure/title writes may have raced a newly accepted end. Leave it
+        // pending for the dedicated end pass after this execution lease releases.
+        if (execution.control?.action === 'end') return { status: 'completed', execution }
         const control = execution.control
         if (control?.status === 'accepted') {
           await this.host.execution!.settle(execution)
@@ -1415,7 +1418,10 @@ export class WorkApplication {
             item.control!.status = 'applied'
             this.dao.appendHistory(item, { state: item.state, commandId })
           })
-          if (control.action === 'resume' && execution.control?.commandId === control.commandId) await this.host.execution!.wake(execution)
+          // A new control accepted during settle owns the next pass, including
+          // its input delivery. Never apply or dispatch under the old receipt.
+          if (execution.control?.commandId !== control.commandId) return { status: 'completed', execution }
+          if (control.action === 'resume') await this.host.execution!.wake(execution)
         }
         for (const event of execution.events) {
           if (!pendingEvent(event)) continue
