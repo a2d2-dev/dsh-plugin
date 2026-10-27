@@ -1,0 +1,62 @@
+
+ RUN  v4.1.11 /data/src/github.com/a2d2-dev/dsh-plugin.worktrees/fix-continuous-recovery-20261027
+
+ ❯ |unit| tests/work-continuous.spec.ts (73 tests | 2 failed | 71 skipped) 619ms
+   × recovers missing sessionQuery through actual persisted observation while current session is idle 515ms
+   × recovers missing sessionQuery through actual persisted observation while current session is running 100ms
+ ❯ |host| tests/work-host.spec.ts (6 tests | 1 failed | 5 skipped) 76ms
+   × starts managed recovery only after controller and actual session query services are activated 74ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |host| tests/work-host.spec.ts > starts managed recovery only after controller and actual session query services are activated
+AssertionError: expected "reconcileControls" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st reconcileControls call:
+
+    Array []
+
+
+Number of calls: 1
+
+ ❯ tests/work-host.spec.ts:108:26
+    106|     ctx.provide('sessionController', {} as never)
+    107|     await new Promise(resolve => setTimeout(resolve, 0))
+    108|     expect(recovery).not.toHaveBeenCalled()
+       |                          ^
+    109|     await ctx.plugin(SessionQuery)
+    110|     await vi.waitFor(() => expect(recovery).toHaveBeenCalled())
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  |unit| tests/work-continuous.spec.ts > recovers missing sessionQuery through actual persisted observation while current session is idle
+ FAIL  |unit| tests/work-continuous.spec.ts > recovers missing sessionQuery through actual persisted observation while current session is running
+AssertionError: expected { …(2) } to be undefined
+
+- Expected:
+undefined
+
++ Received:
+{
+  "code": "continuous-recovery-blocked",
+  "message": "Cannot read properties of undefined (reading 'observeSession')",
+}
+
+ ❯ tests/work-continuous.spec.ts:1313:24
+    1311|     await restored.reconcileContinuous()
+    1312|     const rule = await h.status(restored)
+    1313|     expect(rule.error).toBeUndefined()
+       |                        ^
+    1314|     expect(rule.items[0]!.recoveryBlocked).toBeUndefined()
+    1315|     expect(rule.items[0]!.state).toBe(status === 'running' ? 'active' …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  3 failed | 76 skipped (79)
+   Start at  19:54:46
+   Duration  3.38s (transform 1.35s, setup 0ms, import 2.32s, tests 695ms, environment 0ms)
+
