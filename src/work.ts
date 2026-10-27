@@ -189,7 +189,7 @@ export class WorkApplication {
     if (!execution) return undefined
     const task = taskAt(state, execution.ref)
     const current = execution.session.sessionId === sessionId
-    const status = isTaskCompleted(task) ? '已完成' : execution.control?.status === 'accepted' && execution.control.action !== 'resume'
+    const status = isTaskCompleted(task) ? '已完成' : execution.control?.action === 'end' ? (execution.control.status === 'applied' ? '队列已结束，业务验收未确认' : '正在结束队列处理') : execution.control?.status === 'accepted' && execution.control.action !== 'resume'
       ? execution.control.action === 'pause' ? '暂停中' : '等待中'
       : execution.state === 'waiting' ? '等待中' : execution.state === 'paused' ? '已暂停' : execution.state
     return [
@@ -648,6 +648,10 @@ export class WorkApplication {
             continue
           }
           if (execution) {
+            if (execution.control?.action === 'end') {
+              if (execution.control.status === 'accepted' && host.status(execution) !== 'running') await this.ensureExecution(execution.id, execution.control.commandId)
+              continue
+            }
             if (host.status(execution) === 'running') continue
             const owner = continuousOwner(state, execution.ref)!
             if (owner.item.recoveryBlocked && !owner.item.resumeRequested) continue
@@ -935,6 +939,10 @@ export class WorkApplication {
       const state = await this.load()
       return { status: 'completed', task: taskAt(state, receipt.execution.ref), execution: state.executions.find(item => item.id === receipt.execution!.id) }
     }
+    if (command.type === 'continuous.end' && receipt.status === 'completed') {
+      if (receipt.execution) await this.ensureExecution(receipt.execution.id, command.commandId)
+      return this.query({ type: 'continuous.status', projectId: command.projectId, sourceId: command.sourceId }, actor)
+    }
     if (command.type === 'task.continuation-material' || command.type === 'task.organize' || command.type === 'task.report' || command.type === 'task.configure-continuation') return receipt
     if (command.type === 'task.continue' && !actor.operator) return receipt
     if (command.type === 'task.control' && (!actor.operator || command.action === 'progress')) return receipt
@@ -1020,6 +1028,10 @@ export class WorkApplication {
     await this.refreshSessionTitles()
     await this.reconcileCompletions()
     if (!this.host.execution) return
+    // Explicit ends also recover items that already released a pause/blocked slot.
+    for (const execution of (await this.load()).executions) {
+      if (execution.control?.action === 'end' && execution.control.status === 'accepted' && this.host.execution.status(execution) !== 'running') await this.ensureExecution(execution.id, execution.control.commandId)
+    }
     await this.reconcileContinuous()
     const snapshot = await this.load()
     for (const initial of snapshot.executions) {
@@ -1307,6 +1319,35 @@ export class WorkApplication {
       })
       const state = await this.load()
       let execution = state.executions.find(item => item.id === id)!
+      if (execution.control?.action === 'end') {
+        if (execution.control.status === 'applied') return { status: 'completed', execution }
+        const control = execution.control
+        try {
+          if (!this.host.execution?.end) throw new WorkExecutionError('queue-end-capability-unavailable', '宿主不支持安全结束；请在能力恢复后重试结束')
+          await this.host.execution.end(execution)
+          execution = await this.dao.transaction(async state => {
+            const current = state.executions.find(item => item.id === id)!
+            if (current.control?.commandId !== control.commandId || current.epoch !== execution.epoch) return current
+            const owner = continuousOwner(state, current.ref)!
+            current.state = 'paused'; current.control.status = 'applied'; delete current.error
+            owner.item.end = { commandId: control.commandId, status: 'applied' }
+            owner.rule.version++
+            owner.item.state = 'completed'; owner.item.reason = `${control.reason || '明确结束本项队列处理'}；队列已结束，业务验收未确认，历史结果保留`
+            delete owner.item.resumeRequested; delete owner.item.explicitResumeRequested; delete owner.item.retryAt; delete owner.item.recoveryBlocked
+            continuousSetSlot(owner.rule, current.ref, false)
+            this.dao.appendHistory(current, { state: 'paused', commandId: control.commandId })
+            return current
+          })
+        } catch (error) {
+          execution = await this.dao.transaction(async state => {
+            const current = state.executions.find(item => item.id === id)!
+            current.error = { code: error instanceof WorkExecutionError ? error.code : 'queue-end-unknown', message: error instanceof Error ? error.message : '停止结果未知，请重试结束' }
+            continuousOwner(state, current.ref)!.item.reason = `结束尚未完成：${current.error.message}；可重试结束`
+            return current
+          })
+        }
+        return { status: 'completed', execution }
+      }
       if (execution.events.some(event => pendingEvent(event) && lifecycleOwned(event.nativeMessage))) execution = await save(discardLifecycleEvents)
       if (isTaskCompleted(taskAt(state, execution.ref))) return { status: 'completed', execution }
       const owner = continuousOwner(state, execution.ref)
@@ -1426,6 +1467,24 @@ export class WorkApplication {
       if (configured.status === 'completed' && configured.source) remember(configured.source)
       return configured.status === 'completed' ? { ...configured, project: created.project } : configured
     }
+    if (command.type === 'continuous.end') {
+      const rule = state.continuousRules?.find(rule => rule.projectId === command.projectId && rule.sourceId === command.sourceId)
+      if (!rule) return failed('continuous-unconfigured', '队列尚未配置')
+      const item = rule.items.find(item => item.nodeId === command.nodeId)
+      if (!item) return failed('continuous-item-missing', '队列中没有本项工作')
+      if (item.state === 'completed') return { status: 'completed', continuousRule: rule }
+      if (rule.version !== command.expectedVersion) return conflict(rule.version)
+      const execution = state.executions.find(execution => execution.id === item.executionId && sameTask(execution.ref, item.ref))
+      if (execution) {
+        const result = await this.apply(state, { type: 'task.control', commandId: command.commandId, ref: execution.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch, action: 'end', text: '用户明确结束本项队列处理' })
+        return result.status === 'completed' ? { ...result, continuousRule: rule } : result
+      }
+      if (item.ref || item.executionId) return failed('continuous-execution-missing', '关联执行缺失，无法核实安全结束')
+      item.end = { commandId: command.commandId, status: 'applied' }; item.state = 'completed'; item.reason = '用户明确结束本项队列处理；业务验收未确认'
+      delete item.resumeRequested; delete item.explicitResumeRequested; delete item.retryAt; delete item.recoveryBlocked
+      rule.version++
+      return { status: 'completed', continuousRule: rule }
+    }
     if (command.type === 'continuous.refresh') return failed('unsupported-command', 'Refresh requires source observation')
     if (command.type === 'continuous.instruct' || command.type === 'continuous.block') {
       const rule = state.continuousRules?.find(rule => rule.projectId === command.projectId && rule.sourceId === command.sourceId)
@@ -1498,9 +1557,15 @@ export class WorkApplication {
         if (managed) { managed.item.attempts = 0; delete managed.item.retryAt; delete managed.item.recoveryBlocked }
       }
       if (command.type === 'task.completion-sync') return task.completion ? { status: 'completed', task, execution } : failed('completion-required', 'Only an accepted Task can synchronize completion')
-      if (command.type === 'task.organize') return applyTaskOrganization(state, execution, command.organization, command.commandId, randomUUID)
       const managed = continuousOwner(state, execution.ref)
-      if (managed && command.type === 'task.reconcile') { managed.item.resumeRequested = true; managed.item.explicitResumeRequested = true; managed.item.attempts = 0; delete managed.item.retryAt; delete managed.item.recoveryBlocked }
+      if (command.type === 'task.control' && command.action === 'end' && managed?.item.state === 'completed') return { status: 'completed', execution }
+      if (command.type === 'task.control' && command.action === 'end' && !managed) return failed('continuous-required', '只有持续队列中的工作可以结束队列处理')
+      if (execution.control?.action === 'end') {
+        if (command.type === 'task.control' && command.action === 'end') return { status: 'completed', execution }
+        if (command.type !== 'task.reconcile') return failed('continuous-ended', '本项队列已明确结束，不能恢复业务处理；历史记录仍可查看')
+      }
+      if (command.type === 'task.organize') return applyTaskOrganization(state, execution, command.organization, command.commandId, randomUUID)
+      if (managed && command.type === 'task.reconcile' && execution.control?.action !== 'end') { managed.item.resumeRequested = true; managed.item.explicitResumeRequested = true; managed.item.attempts = 0; delete managed.item.retryAt; delete managed.item.recoveryBlocked }
       if (managed && continuousCompleted(state, execution) && (command.type === 'task.input' || command.type === 'task.continue' || (command.type === 'task.control' && command.action === 'resume'))) return failed('continuous-completed', 'Completed continuous work cannot restart')
       if (command.type === 'task.report') {
         let reminders: string[] | undefined
@@ -1558,6 +1623,7 @@ export class WorkApplication {
         if (command.action === 'progress') execution.progress = command.text
         else {
           execution.control = { commandId: command.commandId, action: command.action, status: 'accepted', reason: command.text }
+          if (managed && command.action === 'end') { managed.item.end = { commandId: command.commandId, status: 'accepted' }; managed.item.reason = '结束中；等待本项执行安全停止'; managed.rule.version++ }
           if (managed && command.action !== 'resume') { delete managed.item.resumeRequested; delete managed.item.explicitResumeRequested }
         }
       }

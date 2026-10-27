@@ -68,7 +68,7 @@ export const executionSchema = z.object({
   continuationHistory: z.array(continuationOperationSchema).optional(),
   retired: z.array(z.object({ session: sessionRefSchema, epoch: z.number().int().positive(), operationId: id }).strict()).optional(),
   progress: text.optional(),
-  control: z.object({ commandId: referenceId, action: z.enum(['wait', 'pause', 'resume']), status: z.enum(['accepted', 'applied']), reason: text.optional() }).strict().optional(),
+  control: z.object({ commandId: referenceId, action: z.enum(['wait', 'pause', 'resume', 'end']), status: z.enum(['accepted', 'applied']), reason: text.optional() }).strict().optional(),
   error: z.object({ code: referenceId, message: text }).strict().optional(),
 }).strict()
 const command = { commandId: referenceId }
@@ -85,7 +85,7 @@ const legacyContinuousRuleSchema = z.object({
   resource: resourceRefSchema, model: modelSchema, agentPreset: referenceId, permissionPreset: referenceId,
   items: z.array(z.object({ nodeId: referenceId, title: text, number: z.number().int().positive(), url: text, taskRef: taskRefSchema.optional(), sourceId: id.optional(), ref: taskRefSchema.optional(), executionId: id.optional(),
     screening: z.object({ key: referenceId, matches: z.boolean(), reason: text.max(2000) }).strict().optional(),
-    state: z.enum(['queued', 'active', 'waiting', 'paused', 'blocked', 'completed', 'skipped']), reason: text.optional(), attempts: z.number().int().nonnegative(), retryAt: z.string().datetime().optional(), resumeRequested: z.boolean().optional(), explicitResumeRequested: z.boolean().optional(), followups: z.array(referenceId).optional(), recoveryBlocked: z.boolean().optional() }).strict()),
+    end: z.object({ commandId: referenceId, status: z.enum(['accepted', 'applied']) }).strict().optional(), state: z.enum(['queued', 'active', 'waiting', 'paused', 'blocked', 'completed', 'skipped']), reason: text.optional(), attempts: z.number().int().nonnegative(), retryAt: z.string().datetime().optional(), resumeRequested: z.boolean().optional(), explicitResumeRequested: z.boolean().optional(), followups: z.array(referenceId).optional(), recoveryBlocked: z.boolean().optional() }).strict()),
   planning: planningSchema.optional(),
   active: taskRefSchema.optional(), error: z.object({ code: referenceId, message: text }).strict().optional(),
 }).strict()
@@ -102,6 +102,7 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ ...command, type: z.literal('continuous.instruct'), projectId: id, sourceId: id, expectedVersion: z.number().int().positive(), text }).strict(),
   z.object({ ...command, type: z.literal('continuous.refresh'), projectId: id, sourceId: id, expectedVersion: z.number().int().positive() }).strict(),
   z.object({ ...command, type: z.literal('continuous.preview'), projectId: id, sourceId: id, expectedVersion: z.number().int().positive() }).strict(),
+  z.object({ ...command, type: z.literal('continuous.end'), projectId: id, sourceId: id, expectedVersion: z.number().int().positive(), nodeId: referenceId }).strict(),
   z.object({ ...command, type: z.literal('continuous.block'), projectId: id, sourceId: id, expectedVersion: z.number().int().positive(), nodeId: referenceId, blocked: z.boolean() }).strict(),
   z.object({ ...command, type: z.literal('source.connect'), githubProject: githubProjectRef.optional(), url: z.string().max(2048).optional(), resource: resourceRefSchema.optional() }).strict().refine(value => Boolean(value.url) !== Boolean(value.githubProject)),
   z.object({ ...command, type: z.literal('continuous.configure'), queue: continuousQueueSchema.optional(), projectId: id, sourceId: id, expectedVersion: z.number().int().nonnegative(), assignee: z.enum(['@me', '*']), labels: z.array(referenceId).max(100), resource: resourceRefSchema, model: modelSchema, agentPreset: referenceId, permissionPreset: referenceId, enabled: z.boolean() }).strict(),
@@ -116,7 +117,7 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ ...fence, type: z.literal('task.organize'), organization: taskOrganizationSchema }).strict(),
   z.object({ ...fence, type: z.literal('task.report'), report: taskReportSchema }).strict(),
   z.object({ ...fence, type: z.literal('task.continuation-material'), content: continuationContentSchema }).strict(),
-  z.object({ ...fence, type: z.literal('task.control'), action: z.enum(['progress', 'wait', 'pause', 'resume']), text }).strict(),
+  z.object({ ...fence, type: z.literal('task.control'), action: z.enum(['progress', 'wait', 'pause', 'resume', 'end']), text }).strict(),
   z.object({ ...fence, type: z.literal('task.input'), text, kind: z.enum(['input', 'result']) }).strict(),
   z.object({ ...fence, type: z.literal('task.completion-sync') }).strict(),
   z.object({ ...fence, type: z.literal('task.reconcile') }).strict(),

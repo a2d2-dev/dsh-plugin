@@ -44,7 +44,7 @@ export class ContinuousDelegationController {
     try { globalThis.localStorage?.setItem(this.key, draft) } catch { /* Keep the live input even when browser persistence is unavailable. */ }
     this.change({ draft })
   }
-  private command(type: 'continuous.preview' | 'continuous.refresh' | 'continuous.instruct' | 'continuous.set-enabled' | 'continuous.block', fields: Record<string, unknown> = {}): WorkCommand {
+  private command(type: 'continuous.end' | 'continuous.preview' | 'continuous.refresh' | 'continuous.instruct' | 'continuous.set-enabled' | 'continuous.block', fields: Record<string, unknown> = {}): WorkCommand {
     return { type, commandId: `continuous-ui:${browserUUID()}`, ...this.scope, expectedVersion: this.state.rule?.version ?? 0, ...fields } as WorkCommand
   }
   private async run(command: WorkCommand, afterReceipt?: () => void): Promise<void> {
@@ -73,6 +73,7 @@ export class ContinuousDelegationController {
   refresh = async (): Promise<void> => this.run(this.command('continuous.refresh'))
   preview = async (): Promise<void> => this.run(this.command('continuous.preview'))
   enable = async (enabled: boolean): Promise<void> => this.run(this.command('continuous.set-enabled', { enabled }))
+  end = async (nodeId: string): Promise<void> => this.run(this.command('continuous.end', { nodeId }))
   block = async (nodeId: string, blocked: boolean): Promise<void> => this.run(this.command('continuous.block', { nodeId, blocked }))
   retry = async (): Promise<void> => {
     if (this.state.busy || !this.state.pending) return
