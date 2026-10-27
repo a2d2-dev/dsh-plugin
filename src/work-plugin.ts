@@ -57,7 +57,7 @@ export async function apply(ctx: Context, config: Config = {}): Promise<void> {
   void app.ensureSourceSplit().catch(error => ctx.logger.warn(`Work store archive migration: ${String(error)}`))
   ctx.provide('a2d2Work', app)
   ctx.inject(['tools'], toolsCtx => { installOfficialJobReceipts(toolsCtx); installWorkTools(toolsCtx, app, runtimeId); installWorkProgressTools(toolsCtx, app, runtimeId); installWorkOrganizationTools(toolsCtx, app, runtimeId) })
-  ctx.inject(['agents', 'sessionController'], executionCtx => { installWorkControlRecovery(executionCtx, app) })
+  ctx.inject(['agents', 'sessionController', 'sessionQuery'], executionCtx => { installWorkControlRecovery(executionCtx, app) })
   if (source) ctx.effect(() => startProjectDiscovery({
     reconcile: () => app.reconcileSources(),
     onError: error => ctx.logger.warn(`GitHub source discovery: ${String(error)}`),

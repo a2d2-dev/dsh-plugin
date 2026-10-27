@@ -648,8 +648,39 @@ export class WorkApplication {
             continue
           }
           if (execution) {
+            let owner = continuousOwner(state, execution.ref)!
+            // Older hosts could activate the controller before sessionQuery. Only
+            // that proven read-only failure is safe to re-observe automatically;
+            // unknown settlement/creation outcomes still require explicit recovery.
+            if (owner.item.recoveryBlocked && execution.actual && owner.item.executionId === execution.id
+              && owner.item.reason === "Cannot read properties of undefined (reading 'observeSession')" && host.failure) {
+              try {
+                await this.observeRuntimeFailure(execution.id)
+              } catch { continue } // The required observation is still unavailable.
+              await this.sourceTransaction(async state => {
+                const current = state.executions.find(item => item.id === execution!.id)!
+                const managed = continuousOwner(state, current.ref)!
+                if (current.epoch !== execution!.epoch || !sameSession(current.session, execution!.session)
+                  || managed.item.executionId !== current.id || !continuousHasSlot(managed.rule, current.ref)
+                  || managed.item.reason !== "Cannot read properties of undefined (reading 'observeSession')") return
+                delete managed.item.recoveryBlocked; delete managed.item.reason
+                managed.item.attempts = 0
+                if (!continuousCompleted(state, current) && current.state !== 'failed' && !current.error && !current.continuation?.error
+                  && !current.continuationBlocked && !(current.runtimeFailure && !current.runtimeFailure.acknowledged)) {
+                  managed.item.state = ['waiting', 'paused'].includes(current.state) ? current.state as 'waiting' | 'paused'
+                    : current.control?.status === 'accepted' && current.control.action !== 'resume' ? 'blocked' : 'active'
+                }
+                managed.item.reason = (current.error ?? current.continuation?.error ?? current.continuationBlocked
+                  ?? (current.runtimeFailure && !current.runtimeFailure.acknowledged ? current.runtimeFailure : undefined))?.message
+                  ?? (['waiting', 'paused'].includes(current.state) || current.control?.status === 'accepted' && current.control.action !== 'resume' ? current.control?.reason : undefined)
+                const remaining = managed.rule.items.find(item => item.recoveryBlocked)
+                managed.rule.error = sourceScopeError(managed.rule, state.sources.find(source => source.id === managed.rule.sourceId))
+                  ?? (remaining ? { code: 'continuous-recovery-blocked', message: remaining.reason ?? 'Host recovery needs an explicit retry' } : undefined)
+              })
+              state = await this.load(); execution = state.executions.find(item => item.id === execution!.id)!
+              owner = continuousOwner(state, execution.ref)!
+            }
             if (host.status(execution) === 'running') continue
-            const owner = continuousOwner(state, execution.ref)!
             if (owner.item.recoveryBlocked && !owner.item.resumeRequested) continue
             try {
               await this.observeRuntimeFailure(execution.id)

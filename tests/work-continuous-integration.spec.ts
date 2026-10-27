@@ -4,7 +4,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import Subagents from '@deepseek-ai/dsh-subagent'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { RuntimeHost } from '../src/task-runtime/host.ts'
-import { WorkApplication } from '../src/work.ts'
+import { WorkApplication, WorkDao } from '../src/work.ts'
 import { installWorkTools } from '../src/work-execution/tools.ts'
 import { ExecutionFixtures } from './work-execution-fixture.ts'
 import type { GitHubIssue, GitHubSourcePort } from '../src/work-sources/types.ts'
@@ -215,3 +215,53 @@ it.each(['wait', 'pause'] as const)('replaces a continuous %s Session without ac
     expect(afterRule.items[0]!.state).toBe(action === 'wait' ? 'waiting' : 'paused')
   } finally { release(); await fixtures.close() }
 })
+
+
+it('reconciles legacy protection against the real current running Agent without interrupting its tool or duplicating work', async () => {
+  const fixtures = new ExecutionFixtures()
+  let release = () => {}
+  try {
+    const h = await fixtures.mount(await fixtures.root(), 'read-only')
+    const app = new WorkApplication(h.app.directory, h.host, source)
+    const execute = (command: unknown) => fixtures.run(async () => completed(await app.execute(command, actor)))
+    const query = (request: unknown) => fixtures.run(async () => completed(await app.query(request, actor)))
+    const connected = await execute({ type: 'source.connect', commandId: 'connect', githubProject: { owner: 'example', type: 'org', number: 1 } })
+    const projectId = connected.project!.id, sourceId = connected.source!.id
+    await query({ type: 'source.issues', projectId, sourceId, page: 1, perPage: 20, assignee: '@me', state: 'open', refresh: true })
+    const options = (await query({ type: 'source.execution-options', projectId, sourceId })).executionOptions!
+    let entered!: () => void
+    const started = new Promise<void>(resolve => { entered = resolve })
+    const gate = new Promise<void>(resolve => { release = resolve })
+    h.ctx.tools.register(defineTool({ name: 'hold_recovery', description: 'Keep a real running tool across queue reconciliation', parameters: {},
+      output: { schema: { type: 'object', additionalProperties: false, properties: { result: { type: 'string', required: true } } }, render: (_, value) => [{ type: 'text', text: value.result }] },
+      async execute() { entered(); await gate; return { result: 'Original tool completed' } } }))
+    h.model.nextTool = { name: 'hold_recovery', arguments: {} }
+    await execute({ type: 'continuous.configure', commandId: 'enable', projectId, sourceId, expectedVersion: 0, assignee: '@me', labels: ['bug'], resource: options.resources[0]!.ref, model: options.defaults.model, agentPreset: options.defaults.agentPreset, permissionPreset: options.defaults.permissionPreset, enabled: true })
+    await started
+    const rule = (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!
+    const ref = rule.active!
+    const first = (await query({ type: 'task.detail', ref })).execution!
+    const agent = h.ctx.agents.get(SessionId(first.session.sessionId))!
+    const requests = h.model.requests.length
+    await WorkDao.forDirectory(h.app.directory).transaction(async state => {
+      const item = state.continuousRules![0]!.items[0]!
+      item.state = 'blocked'; item.recoveryBlocked = true
+      item.reason = "Cannot read properties of undefined (reading 'observeSession')"
+    })
+    await fixtures.run(() => app.reconcileContinuous())
+    const after = (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!
+    expect(after.items[0]).toMatchObject({ state: 'active', ref, executionId: first.id })
+    expect(after.items[0]!.recoveryBlocked).toBeUndefined()
+    expect(after.error).toBeUndefined()
+    expect(after.slots).toEqual([ref])
+    expect(agent.status).toBe('running')
+    expect(h.ctx.agents.get(agent.id)).toBe(agent)
+    expect(h.model.requests).toHaveLength(requests)
+    expect((await query({ type: 'project.detail', projectId })).tasks).toHaveLength(1)
+    expect((await query({ type: 'task.detail', ref })).execution).toMatchObject({ id: first.id, session: first.session, owner: first.owner, epoch: first.epoch, model: first.model, permissionPreset: first.permissionPreset })
+    release()
+    await fixtures.run(() => agent.whenIdle())
+    await fixtures.run(() => app.reconcileControls())
+    expect((await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!.items[0]).toMatchObject({ state: 'blocked', reason: expect.stringContaining('idle without new actionable progress') })
+  } finally { release(); await fixtures.close() }
+}, 20_000)
