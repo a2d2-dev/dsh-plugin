@@ -1310,7 +1310,9 @@ it('persists Block on a fresh queue without a plan and re-screens unblocked work
   await restarted.reconcileControls()
   expect(screen.mock.calls.length).toBeGreaterThan(before)
   expect((await h.status(restarted)).blocks).toEqual([])
-  expect((await h.status(restarted)).items[0]).toMatchObject({ state: 'queued', screening: { matches: true } })
+  await vi.waitFor(async () => {
+    expect((await h.status(restarted)).items[0]).toMatchObject({ state: 'queued', screening: { matches: true } })
+  })
   expect(h.host.sessionsCreated.size).toBe(1)
 })
 
