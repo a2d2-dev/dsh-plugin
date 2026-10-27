@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import * as atomic from '@deepseek-ai/dsh-atomic-write'
 import { WorkApplication } from '../src/work.ts'
+import { WorkDao } from '../src/work-store/dao.ts'
 import { reconcileProjectSources, startProjectDiscovery } from '../src/work-sources/discovery.ts'
 
 vi.mock('@deepseek-ai/dsh-atomic-write', { spy: true })
@@ -75,11 +76,15 @@ it('round-trips all 3000 observations and the large checkpoint within the write 
   expect(after.sources[0].observations).toEqual([])
   expect(after.sources[0].discovery.checkpoint).toBeUndefined()
   const sidecar = JSON.parse(await readFile(join(directory, 'work-v3.archive', after.storage.sources[before.sources[0].id]), 'utf8'))
-  expect(sidecar.observations).toHaveLength(3000)
-  expect(sidecar.checkpoint.issues).toHaveLength(3000)
+  expect(sidecar.observations).toEqual(before.sources[0].observations)
+  expect(sidecar.checkpoint).toEqual(before.sources[0].discovery.checkpoint)
+  // Full export must also recover the original values through the current reader.
+  const exported = await WorkDao.forDirectory(directory).exportSnapshot()
+  expect(exported.schemaVersion).toBe(before.schemaVersion)
+  expect(exported.sources).toEqual(before.sources)
 }, 30_000)
 
-it('completes an interactive large-store write while background discovery holds the writer for five seconds', async () => {
+it('completes three interactive large-store writes while background discovery holds the writer for five seconds', async () => {
   const { directory, app: seed } = await open()
   await largeStore(directory, seed)
   const app = new WorkApplication(directory, noHost, { list: vi.fn(), detail: vi.fn(), project: async () => ({
@@ -98,11 +103,12 @@ it('completes an interactive large-store write while background discovery holds 
   const background = app.reconcileSources()
   await entered
   try {
-    await expect(app.execute({ type: 'project.create', commandId: 'during-discovery', name: 'Interactive during discovery' }, operator))
-      .resolves.toMatchObject({ status: 'completed' })
+    await Promise.all(Array.from({ length: 3 }, (_, index) =>
+      expect(app.execute({ type: 'project.create', commandId: `during-discovery-${index}`, name: `Interactive during discovery ${index}` }, operator))
+        .resolves.toMatchObject({ status: 'completed' })))
   } finally { await background }
   expect(JSON.parse(await readFile(join(directory, 'work-v3.json'), 'utf8')).projects.map((project: { name: string }) => project.name))
-    .toContain('Interactive during discovery')
+    .toEqual(['Large Project', ...Array.from({ length: 3 }, (_, index) => `Interactive during discovery ${index}`)])
 }, 35_000)
 
 it('queues writers across application instances before attempting the cross-process lock', async () => {
