@@ -1,4 +1,5 @@
 import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
+import * as continuous from '../src/work-continuous.ts'
 import { SourceError } from '../src/work-sources/errors.ts'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -1363,4 +1364,67 @@ it('rejects end outside continuous ownership and leaves ordinary pause/resume un
   expect(paused).toMatchObject({ state: 'paused', control: { action: 'pause', status: 'applied' } })
   const resumed = completed(await h.app.execute({ type: 'task.control', commandId: 'unmanaged-resume', ...fence(execution), action: 'resume', text: '恢复' }, operator)).execution!
   expect(resumed).toMatchObject({ state: 'ready', control: { action: 'resume', status: 'applied' } })
+})
+
+it('preserves a released waiting item end when automatic native input arrives before physical stop settles', async () => {
+  const h = await setup()
+  h.remote.issues = [h.remote.issues[0]!]; completed(await h.refresh())
+  completed(await h.app.execute(h.configure, operator))
+  const first = await h.execution(); h.host.idle(first)
+  completed(await h.app.execute({ type: 'task.control', commandId: 'end-race-wait', ...fence(first), action: 'wait', text: '等待外部结果' }, operator))
+  await h.app.reconcileContinuous()
+  expect((await h.status()).slots).not.toContainEqual(first.ref)
+  let release!: () => void, entered!: () => void
+  const stopping = new Promise<void>(resolve => { entered = resolve })
+  const gate = new Promise<void>(resolve => { release = resolve })
+  h.host.execution.end = async () => { entered(); await gate; throw Error('job still stopping') }
+  const before = { ensures: h.host.ensures.length, sends: h.host.sends.length, wakes: h.host.wakes.length }
+  const ending = h.app.execute({ type: 'task.control', commandId: 'end-race-end', ...fence(first), action: 'end', text: '明确结束本项' }, operator)
+  try {
+    await stopping
+    const input: NativeWorkMessage = { id: 'automatic-during-end', role: 'user', content: [{ type: 'text', text: 'new external result' }], source: { kind: 'external-result' } }
+    expect(await h.host.authorize(first.session.sessionId, [input])).toBe(false)
+    await h.app.reconcileContinuous()
+    const current = await h.execution(first.ref), item = (await h.status()).items[0]!
+    expect(current.control).toMatchObject({ action: 'end', status: 'accepted' })
+    expect(item.resumeRequested).toBeUndefined()
+    expect((await h.status()).slots).not.toContainEqual(first.ref)
+    expect(current.events).toContainEqual(expect.objectContaining({ id: input.id, delivery: 'accepted', acceptance: 'unassessed' }))
+    expect({ ensures: h.host.ensures.length, sends: h.host.sends.length, wakes: h.host.wakes.length }).toEqual(before)
+  } finally { release(); await ending }
+})
+
+it('rechecks an end accepted after resume candidate selection inside the real dispatch transaction', async () => {
+  const h = await setup()
+  h.remote.issues = [h.remote.issues[0]!]; completed(await h.refresh())
+  completed(await h.app.execute(h.configure, operator))
+  const first = await h.execution(); h.host.idle(first)
+  completed(await h.app.execute({ type: 'task.control', commandId: 'dispatch-race-wait', ...fence(first), action: 'wait', text: '等待外部结果' }, operator))
+  await h.app.reconcileContinuous()
+  expect(await h.host.authorize(first.session.sessionId, [{ id: 'automatic-before-end', role: 'user', content: [{ type: 'text', text: 'new external result' }], source: { kind: 'external-result' } }])).toBe(false)
+  expect((await h.status()).items[0]!.resumeRequested).toBe(true)
+  const dao = WorkDao.forDirectory(h.directory), transaction = dao.transaction.bind(dao), candidates = continuous.continuousCandidates
+  let selected = false, used = false, entered!: () => void, release!: () => void
+  const selectedGate = new Promise<void>(resolve => { entered = resolve })
+  const gate = new Promise<void>(resolve => { release = resolve })
+  vi.spyOn(continuous, 'continuousCandidates').mockImplementation((...args) => {
+    const result = candidates(...args)
+    if (!used && result.some(item => item.executionId === first.id && item.resumeRequested)) selected = true
+    return result
+  })
+  vi.spyOn(dao, 'transaction').mockImplementation(async (...args) => {
+    if (selected && !used) { used = true; entered(); await gate }
+    return transaction(...args)
+  })
+  h.host.execution.end = async () => { throw Error('job still stopping') }
+  const before = { ensures: h.host.ensures.length, sends: h.host.sends.length, wakes: h.host.wakes.length }
+  const dispatch = h.app.reconcileContinuous()
+  try {
+    await selectedGate
+    completed(await h.app.sessionControl(first.session, 'end-after-selection', 'end', '明确结束本项'))
+    release(); await dispatch
+    expect((await h.execution(first.ref)).control).toMatchObject({ action: 'end', status: 'accepted' })
+    expect((await h.status()).slots).not.toContainEqual(first.ref)
+    expect({ ensures: h.host.ensures.length, sends: h.host.sends.length, wakes: h.host.wakes.length }).toEqual(before)
+  } finally { release(); await dispatch }
 })
