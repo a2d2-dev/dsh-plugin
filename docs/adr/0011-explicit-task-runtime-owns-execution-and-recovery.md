@@ -46,7 +46,7 @@
 
 受控接任在 source maintenance 内通过公开 goals.disarm(exactLiveAgent) 撤销旧 activation，并 goals.get 回读确认 id/phase/revision 不变、activation=disarmed。无公开能力且无法证明旧 Goal 已退役时保留准确宿主能力阻塞；不修改 DSH，不冒充人类 pause/resume，不以 complete/blocked 收口未完成 Goal。独立浏览器协作不会自动成为原生接任，须使用该受控流程；这里不提供跨会话 Goal 迁移或自动 rearm。
 
-显式 `task.control action=end` 仅终止所属持续队列项；页面 `continuous.end` 对未开始项直接保存终态，对已执行项沿用同一控制路径。根会话及其原生子执行使用宿主公开取消，运行作业使用准确 owner 的 `jobs.kill`，等待 idle 并 flush 后核实停止，再移入历史和释放槽位。related/review/retired 关联本身不授予停止权。终态输出、子通知尚未消费或输出交付观察能力不可用只阻止业务完成，不单独阻止放弃队列处理；结束仍以准确 owner 的公开作业列表核实 running/stopping 状态，未知实际活动不放行。保留原结果及 unassessed。未知活动或停止失败保留结束请求和位置，页面可重试结束。此操作不写 Task.completion、不置 progress=done、不关闭 Issue，也不因外部 Closed 推断验收。
+显式 `task.control action=end` 仅终止所属持续队列项；页面 `continuous.end` 对未开始项直接保存终态，对已执行项沿用同一控制路径。根会话及其原生子执行使用宿主公开取消，运行作业使用准确 owner 的 `jobs.kill`，等待 idle 并 flush 后核实停止，再移入历史和释放槽位。related/review/retired 关联本身不授予停止权。终态输出、子通知尚未消费或输出交付观察能力不可用只阻止业务完成，不单独阻止放弃队列处理；结束仍以准确 owner 的公开作业列表核实 running/stopping 状态，未知实际活动不放行。保留原结果及 unassessed。未知活动或停止失败保留结束请求和位置，页面可重试结束。此操作不写 Task.completion、不置 progress=done、不关闭 Issue，也不因外部 Closed 推断验收。 已接受或已生效的 end 同时约束原生自动输入的恢复请求、候选选择与取得槽位的提交事务；即使结束在候选选出之后才落盘，事务仍重读该事实并拒绝覆盖为 resume。新输入保留在事件记录中，不重新授予处理权。
 
 ## 持久化与恢复
 

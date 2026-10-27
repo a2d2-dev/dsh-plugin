@@ -166,7 +166,7 @@ export class WorkApplication {
           if (lifecycleOwned(message) || owner!.events.some(item => item.id === message.id)) continue
           const text = message.content.flatMap(block => typeof block === 'object' && block !== null && 'type' in block && block.type === 'text' && 'text' in block && typeof block.text === 'string' ? [block.text] : []).join('\n')
           const managed = continuousOwner(current, owner!.ref)
-          if (managed && (!(owner!.error || owner!.continuation?.error || owner!.runtimeFailure || managed.item.recoveryBlocked) || typeof message.source === 'object' && message.source !== null && 'kind' in message.source && message.source.kind === 'user') && managed.item.state !== 'completed' && !continuousCompleted(current, owner!) && owner!.state !== 'paused' && !(owner!.control?.action === 'pause' && owner!.control.status === 'accepted')) { managed.item.resumeRequested = true; managed.item.attempts = 0; delete managed.item.retryAt; delete managed.item.recoveryBlocked; if (owner!.runtimeFailure) owner!.runtimeFailure.acknowledged = true }
+          if (managed && !managed.item.end && owner!.control?.action !== 'end' && (!(owner!.error || owner!.continuation?.error || owner!.runtimeFailure || managed.item.recoveryBlocked) || typeof message.source === 'object' && message.source !== null && 'kind' in message.source && message.source.kind === 'user') && managed.item.state !== 'completed' && !continuousCompleted(current, owner!) && owner!.state !== 'paused' && !(owner!.control?.action === 'pause' && owner!.control.status === 'accepted')) { managed.item.resumeRequested = true; managed.item.attempts = 0; delete managed.item.retryAt; delete managed.item.recoveryBlocked; if (owner!.runtimeFailure) owner!.runtimeFailure.acknowledged = true }
           owner!.events.push({ id: message.id, text: text.trim() ? text.slice(0, 100_000) : 'Native Session input', kind: 'input', delivery: 'accepted', acceptance: 'unassessed', nativeMessage: structuredClone(message) })
         }
         return false
@@ -754,7 +754,7 @@ export class WorkApplication {
                   await this.sourceTransaction(async state => {
                     const current = state.executions.find(item => item.id === execution!.id)!
                     const owner = continuousOwner(state, current.ref)!
-                    if (continuousCompleted(state, current)) return
+                    if (continuousCompleted(state, current) || owner.item.end || current.control?.action === 'end') return
                     owner.item.state = 'active'; delete owner.item.resumeRequested; delete owner.item.explicitResumeRequested; delete owner.item.reason
                     if (['waiting', 'paused'].includes(current.state) || current.control?.action !== 'resume') current.control = { commandId: `continuous-resume:${current.id}:${current.events.length}`, action: 'resume', status: 'accepted' }
                   })
@@ -793,7 +793,7 @@ export class WorkApplication {
               const current = state.continuousRules!.find(rule => rule.id === ruleId)!
               const item = current.items.find(item => item.nodeId === resume.nodeId)!
               const execution = state.executions.find(execution => execution.id === item.executionId)!
-              if (continuousSlots(current).length >= (current.queue?.concurrency ?? 1) || continuousCompleted(state, execution) || current.queue && !current.enabled && !item.explicitResumeRequested) return
+              if (item.end || execution.control?.action === 'end' || continuousSlots(current).length >= (current.queue?.concurrency ?? 1) || continuousCompleted(state, execution) || current.queue && !current.enabled && !item.explicitResumeRequested) return
               continuousSetSlot(current, item.ref!, true); item.state = 'active'; delete item.resumeRequested; delete item.explicitResumeRequested; delete item.reason
               execution.control = { commandId: `continuous-resume:${execution.id}:${execution.events.length}`, action: 'resume', status: 'accepted' }
             })
@@ -827,7 +827,7 @@ export class WorkApplication {
             if (freshSource && !sourceScopeError(current, freshSource)) discoverContinuous(current, freshSource)
             observeContinuousTasks(state, current)
             const item = current.items.find(item => item.nodeId === candidate.nodeId)!
-            if (continuousSlots(current).length >= (current.queue?.concurrency ?? 1) || !current.enabled || current.version !== rule.version || item.state !== 'queued' || sourceScopeError(current, state.sources.find(source => source.id === current.sourceId))) return undefined
+            if (item.end || continuousSlots(current).length >= (current.queue?.concurrency ?? 1) || !current.enabled || current.version !== rule.version || item.state !== 'queued' || sourceScopeError(current, state.sources.find(source => source.id === current.sourceId))) return undefined
             if ((current.planning || current.queue) && !continuousDependenciesReady(state, current, item.nodeId)) return undefined
             const commandId = `continuous:${current.id}:${createHash('sha256').update(item.nodeId).digest('hex')}`
             // Reserve import, binding, execution and slot in one snapshot. No host side effects precede this commit.
@@ -839,6 +839,7 @@ export class WorkApplication {
             if (imported.status !== 'completed' || !imported.ref || !imported.task) { item.state = 'blocked'; item.reason = imported.status !== 'completed' ? imported.error.message : 'Issue import returned no task'; return undefined }
             const existing = draft.executions.find(execution => sameTask(execution.ref, imported.ref))
             if (existing) {
+              if (existing.control?.action === 'end') return undefined
               const other = continuousOwner(draft, existing.ref)
               if (other && other.rule.id !== current.id) { item.state = 'waiting'; item.reason = `Canonical Task is owned by rule ${other.rule.id}; observe without advancing`; return undefined }
               const accepted = imported.task.progress?.stage === 'done' && imported.task.progress.specificationVersion === imported.task.specification.version
