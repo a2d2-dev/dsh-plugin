@@ -20,3 +20,9 @@
 自动恢复只识别本次已复现的准确 undefined.observeSession 保护，先成功读取当前绑定会话的正式日志，再以 ExecutionId、epoch、Session 和保留槽位复核。其他未知宿主结果沿用明确 task.reconcile / task.control resume 路径。已有错误、业务等待、暂停和真实模型失败独立保留；空闲无新输入只安全让槽，不发送续跑消息。
 
 本工作树没有改动生产状态、重启、部署或发送业务消息。正式 3080 页面验收由主会话集成后完成，当前未验证。与 #301 合并时，end 优先处理分支必须位于本次遗留恢复之前，并通过正常类型条件保留 ended/已应用 end，不恢复为 active。#140 未合并改动由主会话另行保留。
+
+## 补充：现场用户主动停止（03:02:38 UTC）
+
+原负向回归只有普通模型错误，未覆盖用户取消。新增相同真实持久化观察参数 `user-aborted`，写入 `turn/end={kind:'aborted', reason:{kind:'user'}}`。旧 observeSession 保护清除后，确认 `runtimeFailure.userCancelled=true` 和 blocked 保留，原执行处于 idle 且已安全让出槽位；重新允许接新工作后，下一候选取得槽位，原执行仍保持同一失败，没有被恢复或重启。
+
+只执行新增用例：`pnpm exec vitest run tests/work-continuous.spec.ts -t 'current session is user-aborted'`，1 项通过，77 项跳过，见 recovery-user-aborted.log。本次只有测试和证据变化，按交接要求不重跑整套或类型检查。没有写生产状态。

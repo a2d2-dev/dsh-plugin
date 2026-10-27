@@ -1291,7 +1291,7 @@ it('reflects explicit Task-page recovery of a pre-admission problem without bypa
 })
 
 
-it.each(['idle', 'running', 'waiting', 'paused', 'model-failure', 'historical-running'] as const)('recovers missing sessionQuery through actual persisted observation while current session is %s', async status => {
+it.each(['idle', 'running', 'waiting', 'paused', 'model-failure', 'user-aborted', 'historical-running'] as const)('recovers missing sessionQuery through actual persisted observation while current session is %s', async status => {
   const h = await setup()
   completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1 } }, operator))
   const first = await h.execution()
@@ -1312,9 +1312,9 @@ it.each(['idle', 'running', 'waiting', 'paused', 'model-failure', 'historical-ru
     completed(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'freeze-new-intake', ...h.scope, expectedVersion: 1, enabled: false }, operator))
     const calls = [h.host.ensures.length, h.host.sends.length, h.host.wakes.length]
     if (status === 'waiting' || status === 'paused') completed(await h.app.sessionControl(first.session, 'retain-business-control', status === 'waiting' ? 'wait' : 'pause', 'Explicit business hold'))
-    if (status === 'model-failure') {
+    if (status === 'model-failure' || status === 'user-aborted') {
       const log = await ctx.sessionPersistence.open(SessionId(first.session.sessionId), 'write')
-      await log.append([{ type: 'turn/start', seq: SessionSeq(0), time: Date.now(), data: { turn: 1 } }, { type: 'turn/end', seq: SessionSeq(1), time: Date.now(), data: { turn: 1, reason: { kind: 'error', error: { code: 'provider-error', message: 'Real model failure' } } } }])
+      await log.append([{ type: 'turn/start', seq: SessionSeq(0), time: Date.now(), data: { turn: 1 } }, { type: 'turn/end', seq: SessionSeq(1), time: Date.now(), data: { turn: 1, reason: status === 'user-aborted' ? { kind: 'aborted', reason: { kind: 'user' } } : { kind: 'error', error: { code: 'provider-error', message: 'Real model failure' } } } }])
       await log.flush(); await log.close()
     }
     if (status === 'historical-running') h.host.statuses.set('old-or-unrelated-session', 'running')
@@ -1332,5 +1332,18 @@ it.each(['idle', 'running', 'waiting', 'paused', 'model-failure', 'historical-ru
     expect(await h.execution(first.ref, restored)).toMatchObject({ id: first.id, owner: first.owner, epoch: first.epoch, session: first.session, model: first.model, permissionPreset: first.permissionPreset })
     expect([h.host.ensures.length, h.host.sends.length, h.host.wakes.length]).toEqual([calls[0]! + (status === 'waiting' || status === 'paused' ? 1 : 0), calls[1], calls[2]])
     expect(h.host.sessionsCreated.size).toBe(1)
+    if (status === 'user-aborted') {
+      const stopped = await h.execution(first.ref, restored)
+      expect(stopped.runtimeFailure).toMatchObject({ userCancelled: true, message: expect.stringContaining('aborted') })
+      expect(h.host.execution.status(stopped)).toBe('idle')
+      completed(await restored.execute({ type: 'continuous.set-enabled', commandId: 'continue-other-candidates', ...h.scope, expectedVersion: 2, enabled: true }, operator))
+      await restored.reconcileContinuous()
+      const next = await h.status(restored)
+      expect(next.items[0]!.state).toBe('blocked')
+      expect(next.slots).not.toContainEqual(first.ref)
+      expect(next.items[1]!.state).toBe('active')
+      expect(h.host.sessionsCreated.size).toBe(2)
+      expect((await h.execution(first.ref, restored)).runtimeFailure).toEqual(stopped.runtimeFailure)
+    }
   } finally { await ctx.fiber.dispose() }
 })
