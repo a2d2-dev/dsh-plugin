@@ -1347,3 +1347,88 @@ it.each(['idle', 'running', 'waiting', 'paused', 'model-failure', 'user-aborted'
     }
   } finally { await ctx.fiber.dispose() }
 })
+
+it('ends an old aborted item after an ordinary resumable pause without declaring Task acceptance', async () => {
+  const h = await setup(); completed(await h.app.execute(h.configure, operator))
+  const first = await h.execution(); h.host.idle(first)
+  completed(await h.app.execute({ type: 'task.control', commandId: 'temporary-pause', ...fence(first), action: 'pause', text: '暂时暂停' }, operator))
+  await h.app.reconcileContinuous()
+  expect((await h.status()).items[0]!.state).toBe('paused')
+  await WorkDao.forDirectory(h.directory).transaction(async state => {
+    state.executions.find(row => row.id === first.id)!.runtimeFailure = { id: 'old-abort', message: '旧中止', userCancelled: true }
+  })
+  const stop = vi.fn(async (execution: WorkExecution) => { h.host.idle(execution) })
+  h.host.execution.end = stop
+  const taskBefore = completed(await h.app.query({ type: 'task.detail', ref: first.ref }, operator)).task!
+  const command = { type: 'task.control' as const, commandId: 'end-aborted', ...fence(first), action: 'end' as const, text: '交由业务负责者处理，结束本项' }
+  completed(await h.app.execute(command, operator)); completed(await h.app.execute(command, operator))
+  expect(stop).toHaveBeenCalledTimes(1)
+  expect((await h.status()).items[0]).toMatchObject({ state: 'completed', end: { status: 'applied' } })
+  const taskAfter = completed(await h.app.query({ type: 'task.detail', ref: first.ref }, operator)).task!
+  expect(taskAfter).toEqual(taskBefore)
+  expect(taskAfter.completion).toBeUndefined()
+  expect(await h.app.execute({ type: 'task.control', commandId: 'cannot-resume', ...fence(first), action: 'resume', text: '重新执行' }, operator)).toMatchObject({ status: 'failed' })
+  const restarted = new WorkApplication(h.directory, h.host, h.source)
+  await h.refresh(); await restarted.reconcileControls()
+  expect((await h.status(restarted)).items[0]).toMatchObject({ state: 'completed', end: { status: 'applied' } })
+  expect(stop).toHaveBeenCalledTimes(1)
+})
+
+it('ends active work only after the stop boundary, retaining unconsumed events and other queue items', async () => {
+  const h = await setup(); completed(await h.app.execute(h.configure, operator))
+  const first = await h.execution()
+  const otherBefore = (await h.status()).items.slice(1)
+  const eventsBefore = structuredClone(first.events)
+  let finish!: () => void
+  h.host.execution.end = async execution => { await new Promise<void>(resolve => { finish = resolve }); h.host.idle(execution) }
+  const ending = h.app.execute({ type: 'task.control', commandId: 'end-active', ...fence(first), action: 'end', text: '明确结束' }, operator)
+  await vi.waitFor(async () => expect((await h.status()).items[0]!.end?.status).toBe('accepted'))
+  await vi.waitFor(() => expect(finish).toBeTypeOf('function'))
+  expect((await h.status()).slots).toContainEqual(first.ref)
+  expect(await h.host.authorize(first.session.sessionId)).toBe(false)
+  finish(); completed(await ending)
+  expect((await h.status()).slots).not.toContainEqual(first.ref)
+  expect((await h.status()).items.slice(1)).toEqual(otherBefore)
+  expect((await h.execution(first.ref)).events).toEqual(eventsBefore)
+  expect(completed(await h.app.query({ type: 'task.detail', ref: first.ref }, operator)).task!.completion).toBeUndefined()
+})
+
+it('persists model end until its turn finishes and exposes an operator retry after a real stop failure', async () => {
+  const h = await setup(); completed(await h.app.execute(h.configure, operator))
+  const first = await h.execution()
+  completed(await h.app.sessionControl(first.session, 'model-end', 'end', '明确结束本项'))
+  expect((await h.execution(first.ref)).control).toMatchObject({ action: 'end', status: 'accepted' })
+  h.host.execution.end = async () => { throw new Error('job still stopping') }
+  h.host.statuses.set(first.session.sessionId, 'idle')
+  await h.app.reconcileControls()
+  expect((await h.status()).slots).toContainEqual(first.ref)
+  expect((await h.execution(first.ref)).error?.message).toContain('job still stopping')
+  h.host.execution.end = async execution => { h.host.idle(execution) }
+  const rule = await h.status()
+  completed(await h.app.execute({ type: 'continuous.end', commandId: 'retry-end', ...h.scope, expectedVersion: rule.version, nodeId: rule.items[0]!.nodeId }, operator))
+  expect((await h.status()).items[0]).toMatchObject({ state: 'completed', end: { status: 'applied' } })
+  expect((await h.status()).slots).not.toContainEqual(first.ref)
+})
+
+it('ends an unstarted queue candidate durably without creating a Task or Session', async () => {
+  const h = await setup(); completed(await h.app.execute(h.configure, operator))
+  const rule = await h.status(), queued = rule.items[1]!
+  const ensures = h.host.ensures.length
+  const ended = completed(await h.app.execute({ type: 'continuous.end', commandId: 'end-queued', ...h.scope, expectedVersion: rule.version, nodeId: queued.nodeId }, operator))
+  expect(ended.continuousRule!.items[1]).toMatchObject({ state: 'completed', end: { status: 'applied' } })
+  await h.refresh(); await h.app.reconcileControls()
+  expect((await h.status()).items[1]!.state).toBe('completed')
+  expect(h.host.ensures.length).toBe(ensures)
+})
+
+it('rejects end outside continuous ownership and leaves ordinary pause/resume unchanged', async () => {
+  const h = await setup(false); completed(await h.app.execute(h.configure, operator))
+  const imported = completed(await h.app.execute({ type: 'source.import', commandId: 'unmanaged-import', ...h.scope, nodeId: 'ISSUE_3' }, operator))
+  const execution = completed(await h.app.execute({ type: 'task.start', commandId: 'unmanaged-start', ref: imported.ref!, expectedVersion: imported.task!.version, agentId: imported.task!.agentId, resource, model, agentPreset: 'agent', permissionPreset: 'safe' }, operator)).execution!
+  expect(await h.app.execute({ type: 'task.control', commandId: 'unmanaged-end', ...fence(execution), action: 'end', text: '结束' }, operator)).toMatchObject({ status: 'failed', error: { code: 'continuous-required' } })
+  h.host.idle(execution)
+  const paused = completed(await h.app.execute({ type: 'task.control', commandId: 'unmanaged-pause', ...fence(execution), action: 'pause', text: '暂停' }, operator)).execution!
+  expect(paused).toMatchObject({ state: 'paused', control: { action: 'pause', status: 'applied' } })
+  const resumed = completed(await h.app.execute({ type: 'task.control', commandId: 'unmanaged-resume', ...fence(execution), action: 'resume', text: '恢复' }, operator)).execution!
+  expect(resumed).toMatchObject({ state: 'ready', control: { action: 'resume', status: 'applied' } })
+})
