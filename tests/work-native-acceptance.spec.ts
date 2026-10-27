@@ -134,7 +134,7 @@ it('reads the real adapter native child endpoint completely before presenting a 
     const url = String(input); requests.push(url)
     expect(init?.method).toBe('GET'); expect(init?.redirect).toBe('manual')
     if (url.endsWith('/user')) return Response.json({ login: identity.login, node_id: identity.nodeId })
-    if (url.endsWith('/issues/1')) return Response.json({ ...raw(1), sub_issues_summary: { total: 101 } })
+    if (url.endsWith('/issues/1')) return Response.json({ ...raw(1), sub_issues_summary: { total: 101, completed: 0 } })
     if (url.endsWith('/sub_issues?per_page=100&page=1')) return Response.json(Array.from({ length: 100 }, (_, index) => raw(index + 2)))
     if (url.endsWith('/sub_issues?per_page=100&page=2')) return Response.json([raw(102)])
     throw Error('Unexpected source route')

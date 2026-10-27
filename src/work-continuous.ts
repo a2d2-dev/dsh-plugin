@@ -1,3 +1,4 @@
+import { continuousBlocks } from './work-blocks.ts'
 import { screeningKey, SCREENING_PENDING } from './work-screening.ts'
 import type { WorkSnapshot } from './work-schema.ts'
 import type { ContinuousWorkRule, TaskRef, WorkExecution } from './work-types.ts'
@@ -57,7 +58,7 @@ export function observeContinuousTasks(state: WorkSnapshot, rule: ContinuousWork
 }
 
 /** Only the published complete Project membership is eligible; archived/draft/PR items never enter. */
-export function discoverContinuous(rule: ContinuousWorkRule, source: WorkSource): void {
+export function discoverContinuous(rule: ContinuousWorkRule, source: WorkSource, state?: WorkSnapshot): void {
   const members = new Set(source.repository ? source.repositorySnapshot?.nodeIds : source.projectSnapshot?.items.filter(item => item.kind === 'issue' && !item.archived).map(item => item.issueNodeId))
   const eligible = new Set<string>()
   for (const { issue } of source.observations) {
@@ -74,7 +75,7 @@ export function discoverContinuous(rule: ContinuousWorkRule, source: WorkSource)
   const plan = rule.queue ? undefined : rule.planning?.plans.find(plan => plan.version === rule.planning!.enabledPlanVersion)
   for (const item of rule.items) {
     if (item.ref || ['blocked', 'completed', 'paused'].includes(item.state)) continue // Block never kills accepted work or its safe closeout.
-    if (rule.planning?.blocks.includes(item.nodeId)) { item.state = 'blocked'; item.reason = 'Issue is excluded by the persistent Block list'; continue }
+    if (continuousBlocks(rule).includes(item.nodeId)) { item.state = 'blocked'; item.reason = 'Issue is excluded by the persistent Block list'; continue }
     if (rule.planning && !rule.queue) {
       const step = plan?.steps.find(step => step.nodeId === item.nodeId)
       if (!step) { item.state = 'skipped'; item.reason = 'Issue is not in an explicitly enabled model plan' }
@@ -85,7 +86,7 @@ export function discoverContinuous(rule: ContinuousWorkRule, source: WorkSource)
   if (rule.queue) {
     for (const item of rule.items) if (!item.ref && item.state === 'skipped' && item.reason === 'Issue is not in an explicitly enabled model plan' && eligible.has(item.nodeId)) { item.state = 'queued'; delete item.reason }
     const observations = new Map(source.observations.map(row => [row.issue.nodeId, row.issue]))
-    const batchKey = rule.queue.filterPrompt?.trim() ? screeningKey(rule, source) : undefined
+    const batchKey = rule.queue.filterPrompt?.trim() ? screeningKey(rule, source, state) : undefined
     for (const item of rule.items) {
       if (item.ref || ['blocked', 'completed', 'paused'].includes(item.state) || !eligible.has(item.nodeId)) continue
       if (rule.queue.filterPrompt?.trim()) {
@@ -113,8 +114,8 @@ export function discoverContinuous(rule: ContinuousWorkRule, source: WorkSource)
   }
 }
 /** Resumable accepted work competes with new waiting work under the same ordering and capacity. */
-export function continuousCandidates(rule: ContinuousWorkRule, source: WorkSource | undefined): ContinuousWorkRule['items'] {
-  const batchKey = rule.queue?.filterPrompt?.trim() && source ? screeningKey(rule, source) : undefined
+export function continuousCandidates(rule: ContinuousWorkRule, source: WorkSource | undefined, state?: WorkSnapshot): ContinuousWorkRule['items'] {
+  const batchKey = rule.queue?.filterPrompt?.trim() && source ? screeningKey(rule, source, state) : undefined
   const candidates = rule.items.filter(item => (!rule.queue || rule.enabled || item.explicitResumeRequested) && (item.state === 'queued' || item.ref && item.executionId && item.resumeRequested && item.state !== 'completed')).filter(item => {
     if (item.ref || !rule.queue?.filterPrompt?.trim()) return true
     return !!batchKey && item.screening?.matches === true && item.screening.key === batchKey
@@ -136,13 +137,20 @@ export function continuousDependenciesReady(state: WorkSnapshot, rule: Continuou
   }
   const binding = state.externalBindings.find(binding => binding.nodeId === nodeId)
   const task = binding && state.tasks.find(task => task.id === binding.ref.taskId && task.projectId === binding.ref.projectId)
-  // Necessary children come from the primary store; a local-only child is invalid cache.
+  // A list observation is not proof of an empty relationship set. Both native
+  // reads must be complete, including the total count and unique identities.
+  const complete = (relation: NonNullable<typeof issue>['subIssues']) => !!relation && !relation.hasNextPage && relation.totalCount === relation.items.length && new Set(relation.items.map(item => item.nodeId)).size === relation.items.length
+  if (!issue || issue.parent === undefined || !complete(issue.subIssues) || issue.dependencies?.availability !== 'available' || !complete(issue.dependencies.blockedBy)) return false
+  const accepted = (relative: { nodeId: string; state: 'open' | 'closed' }) => {
+    const canonical = state.externalBindings.find(binding => binding.nodeId === relative.nodeId)
+    // Once imported, even a closed Issue must pass its canonical Task acceptance.
+    return canonical ? done(canonical.ref) : relative.state === 'closed'
+  }
+  // An accepted native child scope cannot disappear when discovery shrinks.
+  const nativeChildren = new Map([...(binding?.acceptedChildren?.items ?? binding?.accepted.subIssues?.items ?? []), ...issue.subIssues!.items,
+    ...source!.observations.filter(row => row.issue.parent?.nodeId === nodeId).map(row => row.issue)].map(child => [child.nodeId, child]))
   const canonicalChildren = (task?.children ?? []).filter(ref => state.externalBindings.some(binding => sameTask(binding.ref, ref)))
-  const ready = !issue?.subIssues?.hasNextPage && (issue?.subIssues?.items ?? []).every(child => {
-    const childBinding = state.externalBindings.find(binding => binding.nodeId === child.nodeId)
-    return child.state === 'closed' || !!childBinding && done(childBinding.ref)
-  }) && canonicalChildren.every(done)
-  return ready
+  return [...nativeChildren.values()].every(accepted) && issue.dependencies.blockedBy.items.every(accepted) && canonicalChildren.every(done)
 }
 
 export const MAX_CONTINUOUS_ATTEMPTS = 3

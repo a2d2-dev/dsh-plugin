@@ -35,6 +35,14 @@ describe('GitHub Project source', () => {
     expect(page.items.map(item => item.kind)).toEqual(['issue', 'issue', 'restricted', 'draft', 'pull-request'])
     expect(page.items[0]?.fields).toEqual([{ id: 'F_status', name: 'Status', type: 'single-select', value: 'In progress' }, { id: 'F_priority', name: 'Priority', type: 'single-select', value: 'P1' }, { id: 'F_iteration', name: 'Iteration', type: 'iteration', value: 'Iteration 2' }])
   })
+  it('reads native blockers in the same Project page and preserves partial coverage explicitly', async () => {
+    const blocker = { ...reference('I_blocker', 'blocker'), state: 'CLOSED' }
+    const page = await readGitHubProject(target, { perPage: 20 }, async query => {
+      expect(query).toContain('blockedBy(first:100)')
+      return response([item({ ...issue(), blockedBy: { totalCount: 2, pageInfo: { hasNextPage: true }, nodes: [blocker] } })])
+    })
+    expect(page.issues[0]!.dependencies).toMatchObject({ availability: 'available', blockedBy: { totalCount: 2, hasNextPage: true, items: [{ nodeId: 'I_blocker', state: 'closed' }] } })
+  })
   it('supports user Projects and completes an empty terminal page without inventing Issues', async () => {
     const page = await readGitHubProject({ owner: 'imneov', type: 'user', number: 2 }, { perPage: 1 }, async query => {
       expect(query).toContain('user(login:$owner)')

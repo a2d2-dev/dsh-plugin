@@ -62,6 +62,7 @@ export function normalizeContinuousQueues(state: WorkSnapshot): WorkSnapshot {
     current.legacyRules.push(legacySettings(rule))
     if (!current.planning && rule.planning) current.planning = structuredClone(rule.planning)
     else if (current.planning && rule.planning) current.planning.blocks = [...new Set([...current.planning.blocks, ...rule.planning.blocks])]
+    if (rule.blocks?.length) current.blocks = [...new Set([...(current.blocks ?? []), ...rule.blocks])]
     current.enabled = false
     current.version = Math.max(current.version, rule.version) + 1
     current.migrationConflict = { code: 'continuous-scope-conflict', message: 'Multiple legacy source scopes exist. Save explicit Project queue settings before starting further work; existing executions and legacy settings are retained.' }

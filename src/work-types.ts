@@ -104,8 +104,11 @@ export interface ContinuousWorkRule {
   resource: ResourceRef; model: { provider: string; model: string; reasoningEffort?: string }
   agentPreset: string; permissionPreset: string
   planning?: import('./work-planning.ts').WorkPlanning
+  /** Persistent exclusions for the single queue, independent of legacy plan approvals. */
+  blocks?: string[]
   queue?: ContinuousQueueSettings
   screeningError?: { code: string; message: string }
+  screeningReviews?: import('./work-screening-record.ts').ScreeningReview[]
   lastRefreshedAt?: string; nextRefreshAt?: string
   /** Retained until host settlement or completion closeout; active is a legacy first-slot projection. */
   slots?: TaskRef[]

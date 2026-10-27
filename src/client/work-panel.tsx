@@ -212,7 +212,7 @@ function ContinuousProcessing({controller}:{controller:WorkPanelController}) {
       const selectedResource=options.resources[resource]?.ref, selectedModel=options.models[model]
       if(!selectedResource||!selectedModel)throw Error('请选择可用执行配置')
       const configuredModel=rule?.model.provider===selectedModel.provider&&rule.model.model===selectedModel.model?rule.model:options.defaults.model.provider===selectedModel.provider&&options.defaults.model.model===selectedModel.model?options.defaults.model:selectedModel
-      const result=await controller.submit({type:'continuous.configure',projectId,sourceId:configSourceId,expectedVersion:rule?.version??0,assignee,labels:[...new Set(labels.split(',').map(label=>label.trim()).filter(Boolean))],resource:selectedResource,model:configuredModel,agentPreset,permissionPreset,enabled:rule?.enabled??false,queue:{concurrency,refreshMinutes,order,filterPrompt:filterPrompt.trim()}})
+      const result=await controller.submit({type:'continuous.configure',projectId,sourceId:configSourceId,expectedVersion:rule?.version??0,assignee,labels:[...new Set(labels.split(',').map(label=>label.trim()).filter(Boolean))],resource:selectedResource,model:configuredModel,agentPreset,permissionPreset,enabled:rule?.enabled??false,queue:{concurrency,refreshMinutes,order,filterPrompt}})
       if(!scope.signal.aborted){setRule(result.continuousRule);setEditing(false)}
     }catch(error){if(!scope.signal.aborted)setError(message(error))}finally{if(!scope.signal.aborted)setBusy(false)}
   }

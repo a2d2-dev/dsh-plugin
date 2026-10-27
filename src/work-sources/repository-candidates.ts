@@ -1,3 +1,4 @@
+import { hydrateCandidateRelationships } from './relationships.ts'
 import { z } from 'zod'
 import type { SourceTransaction } from './application.ts'
 import { issueSchema } from './schema.ts'
@@ -38,7 +39,7 @@ export async function refreshRepositoryCandidates(transaction: SourceTransaction
       identity = observed.identity
       for (const issue of observed.items) {
         if (issue.repository.owner.toLowerCase() !== reserved.repository!.owner.toLowerCase() || issue.repository.repository.toLowerCase() !== reserved.repository!.repository.toLowerCase()) throw new SourceError('github-invalid-response', 'Repository candidate belongs to a different repository')
-        issues.set(issue.nodeId, issue)
+        issues.set(issue.nodeId, await hydrateCandidateRelationships(issue, identity, port!))
       }
       if (issues.size > MAX_REPOSITORY_CANDIDATES) throw new SourceError('source-candidate-limit', 'Repository candidate scope exceeds 1000 visible Issues; nothing was enabled')
       if (!observed.nextPage) { result = { identity, issues: [...issues.values()], observedAt: observed.observedAt }; break }

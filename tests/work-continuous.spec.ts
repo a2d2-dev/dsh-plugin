@@ -66,7 +66,7 @@ class Host implements WorkHost {
   idle(execution: WorkExecution) { this.settlements.set(execution.id, 'settled'); this.statuses.set(execution.session.sessionId, 'idle'); for (const event of execution.events) if (this.deliveries.has(event.id)) this.deliveries.set(event.id, 'consumed') }
 }
 function issue(number: number, assignees = ['alice'], labels = ['ready']): GitHubIssue {
-  return { subIssues: { items: [], totalCount: 0, hasNextPage: false }, nodeId: `ISSUE_${number}`, number, title: `Issue ${number}`, url: `https://github.com/acme/repo/issues/${number}`, body: 'Implement the agreed work.', repository: { owner: 'acme', repository: 'repo' }, assignees, labels, state: 'open', updatedAt: '2026-01-01T00:00:00.000Z', observedAt: '2026-01-01T00:00:00.000Z' }
+  return { parent: null, dependencies: { availability: 'available', blockedBy: { items: [], totalCount: 0, hasNextPage: false } }, subIssues: { items: [], totalCount: 0, hasNextPage: false }, nodeId: `ISSUE_${number}`, number, title: `Issue ${number}`, url: `https://github.com/acme/repo/issues/${number}`, body: 'Implement the agreed work.', repository: { owner: 'acme', repository: 'repo' }, assignees, labels, state: 'open', updatedAt: '2026-01-01T00:00:00.000Z', observedAt: '2026-01-01T00:00:00.000Z' }
 }
 async function setup(enable = true, planner?: import('../src/work-planning.ts').WorkPlanner, repository = false) {
   const directory = await mkdtemp(join(tmpdir(), 'continuous-work-')); roots.push(directory)
@@ -643,7 +643,7 @@ it('previews complete Repo candidates without execution and dispatches only afte
   expect(generate).toHaveBeenCalledTimes(1)
   const basis = (generate.mock.calls[0] as unknown as [import('../src/work-planning.ts').PlanningBasis])[0]
   expect(basis.candidates.map(item => item.issue.nodeId)).toEqual(['ISSUE_1', 'ISSUE_2', 'ISSUE_3', 'ISSUE_4'])
-  expect(basis.relationshipAvailability.nativeDependencies).toBe('unavailable-in-source-port')
+  expect(basis.relationshipAvailability.nativeDependencies).toBe('per-candidate')
   expect(pages.mock.calls.map(([, request]) => [request.page, request.assignee, request.state])).toEqual([[1, '*', 'open'], [2, '*', 'open']])
   expect(h.host.sessionsCreated.size).toBe(0); expect(h.host.sends).toHaveLength(0)
   expect((await h.status()).items.every(item => !item.ref)).toBe(true)
@@ -1074,7 +1074,8 @@ it('rescreens cached queue candidates after session occupancy changes without wa
   await h.app.reconcileContinuous()
   await vi.waitFor(async () => {
     expect(screen).toHaveBeenCalledTimes(3)
-    expect((await h.status()).items.find(item => item.number === 2)?.screening?.key).toBe(initial.items[1]!.screening!.key)
+    expect((await h.status()).items.find(item => item.number === 2)?.screening?.key).not.toBe(initial.items[1]!.screening!.key)
+    expect(screen.mock.calls[2]![0].candidates[0]?.task?.progress?.stage).toBe('done')
   })
   expect(screen.mock.calls[2]![0].candidates.map(candidate => [candidate.number, candidate.sessionOccupied])).toEqual([[1, false], [2, false]])
   await Promise.all([h.app.reconcileContinuous(), h.app.reconcileContinuous()])
@@ -1278,4 +1279,66 @@ it('reflects explicit Task-page recovery of a pre-admission problem without bypa
   expect((await h.status()).items[0]).toMatchObject({ ref: recovered.ref, executionId: recovered.id, state: 'active' })
   expect(h.host.sessionsCreated.size).toBe(2)
   expect((await h.execution(recovered.ref)).session).toEqual(recovered.session)
+})
+
+it('persists Block on a fresh queue without a plan and re-screens unblocked work after restart', async () => {
+  const screen = vi.fn(async (basis: import('../src/work-screening.ts').ScreeningBasis) => ({ decisions: basis.candidates.map(issue => ({ nodeId: issue.nodeId, matches: true, reason: '符合自然语言要求' })) }))
+  const planner = { generate: async () => ({ steps: [] }), screen }
+  const h = await setup(false, planner)
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1, filterPrompt: '处理批准的独立工作' } }, operator))
+  completed(await h.app.execute({ type: 'continuous.block', commandId: 'block-new-queue', ...h.scope, expectedVersion: 1, nodeId: 'ISSUE_1', blocked: true }, operator))
+  expect((await h.status()).planning).toBeUndefined()
+  expect((await h.status()).blocks).toEqual(['ISSUE_1'])
+  expect((await h.status()).items[0]).toMatchObject({ state: 'blocked', reason: 'Issue is excluded by the persistent Block list' })
+  const restarted = new WorkApplication(h.directory, h.host, h.source, planner)
+  expect((await h.status(restarted)).blocks).toEqual(['ISSUE_1'])
+  completed(await restarted.execute({ type: 'continuous.set-enabled', commandId: 'enable-blocked-queue', ...h.scope, expectedVersion: 2, enabled: true }, operator))
+  await restarted.reconcileControls()
+  await vi.waitFor(async () => { await restarted.reconcileControls(); expect((await h.status(restarted)).items.find(item => item.state === 'active')?.nodeId).toBe('ISSUE_2') })
+  const before = screen.mock.calls.length
+  completed(await restarted.execute({ type: 'continuous.block', commandId: 'unblock-new-queue', ...h.scope, expectedVersion: 3, nodeId: 'ISSUE_1', blocked: false }, operator))
+  await restarted.reconcileControls()
+  expect(screen.mock.calls.length).toBeGreaterThan(before)
+  expect((await h.status(restarted)).blocks).toEqual([])
+  expect((await h.status(restarted)).items[0]).toMatchObject({ state: 'queued', screening: { matches: true } })
+  expect(h.host.sessionsCreated.size).toBe(1)
+})
+
+it('screens canonical requirements and progress and keeps versioned model evidence after restart', async () => {
+  const screen = vi.fn(async (basis: import('../src/work-screening.ts').ScreeningBasis) => ({ decisions: basis.candidates.map(issue => ({ nodeId: issue.nodeId, matches: issue.task?.progress?.summary === '设计完成，待性能验证', reason: issue.task?.progress?.summary ?? '尚无进展，排除' })) }))
+  const planner = { generate: async () => ({ steps: [] }), screen }, h = await setup(false, planner)
+  completed(await h.app.execute({ type: 'project.attach-resource', commandId: 'context-resource', projectId: h.scope.projectId, expectedVersion: h.connection.project!.version, resource }, operator))
+  const imported = completed(await h.app.execute({ type: 'source.import', commandId: 'context-import', ...h.scope, nodeId: 'ISSUE_1' }, operator))
+  const specified = completed(await h.app.execute({ type: 'task.update-spec', commandId: 'context-spec', ref: imported.ref!, expectedVersion: imported.task!.version, goal: '验证交互时延', specification: '真实验收要求只在已确认的 Task 规格中', acceptance: ['时延符合已确认阈值'] }, operator)).task!
+  const execution = completed(await h.app.execute({ type: 'task.start', commandId: 'context-start', ref: imported.ref!, expectedVersion: specified.version, agentId: specified.agentId, resource, model, agentPreset: 'agent', permissionPreset: 'safe' }, operator)).execution!
+  completed(await h.app.execute({ type: 'task.report', commandId: 'context-progress', ...fence(execution), report: { specificationVersion: specified.specification.version, stage: 'in-progress', summary: '设计完成，待性能验证', next: '测量实际交互时延', blockers: [], criteria: [] } }, operator))
+  const original = '  只接入已完成设计但待性能验证的工作\n保留既有会话  '
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1, filterPrompt: original } }, operator))
+  const first = screen.mock.calls[0]![0].candidates[0]!
+  expect(first).toMatchObject({ sessionOccupied: true, task: { ref: imported.ref, specification: { text: '真实验收要求只在已确认的 Task 规格中', acceptance: ['时延符合已确认阈值'] }, progress: { summary: '设计完成，待性能验证', next: '测量实际交互时延' }, contextTruncated: false }, execution: { id: execution.id, session: execution.session } })
+  const saved = await h.status()
+  expect(saved.queue!.filterPrompt).toBe(original)
+  expect(saved.screeningReviews).toMatchObject([{ version: 1, basis: { instruction: original.trim(), candidates: expect.arrayContaining([expect.objectContaining({ task: first.task })]) }, authorization: { resource, model }, decisions: expect.arrayContaining([expect.objectContaining({ nodeId: 'ISSUE_1', matches: true })]) }])
+  const restarted = new WorkApplication(h.directory, h.host, h.source, planner)
+  expect((await h.status(restarted)).screeningReviews).toEqual(saved.screeningReviews)
+  completed(await restarted.execute({ type: 'task.report', commandId: 'context-changed', ...fence(execution), report: { specificationVersion: specified.specification.version, stage: 'in-progress', summary: '性能已验证，待产品确认', next: '等待产品确认', blockers: ['产品确认尚未进入'], criteria: [] } }, operator))
+  completed(await restarted.execute({ type: 'continuous.refresh', commandId: 'context-refresh', ...h.scope, expectedVersion: saved.version }, operator))
+  const updated = await h.status(restarted)
+  expect(updated.screeningReviews).toHaveLength(2)
+  expect(updated.screeningReviews![1]).toMatchObject({ version: 2, basis: { candidates: expect.arrayContaining([expect.objectContaining({ task: expect.objectContaining({ progress: expect.objectContaining({ summary: '性能已验证，待产品确认' }) }) })]) } })
+  expect(updated.items[0]!.screening?.matches).toBe(false)
+  expect(updated.enabled).toBe(false)
+  expect(h.host.sessionsCreated.size).toBe(1)
+})
+
+it('Block on an in-flight queue item keeps its owner, session and slot while excluding later intake', async () => {
+  const h = await setup(false)
+  completed(await h.app.execute({ ...h.configure, enabled: true, queue: { ...queue, concurrency: 1 } }, operator))
+  const first = await h.execution()
+  completed(await h.app.execute({ type: 'continuous.block', commandId: 'block-running', ...h.scope, expectedVersion: 1, nodeId: 'ISSUE_1', blocked: true }, operator))
+  expect((await h.status()).active).toEqual(first.ref)
+  expect((await h.execution()).owner).toBe(first.owner)
+  expect((await h.execution()).session).toEqual(first.session)
+  expect(await h.host.authorize(first.session.sessionId)).toBe(true)
+  expect(h.host.sessionsCreated.size).toBe(1)
 })

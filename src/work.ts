@@ -1,3 +1,4 @@
+import { continuousBlocks } from './work-blocks.ts'
 import { screeningBasis, screeningKey, validateScreening, SCREENING_PENDING } from './work-screening.ts'
 import { workSessionTitles } from './work-session-titles.ts'
 import { refreshRepositoryCandidates } from './work-sources/repository-candidates.ts'
@@ -443,13 +444,15 @@ export class WorkApplication {
       scope: { assignee: command.assignee, labels: [...new Set(command.labels)].sort(), ...(command.assignee === '@me' ? { identity: { login: source.identity!.login, nodeId: source.identity!.nodeId } } : {}) },
       resource: command.resource, model: command.model, agentPreset: command.agentPreset, permissionPreset: command.permissionPreset,
       items: previous?.items ?? [], slots: previous ? continuousSlots(previous) : [], ...(previous?.active ? { active: previous.active } : {}),
+      ...(previous?.blocks ? { blocks: previous.blocks } : {}),
+      ...(previous?.screeningReviews ? { screeningReviews: previous.screeningReviews } : {}),
       ...(command.queue || previous?.queue ? { queue: command.queue ?? previous!.queue } : {}),
       ...(previous?.legacyRules ? { legacyRules: previous.legacyRules } : {}),
       ...(previous?.planning ? { planning: { ...previous.planning, scopeVersion: previous.planning.scopeVersion + 1, draftVersion: previous.planning.draftVersion + 1 }, ...(!command.queue && !previous.queue ? { enabled: false } : {}) } : {}),
     }
     if (command.queue && previous) { delete previous.migrationConflict; delete previous.error; delete previous.screeningError }
     rule.error = sourceScopeError(rule, source)
-    if (!rule.error) discoverContinuous(rule, source)
+    if (!rule.error) discoverContinuous(rule, source, state)
     observeContinuousTasks(state, rule)
     if (previous) Object.assign(previous, rule)
     else (state.continuousRules ??= []).push(rule)
@@ -483,7 +486,7 @@ export class WorkApplication {
       if (current.queue) current.nextRefreshAt = new Date(Date.now() + current.queue.refreshMinutes * 60_000).toISOString()
       if (!current.error) {
         if (current.queue?.filterPrompt?.trim()) for (const item of current.items) if (!item.ref && !['blocked', 'completed', 'paused'].includes(item.state)) delete item.screening
-        discoverContinuous(current, observed); current.lastRefreshedAt = new Date(Date.now()).toISOString(); delete current.screeningError
+        discoverContinuous(current, observed, state); current.lastRefreshedAt = new Date(Date.now()).toISOString(); delete current.screeningError
       }
       observeContinuousTasks(state, current)
       return { status: 'completed' as const, continuousRule: current }
@@ -519,7 +522,7 @@ export class WorkApplication {
     if (rule.version !== expectedVersion) return
     const source = snapshot.sources.find(source => source.id === rule.sourceId)!
     if (!rule.items.some(item => !item.ref && item.state === 'waiting' && item.reason === SCREENING_PENDING)) return
-    const basis = screeningBasis(rule, source), key = screeningKey(rule, source)
+    const basis = screeningBasis(rule, source, snapshot), key = screeningKey(rule, source, snapshot)
     try {
       if (!this.planner?.screen) throw new Error('宿主大模型筛选能力不可用')
       const { decisions } = validateScreening(await this.planner.screen(basis, rule.model), basis)
@@ -527,13 +530,16 @@ export class WorkApplication {
         const current = state.continuousRules!.find(rule => rule.id === ruleId)!
         if (current.version !== expectedVersion) return
         const observed = state.sources.find(source => source.id === current.sourceId)!
-        if (sourceScopeError(current, observed) || key !== screeningKey(current, observed)) throw new Error('筛选期间候选内容发生变化，请刷新重试')
+        if (sourceScopeError(current, observed) || key !== screeningKey(current, observed, state)) throw new Error('筛选期间候选内容发生变化，请刷新重试')
         for (const decision of decisions) {
           const item = current.items.find(item => item.nodeId === decision.nodeId)!
           if (!item.ref && !['blocked', 'completed', 'paused'].includes(item.state)) item.screening = { key, matches: decision.matches, reason: decision.reason }
         }
+        const reviews = current.screeningReviews ??= []
+        reviews.push({ version: reviews.length + 1, key, generatedAt: new Date().toISOString(), ruleVersion: current.version, sourceId: current.sourceId, sourceVersion: observed.version,
+          basis: JSON.parse(JSON.stringify(basis)), authorization: JSON.parse(JSON.stringify({ scope: current.scope, resource: current.resource, model: current.model, agentPreset: current.agentPreset, permissionPreset: current.permissionPreset })), decisions })
         delete current.screeningError
-        discoverContinuous(current, observed)
+        discoverContinuous(current, observed, state)
       })
     } catch (error) {
       await this.sourceTransaction(async state => {
@@ -606,7 +612,7 @@ export class WorkApplication {
       for (const rule of state.continuousRules ?? []) {
         const source = state.sources.find(source => source.id === rule.sourceId)
         if (rule.enabled && rule.queue?.filterPrompt?.trim() && source && !sourceScopeError(rule, source)) {
-          discoverContinuous(rule, source)
+          discoverContinuous(rule, source, state)
           observeContinuousTasks(state, rule)
         }
       }
@@ -628,7 +634,7 @@ export class WorkApplication {
           const recovery = rule.items.find(item => item.recoveryBlocked)
           if (!rule.error && recovery) rule.error = { code: 'continuous-recovery-blocked', message: recovery.reason ?? 'Host recovery needs an explicit retry' }
           if (!rule.error && source) {
-            if (!rule.queue) { discoverContinuous(rule, source); observeContinuousTasks(state, rule) }
+            if (!rule.queue) { discoverContinuous(rule, source, state); observeContinuousTasks(state, rule) }
             if (rule.planning || rule.queue) for (const item of rule.items) {
               if (item.state === 'queued' && !continuousDependenciesReady(state, rule, item.nodeId)) item.reason = `Issue ${item.nodeId} is waiting for complete child/dependency acceptance`
             }
@@ -750,7 +756,7 @@ export class WorkApplication {
           if (continuousSlots(rule).length >= (rule.queue?.concurrency ?? 1)) break
           if (rule.migrationConflict) break
           // Paused queues admit explicit existing-Task recovery only; accepted input waits.
-          const next = continuousCandidates(rule, state.sources.find(source => source.id === rule.sourceId)).find(item => item.resumeRequested || (!(rule.planning || rule.queue) || continuousDependenciesReady(state, rule, item.nodeId)))
+          const next = continuousCandidates(rule, state.sources.find(source => source.id === rule.sourceId), state).find(item => item.resumeRequested || continuousDependenciesReady(state, rule, item.nodeId))
           const resume = next?.resumeRequested ? next : undefined
           if (resume) {
             await this.sourceTransaction(async state => {
@@ -788,11 +794,11 @@ export class WorkApplication {
           const executionId = await this.sourceTransaction(async state => {
             const current = state.continuousRules!.find(rule => rule.id === ruleId)!
             const freshSource = state.sources.find(source => source.id === current.sourceId)
-            if (freshSource && !sourceScopeError(current, freshSource)) discoverContinuous(current, freshSource)
+            if (freshSource && !sourceScopeError(current, freshSource)) discoverContinuous(current, freshSource, state)
             observeContinuousTasks(state, current)
             const item = current.items.find(item => item.nodeId === candidate.nodeId)!
             if (continuousSlots(current).length >= (current.queue?.concurrency ?? 1) || !current.enabled || current.version !== rule.version || item.state !== 'queued' || sourceScopeError(current, state.sources.find(source => source.id === current.sourceId))) return undefined
-            if ((current.planning || current.queue) && !continuousDependenciesReady(state, current, item.nodeId)) return undefined
+            if (!continuousDependenciesReady(state, current, item.nodeId)) return undefined
             const commandId = `continuous:${current.id}:${createHash('sha256').update(item.nodeId).digest('hex')}`
             // Reserve import, binding, execution and slot in one snapshot. No host side effects precede this commit.
             const draft = this.dao.fork(state)
@@ -1436,16 +1442,18 @@ export class WorkApplication {
         else { rule.planning.supplements.push(command.text); rule.planning.draftVersion++; delete rule.planning.error }
         rule.enabled = false
       } else {
-        if (!rule.planning) return failed('planning-instruction-required', 'Save an instruction before modifying Block')
+        if (!rule.planning && !rule.queue) return failed('planning-instruction-required', 'Save an instruction before modifying Block')
         const source = state.sources.find(source => source.id === rule.sourceId)!
-        if (!source.observations.some(item => item.issue.nodeId === command.nodeId) && !rule.planning.blocks.includes(command.nodeId)) return failed('planning-unknown-issue', `Issue ${command.nodeId} is not an observed stable identity`)
-        rule.planning.blocks = rule.planning.blocks.filter(nodeId => nodeId !== command.nodeId)
-        if (command.blocked) rule.planning.blocks.push(command.nodeId)
+        const blocks = continuousBlocks(rule)
+        if (!source.observations.some(item => item.issue.nodeId === command.nodeId) && !blocks.includes(command.nodeId)) return failed('planning-unknown-issue', `Issue ${command.nodeId} is not an observed stable identity`)
+        rule.blocks = blocks.filter(nodeId => nodeId !== command.nodeId)
+        if (command.blocked) rule.blocks.push(command.nodeId)
         else {
           const item = rule.items.find(item => item.nodeId === command.nodeId && !item.ref && item.reason === 'Issue is excluded by the persistent Block list')
-          if (item) { item.state = 'queued'; item.attempts = 0; delete item.reason }
+          if (item) { item.state = 'queued'; item.attempts = 0; delete item.reason; delete item.screening }
         }
-        rule.planning.draftVersion++
+        if (rule.planning) { rule.planning.blocks = [...rule.blocks]; rule.planning.draftVersion++ }
+        discoverContinuous(rule, source, state)
       }
       rule.version++
       return { status: 'completed', continuousRule: rule }

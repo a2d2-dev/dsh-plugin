@@ -13,7 +13,7 @@ export type * from './types.ts'
 const exec = promisify(execFile)
 export function validRepository(value: GitHubRepository): boolean { return repositorySchema.safeParse(value).success }
 const identitySchema = z.object({ login: z.string().min(1), node_id: z.string().min(1), name: z.string().nullable().optional() })
-const issueSchema = z.object({ node_id: z.string().min(1), number: z.number().int().positive(), title: z.string().min(1), body: z.string().nullable(), html_url: z.string(), state: z.enum(['open', 'closed']), updated_at: z.iso.datetime(), assignees: z.array(z.object({ login: z.string() })), labels: z.array(z.object({ name: z.string() })), milestone: z.object({ number: z.number().int().positive(), title: z.string() }).nullable() })
+const issueSchema = z.object({ node_id: z.string().min(1), number: z.number().int().positive(), title: z.string().min(1), body: z.string().nullable(), html_url: z.string(), state: z.enum(['open', 'closed']), updated_at: z.iso.datetime(), created_at: z.iso.datetime().optional(), closed_at: z.iso.datetime().nullable().optional(), sub_issues_summary: z.object({ total: z.number().int().nonnegative(), completed: z.number().int().nonnegative() }).optional(), assignees: z.array(z.object({ login: z.string() })), labels: z.array(z.object({ name: z.string() })), milestone: z.object({ number: z.number().int().positive(), title: z.string() }).nullable() })
 /** Respect the host's explicit GH/XDG config; never search another account directory. */
 async function credential(): Promise<string> {
   try {
@@ -87,8 +87,8 @@ export class GitHubSource implements GitHubSourcePort {
     return { ...scope, repository, nodeId: value.node_id, title: value.full_name, url: value.html_url, identity }
   }
   project(project: GitHubProjectRef, request: ProjectPageRequest) { return readGitHubProject(project, request, this.options.graphql) }
-  private async get(path: string, token: string): Promise<unknown> {
-    if (!(path === '/user' || /^\/user\/repos\?per_page=50&page=[1-9][0-9]{0,4}&sort=updated&direction=desc&affiliation=owner,collaborator,organization_member$/.test(path) || /^\/repos\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\/issues(?:\/[1-9][0-9]*(?:\/sub_issues)?)?(?:\?.*)?)?$/.test(path))) throw new SourceError('github-invalid-scope', 'Unsupported GitHub source path')
+  private async get(path: string, token: string, missingParent = false): Promise<unknown> {
+    if (!(path === '/user' || /^\/user\/repos\?per_page=50&page=[1-9][0-9]{0,4}&sort=updated&direction=desc&affiliation=owner,collaborator,organization_member$/.test(path) || /^\/repos\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\/issues(?:\/[1-9][0-9]*(?:\/(?:sub_issues|parent|dependencies\/blocked_by))?)?(?:\?.*)?)?$/.test(path))) throw new SourceError('github-invalid-scope', 'Unsupported GitHub source path')
     try {
       const response = await this.fetcher(`https://api.github.com${path}`, { method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(this.timeoutMs), headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28', 'user-agent': 'dsh-a2d2-issue-source' } })
       if (!response.ok) {
@@ -98,6 +98,7 @@ export class GitHubSource implements GitHubSourcePort {
           throw new SourceError('github-rate-limited', 'GitHub rate limit exceeded', reset > 0 ? new Date(reset * 1000).toISOString() : delay > 0 ? new Date(Date.now() + delay * 1000).toISOString() : undefined)
         }
         if (response.status === 403) throw new SourceError('github-forbidden', 'GitHub source permission denied (403)')
+        if (response.status === 404 && missingParent && path.endsWith('/parent')) return null
         if (response.status === 404) throw new SourceError('github-not-found', 'GitHub source is missing or not visible to this credential (404)')
         if (response.status >= 300 && response.status < 400) throw new SourceError('github-source-moved', 'GitHub source moved; configure its canonical repository before refreshing')
         throw new SourceError('github-unavailable', `GitHub source temporarily unavailable (${response.status})`)
@@ -119,7 +120,7 @@ export class GitHubSource implements GitHubSourcePort {
     const value = result.data
     const match = /^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/issues\/([1-9][0-9]*)\/?$/i.exec(value.html_url)
     if (!match || Number(match[3]) !== value.number) throw new SourceError('github-invalid-response', 'GitHub returned an out-of-scope Issue URL')
-    return { nodeId: value.node_id, url: `https://github.com/${match[1]!.toLowerCase()}/${match[2]!.toLowerCase()}/issues/${value.number}`, number: value.number, repository: { owner: match[1]!, repository: match[2]! }, title: value.title, body: value.body, milestone: value.milestone, state: value.state, assignees: value.assignees.map(item => item.login), labels: value.labels.map(item => item.name), updatedAt: value.updated_at, observedAt: new Date().toISOString() }
+    return { nodeId: value.node_id, url: `https://github.com/${match[1]!.toLowerCase()}/${match[2]!.toLowerCase()}/issues/${value.number}`, number: value.number, repository: { owner: match[1]!, repository: match[2]! }, title: value.title, body: value.body, milestone: value.milestone, state: value.state, assignees: value.assignees.map(item => item.login), labels: value.labels.map(item => item.name), updatedAt: value.updated_at, observedAt: new Date().toISOString(), ...(value.created_at ? { createdAt: value.created_at } : {}), ...(value.closed_at !== undefined ? { closedAt: value.closed_at } : {}), ...(value.sub_issues_summary ? { subIssuesSummary: value.sub_issues_summary } : {}) }
   }
   /** Fixed Issue mutation; no external URL, credential, or repository path is accepted from a browser. */
   async close(input: import('../work-completion/index.ts').CloseTarget, operationId: string): Promise<import('../work-completion/index.ts').CloseReceipt> {
@@ -186,14 +187,14 @@ export class GitHubSource implements GitHubSourcePort {
     }
     return { identity, items, observedAt: new Date().toISOString() }
   }
-  async detail(repository: GitHubRepository, number: number, options?: { nativeChildren: true }) {
+  async detail(repository: GitHubRepository, number: number, options?: { nativeChildren?: true; nativeRelationships?: true }) {
     if (!validRepository(repository) || !Number.isSafeInteger(number) || number < 1) throw new SourceError('github-invalid-scope', 'Invalid source Issue reference')
     const token = await this.token(), identity = await this.identity(token)
     const raw = await this.get(`/repos/${repository.owner}/${repository.repository}/issues/${number}`, token)
     if (raw && typeof raw === 'object' && 'pull_request' in raw) throw new SourceError('github-not-issue', 'This object is a Pull Request, not an Issue')
     const issue = this.issue(raw)
     if (issue.number !== number) throw new SourceError('github-invalid-response', 'GitHub returned a different Issue')
-    if (options?.nativeChildren) {
+    if (options?.nativeChildren || options?.nativeRelationships) {
       const items: NonNullable<GitHubIssue['subIssues']>['items'] = []
       const seen = new Set<string>()
       const summary = z.object({ sub_issues_summary: z.object({ total: z.number().int().nonnegative() }) }).safeParse(raw)
@@ -211,6 +212,38 @@ export class GitHubSource implements GitHubSourcePort {
       }
       const totalCount = summary.success ? summary.data.sub_issues_summary.total : items.length
       issue.subIssues = { items, totalCount, hasNextPage: !complete || totalCount !== items.length }
+    }
+    if (options?.nativeRelationships) {
+      const parent = await this.get(`/repos/${repository.owner}/${repository.repository}/issues/${number}/parent`, token, true)
+      if (parent === null) issue.parent = null
+      else {
+        const { nodeId, url, number, title, repository, state } = this.issue(parent)
+        if (nodeId === issue.nodeId) throw new SourceError('github-invalid-response', 'Native Issue parent repeats its own identity')
+        issue.parent = { nodeId, url, number, title, repository, state }
+      }
+      try {
+        // GitHub documents blocked_by as the live open count and total_blocked_by as
+        // the complete relationship count. Closed blockers must remain observable.
+        const summary = z.object({ issue_dependencies_summary: z.object({ total_blocked_by: z.number().int().nonnegative() }) }).safeParse(raw)
+        if (!summary.success) throw new SourceError('github-native-dependencies-unavailable', 'GitHub did not supply a native dependency summary')
+        const items: NonNullable<GitHubIssue['subIssues']>['items'] = [], seen = new Set<string>()
+        let complete = false
+        for (let page = 1; page <= 10; page++) {
+          const rows = await this.get(`/repos/${repository.owner}/${repository.repository}/issues/${number}/dependencies/blocked_by?per_page=100&page=${page}`, token)
+          if (!Array.isArray(rows) || rows.length > 100) throw new SourceError('github-invalid-response', 'Invalid native blocker Issue page')
+          for (const row of rows) {
+            const { nodeId, url, number, title, repository, state } = this.issue(row)
+            if (seen.has(nodeId) || nodeId === issue.nodeId) throw new SourceError('github-native-dependencies-incomplete', 'Native blocker pagination repeated an identity')
+            seen.add(nodeId); items.push({ nodeId, url, number, title, repository, state })
+          }
+          if (rows.length < 100) { complete = true; break }
+        }
+        const totalCount = summary.data.issue_dependencies_summary.total_blocked_by
+        issue.dependencies = { availability: 'available', blockedBy: { items, totalCount, hasNextPage: !complete || totalCount !== items.length } }
+      } catch (error) {
+        if (!(error instanceof SourceError)) throw error
+        issue.dependencies = { availability: 'unavailable', code: ['github-not-found', 'github-unavailable'].includes(error.code) ? 'github-native-dependencies-unavailable' : error.code, message: error.message }
+      }
     }
     return { identity, issue }
   }
