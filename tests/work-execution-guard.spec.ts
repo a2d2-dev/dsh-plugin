@@ -173,6 +173,19 @@ it('does not wake a Session on resume observation or steer a paused, complete or
   expect(await h.app.sessionReport({ runtimeId: 'runtime', sessionId: agent.id }, 'acceptance', { specificationVersion: 1, stage: 'done', summary: '真实文件已核实', next: '', blockers: [], criteria: [{ index: 0, passed: true, evidence: ['dependency.txt: READY-312'] }] })).toMatchObject({ status: 'completed' })
   expect(await h.guard()(agent.id, stopping)).toBeUndefined()
   expect(await h.guard()(agent.id, { kind: 'resume' })).toBeUndefined()
+  const human = message('Explain the accepted result')
+  const reminder = createUserMessage({ content: [{ type: 'text', text: 'Continue completed task' }], source: { kind: 'schedule' } as never })
+  const requests = h.model.requests.length
+  h.model.nextTool = { name: 'work_control', arguments: { action: 'resume', text: 'Reminder cannot reopen Task' } }
+  agent.inbox.splice('next-turn', 0, 0, [reminder])
+  agent.followup(human)
+  await fixtures.run(() => agent.whenIdle())
+  expect(h.model.requests).toHaveLength(requests + 2)
+  const events = agent.session.snapshotEvents()
+  expect(events.filter(event => event.type === 'user/message' && event.data.id === human.id)).toHaveLength(1)
+  expect(events.filter(event => event.type === 'user/message' && event.data.id === reminder.id)).toHaveLength(0)
+  expect(JSON.stringify(events.filter(event => event.type === 'tool/result').at(-1))).toContain('task-completed')
+
 }, 15000)
 
 it('does not replenish the budget from successful work_report bookkeeping', async () => {
@@ -207,6 +220,24 @@ it('keeps handoff maintenance narrow and never corrects the retired source Sessi
   expect(h.model.requests.length - before).toBeLessThanOrEqual(4)
   expect(await h.guard()(source.id, { kind: 'stopping', progress: [], answerOnly: false, recheckWait: false })).toBeUndefined()
   expect(await h.guard()(source.id, { kind: 'resume' })).toBeUndefined()
+  const human = message('Explain this historical conversation')
+  const goal = createUserMessage({ content: [{ type: 'text', text: 'Old Goal round' }], source: { kind: 'goal', goalId: 'retired-goal', revision: 1, round: 1 } as never })
+  const requests = h.model.requests.length
+  h.model.nextTool = { name: 'work_control', arguments: { action: 'progress', text: 'Forbidden retired update' } }
+  source.inbox.splice('next-turn', 0, 0, [goal])
+  source.followup(human)
+  await fixtures.run(() => source.whenIdle())
+  expect(h.model.requests).toHaveLength(requests + 2) // human, denied tool result
+  const history = source.session.snapshotEvents()
+  expect(history.filter(event => event.type === 'user/message' && event.data.id === human.id)).toHaveLength(1)
+  expect(history.filter(event => event.type === 'user/message' && event.data.id === goal.id)).toHaveLength(0)
+  expect(JSON.stringify(history.filter(event => event.type === 'tool/result').at(-1))).toContain('forbidden')
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { epoch: 2, session: { sessionId: successor.id }, owner: execution.owner } })
+  const stable = source.session.snapshotEvents().filter(event => event.type === 'turn/start').length
+  for (let i = 0; i < 3; i++) await h.app.reconcileControls()
+  await fixtures.run(() => successor.whenIdle())
+  expect(source.session.snapshotEvents().filter(event => event.type === 'turn/start')).toHaveLength(stable)
+
 }, 15000)
 
 it.each(['human', 'external'] as const)('honors a newly confirmed structured %s wait after rechecking the historical blocker', async reason => {
@@ -278,4 +309,65 @@ it('continues with an actual tool when resuming an already applied legacy wait p
   expect(await readFile(join(h.root, 'applied-wait-proof.txt'), 'utf8')).toBe('actual next action')
   expect(h.model.requests).toHaveLength(before + 4)
   expect(await upgraded.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { control: { action: 'resume' }, executionGuard: { corrections: 0 } } })
+}, 15000)
+
+it.each(['wait', 'pause'] as const)('consumes real queued schedule/dispatch before human input during %s without locking the driver', async action => {
+  const h = await setup(false)
+  const agent = await h.start()
+  const current = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (current.status !== 'completed' || !current.execution) throw Error('Missing execution')
+  const execution = current.execution
+  await h.app.execute({ type: 'task.control', commandId: 'backlog-control', ref: h.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch, action, text: 'Keep the original control' }, operator)
+  const automatic = [
+    createUserMessage({ content: [{ type: 'text', text: 'Check the dependency condition' }], source: { kind: 'schedule' } as never }),
+    createUserMessage({ content: [{ type: 'text', text: 'Old continuation dispatch' }], source: { kind: 'a2d2-work-input' } as never }),
+  ]
+  const humans = [message('这个啥意思？'), message('只回答当前状态，不要继续执行')]
+  // Real durable Inbox: queue without waking, then start the real Agent driver.
+  agent.inbox.splice('next-turn', 0, 0, [...automatic, humans[0]!])
+  const before = h.model.requests.length
+  agent.followup(humans[1]!)
+  await fixtures.run(() => agent.whenIdle())
+  const delivered = agent.session.snapshotEvents().filter(event => event.type === 'user/message').map(event => event.data.id)
+  expect(delivered.filter(id => humans.some(message => message.id === id))).toEqual(humans.map(message => message.id))
+  for (const human of humans) expect(delivered.filter(id => id === human.id)).toHaveLength(1)
+  expect(agent.inbox.nextTurn).toHaveLength(0)
+  if (action === 'wait') for (const auto of automatic) expect(delivered.filter(id => id === auto.id)).toHaveLength(1)
+  const result = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(result).toMatchObject({ execution: { id: execution.id, owner: execution.owner, epoch: execution.epoch, state: action === 'wait' ? 'waiting' : 'paused', control: { action } } })
+  const requests = h.model.requests.length
+  expect(requests - before).toBeLessThanOrEqual(4)
+  for (let i = 0; i < 3; i++) await h.app.reconcileControls()
+  await fixtures.run(() => agent.whenIdle())
+  expect(h.model.requests).toHaveLength(requests)
+}, 15000)
+
+it('lets the waiting current owner inspect a changed condition and recover its own wait from schedule alone', async () => {
+  const h = await setup()
+  h.model.nextTool = { name: 'work_control', arguments: { action: 'wait', text: 'External approval unavailable', yield_reason: 'external', checked_facts: ['Approval absent'], wake_condition: 'dependency.txt contains READY-315' } }
+  const agent = await h.start()
+  await h.app.reconcileControls()
+  const before = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (before.status !== 'completed' || !before.execution) throw Error('Missing execution')
+  await writeFile(join(h.root, 'dependency.txt'), 'READY-315')
+  const tools = [
+    { name: 'read', arguments: { file_path: 'dependency.txt' } },
+    { name: 'work_control', arguments: { action: 'resume', text: 'Read READY-315; the original external condition is resolved' } },
+    { name: 'write', arguments: { file_path: 'schedule-proof.txt', content: 'READY-315' } },
+  ]
+  h.model.selectTool = () => tools.shift()
+  const scheduled = createUserMessage({ content: [{ type: 'text', text: 'Check the original wait condition, and continue within original authority if it is resolved.' }], source: { kind: 'schedule' } as never })
+  agent.followup(scheduled)
+  await fixtures.run(() => agent.whenIdle())
+  await h.app.reconcileControls()
+  expect(await readFile(join(h.root, 'schedule-proof.txt'), 'utf8')).toBe('READY-315')
+  const after = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(after).toMatchObject({ execution: { id: before.execution.id, session: before.execution.session, owner: before.execution.owner, epoch: before.execution.epoch, state: 'ready', control: { action: 'resume' } } })
+  expect(after.status === 'completed' && after.execution?.events.filter(event => event.id === scheduled.id)).toEqual([])
+  const consumed = agent.session.snapshotEvents().filter(event => event.type === 'user/message' && event.data.id === scheduled.id)
+  expect(consumed).toHaveLength(1)
+  const count = h.model.requests.length
+  for (let i = 0; i < 3; i++) await h.app.reconcileControls()
+  await fixtures.run(() => agent.whenIdle())
+  expect(h.model.requests).toHaveLength(count)
 }, 15000)

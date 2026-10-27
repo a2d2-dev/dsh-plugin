@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /data/src/github.com/a2d2-dev/dsh-plugin.worktrees/issue-315-owner-admission
+
+
+ Test Files  5 passed (5)
+      Tests  191 passed (191)
+   Start at  08:22:11
+   Duration  45.32s (transform 2.53s, setup 0ms, import 5.44s, tests 47.05s, environment 1ms)
+

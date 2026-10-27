@@ -431,9 +431,9 @@ it.each(['wait', 'pause'] as const)('explicitly replaces a %s Session while pres
   await fixtures.run(() => h.app.reconcileControls())
   expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { continuation: { phase: 'received' } } })
   const before = h.model.requests.length
-  h.ctx.agents.get(SessionId(result.execution.session.sessionId))!.followup(createUserMessage({ content: [{ type: 'text', text: 'Unapproved business automation' }], source: { kind: 'a2d2-work-dispatch' } }))
+  h.ctx.agents.get(SessionId(result.execution.session.sessionId))!.followup(createUserMessage({ content: [{ type: 'text', text: 'Inspect the held condition without resuming business' }], source: { kind: 'a2d2-work-dispatch' } }))
   await fixtures.run(() => h.ctx.agents.get(SessionId(result.execution!.session.sessionId))!.whenIdle())
-  expect(h.model.requests).toHaveLength(before)
+  expect(h.model.requests).toHaveLength(before + (action === 'wait' ? 1 : 0))
   expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { state: held.execution.state, control: held.execution.control, owner: h.execution.owner, epoch: 2 } })
 })
 

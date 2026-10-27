@@ -162,6 +162,15 @@ export class WorkApplication {
       }
       if (state.executions.some(item => item.retired?.some(old => old.session.sessionId === sessionId) || (item.continuation?.successor.sessionId === sessionId && item.session.sessionId !== sessionId))) return false
       const execution = state.executions.find(item => item.session.sessionId === sessionId)
+      // Incoming observations belong to the current coordinator even after a
+      // real wait released its dispatch slot. Reading them neither resumes the
+      // Task nor records a second copy for a later business dispatch.
+      if (execution && messages.length && messages.every(message => !lifecycleOwned(message))
+        && !isTaskCompleted(taskAt(state, execution.ref)) && !continuousCompleted(state, execution)
+        && (execution.control?.action === 'wait' || execution.state === 'waiting' && execution.control?.action !== 'resume')
+        && !continuousOwner(state, execution.ref)?.item.end
+        && execution.control?.action !== 'pause' && execution.control?.action !== 'end'
+        && !continuationInFlight(execution) && !execution.continuationBlocked) return true
       if (mayAdvance(execution) || messages.length === 0) return mayAdvance(execution)
       return this.dao.transaction(async current => {
         const owner = current.executions.find(item => item.session.sessionId === sessionId)
@@ -257,6 +266,7 @@ export class WorkApplication {
       `当前任务处理会话：${execution.session.sessionId}。可从“关联任务 → 进入当前处理会话”打开。`,
       `以下是供工具核对的内部上下文，不是用户进展说明，请勿照抄。任务 ${execution.ref.taskId}；epoch ${execution.epoch}。${current ? '此会话仍负责当前任务。' : '此会话已移交任务；不要自动推进原任务或写入其记录。'}`,
       ...(execution.control?.reason ? [`最近控制说明：${execution.control.reason.slice(0, 1200)}`] : []),
+      ...(current && continuousOwner(state, execution.ref) && !continuousMayAdvance(state, execution) ? ['本次可核实消息与等待条件；尚未取得持续处理槽位。条件满足后用 work_control resume 请求既有有序调度，不因收到消息越过其他任务的槽位。'] : []),
       ...state.externalBindings.filter(binding => sameTask(binding.ref, execution.ref)).map(binding => `可只读核实的已接受来源：${JSON.stringify([binding.accepted, ...((binding.acceptedChildren ?? binding.accepted.subIssues)?.items ?? []), ...(binding.accepted.dependencies?.availability === 'available' ? binding.accepted.dependencies.blockedBy.items : [])].map(({ nodeId, number, repository }) => ({ nodeId, number, repository })))}。用 work_related_issue 读取；读取不授予修改权限。`),
       '正常回答人工消息。用户追问状态或指出执行方式有误时，简短交代后继续已授权且未完成的工作。不要把状态问题当成暂停，也不要要求用户说“继续”。人工明确暂停、停止或只作答时服从；已完成、旧会话和接续维护不取得业务执行权。模型自己设错等待时，先核实再解除自己的等待；历史人工暂停或真实外部阻塞不得自行解除。核实证据是工作，不是等人的理由。权限模式只说明工具能力，不扩大任务授权。用日常中文说明结果和下一步，少用内部术语。',
     ].join('\n')
