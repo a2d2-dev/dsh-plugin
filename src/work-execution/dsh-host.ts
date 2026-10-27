@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto'
+import { humanGuardIntent } from './guard.ts'
+import type { WorkGuard } from './guard.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-session-controller'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
@@ -48,6 +51,15 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
   private readonly admittedTurns = new WeakMap<Agent, number>()
   private readonly conversationSnapshots = new WeakMap<Agent, string>()
   private readonly activeTools = new Map<import('@deepseek-ai/dsh-tools').ToolExecutionToken, import('@deepseek-ai/dsh-tools').ToolExecution>()
+  private readonly resumeInstructions = new WeakMap<Agent, string>()
+  private guard?: WorkGuard
+  private readonly guardWaitCommands = new WeakMap<Agent, string>()
+  private readonly guardProgress = new WeakMap<Agent, Set<string>>()
+  private readonly guardIntent = new WeakMap<Agent, ReturnType<typeof humanGuardIntent>>()
+  connectGuard(guard: WorkGuard): void { this.guard = guard }
+  private steerGuard(agent: Agent, text: string): void {
+    agent.steer(createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'a2d2-work-context', form: 'notice', summary: '继续已授权的工作' } }))
+  }
   private connected = false
   connect(authorize: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<WorkAdmission>, conversation?: (sessionId: string) => Promise<string | undefined>, pendingHumanInput?: (sessionId: string) => Promise<readonly import('../work-types.ts').NativeWorkMessage[]>): void {
     this.authorize = authorize
@@ -59,7 +71,11 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       // Task scheduling controls automatic turns, never the native human conversation.
       // An admitted turn can finish its tool results and final answer after wait/done.
       const human = messages.some(message => message.source?.kind === 'user')
-      if (human) this.maintenanceTurns.delete(agent)
+      if (human) {
+        this.maintenanceTurns.delete(agent)
+        this.guardIntent.set(agent, humanGuardIntent(messages))
+        await this.guard?.(agent.id, { kind: 'ingress', messages })
+      }
       else if (this.admittedTurns.get(agent) !== turn) {
         const admission = await this.authorize!(agent.id, messages)
         if (!admission) return { kind: 'reject' }
@@ -80,7 +96,8 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
           decision.messages.unshift(...structuredClone(recovered))
         }
       }
-      const context = await this.conversation?.(agent.id)
+      const context = [await this.conversation?.(agent.id), this.resumeInstructions.get(agent)].filter(Boolean).join('\n')
+      this.resumeInstructions.delete(agent)
       if (context && context !== this.conversationSnapshots.get(agent)) {
         this.conversationSnapshots.set(agent, context)
         decision.messages.push(createUserMessage({
@@ -90,7 +107,24 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       }
       return decision
     }, { prepend: true })
-    this.ctx.on('agent/status', ({ agent, status }) => { if (status === 'idle') { this.admittedTurns.delete(agent); this.maintenanceTurns.delete(agent) } })
+    this.ctx.on('agent/created', async ({ agent, source, signal }) => {
+      if (!['startup', 'resume', 'compact'].includes(source) || signal?.aborted) return
+      const instruction = await this.guard?.(agent.id, { kind: 'resume' })
+      // Resolving/viewing a Session may create its Agent. Keep this directive
+      // silent until an independently admitted turn; browsing never starts work.
+      if (instruction && !signal?.aborted) this.resumeInstructions.set(agent, instruction)
+    })
+    this.ctx.on('agent/turn-stopping', async ({ agent, signal }) => {
+      if (signal.aborted || this.maintenanceTurns.has(agent)) return
+      const intent = this.guardIntent.get(agent) ?? { answerOnly: false, recheckWait: false }
+      const progress = [...(this.guardProgress.get(agent) ?? [])]
+      this.guardProgress.delete(agent)
+      const currentWaitCommand = this.guardWaitCommands.get(agent)
+      this.guardWaitCommands.delete(agent)
+      const instruction = await this.guard?.(agent.id, { kind: 'stopping', progress, ...intent, ...(currentWaitCommand ? { currentWaitCommand } : {}) })
+      if (instruction && !signal.aborted) this.steerGuard(agent, instruction)
+    })
+    this.ctx.on('agent/status', ({ agent, status }) => { if (status === 'idle') { this.admittedTurns.delete(agent); this.maintenanceTurns.delete(agent); this.guardIntent.delete(agent); this.guardProgress.delete(agent); this.guardWaitCommands.delete(agent) } })
     this.ctx.inject(['tools'], toolsCtx => { toolsCtx.effect(() => toolsCtx.tools.guard(exec => {
       const scope = exec.agent && this.maintenanceTurns.get(exec.agent)
       if (!scope) return
@@ -99,7 +133,34 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
         : scope.step === 'collect' && exec.name === 'job_output' && scope.jobIds?.includes(String((exec.arguments as { job_id?: unknown } | undefined)?.job_id))
       if (!allowed || exec.parent) return `Continuation ${scope.operationId} permits only its ${scope.step} maintenance step; business tools require explicit Task resume`
     }), 'narrow continuation maintenance tools') })
-    this.ctx.on('tools/result', exec => { this.activeTools.delete(exec.token) })
+    this.ctx.on('tools/result', (exec, result) => {
+      this.activeTools.delete(exec.token)
+      if (exec.agent && !exec.parent && !result.isError && exec.name === 'work_control') {
+        const args = exec.arguments as { action: string; yield_reason?: string }
+        if (args.action === 'wait' && args.yield_reason && args.yield_reason !== 'internal') {
+          const value = JSON.parse((result.value as { result: string }).result) as { status: string; saved?: boolean }
+          if (value.status === 'completed' && value.saved) this.guardWaitCommands.set(exec.agent,
+            `tool:${createHash('sha256').update(JSON.stringify([this.runtimeId, exec.agent.id, exec.callId])).digest('hex')}`)
+        }
+      }
+      // A report/status/Goal update is coordination, not work. Repeated identical
+      // reads keep the same identity across turns and process reloads.
+      if (!exec.agent || exec.parent || result.isError || this.maintenanceTurns.has(exec.agent)
+        || /^(?:work_(?!related_issue$).*|.*goal.*)$/.test(exec.name)) return
+      let identity: unknown = [exec.name, exec.arguments, result.content]
+      if (exec.name === 'work_related_issue') {
+        // This tool's own normalized result has a stable source schema. Fresh
+        // observation timestamps and local report versions are not new facts.
+        const value = JSON.parse((result.value as { result: string }).result) as { status: string; issue?: import('../work-sources/types.ts').GitHubIssue }
+        if (value.status !== 'completed' || !value.issue) return
+        const { observedAt, updatedAt, ...issue } = value.issue
+        identity = [exec.name, issue]
+      }
+      const key = createHash('sha256').update(JSON.stringify(identity)).digest('hex')
+      const progress = this.guardProgress.get(exec.agent) ?? new Set<string>()
+      progress.add(key)
+      this.guardProgress.set(exec.agent, progress)
+    })
     this.ctx.on('tools/pre-execute', async (exec, next) => {
       // Observation includes admission still in flight. Task writes authorize in WorkApplication.
       this.activeTools.set(exec.token, exec)

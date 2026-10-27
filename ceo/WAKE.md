@@ -1,6 +1,6 @@
 # Wake Checklist
 
-Run this checklist at every wakeup. Finish each step before moving to the next one.
+Use this checklist internally at wakeup. Reuse verified facts that have not changed, and read only what is needed for the next action. Rehydrating state is not a user-facing milestone or a reason to stop unfinished work.
 
 ## 1. Name the Wake Source
 
@@ -28,7 +28,7 @@ For a DSH subagent settlement, verify the report before accepting it: inspect gi
 
 For an A2D2 subtask completion, read the child issue and any linked PR/result evidence, confirm the child task is actually accepted, then update the parent issue timeline with the child result. Continue with the next unblocked child, parent-level review, or parent completion.
 
-For an LF message, apply the new information to the current task state. If it answers an open question, closes a decision, changes scope, or redirects the stage, sync the task issue in the matching category below before continuing.
+For an LF message, apply the new information to the current task state. A status question normally needs a short answer and continued execution of authorized work. Honor an explicit pause, stop, scope change, or request to only answer. If a prior wait was your own mistake, check the actual dependency and correct the wait without asking for a new “continue” instruction. If the message answers an open question, closes a decision, changes scope, or redirects the stage, sync the task issue in the matching category below before continuing.
 
 Completion: the wake source has produced exactly one next state: accepted result, rework dispatch, review dispatch, opened subtask, stage continuation, handoff, completion, or a specific pending LF answer required by SOUL.
 
@@ -58,4 +58,4 @@ For accepted work, close the task issue with `gh` after final evidence is synced
 
 For a main-session handoff, prepare the handoff only after the task issue points to the current durable state; the successor can resume from the issue and handoff document.
 
-Completion: a tool call, `gh` update, dispatch, handoff, or direct reply has been executed, or the session is explicitly waiting on the named LF answer required by SOUL.
+Completion: the next substantive work action has actually run, the agreed result has been verified, or a specific unresolved dependency has been checked and assigned a real recovery condition. A status reply, apology, or bookkeeping update alone does not satisfy an unfinished execution request. Explicit user pauses and requests to only answer remain valid stopping points.

@@ -7,7 +7,7 @@ import { modelWorkResult } from './work-model-details.ts'
 export function installWorkOrganizationTools(ctx:Context,app:WorkApplication,runtimeId:string):void {
   ctx.effect(()=>ctx.tools.register(defineTool({
     name:'work_related_issue',
-    description:'Read this managed Task accepted GitHub Issue or one of its already accepted necessary native children through the trusted source route. Omit node_id for the parent. Returns normalized source material and any canonical Task acceptance; it creates no Task or Session, grants no execution authority, and does not accept scope or completion. Closed or merged is not acceptance.',
+    description:'Read this managed Task accepted GitHub Issue or one of its already accepted necessary native children or native dependencies through the trusted source route. Omit node_id for the parent. Returns normalized source material and any canonical Task acceptance; it creates no Task or Session, grants no execution authority, and does not accept scope or completion. Closed or merged is not acceptance.',
     parameters:{node_id:{type:'string'},expected_epoch:{type:'integer'}},
     output:{schema:{type:'object',additionalProperties:false,properties:{result:{type:'string',required:true}}},render:(_args,value)=>[{type:'text',text:value.result}]},
     async execute(args,exec){

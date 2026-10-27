@@ -22,8 +22,8 @@ import type { RequestRejection } from './route-auth.ts'
 
 export const name = 'a2d2-work'
 export const inject = ['webServer', 'connection']
-export interface Config { directory?: string; github?: boolean }
-export const Config: schema<Config> = schema.object({ directory: schema.string(), github: schema.boolean() })
+export interface Config { directory?: string; github?: boolean; executionGuard?: boolean; guardMaxCorrections?: number }
+export const Config: schema<Config> = schema.object({ directory: schema.string(), github: schema.boolean(), executionGuard: schema.boolean(), guardMaxCorrections: schema.number().min(0).max(10).step(1) })
 declare module '@deepseek-ai/cordis' {
   interface Context { a2d2Work: WorkApplication; a2d2GitHubSource?: GitHubSourcePort }
 }
@@ -52,7 +52,7 @@ export async function apply(ctx: Context, config: Config = {}): Promise<void> {
     if (!llm) throw new Error('Host LLM service is unavailable')
     return llm.stream(options)
   })
-  const app = new WorkApplication(directory, new DshWorkHost(ctx, runtimeId), source, planner)
+  const app = new WorkApplication(directory, new DshWorkHost(ctx, runtimeId), source, planner, { enabled: config.executionGuard, maxCorrections: config.guardMaxCorrections })
   // Migrate legacy inline history/receipts and mutable source sidecars under the DAO writer lock.
   void app.ensureSourceSplit().catch(error => ctx.logger.warn(`Work store archive migration: ${String(error)}`))
   ctx.provide('a2d2Work', app)
