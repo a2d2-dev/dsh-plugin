@@ -89,10 +89,10 @@ export function installWorkTools(ctx: Context, app: WorkApplication, runtimeId: 
   })), 'managed continuation readable receipt')
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'work_control',
-    description: 'Check current-session ownership and Task/specification versions with status (no Task material); use work_read for explicit paginated details when supplied material is missing or changed. Status remains available after startup. Report progress, ask/wait, pause or explicitly resume your current managed Task. Waiting and pausing are durably accepted now and applied after this turn, which may still finish its reply. Automatic task input waits for explicit resume; native human conversation remains available and does not itself resume the task. Task identity and execution authority come from your calling Session.',
+    description: 'Check current-session ownership and Task/specification versions with status (no Task material); use work_read for explicit paginated details when supplied material is missing or changed. Status remains available after startup. Report progress, ask/wait, pause or explicitly resume your current managed Task. Use end only for an explicit decision to permanently end this continuous queue item, without claiming Task acceptance or closing its Issue. Waiting and pausing are durably accepted now and applied after this turn, which may still finish its reply. Automatic task input waits for explicit resume; native human conversation remains available and does not itself resume the task. Task identity and execution authority come from your calling Session.',
     parameters: {
       known_specification_version: { type: 'integer', description: 'Specification version supplied at startup or fully read with work_read; status flags changed or missing material.' },
-      action: { type: 'string', required: true, enum: ['status', 'progress', 'wait', 'pause', 'resume'] },
+      action: { type: 'string', required: true, enum: ['status', 'progress', 'wait', 'pause', 'resume', 'end'] },
       text: { type: 'string', description: 'Concrete progress, question, or reason for the control request.' },
       expected_epoch: { type: 'integer', description: 'Optional epoch precondition from status. A mismatch rejects the write; this never grants ownership.' },
     },

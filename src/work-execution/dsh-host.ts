@@ -451,6 +451,50 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     return !!message && !!call && !!result && call.seq > message.seq && result.seq > call.seq && result.data.message.isError === false
       && result.data.message.content.some((block: { type: string; text?: string }) => block.type === 'text' && block.text === expected)
   }
+  async end(execution: WorkExecution): Promise<void> {
+    const facts = await this.observation(execution)
+    // Native lineage grants control; a related/review association alone does not.
+    const scope = (observation: import('./observation.ts').ExecutionObservation) => {
+      const ids = new Set([execution.session.sessionId])
+      for (const id of ids) {
+        const row = observation.sessions.find(row => row.session.sessionId === id)
+        for (const child of row?.children ?? []) ids.add(child.session.sessionId)
+      }
+      return ids
+    }
+    let controlled = scope(facts)
+    const owned = facts.sessions.filter(row => controlled.has(row.session.sessionId))
+    const agents: Agent[] = []
+    for (const row of owned) {
+      if (row.session.runtimeId !== this.runtimeId) throw new WorkExecutionError('queue-end-runtime-unavailable', '无法停止其他宿主的执行者')
+      const id = SessionId(row.session.sessionId)
+      const agent = this.ctx.get('agents')?.get(id)
+      if (agent) {
+        // Same public cancellation used by the host Stop action. Preserve inbox/results.
+        if (agent.status !== 'idle') agent.cancel({ kind: 'user' }, { keepInbox: true })
+        agents.push(agent)
+      }
+      for (const job of row.jobs) if (job.availability === 'live' && ['running', 'stopping'].includes(job.status)) {
+        this.service('jobs', 'kill').kill(job.id as Parameters<NonNullable<Context['jobs']>['kill']>[0], id, '结束本项队列处理')
+      }
+    }
+    for (const agent of agents) {
+      await agent.whenIdle()
+      await agent.runMaintenance(async () => { await this.runtime.flush(agent) })
+    }
+    // Termination has a physical-stop barrier, not the business acceptance gate:
+    // terminal job output and unconsumed child notices stay retained and unassessed.
+    const stopped = await this.observation(execution)
+    controlled = scope(stopped)
+    const blockers = stopped.blockers.filter(row => (controlled.has(row.session.sessionId) || row.code === 'execution-scope-unavailable') && row.code !== 'job-result-unknown' && /unavailable|unknown/.test(row.code))
+    for (const row of stopped.sessions.filter(row => controlled.has(row.session.sessionId))) {
+      if (row.status === 'running' || row.status === 'unknown' || row.waitingHuman) blockers.push({ code: 'executor-unsettled', session: row.session })
+      if ([...this.activeTools.values()].some(call => call.agent?.id === row.session.sessionId)) blockers.push({ code: 'tool-result-pending', session: row.session })
+      for (const job of row.jobs) if (job.availability === 'live' && ['running', 'stopping'].includes(job.status)) blockers.push({ code: 'job-unsettled', session: row.session, jobId: job.id })
+    }
+    if (blockers.length) throw new WorkExecutionError('queue-end-unsettled', `结束尚未完成：${blockers.map(row => `${row.code}:${row.session.sessionId}${row.jobId ? `:${row.jobId}` : ''}`).join(', ')}。停止后可重试结束；历史结果保持未验收。`)
+  }
+
   async settle(execution: WorkExecution): Promise<void> {
     const agent = await this.runtime.agent(SessionId(execution.session.sessionId))
     await agent.whenIdle()

@@ -31,6 +31,7 @@ export function continuousCompleted(state: WorkSnapshot, execution: WorkExecutio
 /** The native pre-step and per-session maintenance guard use the same durable slot. */
 export function continuousMayAdvance(state: WorkSnapshot, execution: WorkExecution): boolean {
   const owner = continuousOwner(state, execution.ref)
+  if (execution.control?.action === 'end') return false
   return !owner || (!continuousCompleted(state, execution) && owner.item.state === 'active' && continuousHasSlot(owner.rule, execution.ref))
 }
 export function sourceScopeError(rule: ContinuousWorkRule, source: WorkSource | undefined): { code: string; message: string } | undefined {

@@ -83,13 +83,14 @@ export interface WorkExecution {
   retired?: { session: SessionRef; epoch: number; operationId: string }[]
   continuationMaterial?: ContinuationMaterial
   progress?: string
-  control?: { commandId: string; action: 'wait' | 'pause' | 'resume'; status: 'accepted' | 'applied'; reason?: string }
+  control?: { commandId: string; action: 'wait' | 'pause' | 'resume' | 'end'; status: 'accepted' | 'applied'; reason?: string }
   error?: { code: string; message: string }
 }
 export interface ContinuousWorkItem {
   nodeId: string; title: string; number: number; url: string
   /** Canonical identity and discovery origin; neither grants queue execution ownership. */
   taskRef?: TaskRef; sourceId?: string
+  end?: { commandId: string; status: 'accepted' | 'applied' }
   ref?: TaskRef; executionId?: string
   state: 'queued' | 'active' | 'waiting' | 'paused' | 'blocked' | 'completed' | 'skipped'
   reason?: string; attempts: number; retryAt?: string; resumeRequested?: boolean; followups?: string[]; recoveryBlocked?: boolean
@@ -125,6 +126,7 @@ export type WorkCommand =
   | (Command & { type: 'continuous.instruct'; projectId: string; sourceId: string; expectedVersion: number; text: string })
   | (Command & { type: 'continuous.refresh'; projectId: string; sourceId: string; expectedVersion: number })
   | (Command & { type: 'continuous.preview'; projectId: string; sourceId: string; expectedVersion: number })
+  | (Command & { type: 'continuous.end'; projectId: string; sourceId: string; expectedVersion: number; nodeId: string })
   | (Command & { type: 'continuous.block'; projectId: string; sourceId: string; expectedVersion: number; nodeId: string; blocked: boolean })
   | (Command & { type: 'source.connect'; url?: string; githubProject?: { owner: string; type: 'org' | 'user'; number: number }; resource?: ResourceRef })
   | (Command & { type: 'continuous.configure'; queue?: ContinuousQueueSettings; projectId: string; sourceId: string; expectedVersion: number; assignee: '@me' | '*'; labels: string[]; resource: ResourceRef; model: { provider: string; model: string; reasoningEffort?: string }; agentPreset: string; permissionPreset: string; enabled: boolean })
@@ -149,7 +151,7 @@ export type WorkCommand =
   | (Command & ExecutionRef & { type: 'task.organize'; owner: string; epoch: number; organization: import('./work-organization.ts').TaskOrganization })
   | (Command & ExecutionRef & { type: 'task.report'; owner: string; epoch: number; report: TaskReport })
   | (Command & ExecutionRef & { type: 'task.continuation-material'; owner: string; epoch: number; content: ContinuationContent })
-  | (Command & ExecutionRef & { type: 'task.control'; owner: string; epoch: number; action: 'progress' | 'wait' | 'pause' | 'resume'; text: string })
+  | (Command & ExecutionRef & { type: 'task.control'; owner: string; epoch: number; action: 'progress' | 'wait' | 'pause' | 'resume' | 'end'; text: string })
   | (Command & ExecutionRef & { type: 'task.input'; owner: string; epoch: number; text: string; kind: 'input' | 'result' })
   | (Command & ExecutionRef & { type: 'task.completion-sync'; owner: string; epoch: number })
   | (Command & ExecutionRef & { type: 'task.reconcile'; owner: string; epoch: number })

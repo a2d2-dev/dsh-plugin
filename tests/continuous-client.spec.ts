@@ -42,3 +42,14 @@ it('retries an unknown command receipt using the same command identity', async (
   expect(commands[1]).toEqual(commands[0])
   expect(controller.getSnapshot().pending).toBeUndefined()
 })
+
+it('sends an explicit per-item end command and retries its unknown receipt without enabling the rule', async () => {
+  const commands: WorkCommand[] = []
+  const client = { command: vi.fn(async command => { commands.push(command); if (commands.length === 1) throw new TypeError('Network disconnected'); return { status: 'completed', continuousRule: rule } }) } as unknown as WorkClient
+  const controller = new ContinuousDelegationController(client, { projectId: 'project', sourceId: 'source' }, rule)
+  await controller.end('ISSUE_301')
+  expect(commands[0]).toMatchObject({ type: 'continuous.end', projectId: 'project', sourceId: 'source', expectedVersion: 1, nodeId: 'ISSUE_301' })
+  await controller.retry()
+  expect(commands[1]).toEqual(commands[0])
+  expect(controller.getSnapshot().rule?.enabled).toBe(false)
+})

@@ -46,6 +46,8 @@
 
 受控接任在 source maintenance 内通过公开 goals.disarm(exactLiveAgent) 撤销旧 activation，并 goals.get 回读确认 id/phase/revision 不变、activation=disarmed。无公开能力且无法证明旧 Goal 已退役时保留准确宿主能力阻塞；不修改 DSH，不冒充人类 pause/resume，不以 complete/blocked 收口未完成 Goal。独立浏览器协作不会自动成为原生接任，须使用该受控流程；这里不提供跨会话 Goal 迁移或自动 rearm。
 
+显式 `task.control action=end` 仅终止所属持续队列项；页面 `continuous.end` 对未开始项直接保存终态，对已执行项沿用同一控制路径。根会话及其原生子执行使用宿主公开取消，运行作业使用准确 owner 的 `jobs.kill`，等待 idle 并 flush 后核实停止，再移入历史和释放槽位。related/review/retired 关联本身不授予停止权。终态输出、子通知尚未消费只阻止业务完成，不单独阻止放弃队列处理；保留原结果及 unassessed。未知活动或停止失败保留结束请求和位置，页面可重试结束。此操作不写 Task.completion、不置 progress=done、不关闭 Issue，也不因外部 Closed 推断验收。
+
 ## 持久化与恢复
 
 - 稳定事件身份贯穿接受、入队、投递和消费；这些是不同确认点。交接期间仍可持久化新事件，慢创建不阻塞事件落盘。
@@ -53,6 +55,14 @@
 - 验收结论与完成意图先可靠记录到执行协调记录；完成事实只有在发布到主存后才成立。不得在主存仍为待发布时通知父任务“已完成”，也不得把本地记录当成完成事实。
 - 完成后不因可选的外部收尾失败继续驱动模型。独立同步恢复只处理已有操作，不能重新授予协调权或重跑任务。
 - 升级在安全边界迁移旧任务、会话、固定后继、消息与 watch 引用，保留唯一映射和进行中的操作身份。旧新运行器不能同时写同一协调记录。
+
+### 持续队列的宿主观察恢复（#299、#300）
+
+后台恢复依赖真实 `agents`、`sessionController` 和 `sessionQuery` 三个服务就绪。控制器已注册不等于会话观察服务可用；本地浏览和来源查询仍不需要这些执行服务。
+
+旧版本在会话观察服务缺失时会持久保存 `recoveryBlocked` 和准确错误 `Cannot read properties of undefined (reading 'observeSession')`。仅对此已确认的只读观察失败，周期恢复重新通过当前 Execution 的正式 failure 观察读取真实会话日志；读取仍失败则保留原保护。读取成功后按 ExecutionId、当前 Session、epoch 和保留槽位重新核对，只清除此项观察保护及对应规则错误。实际运行的当前主会话恢复为 active 并保留原槽位；没有新输入的空闲执行依正常安全结算让出槽位，不自动发送续跑消息。历史或无关会话运行不构成恢复证明。
+
+当前执行的真实模型失败、执行/接续错误、人工暂停和业务等待继续独立成立，不以观察成功解除。其他未知创建或结算结果不进入该自动恢复例外，沿用带当前 ExecutionId、owner、epoch 的 `task.reconcile` 或明确 `task.control resume`；需要继续业务时必须表达明确恢复意图。恢复保持 Task、Execution、Session、owner、epoch、模型和权限，不创建替代执行。
 
 ## 实现覆盖
 
