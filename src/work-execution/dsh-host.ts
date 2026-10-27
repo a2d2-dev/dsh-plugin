@@ -70,17 +70,27 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     this.ctx.on('agent/pre-step', async ({ agent, messages, turn }, next) => {
       // Task scheduling controls automatic turns, never the native human conversation.
       // An admitted turn can finish its tool results and final answer after wait/done.
-      const human = messages.some(message => message.source?.kind === 'user')
+      let human = messages.some(message => message.source?.kind === 'user')
+      if (!human && this.admittedTurns.get(agent) !== turn) {
+        const admission = await this.authorize!(agent.id, messages)
+        if (!admission) {
+          // The host claims only one queued turn and stops its driver on reject.
+          // A blocked automatic input must not strand human messages behind it.
+          // Keep automatic input with its existing Task/producer recovery lane;
+          // move only native human envelopes through the public durable Inbox.
+          const pending = [...agent.inbox.nextStep, ...agent.inbox.nextTurn].filter(message => message.source?.kind === 'user')
+          if (!pending.length) return { kind: 'reject' }
+          const recovered = pending.filter(message => agent.inbox.remove(message.id))
+          messages.splice(0, messages.length, ...recovered)
+          human = true
+          this.maintenanceTurns.delete(agent)
+        } else if (typeof admission === 'object') this.maintenanceTurns.set(agent, admission)
+        else this.maintenanceTurns.delete(agent)
+      }
       if (human) {
         this.maintenanceTurns.delete(agent)
         this.guardIntent.set(agent, humanGuardIntent(messages))
         await this.guard?.(agent.id, { kind: 'ingress', messages })
-      }
-      else if (this.admittedTurns.get(agent) !== turn) {
-        const admission = await this.authorize!(agent.id, messages)
-        if (!admission) return { kind: 'reject' }
-        if (typeof admission === 'object') this.maintenanceTurns.set(agent, admission)
-        else this.maintenanceTurns.delete(agent)
       }
       const decision = await next()
       if (decision.kind === 'reject') return decision
