@@ -16,6 +16,7 @@ import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { afterEach, expect, it, vi } from 'vitest'
 import { mountExecution } from './work-execution-fixture.ts'
 import * as plugin from '../src/work-plugin.ts'
+import { WorkApplication } from '../src/work.ts'
 import { WORK_ROUTE_PATH } from '../src/work-types.ts'
 import type { WorkCompleted, WorkRequest, WorkResult } from '../src/work-types.ts'
 import type { GitHubSourcePort } from '../src/work-sources/types.ts'
@@ -91,6 +92,21 @@ function completed(result: WorkResult): WorkCompleted {
   if (result.status !== 'completed') throw new Error(JSON.stringify(result))
   return result
 }
+
+it('starts managed recovery only after the public session controller is activated', async () => {
+  const recovery = vi.spyOn(WorkApplication.prototype, 'reconcileControls')
+  try {
+    const { ctx } = await mount(await root(), undefined, false)
+    ctx.provide('agents', {} as never)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(ctx.get('sessionController')).toBeUndefined()
+    expect(recovery).not.toHaveBeenCalled()
+    // Real Cordis service activation releases the production recovery injection.
+    ctx.provide('sessionController', {} as never)
+    await vi.waitFor(() => expect(recovery).toHaveBeenCalled())
+    await expect(recovery.mock.results[0]!.value).resolves.toBeUndefined()
+  } finally { recovery.mockRestore() }
+})
 
 it('exposes real local commands and trusted persisted host Sessions through the production plugin without a live Session or model', async () => {
   const path = await root()
