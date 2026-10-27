@@ -53,6 +53,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
   private readonly activeTools = new Map<import('@deepseek-ai/dsh-tools').ToolExecutionToken, import('@deepseek-ai/dsh-tools').ToolExecution>()
   private readonly resumeInstructions = new WeakMap<Agent, string>()
   private guard?: WorkGuard
+  private readonly guardWaitCommands = new WeakMap<Agent, string>()
   private readonly guardProgress = new WeakMap<Agent, Set<string>>()
   private readonly guardIntent = new WeakMap<Agent, ReturnType<typeof humanGuardIntent>>()
   connectGuard(guard: WorkGuard): void { this.guard = guard }
@@ -118,10 +119,12 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       const intent = this.guardIntent.get(agent) ?? { answerOnly: false, recheckWait: false }
       const progress = [...(this.guardProgress.get(agent) ?? [])]
       this.guardProgress.delete(agent)
-      const instruction = await this.guard?.(agent.id, { kind: 'stopping', progress, ...intent })
+      const currentWaitCommand = this.guardWaitCommands.get(agent)
+      this.guardWaitCommands.delete(agent)
+      const instruction = await this.guard?.(agent.id, { kind: 'stopping', progress, ...intent, ...(currentWaitCommand ? { currentWaitCommand } : {}) })
       if (instruction && !signal.aborted) this.steerGuard(agent, instruction)
     })
-    this.ctx.on('agent/status', ({ agent, status }) => { if (status === 'idle') { this.admittedTurns.delete(agent); this.maintenanceTurns.delete(agent); this.guardIntent.delete(agent); this.guardProgress.delete(agent) } })
+    this.ctx.on('agent/status', ({ agent, status }) => { if (status === 'idle') { this.admittedTurns.delete(agent); this.maintenanceTurns.delete(agent); this.guardIntent.delete(agent); this.guardProgress.delete(agent); this.guardWaitCommands.delete(agent) } })
     this.ctx.inject(['tools'], toolsCtx => { toolsCtx.effect(() => toolsCtx.tools.guard(exec => {
       const scope = exec.agent && this.maintenanceTurns.get(exec.agent)
       if (!scope) return
@@ -132,6 +135,14 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     }), 'narrow continuation maintenance tools') })
     this.ctx.on('tools/result', (exec, result) => {
       this.activeTools.delete(exec.token)
+      if (exec.agent && !exec.parent && !result.isError && exec.name === 'work_control') {
+        const args = exec.arguments as { action: string; yield_reason?: string }
+        if (args.action === 'wait' && args.yield_reason && args.yield_reason !== 'internal') {
+          const value = JSON.parse((result.value as { result: string }).result) as { status: string; saved?: boolean }
+          if (value.status === 'completed' && value.saved) this.guardWaitCommands.set(exec.agent,
+            `tool:${createHash('sha256').update(JSON.stringify([this.runtimeId, exec.agent.id, exec.callId])).digest('hex')}`)
+        }
+      }
       // A report/status/Goal update is coordination, not work. Repeated identical
       // reads keep the same identity across turns and process reloads.
       if (!exec.agent || exec.parent || result.isError || this.maintenanceTurns.has(exec.agent)

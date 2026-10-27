@@ -91,11 +91,13 @@ export class WorkApplication {
   private readonly discoverySchedule = new Map<string, { version: number; persisted: string; next: string }>()
   /** User-triggered source reads currently running; the scheduled pass yields to them. */
   private readonly screeningJobs = new Map<string, Promise<void>>()
+  private readonly executionGuardEnabled: boolean
   private refreshCount = 0
   constructor(readonly directory: string, readonly host: WorkHost, readonly source?: GitHubSourcePort, readonly planner?: WorkPlanner, readonly guardOptions: WorkGuardOptions = {}) {
     if (!isAbsolute(directory)) throw new Error('Work record directory must be absolute')
     this.dao = WorkDao.forDirectory(directory)
-    if (guardOptions.enabled !== false) this.host.execution?.connectGuard?.((sessionId, input) => this.guardExecution(sessionId, input))
+    this.executionGuardEnabled = guardOptions.enabled !== false && !!this.host.execution?.connectGuard
+    if (this.executionGuardEnabled) this.host.execution?.connectGuard?.((sessionId, input) => this.guardExecution(sessionId, input))
     this.host.execution?.connectObservation?.(async requested => {
       const state = await this.load()
       const current = state.executions.find(item => item.id === requested.id && sameTask(item.ref, requested.ref))
@@ -203,13 +205,17 @@ export class WorkApplication {
         || row.children.some(child => !child.returned && child.status === 'running')
         || row.jobs.some(job => job.availability !== 'lost' && ['running', 'stopping'].includes(job.status))))
       if (pendingExecutor) return undefined
-      const waiting = execution.state === 'waiting' || execution.control?.action === 'wait'
+      const waiting = execution.control?.action === 'wait' || execution.state === 'waiting' && execution.control?.action !== 'resume'
       const ownWait = execution.control?.action === 'wait' && execution.control.commandId.startsWith('tool:')
       if (waiting && (!ownWait || execution.control?.yield && execution.control.yield.reason !== 'internal' && !(input.kind === 'stopping' && input.recheckWait))) return undefined
       if (input.kind === 'resume') {
         if (waiting || !continuousMayAdvance(state, execution) || execution.executionGuard?.exhausted) return undefined
         return CONTINUE_AUTHORIZED_WORK
       }
+      // A status turn may recheck an old wait, then confirm the same real blocker.
+      // Honor only the exact successful structured control observed this turn;
+      // history alone must not suppress the first recheck.
+      if (waiting && execution.control?.yield && input.currentWaitCommand === execution.control.commandId) return undefined
       if (input.answerOnly || waiting && !input.recheckWait && execution.control?.status !== 'accepted') return undefined
       if (!waiting && !continuousMayAdvance(state, execution)) return undefined
       const guard = execution.executionGuard ??= { corrections: 0, progress: [] }
@@ -357,6 +363,7 @@ export class WorkApplication {
     const execution = state.executions.find(item => sameSession(item.session, session))
     if (!execution) return this.coordinatorUnavailable(session)
     if (action === 'status') return { status: 'completed', task: taskAt(state, execution.ref), bindings: state.externalBindings.filter(item => sameTask(item.ref, execution.ref)), sourceIssues: sourceIssuesAt(state, execution.ref), execution, executionRuntime: this.host.execution?.status(execution) ?? 'inactive' }
+    if (action === 'wait' && this.executionGuardEnabled && !yieldInfo) return failed('wait-details-required', '等待前请给出 yield_reason、checked_facts 和 wake_condition。读取资料、核实证据或检查误设等待属于当前工作，请直接执行。')
     if (action === 'wait' && yieldInfo) {
       if (yieldInfo.reason === 'internal') return failed('wait-actionable', '读取资料、核实证据和检查自己的等待都属于当前工作。请立即执行下一项检查；无需用户说“继续”。')
       if (yieldInfo.reason === 'executor') {

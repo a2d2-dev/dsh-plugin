@@ -4,7 +4,7 @@ import type { NativeWorkMessage, SessionRef } from '../work-types.ts'
 export type WorkGuardInput =
   | { kind: 'ingress'; messages: readonly NativeWorkMessage[] }
   | { kind: 'resume' }
-  | { kind: 'stopping'; progress: readonly string[]; answerOnly: boolean; recheckWait: boolean }
+  | { kind: 'stopping'; progress: readonly string[]; answerOnly: boolean; recheckWait: boolean; currentWaitCommand?: string }
 export type WorkGuard = (sessionId: string, input: WorkGuardInput) => Promise<string | undefined>
 export interface WorkGuardOptions { enabled?: boolean; maxCorrections?: number }
 export interface WorkYield {

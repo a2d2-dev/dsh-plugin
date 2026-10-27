@@ -208,3 +208,74 @@ it('keeps handoff maintenance narrow and never corrects the retired source Sessi
   expect(await h.guard()(source.id, { kind: 'stopping', progress: [], answerOnly: false, recheckWait: false })).toBeUndefined()
   expect(await h.guard()(source.id, { kind: 'resume' })).toBeUndefined()
 }, 15000)
+
+it.each(['human', 'external'] as const)('honors a newly confirmed structured %s wait after rechecking the historical blocker', async reason => {
+  const h = await setup()
+  const args = { action: 'wait', text: '外部审批条件尚未满足', yield_reason: reason, checked_facts: ['已读取审批结果，尚未获批'], wake_condition: '审批系统出现 accepted 结论' }
+  h.model.nextTool = { name: 'work_control', arguments: args }
+  const agent = await h.start()
+  const before = h.model.requests.length
+  let reconfirmed = false
+  h.model.selectTool = () => {
+    if (h.model.requests.length === before + 1) return undefined // Historical wait still requires a first recheck.
+    if (!reconfirmed) { reconfirmed = true; return { name: 'work_control', arguments: args } }
+    return undefined
+  }
+  agent.followup(message('到底是什么状态'))
+  await fixtures.run(() => agent.whenIdle())
+  expect(h.model.requests).toHaveLength(before + 3) // answer, one correction/recheck tool, final answer
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: {
+    executionGuard: { corrections: 1 }, control: { action: 'wait', commandId: expect.stringMatching(/^tool:/), yield: {
+      reason, checkedFacts: ['已读取审批结果，尚未获批'], wakeCondition: '审批系统出现 accepted 结论',
+    } },
+  } })
+}, 15000)
+
+it('rejects a new unstructured model wait without replacing the current control', async () => {
+  const h = await setup()
+  h.model.nextTool = { name: 'read', arguments: { file_path: 'dependency.txt' } }
+  const agent = await h.start()
+  expect(await h.app.sessionControl({ runtimeId: 'runtime', sessionId: agent.id }, 'missing-yield', 'wait', '需要核实内部证据，请等待')).toMatchObject({ status: 'failed', error: { code: 'wait-details-required' } })
+  const result = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(result.status === 'completed' && result.execution?.control).toBeUndefined()
+}, 15000)
+
+it.each(['human', 'external'] as const)('adds no correction when the status turn directly confirms a valid %s wait', async reason => {
+  const h = await setup()
+  const args = { action: 'wait', text: '确认审批仍未到达', yield_reason: reason, checked_facts: ['审批记录仍为 pending'], wake_condition: '审批记录变为 accepted' }
+  h.model.nextTool = { name: 'work_control', arguments: args }
+  const agent = await h.start()
+  const before = h.model.requests.length
+  h.model.nextTool = { name: 'work_control', arguments: args }
+  agent.followup(message('现在是什么状态？'))
+  await fixtures.run(() => agent.whenIdle())
+  expect(h.model.requests).toHaveLength(before + 2)
+  const result = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(result).toMatchObject({ execution: { control: { action: 'wait', yield: { reason, checkedFacts: ['审批记录仍为 pending'], wakeCondition: '审批记录变为 accepted' } } } })
+  expect(result.status === 'completed' && result.execution?.executionGuard).toBeUndefined()
+}, 15000)
+
+it('continues with an actual tool when resuming an already applied legacy wait produces only an explanation', async () => {
+  const h = await setup(false)
+  h.model.nextTool = { name: 'work_control', arguments: { action: 'wait', text: '模型误设等待内部证据' } }
+  const agent = await h.start()
+  await fixtures.run(() => h.app.reconcileControls())
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { state: 'waiting', control: { action: 'wait', status: 'applied' } } })
+  const { DshWorkExecutionHost } = await import('../src/work-execution/dsh-host.ts')
+  h.host.execution.connectGuard = DshWorkExecutionHost.prototype.connectGuard
+  const upgraded = fixtures.application(h.app.directory, h.host)
+  let calls = 0
+  h.model.selectTool = () => {
+    calls++
+    if (calls === 1) return { name: 'work_control', arguments: { action: 'resume', text: '已恢复，后续继续处理。' } }
+    if (calls === 2) return undefined // Resume bookkeeping alone cannot close the turn.
+    if (calls === 3) return { name: 'write', arguments: { file_path: 'applied-wait-proof.txt', content: 'actual next action' } }
+    return undefined
+  }
+  const before = h.model.requests.length
+  agent.followup(message('到底是什么状态'))
+  await fixtures.run(() => agent.whenIdle())
+  expect(await readFile(join(h.root, 'applied-wait-proof.txt'), 'utf8')).toBe('actual next action')
+  expect(h.model.requests).toHaveLength(before + 4)
+  expect(await upgraded.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { control: { action: 'resume' }, executionGuard: { corrections: 0 } } })
+}, 15000)
