@@ -54,6 +54,14 @@
 - 完成后不因可选的外部收尾失败继续驱动模型。独立同步恢复只处理已有操作，不能重新授予协调权或重跑任务。
 - 升级在安全边界迁移旧任务、会话、固定后继、消息与 watch 引用，保留唯一映射和进行中的操作身份。旧新运行器不能同时写同一协调记录。
 
+### 持续队列的宿主观察恢复（#299、#300）
+
+后台恢复依赖真实 `agents`、`sessionController` 和 `sessionQuery` 三个服务就绪。控制器已注册不等于会话观察服务可用；本地浏览和来源查询仍不需要这些执行服务。
+
+旧版本在会话观察服务缺失时会持久保存 `recoveryBlocked` 和准确错误 `Cannot read properties of undefined (reading 'observeSession')`。仅对此已确认的只读观察失败，周期恢复重新通过当前 Execution 的正式 failure 观察读取真实会话日志；读取仍失败则保留原保护。读取成功后按 ExecutionId、当前 Session、epoch 和保留槽位重新核对，只清除此项观察保护及对应规则错误。实际运行的当前主会话恢复为 active 并保留原槽位；没有新输入的空闲执行依正常安全结算让出槽位，不自动发送续跑消息。历史或无关会话运行不构成恢复证明。
+
+当前执行的真实模型失败、执行/接续错误、人工暂停和业务等待继续独立成立，不以观察成功解除。其他未知创建或结算结果不进入该自动恢复例外，沿用带当前 ExecutionId、owner、epoch 的 `task.reconcile` 或明确 `task.control resume`；需要继续业务时必须表达明确恢复意图。恢复保持 Task、Execution、Session、owner、epoch、模型和权限，不创建替代执行。
+
 ## 实现覆盖
 
 已有运行器的 owner 锁、安全维护、固定后继、分步交接、inbox 和恢复测试可以复用；它当前仍以项目根/Issue 寻址，未提供完整 TaskId/epoch/Project Agent、新来源队列和验收 outbox。现有 `rotateTokens` 使用近似投影，需按上面的计量契约扩展。实现与验证必须在隔离开发环境中完成，不接管或重启现有 18780/18781 实例。

@@ -1,3 +1,8 @@
+import { Context } from '@deepseek-ai/cordis'
+import SessionStore, { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import SessionQuery from '@deepseek-ai/dsh-session-query'
+import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import { DshWorkExecutionHost } from '../src/work-execution/dsh-host.ts'
 import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
 import { SourceError } from '../src/work-sources/errors.ts'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -8,6 +13,11 @@ import { WorkApplication, WorkDao } from '../src/work.ts'
 import type { WorkHost } from '../src/work.ts'
 import type { ContinuousWorkRule, NativeWorkMessage, WorkCompleted, WorkExecution, WorkResult } from '../src/work-types.ts'
 import type { GitHubIssue, GitHubProjectField, GitHubSourcePort } from '../src/work-sources/types.ts'
+
+class Query extends SessionQuery {
+  async searchSessions(): Promise<never> { throw new Error('Search is outside this observation regression') }
+  async searchEvents(): Promise<never> { throw new Error('Search is outside this observation regression') }
+}
 
 const roots: string[] = []
 afterEach(async () => { vi.restoreAllMocks(); for (const root of roots.splice(0)) {
@@ -1278,4 +1288,49 @@ it('reflects explicit Task-page recovery of a pre-admission problem without bypa
   expect((await h.status()).items[0]).toMatchObject({ ref: recovered.ref, executionId: recovered.id, state: 'active' })
   expect(h.host.sessionsCreated.size).toBe(2)
   expect((await h.execution(recovered.ref)).session).toEqual(recovered.session)
+})
+
+
+it.each(['idle', 'running', 'waiting', 'paused', 'model-failure', 'historical-running'] as const)('recovers missing sessionQuery through actual persisted observation while current session is %s', async status => {
+  const h = await setup()
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1 } }, operator))
+  const first = await h.execution()
+  h.host.idle(first)
+  const ctx = new Context()
+  try {
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(JsonlSessionPersistence, { root: join(h.directory, 'sessions') })
+    const handle = await ctx.sessionPersistence.create({ version: 4, isSeeded: false, delegationDepth: 0, id: SessionId(first.session.sessionId), createdAt: 1234, cwd: '/workspace', agentPreset: 'agent' })
+    await handle.flush(); await handle.close()
+    const actualHost = new DshWorkExecutionHost(ctx, resource.runtimeId)
+    h.host.execution.failure = execution => actualHost.failure(execution)
+    // This is the real production failure path, not a synthetic thrown error.
+    await h.app.reconcileContinuous()
+    expect((await h.status()).items[0]).toMatchObject({ state: 'blocked', recoveryBlocked: true, reason: expect.stringContaining('observeSession') })
+    await h.app.reconcileContinuous()
+    expect((await h.status()).slots).toEqual([first.ref])
+    completed(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'freeze-new-intake', ...h.scope, expectedVersion: 1, enabled: false }, operator))
+    const calls = [h.host.ensures.length, h.host.sends.length, h.host.wakes.length]
+    if (status === 'waiting' || status === 'paused') completed(await h.app.sessionControl(first.session, 'retain-business-control', status === 'waiting' ? 'wait' : 'pause', 'Explicit business hold'))
+    if (status === 'model-failure') {
+      const log = await ctx.sessionPersistence.open(SessionId(first.session.sessionId), 'write')
+      await log.append([{ type: 'turn/start', seq: SessionSeq(0), time: Date.now(), data: { turn: 1 } }, { type: 'turn/end', seq: SessionSeq(1), time: Date.now(), data: { turn: 1, reason: { kind: 'error', error: { code: 'provider-error', message: 'Real model failure' } } } }])
+      await log.flush(); await log.close()
+    }
+    if (status === 'historical-running') h.host.statuses.set('old-or-unrelated-session', 'running')
+    h.host.statuses.set(first.session.sessionId, status === 'running' ? 'running' : 'idle')
+    await ctx.plugin(Query)
+    const restored = new WorkApplication(h.directory, h.host, h.source)
+    await restored.reconcileContinuous()
+    const rule = await h.status(restored)
+    expect(rule.error).toBeUndefined()
+    expect(rule.items[0]!.recoveryBlocked).toBeUndefined()
+    expect(rule.items[0]!.state).toBe(status === 'running' ? 'active' : status === 'waiting' || status === 'paused' ? status : 'blocked')
+    expect(rule.slots).toEqual(status === 'running' ? [first.ref] : [])
+    if (status === 'model-failure') expect((await h.execution(first.ref, restored)).runtimeFailure?.message).toContain('Real model failure')
+    if (status === 'waiting' || status === 'paused') expect(rule.items[0]!.reason).toBe('Explicit business hold')
+    expect(await h.execution(first.ref, restored)).toMatchObject({ id: first.id, owner: first.owner, epoch: first.epoch, session: first.session, model: first.model, permissionPreset: first.permissionPreset })
+    expect([h.host.ensures.length, h.host.sends.length, h.host.wakes.length]).toEqual([calls[0]! + (status === 'waiting' || status === 'paused' ? 1 : 0), calls[1], calls[2]])
+    expect(h.host.sessionsCreated.size).toBe(1)
+  } finally { await ctx.fiber.dispose() }
 })
