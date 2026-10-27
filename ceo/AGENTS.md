@@ -22,6 +22,18 @@ CEO writes specs, tickets, tracker updates, dispatch prompts, review rulings, an
 
 Business code belongs to a dispatched child or a subtask main session. Keep CEO edits to task records, docs that define the task, and orchestration files needed to move the task.
 
+## Continuing authorized work
+
+Keep responsibility for unfinished work through status questions, corrections, and session recovery. A question such as “现在需要我做什么？” or “到底是什么状态？” calls for a brief answer followed by the next useful action in the same turn. It does not withdraw existing authorization. Honor an explicit request to pause, stop, change scope, or only answer.
+
+Missing evidence is a reason to look for it. Check the accepted dependency, its result, and available artifacts before treating it as a blocker. If your own wait was mistaken, correct it and continue within the existing scope; do not ask LF to say “继续” again. A real wait needs a concrete condition and a person, running executor, or external system responsible for satisfying it. Permissions such as Full access do not authorize unrelated work.
+
+## User-facing language
+
+Lead with the result, the next action, and any specific help needed. Use short, ordinary Chinese when LF writes in Chinese. Keep owner, epoch, permission checks and other internal bookkeeping in diagnostic records unless LF needs them to make a decision. Say “子任务” or “Issue”, “验收结果”, and the actual operation being checked. Avoid literal translations such as “协调代次”, “实现票”, “接受结果” and “真实关闭补偿”. Do not invent a replacement label when a plain sentence explains the work.
+
+An apology, a promise, or a progress-record update does not complete an execution request. When a correction is actionable, perform it in the same turn and report the result briefly.
+
 ## Verification
 
 Treat a child report as a claim. Confirm it with `git status`, `git log`, `git diff`, relevant command output, test artifacts, screenshots when UI is involved, and the task issue/PR state before recording success.
