@@ -21,7 +21,7 @@ function fixture(count = 46) {
     specification: { version: 1, text: 'SPEC_BODY_' + 'S'.repeat(8192), acceptance: ['A'.repeat(8192)] },
     children: [], breakdown: [], progress: { stage: 'in-progress', specificationVersion: 1, summary: 'PROGRESS_BODY_' + 'P'.repeat(8192) },
   }))
-  const state = { sources: [source], tasks, externalBindings: tasks.map(task => ({ nodeId: task.id, ref: { projectId: task.projectId, taskId: task.id } })), executions: [] } as unknown as WorkSnapshot
+  const state = { sources: [source], tasks, externalBindings: tasks.map((task, index) => ({ nodeId: task.id, ref: { projectId: task.projectId, taskId: task.id }, accepted: observations[index]!.issue, lastObserved: observations[index]!.issue })), executions: [] } as unknown as WorkSnapshot
   const rule = { id: 'rule', sourceId: source.id, projectId: source.projectId, scope: { assignee: '*', labels: [] },
     resource: { runtimeId: 'host', workspaceId: 'workspace' }, model: { provider: 'fake', model: 'exact' }, agentPreset: 'agent', permissionPreset: 'safe',
     planning: { instruction: 'Complete the work', supplements: [], blocks: [], scopeVersion: 1 }, items: [],
@@ -110,8 +110,8 @@ it('summarizes Project item catalogs without losing membership or relationship s
   expect(JSON.stringify(basis)).not.toContain('PROJECT_ITEM_TEXT')
   expect(JSON.stringify(basis).length).toBeLessThanOrEqual(planningBasisCharacterLimit(46))
   expect(basis.candidates.map(candidate => candidate.issue.nodeId)).toEqual(source.observations.map(({ issue }) => issue.nodeId))
-  expect(basis.candidates[0]!.issue.subIssues).toEqual({ items: [{ nodeId: 'ISSUE_2', state: 'open' }], totalCount: 2, hasNextPage: true })
-  expect(basis.candidates[1]!.issue.parent).toEqual({ nodeId: 'ISSUE_1', state: 'open' })
+  expect(basis.candidates[0]!.issue.subIssues).toEqual({ items: [{ nodeId: 'ISSUE_2', state: 'open', canonicalAccepted: false }], totalCount: 2, hasNextPage: true })
+  expect(basis.candidates[1]!.issue.parent).toEqual({ nodeId: 'ISSUE_1', state: 'open', canonicalAccepted: false })
 })
 
 it('retains execution authority and tool control while excluding diagnostic and control prose', () => {

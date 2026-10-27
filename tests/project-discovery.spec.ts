@@ -12,7 +12,7 @@ import type { GitHubIssue, GitHubProjectPage, GitHubSourcePort, WorkSource } fro
 import type { WorkResult } from '../src/work-types.ts'
 const roots: string[] = [], actor = { operator: true }, host = { resources: async () => [], sessions: async () => [] }
 const identity = { login: 'imneov', nodeId: 'U_1', name: 'LF' }
-const issue: GitHubIssue = { nodeId: 'I_1', number: 1, title: 'Issue 1', body: 'Original source', repository: { owner: 'a2d2-dev', repository: 'one' }, url: 'https://github.com/a2d2-dev/one/issues/1', state: 'open', labels: [], assignees: ['imneov'], updatedAt: '2026-10-20T00:00:00Z', observedAt: '2026-10-20T00:00:00Z', parent: null, subIssues: { items: [], totalCount: 0, hasNextPage: false } }
+const issue: GitHubIssue = { nodeId: 'I_1', number: 1, title: 'Issue 1', body: 'Original source', repository: { owner: 'a2d2-dev', repository: 'one' }, url: 'https://github.com/a2d2-dev/one/issues/1', state: 'open', labels: [], assignees: ['imneov'], updatedAt: '2026-10-20T00:00:00Z', observedAt: '2026-10-20T00:00:00Z', parent: null, dependencies: { availability: 'available', blockedBy: { items: [], totalCount: 0, hasNextPage: false } }, subIssues: { items: [], totalCount: 0, hasNextPage: false } }
 function page(issues: GitHubIssue[], nextCursor?: string): GitHubProjectPage { return { identity, project: { nodeId: 'PVT_1', title: 'Project', url: 'https://github.com/orgs/a2d2-dev/projects/1', closed: false }, items: issues.map(issue => ({ id: `item-${issue.nodeId}`, kind: 'issue', issueNodeId: issue.nodeId, archived: false, fields: [{ id: 'status', name: 'Status', type: 'single-select', value: 'Todo' }], fieldsPartial: false })), issues, observedAt: issue.observedAt, ...(nextCursor ? { nextCursor } : {}) } }
 const port: GitHubSourcePort = { list: async () => ({ identity, items: [issue], observedAt: issue.observedAt }), detail: async () => ({ identity, issue }), project: async () => page([issue]) }
 function complete(result: WorkResult) { expect(result.status).toBe('completed'); if (result.status !== 'completed') throw Error(JSON.stringify(result)); return result }
@@ -176,7 +176,7 @@ it('uses node identity for same-number Project Issues and retains parent/subissu
   const sourcePort = { ...port, project: async () => page([issue, other]) }, state = await setup(sourcePort)
   await state.app.query(query(state.source, true), actor)
   expect(await state.app.query({ type: 'source.issue', projectId: state.project.id, sourceId: state.source.id, number: 1 }, actor)).toMatchObject({ status: 'failed', error: { code: 'source-issue-ambiguous' } })
-  expect(await state.app.query({ type: 'source.issue', projectId: state.project.id, sourceId: state.source.id, number: 1, nodeId: 'I_other' }, actor)).toMatchObject({ status: 'completed', issue: { nodeId: 'I_other', parent: null, subIssues: { totalCount: 0 } } })
+  expect(await state.app.query({ type: 'source.issue', projectId: state.project.id, sourceId: state.source.id, number: 1, nodeId: 'I_other' }, actor)).toMatchObject({ status: 'completed', issue: { nodeId: 'I_other', parent: null, dependencies: { availability: 'available', blockedBy: { items: [], totalCount: 0, hasNextPage: false } }, subIssues: { totalCount: 0 } } })
 })
 
 it('honors scheduled due times and discards a partial scan when the credential identity changes', async () => {

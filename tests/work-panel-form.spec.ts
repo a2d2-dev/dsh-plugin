@@ -147,6 +147,7 @@ function fixture() {
     if(value.type==='source.connect')return {status:'completed',project,source}
     if(value.type==='continuous.configure'){rule={...rule,id:'r1',projectId:'p1',sourceId:'s1',version:(rule?.version??0)+1,enabled:value.enabled,scope:{assignee:value.assignee,labels:value.labels,identity},resource:value.resource,model:value.model,agentPreset:value.agentPreset,permissionPreset:value.permissionPreset,queue:value.queue,items:rule?.items??[]};return {status:'completed',continuousRule:rule}}
     if(value.type==='continuous.set-enabled'){rule={...rule!,version:rule!.version+1,enabled:value.enabled};return {status:'completed',continuousRule:rule}}
+    if(value.type==='continuous.block'){rule={...rule!,version:rule!.version+1,blocks:[...(rule!.blocks??[]).filter(id=>id!==value.nodeId),...(value.blocked?[value.nodeId]:[])]};return {status:'completed',continuousRule:rule}}
     throw Error('Unexpected write '+value.type)
   })
   const query=vi.fn(async(value:import('../src/work-types.ts').WorkQuery):Promise<import('../src/work-types.ts').WorkCompleted>=>{
@@ -244,14 +245,33 @@ describe('continuous processing production scope controls',()=>{
       form.click('设置');await vi.waitFor(()=>expect(form.textareas()).toHaveLength(1))
       form.change(form.textareas()[0],'  只处理独立缺陷\n排除文档与产品决策  ')
       form.submit();await vi.waitFor(()=>expect(h.command).toHaveBeenCalledOnce())
-      expect(h.command.mock.calls[0]![0]).toMatchObject({queue:{filterPrompt:'只处理独立缺陷\n排除文档与产品决策'}})
+      expect(h.command.mock.calls[0]![0]).toMatchObject({queue:{filterPrompt:'  只处理独立缺陷\n排除文档与产品决策  '}})
       await vi.waitFor(()=>expect(form.nodes('form')).toHaveLength(0))
       expect(form.text()).toContain('大模型筛选条件')
-      form.click('设置');await vi.waitFor(()=>expect(form.textareas()[0]?.props.value).toBe('只处理独立缺陷\n排除文档与产品决策'))
+      form.click('设置');await vi.waitFor(()=>expect(form.textareas()[0]?.props.value).toBe('  只处理独立缺陷\n排除文档与产品决策  '))
       form.change(form.textareas()[0],'');form.submit()
       await vi.waitFor(()=>expect(h.command).toHaveBeenCalledTimes(2))
       expect(h.command.mock.calls[1]![0]).toMatchObject({queue:{filterPrompt:''}})
     }finally{form.unmount()}
+  })
+  it('blocks and unblocks later intake from a fresh single queue without restoring plan approval', async () => {
+    const h=fixture(),rule=savedRule()
+    h.setRule({...rule,queue:{concurrency:1,refreshMinutes:30,order:'oldest'}})
+    await h.panel.load()
+    const form=await mountWorkPanel({controller:h.panel},'ContinuousProcessing')
+    try {
+      await vi.waitFor(()=>expect(form.nodes('select').some(node=>node.props['aria-label']==='选择后续排除项')).toBe(true))
+      expect(h.command).not.toHaveBeenCalled()
+      form.change(form.nodes('select').find(node=>node.props['aria-label']==='选择后续排除项'),'I1')
+      form.click('排除后续接入')
+      await vi.waitFor(()=>{form.render();expect(h.getRule()?.blocks).toEqual(['I1'])})
+      expect(h.command.mock.calls[0]![0]).toMatchObject({type:'continuous.block',nodeId:'I1',blocked:true,expectedVersion:3})
+      form.click('解除后续排除')
+      await vi.waitFor(()=>{form.render();expect(h.getRule()?.blocks).toEqual([])})
+      expect(h.command.mock.calls[1]![0]).toMatchObject({type:'continuous.block',nodeId:'I1',blocked:false,expectedVersion:4})
+      expect(h.getRule()?.planning).toBeUndefined()
+      expect(h.command.mock.calls.every(([value])=>value.type==='continuous.block')).toBe(true)
+    } finally { form.unmount() }
   })
   it('renders persisted queue reasons and opens its active Issue without starting or pausing it',async()=>{
     const h=fixture(),rule=savedRule(),screening={key:'k1',matches:false,reason:'不符合筛选条件'}

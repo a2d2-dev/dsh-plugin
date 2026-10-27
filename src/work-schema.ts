@@ -1,3 +1,4 @@
+import { screeningReviewRefSchema } from './work-screening-record.ts'
 import { planningSchema } from './work-planning.ts'
 import { z } from 'zod'
 import { completionSchema, childCompletionSchema } from './work-completion/index.ts'
@@ -78,7 +79,7 @@ const externalReference = { nodeId: referenceId.optional(), url: z.string().max(
 const oneReference = (value: { nodeId?: string; url?: string }) => Boolean(value.nodeId) !== Boolean(value.url)
 const fence = { ...command, ref: taskRefSchema, executionId: id, owner: id, epoch: z.number().int().positive() }
 const githubProjectRef = z.object({ owner: referenceId, type: z.enum(['org', 'user']), number: z.number().int().positive() }).strict()
-export const continuousQueueSchema = z.object({ concurrency: z.number().int().min(1).max(32), refreshMinutes: z.number().int().min(1).max(10080), order: z.enum(['oldest', 'newest']), filterPrompt: z.string().trim().max(10_000).optional() }).strict()
+export const continuousQueueSchema = z.object({ concurrency: z.number().int().min(1).max(32), refreshMinutes: z.number().int().min(1).max(10080), order: z.enum(['oldest', 'newest']), filterPrompt: z.string().max(10_000).optional() }).strict()
 const legacyContinuousRuleSchema = z.object({
   id, projectId: id, sourceId: id, version: z.number().int().positive(), enabled: z.boolean(),
   scope: z.object({ assignee: z.enum(['@me', '*']), labels: z.array(referenceId), identity: z.object({ login: referenceId, nodeId: referenceId }).strict().optional() }).strict(),
@@ -86,12 +87,12 @@ const legacyContinuousRuleSchema = z.object({
   items: z.array(z.object({ nodeId: referenceId, title: text, number: z.number().int().positive(), url: text, taskRef: taskRefSchema.optional(), sourceId: id.optional(), ref: taskRefSchema.optional(), executionId: id.optional(),
     screening: z.object({ key: referenceId, matches: z.boolean(), reason: text.max(2000) }).strict().optional(),
     end: z.object({ commandId: referenceId, status: z.enum(['accepted', 'applied']) }).strict().optional(), state: z.enum(['queued', 'active', 'waiting', 'paused', 'blocked', 'completed', 'skipped']), reason: text.optional(), attempts: z.number().int().nonnegative(), retryAt: z.string().datetime().optional(), resumeRequested: z.boolean().optional(), explicitResumeRequested: z.boolean().optional(), followups: z.array(referenceId).optional(), recoveryBlocked: z.boolean().optional() }).strict()),
-  planning: planningSchema.optional(),
+  planning: planningSchema.optional(), blocks: z.array(referenceId).optional(),
   active: taskRefSchema.optional(), error: z.object({ code: referenceId, message: text }).strict().optional(),
 }).strict()
 export const continuousRuleSchema = legacyContinuousRuleSchema.extend({
   queue: continuousQueueSchema.optional(), slots: z.array(taskRefSchema).optional(),
-  screeningError: z.object({ code: referenceId, message: text }).strict().optional(),
+  screeningError: z.object({ code: referenceId, message: text }).strict().optional(), screeningReview: screeningReviewRefSchema.optional(),
   lastRefreshedAt: z.string().datetime().optional(), nextRefreshAt: z.string().datetime().optional(),
   migrationConflict: z.object({ code: referenceId, message: text }).strict().optional(),
   legacyRules: z.array(legacyContinuousRuleSchema).optional(),
@@ -140,7 +141,7 @@ export const querySchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('source.catalog'), projectId: id, sourceId: id, refresh: z.boolean().optional() }).strict(),
   z.object({ type: z.literal('source.identify'), url: z.string().min(1).max(2048) }).strict(),
   z.object({ type: z.literal('source.execution-options'), projectId: id, sourceId: id }).strict(),
-  z.object({ type: z.literal('continuous.status'), projectId: id, sourceId: id }).strict(),
+  z.object({ type: z.enum(['continuous.status', 'continuous.review']), projectId: id, sourceId: id }).strict(),
   z.object({ type: z.literal('work.capabilities') }).strict(),
   z.object({ type: z.literal('source.list'), projectId: id }).strict(),
   z.object({ type: z.literal('source.progress'), projectId: id, sourceId: id }).strict(),

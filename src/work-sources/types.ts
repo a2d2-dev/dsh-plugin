@@ -12,6 +12,9 @@ export interface GitHubIssue {
   milestone?: { number: number; title: string } | null
   parent?: GitHubIssueReference | null
   subIssues?: { items: GitHubIssueReference[]; totalCount: number; hasNextPage: boolean }
+  /** Absent means unknown; only the native blocked-by API can establish availability. */
+  dependencies?: { availability: 'available'; blockedBy: { items: GitHubIssueReference[]; totalCount: number; hasNextPage: boolean } }
+    | { availability: 'unavailable'; code: string; message: string }
   subIssuesSummary?: { total: number; completed: number }
   linkedPullRequests?: GitHubLinkedPullRequest[]
 }
@@ -72,7 +75,7 @@ export interface GitHubSourcePort {
   /** Host-only write capability. Targets come exclusively from accepted local bindings. */
   close?(target: import('../work-completion/index.ts').CloseTarget, operationId: string): Promise<import('../work-completion/index.ts').CloseReceipt>
   list(repository: GitHubRepository, request: IssuePageRequest): Promise<IssuePage>
-  detail(repository: GitHubRepository, number: number, options?: { nativeChildren: true }): Promise<IssueDetail>
+  detail(repository: GitHubRepository, number: number, options?: { nativeChildren?: true; nativeRelationships?: true }): Promise<IssueDetail>
   project?(project: GitHubProjectRef, request: ProjectPageRequest): Promise<GitHubProjectPage>
 }
 export interface SourceFailure { code: string; message: string; retryAt?: string }

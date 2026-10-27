@@ -1,3 +1,4 @@
+import { screeningArchiveSchema, type ScreeningReview } from '../work-screening-record.ts'
 import { randomUUID } from 'node:crypto'
 import { readFileSync, realpathSync } from 'node:fs'
 import { mkdir, readFile, stat } from 'node:fs/promises'
@@ -134,6 +135,10 @@ export class WorkDao {
     await writeFileAtomic(this.blobPath(ref), `${JSON.stringify(value)}\n`, options)
     return ref
   }
+  async archiveScreening(review: ScreeningReview, previous?: string): Promise<string> {
+    return this.put(screeningArchiveSchema.parse({ review, previous }))
+  }
+  readScreening(ref: string): ScreeningReview { return screeningArchiveSchema.parse(this.blob(ref)).review }
   private validateSource(source: WorkSource, bulk: SourceBulk): SourceBulk {
     if (!bulk || !Array.isArray(bulk.observations) || !Array.isArray(bulk.pages)) throw new Error('Invalid work source archive')
     return freeze(bulkOf(sourceSchema.parse(attachBulk(sourceControl(source), bulk))))

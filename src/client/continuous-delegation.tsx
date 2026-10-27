@@ -1,3 +1,4 @@
+import { continuousBlocks } from '../work-blocks.ts'
 import { SCREENING_PENDING } from '../work-screening.ts'
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
@@ -39,6 +40,7 @@ export function ContinuousDelegation(props: ContinuousDelegationProps) {
   const rule = state.rule
   const disabled = state.busy || !!state.pending || !rule || props.configuring
   const items = rule?.items ?? []
+  const blocks = rule ? continuousBlocks(rule) : []
   // Screening rejections stay persisted so the same batch is not sent to the model again,
   // but they are not queue work: scope or screening-condition changes re-judge them.
   const visible = items.filter(item => item.state !== 'skipped')
@@ -80,9 +82,10 @@ export function ContinuousDelegation(props: ContinuousDelegationProps) {
         <td data-cell="status"><span>{item.end?.status==='accepted'?'正在结束':item.state==='completed'&&(rule?.slots??(rule?.active?[rule.active]:[])).some(ref=>ref.projectId===item.ref?.projectId&&ref.taskId===item.ref?.taskId)?'已验收 · 正在收口':item.reason===SCREENING_PENDING?SCREENING_PENDING:labels[item.state]}</span>{(item.reason || item.screening?.reason) && <details className={styles.problem}><summary>查看摘要</summary><p>{item.reason || item.screening?.reason}</p></details>}</td>
         <td data-cell="session"><div className={styles.actions}>{item.ref && item.executionId ? <button className={styles.taskLink} onClick={() => void props.navigation.openQueueSession(item.ref!, item.state === 'completed')}>{item.state === 'completed' ? '会话记录' : '进入会话'}</button> : item.taskRef ? <button className={styles.taskLink} onClick={() => void props.navigation.openQueueSession(item.taskRef!, true)}>会话记录</button> : <span className={styles.summary}>尚未开始</span>}{item.state !== 'completed' && <button type="button" disabled={disabled} title="结束本项队列处理，保留会话与未验收事实" onClick={() => void controller.end(item.nodeId)}>{item.end?.status === 'accepted' ? '重试结束' : '结束处理'}</button>}</div></td>
       </tr>)}</tbody></table></div> : <div className={styles.empty} role="status"><strong>{filter === 'all' ? (rejected.length ? '本次筛选没有命中工作' : '队列当前为空') : '当前分类没有任务'}</strong><p>{filter === 'all' ? (rejected.length ? `候选 ${screened.length} 项全部被排除，展开上方「被排除的 ${rejected.length} 项」可查看理由。` : '保存设置并更新等待任务，匹配工作会出现在这里。') : '可切换到全部查看其他任务。'}</p>{filter !== 'all' && <button onClick={() => setFilter('all')}>查看全部</button>}</div>}
-    {rule?.planning && <details><summary>已保存委托与排除项</summary><p>{rule.planning.instruction}</p>{rule.planning.supplements.map((text, index) => <p key={index}>{text}</p>)}
-      <div className={styles.actions}><select aria-label="选择后续排除项" disabled={disabled} value={blockCandidate} onChange={event=>setBlockCandidate(event.target.value)}><option value="">选择队列中的工作</option>{visible.filter(item=>!rule.planning?.blocks.includes(item.nodeId)).map(item=><option key={item.nodeId} value={item.nodeId}>#{item.number} {item.title}</option>)}</select><button disabled={disabled||!blockCandidate} onClick={()=>{void controller.block(blockCandidate,true);setBlockCandidate('')}}>排除后续接入</button></div>
-      <ul>{rule.planning.blocks.map(nodeId => <li key={nodeId}>{items.find(item => item.nodeId === nodeId)?.title ?? nodeId} <button disabled={disabled} onClick={() => void controller.block(nodeId, false)}>解除后续排除</button></li>)}</ul>
+    {rule?.planning && <details><summary>历史委托</summary><p>{rule.planning.instruction}</p>{rule.planning.supplements.map((text, index) => <p key={index}>{text}</p>)}</details>}
+    {rule && (rule.queue || rule.planning) && <details><summary>后续排除 {blocks.length || ''}</summary>
+      <div className={styles.actions}><select aria-label="选择后续排除项" disabled={disabled} value={blockCandidate} onChange={event=>setBlockCandidate(event.target.value)}><option value="">选择队列中的工作</option>{visible.filter(item=>item.state !== 'completed' && !blocks.includes(item.nodeId)).map(item=><option key={item.nodeId} value={item.nodeId}>#{item.number} {item.title}</option>)}</select><button title="只阻止后续接入，保留在途执行与会话" disabled={disabled||!blockCandidate} onClick={()=>{void controller.block(blockCandidate,true);setBlockCandidate('')}}>排除后续接入</button></div>
+      <ul>{blocks.map(nodeId => <li key={nodeId}>{items.find(item => item.nodeId === nodeId)?.title ?? nodeId} <button disabled={disabled} onClick={() => void controller.block(nodeId, false)}>解除后续排除</button></li>)}</ul>
     </details>}
   </section>
 }

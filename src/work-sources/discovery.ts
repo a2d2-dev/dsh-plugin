@@ -1,3 +1,4 @@
+import { hydrateCandidateRelationships } from './relationships.ts'
 import { randomUUID } from 'node:crypto'
 import type { SourceTransaction } from './application.ts'
 import { SourceError } from './errors.ts'
@@ -53,6 +54,20 @@ export async function reconcileProjectSources(transaction: SourceTransaction, po
       for (let index = 0; index < maxPages; index++) {
         const page = projectPageSchema.parse(await port.project(reserved.githubProject, { perPage, ...(cursor ? { cursor } : {}) }))
         if (page.nextCursor === cursor && cursor !== undefined) throw new SourceError('github-invalid-response', 'GitHub Project pagination did not advance')
+        const candidates = new Set(page.items.filter(item => item.kind === 'issue' && !item.archived).map(item => item.issueNodeId))
+        for (let index = 0; index < page.issues.length; index++) {
+          const issue = page.issues[index]!
+          if (issue.state === 'open' && candidates.has(issue.nodeId)) {
+            page.issues[index] = await hydrateCandidateRelationships(issue, page.identity, port)
+            const retained = await transaction(async state => {
+              const source = state.sources.find(item => item.id === sourceId)
+              if (!current(source, version, reservation)) return false
+              source.discovery.inFlight!.expiresAt = iso(now() + 90_000)
+              return true
+            })
+            if (!retained) return
+          }
+        }
         const result = await transaction(async state => {
           const source = state.sources.find(item => item.id === sourceId)
           if (!current(source, version, reservation)) return 'superseded' as const

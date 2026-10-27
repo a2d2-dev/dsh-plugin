@@ -15,17 +15,21 @@ const sourceSummarySchema = z.object({
   repositorySnapshot: z.object({ sourceVersion: z.number(), identity: identitySchema }).strict().optional(),
   projectSnapshot: z.object({ identity: identitySchema, project: z.object({ nodeId: z.string(), title: z.string().max(300), url: z.string(), closed: z.boolean() }).strict() }).strict().optional(),
 }).strict()
-const relationSchema = z.object({ nodeId: z.string(), state: z.enum(['open', 'closed']) }).strict()
+const relationSchema = z.object({ nodeId: z.string(), state: z.enum(['open', 'closed']), canonicalAccepted: z.boolean().optional() }).strict()
+const dependencySchema = z.discriminatedUnion('availability', [
+  z.object({ availability: z.literal('available'), blockedBy: z.object({ items: z.array(relationSchema), totalCount: z.number(), hasNextPage: z.boolean() }).strict() }).strict(),
+  z.object({ availability: z.literal('unavailable'), code: z.string(), message: z.string() }).strict(),
+])
 const candidateIssueSchema = z.object({
   nodeId: z.string().max(256), number: z.number(), title: z.string().max(300), url: z.string().max(2048), repository: repositorySchema, state: z.enum(['open', 'closed']),
   labels: z.array(z.string()), assignees: z.array(z.string()), updatedAt: z.string().optional(),
-  parent: relationSchema.nullable().optional(), subIssues: z.object({ items: z.array(relationSchema), totalCount: z.number(), hasNextPage: z.boolean() }).strict().optional(),
+  parent: relationSchema.nullable().optional(), subIssues: z.object({ items: z.array(relationSchema), totalCount: z.number(), hasNextPage: z.boolean() }).strict().optional(), dependencies: dependencySchema.optional(),
 }).strict()
 export const planningBasisSchema = z.object({
   instruction: text, supplements: z.array(text), scopeVersion: z.number().int().positive(), blocks: z.array(z.string()),
   scope: z.object({ assignee: z.enum(['@me', '*']), labels: z.array(z.string()), identity: z.object({ login: z.string(), nodeId: z.string() }).optional() }).strict(),
   executionStrategy: z.object({ resource: z.object({ runtimeId: z.string(), workspaceId: z.string() }), model: z.object({ provider: z.string(), model: z.string(), reasoningEffort: z.string().optional() }), agentPreset: z.string(), permissionPreset: z.string() }).strict(),
-  relationshipAvailability: z.object({ nativeParentChildren: z.literal('observed-when-present'), nativeDependencies: z.literal('unavailable-in-source-port') }).strict(),
+  relationshipAvailability: z.object({ nativeParentChildren: z.enum(['observed-when-present', 'per-candidate']), nativeDependencies: z.enum(['unavailable-in-source-port', 'per-candidate']) }).strict(),
   source: sourceSummarySchema,
   candidates: z.array(z.object({ issue: candidateIssueSchema, task: z.json().optional(), execution: z.json().optional(), ownerRuleId: z.string().optional() }).strict()),
 }).strict()
@@ -83,14 +87,21 @@ export function planningBasis(state: WorkSnapshot, rule: ContinuousWorkRule): Pl
     const execution = task && state.executions.find(execution => execution.ref.taskId === task.id && execution.ref.projectId === task.projectId)
     const owner = task && state.continuousRules?.find(rule => rule.items.some(item => item.ref?.taskId === task.id && item.ref.projectId === task.projectId))
     // Explanatory text is bounded independently of canonical identity and safety facts.
-    const relation = ({ nodeId, state }: { nodeId: string; state: 'open' | 'closed' }) => ({ nodeId, state })
+    const relation = ({ nodeId, state: issueState }: { nodeId: string; state: 'open' | 'closed' }) => {
+      const binding = state.externalBindings.find(binding => binding.nodeId === nodeId)
+      const task = binding && state.tasks.find(task => task.id === binding.ref.taskId && task.projectId === binding.ref.projectId)
+      return { nodeId, state: issueState, ...(binding ? { canonicalAccepted: task?.progress?.stage === 'done' && task.progress.specificationVersion === task.specification.version } : {}) }
+    }
     const goal = task?.goal.slice(0, 2000)
     return { issue: { nodeId: issue.nodeId, number: issue.number, title: issue.title.slice(0, 300), url: `https://github.com/${issue.repository.owner}/${issue.repository.repository}/issues/${issue.number}`, repository: issue.repository, state: issue.state, labels: issue.labels, assignees: issue.assignees, updatedAt: issue.updatedAt,
       ...(issue.parent !== undefined ? { parent: issue.parent && relation(issue.parent) } : {}),
-      ...(issue.subIssues ? { subIssues: { ...issue.subIssues, items: issue.subIssues.items.map(relation) } } : {}) },
+      ...(issue.subIssues ? { subIssues: { ...issue.subIssues, items: issue.subIssues.items.map(relation) } } : {}),
+      ...(issue.dependencies ? { dependencies: issue.dependencies.availability === 'available' ? { availability: 'available' as const, blockedBy: { ...issue.dependencies.blockedBy, items: issue.dependencies.blockedBy.items.map(relation) } } : issue.dependencies } : {}) },
       ...(task ? { task: JSON.parse(JSON.stringify({ ref: binding!.ref, agentId: task.agentId, goal,
         goalTruncated: task.goal.length > 2000, goalIdentity: goalIdentity(task.goal),
-        specification: { version: task.specification.version }, progress: task.progress && { stage: task.progress.stage, specificationVersion: task.progress.specificationVersion }, children: task.children, parent: task.parent })) } : {}),
+        specification: { version: task.specification.version }, progress: task.progress && { stage: task.progress.stage, specificationVersion: task.progress.specificationVersion }, children: task.children, parent: task.parent,
+         nativeChildren: (binding?.acceptedChildren?.items ?? binding?.accepted.subIssues?.items ?? []).map(relation),
+         childAcceptance: task.children.flatMap(ref => { const binding = state.externalBindings.find(binding => binding.ref.projectId === ref.projectId && binding.ref.taskId === ref.taskId); return binding ? [relation({ nodeId: binding.nodeId, state: binding.lastObserved.state })] : [] }) })) } : {}),
       ...(execution ? { execution: JSON.parse(JSON.stringify({ id: execution.id, ref: execution.ref, agentId: execution.agentId, owner: execution.owner, epoch: execution.epoch, resource: execution.resource, model: execution.model, agentPreset: execution.agentPreset, permissionPreset: execution.permissionPreset, session: execution.session, state: execution.state,
         control: execution.control && { action: execution.control.action, status: execution.control.status } })) } : {}), ...(owner ? { ownerRuleId: owner.id } : {}) }
   })
@@ -101,7 +112,7 @@ export function planningBasis(state: WorkSnapshot, rule: ContinuousWorkRule): Pl
     repositorySnapshot: source!.repositorySnapshot && { sourceVersion: source!.repositorySnapshot.sourceVersion, identity: identity(source!.repositorySnapshot.identity) },
     projectSnapshot: source!.projectSnapshot && { identity: identity(source!.projectSnapshot.identity), project: { nodeId: source!.projectSnapshot.project.nodeId, title: source!.projectSnapshot.project.title.slice(0, 300), url: source!.projectSnapshot.project.url, closed: source!.projectSnapshot.project.closed } },
   }
-  const basis = planningBasisSchema.parse({ instruction: rule.planning.instruction, supplements: rule.planning.supplements, blocks: rule.planning.blocks, scopeVersion: rule.planning.scopeVersion, scope: rule.scope, executionStrategy: { resource: rule.resource, model: rule.model, agentPreset: rule.agentPreset, permissionPreset: rule.permissionPreset }, relationshipAvailability: { nativeParentChildren: 'observed-when-present', nativeDependencies: 'unavailable-in-source-port' }, source: summary, candidates })
+  const basis = planningBasisSchema.parse({ instruction: rule.planning.instruction, supplements: rule.planning.supplements, blocks: rule.planning.blocks, scopeVersion: rule.planning.scopeVersion, scope: rule.scope, executionStrategy: { resource: rule.resource, model: rule.model, agentPreset: rule.agentPreset, permissionPreset: rule.permissionPreset }, relationshipAvailability: { nativeParentChildren: 'per-candidate', nativeDependencies: 'per-candidate' }, source: summary, candidates })
   const limit = planningBasisCharacterLimit(candidates.length)
   // Check serialized length: JSON escaping can multiply the size of bounded strings.
   // Remove why-related goal text first, then titles, always in stable nodeId order.
@@ -148,6 +159,7 @@ export function planningBasisFingerprint(basis: z.infer<typeof savedBasisSchema>
       const task = candidate.task as { specification?: { version?: number }; goal?: string; goalIdentity?: string } | undefined
       return {
         nodeId: candidate.issue.nodeId, ownerRuleId: candidate.ownerRuleId,
+        relationships: pick(candidate.issue, ['parent', 'subIssues', 'dependencies']),
         task: task && { ...pick(task, ['ref', 'agentId', 'children', 'parent']), goalIdentity: task.goalIdentity ?? goalIdentity(task.goal ?? ''), specificationVersion: task.specification?.version },
         execution: pick(candidate.execution, ['id', 'ref', 'agentId', 'owner', 'epoch', 'resource', 'model', 'agentPreset', 'permissionPreset', 'session']),
       }
@@ -169,7 +181,7 @@ export function samePlannedExecution(saved: unknown, current: unknown): boolean 
 export function validatePlan(output: unknown, basis: PlanningBasis, rule: ContinuousWorkRule): PlanOutput {
   const parsed = planOutputSchema.safeParse(output)
   if (!parsed.success) throw new PlanningError('planning-malformed', 'Model plan must contain only stable nodeId, why, nextAction and new/existing/wait steps')
-  const seen = new Set<string>()
+  const seen = new Set<string>(), scheduled = new Set<string>()
   for (const step of parsed.data.steps) {
     const candidate = basis.candidates.find(candidate => candidate.issue.nodeId === step.nodeId)
     if (!candidate) throw new PlanningError('planning-outside-source', `Issue ${step.nodeId} is outside the complete authorized source snapshot`)
@@ -184,16 +196,13 @@ export function validatePlan(output: unknown, basis: PlanningBasis, rule: Contin
       const child = basis.candidates.find(candidate => candidate.issue.nodeId === nodeId)?.task as { specification?: { version: number }; progress?: { stage: string; specificationVersion: number } } | undefined
       return child?.progress?.stage === 'done' && child.progress.specificationVersion === child.specification?.version
     }
-    const nativeChildren = [...(issue.subIssues?.items ?? []), ...basis.candidates.filter(candidate => candidate.issue.parent?.nodeId === issue.nodeId).map(candidate => candidate.issue)]
-    const localChildren = ((candidate.task as { children?: { projectId: string; taskId: string }[] } | undefined)?.children ?? []).flatMap(ref => {
-      const child = basis.candidates.find(candidate => {
-        const task = candidate.task as { ref?: { projectId: string; taskId: string } } | undefined
-        return task?.ref?.projectId === ref.projectId && task.ref.taskId === ref.taskId
-      })
-      // A child with no primary-store observation is invalid local cache, not necessary work.
-      return child ? [child] : []
-    })
-    if (step.mode !== 'wait' && (issue.subIssues?.hasNextPage || nativeChildren.some(child => child.state === 'open' && !seen.has(child.nodeId) && !childDone(child.nodeId)) || localChildren.some(child => !seen.has(child.issue.nodeId) && !childDone(child.issue.nodeId)))) throw new PlanningError('planning-child-coverage', `Issue ${step.nodeId} requires complete child coverage before parent advancement`)
+    const relationDone = (relative: z.infer<typeof relationSchema>) => relative.canonicalAccepted ?? (basis.candidates.some(candidate => candidate.issue.nodeId === relative.nodeId && candidate.task) ? childDone(relative.nodeId) : relative.state === 'closed')
+    const complete = (set: typeof issue.subIssues) => !!set && !set.hasNextPage && set.totalCount === set.items.length && new Set(set.items.map(item => item.nodeId)).size === set.items.length
+    const taskRelations = candidate.task as { nativeChildren?: z.infer<typeof relationSchema>[]; childAcceptance?: z.infer<typeof relationSchema>[] } | undefined
+    const nativeChildren = new Map([...(taskRelations?.nativeChildren ?? []), ...(issue.subIssues?.items ?? []), ...basis.candidates.filter(candidate => candidate.issue.parent?.nodeId === issue.nodeId).map(candidate => candidate.issue)].map(child => [child.nodeId, child]))
+    if (step.mode !== 'wait' && (issue.parent === undefined || !complete(issue.subIssues) || [...nativeChildren.values()].some(child => !relationDone(child) && !scheduled.has(child.nodeId)) || taskRelations?.childAcceptance?.some(child => child.canonicalAccepted !== true && !scheduled.has(child.nodeId)))) throw new PlanningError('planning-child-coverage', `Issue ${step.nodeId} requires complete child coverage before parent advancement`)
+    if (step.mode !== 'wait' && (issue.dependencies?.availability !== 'available' || !complete(issue.dependencies.blockedBy) || issue.dependencies.blockedBy.items.some(blocker => !relationDone(blocker) && !scheduled.has(blocker.nodeId)))) throw new PlanningError('planning-dependency-coverage', `Issue ${step.nodeId} requires complete native blocker acceptance or prior coverage`)
+    if (step.mode !== 'wait') scheduled.add(step.nodeId)
     const execution = candidate.execution as { state?: string; control?: { action?: string }; resource?: { runtimeId: string; workspaceId: string } } | undefined
     if (step.mode === 'existing' && (execution?.state === 'paused' || execution?.control?.action === 'pause')) throw new PlanningError('planning-explicit-resume-required', `Issue ${step.nodeId} was explicitly paused; resume it explicitly`)
     const task = candidate.task as { agentId?: string; progress?: { stage?: string } } | undefined

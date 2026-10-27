@@ -33,6 +33,7 @@ export function projectQuery(type: GitHubProjectRef['type']): string {
             parent { ${referenceFields} }
             subIssues(first:50) { totalCount pageInfo { hasNextPage } nodes { ${referenceFields} } }
             subIssuesSummary { total completed }
+            blockedBy(first:100) { totalCount pageInfo { hasNextPage } nodes { ${referenceFields} } }
             closedByPullRequestsReferences(first:20) { nodes { number title url state isDraft } }
           }
           ... on PullRequest { title url state isDraft repository { name owner { login } } createdAt updatedAt closedAt assignees(first:100) { nodes { login } } labels(first:100) { nodes { name } }
@@ -92,6 +93,7 @@ const issue = refSchema.extend({ __typename: z.literal('Issue'), body: z.string(
   assignees: z.object({ nodes: z.array(z.object({ login: z.string() })) }), labels: z.object({ nodes: z.array(z.object({ name: z.string() })) }),
   parent: refSchema.nullable(), subIssues: z.object({ totalCount: z.number().int().nonnegative(), pageInfo: z.object({ hasNextPage: z.boolean() }), nodes: z.array(refSchema) }),
   subIssuesSummary: z.object({ total: z.number().int().nonnegative(), completed: z.number().int().nonnegative() }),
+  blockedBy: z.object({ totalCount: z.number().int().nonnegative(), pageInfo: z.object({ hasNextPage: z.boolean() }), nodes: z.array(refSchema) }).optional(),
   closedByPullRequestsReferences: z.object({ nodes: z.array(linkedPullRequest) }),
 })
 const content = z.discriminatedUnion('__typename', [issue, z.object({ __typename: z.literal('PullRequest'), title: z.string(), url: z.string(), state: z.enum(['OPEN','CLOSED','MERGED']).optional(), isDraft: z.boolean().optional(), repository: z.object({ name: z.string(), owner: z.object({ login: z.string() }) }).optional(), assignees: z.object({ nodes: z.array(z.object({ login: z.string() })) }).optional(), labels: z.object({ nodes: z.array(z.object({ name: z.string() })) }).optional(),
@@ -148,6 +150,7 @@ export async function readGitHubProject(project: GitHubProjectRef, request: Proj
       issues.push({ ...reference(content), body: content.body, milestone: content.milestone, updatedAt: content.updatedAt, observedAt, createdAt: content.createdAt, closedAt: content.closedAt, assignees: content.assignees.nodes.map(item => item.login), labels: content.labels.nodes.map(item => item.name), parent: content.parent ? reference(content.parent) : null,
         subIssues: { items: content.subIssues.nodes.map(reference), totalCount: content.subIssues.totalCount, hasNextPage: content.subIssues.pageInfo.hasNextPage },
         subIssuesSummary: content.subIssuesSummary,
+         ...(content.blockedBy ? { dependencies: { availability: 'available' as const, blockedBy: { items: content.blockedBy.nodes.map(reference), totalCount: content.blockedBy.totalCount, hasNextPage: content.blockedBy.pageInfo.hasNextPage } } } : {}),
         linkedPullRequests: content.closedByPullRequestsReferences.nodes.map(pull => ({ number: pull.number, title: pull.title, url: pull.url, state: pull.state.toLowerCase() as 'open' | 'closed' | 'merged', draft: pull.isDraft })) })
       return { ...shared, kind: 'issue' as const, issueNodeId: content.id, title: content.title, url: content.url }
     }
