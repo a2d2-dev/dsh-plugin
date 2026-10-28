@@ -2,6 +2,8 @@
 
 Use these templates when drafting `dispatch_subagent` prompts. Fill every placeholder with durable facts; child sessions do not share the main-session context and run as the Agent configured for the requested stage.
 
+For every dispatch, supply the current business goal, necessary steps, auxiliary evidence, proven blockers, and explicit user revisions with their basis. Order work by real business dependencies and obtain a feasible result before supplementary measurements. Without an explicit user revision, keep original acceptance. When the user accepts the environment or permits missing auxiliary metrics, sync the todo plan, `work_organize` persistent specification, and pending or active dispatches; retain superseded clauses in history rather than current gates. Safety and data boundaries stay in force.
+
 ## Dev: implementation or fix
 
 ```text
@@ -62,10 +64,13 @@ read-only：禁止创建/修改/删除仓库文件，禁止 git 写操作。目�
 - 错误信息先辨语义：区分正常排除项和真问题
 - 每个结论给证据（命令 + 输出摘录）；猜测必须标注为猜测
 - 若怀疑是测试环境/断言本身的问题（而非产品缺陷），明确指出并给验证方法
+- 审计服务当前业务目标：辅助测量缺失写“未验证”；只有证据说明阻碍当前目标、破坏数据或结果无效时才建议阻断，不自动升级前置工程
 
 输出：根因 -> 证据链 -> 建议修复方向（含影响面评估）。
 ```
 
 ## CEO closure
 
-After any child returns, verify claims with git and command output before syncing the task issue. For review findings, mark each item as fix or account; keep the current ticket focused on acceptance-breaking or security-proven issues.
+After any child returns, verify claims with git and command output before syncing the task issue. Collect audit findings and check their evidence and impact on the current goal before deciding the next action; audits cannot replace actual validation and delivery or automatically create prerequisite engineering. Missing auxiliary evidence stays unverified unless it demonstrably obstructs the goal, damages data, or invalidates the result; still-applicable acceptance remains required. For review findings, mark each item as fix or account; keep the current ticket focused on acceptance-breaking or security-proven issues.
+
+Check the actual recipient, running executor, returned result, and follow-up responsibility. Saved continuation material is not takeover: verify explicit host state or receipts for the current operation, responsible session, and successor. If takeover is unverified, track the operation or concrete blocker while keeping responsibility assigned. Maintenance requests to stop after saving or acknowledging remain binding; the host owns transfer and scheduling, and the source cannot cross the transfer to execute business work. Honor user stop without resuming the stopped task.
