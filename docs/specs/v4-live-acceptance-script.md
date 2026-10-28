@@ -1,12 +1,19 @@
-# v4 既有预览真实验收执行脚本
+# v4 开发服务器真实验收执行脚本
 
-本脚本是 #136／#141 的验收范围定义，供 QA 完成准备后执行。当前不是执行授权，也不是已通过记录。目标只限既有 18782，之后才切实际 18781；不启用或处理 freeland／Project14 业务 Issue。
+本脚本是 #136／#141／#152 的验收范围定义，供 QA 完成准备后执行。当前不是执行授权，也不是已通过记录。不启用或处理 freeland／Project14 业务 Issue。
+
+## 当前验收环境（LF 于 2026-10-28 更新）
+
+- 验收入口：[DSH 插件开发服务器](https://dsh-dev.e5box.a2d2.dev/)。实例为 `dsh-plugin-dev-server`，`DSH_HOME=/data/_ssd2t/dsh-plugin-dev/home`；运行配置以 `/data/_openclaw/environment/services.yaml` 的 `local_dev.dsh_plugin_dev` 为准。
+- 仓库 `a2d2-dev/dsh-plugin` 采用 public。原 PRIVATE 条件已由 LF 本次决定替换。
+- 原 18782／18781 是历史验收环境。后续执行使用上述开发入口，原地址与历史结果保留在各轮证据中；旧 18782 停服不再是本任务的阻塞或恢复前置。
+- 继续保留以下全部功能验收、隔离和数据保留条件。迁移前的运行结果标明当时环境，新实例的实际状态和缺项另行核实。
 
 ## 安全范围与模型证据
 
-- 仓库使用已确认为 PRIVATE 的 a2d2-dev/dsh-plugin，自有 Project 1。只创建明确标记的专用验收 Issue／标签／Project items；不得修改现有开发 Issue 或其 Project 字段。
+- 仓库使用 LF 已确认的 public 仓库 a2d2-dev/dsh-plugin，自有 Project 1。只创建明确标记的专用验收 Issue／标签／Project items；不得修改现有开发 Issue 或其 Project 字段。
 - 真实运行前读取已有持续规则，确认新 fixture 不会被旧规则接入；若存在冲突，先给出保持原规则的隔离方案，不能悄悄暂停用户原规则。
-- 先准备六项 fixture 的精确 body、期望、标签、assignee 与 nonce 清单；在 preview 切换验证通过、父会话下达实际验收阶段指令后创建。记录真实 nodeId／number／URL／Project item ID，禁止编造。
+- 先准备六项 fixture 的精确 body、期望、标签、assignee 与 nonce 清单；在当前开发实例与隔离范围核实通过、父会话下达实际验收阶段指令后创建。记录真实 nodeId／number／URL／Project item ID，禁止编造。
 - 一个共同 run 标签标识所有 fixture；只有串行 A/B/Block X 使用独立 serial 标签，规则硬范围限定该标签及当前账户。自然语言仍由真实模型理解并产生理由／下一步／复用判断，不能用固定计划代替。
 - 所有 Task／Session／文件／规则由 nonce 标识，执行目录为明确隔离验收 workspace。不得 clone 或修改本仓库业务代码，不让模型对其它 Issue 工作。
 - 模型调用由真实 request／header／runtime trace 证明 provider、model、reasoning；不能用模型自报。QA agent 本身沿既定 medium 通道；应用内模型选用已配置且明确记录的路由，不在失败时静默换组。
@@ -57,4 +64,4 @@
 
 原78 GUI／3 preview Session及旧64域记录按保留规则比对；新增对象只允许本run清单。保留proof和Issue引用。测试结束只停新验收规则、关闭明确专用Issue、按需从Project移除本次item；不删除用户数据、不触已有业务自动化。
 
-最后先完成原18782运行验收，再通过已审可回滚服务外流程切实际18781并刷新同URL；同一证据格式验证新入口、原会话／目录／实际模型权限和数据。没有这些记录，整体目标不标完成。
+最终在当前开发入口 https://dsh-dev.e5box.a2d2.dev/ 完成上述运行验收，并以同一证据格式核实实际构建、新入口、会话／目录／实际模型权限和数据；涉及该开发实例更新时沿用受管、可回滚的服务外流程并刷新同一 URL。原 18782／18781 的交付与原78 GUI／3 preview Session、旧64域保留证据继续作为历史记录核对，不恢复或切换历史实例来代替当前验收。没有真实运行与交付记录，整体目标不标完成。
