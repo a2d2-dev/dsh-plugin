@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from 'vitest'
-import { mkdtemp, realpath, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, basename, join } from 'node:path'
 import { GitHubSource } from '../src/work-sources/github.ts'
@@ -40,6 +40,72 @@ async function setup(change: (parent: GitHubIssue, child: GitHubIssue) => void =
   const execution = await start(ok(await app.query({ type: 'task.detail', ref }, operator)).task!)
   return { app, ref, execution, project, configured, parent, child, start, reads, writes: () => writes, detail: async () => ok(await app.query({ type: 'task.detail', ref }, operator)) }
 }
+it('refuses to link two independently imported root Issues as a local parent and child', async () => {
+  const h = await setup(parent => { parent.subIssues = { items: [], totalCount: 0, hasNextPage: false } })
+  const child = ok(await h.app.execute({ type: 'source.import', commandId: 'root-child', projectId: h.project.id, sourceId: h.configured.id, nodeId: h.child.nodeId }, operator)).task!
+  const before = await h.detail()
+  expect(await h.app.execute({ type: 'task.link-child', commandId: 'invented-edge', ref: h.ref, expectedVersion: before.task!.version,
+    child: { projectId: child.projectId, taskId: child.id }, childExpectedVersion: child.version }, operator)).toMatchObject({ status: 'failed', error: { code: 'native-child-relationship-required' } })
+  expect((await h.detail()).task).toEqual(before.task)
+  expect(ok(await h.app.query({ type: 'task.detail', ref: { projectId: child.projectId, taskId: child.id } }, operator)).task).toEqual(child)
+  expect(h.writes()).toBe(0)
+})
+
+it.each(['unknown', 'partial', 'count-mismatch', 'duplicate', 'foreign-repository', 'foreign-owner', 'wrong-number', 'wrong-node'] as const)('refuses operator linking with %s native relationship evidence', async mode => {
+  const h = await setup(parent => {
+    if (mode === 'unknown') delete parent.subIssues
+    else if (mode === 'partial') parent.subIssues!.hasNextPage = true
+    else if (mode === 'count-mismatch') parent.subIssues!.totalCount = 2
+    else if (mode === 'duplicate') { parent.subIssues!.items.push(structuredClone(parent.subIssues!.items[0]!)); parent.subIssues!.totalCount = 2 }
+    else if (mode === 'foreign-repository') parent.subIssues!.items[0]!.repository = { ...repository, repository: 'other' }
+    else if (mode === 'foreign-owner') parent.subIssues!.items[0]!.repository = { ...repository, owner: 'other' }
+    else if (mode === 'wrong-number') parent.subIssues!.items[0]!.number = 99
+    else parent.subIssues!.items[0]!.nodeId = 'I_other'
+  })
+  const child = ok(await h.app.execute({ type: 'source.import', commandId: 'observed-child', projectId: h.project.id, sourceId: h.configured.id, nodeId: h.child.nodeId }, operator)).task!
+  const before = await h.detail()
+  expect(await h.app.execute({ type: 'task.link-child', commandId: 'unproven-edge', ref: h.ref, expectedVersion: before.task!.version,
+    child: { projectId: child.projectId, taskId: child.id }, childExpectedVersion: child.version }, operator)).toMatchObject({ status: 'failed', error: { code: 'native-child-relationship-required' } })
+  expect((await h.detail()).task).toEqual(before.task)
+  expect(ok(await h.app.query({ type: 'task.detail', ref: { projectId: child.projectId, taskId: child.id } }, operator)).task).toEqual(child)
+})
+
+it('links a completely read and explicitly accepted native child and still requires its independent acceptance', async () => {
+  const h = await setup(parent => { parent.subIssues = { items: [], totalCount: 0, hasNextPage: false } })
+  const imported = ok(await h.app.execute({ type: 'source.import', commandId: 'import-child', projectId: h.project.id, sourceId: h.configured.id, nodeId: h.child.nodeId }, operator))
+  h.parent.subIssues = { items: [{ nodeId: h.child.nodeId, number: h.child.number, url: h.child.url, title: h.child.title, repository, state: 'open' }], totalCount: 1, hasNextPage: false }
+  h.parent.observedAt = '2026-10-22T00:00:00Z'
+  ok(await h.app.sessionReadRelatedIssue(h.execution.session))
+  const link = async (commandId: string) => h.app.execute({ type: 'task.link-child', commandId, ref: h.ref, expectedVersion: (await h.detail()).task!.version,
+    child: imported.ref!, childExpectedVersion: ok(await h.app.query({ type: 'task.detail', ref: imported.ref! }, operator)).task!.version }, operator)
+  expect(await link('observed-only-link')).toMatchObject({ status: 'failed', error: { code: 'native-child-relationship-required' } })
+  ok(await h.app.sessionOrganize(h.execution.session, 'accept-child-scope', { kind: 'source-children', expectedVersion: (await h.detail()).task!.version, observedAt: h.parent.observedAt }))
+  expect(ok(await link('accepted-native-link')).task!.children).toEqual([imported.ref])
+  const linkedChild = ok(await h.app.query({ type: 'task.detail', ref: imported.ref! }, operator)).task!
+  const child = ok(await h.app.execute({ type: 'task.update-spec', commandId: 'spec-child', ref: imported.ref!, expectedVersion: linkedChild.version, goal: 'verify', specification: 'verify', acceptance: ['verified'] }, operator)).task!
+  expect((await h.detail()).execution).toMatchObject({ id: h.execution.id, owner: h.execution.owner, epoch: h.execution.epoch })
+  expect(await h.app.sessionReport(h.execution.session, 'child-unaccepted', report)).toMatchObject({ status: 'failed', error: { code: 'native-child-acceptance-required' } })
+  const childExecution = await h.start(child)
+  ok(await h.app.sessionReport(childExecution.session, 'independent-child-accepted', { ...report, specificationVersion: child.specification.version, closeExternal: false }))
+  ok(await h.app.sessionReport(h.execution.session, 'parent-accepted', { ...report, closeExternal: false }))
+  expect((await h.detail()).task!.completion).toBeDefined()
+  expect(h.writes()).toBe(0)
+})
+
+it('ignores a legacy local edge between bound root Issues when accepting the parent', async () => {
+  const h = await setup(parent => { parent.subIssues = { items: [], totalCount: 0, hasNextPage: false } })
+  const child = ok(await h.app.execute({ type: 'source.import', commandId: 'legacy-root-child', projectId: h.project.id, sourceId: h.configured.id, nodeId: h.child.nodeId }, operator)).task!
+  // Arrange the public persisted format from the old operator link command.
+  const file = join(h.app.directory, 'work-v3.json')
+  const snapshot = JSON.parse(await readFile(file, 'utf8')) as { tasks: WorkTask[] }
+  snapshot.tasks.find(task => task.id === h.ref.taskId)!.children = [{ projectId: child.projectId, taskId: child.id }]
+  snapshot.tasks.find(task => task.id === child.id)!.parent = h.ref
+  await writeFile(file, JSON.stringify(snapshot))
+  const reloaded = new WorkApplication(h.app.directory, h.app.host, h.app.source)
+  expect(ok(await reloaded.sessionReport(h.execution.session, 'ignore-invented-necessity', report)).task!.completion).toBeDefined()
+  expect(ok(await reloaded.query({ type: 'task.detail', ref: { projectId: child.projectId, taskId: child.id } }, operator)).task!.completion).toBeUndefined()
+})
+
 it.each(['open', 'closed'] as const)('refuses parent acceptance when a necessary %s native child has never been imported', async state => {
   const h = await setup((parent, child) => { child.state = state; parent.subIssues!.items[0]!.state = state })
   expect(await h.app.sessionReport(h.execution.session, 'early', report)).toMatchObject({ status: 'failed', error: { code: 'native-child-acceptance-required' } })
@@ -183,4 +249,20 @@ it('requires current externally observed material after the necessary child chan
   ok(await h.app.sessionReadRelatedIssue(h.execution.session, h.child.nodeId))
   expect(await h.app.sessionReport(h.execution.session, 'stale-external-result', { ...report, externalChildren })).toMatchObject({ status: 'failed', error: { code: 'native-child-evidence-unobserved' } })
   expect((await h.detail()).task!.completion).toBeUndefined()
+})
+
+it('reads only accepted native dependencies without granting mutations or accepting later unrelated references', async () => {
+  const h = await setup((parent, child) => {
+    parent.subIssues = { items: [], totalCount: 0, hasNextPage: false }
+    parent.dependencies = { availability: 'available', blockedBy: { items: [{ nodeId: child.nodeId, number: child.number, url: child.url, title: child.title, repository: child.repository, state: child.state }], totalCount: 1, hasNextPage: false } }
+  })
+  const before = (await h.detail()).task
+  expect(await h.app.sessionReadRelatedIssue(h.execution.session, h.child.nodeId)).toMatchObject({ status: 'completed', issue: { nodeId: h.child.nodeId } })
+  expect(h.reads).toContain('example/repo#2')
+  expect(h.writes()).toBe(0)
+  expect((await h.detail()).task).toEqual(before)
+  expect(await h.app.sessionReadRelatedIssue(h.execution.session, 'I_unrelated')).toMatchObject({ status: 'failed', error: { code: 'source-reference-unrelated' } })
+  expect(await h.app.sessionReadRelatedIssue(h.execution.session, h.child.nodeId, 999)).toMatchObject({ status: 'failed', error: { code: 'forbidden' } })
+  h.child.nodeId = 'I_identity_changed'
+  expect(await h.app.sessionReadRelatedIssue(h.execution.session, 'I_2')).toMatchObject({ status: 'failed', error: { code: 'source-identity-changed' } })
 })

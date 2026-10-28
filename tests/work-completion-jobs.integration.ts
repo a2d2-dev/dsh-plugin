@@ -34,11 +34,13 @@ it('collects real native notices and job_output before a new accountable complet
         async execute() { started.release(); await work.promise; return { result: `${name} verification passed` } } }))
     }
     const identity = { login: 'developer', nodeId: 'U_developer', name: null }, repository = { owner: 'example', repository: 'repo' }
-    const issues: GitHubIssue[] = [1, 2].map(number => ({ nodeId: `I_${number}`, number, url: `https://github.com/example/repo/issues/${number}`, title: `Required work ${number}`, body: 'Verify collected native and background results.', repository, state: 'open', labels: [], assignees: [identity.login], observedAt: '2026-10-21T00:01:00Z', updatedAt: '2026-10-21T00:00:00Z', subIssues: { items: [], totalCount: 0, hasNextPage: false } }))
+    const issues: GitHubIssue[] = [1, 2].map(number => ({ nodeId: `I_${number}`, number, url: `https://github.com/example/repo/issues/${number}`, title: `Required work ${number}`, body: 'Verify collected native and background results.', repository, state: 'open', labels: [], assignees: [identity.login], observedAt: '2026-10-21T00:01:00Z', updatedAt: '2026-10-21T00:00:00Z', parent: null, dependencies: { availability: 'available', blockedBy: { items: [], totalCount: 0, hasNextPage: false } }, subIssues: { items: [], totalCount: 0, hasNextPage: false } }))
+    const parentIssue: GitHubIssue = { ...issues[0]!, nodeId: 'I_3', number: 3, url: 'https://github.com/example/repo/issues/3', title: 'Parent acceptance', parent: null,
+      subIssues: { items: [{ nodeId: issues[0]!.nodeId, number: 1, url: issues[0]!.url, title: issues[0]!.title, repository, state: 'open' }], totalCount: 1, hasNextPage: false } }
     let closes = 0
     const source: GitHubSourcePort = {
       list: async () => ({ identity, items: issues, observedAt: issues[0]!.observedAt }),
-      detail: async (_, number) => ({ identity, issue: issues.find(issue => issue.number === number)! }),
+      detail: async (_, number) => ({ identity, issue: number === parentIssue.number ? parentIssue : issues.find(issue => issue.number === number)! }),
       project: async () => ({ identity, project: { nodeId: 'PVT_fixture', title: 'Required work', url: 'https://github.com/orgs/example/projects/1', closed: false }, items: issues.map(issue => ({ id: `item:${issue.nodeId}`, kind: 'issue', issueNodeId: issue.nodeId, archived: false, fields: [], fieldsPartial: false })), issues, observedAt: issues[0]!.observedAt }),
       close: async target => { closes++; issues.find(issue => issue.nodeId === target.nodeId)!.state = 'closed'; return { status: 'closed' } },
     }
@@ -65,7 +67,11 @@ it('collects real native notices and job_output before a new accountable complet
     ok(await app.sessionOrganize(execution.session, 'specification', { kind: 'specification', expectedVersion: (await detail()).task!.version, goal: 'verify', specification: 'Verify all collected results.', acceptance: ['native and job results verified'] }))
     const parent = ok(await app.execute({ type: 'task.create', commandId: 'parent', projectId, title: 'Parent acceptance', goal: 'Collect accepted child results', specification: 'Child must independently pass', acceptance: ['child passed'] }, operator)).task!
     const parentRef = { projectId, taskId: parent.id }
-    ok(await app.execute({ type: 'task.link-child', commandId: 'link-child', ref: parentRef, expectedVersion: parent.version, child: ref, childExpectedVersion: (await detail()).task!.version }, operator))
+    const parentSource = ok(await app.execute({ type: 'source.configure', commandId: 'parent-source', projectId, repository }, operator)).source!
+    ok(await app.query({ type: 'source.issue', projectId, sourceId: parentSource.id, number: parentIssue.number, refresh: true }, operator))
+    ok(await app.execute({ type: 'source.link', commandId: 'parent-native-binding', ref: parentRef, expectedVersion: parent.version, sourceId: parentSource.id, nodeId: parentIssue.nodeId }, operator))
+    const parentCurrent = ok(await app.query({ type: 'task.detail', ref: parentRef }, operator)).task!
+    ok(await app.execute({ type: 'task.link-child', commandId: 'link-child', ref: parentRef, expectedVersion: parentCurrent.version, child: ref, childExpectedVersion: (await detail()).task!.version }, operator))
     const report = { specificationVersion: 2, stage: 'done', summary: 'Verified collected native and job results', next: '', blockers: [], criteria: [{ index: 0, passed: true, evidence: ['Native verification output and job_output result were reviewed'] }], closeExternal: true }
     const runTool = async (name: string, arguments_: Record<string, unknown>, text: string) => {
       h.model.nextTool = { name, arguments: arguments_ }
