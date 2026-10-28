@@ -397,8 +397,8 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     const permissionPresets = declaredPermissions.length ? [...declaredPermissions] : [defaultPermissionPreset]
     const permissionPreset = permissionPresets.includes(defaultPermissionPreset) ? defaultPermissionPreset : permissionPresets[0]!
     return { agentPresets, permissionPresets,
-      models: catalog.groups.flatMap(group => group.models.map(model => ({ provider: group.id, model: model.id }))),
-      defaults: { agentPreset, permissionPreset, model: { provider: catalog.default.provider, model: catalog.default.model } } }
+      models: catalog.groups.flatMap(group => group.models.map(model => ({ provider: group.id, model: model.id, reasoningEfforts: model.reasoning?.efforts.map(effort => effort.id) ?? [] }))),
+      defaults: { agentPreset, permissionPreset, model: { provider: catalog.default.provider, model: catalog.default.model, ...(catalog.default.reasoningEffort ? { reasoningEffort: catalog.default.reasoningEffort } : {}) } } }
   }
   private async validateModel(model: WorkExecution['model'], policy?: WorkExecution['policy']) {
     const choices = await this.choices()

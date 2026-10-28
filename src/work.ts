@@ -1,3 +1,4 @@
+import { resolveExecutionDefaults } from './work-execution/defaults.ts'
 import { CONTINUE_AUTHORIZED_WORK } from './work-execution/guard.ts'
 import type { WorkGuardInput, WorkGuardOptions, WorkYield } from './work-execution/guard.ts'
 import { continuousBlocks } from './work-blocks.ts'
@@ -59,6 +60,13 @@ function discardLifecycleEvents(execution: import('./work-types.ts').WorkExecuti
 }
 function legacyKey(address: { runtimeId: string; projectRoot: string; taskId: string }): string { return JSON.stringify([address.runtimeId, address.projectRoot, address.taskId]) }
 function sameResource(a: ResourceRef, b: ResourceRef): boolean { return a.runtimeId === b.runtimeId && a.workspaceId === b.workspaceId }
+function rememberExecutionDefaults(project: Project, selection: import('./work-types.ts').WorkExecutionSelection & { rememberExecutionDefaults?: boolean }): void {
+  if (selection.rememberExecutionDefaults === false) return
+  const defaults = { resource: selection.resource, model: selection.model, agentPreset: selection.agentPreset, permissionPreset: selection.permissionPreset }
+  if (JSON.stringify(project.executionDefaults) === JSON.stringify(defaults)) return
+  project.executionDefaults = structuredClone(defaults)
+  project.version++
+}
 function sameSession(a: { runtimeId: string; sessionId: string }, b: { runtimeId: string; sessionId: string }): boolean { return a.runtimeId === b.runtimeId && a.sessionId === b.sessionId }
 function taskAt(state: WorkSnapshot, ref: TaskRef): WorkTask | undefined {
   return state.tasks.find(item => item.id === ref.taskId && item.projectId === ref.projectId)
@@ -525,6 +533,7 @@ export class WorkApplication {
     observeContinuousTasks(state, rule)
     if (previous) Object.assign(previous, rule)
     else (state.continuousRules ??= []).push(rule)
+    rememberExecutionDefaults(project, command)
     return { status: 'completed', continuousRule: previous ?? rule }
   }
   /** Complete source observation and waiting-only model screening; never dispatches. */
@@ -942,7 +951,7 @@ export class WorkApplication {
             }
             if (isTaskCompleted(imported.task)) { item.state = 'completed'; item.reason = 'Canonical Task is already accepted'; return undefined }
             const result = await this.apply(draft, { type: 'task.start', commandId, ref: imported.ref, expectedVersion: imported.task.version, agentId: imported.task.agentId,
-              resource: current.resource, model: current.model, agentPreset: current.agentPreset, permissionPreset: current.permissionPreset }, choices)
+              resource: current.resource, model: current.model, agentPreset: current.agentPreset, permissionPreset: current.permissionPreset, rememberExecutionDefaults: false }, choices)
             if (result.status !== 'completed' || !result.execution) { continuousProblem(item, result.status !== 'completed' ? result.error.message : 'Start returned no execution'); return undefined }
             const reservedRule = draft.continuousRules!.find(rule => rule.id === ruleId)!
             const planned = reservedRule.queue ? undefined : reservedRule.planning?.plans.find(plan => plan.version === reservedRule.planning!.enabledPlanVersion)?.steps.find(step => step.nodeId === candidate.nodeId)
@@ -1784,6 +1793,7 @@ export class WorkApplication {
         resource: command.resource, session, sessionMode: command.session ? 'reuse' as const : 'create' as const, agentPreset: command.agentPreset, model: command.model, permissionPreset: command.permissionPreset,
         policy: structuredClone(agent.policy), ...(project.continuationPolicy ? { continuationPolicy: structuredClone(project.continuationPolicy) } : {}), events: [{ id: `kickoff:${executionId}`, text: kickoff, kind: 'input' as const, delivery: 'accepted' as const, acceptance: 'unassessed' as const }], state: 'accepted' as const, history: [{ state: 'accepted' as const, commandId: command.commandId }] }
       state.executions.push(execution)
+      rememberExecutionDefaults(project, command)
       queueParentResults(state)
       task.agentId = agent.id
       this.changed(task, command)
@@ -1930,11 +1940,8 @@ export class WorkApplication {
       if (!this.host.execution) return failed('host-capability-unavailable', 'This host has no managed execution capability')
       try {
         const choices = await this.host.execution.choices()
-        const models = choices.models.filter(item => !agent.policy.modelCandidates.length || agent.policy.modelCandidates.includes(`${item.provider}/${item.model}`))
-        const defaultModel = models.find(item => item.provider === choices.defaults.model.provider && item.model === choices.defaults.model.model) ?? models[0]
-        if (!defaultModel) return failed('unavailable-model', 'Project Agent has no available allowed model')
-        return { status: 'completed', executionOptions: { ...choices, agentId: agent.id, models,
-          defaults: { ...choices.defaults, model: defaultModel }, resources: (await this.host.resources()).filter(item => project.resources.some(ref => sameResource(ref, item.ref)) || (query.type === 'source.execution-options' && !state.projects.some(other => other.resources.some(ref => sameResource(ref, item.ref))))) } }
+        const resources = (await this.host.resources()).filter(item => project.resources.some(ref => sameResource(ref, item.ref)) || (query.type === 'source.execution-options' && !state.projects.some(other => other.resources.some(ref => sameResource(ref, item.ref)))))
+        return { status: 'completed', executionOptions: resolveExecutionDefaults(project, agent, state.continuousRules?.find(rule => rule.projectId === project.id), choices, resources) }
       } catch (error) { return failed(error instanceof WorkExecutionError ? error.code : 'host-admission-failed', error instanceof WorkExecutionError ? error.message : 'Host execution catalogs could not be read') }
     }
     if (query.type === 'task.history') {

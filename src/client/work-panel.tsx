@@ -16,7 +16,7 @@ import type { FormEvent, ReactNode } from 'react'
 import type { DetailTab, WorkPanelController } from './work-panel-controller.ts'
 import type { AssociatedWork, WorkExecution, WorkTask, WorkExecutionOptions, ContinuousWorkRule } from '../work-types.ts'
 import type { GitHubIssue } from '../work-sources/types.ts'
-import { message } from './work-panel-controller.ts'
+import { message, startSelection } from './work-panel-controller.ts'
 import styles from './work-panel.module.css'
 
 const detailTabs: [DetailTab,string][] = [['overview','概览'],['related','子项'],['sessions','会话'],['continuation','接续'],['activity','活动']]
@@ -40,6 +40,7 @@ export function WorkPanel({ controller }: { controller: WorkPanelController }) {
   const projects=controller.connectedProjects()
   const source=state.source.sources.find(item=>item.id===state.source.sourceId)
   const detail=state.detail, task=detail?.task
+  useEffect(() => { void controller.previewStart() }, [controller, state.projectId, task?.id, detail?.execution?.id, state.source.issue?.nodeId, state.loading, state.source.loading])
   const continuationCompleted=Boolean(task?.completion||detail?.progress?.completion||detail?.progress?.processingState==='completed')
   const selectedNode=state.source.issueTarget?.nodeId
   const binding=detail?.bindings?.find(item=>item.nodeId===selectedNode)??detail?.bindings?.[0]
@@ -56,11 +57,12 @@ export function WorkPanel({ controller }: { controller: WorkPanelController }) {
     {state.error&&<p className={styles.failure} role="alert">{state.error} <button onClick={retryIssue}>重新读取</button></p>}
 
     {state.startup.error&&<ErrorText error={state.startup.error}/>}
+    {state.startup.previewLoading&&<p role="status">正在读取执行设置…</p>}
     {state.startup.busy&&<p role="status">正在准备执行，请稍候…</p>}
     {(connecting||(!projects.length&&!hasDetail&&!state.loading))&&<SourceConnect controller={controller} onBack={connecting?()=>setConnecting(false):undefined} onSaved={()=>setConnecting(false)}/>}
     {state.loading&&<p role="status">正在读取 Issue 与进展…</p>}
     {!connecting&&hasDetail?<>
-      <header className={styles.issueHeader}><div className={styles.detailActions}><button className={styles.sourceRefresh} aria-label="返回 Issue 列表" title={controller.canReturnToRequirement()?'返回上级':'返回列表'} onClick={()=>controller.back()}><PanelIcon name="back"/></button><span className={styles.badge}>{detailPending?'读取中…':task?.completion?'已完成':detailUnavailable?'读取失败':processingLabel(detail?.progress)}</span><div className={styles.panelUtilities}>{!detail?.execution&&!continuationCompleted&&!state.startup.options&&!detailPending&&!detailUnavailable&&<button className={styles.detailStart} disabled={state.startup.busy||state.loading||state.source.loading||detailPending||detailUnavailable||!issue&&!task} onClick={()=>void controller.prepareStart(!state.detail?.task)}><PanelIcon name="play"/>开始处理</button>}{issue&&<GitHubLink url={issue.url}/>}<button className={styles.sourceRefresh} aria-label="刷新详情" title="刷新" aria-busy={detailPending} disabled={state.loading||state.source.loading} onClick={retryIssue}><PanelIcon name="refresh" className={detailPending?styles.iconSpin:undefined}/></button></div></div>{issueRepository&&issueRepository!==sourceRepository&&<p className={styles.issueFacts}>{issueRepository} · #{issue?.number}</p>}<h1>{issue?`#${issue.number} ${issue.title}`:target?`#${target.number}`:task?.title}</h1></header>
+      <header className={styles.issueHeader}><div className={styles.detailActions}><button className={styles.sourceRefresh} aria-label="返回 Issue 列表" title={controller.canReturnToRequirement()?'返回上级':'返回列表'} onClick={()=>controller.back()}><PanelIcon name="back"/></button><span className={styles.badge}>{detailPending?'读取中…':task?.completion?'已完成':detailUnavailable?'读取失败':processingLabel(detail?.progress)}</span><div className={styles.panelUtilities}>{!detail?.execution&&!continuationCompleted&&!state.startup.options&&!detailPending&&!detailUnavailable&&<button className={styles.detailStart} disabled={state.startup.busy||state.startup.previewLoading||state.loading||state.source.loading||detailPending||detailUnavailable||!issue&&!task} onClick={()=>void controller.prepareStart(!state.detail?.task)}><PanelIcon name="play"/>开始处理</button>}{issue&&<GitHubLink url={issue.url}/>}<button className={styles.sourceRefresh} aria-label="刷新详情" title="刷新" aria-busy={detailPending} disabled={state.loading||state.source.loading} onClick={retryIssue}><PanelIcon name="refresh" className={detailPending?styles.iconSpin:undefined}/></button></div></div>{issueRepository&&issueRepository!==sourceRepository&&<p className={styles.issueFacts}>{issueRepository} · #{issue?.number}</p>}<h1>{issue?`#${issue.number} ${issue.title}`:target?`#${target.number}`:task?.title}</h1></header>
 
       <nav className={`${styles.tabs} ${styles.detailTabs}`} role="tablist" aria-label="Issue 详情标签">{detailTabs.map(([id,label])=><button key={id} role="tab" aria-selected={state.detailTab===id} onClick={()=>controller.setDetailTab(id)}>{label}</button>)}</nav>
       <div ref={detailScroll} tabIndex={0} className={styles.detailContent} role="tabpanel" aria-label={detailTabs.find(([id])=>id===state.detailTab)?.[1]} aria-busy={detailPending}>
@@ -178,7 +180,7 @@ function ContinuousProcessing({controller}:{controller:WorkPanelController}) {
   const sourceId=rule?.sourceId??browseSourceId
   const [options,setOptions]=useState<WorkExecutionOptions|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[statusError,setStatusError]=useState('')
   const [assignee,setAssignee]=useState<'@me'|'*'>('*'),[labels,setLabels]=useState(''),[resource,setResource]=useState(0),[model,setModel]=useState(0),[agentPreset,setAgentPreset]=useState(''),[permissionPreset,setPermissionPreset]=useState('')
-  const [filterPrompt,setFilterPrompt]=useState('')
+  const [filterPrompt,setFilterPrompt]=useState(''),[remember,setRemember]=useState(true)
   const [configSourceId,setConfigSourceId]=useState(sourceId)
   const [concurrency,setConcurrency]=useState(1),[refreshMinutes,setRefreshMinutes]=useState(30),[order,setOrder]=useState<'oldest'|'newest'>('oldest')
   const [scope]=useState(()=>new AbortController())
@@ -198,11 +200,9 @@ function ContinuousProcessing({controller}:{controller:WorkPanelController}) {
       if(!choices||!choices.resources.length||!choices.models.length||!choices.agentPresets.length||!choices.permissionPresets.length)throw Error('宿主尚无完整的执行目录、模型或预设配置')
       setOptions(choices);setConfigSourceId(sourceId);setAssignee(rule?.scope.assignee??'*');setLabels(rule?.scope.labels.join(', ')??'')
       setConcurrency(rule?.queue?.concurrency??1);setRefreshMinutes(rule?.queue?.refreshMinutes??30);setOrder(rule?.queue?.order??'oldest');setFilterPrompt(rule?.queue?.filterPrompt??'')
-      setResource(Math.max(0,choices.resources.findIndex(item=>item.ref.runtimeId===rule?.resource.runtimeId&&item.ref.workspaceId===rule.resource.workspaceId)))
-      const preferred=rule?.model??choices.defaults.model
-      setModel(Math.max(0,choices.models.findIndex(item=>item.provider===preferred.provider&&item.model===preferred.model)))
-      setAgentPreset(choices.agentPresets.includes(rule?.agentPreset??choices.defaults.agentPreset)?rule?.agentPreset??choices.defaults.agentPreset:choices.agentPresets[0]!)
-      setPermissionPreset(choices.permissionPresets.includes(rule?.permissionPreset??choices.defaults.permissionPreset)?rule?.permissionPreset??choices.defaults.permissionPreset:choices.permissionPresets[0]!)
+      const selection=startSelection(choices)
+      setResource(selection.resourceIndex);setModel(selection.modelIndex)
+      setAgentPreset(selection.agentPreset);setPermissionPreset(selection.permissionPreset);setRemember(true)
       setEditing(true)
     }catch(error){if(!scope.signal.aborted)setError(message(error))}finally{if(!scope.signal.aborted)setBusy(false)}
   }
@@ -211,8 +211,8 @@ function ContinuousProcessing({controller}:{controller:WorkPanelController}) {
     try {
       const selectedResource=options.resources[resource]?.ref, selectedModel=options.models[model]
       if(!selectedResource||!selectedModel)throw Error('请选择可用执行配置')
-      const configuredModel=rule?.model.provider===selectedModel.provider&&rule.model.model===selectedModel.model?rule.model:options.defaults.model.provider===selectedModel.provider&&options.defaults.model.model===selectedModel.model?options.defaults.model:selectedModel
-      const result=await controller.submit({type:'continuous.configure',projectId,sourceId:configSourceId,expectedVersion:rule?.version??0,assignee,labels:[...new Set(labels.split(',').map(label=>label.trim()).filter(Boolean))],resource:selectedResource,model:configuredModel,agentPreset,permissionPreset,enabled:rule?.enabled??false,queue:{concurrency,refreshMinutes,order,filterPrompt}})
+      const configuredModel=options.defaults.model.provider===selectedModel.provider&&options.defaults.model.model===selectedModel.model?options.defaults.model:{provider:selectedModel.provider,model:selectedModel.model}
+      const result=await controller.submit({type:'continuous.configure',projectId,sourceId:configSourceId,expectedVersion:rule?.version??0,assignee,labels:[...new Set(labels.split(',').map(label=>label.trim()).filter(Boolean))],resource:selectedResource,model:configuredModel,agentPreset,permissionPreset,rememberExecutionDefaults:remember,enabled:rule?.enabled??false,queue:{concurrency,refreshMinutes,order,filterPrompt}})
       if(!scope.signal.aborted){setRule(result.continuousRule);setEditing(false)}
     }catch(error){if(!scope.signal.aborted)setError(message(error))}finally{if(!scope.signal.aborted)setBusy(false)}
   }
@@ -228,7 +228,8 @@ function ContinuousProcessing({controller}:{controller:WorkPanelController}) {
         <label>大模型筛选提示词<textarea disabled={busy} rows={4} maxLength={10000} value={filterPrompt} onChange={event=>setFilterPrompt(event.target.value)} placeholder="例如：只处理能独立完成的缺陷；排除纯文档、依赖未完成或需要产品决策的事项。"/></label>
         <p>每次定时更新先按上述条件取候选，再按提示词对整批候选筛选一次。留空则只使用上述条件。</p>
         <div className={styles.formRow}><label>更新周期（分钟）<input type="number" min={1} max={10080} required disabled={busy} value={refreshMinutes} onChange={event=>setRefreshMinutes(Number(event.target.value))}/></label><label>并发上限<input type="number" min={1} max={32} required disabled={busy} value={concurrency} onChange={event=>setConcurrency(Number(event.target.value))}/></label><label>等待顺序<select disabled={busy} value={order} onChange={event=>setOrder(event.target.value as 'oldest'|'newest')}><option value="oldest">较早创建优先</option><option value="newest">较新创建优先</option></select></label></div>
-        <details><summary>执行目录、模型与权限</summary><div className={styles.formRow}><label>持续处理执行目录<select disabled={busy} value={resource} onChange={event=>setResource(Number(event.target.value))}>{options.resources.map((item,index)=><option key={index} value={index}>{item.title}</option>)}</select></label><label>持续处理模型<select disabled={busy} value={model} onChange={event=>setModel(Number(event.target.value))}>{options.models.map((item,index)=><option key={index} value={index}>{item.provider}/{item.model}</option>)}</select></label><label>Agent 预设<select disabled={busy} value={agentPreset} onChange={event=>setAgentPreset(event.target.value)}>{options.agentPresets.map(item=><option key={item}>{item}</option>)}</select></label><label>权限预设<select disabled={busy} value={permissionPreset} onChange={event=>setPermissionPreset(event.target.value)}>{options.permissionPresets.map(item=><option key={item}>{item}</option>)}</select></label></div></details>
+        {options.fallbackReasons?.map(reason=><p className={styles.failure} role="alert" key={reason}>{reason}</p>)}
+        <details open={options.fallbackReasons?.length?true:undefined}><summary>执行设置 · {options.selectionSource==='remembered'&&!options.fallbackReasons?.length?'使用上次配置（可修改）':'目录、模型与权限'}</summary><div className={styles.formRow}>{options.resources.length>1&&<label>持续处理执行目录<select disabled={busy} value={resource} onChange={event=>setResource(Number(event.target.value))}>{options.resources.map((item,index)=><option key={index} value={index}>{item.title}</option>)}</select></label>}<label>持续处理模型<select disabled={busy} value={model} onChange={event=>setModel(Number(event.target.value))}>{options.models.map((item,index)=><option key={index} value={index}>{item.provider}/{item.model}</option>)}</select></label><label>Agent 预设<select disabled={busy} value={agentPreset} onChange={event=>setAgentPreset(event.target.value)}>{options.agentPresets.map(item=><option key={item}>{item}</option>)}</select></label><label>权限预设<select disabled={busy} value={permissionPreset} onChange={event=>setPermissionPreset(event.target.value)}>{options.permissionPresets.map(item=><option key={item}>{item}</option>)}</select></label></div><label className={styles.rememberExecution}><input type="checkbox" disabled={busy} checked={remember} onChange={event=>setRemember(event.target.checked)}/>记住为该项目默认</label></details>
         <p>筛选上述来源的开放 Issue；保存后更新等待部分，在途执行、问题与历史保留。{rule?.enabled?'队列已开启，空余位置按新设置推进。':'保存后仍暂停，点击“继续处理”才启动。'}</p>
         <div className={styles.toolbar}><button className={styles.primary} type="submit" disabled={busy}>{busy?'正在保存…':'保存并更新等待任务'}</button><button type="button" disabled={busy} onClick={()=>setEditing(false)}>取消</button></div>
       </form>}
@@ -270,13 +271,18 @@ function CurrentExecution({controller}:{controller:WorkPanelController}) {
       {execution.events.length>0 && <details><summary>输入与结果（{execution.events.length}）</summary>{execution.events.map(event=><p key={event.id}>{({accepted:'已接受',delivered:'已投递',consumed:'已消费',discarded:'已废弃'})[event.delivery]} · 尚未验收<br/>{event.text}</p>)}</details>}
     </> : completed ? <p>本地已验收；执行观察尚未取得，请刷新详情读取收口状态。</p> : <>
 
-      {options && selection ? <form className={styles.form} onSubmit={event=>{event.preventDefault();void controller.startPrepared()}}>
-        <p>请确认执行目录、模型、Agent 预设与权限；未修改时使用宿主与项目的默认配置。</p>
-        <label>工作目录{options.resources.length>1 ? <select disabled={busy} value={selection.resourceIndex} onChange={event=>controller.selectStart({resourceIndex:Number(event.target.value)})}>{options.resources.map((resource,index)=><option key={`${resource.ref.runtimeId}/${resource.ref.workspaceId}`} value={index}>{resource.title}</option>)}</select> : <span title="宿主或项目规则只提供这一个执行目录">{options.resources[0]?.title}</span>}</label>
-        <label>模型{options.models.length>1 ? <select disabled={busy} value={selection.modelIndex} onChange={event=>controller.selectStart({modelIndex:Number(event.target.value)})}>{options.models.map((model,index)=><option key={`${model.provider}/${model.model}`} value={index}>{model.provider}/{model.model}</option>)}</select> : <span title="宿主或项目 Agent 只允许这一个模型">{options.models[0]?.provider}/{options.models[0]?.model}</span>}</label>
-        <label>Agent 预设{options.agentPresets.length>1 ? <select disabled={busy} value={selection.agentPreset} onChange={event=>controller.selectStart({agentPreset:event.target.value})}>{options.agentPresets.map(preset=><option key={preset}>{preset}</option>)}</select> : <span title="宿主只暴露默认 Agent 预设">{selection.agentPreset}</span>}</label>
-        <label>权限{options.permissionPresets.length>1 ? <select disabled={busy} value={selection.permissionPreset} onChange={event=>controller.selectStart({permissionPreset:event.target.value})}>{options.permissionPresets.map(preset=><option key={preset}>{preset}</option>)}</select> : <span title="宿主只暴露默认权限预设">{selection.permissionPreset}</span>}</label>
-        <div className={styles.toolbar}><button type="submit" disabled={busy}>{busy?'正在启动…':'开始处理'}</button><button type="button" disabled={busy} onClick={()=>controller.cancelStart()}>取消</button></div>
+      {options && selection ? <form className={styles.form} aria-label="执行设置" onSubmit={event=>{event.preventDefault();void controller.startPrepared()}}>
+        {options.fallbackReasons?.map(reason=><p key={reason} className={styles.failure} role="alert">{reason}</p>)}
+        <details className={styles.executionSettings} open={state.startup.expanded||options.selectionSource!=='remembered'} onToggle={event=>controller.setStartSettings({expanded:event.currentTarget.open})}>
+          <summary>执行设置 · {options.selectionSource==='remembered'&&!options.fallbackReasons?.length?'使用上次配置（可修改）':options.selectionSource==='project'?'使用项目配置':'请确认配置'}</summary>
+          <p>{options.selectionSource==='remembered'&&!options.fallbackReasons?.length?'使用该项目上次确认的配置。':options.selectionSource==='project'?'使用项目显式配置，其余取宿主默认。':'请确认模型、Agent 预设与权限。'}</p>
+          {options.resources.length>1&&<label>工作目录<select disabled={busy} value={selection.resourceIndex} onChange={event=>controller.selectStart({resourceIndex:Number(event.target.value)})}>{options.resources.map((resource,index)=><option key={`${resource.ref.runtimeId}/${resource.ref.workspaceId}`} value={index}>{resource.title}</option>)}</select></label>}
+          <label>模型{options.models.length>1 ? <select disabled={busy} value={selection.modelIndex} onChange={event=>controller.selectStart({modelIndex:Number(event.target.value)})}>{options.models.map((model,index)=><option key={`${model.provider}/${model.model}`} value={index}>{model.provider}/{model.model}</option>)}</select> : <span>{options.models[0]?.provider}/{options.models[0]?.model}</span>}</label>
+          <label>Agent 预设{options.agentPresets.length>1 ? <select disabled={busy} value={selection.agentPreset} onChange={event=>controller.selectStart({agentPreset:event.target.value})}>{options.agentPresets.map(preset=><option key={preset}>{preset}</option>)}</select> : <span>{selection.agentPreset}</span>}</label>
+          <label>权限{options.permissionPresets.length>1 ? <select disabled={busy} value={selection.permissionPreset} onChange={event=>controller.selectStart({permissionPreset:event.target.value})}>{options.permissionPresets.map(preset=><option key={preset}>{preset}</option>)}</select> : <span>{selection.permissionPreset}</span>}</label>
+          <label className={styles.rememberExecution}><input type="checkbox" disabled={busy} checked={state.startup.remember} onChange={event=>controller.setStartSettings({remember:event.target.checked})}/>记住为该项目默认</label>
+        </details>
+        <div className={styles.toolbar}><button type="submit" disabled={busy}>{busy?'正在启动…':state.startup.expanded||options.selectionSource!=='remembered'?'确认开始处理':'开始处理'}</button><button type="button" disabled={busy} onClick={()=>controller.cancelStart()}>取消</button></div>
       </form> : <button className={styles.primary} disabled={busy||state.loading||state.source.loading} onClick={()=>void controller.prepareStart(!state.detail?.task)}>开始处理</button>}
     </>}
   </Section>

@@ -81,6 +81,7 @@ describe('production Issue source acceptance controls', () => {
       expect((await panel.client.query({type:'project.detail',projectId:panel.getSnapshot().projectId!})).tasks).toEqual([])
       const form=await mountWorkPanel({controller:panel},'WorkPanel')
       expect(writes).not.toHaveBeenCalled()
+      await vi.waitFor(()=>expect(panel.getSnapshot().startup.previewLoading).toBe(false))
       form.click('开始处理')
       await vi.waitFor(()=>expect(panel.getSnapshot().detail?.task?.specification).toMatchObject({text:'',acceptance:[],missing:['body','acceptance']}))
       expect(writes.mock.calls.filter(([command])=>command.type==='source.import')).toHaveLength(1)

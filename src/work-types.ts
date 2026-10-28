@@ -33,7 +33,13 @@ export interface ContinuationOperation {
   requestDelivery?: Exclude<WorkEvent['delivery'], 'discarded'>; kickoffDelivery?: Exclude<WorkEvent['delivery'], 'discarded'>
   error?: { code: string; message: string }
 }
-export interface Project { id: string; name: string; version: number; defaultAgentId: string; resources: ResourceRef[]; continuationPolicy?: ContinuationPolicy }
+export interface WorkExecutionSelection {
+  resource: ResourceRef
+  model: { provider: string; model: string; reasoningEffort?: string }
+  agentPreset: string
+  permissionPreset: string
+}
+export interface Project { id: string; name: string; version: number; defaultAgentId: string; resources: ResourceRef[]; continuationPolicy?: ContinuationPolicy; executionDefaults?: Partial<WorkExecutionSelection> }
 export interface WorkSpecification { version: number; text: string; acceptance: string[]; missing?: ('body' | 'acceptance')[] }
 export interface BreakdownBlock { id: string; title: string; description: string; status?: WorkStage; evidence?: string[]; child?: TaskRef }
 export interface SessionAssociation { session: SessionRef; purpose: 'related' | 'review' }
@@ -53,10 +59,15 @@ export interface WorkTask {
 }
 export interface LegacyAddress { runtimeId: string; projectRoot: string; taskId: string }
 export interface HostExecutionChoices {
-  agentPresets: string[]; models: { provider: string; model: string }[]; permissionPresets: string[]
+  agentPresets: string[]; models: { provider: string; model: string; reasoningEfforts?: string[] }[]; permissionPresets: string[]
   defaults: { agentPreset: string; model: { provider: string; model: string; reasoningEffort?: string }; permissionPreset: string }
 }
-export interface WorkExecutionOptions extends HostExecutionChoices { agentId: string; resources: HostResource[] }
+export interface WorkExecutionOptions extends HostExecutionChoices {
+  agentId: string; resources: HostResource[]
+  selection?: WorkExecutionSelection
+  selectionSource?: 'remembered' | 'project' | 'host'
+  fallbackReasons?: string[]
+}
 export interface ExecutionRef { ref: TaskRef; executionId: string }
 export interface NativeWorkMessage { id: string; role: 'user'; content: readonly unknown[]; source: unknown }
 export interface WorkEvent { id: string; text: string; kind: 'input' | 'result'; delivery: 'accepted' | 'delivered' | 'consumed' | 'discarded'; acceptance: 'unassessed'; nativeMessage?: NativeWorkMessage }
@@ -130,7 +141,7 @@ export type WorkCommand =
   | (Command & { type: 'continuous.end'; projectId: string; sourceId: string; expectedVersion: number; nodeId: string })
   | (Command & { type: 'continuous.block'; projectId: string; sourceId: string; expectedVersion: number; nodeId: string; blocked: boolean })
   | (Command & { type: 'source.connect'; url?: string; githubProject?: { owner: string; type: 'org' | 'user'; number: number }; resource?: ResourceRef })
-  | (Command & { type: 'continuous.configure'; queue?: ContinuousQueueSettings; projectId: string; sourceId: string; expectedVersion: number; assignee: '@me' | '*'; labels: string[]; resource: ResourceRef; model: { provider: string; model: string; reasoningEffort?: string }; agentPreset: string; permissionPreset: string; enabled: boolean })
+  | (Command & { type: 'continuous.configure'; queue?: ContinuousQueueSettings; projectId: string; sourceId: string; expectedVersion: number; assignee: '@me' | '*'; labels: string[]; resource: ResourceRef; model: { provider: string; model: string; reasoningEffort?: string }; agentPreset: string; permissionPreset: string; enabled: boolean; rememberExecutionDefaults?: boolean })
   | (Command & { type: 'continuous.set-enabled'; projectId: string; sourceId: string; expectedVersion: number; enabled: boolean })
   | (Command & { type: 'source.configure-project'; projectId: string; githubProject: { owner: string; type: 'org' | 'user'; number: number } })
   | (Command & { type: 'source.configure'; projectId: string; repository: { owner: string; repository: string } })
@@ -156,7 +167,7 @@ export type WorkCommand =
   | (Command & ExecutionRef & { type: 'task.input'; owner: string; epoch: number; text: string; kind: 'input' | 'result' })
   | (Command & ExecutionRef & { type: 'task.completion-sync'; owner: string; epoch: number })
   | (Command & ExecutionRef & { type: 'task.reconcile'; owner: string; epoch: number })
-  | (TaskChange & { type: 'task.start'; agentId: string; resource: ResourceRef; session?: SessionRef; agentPreset: string; model: { provider: string; model: string; reasoningEffort?: string }; permissionPreset: string })
+  | (TaskChange & { type: 'task.start'; agentId: string; resource: ResourceRef; session?: SessionRef; agentPreset: string; model: { provider: string; model: string; reasoningEffort?: string }; permissionPreset: string; rememberExecutionDefaults?: boolean })
 export type WorkQuery =
   | { type: 'github.account' }
   | { type: 'github.repositories'; page: number }
