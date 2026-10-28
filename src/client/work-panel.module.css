@@ -54,6 +54,9 @@
 .form input, .form textarea, .form select { min-width: 0; width: 100%; box-sizing: border-box; }
 .form fieldset { border: 1px solid var(--work-line); border-radius: 6px; display: grid; gap: 12px; min-width: 0; }
 .form > button { justify-self: start; }
+.form .rememberExecution { display: flex; align-items: center; gap: 7px; margin-top: 12px; }
+.form .rememberExecution input { width: auto; margin: 0; }
+.executionSettings > label { margin-top: 12px; }
 .panel h1, .panel h2, .panel h3 { overflow-wrap: anywhere; }
 .sourceBody { white-space: pre-wrap; overflow-wrap: anywhere; color: inherit !important; }
 .panel summary { cursor: pointer; }

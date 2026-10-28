@@ -15,7 +15,9 @@ export const sessionRefSchema = z.object({ runtimeId: referenceId, sessionId: re
 export const legacyAddressSchema = z.object({ runtimeId: referenceId, projectRoot: text, taskId: referenceId }).strict()
 export const policySchema = z.object({ version: z.number().int().positive(), modelCandidates: z.array(z.string()), instructions: z.string(), capabilities: z.array(z.string()) }).strict()
 export const continuationPolicySchema = z.object({ version: z.number().int().positive(), enabled: z.boolean(), targetTokens: z.number().int().positive(), reserveTokens: z.number().int().min(1024) }).strict()
-export const projectSchema = z.object({ id, name: text, version: z.number().int().positive(), defaultAgentId: id, resources: z.array(resourceRefSchema), continuationPolicy: continuationPolicySchema.optional() }).strict()
+export const modelSchema = z.object({ provider: referenceId, model: referenceId, reasoningEffort: referenceId.optional() }).strict()
+export const executionDefaultsSchema = z.object({ resource: resourceRefSchema.optional(), model: modelSchema.optional(), agentPreset: referenceId.optional(), permissionPreset: referenceId.optional() }).strict()
+export const projectSchema = z.object({ id, name: text, version: z.number().int().positive(), defaultAgentId: id, resources: z.array(resourceRefSchema), continuationPolicy: continuationPolicySchema.optional(), executionDefaults: executionDefaultsSchema.optional() }).strict()
 export const agentSchema = z.object({ id, projectId: id, role: z.literal('coordinator'), policy: policySchema }).strict()
 export const specificationSchema = z.object({ version: z.number().int().positive(), text: z.string().max(1_000_000), acceptance: z.array(text).max(1000), missing: z.array(z.enum(['body', 'acceptance'])).optional() }).strict().refine(value =>
   (value.text.trim().length > 0 || value.missing?.includes('body')) && (value.acceptance.length > 0 || value.missing?.includes('acceptance')), 'Missing source material must be explicit')
@@ -29,7 +31,6 @@ export const taskSchema = z.object({
   sessions: z.array(z.object({ session: sessionRefSchema, purpose: z.enum(['related', 'review']) }).strict()),
   activity: z.array(z.object({ commandId: referenceId, type: referenceId, version: z.number().int().positive() }).strict()),
 }).strict()
-export const modelSchema = z.object({ provider: referenceId, model: referenceId, reasoningEffort: referenceId.optional() }).strict()
 export const continuationContentSchema = z.object({ body: text, decisions: text, evidence: text, unfinished: text, next: text }).strict()
 const actualSchema = z.object({ runtimeId: referenceId, cwd: text, agentPreset: referenceId, provider: referenceId, model: referenceId, reasoningEffort: referenceId.optional(), permissionPreset: referenceId, sandbox: referenceId, approval: referenceId }).strict()
 const materialSchema = continuationContentSchema.extend({ commandId: referenceId, ref: taskRefSchema, executionId: id, source: sessionRefSchema, epoch: z.number().int().positive(), taskVersion: z.number().int().positive(), specificationVersion: z.number().int().positive(), settlementKey: text.optional() }).strict()
@@ -108,7 +109,7 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ ...command, type: z.literal('continuous.end'), projectId: id, sourceId: id, expectedVersion: z.number().int().positive(), nodeId: referenceId }).strict(),
   z.object({ ...command, type: z.literal('continuous.block'), projectId: id, sourceId: id, expectedVersion: z.number().int().positive(), nodeId: referenceId, blocked: z.boolean() }).strict(),
   z.object({ ...command, type: z.literal('source.connect'), githubProject: githubProjectRef.optional(), url: z.string().max(2048).optional(), resource: resourceRefSchema.optional() }).strict().refine(value => Boolean(value.url) !== Boolean(value.githubProject)),
-  z.object({ ...command, type: z.literal('continuous.configure'), queue: continuousQueueSchema.optional(), projectId: id, sourceId: id, expectedVersion: z.number().int().nonnegative(), assignee: z.enum(['@me', '*']), labels: z.array(referenceId).max(100), resource: resourceRefSchema, model: modelSchema, agentPreset: referenceId, permissionPreset: referenceId, enabled: z.boolean() }).strict(),
+  z.object({ ...command, type: z.literal('continuous.configure'), queue: continuousQueueSchema.optional(), projectId: id, sourceId: id, expectedVersion: z.number().int().nonnegative(), assignee: z.enum(['@me', '*']), labels: z.array(referenceId).max(100), resource: resourceRefSchema, model: modelSchema, agentPreset: referenceId, permissionPreset: referenceId, enabled: z.boolean(), rememberExecutionDefaults: z.boolean().optional() }).strict(),
   z.object({ ...command, type: z.literal('continuous.set-enabled'), projectId: id, sourceId: id, expectedVersion: z.number().int().positive(), enabled: z.boolean() }).strict(),
   z.object({ ...command, type: z.literal('source.configure-project'), projectId: id, githubProject: z.object({ owner: referenceId, type: z.enum(['org', 'user']), number: z.number().int().positive() }).strict() }).strict(),
   z.object({ ...command, type: z.literal('source.configure'), projectId: id, repository: repositorySchema }).strict(),
@@ -135,7 +136,7 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ ...change, type: z.literal('task.associate-session'), session: sessionRefSchema, purpose: z.enum(['related', 'review']) }).strict(),
   z.object({ ...change, type: z.literal('legacy.map'), address: legacyAddressSchema }).strict(),
   z.object({ ...change, type: z.literal('task.start'), agentId: id, resource: resourceRefSchema, session: sessionRefSchema.optional(),
-    agentPreset: referenceId, model: modelSchema, permissionPreset: referenceId }).strict(),
+    agentPreset: referenceId, model: modelSchema, permissionPreset: referenceId, rememberExecutionDefaults: z.boolean().optional() }).strict(),
 ])
 export const querySchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('github.account') }).strict(),

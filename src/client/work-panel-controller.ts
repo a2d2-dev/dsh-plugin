@@ -38,8 +38,19 @@ export interface StartSelection {
 }
 export interface StartupState {
   busy: boolean; error: string | null; options: WorkExecutionOptions | null; selection: StartSelection | null
+  preview: boolean; previewLoading: boolean; expanded: boolean; remember: boolean
 }
-const emptyStartup = (): StartupState => ({ busy: false, error: null, options: null, selection: null })
+const emptyStartup = (): StartupState => ({ busy: false, error: null, options: null, selection: null, preview: false, previewLoading: false, expanded: false, remember: true })
+/** The server resolves project history and policy; indices are only a view of its current catalog. */
+export function startSelection(options: WorkExecutionOptions): StartSelection {
+  const preferred = options.selection
+  return {
+    resourceIndex: Math.max(0, options.resources.findIndex(item => item.ref.runtimeId === preferred?.resource.runtimeId && item.ref.workspaceId === preferred.resource.workspaceId)),
+    modelIndex: Math.max(0, options.models.findIndex(item => item.provider === options.defaults.model.provider && item.model === options.defaults.model.model)),
+    agentPreset: options.agentPresets.includes(options.defaults.agentPreset) ? options.defaults.agentPreset : options.agentPresets[0]!,
+    permissionPreset: options.permissionPresets.includes(options.defaults.permissionPreset) ? options.defaults.permissionPreset : options.permissionPresets[0]!,
+  }
+}
 export interface HistoryState {
   session: SessionRef | null; events: unknown[]; nextCursor?: number
   loading: boolean; loaded: boolean; error: string | null
@@ -261,9 +272,30 @@ export class WorkPanelController {
       if (revision === this.revision) this.update({ detail, loading: false })
     } catch (error) { if (revision === this.revision) this.update({ loading: false, error: message(error) }) }
   }
+  /** Read-only preparation makes remembered settings editable before the single start click. */
+  async previewStart(): Promise<void> {
+    const { projectId, detail, source, startup } = this.state
+    if (!projectId || detail?.execution || detail?.task?.completion || startup.busy || startup.previewLoading || startup.options || source.loading || this.state.loading) return
+    const ref = detail?.task ? { projectId: detail.task.projectId, taskId: detail.task.id } : null
+    if (!ref && (!source.issue || !source.sourceId)) return
+    const revision = this.revision, sourceRevision = this.sourceRevision
+    this.update({ startup: { ...startup, previewLoading: true } })
+    try {
+      const result = await this.client.query(ref ? { type: 'task.execution-options', ref } : { type: 'source.execution-options', projectId, sourceId: source.sourceId! })
+      if (revision !== this.revision || sourceRevision !== this.sourceRevision || this.state.startup.busy || this.state.startup.options) return
+      const options = result.executionOptions
+      if (!options || (!options.fallbackReasons?.length && options.selectionSource !== 'remembered')) return
+      if (![options.resources, options.models, options.agentPresets, options.permissionPresets].every(values => values.length)) return
+      this.update({ startup: { ...emptyStartup(), options, selection: startSelection(options), preview: true, expanded: Boolean(options.fallbackReasons?.length) } })
+    } catch { /* Starting explicitly retries the catalog read and reports a failure there. */ }
+    finally { if (revision === this.revision && sourceRevision === this.sourceRevision) this.update({ startup: { ...this.state.startup, previewLoading: false } }) }
+  }
+  setStartSettings(value: Partial<Pick<StartupState, 'expanded' | 'remember'>>): void {
+    if (!this.state.startup.busy) this.update({ startup: { ...this.state.startup, ...value } })
+  }
   /** One explicit start intent may import an Issue, but navigation changes cancel its later UI steps. */
-  async prepareStart(fromIssue = false): Promise<void> {
-    if (this.state.startup.busy) return
+  async prepareStart(fromIssue = false, confirmed?: StartupState): Promise<void> {
+    if (this.state.startup.busy || this.state.startup.previewLoading) return
     const projectId = this.state.projectId
     const { issue, sourceId, bindings, canonical } = this.state.source
     const selectedTask = this.state.detail?.task
@@ -304,27 +336,31 @@ export class WorkPanelController {
         return
       }
       const useSource=Boolean(sourceId && ref.projectId === projectId)
-      const [result, continuous] = await Promise.all([
-        this.client.query(useSource ? {type:'source.execution-options',projectId:ref.projectId,sourceId:sourceId!} : {type:'task.execution-options',ref}),
-        useSource ? this.client.query({type:'continuous.status',projectId:ref.projectId,sourceId:sourceId!}) : Promise.resolve(null),
-      ])
+      const result = await this.client.query(useSource ? {type:'source.execution-options',projectId:ref.projectId,sourceId:sourceId!} : {type:'task.execution-options',ref})
       if (!current()) return
-      const rule=continuous?.continuousRule
-      const options = result.executionOptions ? {...result.executionOptions,defaults:{...result.executionOptions.defaults,
-        ...(rule && result.executionOptions.models.some(item=>item.provider===rule.model.provider&&item.model===rule.model.model)?{model:rule.model}:{}),
-        ...(rule && result.executionOptions.agentPresets.includes(rule.agentPreset)?{agentPreset:rule.agentPreset}:{}),
-        ...(rule && result.executionOptions.permissionPresets.includes(rule.permissionPreset)?{permissionPreset:rule.permissionPreset}:{}),
-      }} : undefined
+      let options = result.executionOptions
       if (!options) throw Error('宿主未返回可用的执行配置')
       if (!options.resources.length) throw Error('没有可用执行目录，请检查宿主的工作目录配置。')
       if (!options.models.length || !options.agentPresets.length || !options.permissionPresets.length) throw Error('宿主暂无可用模型、Agent 预设或权限配置')
-      const selection: StartSelection = { resourceIndex: Math.max(0,options.resources.findIndex(item=>item.ref.runtimeId===rule?.resource.runtimeId&&item.ref.workspaceId===rule.resource.workspaceId)),
-        modelIndex: Math.max(0, options.models.findIndex(model => model.provider === options.defaults.model.provider && model.model === options.defaults.model.model)),
-        agentPreset: options.agentPresets.includes(options.defaults.agentPreset) ? options.defaults.agentPreset : options.agentPresets[0]!,
-        permissionPreset: options.permissionPresets.includes(options.defaults.permissionPreset) ? options.defaults.permissionPreset : options.permissionPresets[0]!,
+      let selection = startSelection(options), changed = false
+      // Re-map the visible confirmation by identity when the fresh catalog has a different order.
+      if (confirmed?.options && confirmed.selection && ref.projectId === projectId) {
+        const previous = confirmed.selection, catalog = confirmed.options
+        const resource = catalog.resources[previous.resourceIndex]?.ref, model = catalog.models[previous.modelIndex]
+        const resourceIndex = options.resources.findIndex(item => item.ref.runtimeId === resource?.runtimeId && item.ref.workspaceId === resource.workspaceId)
+        const modelIndex = options.models.findIndex(item => item.provider === model?.provider && item.model === model.model)
+        const selectedModel: WorkExecutionOptions['defaults']['model'] | undefined = model?.provider === catalog.defaults.model.provider && model.model === catalog.defaults.model.model ? catalog.defaults.model : model && { provider: model.provider, model: model.model }
+        const efforts = options.models[modelIndex]?.reasoningEfforts
+        changed = resourceIndex < 0 || modelIndex < 0 || !options.agentPresets.includes(previous.agentPreset) || !options.permissionPresets.includes(previous.permissionPreset)
+          || Boolean(selectedModel?.reasoningEffort !== undefined && efforts && !efforts.includes(selectedModel.reasoningEffort))
+        if (!changed) {
+          selection = { ...previous, resourceIndex, modelIndex }
+          options = { ...options, defaults: { ...options.defaults, model: selectedModel! } }
+        } else options = { ...options, fallbackReasons: [...(options.fallbackReasons ?? []), '刚才选择的执行配置已不可用，已重新选择默认值，请确认。'] }
       }
-      this.update({ startup: { busy: false, error: null, options, selection } })
-      if ([options.resources, options.models, options.agentPresets, options.permissionPresets].every(values => values.length === 1)) await this.startPrepared()
+      const fallback = Boolean(options.fallbackReasons?.length)
+      this.update({ startup: { ...emptyStartup(), options, selection, expanded: fallback || Boolean(confirmed?.expanded), remember: confirmed?.remember ?? true } })
+      if (!changed && ((confirmed && ref.projectId === projectId) || (!fallback && [options.resources, options.models, options.agentPresets, options.permissionPresets].every(values => values.length === 1)))) await this.startPrepared()
     } catch (error) { if (current()) this.update({ startup: { ...this.state.startup, busy: false, error: message(error) } }) }
   }
   selectStart(value: Partial<StartSelection>): void {
@@ -334,10 +370,12 @@ export class WorkPanelController {
   cancelStart(): void { ++this.revision; this.update({ startup: emptyStartup() }) }
   async startPrepared(): Promise<void> {
     const { startup, detail } = this.state
-    if (startup.busy || !startup.options || !startup.selection || !detail?.task) return
+    if (startup.busy || !startup.options || !startup.selection) return
+    if (startup.preview) { await this.prepareStart(!detail?.task, startup); return }
+    if (!detail?.task) return
     const { options, selection } = startup, task = detail.task
     const resource = options.resources[selection.resourceIndex]?.ref, selectedModel = options.models[selection.modelIndex]
-    const model = selectedModel && selectedModel.provider === options.defaults.model.provider && selectedModel.model === options.defaults.model.model ? options.defaults.model : selectedModel
+    const model = selectedModel && selectedModel.provider === options.defaults.model.provider && selectedModel.model === options.defaults.model.model ? options.defaults.model : selectedModel && { provider: selectedModel.provider, model: selectedModel.model }
     if (!resource || !model || !options.agentPresets.includes(selection.agentPreset) || !options.permissionPresets.includes(selection.permissionPreset)) {
       this.update({ startup: { ...startup, error: '请选择宿主提供的执行配置' } }); return
     }
@@ -359,7 +397,7 @@ export class WorkPanelController {
         }
       }
       const result = latest.execution ? latest : await this.submit({ type: 'task.start', ref, expectedVersion: latest.task.version,
-        agentId: options.agentId, resource, model, agentPreset: selection.agentPreset, permissionPreset: selection.permissionPreset })
+        agentId: options.agentId, resource, model, agentPreset: selection.agentPreset, permissionPreset: selection.permissionPreset, rememberExecutionDefaults: startup.remember })
       if (!current()) return
       // A completed command can contain a failed execution; retain it even if refresh fails.
       this.update({ detail: { ...latest, ...result }, startup: { ...emptyStartup(), busy: true } })
