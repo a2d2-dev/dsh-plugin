@@ -56,3 +56,40 @@ pnpm typecheck
 历史 Issue 评论称修复前 100% 503、修复后五次 completed 且每次 17–26 秒。指定历史部署目录中的原始文件只能证明部署和 session/storage inventory 保留，未找到五次请求的原件。因此这些历史比例和耗时没有作为本轮通过依据。
 
 本地原始证据位于本 worktree 的忽略目录 `docs/artifacts/163-2026-10-27/`：`targeted-tests.log`、`strengthened-tests.log`、`typecheck-final.log`、`real-store-result.json`、`real-store-cold-result.json`、脱敏请求摘要及两张页面截图。原始库副本、HAR、含业务上下文的日志和截图不进入 Git 历史。
+
+## 2026-10-28 指定开发入口复核
+
+### 目的与步骤
+
+在原验收分支整合最新 `origin/main`（`ca381d5`），得到固定验收头 `870752a`。本票仍仅加强测试和文档，不改生产代码或存储协议。没有必要原生子任务。
+
+在该固定代码上执行：
+
+```sh
+pnpm exec vitest run tests/work-store-contention.spec.ts tests/work-process.spec.ts tests/work-dao.spec.ts tests/work-source-freeze.spec.ts --maxWorkers=1 --reporter=verbose
+pnpm typecheck
+pnpm build
+```
+
+结果：4 文件、38 项全部通过，38.93 秒；类型检查及构建均成功。三交互写与后台发现竞争的用例为 6.655 秒，同 PID 五秒持锁用例为 5.815 秒；跨进程活锁超时和退出恢复用例为 30.628 秒。idle、纯 `nextAttemptAt`、安全错误原因及全部旧来源内容断言保持通过。旧真实库证据复核使用前节已存在的脚本和原始 JSON，没有重复写原始库。
+
+### 开发实例与请求记录
+
+使用 `agent-browser` 登录现有指定入口 **https://dsh-dev.e5box.a2d2.dev/**，打开 A²D² 控制面板并点击“刷新来源”。没有新建服务器或换用旧 preview。原生网络 HAR 与实际页面记录：
+
+| 真实页面触发的请求 | HTTP | 本机单次耗时 |
+| --- | --- | --- |
+| `source.catalog(refresh:true)` | 200 | 12467 毫秒 |
+| `source.issues(refresh:true)` | 200 | 14323 毫秒 |
+
+刷新按钮恢复可用，页面没有工作库错误。截图显示 Project 扫描为 100/140，仍可继续分页；这里不宣称全扫描完成。当前浏览器 HAR 不含响应正文，因此本轮记录只直接断言 HTTP 200、按钮恢复与页面无错误，不把缺失正文写成已捕获的 `completed` 字段。后台真实五秒持锁和三个并发写请求由前述确定性回归覆盖；此处页面操作本身不声称构造了该持锁负载。
+
+构建后将本轮产物与开发 profile 已安装的全部 **27 个后端 JavaScript 文件**逐字节比较，全部一致，包含 DAO、discovery 和工作路由。因此现有开发实例已具备本次验收的后端修复，无需为测试/文档变更重新安装或重启。DAO 文件 SHA-256 为 `801f393d25b789514635a193a619e59e86c939ff32418b8090dc84c9b061d3f7`。客户端 bundle 与当前构建的散列不同，本票没有客户端实现改动，未覆盖或升级该 bundle。未操作生产实例。
+
+本轮原始证据位于忽略目录 `docs/artifacts/163-2026-10-28/`：`targeted-tests.log`、`typecheck.log`、`build.log`、`installed-comparison.json`、`installed-server-comparison.json`、`dev-refresh.har`、`dev-refresh-summary.json`、`dev-refresh.png`。HAR 和截图保持本地，不提交含认证或业务上下文的原件。
+
+### 审查入口
+
+1. [三写者和旧库完整性断言](../../tests/work-store-contention.spec.ts#L67)：先看本票补强的两个回归场景。
+2. [原验收矩阵](#步骤与记录)：核对四项原始要求及兼容性边界。
+3. [本轮开发实例记录](#开发实例与请求记录)：核对已部署后端、真实页面结果和证据限制。
