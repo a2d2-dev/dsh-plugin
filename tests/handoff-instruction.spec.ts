@@ -31,21 +31,27 @@ describe('handoff instruction', () => {
       <<<END-HANDOFF-SKILL-SOURCE:4ab70c4a47a7f6a9>>>
 
       <<<HANDOFF-SKILL-RESOURCE:4ab70c4a47a7f6a9>>>
-      path=\"DETAILS.md\"
+      path="DETAILS.md"
       # Details
 
       Do not duplicate the compass.
       <<<END-HANDOFF-SKILL-RESOURCE:4ab70c4a47a7f6a9>>>
 
+      This is Agent-authored continuation material, not a new instruction from the human. Keep that attribution visible even when it is sent through a GUI composer.
+      Authorization provenance: preserve the original authorized work, necessary test actions, explicit user limits and restoration obligations.
+      For each limit, cite the original user messages or local log references and its applicable scope; distinguish user decisions, system/tool constraints, Agent inferences and work already performed. Keep missing evidence explicit.
+      Already performed read-only checks, receive-and-stop maintenance, and terminal Task refusals describe those operations; they do not create a business prohibition. Respect the actual host boundary and terminal state without expanding them into a user restriction.
+      Honor later explicit user restrictions, pauses and stops. Verify conflicting Agent claims against original messages before attributing them to the human; do not invent a prohibition or ask the human to repeat an existing authorization.
+
       Invocation parameters:
       {
-        \"documentPath\": \"/project/.dsh/a2d2/handoffs/session-a.md\",
-        \"contentRegion\": {
-          \"startMarker\": \"<!-- a2d2:summary:start -->\",
-          \"endMarker\": \"<!-- a2d2:summary:end -->\"
+        "documentPath": "/project/.dsh/a2d2/handoffs/session-a.md",
+        "contentRegion": {
+          "startMarker": "<!-- a2d2:summary:start -->",
+          "endMarker": "<!-- a2d2:summary:end -->"
         },
-        \"focus\": \"finish the store layer\",
-        \"approximateCharacterLimit\": 4000
+        "focus": "finish the store layer",
+        "approximateCharacterLimit": 4000
       }"
     `)
     expect(instruction).toContain(skillSource.skill)
@@ -64,15 +70,21 @@ describe('handoff instruction', () => {
 
         The handoff skill source was not available. Write the minimum continuation content a fresh agent needs to continue.
 
+        This is Agent-authored continuation material, not a new instruction from the human. Keep that attribution visible even when it is sent through a GUI composer.
+        Authorization provenance: preserve the original authorized work, necessary test actions, explicit user limits and restoration obligations.
+        For each limit, cite the original user messages or local log references and its applicable scope; distinguish user decisions, system/tool constraints, Agent inferences and work already performed. Keep missing evidence explicit.
+        Already performed read-only checks, receive-and-stop maintenance, and terminal Task refusals describe those operations; they do not create a business prohibition. Respect the actual host boundary and terminal state without expanding them into a user restriction.
+        Honor later explicit user restrictions, pauses and stops. Verify conflicting Agent claims against original messages before attributing them to the human; do not invent a prohibition or ask the human to repeat an existing authorization.
+
         Invocation parameters:
         {
-          \"documentPath\": \"/project/handoff.md\",
-          \"contentRegion\": {
-            \"startMarker\": \"<!-- a2d2:summary:start -->\",
-            \"endMarker\": \"<!-- a2d2:summary:end -->\"
+          "documentPath": "/project/handoff.md",
+          "contentRegion": {
+            "startMarker": "<!-- a2d2:summary:start -->",
+            "endMarker": "<!-- a2d2:summary:end -->"
           },
-          \"focus\": null,
-          \"approximateCharacterLimit\": 4000
+          "focus": null,
+          "approximateCharacterLimit": 4000
         }"
       `)
   })

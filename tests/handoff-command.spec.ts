@@ -194,7 +194,7 @@ describe('/handoff prepare', () => {
 
     const message = queued(agent)
     expect(message.role).toBe('user')
-    expect(message.source.kind).toBe('user')
+    expect(message.source).toEqual({ kind: 'a2d2-handoff', phase: 'prepare', sourceSessionId: source })
     const instruction = queuedText(agent)
     expect(instruction).toContain(path)
     expect(instruction).toContain(HANDOFF_SUMMARY_START)
@@ -251,6 +251,29 @@ describe('/handoff prepare', () => {
 })
 
 describe('/handoff take', () => {
+  it.each([
+    'U1: 只禁用和恢复 rise.io/platform-components，不卸载；观察 enabled=false，测试后恢复 enabled=true。此前只读核查，尚未禁用。',
+    'U1: 允许禁用和恢复，不卸载。U2（后来真实用户消息）: 本次只允许只读，暂不禁用。',
+  ])('retains the evidenced scope without presenting Agent material as a new human decision: %s', async body => {
+    const root = await tempRoot()
+    const h = await harness(root)
+    await h.invoke(' verify #3335 authorization')
+    const instruction = queuedText(h.agent)
+    expect(instruction).toContain('original user messages')
+    expect(instruction).toContain('restoration obligations')
+    expect(instruction).toContain('Already performed read-only checks')
+    await writeSummary(handoffPath(root, source), body)
+    const next = stubAgent(root, successor)
+    expect(await h.invokeAs(next, ' take session-a')).toMatchObject({ kind: 'success' })
+    expect(queued(next).source).toEqual({ kind: 'a2d2-handoff', phase: 'take', sourceSessionId: source })
+    const prompt = queuedText(next)
+    expect(prompt).toContain(body)
+    expect(prompt).toContain('Agent-authored handoff from session-a')
+    expect(prompt).toContain('not a new instruction from the human')
+    expect(prompt).toContain('later explicit user restrictions')
+    expect(prompt).toContain('repeat an existing authorization')
+  })
+
   it('queues the document body as the successor\'s first prompt', async () => {
     const root = await tempRoot()
     const { invoke, invokeAs, agent, service } = await harness(root)

@@ -15,6 +15,8 @@ declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
     /** A user message dsh-a2d2 builds for its own model call; never appended to a session. */
     'dsh-a2d2': { kind: 'dsh-a2d2' }
+    /** Plugin-produced handoff turns, distinct from a person's direct input. */
+    'a2d2-handoff': { kind: 'a2d2-handoff'; phase: 'prepare' | 'take'; sourceSessionId: string }
   }
 }
 
