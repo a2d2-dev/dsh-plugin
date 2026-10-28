@@ -322,6 +322,12 @@ it('inherits the actual Session-local reasoning effort and Project Agent instruc
   const kickoff = h.model.requests.find(request => request.messages.some(message => message.id === current.continuation!.kickoffId))!
   expect(JSON.stringify(kickoff.messages)).toContain('Coordinate accepted work and its acceptance criteria.')
   expect(JSON.stringify(kickoff.messages)).toContain('work_organize')
+  expect(JSON.stringify(kickoff.messages)).toContain('同步 todo 计划、work_organize 持久规格与派发')
+  expect(JSON.stringify(kickoff.messages)).toContain('交接材料保存不等于实际接任')
+  expect(JSON.stringify(kickoff.messages)).toContain('this request only transfers context and never authorizes business work')
+  expect(JSON.stringify(kickoff.messages)).toContain('Stop after this receipt; the plugin owns further scheduling.')
+  const materialRequest = h.model.requests.find(request => request.messages.some(message => message.id === current.continuation!.materialRequestId))!
+  expect(JSON.stringify(materialRequest.messages)).toContain('After saving, stop; the host will transfer coordination.')
   expect(defaultSaves).not.toHaveBeenCalled()
 })
 
