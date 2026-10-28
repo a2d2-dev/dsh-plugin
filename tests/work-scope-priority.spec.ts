@@ -38,3 +38,12 @@ it('assembles current-goal ordering and explicit revision instructions in the re
   expect(prompt).toContain('被明确修订替代的旧条款保留历史，不再作为当前门槛')
   expect(prompt).toContain('未获用户明确修订时保留原验收')
 })
+
+it('exposes explicit user revisions and history preservation in the registered organize tool description', async () => {
+  const h = await setup()
+  const description = h.model.requests[0]!.tools!.find(tool => tool.name === 'work_organize')!.description
+  expect(description).toContain('Explicit user revisions supersede the affected old criteria')
+  expect(description).toContain('sync the todo plan, persistent specification and dispatches')
+  expect(description).toContain('retain superseded requirements and the revision basis in history')
+  expect(description).toContain('Without an explicit revision, preserve original acceptance')
+})
