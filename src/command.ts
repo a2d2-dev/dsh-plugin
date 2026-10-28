@@ -18,6 +18,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { CommandInvocation, CommandResult } from '@deepseek-ai/dsh-commands'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import type {} from './message-source.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { TaskId } from './brand.ts'
 import { HANDOFF_USAGE, parseHandoffCommand } from './handoff.ts'
@@ -104,7 +105,7 @@ async function prepare(
   // conversation the summary is about.
   agent.followup(createUserMessage({
     content: [{ type: 'text', text: prepared.instruction }],
-    source: { kind: 'user' },
+    source: { kind: 'a2d2-handoff', phase: 'prepare', sourceSessionId: agent.id },
   }))
 
   return {
@@ -149,7 +150,7 @@ async function take(
   // This producer owns that message, which is why the edge is recorded first.
   agent.followup(createUserMessage({
     content: [{ type: 'text', text: taken.prompt }],
-    source: { kind: 'user' },
+    source: { kind: 'a2d2-handoff', phase: 'take', sourceSessionId: source },
   }))
 
   return {

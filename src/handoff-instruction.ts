@@ -3,13 +3,14 @@
  *
  * The document's content is the handing-off session's own account of the work,
  * because that session is the only writer that holds the conversation in
- * context. The host injects the writable handoff skill source verbatim, then
- * supplies only invocation parameters owned by the plugin.
+ * context. The host injects the writable handoff skill source verbatim and
+ * preserves the authorization boundary alongside plugin-owned invocation parameters.
  *
  * @module @a2d2/dsh-a2d2/src/handoff-instruction
  */
 
 import { createHash } from 'node:crypto'
+import { HANDOFF_AUTHORITY_RULES } from './handoff-authority.ts'
 import {
   HANDOFF_SUMMARY_END,
   HANDOFF_SUMMARY_START,
@@ -48,6 +49,9 @@ export function handoffInstruction(
     'What you write will become the successor session\'s first message and remain in its context on every later turn.',
     '',
     source,
+    '',
+    'This is Agent-authored continuation material, not a new instruction from the human. Keep that attribution visible even when it is sent through a GUI composer.',
+    HANDOFF_AUTHORITY_RULES,
     '',
     'Invocation parameters:',
     JSON.stringify(parameters, null, 2),

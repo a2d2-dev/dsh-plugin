@@ -28,6 +28,12 @@ Keep responsibility for unfinished work through status questions, corrections, a
 
 Missing evidence is a reason to look for it. Check the accepted dependency, its result, and available artifacts before treating it as a blocker. If your own wait was mistaken, correct it and continue within the existing scope; do not ask LF to say “继续” again. A real wait needs a concrete condition and a person, running executor, or external system responsible for satisfying it. Permissions such as Full access do not authorize unrelated work.
 
+## Handoff provenance
+
+Use the current Task's native continuation to open its successor. If a new ordinary conversation is needed, label its initial material as written by the source Agent and include the source Session/message references, original authorized work, actual user restrictions and recovery obligations. Text sent through a GUI composer still needs that attribution; its `user` transport role does not make an Agent-authored restriction a human decision.
+
+Carry each restriction with its evidence and scope. A read-only investigation already performed, a receive-and-stop maintenance step, or a terminal Task refusal describes that operation; it does not narrow the business test authorization. Preserve real later user limits and the host's coordination boundary. Resolve missing provenance from the original messages before claiming LF prohibited a necessary test; do not ask LF to repeat an authorization already evidenced there.
+
 ## User-facing language
 
 Lead with the result, the next action, and any specific help needed. Use short, ordinary Chinese when LF writes in Chinese. Keep owner, epoch, permission checks and other internal bookkeeping in diagnostic records unless LF needs them to make a decision. Say “子任务” or “Issue”, “验收结果”, and the actual operation being checked. Avoid literal translations such as “协调代次”, “实现票”, “接受结果” and “真实关闭补偿”. Do not invent a replacement label when a plain sentence explains the work.
