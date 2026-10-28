@@ -1,8 +1,14 @@
-# #152 原预览真实验收：只读准备结果
+# #152 开发服务器真实验收：准备方案
 
-父任务 [#150](https://github.com/a2d2-dev/dsh-plugin/issues/150)，执行任务 [#152](https://github.com/a2d2-dev/dsh-plugin/issues/152)。本记录是准备结果，不是运行验收。继续沿用 [既定六项验收脚本](https://github.com/a2d2-dev/dsh-plugin/blob/7e5566b48c23171a7d7a69550077b66b69d33ad0/docs/specs/v4-live-acceptance-script.md)，不减少场景。
+父任务 [#150](https://github.com/a2d2-dev/dsh-plugin/issues/150)，执行任务 [#152](https://github.com/a2d2-dev/dsh-plugin/issues/152)。本记录是准备结果，不是运行验收。后续使用[当前六项验收脚本](https://github.com/a2d2-dev/dsh-plugin/blob/2097a91/docs/specs/v4-live-acceptance-script.md)，保留全部功能条件，不减少场景；原始版本见[历史脚本](https://github.com/a2d2-dev/dsh-plugin/blob/7e5566b48c23171a7d7a69550077b66b69d33ad0/docs/specs/v4-live-acceptance-script.md)。
 
-## 已核实环境
+## 当前环境（LF 于 2026-10-28 更新）
+
+- 测试入口：[DSH 插件开发服务器](https://dsh-dev.e5box.a2d2.dev/)，实例 `dsh-plugin-dev-server`，`DSH_HOME=/data/_ssd2t/dsh-plugin-dev/home`。环境真相源为 `/data/_openclaw/environment/services.yaml` 的 `local_dev.dsh_plugin_dev`。
+- 仓库 `a2d2-dev/dsh-plugin` 已由 LF 改为 public；PRIVATE 不再作为验收前提。
+- 原 18782／18781 及下节快照属于历史环境。旧 18782 停服不再阻塞本任务；后续接缝、旧规则、隔离资源、模型路由和截图均在当前开发实例核实。历史 ID／来源／权限和已通过项保留原环境归属，不能直接视为新实例现状。
+
+## 历史准备快照（原 18782）
 
 准备执行者 session-e8933487-f87c-4a3c-b674-bc95513f9b70，通过 implement 实际派发 codex/gpt-6.1-sol/medium。锁定工具树 test/v4-acceptance @6b2522189cc64ebdea608789949b3237aa4b1d29；没有主动写文件、Git写、模型、浏览器、服务动作或GitHub mutation；无后台jobs。主会话在采用结果前已亲读公开路由、执行与运维脚本，并核对工具/PR状态。
 
@@ -25,7 +31,7 @@ source.connect全局去重可回到旧来源，适合验证识别/重复入口�
 
 ## 执行序列
 
-1. #154切换及原URL/原数据无fixture严格比对通过后，给独立QA写树和正式资源，再创建精确六项专用对象。
+1. 在当前开发入口核实实际实例、已有数据、规则和隔离资源；按具名阶段指令给独立QA写树和正式资源，再创建精确专用对象。现有六项对象先核对真实ledger与状态，避免重复创建。
 2. 页面验证Repo三页、Project四页和真实View1；C双来源身份唯一；建立真实P→C/E原生关系，P采纳完整必要子范围。
 3. C由自身Task验收；E由真实测试器生成proof/checksum、关闭，P读取当前updatedAt与交付证据后显式外部验收；Closed本身不足。
 4. P创建真实native只读校验child和自有checksum job。早done被拒后仍可收取；owner正式job_output和真实子通知后重新验收，不伪造consumed。
@@ -43,8 +49,8 @@ source.connect全局去重可回到旧来源，适合验证识别/重复入口�
 
 ## 证据与数据比对
 
-后续执行者必须先加载agent-browser技能及CLI core，在原18782采集1440×1000和390×844的实际页面。覆盖来源、必要子、真实job待收/收后、接续准备/taken、策略/草稿、模型计划/Block/暂停/等待、关闭冲突补同步和重启恢复。截图和中文报告写目的/步骤/记录，不含秘密。
+后续执行者必须先加载agent-browser技能及CLI core，在 https://dsh-dev.e5box.a2d2.dev/ 采集1440×1000和390×844的实际页面。覆盖来源、必要子、真实job待收/收后、接续准备/taken、策略/草稿、模型计划/Block/暂停/等待、关闭冲突补同步和重启恢复。截图和中文报告写目的/步骤/记录，不含秘密。
 
 先无fixture严格核对升级保留；验收后再按真实ledger核对精确增量。现采集器不覆盖continuousRules，须额外保留公开continuous.status；externalIndex既有映射必须全保留，只允许本run已登记canonical新增，不放宽旧identity。E/X不import。不能把现retention比较器描述为已自动容许所有合法fixture变化。
 
-当前真实验收、模型trace、native运行入口和重启均未完成；这些不是已通过项。
+本方案形成时，真实验收、模型trace、native运行入口和重启尚未完成；后续历史实跑结果见 #152 评论与各轮证据。当前开发实例仍须逐项记录实际通过及未完成项。
