@@ -43,6 +43,8 @@ it('assembles current-goal ordering and explicit revision instructions in the re
   expect(prompt).toContain('安全和数据边界继续有效')
   expect(prompt).toContain('不能自动把审计发现升级为前置工程')
   expect(prompt).toContain('交接材料保存不等于实际接任')
+  expect(prompt).toContain('关闭或结束当前会话只要求停止该会话，不等于放弃 Task 或本项队列处理')
+  expect(prompt).toContain('后续仅解释目标也不撤销停止')
   expect(prompt).toContain('用宿主明确状态或回执核实当前操作、负责会话与后继接任')
   expect(prompt).toContain('执行该准确步骤后停止，由宿主继续转交')
   expect(prompt).toContain('不允许旧会话跨越转交执行业务，也不恢复用户已停止的工作')
