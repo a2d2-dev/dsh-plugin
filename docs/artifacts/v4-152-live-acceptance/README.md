@@ -1,6 +1,14 @@
-# #152 专用验收对象正文
+# #152 历史专用验收对象正文（r01）
 
-这些是#150主会话依据既定脚本保存的工单正文；尚未创建外部对象、注册workspace或开始验收。实际执行前必须等[#154](https://github.com/a2d2-dev/dsh-plugin/issues/154)原18782切换及原数据比对通过。
+## 当前入口提示（2026-10-28）
+
+LF 已将测试入口改为 https://dsh-dev.e5box.a2d2.dev/，仓库采用 public。当前使用[更新后的完整脚本](https://github.com/a2d2-dev/dsh-plugin/blob/2097a91/docs/specs/v4-live-acceptance-script.md)；新实例准备记录见[只读 API 与隔离核对](../v4-152-dev-api-preparation-20261028/README.md)。旧 18782 停服不再是阻塞或恢复前置。
+
+本目录六正文固定为历史 r01 的原始要求，含当时工作目录和完成令；原封保留，不直接作为新实例的运行指令。P#157/C#158/X#162 当前 Open，E#159/A#160/B#161 已 Closed；后续先核对 ledger 与状态，按新实例独立资源准备实际阶段，不重复创建或重开历史对象。
+
+## 历史准备记录
+
+以下正文与操作顺序是 #150 主会话当时保存的准备方案；“尚未创建”及 #154／18782／PRIVATE 条件描述的是该历史阶段，不代表当前状态。后续真实运行记录见 #152 评论与各轮报告。
 
 - 固定依据：[完整六项脚本](https://github.com/a2d2-dev/dsh-plugin/blob/7e5566b48c23171a7d7a69550077b66b69d33ad0/docs/specs/v4-live-acceptance-script.md)、[PR153具体验收方案](https://github.com/a2d2-dev/dsh-plugin/pull/153/files)。
 - nonce：`v4-152-6b252218-r01`；workspace预定`/data/_dsh-dev/acceptance-workspaces/v4-152-r01`，只有正式注册返回的resource ref能进入执行命令。
