@@ -60,7 +60,7 @@ export interface HostExecutionChoices {
 export interface WorkExecutionOptions extends HostExecutionChoices { agentId: string; resources: HostResource[] }
 export interface ExecutionRef { ref: TaskRef; executionId: string }
 export interface NativeWorkMessage { id: string; role: 'user'; content: readonly unknown[]; source: unknown }
-export interface WorkEvent { id: string; text: string; kind: 'input' | 'result'; delivery: 'accepted' | 'delivered' | 'consumed' | 'discarded'; acceptance: 'unassessed'; nativeMessage?: NativeWorkMessage }
+export interface WorkEvent { id: string; text: string; kind: 'input' | 'result'; delivery: 'accepted' | 'delivered' | 'consumed' | 'discarded'; acceptance: 'unassessed'; discardReason?: 'superseded'; nativeMessage?: NativeWorkMessage }
 /** Source-authored material; full original text is retained before any delivery redaction. */
 export interface ContinuationContent { body: string; decisions: string; evidence: string; unfinished: string; next: string }
 export interface ContinuationMaterial extends ContinuationContent {

@@ -6,6 +6,8 @@
 
 接续后先调用 `status` 查看 `readProgress`。它只暴露经真实工具 call/result 日志核实的游标、revision 和 complete。未完成结果可从原游标继续；完整且末轮未变的结果无需因 epoch 切换重读。每页保存产生该回执的协调会话和 epoch，核实范围限于当前 TaskExecution 的 current/retired 链。历史回执可复用，退休会话仍不能发起新业务操作。
 
+已有事件上的可选 `discardReason: "superseded"` 原样保留；严格 schema 继续拒绝其他原因值或未知字段。
+
 旧存储记录的 `pages` 字段可缺省，校验时按该记录 epoch 在同一执行链中解析原协调日志。旧完整回执仍有效；旧原始事件 JSON 的未完成游标与新投影 revision 不同，需从零重读一次。不存在真实工具提交、页面不连续、revision 不匹配或新末轮 endSeq 变化时，旧进度不能结清当前结果。
 
 回归覆盖见 `tests/work-child-result-projection.spec.ts` 和 `tests/work-continuation-pending-children.spec.ts`：投影排除重放噪音、保留原文及失败、成功工具详情留原日志、长文本跨代分页逐字重组、完整回执继承、旧 schema、伪造/未提交回执拒绝、无关 Task 和退休会话拒绝、新末轮失效，以及 pause/wait 保持。
