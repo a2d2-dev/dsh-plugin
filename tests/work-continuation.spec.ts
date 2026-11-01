@@ -353,6 +353,83 @@ it('keeps retired conversations usable after cold restore without restoring Task
   expect(await restored.app.query({ type: 'session.work', session: h.execution.session }, operator)).toMatchObject({ work: [{ purpose: 'history', executionId: current.id, epoch: 1, currentSession: current.session }] })
 })
 
+it.each(['user', 'a2d2-work-dispatch'] as const)('checks later steps of the same %s turn after a completed tool crosses the soft target', async kind => {
+  const h = await setup()
+  const source = h.ctx.agents.get(SessionId(h.execution.session.sessionId))!
+  const resolve = h.model.resolveModel.bind(h.model)
+  vi.spyOn(h.model, 'resolveModel').mockImplementation(async (provider, model) => ({ ...await resolve(provider, model), context: { contextWindow: 512_000 }, defaultMaxTokens: 8_000 }))
+  let completedTools = 0
+  const deferred = createUserMessage({ content: [{ type: 'text', text: 'Preserve this complete automatic envelope across the safe boundary' }], source: { kind: 'a2d2-work-dispatch' } })
+  const measurements: number[] = []
+  h.ctx.provide('tokenMeter' as never, { measure(session: { id: string; seq: number }) {
+    const totalTokens = session.id === source.id && completedTools >= 2 ? 300_001 : 100
+    measurements.push(totalTokens)
+    return { totalTokens, logRevision: session.seq, baseline: { kind: 'usage' } }
+  } } as never)
+  h.ctx.on('tools/result', exec => {
+    if (exec.agent !== source || exec.name !== 'work_control') return
+    completedTools++
+    if (completedTools === 2 && kind === 'a2d2-work-dispatch') source.steer(deferred)
+  })
+  await h.app.execute({ type: 'task.configure-continuation', commandId: 'step-policy', ...fence(h.execution), policy: { version: 1, enabled: true, targetTokens: 300_000, reserveTokens: 16_000 } }, operator)
+  h.model.nextTool = { name: 'work_control', arguments: { action: 'progress', text: 'Tool completed before the next safe step' } }
+  h.model.uniqueToolIds = true
+  let remaining = 1
+  h.model.selectTool = () => remaining-- > 0 ? { name: 'work_control', arguments: { action: 'progress', text: 'Second completed tool crosses the soft target' } } : undefined
+  const requests = h.model.requests.length
+  source.followup(createUserMessage({ content: [{ type: 'text', text: 'Continue the authorized task through multiple steps' }], source: kind === 'user' ? { kind: 'user' } : { kind: 'a2d2-work-dispatch' } }))
+  await fixtures.run(() => source.whenIdle())
+  expect(completedTools).toBe(2)
+  expect(measurements).toContain(100)
+  expect(measurements).toContain(300_001)
+  expect(h.model.requests).toHaveLength(requests + 2)
+  const sourceLog = await fixtures.run(() => h.ctx.sessionController.inspect(source.id))
+  const start = sourceLog.events.findLast(event => event.type === 'turn/start')!
+  const steps = sourceLog.events.filter(event => event.type === 'step/start' && event.seq > start.seq)
+  expect(steps).toHaveLength(2)
+  expect(sourceLog.events.findLast(event => event.type === 'turn/end')).toMatchObject({ data: { reason: { kind: 'blocked' } } })
+  const reserved = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(reserved).toMatchObject({ execution: { epoch: 1, continuationObservation: { totalTokens: 300_001 }, continuation: { automatic: true, phase: 'reserved' } } })
+  if (kind === 'a2d2-work-dispatch') expect(reserved).toMatchObject({ execution: { events: expect.arrayContaining([expect.objectContaining({ id: deferred.id, nativeMessage: deferred, delivery: 'accepted' })]) } })
+  h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+  await fixtures.run(() => h.app.reconcileControls())
+  await fixtures.run(() => source.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  const taken = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (taken.status !== 'completed' || !taken.execution?.continuation) throw new Error(JSON.stringify(taken))
+  const successor = h.ctx.agents.get(SessionId(taken.execution.session.sessionId))!
+  await fixtures.run(() => successor.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  await fixtures.run(() => successor.whenIdle())
+  const completed = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(completed).toMatchObject({ execution: { id: h.execution.id, owner: h.execution.owner, epoch: 2, continuation: { phase: 'received' } } })
+  expect(completed.status === 'completed' && completed.execution?.runtimeFailure).toBeUndefined()
+  expect(h.model.requests.some(request => request.messages.some(message => message.id === `continuation-business:${taken.execution!.continuation!.operationId}`))).toBe(true)
+  if (kind === 'a2d2-work-dispatch') expect(h.model.requests.some(request => request.messages.some(message => message.id === deferred.id && JSON.stringify(message.content) === JSON.stringify(deferred.content)))).toBe(true)
+  expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(2)
+})
+
+it.each(['pause', 'wait'] as const)('keeps the admitted final answer and %s after a tool crosses the target', async action => {
+  const h = await setup()
+  const source = h.ctx.agents.get(SessionId(h.execution.session.sessionId))!
+  const resolve = h.model.resolveModel.bind(h.model)
+  vi.spyOn(h.model, 'resolveModel').mockImplementation(async (provider, model) => ({ ...await resolve(provider, model), context: { contextWindow: 512_000 }, defaultMaxTokens: 8_000 }))
+  let crossed = false
+  h.ctx.provide('tokenMeter' as never, { measure(session: { seq: number }) { return { totalTokens: crossed ? 300_001 : 100, logRevision: session.seq, baseline: { kind: 'usage' } } } } as never)
+  await h.app.execute({ type: 'task.configure-continuation', commandId: 'hold-step-policy', ...fence(h.execution), policy: { version: 1, enabled: true, targetTokens: 300_000, reserveTokens: 16_000 } }, operator)
+  h.ctx.on('tools/result', exec => { if (exec.agent === source && exec.name === 'work_control') crossed = true })
+  h.model.nextTool = { name: 'work_control', arguments: { action, text: 'Preserve the explicit human boundary', ...(action === 'wait' ? { yield_reason: 'human', checked_facts: ['LF must decide'], wake_condition: 'LF supplies the decision' } : {}) } }
+  const before = h.model.requests.length
+  source.followup(createUserMessage({ content: [{ type: 'text', text: 'Advance until the explicit hold' }], source: { kind: 'a2d2-work-dispatch' } }))
+  await fixtures.run(() => source.whenIdle())
+  expect(crossed).toBe(true)
+  expect(h.model.requests).toHaveLength(before + 2)
+  await fixtures.run(() => h.app.reconcileControls())
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { epoch: 1, state: action === 'pause' ? 'paused' : 'waiting', control: { action, status: 'applied' } } })
+  const held = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(held.status === 'completed' && held.execution?.continuation).toBeUndefined()
+})
+
 it.each([100, 200_001])('automatically continues at a 200K soft target and observes successor context of %i tokens', async successorTokens => {
   const h = await setup()
   const resolve = h.model.resolveModel.bind(h.model)

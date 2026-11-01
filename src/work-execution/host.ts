@@ -6,6 +6,9 @@ export type WorkAdmission = boolean | MaintenanceAdmission
 /** Trusted host boundary. check must be read-only and reject missing capabilities before reservation. */
 export interface WorkExecutionHost {
   connect(authorize: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<WorkAdmission>, conversation?: (sessionId: string) => Promise<string | undefined>, pendingHumanInput?: (sessionId: string) => Promise<readonly import('../work-types.ts').NativeWorkMessage[]>): void
+  /** Observe between completed steps. False rechecks admission without revoking
+   * an admitted turn's ordinary result/final-answer allowance after wait/done. */
+  connectStepBoundary?(observe: (sessionId: string) => Promise<boolean>): void
   connectGuard?(guard: import('./guard.ts').WorkGuard): void
   connectObservation?(scope: import('./observation.ts').ObservationScope): void
   observation?(execution: WorkExecution, associations?: readonly import('../work-types.ts').SessionAssociation[], reporter?: import('@deepseek-ai/dsh-tools').ToolExecutionToken): Promise<import('./observation.ts').ExecutionObservation>
