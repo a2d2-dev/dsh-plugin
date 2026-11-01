@@ -10,13 +10,28 @@ export function installWorkControlRecovery(ctx: Context, app: WorkApplication): 
   ctx.effect(() => {
     let closed = false
     let running: Promise<void> | undefined
+    let scanning: Promise<void> | undefined
+    const lifecycle = new Map<string, Promise<void>>()
+    const recover = (sessionId: string) => {
+      if (closed || lifecycle.has(sessionId)) return
+      const operation = app.reconcileSessionControls(sessionId)
+        .catch(error => { ctx.logger.warn(`work Session control recovery: ${String(error)}`) })
+        .finally(() => { lifecycle.delete(sessionId) })
+      lifecycle.set(sessionId, operation)
+    }
     const tick = () => {
+      // A slow full scan must not strand material already saved by an idle Session.
+      // The startup/timer pass also recovers intent whose idle event predates this plugin.
+      if (!closed && !scanning) scanning = app.pendingSessionControls().then(sessions => { for (const sessionId of sessions) recover(sessionId) })
+        .catch(error => { ctx.logger.warn(`work pending control scan: ${String(error)}`) }).finally(() => { scanning = undefined })
       if (closed || running) return
       running = app.reconcileControls().catch(error => { ctx.logger.warn(`work control recovery: ${String(error)}`) }).finally(() => { running = undefined })
     }
     // agent/status is emitted after the real loop changes to idle. The recovery
     // read yields out of the event callback; it never waits on its emitting turn.
-    const off = ctx.on('agent/status', ({ status }) => { if (status === 'idle') tick() })
+    const off = ctx.on('agent/status', ({ agent, status }) => {
+      if (status === 'idle') { recover(agent.id); tick() }
+    })
     // This fallback reconciles the whole work snapshot; with a Project of
     // thousands of items a 250ms cadence re-parsed megabytes several times a
     // second and starved the server event loop. The idle event above is the
@@ -24,7 +39,7 @@ export function installWorkControlRecovery(ctx: Context, app: WorkApplication): 
     const timer = setInterval(tick, 2_000)
     timer.unref()
     tick()
-    return async () => { closed = true; clearInterval(timer); off(); await running }
+    return async () => { closed = true; clearInterval(timer); off(); await Promise.all([running, scanning, ...lifecycle.values()]) }
   }, 'persisted managed work control recovery')
 }
 
