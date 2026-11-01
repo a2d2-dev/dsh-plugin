@@ -68,7 +68,7 @@ export class WorkDao {
     return dao
   }
   readonly file: string
-  private cached?: { key: string; content?: string; state: WorkSnapshot }
+  private cached?: { key: string; content?: Buffer; state: WorkSnapshot }
   private loading?: Promise<WorkSnapshot>
   private writers: Promise<void> = Promise.resolve()
   private listeners = new Set<() => void>()
@@ -98,11 +98,11 @@ export class WorkDao {
       const key = await this.key()
       // Same-inode, same-size writes can share timestamps on real filesystems.
       // Recheck the hot control bytes; immutable archives remain lazy and cold.
-      const content = key === 'missing' ? undefined : await readFile(this.file, 'utf8')
+      const content = key === 'missing' ? undefined : await readFile(this.file)
       // An external writer can rename between stat and read. Never label that data with an older revision.
       if (await this.key() !== key) continue
-      if (this.cached?.key === key && this.cached.content === content) return this.cached.state
-      const parsed = content === undefined ? empty() : snapshotSchema.parse(JSON.parse(content))
+      if (this.cached?.key === key && (content === undefined ? this.cached.content === undefined : this.cached.content?.equals(content))) return this.cached.state
+      const parsed = content === undefined ? empty() : snapshotSchema.parse(JSON.parse(content.toString('utf8')))
       const state = this.materialize(parsed)
       const changed = this.cached !== undefined
       this.cached = { key, content, state }
@@ -354,7 +354,8 @@ export class WorkDao {
     const content = `${JSON.stringify(persisted)}\n`
     await writeFileAtomic(this.file, content, options)
     const key = await this.key()
-    if (this.cached?.key !== key || this.cached.content !== content) { this.cached = { key, content, state }; this.notify() }
+    const bytes = Buffer.from(content, 'utf8')
+    if (this.cached?.key !== key || !this.cached.content?.equals(bytes)) { this.cached = { key, content: bytes, state }; this.notify() }
   }
   /** All readers and writers must be stopped: readers may still hold an older root.
    * The normal writer lock additionally excludes cooperating accidental writers.
