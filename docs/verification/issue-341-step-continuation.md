@@ -23,6 +23,14 @@ turn 准入缓存继续允许 wait/done 后提交已执行工具的结果和最�
 
 旧代码红灯已记录在 `docs/artifacts/auto-continuation-341-20261101/step-red.log`：自动例 measurements 只有 `[100]`，未包含 300001。首次人工例遇机器磁盘 I/O 导致默认 15 秒超时，不作为产品失败证据。增强回归使用命令级 60 秒预算。
 
-定向绿灯 `step-green.log`：人工及自动两例通过，测试主体共 3.95 秒；包含同 turn 两个真实工具步骤、低/高两次读数、blocked、唯一后继、received、业务自动继续与原 envelope 保全。完整接续、边界、执行护栏、结束及持续队列回归和类型检查仍在执行，结果另补记录。
+定向绿灯 `step-green.log`：人工及自动两例通过，测试主体共 3.95 秒；包含同 turn 两个真实工具步骤、低/高两次读数、blocked、唯一后继、received、业务自动继续与原 envelope 保全。
+
+完整相关回归 `affected.log`：5 文件、96 项全部通过，测试主体 33.78 秒，总耗时 39.40 秒。范围为 `work-continuation`（含新增等待/暂停用例）、`work-execution-boundary`、`work-execution-guard`、`work-queue-end-host`、`work-continuous-integration`。命令为：
+
+```sh
+PATH=/root/.nvm/versions/node/v22.23.1/bin:$PATH pnpm exec vitest run tests/work-continuation.spec.ts tests/work-execution-boundary.spec.ts tests/work-execution-guard.spec.ts tests/work-queue-end-host.spec.ts tests/work-continuous-integration.spec.ts --testTimeout 60000
+```
+
+`pnpm typecheck` 在参数化测试的 MessageSource 联合类型修正后退出 0，日志 `typecheck-green.log`。该修正仅把测试的 `{ kind }` 改成两个显式来源分支，生产代码及回归行为不变。`git diff --check` 通过。构建、包检查、CI 和开发实例页面验收由主协调统一执行，不在本实施分支重复运行。
 
 开发页面与真实模型验收由主协调执行，本实施记录不代替该验收。正式 #1474 的策略、状态、队列和服务均未操作。
