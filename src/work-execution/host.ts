@@ -9,6 +9,7 @@ export interface WorkExecutionHost {
   connectGuard?(guard: import('./guard.ts').WorkGuard): void
   connectObservation?(scope: import('./observation.ts').ObservationScope): void
   observation?(execution: WorkExecution, associations?: readonly import('../work-types.ts').SessionAssociation[], reporter?: import('@deepseek-ai/dsh-tools').ToolExecutionToken): Promise<import('./observation.ts').ExecutionObservation>
+  childRecovery?(execution: WorkExecution, child: NonNullable<import('../work-types.ts').ContinuationOperation['pendingChildren']>[number], action: 'status' | 'result' | 'resume', request?: NonNullable<WorkExecution['childRecovery']>[number], signal?: AbortSignal): Promise<{ status: string; endSeq?: number; messageId?: string; events?: unknown[] }>
   wake(execution: WorkExecution): Promise<void>
   status(execution: WorkExecution): 'running' | 'idle' | 'inactive'
   choices(): Promise<import('../work-types.ts').HostExecutionChoices>
@@ -22,8 +23,9 @@ export interface WorkExecutionHost {
   failure?(execution: WorkExecution): Promise<{ id: string; message: string; userCancelled: boolean } | undefined>
   profile?(execution: WorkExecution): Promise<NonNullable<WorkExecution['actual']>>
   measure?(execution: WorkExecution): Promise<import('../work-types.ts').ContinuationObservation>
-  /** Holds source and related live executors in maintenance, flushes their logs
-   * (including job journals), then rechecks settlement before body. Body must
+  /** Holds source and associated non-child executors in maintenance, flushes their logs
+   * (including job journals), then rechecks their safety before body. Native child
+   * work is carried forward as pending; it does not delay this boundary. Body must
    * not call settle/whenIdle/runMaintenance on these already-held executors. */
   maintain?<T>(execution: WorkExecution, body: () => Promise<T>): Promise<T>
   sealInput?(execution: WorkExecution, operationId: string): Promise<{ seq: number; messages: readonly import('../work-types.ts').NativeWorkMessage[] }>

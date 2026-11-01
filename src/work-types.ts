@@ -25,6 +25,7 @@ export interface ContinuationOperation {
   history: { ref: TaskRef; session: SessionRef }
   collections?: { session: SessionRef; jobs: { id: string; registryEpoch?: string; instanceId?: string }[]; requestId: string; delivery: 'accepted' | 'delivered' | 'consumed'; status: 'requested' | 'collected' }[]
   settlements?: { parent: SessionRef; child: SessionRef; endSeq: number; messageId: string; delivery: 'accepted' | 'delivered' | 'consumed' }[]
+  pendingChildren?: { parent: SessionRef; child: SessionRef; label?: string; reason?: string; mode: 'one-shot' | 'continuable' | 'unknown'; status: 'running' | 'idle' | 'inactive' | 'unknown'; result: 'pending' | 'consumed' | 'unknown'; returned: boolean; endSeq?: number; tools: { callId: string; name: string }[]; jobs: { id: string; label: string; status: string; delivery: string; availability?: string }[]; blockers: string[]; next: string }[]
   materialFactsKey?: string
   goalActivation?: { status: 'none' | 'disarmed'; goalId?: string; revision?: number; phase?: string }
   readable?: { callId: string; materialCommandId: string }
@@ -81,6 +82,8 @@ export interface WorkExecution {
   continuation?: ContinuationOperation
   continuationHistory?: ContinuationOperation[]
   retired?: { session: SessionRef; epoch: number; operationId: string }[]
+  childRecovery?: { requestId: string; parent: SessionRef; child: SessionRef; epoch: number; text: string; messageId?: string }[]
+  childReceipts?: { child: SessionRef; endSeq: number; epoch: number; callId: string; callIds: string[]; cursor: number; revision: string; complete: boolean }[]
   continuationMaterial?: ContinuationMaterial
   progress?: string
   executionGuard?: { corrections: number; progress: string[]; exhausted?: boolean }

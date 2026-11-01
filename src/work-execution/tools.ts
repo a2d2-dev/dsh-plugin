@@ -55,6 +55,23 @@ export function installWorkTools(ctx: Context, app: WorkApplication, runtimeId: 
     presentCall: args => ({ card: 'generic', title: `Read work: ${args.section}`, kind: 'other' }),
   })), 'explicit managed work material reading')
   ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'work_child_recover',
+    description: 'Take over unfinished native child work recorded in this Task continuation. status observes without starting work; result reads the real latest returned turn and records current coordinator receipt, separately from native parent notification and business acceptance. resume continues an inactive unfinished child through its original parent public route without reparenting; running or returned work is never restarted. Task pause/end remain binding.',
+    parameters: {
+      child_session_id: { type: 'string', required: true },
+      cursor: { type: 'integer', description: 'Result character offset, initially zero; then exact nextCursor.' },
+      revision: { type: 'string', description: 'Result revision from prior page; restart at zero if changed.' },
+      action: { type: 'string', required: true, enum: ['status', 'result', 'resume'] },
+      text: { type: 'string', description: 'Exact remaining authorized child instructions, required for resume.' },
+      expected_epoch: { type: 'integer', required: true },
+    },
+    output: { schema: { type: 'object', additionalProperties: false, properties: { result: { type: 'string', required: true } } }, render: (_, value) => [{ type: 'text', text: value.result }] },
+    async execute(args, exec) {
+      if (!exec.agent || exec.agent.session.id !== exec.agent.id) throw new Error('Child recovery requires a real calling Agent Session')
+      return { result: JSON.stringify(await app.sessionChildRecovery({ runtimeId, sessionId: exec.agent.id }, exec.callId, args.child_session_id, args.action, args.text, args.expected_epoch, exec.signal, args.cursor, args.revision)) }
+    },
+  })), 'Task scoped native child recovery')
+  ctx.effect(() => ctx.tools.register(defineTool({
     name: 'work_continuation_material',
     description: 'Save your current managed Task continuation material: the original discussion, concrete accepted decisions, evidence, unfinished work and next step. Task and source Session references are resolved by the server. This saves material only; it does not transfer coordination or start a successor.',
     parameters: {

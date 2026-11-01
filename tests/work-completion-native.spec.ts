@@ -224,7 +224,8 @@ it.for(['ready', 'waiting', 'paused'] as const)('continues the same operation af
     await started
     const reserved = ok(await h.app.execute({ type: 'task.continue', commandId: 'continue-with-live-child', ...fence }, operator)).execution!
     const op = reserved.continuation!
-    expect(reserved).toMatchObject({ epoch: 1, continuation: { phase: 'reserved', error: { code: 'continuation-waiting-executions' } } })
+    expect(reserved).toMatchObject({ epoch: 1, continuation: { phase: 'material-requested', pendingChildren: [{ child: { sessionId: child.childId }, returned: false }] } })
+    await fixtures.run(() => parent.whenIdle())
     // Release only after reservation. Subagents itself delivers the required
     // notice; forged messages below are separate rejection probes.
     const childAgent = h.ctx.agents.get(child.childId)!
@@ -301,7 +302,9 @@ it.for(['ready', 'waiting', 'paused'] as const)('continues the same operation af
     expect((await runtime.events(parent.id)).filter(event => event.type === 'user/message' && event.data.id === originalNotice.id)).toHaveLength(1)
     expect(ok(await h.app.query({ type: 'task.execution', ref }, operator)).execution!.progress).toBeUndefined()
     const material = { body: 'Keep late native evidence from the exact child history.', decisions: 'Retain original Task and owner.', evidence: `Child ${child.childId} returned late native evidence.`, unfinished: 'Verify successor', next: 'Use the late native result to advance the original acceptance.' }
+    await h.app.reconcileControls()
     h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+    await h.app.execute({ type: 'task.continue', commandId: 'retry-material-after-settlement', ...fence }, operator)
     await h.app.reconcileControls()
     await fixtures.run(() => parent.whenIdle())
     await h.app.reconcileControls()

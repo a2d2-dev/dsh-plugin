@@ -19,6 +19,7 @@ export interface ExecutionJob {
   availability?: 'live' | 'lost' | 'history'
 }
 export interface NativeExecution {
+  label?: string
   session: SessionRef
   mode: 'one-shot' | 'continuable' | 'unknown'
   status: 'running' | 'idle' | 'inactive' | 'unknown'

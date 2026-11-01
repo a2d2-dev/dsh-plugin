@@ -1,0 +1,172 @@
+import { expect, it, vi } from 'vitest'
+import { SessionId } from '@deepseek-ai/dsh-session'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import Subagents from '@deepseek-ai/dsh-subagent'
+import { defineTool } from '@deepseek-ai/dsh-tools'
+import { installWorkTools } from '../src/work-execution/tools.ts'
+import { RuntimeHost } from '../src/task-runtime/host.ts'
+import { ExecutionFixtures } from './work-execution-fixture.ts'
+import type { WorkResult } from '../src/work-types.ts'
+const operator = { operator: true }
+const ok = (result: WorkResult) => { if (result.status !== 'completed') throw Error(JSON.stringify(result)); return result }
+const material = { body: 'Retain original accepted work.', decisions: 'Continue the same Task.', evidence: 'Native child still owes a result.', unfinished: 'Collect pending child work.', next: 'Use work_child_recover for the exact pending child.' }
+const report = { specificationVersion: 1, stage: 'done' as const, summary: 'verified', next: '', blockers: [], criteria: [{ index: 0, passed: true, evidence: ['native result verified'] }] }
+
+it('hands off while a real native child tool is running, receives its late result and preserves native delivery facts', async ({ signal }) => {
+  const fixtures = new ExecutionFixtures(signal)
+  let release!: () => void
+  try {
+    const h = await fixtures.mount(await fixtures.root(), 'read-only')
+    h.model.uniqueToolIds = true
+    await h.ctx.plugin(Subagents, { maxActiveSubagents: 8, maxDepth: 1 })
+    h.ctx.subagents.registerProvider({ name: 'fresh-local', capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false }, inheritsParentContext: false,
+      async prepareContinuable() { return {} }, async start() { throw Error('Only native continuable creation is used') } })
+    installWorkTools(h.ctx, h.app, 'runtime')
+    let entered!: () => void
+    const started = new Promise<void>(resolve => { entered = resolve })
+    const gate = new Promise<void>(resolve => { release = resolve })
+    h.ctx.tools.register(defineTool({ name: 'hold_native', description: 'Real unfinished child work', parameters: {},
+      output: { schema: { type: 'object', additionalProperties: false, properties: { result: { type: 'string', required: true } } }, render: (_, value) => [{ type: 'text', text: value.result }] },
+      async execute() { entered(); await gate; return { result: 'late native verification passed' } } }))
+    const resource = { runtimeId: 'runtime', workspaceId: h.workspace.id }
+    const project = ok(await h.app.execute({ type: 'project.create', commandId: 'project', name: 'pending child', resource }, operator)).project!
+    const task = ok(await h.app.execute({ type: 'task.create', commandId: 'task', projectId: project.id, title: 'pending child', goal: 'verify', specification: 'native continuation', acceptance: ['verified'] }, operator)).task!
+    const ref = { projectId: project.id, taskId: task.id }
+    const execution = ok(await h.app.execute({ type: 'task.start', commandId: 'start', ref, expectedVersion: task.version, agentId: task.agentId, resource, model: { provider: 'contract', model: 'default' }, agentPreset: 'contract', permissionPreset: 'read-only' }, operator)).execution!
+    const parent = h.ctx.agents.get(SessionId(execution.session.sessionId))!
+    await fixtures.run(() => parent.whenIdle())
+    h.model.nextTool = { name: 'hold_native', arguments: {} }
+    const child = await fixtures.run(() => h.ctx.subagents.startContinuable({ provider: 'fresh-local', label: 'unfinished verification', request: { parent, prompt: [{ type: 'text', text: 'Produce native evidence' }] }, signal: signal! }))
+    await started
+    h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+    const command = { type: 'task.continue', commandId: 'continue-pending-child', ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch }
+    const reserved = ok(await h.app.execute(command, operator)).execution!
+    expect(reserved.continuation!.error).toBeUndefined()
+    await fixtures.run(() => parent.whenIdle())
+    await fixtures.run(() => h.app.reconcileControls())
+    let current = ok(await h.app.query({ type: 'task.execution', ref }, operator)).execution!
+    expect(current).toMatchObject({ epoch: 2, continuation: { pendingChildren: [{ parent: execution.session, child: { runtimeId: 'runtime', sessionId: child.childId }, status: 'running', returned: false, result: 'pending', tools: [{ name: 'hold_native' }] }] } })
+    const successor = h.ctx.agents.get(SessionId(current.session.sessionId))!
+    await fixtures.run(() => successor.whenIdle())
+    await fixtures.run(() => h.app.reconcileControls())
+    current = ok(await h.app.query({ type: 'task.execution', ref }, operator)).execution!
+    expect(current.continuation!.phase).toBe('received')
+    const log = await new RuntimeHost(h.ctx).events(successor.id)
+    expect(JSON.stringify(log)).toContain(child.childId)
+    expect(JSON.stringify(log)).toContain('Unreturned child work')
+    expect(await h.app.sessionReport(current.session, 'premature-done', report, 2)).toMatchObject({ status: 'failed', error: { code: 'completion-results-unsettled' } })
+    expect(await h.app.sessionChildRecovery(current.session, 'running-no-restart', child.childId, 'resume', 'Finish verification', 2, signal!)).toMatchObject({ status: 'completed', childStatus: 'running' })
+    expect(await h.app.sessionControl(execution.session, 'retired-write', 'progress', 'No authority')).toMatchObject({ status: 'failed', error: { code: 'forbidden' } })
+    await h.app.execute(command, operator)
+    expect(ok(await h.app.query({ type: 'task.execution', ref }, operator)).execution!.epoch).toBe(2)
+    release()
+    await expect.poll(async () => (await new RuntimeHost(h.ctx).executionFacts(parent.id, 'runtime', 'retired')).children[0]?.returned).toBe(true)
+    await fixtures.run(() => parent.whenIdle())
+    expect(await h.app.sessionReport(current.session, 'still-unreceived', report, 2)).toMatchObject({ status: 'failed', error: { code: 'completion-results-unsettled' } })
+    let page = await h.app.sessionChildRecovery(current.session, 'uncommitted-result-0', child.childId, 'result', undefined, 2, signal!)
+    let pageIndex = 1
+    while ('nextCursor' in page && page.nextCursor !== undefined) page = await h.app.sessionChildRecovery(current.session, `uncommitted-result-${pageIndex++}`, child.childId, 'result', undefined, 2, signal!, page.nextCursor, page.revision)
+    const uncommitted = ok(await h.app.query({ type: 'task.execution', ref }, operator)).execution!
+    expect((await h.host.execution.observation!(uncommitted)).settlement).toBe('pending')
+    h.model.selectTool = request => {
+      const output = request.messages.findLast(message => message.role === 'tool')
+      if (!output) return
+      const text = output.content.map(block => block.type === 'text' ? block.text : '').join('')
+      let page: { nextCursor?: number; revision?: string }
+      try { page = JSON.parse(text) } catch { return }
+      if (page.nextCursor !== undefined) return { name: 'work_child_recover', arguments: { child_session_id: child.childId, action: 'result', expected_epoch: 2, cursor: page.nextCursor, revision: page.revision } }
+    }
+    h.model.nextTool = { name: 'work_child_recover', arguments: { child_session_id: child.childId, action: 'result', expected_epoch: 2 } }
+    successor.followup(createUserMessage({ content: [{ type: 'text', text: 'Receive the real child result.' }], source: { kind: 'user' } }))
+    await fixtures.run(() => successor.whenIdle())
+    const received = ok(await h.app.query({ type: 'task.execution', ref }, operator)).execution!
+    expect(received.childReceipts).toMatchObject([{ child: { sessionId: child.childId }, complete: true, epoch: 2 }])
+    const facts = await h.host.execution.observation!(received)
+    expect(facts.settlement, JSON.stringify(facts)).toBe('settled')
+    expect(facts.sessions.find(row => row.role === 'retired')!.children[0]!.result).toBe('pending')
+    expect(JSON.stringify(await new RuntimeHost(h.ctx).events(successor.id))).toContain('late native verification passed')
+    expect((await new RuntimeHost(h.ctx).events(parent.id)).some(event => event.type === 'user/message' && event.data.source?.kind === 'subagent-settled')).toBe(false)
+    expect(await h.app.sessionReport(current.session, 'accepted-done', report, 2)).toMatchObject({ status: 'completed' })
+    expect(await h.app.sessionChildRecovery(current.session, 'completed-resume', child.childId, 'resume', 'Should not run', 2, signal!)).toMatchObject({ status: 'failed', error: { code: 'task-completed' } })
+  } finally { release?.(); await fixtures.close() }
+})
+
+it('cold-recovers an actual host-lost child through the original parent, without reviving old coordination', async ({ signal }) => {
+  const fixtures = new ExecutionFixtures(signal)
+  try {
+    const { spawn } = await import('node:child_process')
+    const { readFile, writeFile } = await import('node:fs/promises')
+    const { join } = await import('node:path')
+    const path = await fixtures.root()
+    const processResult = await new Promise<{ code: number | null; log: string }>((resolve, reject) => {
+      const child = spawn('pnpm', ['exec', 'vitest', 'run', 'tests/fixtures/native-crash-seed.spec.ts'], { cwd: process.cwd(), env: { ...process.env, A2D2_NATIVE_CRASH_PATH: path }, stdio: ['ignore', 'pipe', 'pipe'] })
+      let log = ''
+      child.stdout.on('data', data => { log += data })
+      child.stderr.on('data', data => { log += data })
+      child.on('error', reject)
+      child.on('close', code => resolve({ code, log }))
+    })
+    expect(processResult.code).not.toBe(0)
+    await writeFile('/tmp/continuation-native-crash-seed.log', processResult.log)
+    const seed = JSON.parse(await readFile(join(path, 'crash-seed.json'), 'utf8'))
+    let h = await fixtures.mount(path, 'read-only')
+    h.model.uniqueToolIds = true
+    await h.ctx.plugin(Subagents, { maxActiveSubagents: 8, maxDepth: 1 })
+    h.ctx.subagents.registerProvider({ name: 'fresh-local', capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false }, inheritsParentContext: false,
+      async prepareContinuable() { return {} }, async start() { throw Error('Only native continuable creation is used') } })
+    installWorkTools(h.ctx, h.app, 'runtime')
+    const before = await h.host.execution.observation!(seed.execution)
+    expect(before.sessions.find(row => row.session.sessionId === seed.childId)).toMatchObject({ status: 'inactive', attempt: { reason: 'interrupted' } })
+    const restoredParent = await h.ctx.sessionController.resolveAgent(SessionId(seed.execution.session.sessionId))
+    if ('error' in restoredParent) throw Error(JSON.stringify(restoredParent))
+    h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+    const command = { type: 'task.continue', commandId: 'continue-host-lost-child', ref: seed.ref, executionId: seed.execution.id, owner: seed.execution.owner, epoch: seed.execution.epoch }
+    await h.app.execute(command, operator)
+    await fixtures.run(() => restoredParent.agent.whenIdle())
+    await fixtures.run(() => h.app.reconcileControls())
+    const current = ok(await h.app.query({ type: 'task.execution', ref: seed.ref }, operator)).execution!
+    expect(current.epoch).toBe(2)
+    let successor = h.ctx.agents.get(SessionId(current.session.sessionId))!
+    await fixtures.run(() => successor.whenIdle())
+    await fixtures.run(() => h.app.reconcileControls())
+    const pending = ok(await h.app.query({ type: 'task.execution', ref: seed.ref }, operator)).execution!
+    expect(pending.continuation!.pendingChildren).toMatchObject([{ child: { sessionId: seed.childId }, status: 'inactive', returned: true }])
+    await fixtures.dispose(h.ctx)
+    h = await fixtures.mount(path, 'read-only')
+    h.model.uniqueToolIds = true
+    await h.ctx.plugin(Subagents, { maxActiveSubagents: 8, maxDepth: 1 })
+    h.ctx.subagents.registerProvider({ name: 'fresh-local', capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false }, inheritsParentContext: false,
+      async prepareContinuable() { return {} }, async start() { throw Error('Only native continuable creation is used') } })
+    installWorkTools(h.ctx, h.app, 'runtime')
+    expect(h.ctx.agents.get(SessionId(seed.execution.session.sessionId))).toBeUndefined()
+    const restoredSuccessor = await h.ctx.sessionController.resolveAgent(SessionId(current.session.sessionId))
+    if ('error' in restoredSuccessor) throw Error(JSON.stringify(restoredSuccessor))
+    successor = restoredSuccessor.agent
+    const unfinishedFacts = await h.host.execution.observation!(pending)
+    expect(unfinishedFacts.blockers).toContainEqual(expect.objectContaining({ code: 'child-work-unfinished', session: { runtimeId: 'runtime', sessionId: seed.childId } }))
+    const send = h.ctx.subagents.sendMessage.bind(h.ctx.subagents)
+    let lost = false
+    vi.spyOn(h.ctx.subagents, 'sendMessage').mockImplementation(async (...args) => {
+      const receipt = await send(...args)
+      if (!lost) { lost = true; throw Error('Real child accepted; recovery receipt lost') }
+      return receipt
+    })
+    await expect(h.app.sessionChildRecovery(current.session, 'recover-host-lost-child', seed.childId, 'resume', 'Finish the interrupted verification and report real evidence.', 2, signal!)).rejects.toThrow('recovery receipt lost')
+    expect(lost).toBe(true)
+    await expect.poll(async () => (await new RuntimeHost(h.ctx).executionFacts(restoredParent.agent.id, 'runtime', 'retired')).children[0]?.returned).toBe(true)
+    expect(await h.app.sessionChildRecovery(current.session, 'recover-host-lost-child', seed.childId, 'resume', 'Finish the interrupted verification and report real evidence.', 2, signal!)).toMatchObject({ status: 'completed', childStatus: 'returned' })
+    const childEvents = await new RuntimeHost(h.ctx).events(SessionId(seed.childId))
+    expect(childEvents.filter(event => event.type === 'turn/start')).toHaveLength(2)
+    expect(childEvents.filter(event => event.type === 'tool/call' && event.data.name === 'crash_native')).toHaveLength(1)
+    expect(childEvents.find(event => event.type === 'tool/result' && event.data.message?.toolCallId === childEvents.find(event => event.type === 'tool/call')!.data.callId)).toMatchObject({ data: { message: { isError: true } } })
+    expect(await h.app.sessionChildRecovery(seed.execution.session, 'retired-resume', seed.childId, 'resume', 'Must reject', 1, signal!)).toMatchObject({ status: 'failed', error: { code: 'stale-execution-authority' } })
+    expect(await h.app.sessionReport(current.session, 'unreceived-done', report, 2)).toMatchObject({ status: 'failed', error: { code: 'completion-results-unsettled' } })
+    h.model.nextTool = { name: 'work_child_recover', arguments: { child_session_id: seed.childId, action: 'result', expected_epoch: 2 } }
+    successor.followup(createUserMessage({ content: [{ type: 'text', text: 'Receive recovered child evidence.' }], source: { kind: 'user' } }))
+    await fixtures.run(() => successor.whenIdle())
+    const received = ok(await h.app.query({ type: 'task.execution', ref: seed.ref }, operator)).execution!
+    const facts = await h.host.execution.observation!(received)
+    expect(facts.settlement, JSON.stringify(facts)).toBe('settled')
+    expect(ok(await h.app.query({ type: 'task.execution', ref: seed.ref }, operator)).execution!.session).toEqual(current.session)
+  } finally { await fixtures.close() }
+}, 20_000)

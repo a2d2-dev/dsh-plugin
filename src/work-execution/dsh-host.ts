@@ -1,3 +1,4 @@
+import { continuationBoundary } from './continuation.ts'
 import { createHash } from 'node:crypto'
 import { humanGuardIntent } from './guard.ts'
 import type { WorkGuard } from './guard.ts'
@@ -244,6 +245,23 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     for (const binding of bindings) roots.set(sessionKey(binding.session), { session: binding.session, role: binding.purpose })
     for (const old of execution.retired ?? []) roots.set(sessionKey(old.session), { session: old.session, role: 'retired' })
     roots.set(sessionKey(execution.session), { session: execution.session, role: 'current' })
+    const receivedChildren = new Map<string, number>()
+    if (execution.childReceipts?.length) {
+      const receiptEvents = await this.runtime.events(SessionId(execution.session.sessionId))
+      for (const receipt of execution.childReceipts) {
+        if (receipt.epoch !== execution.epoch || !receipt.complete) continue
+        const committed = receipt.callIds.every(callId => {
+          const call = receiptEvents.find(event => event.type === 'tool/call' && event.data.callId === callId && event.data.name === 'work_child_recover')
+          const result = receiptEvents.find(event => event.type === 'tool/result' && event.data.message?.toolCallId === callId && !event.data.message?.isError)
+          if (!call || !result) return false
+          const text = result.data.message.content?.filter((block: { type: string }) => block.type === 'text').map((block: { text: string }) => block.text).join('')
+          let returned: { status?: string; childStatus?: string; endSeq?: number; revision?: string; child?: { sessionId?: string } }
+          try { returned = JSON.parse(text) } catch { return false }
+          return returned.status === 'completed' && returned.childStatus === 'returned' && returned.child?.sessionId === receipt.child.sessionId && returned.endSeq === receipt.endSeq && returned.revision === receipt.revision
+        })
+        if (committed) receivedChildren.set(sessionKey(receipt.child), receipt.endSeq)
+      }
+    }
     const reporting = reporter && this.activeTools.get(reporter)
     const trustedReport = reporting?.name === 'work_report' && !reporting.parent && reporting.agent?.id === execution.session.sessionId ? reporting : undefined
     const sessions: import('./observation.ts').ObservedSession[] = []
@@ -265,7 +283,9 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
         if ((row.status === 'running' && !ownReport) || row.status === 'unknown') blockers.push({ code: row.status === 'unknown' ? 'executor-state-unknown' : 'executor-unsettled', session: row.session })
         if (row.waitingHuman) blockers.push({ code: 'executor-waiting-human', session: row.session })
         for (const child of row.children) {
-          if (!child.returned || (child.mode === 'continuable' && child.result !== 'consumed') || child.mode === 'unknown') blockers.push({ code: 'native-result-pending', session: row.session })
+          const carried = [execution.continuation, ...(execution.continuationHistory ?? [])].some(op => op?.pendingChildren?.some(pending => sessionKey(pending.child) === sessionKey(child.session)))
+          if (carried && child.returned && child.attempt?.reason !== 'completed') blockers.push({ code: 'child-work-unfinished', session: child.session })
+          if (!child.returned || (child.mode === 'continuable' && child.result !== 'consumed' && receivedChildren.get(sessionKey(child.session)) !== child.endSeq) || child.mode === 'unknown') blockers.push({ code: 'native-result-pending', session: row.session })
           if (!roots.has(sessionKey(child.session))) roots.set(sessionKey(child.session), { session: child.session, role: 'native-child', parent: row.session })
         }
         if (row.jobObservation === 'unavailable') { blockers.push({ code: 'job-observation-unavailable', session: row.session }); limitations.add('当前宿主缺少正式 jobs.observe 非消费接口，无法证明终态结果已交付。') }
@@ -290,6 +310,33 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     const unknown = blockers.some(blocker => /unknown|unavailable/.test(blocker.code))
     return { settlement: unknown ? 'unknown' : blockers.length ? 'pending' : 'settled', sessions, blockers, reminders: [...reminders], limitations: [...limitations] }
   }
+  async childRecovery(execution: WorkExecution, child: NonNullable<import('../work-types.ts').ContinuationOperation['pendingChildren']>[number], action: 'status' | 'result' | 'resume', request?: NonNullable<WorkExecution['childRecovery']>[number], signal: AbortSignal = new AbortController().signal): Promise<{ status: string; endSeq?: number; messageId?: string; events?: unknown[] }> {
+    if (child.child.runtimeId !== this.runtimeId || child.parent.runtimeId !== this.runtimeId) throw new WorkExecutionError('executor-runtime-unavailable', 'Child belongs to another runtime')
+    const parentId = SessionId(child.parent.sessionId), childId = SessionId(child.child.sessionId)
+    const facts = await this.runtime.executionFacts(parentId, this.runtimeId, 'retired')
+    const native = facts.children.find(item => item.session.sessionId === childId)
+    if (!native) throw new WorkExecutionError('unrelated-child', 'Original parent catalog does not own this child')
+    if (native.status === 'running') return { status: 'running' }
+    const events = await this.runtime.events(childId)
+    if (native.returned && !(action === 'resume' && ['interrupted', 'error', 'aborted', 'blocked', 'max-tokens'].includes(native.attempt?.reason ?? ''))) {
+      const start = events.findLastIndex(event => event.type === 'turn/start')
+      return { status: 'returned', endSeq: native.endSeq, ...(action === 'result' ? { events: events.slice(Math.max(0, start)) } : {}) }
+    }
+    if (action !== 'resume') return { status: native.status }
+    if (native.mode !== 'continuable' || !request) throw new WorkExecutionError('child-not-resumable', 'This exact child is not a native continuable Session')
+    const marker = `A²D² Task recovery request ${request.requestId}`
+    const accepted = events.flatMap(event => event.type === 'user/message' ? [event.data] : event.type === 'agent/inbox/spliced' ? event.data.inserted ?? [] : []).find(message => message.role === 'user' && message.content?.some((block: { type: string; text?: string }) => block.type === 'text' && block.text?.startsWith(marker)))
+    if (accepted) return { status: 'accepted', messageId: accepted.id as string }
+    const parent = await this.runtime.agent(parentId).catch(error => {
+      throw new WorkExecutionError('child-recovery-parent-unavailable', `Original parent ${parentId} is unavailable for child ${childId}: ${String(error)}. Public child routing cannot restore this layer through an ordinary Session controller. The current coordinator must verify the old execution has stopped before explicitly redelegating its remaining work from the saved workspace and progress; do not duplicate a running child.`)
+    })
+    const service = (this.ctx.get as (name: string) => unknown).call(this.ctx, 'subagents') as { sendMessage?: (parent: Agent, child: SessionId, content: { type: 'text'; text: string }[], options: { signal: AbortSignal }) => Promise<string> } | undefined
+    if (!service?.sendMessage) throw new WorkExecutionError('host-capability-unavailable', 'Public subagents.sendMessage is required for native recovery')
+    const messageId = await service.sendMessage(parent, childId, [{ type: 'text', text: `${marker}\nCurrent Task coordinator: ${execution.session.sessionId}, epoch ${execution.epoch}. Original parent linkage remains unchanged. Continue only this authorized child work:\n${request.text}` }], { signal })
+    const live = this.ctx.get('agents')?.get(childId)
+    if (live) await this.runtime.flush(live)
+    return { status: 'accepted', messageId }
+  }
   async maintain<T>(execution: WorkExecution, body: () => Promise<T>): Promise<T> {
     if (!this.observationScope) throw new WorkExecutionError('execution-scope-unavailable', 'Safe maintenance requires the authority-owned Task observation scope resolver')
     const id = SessionId(execution.session.sessionId)
@@ -297,7 +344,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     await agent.whenIdle()
     return agent.runMaintenance(async () => {
       await this.runtime.flush(agent)
-      const scope = await this.observation(execution)
+      const scope = continuationBoundary(await this.observation(execution))
       const related = scope.sessions.map(row => this.ctx.get('agents')?.get(SessionId(row.session.sessionId)))
         .filter((candidate): candidate is Agent => !!candidate && candidate.id !== id)
       const held = new Set<string>([id])
@@ -310,7 +357,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
         }
         // The graph was read once to identify locks. Read again while every live
         // executor is fenced: no related tool can start a job between check/take.
-        const observation = await this.observation(execution)
+        const observation = continuationBoundary(await this.observation(execution))
         if (observation.settlement !== 'settled') throw new WorkExecutionError('continuation-waiting-executions', `Continuation is waiting for related execution facts: ${observation.blockers.map(blocker => `${blocker.code}:${blocker.session.sessionId}${blocker.jobId ? `:${blocker.jobId}` : ''}`).join(', ')}`)
         const added = observation.sessions.map(row => this.ctx.get('agents')?.get(SessionId(row.session.sessionId)))
           .filter((candidate): candidate is Agent => !!candidate && !held.has(candidate.id))

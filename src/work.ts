@@ -23,7 +23,7 @@ import { applySourceCommand, refreshSource, sourceResult } from './work-sources/
 import type { GitHubSourcePort } from './work-sources/types.ts'
 import type { WorkSnapshot } from './work-schema.ts'
 import { WorkExecutionError } from './work-execution/host.ts'
-import { continuationInFlight, continuationFactsKey, collectionRequest, MANAGED_WORK_INSTRUCTIONS, maintenanceEvent, materialRequest, reserveContinuation, successorMessage } from './work-execution/continuation.ts'
+import { continuationBoundary, continuationChildren, continuationInFlight, continuationFactsKey, collectionRequest, MANAGED_WORK_INSTRUCTIONS, maintenanceEvent, materialRequest, reserveContinuation, successorMessage } from './work-execution/continuation.ts'
 import { applyTaskOrganization, isAcceptedNativeChild, taskStructureBlocker } from './work-organization.ts'
 import { isCanonicalChild } from './work-migrate.ts'
 import { applyTaskReport, projectProgress, taskProgressView } from './work-progress.ts'
@@ -428,6 +428,46 @@ export class WorkApplication {
     return this.execute({ type: 'task.control', commandId, ref: execution.ref,
       executionId: execution.id, owner: execution.owner, epoch: expectedEpoch ?? execution.epoch, action, text, ...(yieldInfo ? { yield: yieldInfo } : {}) },
     { operator: false, session, agentId: execution.agentId })
+  }
+  /** Current Task authority may recover only a child carried by a real handoff. */
+  async sessionChildRecovery(session: import('./work-types.ts').SessionRef, callId: string, childId: string, action: 'status' | 'result' | 'resume', text: string | undefined, epoch: number, signal: AbortSignal, cursor = 0, revision?: string) {
+    const state = await this.load()
+    const execution = state.executions.find(item => sameSession(item.session, session))
+    if (!execution || execution.epoch !== epoch) return failed('stale-execution-authority', 'Only the current coordinator at this epoch may recover child work')
+    if (action === 'resume' && isTaskCompleted(taskAt(state, execution.ref))) return failed('task-completed', 'Accepted Task completion does not authorize further child work')
+    const child = [execution.continuation, ...(execution.continuationHistory ?? [])].flatMap(op => op?.pendingChildren ?? []).find(child => child.child.sessionId === childId)
+    if (!child) return failed('unrelated-child', 'Child is not in this Task continuation records')
+    if (!this.host.execution?.childRecovery) return failed('host-capability-unavailable', 'Public native child recovery is unavailable')
+    if (action === 'resume' && (continuationInFlight(execution) || ['waiting', 'paused'].includes(execution.state) || execution.control?.action === 'end' || (execution.control?.status === 'accepted' && execution.control.action !== 'resume'))) return failed('child-recovery-paused', 'Explicit Task control and continuation maintenance do not authorize child business work')
+    const requestId = `child-recovery:${createHash('sha256').update(JSON.stringify([session, callId])).digest('hex')}`
+    let request: NonNullable<WorkExecution['childRecovery']>[number] | undefined
+    if (action === 'resume') {
+      if (!text?.trim()) return failed('child-recovery-instructions-required', 'Give the exact remaining authorized child work')
+      request = { requestId, parent: child.parent, child: child.child, epoch, text }
+      await this.sourceTransaction(async state => {
+        const current = state.executions.find(item => item.id === execution.id)!
+        if (current.epoch !== epoch || !sameSession(current.session, session) || current.control?.action === 'end' || isTaskCompleted(taskAt(state, current.ref)) || ['waiting', 'paused'].includes(current.state)) throw new WorkExecutionError('stale-execution-authority', 'Task authority or control changed before child recovery')
+        const existing = current.childRecovery?.find(item => item.requestId === requestId)
+        if (existing) request = existing
+        else (current.childRecovery ??= []).push(request!)
+      })
+    }
+    const result = await this.host.execution.childRecovery(execution, child, action, request, signal)
+    const raw = JSON.stringify(result.events ?? [])
+    const resultRevision = createHash('sha256').update(raw).digest('hex')
+    const nextCursor = Math.min(cursor + 12000, raw.length)
+    if (action === 'result' && result.status === 'returned' && (cursor < 0 || cursor > raw.length || (cursor > 0 && revision !== resultRevision))) return failed('child-result-changed', 'Restart result reading at cursor zero with the current result revision')
+    await this.sourceTransaction(async state => {
+      const current = state.executions.find(item => item.id === execution.id)!
+      if (current.epoch !== epoch || !sameSession(current.session, session)) throw new WorkExecutionError('stale-execution-authority', 'Task authority changed during child recovery')
+      if (request && result.messageId) current.childRecovery!.find(item => item.requestId === requestId)!.messageId = result.messageId
+      if (action === 'result' && result.endSeq !== undefined && result.status === 'returned') {
+        const prior = current.childReceipts?.find(item => sameSession(item.child, child.child))
+        if (cursor && (!prior || prior.epoch !== epoch || prior.endSeq !== result.endSeq || prior.revision !== resultRevision || prior.cursor !== cursor)) throw new WorkExecutionError('child-result-page-order', 'Read each result page in order from cursor zero')
+        current.childReceipts = [...(current.childReceipts ?? []).filter(item => !sameSession(item.child, child.child)), { child: child.child, endSeq: result.endSeq, epoch, callId, callIds: [...(cursor ? prior!.callIds : []), callId], cursor: nextCursor, revision: resultRevision, complete: nextCursor === raw.length }]
+      }
+    })
+    return { ...result, childStatus: result.status, status: 'completed' as const, child: child.child, ...(action === 'result' && result.status === 'returned' ? { events: undefined, content: raw.slice(cursor, nextCursor), revision: resultRevision, complete: nextCursor === raw.length, ...(nextCursor < raw.length ? { nextCursor } : {}) } : {}) }
   }
   /** Public trusted adapter: source identity and Task references are resolved on the server. */
   async sessionContinuationMaterial(session: import('./work-types.ts').SessionRef, callId: string,
@@ -1358,14 +1398,18 @@ export class WorkApplication {
       // is a fresh formal observation after exact-owner Session persistence.
       if (execution.continuation!.phase !== 'taken') {
         if (!host.observation || !host.flushSession) throw new WorkExecutionError('host-capability-unavailable', 'Formal collection observation and exact-owner flush are required')
-        for (const step of execution.continuation!.collections ?? []) await host.flushSession(step.session)
-        const facts = await host.observation(execution)
+        const beforeFlush = continuationBoundary(await host.observation(execution))
+        for (const step of execution.continuation!.collections ?? []) if (beforeFlush.sessions.some(row => sameSession(row.session, step.session))) await host.flushSession(step.session)
+        const allFacts = await host.observation(execution)
+        const facts = continuationBoundary(allFacts)
+        execution = await save(current => { current.continuation!.pendingChildren = continuationChildren(allFacts, current.continuation!.pendingChildren) })
         const jobs = facts.sessions.flatMap(row => row.jobs)
         for (const step of execution.continuation!.collections ?? []) {
           const delivered = step.jobs.every(expected => jobs.some(job => sameSession(job.owner, step.session) && job.id === expected.id && job.registryEpoch === expected.registryEpoch && job.instanceId === expected.instanceId && job.delivery === 'delivered'))
           if (delivered && step.status !== 'collected') execution = await save(current => { current.continuation!.collections!.find(item => item.requestId === step.requestId)!.status = 'collected'; delete current.continuation!.error })
         }
         for (const step of execution.continuation!.settlements ?? []) {
+          if (!facts.sessions.some(row => sameSession(row.session, step.parent))) continue
           await host.flushSession(step.parent)
           const delivery = await host.observe({ ...execution, session: step.parent }, { id: step.messageId, text: 'Native child settlement', kind: 'result', delivery: step.delivery, acceptance: 'unassessed' })
           execution = await save(current => {
@@ -1374,18 +1418,6 @@ export class WorkApplication {
           })
         }
         if (facts.settlement !== 'settled') {
-          const notices = facts.sessions.flatMap(parent => parent.children.flatMap(child => child.settlement ? [{ parent: parent.session, child: child.session, ...child.settlement }] : []))
-          if (notices.length) {
-            execution = await save(current => {
-              const op = current.continuation!
-              for (const notice of notices) if (!op.settlements?.some(step => step.messageId === notice.message.id)) (op.settlements ??= []).push({ parent: notice.parent, child: notice.child, endSeq: notice.endSeq, messageId: notice.message.id, delivery: 'accepted' })
-            })
-            for (const notice of notices) {
-              const delivery = await host.deliver({ ...execution, session: notice.parent }, { id: notice.message.id, text: 'Native child settlement', kind: 'result', delivery: 'accepted', acceptance: 'unassessed', nativeMessage: notice.message })
-              execution = await save(current => { current.continuation!.settlements!.find(step => step.messageId === notice.message.id)!.delivery = delivery })
-            }
-            return execution
-          }
           const pending = facts.blockers.filter(blocker => blocker.code === 'job-unsettled')
           if (!pending.length || facts.blockers.length !== pending.length) throw new WorkExecutionError('continuation-waiting-executions', `Lifecycle prerequisites remain unresolved: ${facts.blockers.map(blocker => `${blocker.code}:${blocker.session.sessionId}:${blocker.jobId ?? ''}`).join(', ')}`)
           for (const blocker of pending) {
@@ -1463,6 +1495,8 @@ export class WorkApplication {
           return
         }
         const fresh = await host.observation!(execution)
+        execution = await save(current => { current.continuation!.pendingChildren = continuationChildren(fresh, current.continuation!.pendingChildren) })
+        operation = execution.continuation!
         if (continuationFactsKey(fresh) !== operation.materialFactsKey) throw new WorkExecutionError('continuation-material-stale', 'Execution results changed after material preparation; the plugin will collect and refresh material before takeover')
         if (!operation.material || operation.material.executionId !== execution.id || !sameTask(operation.material.ref, execution.ref) || operation.material.specificationVersion !== operation.specification.version || !sameSession(operation.material.source, operation.source) || operation.material.epoch !== operation.sourceEpoch || operation.material.settlementKey !== operation.materialFactsKey) throw new WorkExecutionError('continuation-material-missing', 'Saved source material is required before creating a successor')
         // Validate message preparation before any successor creation or authority transfer.
