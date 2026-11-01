@@ -108,6 +108,11 @@ it.for(['complete', 'partial'] as const)('hands off a %s real native child resul
     if (reading === 'partial') {
       expect(legacyStatus).toMatchObject({ restartRequired: true, next: { action: 'result', cursor: 0 } })
       expect(legacyStatus).not.toHaveProperty('readProgress')
+      const restartedPage = await h.app.sessionChildRecovery(current.session, 'restart-legacy-result', child.childId, 'result', undefined, 2, signal!)
+      expect(restartedPage).toMatchObject({ status: 'completed', childStatus: 'returned', complete: false, nextCursor: 12000 })
+      expect(restartedPage).toHaveProperty('content')
+      expect(restartedPage).not.toHaveProperty('restartRequired')
+      expect(restartedPage).not.toHaveProperty('next')
     } else expect(legacyStatus).toMatchObject({ readProgress: { complete: true, cursor: receipt.cursor } })
     await dao.transaction(async state => { state.executions.find(item => item.id === received.id)!.childReceipts![0]!.pages = receipt.pages })
     const globalObservation = vi.spyOn(h.host.execution, 'observation').mockRejectedValue(Error('Global graph is unavailable'))
