@@ -30,6 +30,7 @@ const discovery = z.object({ state: z.enum(['idle', 'syncing', 'error']), nextAt
   inFlight: z.object({ id: z.string().uuid(), expiresAt: z.iso.datetime() }).strict().optional(),
   checkpoint: z.object({ sourceVersion: z.number().int().positive(), startedAt: z.iso.datetime(), cursor: z.string().min(1).max(2048).optional(), pages: z.number().int().nonnegative(), total: z.number().int().nonnegative().optional(), identity: identity.optional(), project: projectMetadata.optional(), items: z.array(projectItem), issues: z.array(issueSchema) }).strict().optional(),
 }).strict()
+export const checkpointSchema = discovery.shape.checkpoint.unwrap()
 export const sourceSchema = z.object({ id: z.string().uuid(), projectId: z.string().uuid(), provider: z.literal('github'), repository: repositorySchema.optional(), githubProject: githubProjectSchema.optional(),
   enabled: z.boolean(), version: z.number().int().positive(), sequence: z.number().int().nonnegative(), requests: z.record(z.string(), z.number().int().positive()),
   observations: z.array(z.object({ issue: issueSchema, sequence: z.number().int().positive() }).strict()),

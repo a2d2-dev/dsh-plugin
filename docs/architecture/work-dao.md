@@ -24,13 +24,14 @@
 
 ### 架构设计
 
-`work-v3.json` 保留 `schemaVersion: 3` 的业务结构，并增加严格的 `storage.version: 1` 持久化协议。其 `commands` 保留 commandId/fingerprint，结果由 `storage.receipts` 指向归档；执行的 `history` 由 `storage.histories` 指向归档。`storage.sources` 指向来源大字段。历史引用记录 head、length、first；新追加只写当前增量和前一 head，不读取或重写历史前缀。新的命令结果通过历史引用保存当时的执行历史，后续追加不会改变旧回执。
+`work-v3.json` 保留 `schemaVersion: 3` 的业务结构，并增加严格的 `storage.version: 1` 持久化协议。其 `commands` 保留 commandId/fingerprint，结果由 `storage.receipts` 指向归档；执行的 `history` 由 `storage.histories` 指向归档。`storage.sources` 指向来源正文，新增可选 `storage.checkpoints` 索引保存各来源的分页进度 head 或显式 `null`。整个索引不存在表示旧协议，首次写入迁移；索引存在时缺少任一来源条目是损坏。旧版本 strict schema 拒绝新增字段。历史引用记录 head、length、first；新追加只写当前增量和前一 head，不读取或重写历史前缀。新的命令结果通过历史引用保存当时的执行历史，后续追加不会改变旧回执。
 
 归档统一位于 `work-v3.archive/<uuid>.json`，目录 0700、文件 0600。文件名只接受限定 UUID 形式，不能从引用跳到目录外。
 
 - 回执文件：`{ result, history? }`；result 内执行历史为空数组，读取时补回指定历史。
 - 历史文件：`{ previous?, entries }`；从 head 逆向读取、按原顺序组合，并检查数量。
-- 来源文件：观察、分页、repository/project snapshot 和 discovery checkpoint。
+- 来源文件：已发布观察、查询分页和 repository/project snapshot。
+- checkpoint 文件：`{ previous?, metadata, itemCount, issueCount, items, issues }`。首块保存完整数组，后续块只保存新增或内容变化的 item/issue，metadata 保存该次 cursor、pages、身份等完整进度；按 id/nodeId 覆盖并保持首次出现顺序。冷读逆向展开，校验数量，重复 id、重排、删除等不能由追加覆盖精确表达的修改写新的完整首块。重置后旧链不再可达。
 
 已有未拆分 JSON 和 `work-v3.sources/<sourceId>.json` 在首次写事务或 `ensureSourceSplit()` 中迁移；旧 sidecar 保留，不再更新。迁移前的查询只读旧格式。冷字段按需读取、校验和缓存，缺失或损坏引用报错，不用空数据兜底。带有 `storage` 标记的控制文件必须为每个来源提供自己的归档引用；缺少引用时拒绝读取与写入，只有无标记的旧格式允许读取旧来源 sidecar。控制 schema、历史项及新回执在各自写入边界校验。
 
@@ -109,4 +110,36 @@ JS
 
 导出包含全部历史、回执和内联来源数据，没有 `storage` 引用。核实导出后，由维护操作在停止写者的前提下把它作为旧版本的 `work-v3.json`，并保留原完整目录以便恢复；不要混合不同备份的控制与 archive。若恢复升级前备份，升级后的新提交不在备份内，因此发生新写入后应使用当前完整导出，而非直接退回旧备份。
 
-首次迁移失败可直接重试；未引用 archive 不影响已提交状态。目前没有在线垃圾回收。不得按时间批量删除 archive：旧回执可能继续引用早期历史 chunk。完整详情与离线导出会产生与所请求历史体积相应的内存和时间成本，这是显式冷路径。
+首次迁移失败可直接重试；未引用 archive 不影响已提交状态。完整详情与离线导出会产生与所请求历史体积相应的内存和时间成本，这是显式冷路径。
+
+### 分页进度、冷恢复和正常增长
+
+`discovery.checkpoint` 与来源正文分别惰性读取和复制。仅更新 cursor、累计 items/issues、lease 或重试状态时，不写来源正文。checkpoint 的新 head 与全部其他控制事实在同一次 `work-v3.json` 原子替换中提交，控制提交失败仍使用原 head。新 Project 来源即使原来没有 discovery 对象，也会保存首次分页进度。当前完整扫描结束时才更新观察和 projectSnapshot、移除 checkpoint；进程重启由 checkpoint 链恢复之前的完整累计结果。
+
+```sh
+pnpm exec vitest run tests/source-storage.spec.ts tests/project-discovery.spec.ts
+node --experimental-transform-types scripts/benchmark-source-storage.mjs
+```
+
+基准使用实际 NVMe 文件：约 20 MB 来源正文、17 MB 已累计 checkpoint，五页各新增一条 20 KB Issue，并执行来源 reservation 的完整 clone。对比旧 DAO 与当前 DAO 的真实新增 archive 字节，结果记录于本地 `docs/artifacts/a2d2-source-storage-2026-11-01/benchmark.json`；仓库提交公共摘要 `docs/verification/source-storage.md`，本地日志和验收记录不入 Git。checkpoint 的正文只写初始首块和各页真实新增/更新数据，控制仍为引用。全量扫描完成时，观察时间等事实变化仍可能新增一份来源正文；命令回执和执行历史也继续保留。这是正常增长，需按实际磁盘使用离线维护，不声称存储总量恒定，不设置自动重启任务。
+
+### 离线可达备份和归档清理
+
+**前置**：停止该工作目录的全部读者与写者，保持停止直到备份及清理结束。writer lock 不能保护另一个进程已持有的惰性旧快照，因此此接口不支持在线清理。`--offline` 是维护者对停止条件的明确声明，不能自动停止服务。旧未拆分库先在安全窗口执行 `ensureSourceSplit()`/`migrate()`；带 `storage` 的旧 v1 来源正文可直接审计。
+
+```sh
+# 工作目录：已构建 checkout，或已安装 package；替换为真实数据目录。
+node scripts/work-archive-gc.mjs --offline /absolute/work-directory
+# 上一条输出 manifest 路径。审核并备份后，仍保持服务停止：
+node scripts/work-archive-gc.mjs --offline /absolute/work-directory --apply
+```
+
+也可从构建包调用 `WorkDao.forDirectory(directory).collectArchives({ offline: true, dryRun: true })`。默认 dry run；`dryRun: false` 才删除。维护操作在普通 writer lock 内重新读取控制根，校验全部可达数据后，在数据目录写 `work-v3.gc-<uuid>.json`，最后才逐个删除候选。清单包括控制字节数与 SHA-256、全部 reachable 文件名、role、候选文件名/字节数、各类总字节数和 ignored 列表。删除中断可在停止状态下重新运行，剩余候选会重新计算。
+
+遍历的根包括 `storage.receipts`、`storage.histories`、`storage.sources`、`storage.checkpoints`、当前 continuousRules 的 screeningReview，以及回执中 continuousRule 的 screeningReview；递归保留历史、checkpoint 和 screening 的 previous 链。历史长度采用 memo 计算，避免共享长前缀的重复遍历。checkpoint 首块和增量均校验累计数量。缺失、损坏、非普通文件、冲突类型、循环或数量不匹配时，在删除前失败。不解析不可达的大来源文件，因此不会扫描整个数百 GB 旧正文。只删除本归档目录中严格 UUID 文件名的普通文件；手工文件、子目录、符号链接和旧 `work-v3.sources` 保留。
+
+**可达备份**：服务停止时复制 `work-v3.json` 和 manifest 的全部 `reachable` 相对文件到备份的 `work-v3.archive/`，保留权限与 manifest。若仍使用旧 v1 格式，此图也包含其 source bulk 内的 checkpoint。manifest 不替代备份本身；核实备份能完整导出后才执行 apply。无需为恢复复制已证明不可达的历史来源正文。不能按日期清理 archive，旧命令回执仍可能指向早期历史和 screening 链。
+
+**完成判据**：apply 返回可删除数量和字节数；控制 SHA-256 不变、全部 reachable 仍存在，备份/清理前后 `exportSnapshot()` 一致。原文件目录完整备份和显式旧格式导出仍是回退边界。
+
+历史开发实例可能保留 Issue #197 版本写入的 `Project.executionDefaults`。存储 schema 使用原字段的严格定义接受并完整保留 resource、model（含 reasoningEffort）、agentPreset、permissionPreset；迁移、普通提交和导出均不删除配置。此兼容边界不恢复旧版本的启动选择行为，未知字段仍拒绝。

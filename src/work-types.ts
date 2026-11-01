@@ -34,7 +34,7 @@ export interface ContinuationOperation {
   requestDelivery?: Exclude<WorkEvent['delivery'], 'discarded'>; kickoffDelivery?: Exclude<WorkEvent['delivery'], 'discarded'>
   error?: { code: string; message: string }
 }
-export interface Project { id: string; name: string; version: number; defaultAgentId: string; resources: ResourceRef[]; continuationPolicy?: ContinuationPolicy }
+export interface Project { id: string; name: string; version: number; defaultAgentId: string; resources: ResourceRef[]; continuationPolicy?: ContinuationPolicy; executionDefaults?: Partial<Pick<WorkExecution, 'resource' | 'model' | 'agentPreset' | 'permissionPreset'>> }
 export interface WorkSpecification { version: number; text: string; acceptance: string[]; missing?: ('body' | 'acceptance')[] }
 export interface BreakdownBlock { id: string; title: string; description: string; status?: WorkStage; evidence?: string[]; child?: TaskRef }
 export interface SessionAssociation { session: SessionRef; purpose: 'related' | 'review' }

@@ -15,7 +15,10 @@ export const sessionRefSchema = z.object({ runtimeId: referenceId, sessionId: re
 export const legacyAddressSchema = z.object({ runtimeId: referenceId, projectRoot: text, taskId: referenceId }).strict()
 export const policySchema = z.object({ version: z.number().int().positive(), modelCandidates: z.array(z.string()), instructions: z.string(), capabilities: z.array(z.string()) }).strict()
 export const continuationPolicySchema = z.object({ version: z.number().int().positive(), enabled: z.boolean(), targetTokens: z.number().int().positive(), reserveTokens: z.number().int().min(1024) }).strict()
-export const projectSchema = z.object({ id, name: text, version: z.number().int().positive(), defaultAgentId: id, resources: z.array(resourceRefSchema), continuationPolicy: continuationPolicySchema.optional() }).strict()
+export const modelSchema = z.object({ provider: referenceId, model: referenceId, reasoningEffort: referenceId.optional() }).strict()
+// Historical #197 config is preserved at the storage boundary; selection behavior is unchanged.
+export const executionDefaultsSchema = z.object({ resource: resourceRefSchema.optional(), model: modelSchema.optional(), agentPreset: referenceId.optional(), permissionPreset: referenceId.optional() }).strict()
+export const projectSchema = z.object({ id, name: text, version: z.number().int().positive(), defaultAgentId: id, resources: z.array(resourceRefSchema), continuationPolicy: continuationPolicySchema.optional(), executionDefaults: executionDefaultsSchema.optional() }).strict()
 export const agentSchema = z.object({ id, projectId: id, role: z.literal('coordinator'), policy: policySchema }).strict()
 export const specificationSchema = z.object({ version: z.number().int().positive(), text: z.string().max(1_000_000), acceptance: z.array(text).max(1000), missing: z.array(z.enum(['body', 'acceptance'])).optional() }).strict().refine(value =>
   (value.text.trim().length > 0 || value.missing?.includes('body')) && (value.acceptance.length > 0 || value.missing?.includes('acceptance')), 'Missing source material must be explicit')
@@ -29,7 +32,6 @@ export const taskSchema = z.object({
   sessions: z.array(z.object({ session: sessionRefSchema, purpose: z.enum(['related', 'review']) }).strict()),
   activity: z.array(z.object({ commandId: referenceId, type: referenceId, version: z.number().int().positive() }).strict()),
 }).strict()
-export const modelSchema = z.object({ provider: referenceId, model: referenceId, reasoningEffort: referenceId.optional() }).strict()
 export const continuationContentSchema = z.object({ body: text, decisions: text, evidence: text, unfinished: text, next: text }).strict()
 const actualSchema = z.object({ runtimeId: referenceId, cwd: text, agentPreset: referenceId, provider: referenceId, model: referenceId, reasoningEffort: referenceId.optional(), permissionPreset: referenceId, sandbox: referenceId, approval: referenceId }).strict()
 const materialSchema = continuationContentSchema.extend({ commandId: referenceId, ref: taskRefSchema, executionId: id, source: sessionRefSchema, epoch: z.number().int().positive(), taskVersion: z.number().int().positive(), specificationVersion: z.number().int().positive(), settlementKey: text.optional() }).strict()
@@ -176,6 +178,7 @@ export const snapshotSchema = z.object({
   // Deliberately unknown to pre-DAO strict schemas: old writers must reject this format.
   storage: z.object({ version: z.literal(1), receipts: receiptIndexSchema,
     histories: z.record(z.string(), historyRefSchema),
+    checkpoints: z.record(z.string(), archiveFileSchema.nullable()).optional(),
     sources: z.record(z.string(), z.string().regex(/^[0-9a-f-]{36}\.json$/)),
   }).strict().optional(), projects: z.array(projectSchema), agents: z.array(agentSchema), tasks: z.array(taskSchema),
   sources: z.array(sourceSchema).default([]), externalBindings: z.array(bindingSchema).default([]),
@@ -187,6 +190,7 @@ export const snapshotSchema = z.object({
 }).strict().superRefine((state, ctx) => {
   if (state.storage && state.commands.some(receipt => !Object.hasOwn(state.storage!.receipts, receipt.commandId))) ctx.addIssue({ code: 'custom', message: 'Missing command archive reference' })
   if (state.storage && state.sources.some(source => !Object.hasOwn(state.storage!.sources, source.id))) ctx.addIssue({ code: 'custom', message: 'Missing source archive reference' })
+  if (state.storage?.checkpoints && state.sources.some(source => !Object.hasOwn(state.storage!.checkpoints!, source.id))) ctx.addIssue({ code: 'custom', message: 'Missing source checkpoint reference' })
   const ruleSources = new Set<string>(), claimedTasks = new Set<string>()
   for (const rule of state.continuousRules ?? []) {
     if (ruleSources.has(rule.sourceId) || !state.sources.some(source => source.id === rule.sourceId && source.projectId === rule.projectId)) ctx.addIssue({ code: 'custom', message: 'Continuous rule source authority is inconsistent' })

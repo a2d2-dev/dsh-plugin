@@ -77,7 +77,9 @@ it('round-trips all 3000 observations and the large checkpoint within the write 
   expect(after.sources[0].discovery.checkpoint).toBeUndefined()
   const sidecar = JSON.parse(await readFile(join(directory, 'work-v3.archive', after.storage.sources[before.sources[0].id]), 'utf8'))
   expect(sidecar.observations).toEqual(before.sources[0].observations)
-  expect(sidecar.checkpoint).toEqual(before.sources[0].discovery.checkpoint)
+  expect(sidecar.checkpoint).toBeUndefined()
+  const checkpoint = JSON.parse(await readFile(join(directory, 'work-v3.archive', after.storage.checkpoints[before.sources[0].id]), 'utf8'))
+  expect(checkpoint).toMatchObject({ metadata: { pages: before.sources[0].discovery.checkpoint.pages }, issues: before.sources[0].discovery.checkpoint.issues, items: before.sources[0].discovery.checkpoint.items })
   // Full export must also recover the original values through the current reader.
   const exported = await WorkDao.forDirectory(directory).exportSnapshot()
   expect(exported.schemaVersion).toBe(before.schemaVersion)
