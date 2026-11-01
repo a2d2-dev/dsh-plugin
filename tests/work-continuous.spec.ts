@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { Context } from '@deepseek-ai/cordis'
 import SessionStore, { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import SessionQuery from '@deepseek-ai/dsh-session-query'
@@ -1466,6 +1467,218 @@ it.each(['idle', 'running', 'waiting', 'paused', 'model-failure', 'user-aborted'
       expect((await h.execution(first.ref, restored)).runtimeFailure).toEqual(stopped.runtimeFailure)
     }
   } finally { await ctx.fiber.dispose() }
+})
+
+it.each([
+  ['Last model turn ended interrupted: previous turn', 'read'],
+  ['Last model turn ended interrupted: previous turn', 'scan'],
+  ['Execution is idle without new actionable progress; send input or explicitly resume', 'read'],
+  ['Execution is idle without new actionable progress; send input or explicitly resume', 'scan'],
+] as const)('settles historical protection when the current turn finishes during observation (%s, %s)', async (reason, finishAt) => {
+  const h = await setup()
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1 } }, operator))
+  const first = await h.execution()
+  await WorkDao.forDirectory(h.directory).transaction(async state => {
+    const rule = state.continuousRules![0]!
+    rule.slots = []; delete rule.active
+    rule.items[0]!.state = 'blocked'; rule.items[0]!.reason = reason; rule.items[0]!.recoveryBlocked = true
+    state.executions[0]!.runtimeFailure = { id: 'old-failure', message: reason, userCancelled: false }
+  })
+  let finished = false
+  if (finishAt === 'scan') {
+    const status = h.host.execution.status
+    let scheduled = false
+    h.host.execution.status = execution => {
+      const current = status(execution)
+      if (execution.id === first.id && current === 'running' && !scheduled) {
+        scheduled = true
+        queueMicrotask(() => { finished = true; h.host.idle(first) })
+      }
+      return current
+    }
+  }
+  h.host.execution.failure = async execution => {
+    if (execution.id === first.id && !finished) { finished = true; h.host.idle(first) }
+    return undefined
+  }
+  await h.app.reconcileContinuous()
+  const rule = await h.status()
+  expect(finished).toBe(true)
+  expect(rule.items[0]!.recoveryBlocked).toBeUndefined()
+  expect(rule.items[0]).toMatchObject({ state: 'blocked', reason: 'Execution is idle without new actionable progress; send input or explicitly resume' })
+  expect(rule.slots).not.toContainEqual(first.ref)
+  expect(rule.items[1]!.state).toBe('active')
+  expect(h.host.sessionsCreated.size).toBe(2)
+})
+
+it('retains a stopped owner slot until the native status turn reaches a safe boundary', async () => {
+  const h = await setup()
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1 } }, operator))
+  const first = await h.execution()
+  const stopped = { id: 'user-stop', message: 'Last model turn ended aborted: user stopped the original turn', userCancelled: true }
+  h.host.execution.failure = async execution => execution.id === first.id ? stopped : undefined
+  await WorkDao.forDirectory(h.directory).transaction(async state => {
+    state.executions[0]!.runtimeFailure = stopped
+    state.continuousRules![0]!.items[0]!.state = 'blocked'
+    state.continuousRules![0]!.items[0]!.reason = stopped.message
+  })
+  const sends = h.host.sends.length
+  await h.app.reconcileContinuous()
+  const during = await h.status()
+  expect(during.slots).toEqual([first.ref])
+  expect(during.items[0]).toMatchObject({ state: 'blocked', reason: stopped.message })
+  expect(during.items[1]!.state).toBe('queued')
+  expect(h.host.sends).toHaveLength(sends)
+  expect((await h.execution(first.ref)).runtimeFailure).toEqual(stopped)
+  h.host.idle(first)
+  await h.app.reconcileContinuous()
+  const after = await h.status()
+  expect(after.slots).not.toContainEqual(first.ref)
+  expect(after.items[1]!.state).toBe('active')
+})
+
+it('rejects stale ExecutionId recovery without clearing current running protection or creating work', async () => {
+  const h = await setup()
+  completed(await h.app.execute(h.configure, operator))
+  const first = await h.execution()
+  await WorkDao.forDirectory(h.directory).transaction(async state => {
+    const item = state.continuousRules![0]!.items[0]!
+    item.state = 'blocked'; item.reason = 'Last model turn ended interrupted: old turn'; item.recoveryBlocked = true
+  })
+  const before = await h.status(), calls = [h.host.ensures.length, h.host.sends.length, h.host.wakes.length]
+  expect(await h.app.execute({ type: 'task.reconcile', commandId: 'wrong-execution-recovery', ...fence(first), executionId: randomUUID() }, operator)).toMatchObject({ status: 'failed', error: { code: 'stale-execution-authority' } })
+  expect(await h.status()).toEqual(before)
+  expect([h.host.ensures.length, h.host.sends.length, h.host.wakes.length]).toEqual(calls)
+})
+
+it.each(['owner', 'epoch', 'session'] as const)('fences current running recovery when %s changes during failure observation', async changed => {
+  const h = await setup()
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1 } }, operator))
+  const first = await h.execution()
+  const originalFailure = { id: 'previous-failure', message: 'Last model turn ended interrupted: previous turn', userCancelled: false }
+  await WorkDao.forDirectory(h.directory).transaction(async state => {
+    const item = state.continuousRules![0]!.items[0]!
+    item.state = 'blocked'; item.reason = originalFailure.message; item.recoveryBlocked = true
+    state.executions[0]!.runtimeFailure = originalFailure
+  })
+  const calls = [h.host.ensures.length, h.host.sends.length, h.host.wakes.length]
+  let observed = false
+  const replacementOwner = randomUUID()
+  h.host.execution.failure = async () => {
+    if (!observed) await WorkDao.forDirectory(h.directory).transaction(async state => {
+      observed = true
+      const current = state.executions.find(row => row.id === first.id)!
+      if (changed === 'owner') current.owner = replacementOwner
+      if (changed === 'epoch') current.epoch++
+      if (changed === 'session') current.session = { ...current.session, sessionId: 'replacement-session' }
+    })
+    return undefined
+  }
+  await h.app.reconcileContinuous()
+  expect(observed).toBe(true)
+  expect((await h.status()).items[0]).toMatchObject({ state: 'blocked', recoveryBlocked: true, reason: originalFailure.message })
+  const current = await h.execution(first.ref)
+  expect(current.runtimeFailure).toEqual(originalFailure)
+  if (changed === 'owner') expect(current.owner).toBe(replacementOwner)
+  if (changed === 'epoch') expect(current.epoch).toBe(first.epoch + 1)
+  if (changed === 'session') expect(current.session.sessionId).toBe('replacement-session')
+  expect([h.host.ensures.length, h.host.sends.length, h.host.wakes.length]).toEqual(calls)
+})
+
+it.each(['execution-error', 'continuation-error', 'continuation-blocked', 'runtime-failure', 'unknown-protection', 'wait', 'pause', 'end'] as const)('preserves %s when current running work has historical protection and lost occupancy', async protection => {
+  const h = await setup()
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1 } }, operator))
+  const first = await h.execution()
+  const error = { code: 'unresolved-failure', message: 'Real unresolved error' }
+  const failure = { id: 'current-failure', message: 'Last model turn ended error: unresolved provider failure', userCancelled: false }
+  h.host.execution.failure = async () => protection === 'runtime-failure' ? failure : undefined
+  await WorkDao.forDirectory(h.directory).transaction(async state => {
+    const rule = state.continuousRules![0]!, item = rule.items[0]!, current = state.executions[0]!
+    rule.slots = []; delete rule.active
+    item.state = 'blocked'; item.reason = 'Last model turn ended interrupted: old turn'; item.recoveryBlocked = true
+    if (protection === 'execution-error') current.error = error
+    if (protection === 'continuation-error') {
+      current.continuation = { operationId: randomUUID(), commandId: 'continue', automatic: false, phase: 'reserved', source: first.session,
+        successor: { ...first.session, sessionId: 'successor' }, sourceEpoch: first.epoch, materialRequestId: 'material', kickoffId: 'kickoff',
+        goal: 'Retain the agreed goal', specification: { version: 1, text: 'Agreed scope', acceptance: ['Pass check'] }, title: 'Issue 1', history: { ref: first.ref, session: first.session }, error }
+    }
+    if (protection === 'continuation-blocked') current.continuationBlocked = error
+    if (protection === 'runtime-failure') current.runtimeFailure = failure
+    if (protection === 'unknown-protection') item.reason = 'Created but receipt lost'
+    if (protection === 'wait' || protection === 'pause' || protection === 'end') {
+      current.control = { commandId: 'explicit-business-hold', action: protection, status: 'accepted', reason: 'Preserve this business decision' }
+      if (protection === 'end') item.end = { commandId: 'explicit-business-hold', status: 'accepted' }
+    }
+  })
+  const before = await h.execution(first.ref)
+  const calls = [h.host.ensures.length, h.host.sends.length, h.host.wakes.length]
+  await h.app.reconcileContinuous()
+  const after = await h.execution(first.ref), rule = await h.status()
+  expect(after).toEqual(before)
+  expect(rule.items[0]!.state).toBe('blocked')
+  if (['execution-error', 'continuation-error', 'continuation-blocked', 'runtime-failure'].includes(protection)) {
+    expect(rule.items[0]!.recoveryBlocked).toBeUndefined()
+    expect(rule.items[0]!.reason).toBe(protection === 'runtime-failure' ? failure.message : error.message)
+  } else expect(rule.items[0]!.recoveryBlocked).toBe(true)
+  expect(rule.slots).toEqual(['wait', 'pause', 'end'].includes(protection) ? [] : [first.ref])
+  expect(rule.items[1]!.state).toBe('queued')
+  expect([h.host.ensures.length, h.host.sends.length, h.host.wakes.length]).toEqual(calls)
+})
+
+it.each(['retired', 'child', 'unrelated'] as const)('does not recover lost occupancy from a running %s Session', async running => {
+  const h = await setup()
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1 } }, operator))
+  const first = await h.execution()
+  h.host.idle(first)
+  h.host.statuses.set('other-session', 'running')
+  h.host.execution.failure = async () => undefined
+  await WorkDao.forDirectory(h.directory).transaction(async state => {
+    const rule = state.continuousRules![0]!, current = state.executions[0]!
+    rule.slots = []; delete rule.active
+    rule.items[0]!.state = 'blocked'; rule.items[0]!.reason = 'Last model turn ended interrupted: old turn'; rule.items[0]!.recoveryBlocked = true
+    if (running === 'retired') { current.epoch++; current.retired = [{ session: { ...first.session, sessionId: 'other-session' }, epoch: first.epoch, operationId: randomUUID() }] }
+    if (running === 'child' || running === 'unrelated') state.tasks[0]!.sessions.push({ session: { ...first.session, sessionId: 'other-session' }, purpose: running === 'child' ? 'related' : 'review' })
+  })
+  await h.app.reconcileContinuous()
+  const rule = await h.status()
+  expect(rule.slots).toEqual([])
+  expect(rule.items[0]).toMatchObject({ state: 'blocked', recoveryBlocked: true })
+  expect(h.host.sessionsCreated.size).toBe(1)
+})
+
+it.each(['blocked', 'pending-input'] as const)('accounts for recovered live occupancy before processing an old %s slot at concurrency one', async oldSlot => {
+  const h = await setup(false)
+  h.remote.issues.push(issue(5))
+  completed(await h.refresh())
+  completed(await h.app.execute({ ...h.configure, enabled: true, queue: { ...queue, concurrency: 2 } }, operator))
+  const refs = (await h.status()).slots!, first = await h.execution(refs[0]), second = await h.execution(refs[1])
+  h.host.idle(first)
+  h.host.execution.failure = async () => undefined
+  await WorkDao.forDirectory(h.directory).transaction(async state => {
+    const rule = state.continuousRules![0]!
+    rule.queue!.concurrency = 1; rule.slots = [first.ref]; rule.active = first.ref
+    rule.items[0]!.state = oldSlot === 'blocked' ? 'blocked' : 'active'
+    if (oldSlot === 'blocked') rule.items[0]!.reason = 'Execution is idle without new actionable progress; send input or explicitly resume'
+    else state.executions.find(row => row.id === first.id)!.events.push({ id: 'pending-old-input', text: 'Previously accepted follow-up', kind: 'input', delivery: 'accepted', acceptance: 'unassessed' })
+    rule.items[1]!.state = 'blocked'; rule.items[1]!.reason = 'Execution is idle without new actionable progress; send input or explicitly resume'
+  })
+  const sends = h.host.sends.length
+  await h.app.reconcileContinuous()
+  let rule = await h.status()
+  expect(h.host.execution.status(first)).toBe('idle')
+  expect(h.host.execution.status(second)).toBe('running')
+  expect(h.host.sends).toHaveLength(sends)
+  expect(rule.items[1]!.state).toBe('active')
+  expect(rule.slots).toContainEqual(second.ref)
+  expect(rule.items[2]!.state).toBe('queued')
+  if (oldSlot === 'blocked') expect(rule.slots).toEqual([second.ref])
+  h.host.idle(second)
+  await h.app.reconcileContinuous()
+  rule = await h.status()
+  expect(rule.slots).not.toContainEqual(second.ref)
+  expect(h.host.sends).toHaveLength(sends + 1)
+  expect(rule.slots).toHaveLength(1)
+  expect(rule.items[oldSlot === 'blocked' ? 2 : 0]!.state).toBe('active')
 })
 
 it('ends an old aborted item after an ordinary resumable pause without declaring Task acceptance', async () => {

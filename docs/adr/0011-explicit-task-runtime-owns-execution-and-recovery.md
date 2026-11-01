@@ -65,9 +65,25 @@
 
 后台恢复依赖真实 `agents`、`sessionController` 和 `sessionQuery` 三个服务就绪。控制器已注册不等于会话观察服务可用；本地浏览和来源查询仍不需要这些执行服务。
 
-旧版本在会话观察服务缺失时会持久保存 `recoveryBlocked` 和准确错误 `Cannot read properties of undefined (reading 'observeSession')`。仅对此已确认的只读观察失败，周期恢复重新通过当前 Execution 的正式 failure 观察读取真实会话日志；读取仍失败则保留原保护。读取成功后按 ExecutionId、当前 Session、epoch 和保留槽位重新核对，只清除此项观察保护及对应规则错误。实际运行的当前主会话恢复为 active 并保留原槽位；没有新输入的空闲执行依正常安全结算让出槽位，不自动发送续跑消息。历史或无关会话运行不构成恢复证明。
+旧版本在会话观察服务缺失时会持久保存 `recoveryBlocked` 和准确错误 `Cannot read properties of undefined (reading 'observeSession')`。对此已确认的只读观察失败，周期恢复重新通过当前 Execution 的正式 failure 观察读取真实会话日志；读取仍失败则保留原保护。恢复先在调度锁内扫描队列已绑定的准确 ExecutionId／TaskRef：当前主会话确实 running、实际配置已确认且没有业务 wait、用户 pause/end 或完成事实时，补回遗失的槽位，再观察旧槽位的收尾，最后才安排候选。历史、子会话和无关会话运行不构成恢复证明。
 
-当前执行的真实模型失败、执行/接续错误、人工暂停和业务等待继续独立成立，不以观察成功解除。其他未知创建或结算结果不进入该自动恢复例外，沿用带当前 ExecutionId、owner、epoch 的 `task.reconcile` 或明确 `task.control resume`；需要继续业务时必须表达明确恢复意图。恢复保持 Task、Execution、Session、owner、epoch、模型和权限，不创建替代执行。
+正式 failure 观察按当前会话日志区分轮次：有更新的 `turn/start` 且当前 Agent 仍 running 时，上一轮 provider 错误可被真实新轮次取代；原生用户 Stop（`aborted` 且 `reason.kind=user`）必须沿用已有显式恢复／业务输入的确认语义，普通状态问句不构成确认。人工消息 ingress 在正常对话执行前观察当前执行，保存尚未协调观察的 Stop；观察失败不拒绝原生对话，关闭自动纠正也不关闭此取消事实观察。后续无失败或正常 `turn/end` 不删除未确认的 `userCancelled`，其状态问句及工具不重新取得业务槽位；已有在途占用仍需通过正常安全结算才能释放，不能只凭用户停止标记提前释放。没有新轮次事实的空闲或冷会话继续保留其最后失败。观察提交同时核对 ExecutionId、owner、epoch 和准确 Session；排队项的投影还须匹配当前规则与执行关联。成功观察后，只清理已被事实推翻的旧 interrupted／model-turn、idle-without-progress 和 observeSession 保护；若仍有真实执行错误、接续错误或当前未解决的 runtimeFailure，则继续 blocked 并呈现真实原因，不把旧保护文案留作当前错误。
+
+业务等待、人工暂停／结束、尚未完成的维护以及未知创建或结算结果继续独立成立，不以 running 或观察成功解除。没有新输入的空闲执行按正常安全结算让出槽位，不自动发送续跑消息；其他未知结果沿用带当前 ExecutionId、owner、epoch 的 `task.reconcile` 或明确 `task.control resume`。恢复保持 Task、Execution、Session、owner、epoch、模型和权限，不创建替代执行。遗失槽位与旧保留槽位并存时，实际 running 已占满容量便不唤醒旧 idle 工作；仍需安全收尾的槽位保留到正常结算，结束后再继续有序轮转。
+
+回归入口（仓库根目录，Node 22）：
+
+```sh
+PATH=/root/.nvm/versions/node/v22.23.1/bin:$PATH pnpm exec vitest run tests/work-continuous-integration.spec.ts tests/work-continuous.spec.ts
+```
+
+真实 Agent 场景让 `hold_recovery` 工具保持运行，注入历史协调保护并保留或移除槽位；`continuous.status` 应显示同一个执行 active、占用恢复、错误清除，模型请求与 Task 数量不增加。另一路先由真实模型循环记录 provider 失败，再由原生人工输入明确继续、开启新轮次，确认正式 failure 不再把上一轮失败当作当前结果。原生 Stop 回归使用公开 `Agent.cancel({ kind: 'user' })`，随后同一 Session 仅问状态并执行 hold 工具，分别覆盖已持久观察停止、未观察停止，以及状态问句正常完成后才扫描（关闭自动纠正仍保留观察）；三者均保留未确认的用户停止，不授业务槽位。初始红灯日志 `/tmp/issue-300-user-stop-red.log`（2 失败）；正常结束先于扫描的补充红灯 `/tmp/issue-300-user-stop-idle-red.log`（1 失败）。工具返回后，非用户停止的原槽位经正常空闲结算释放，下一项取得槽位。负例覆盖观察期间 owner／epoch／Session 改变、旧 ExecutionId、历史／关联会话运行、真实错误、wait/pause/end 以及容量已满时的旧待投递输入；数据从宿主事实进入执行协调记录，再由只读查询投影，业务规格与验收不随恢复改变。
+
+显式恢复仍沿用准确 ExecutionId／owner／epoch 的既有入口：`task.control resume` 和 `task.input kind=input` 确认已观察的停止；受管项的显式 `task.reconcile` 重试也确认该用户停止，`kind=result` 只排队不确认。这些明确命令在接受前先验证 TaskRef、ExecutionId、owner、epoch 及可信当前 Session actor，再于 DAO 写锁外读取该准确主会话的已有宿主失败，把尚未落盘的 Stop 纳入同一次既有确认逻辑；异步返回后的观察提交与命令接受仍分别核对当前身份，新的失败身份不被旧观察覆盖或确认。观察失败保留失败结果，不记录成功恢复回执。相同 commandId 重放只恢复原回执，不重新观察或确认后来发生的 Stop；completed／end 不重新取得处理权。无需新增状态、token 或未来观察中的通用 resumeRequested 确认。
+
+直接恢复回归使用真实 `Agent.cancel({ kind: 'user' }) → whenIdle → task.reconcile`，中间没有原生状态问句或 `reconcileControls`。必要 result 在 retry 后、首次调度前作为已接受事件到达；一次明确 retry 后应实际执行并在下一次协调中保持 active 和唯一槽位。另覆首次明确 resume、可信当前 Session 的 input，以及第二次真实 Stop 后重放原 commandId 仍保留未确认取消。边界负例验证错误 TaskRef／owner／epoch、历史 Session actor、宿主观察失败，以及读取期间 owner／epoch／Session 改变不落盘或确认旧观察；观察内的独立 DAO 写入完成同时核实没有持有 writer 锁。红灯 `/tmp/issue-300-unobserved-stop-red.log`（1 失败，首次 retry 后仍 blocked），定向绿灯 `/tmp/issue-300-unobserved-stop-green.log`，受影响宿主／continuous／guard／end 范围 `/tmp/issue-300-unobserved-stop-affected.log`（5 文件、174 项通过）；现有 execution／lifecycle／boundary／continuation 回归 `/tmp/issue-300-unobserved-stop-execution.log`（4 文件、77 项通过），`pnpm typecheck` 通过。
+
+只加强停止保留而未保留 reconcile 确认时，真实回归在重试运行后失去槽位，红灯见 `/tmp/issue-300-user-stop-reconcile-red-final.log`（1 失败）。同轮补槽扫描已见准确当前会话运行时，保留这次观察的 ExecutionId、owner、epoch 与 Session；逐项读取前或失败观察期间正常结束的，只有身份仍匹配才沿用该事实淘汰旧保护，再由普通空闲结算重读当前结果并安全释放；不把当前时刻不再 running 当作保留旧保护的理由。完整回归与开发发布记录见 [#300 验证说明](../verification/issue-300-running-recovery.md)。测试使用真实 Agent／公开取消／持久化与工具执行，外部模型输出受控。
 
 ## 实现覆盖
 
