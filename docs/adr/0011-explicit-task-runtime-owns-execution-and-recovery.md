@@ -122,4 +122,6 @@ PATH=/root/.nvm/versions/node/v22.23.1/bin:$PATH pnpm exec vitest run tests/work
 
 同 ID 恢复的 child 仍把原生 terminal notice 发给原 direct-parent。插件在既有启动、idle 与兜底 reconciliation 中，仅观察本 Task 已持久 pending、恢复或替代关系下的准确 parent/child，核实原生 header/descriptor、最新 endSeq 和首次持久 notice 身份，再向本 Task 当前协调收件箱写 `a2d2-work-child-result` 结果事件。事件 ID 来自 execution/parent/child/endSeq/原 noticeId，与会话代次无关，重载或重试不重复投递；不伪装原生通知，不改变旧 parent 的原生 consumed，不让退休 root 执行业务，也不创建新 Task。
 
+重复巡检已记录的准确稳定通知 ID 时沿只读路径复用事件，不为无新增通知开启 DAO 创建事务；缺失通知仍在原事务内核对 owner、epoch、当前会话、完成／结束事实并去重。宿主观察期间快照可能变旧，因此 pending 通知投递前仍回读当前 owner／epoch／会话、准确事件的存在和 pending 状态、维护及业务控制条件；通知的持久接受、投递和消费继续分别记录。
+
 当前协调的 model-owned executor wait 复用既有自动恢复准入：等待的准确 child、当前事件完整 envelope、持久 Task event 与新的真实 terminal notice 都必须吻合。人工 wait、pause/end、完成 Task 和未解决错误不被解除；通知在暂停中只持久保存，明确恢复后沿普通 Task 事件投递。无 continuous rule 的 Task 同样可由该通知自动恢复。接收通知只允许核实结果，不是 `childReceipts`、结果完整读取或业务验收；当前协调仍须调用 `work_child_recover result` 读完实际结果。旧通知不能重复唤醒后续 wait，新 turn 必须有自身最新 end/notice 身份。未返回 child 与公开 query 为崩溃生成的 interrupted 闭合没有真实 notice，不生成这种自动唤醒。
