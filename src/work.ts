@@ -531,7 +531,14 @@ export class WorkApplication {
         }]
       }
     })
-    return { ...result, childStatus: result.status, status: 'completed' as const, child: child.child, ...(trustedReceipt && trustedReceipt.endSeq === result.endSeq ? !trustedReceipt.complete && !trustedReceipt.pages ? { restartRequired: true, next: { action: 'result', cursor: 0 } } : { readProgress: { cursor: trustedReceipt.cursor, revision: trustedReceipt.revision, complete: trustedReceipt.complete } } : {}), ...(action === 'result' && result.status === 'returned' ? { events: undefined, content: raw.slice(cursor, nextCursor), revision: resultRevision, complete: nextCursor === raw.length, ...(nextCursor < raw.length ? { nextCursor } : {}) } : {}) }
+    const progress: { readProgress?: { cursor: number; revision: string; complete: boolean }; restartRequired?: boolean; next?: { action: 'result'; cursor: number } } = {}
+    if (action === 'status' && trustedReceipt && trustedReceipt.endSeq === result.endSeq) {
+      if (!trustedReceipt.complete && !trustedReceipt.pages) {
+        progress.restartRequired = true
+        progress.next = { action: 'result', cursor: 0 }
+      } else progress.readProgress = { cursor: trustedReceipt.cursor, revision: trustedReceipt.revision, complete: trustedReceipt.complete }
+    }
+    return { ...result, childStatus: result.status, status: 'completed' as const, child: child.child, ...progress, ...(action === 'result' && result.status === 'returned' ? { events: undefined, content: raw.slice(cursor, nextCursor), revision: resultRevision, complete: nextCursor === raw.length, ...(nextCursor < raw.length ? { nextCursor } : {}) } : {}) }
   }
   /** Public trusted adapter: source identity and Task references are resolved on the server. */
   async sessionContinuationMaterial(session: import('./work-types.ts').SessionRef, callId: string,
