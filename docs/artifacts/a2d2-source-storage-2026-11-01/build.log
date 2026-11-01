@@ -18,7 +18,7 @@
 
 ℹ Build start
 ℹ [ESM] lib/index.js                               125.30 kB │ gzip: 33.40 kB
-ℹ [ESM] lib/work-plugin.js                          95.01 kB │ gzip: 24.73 kB
+ℹ [ESM] lib/work-plugin.js                          95.22 kB │ gzip: 24.78 kB
 ℹ [ESM] lib/task-runtime.js                         31.22 kB │ gzip:  8.21 kB
 ℹ [ESM] lib/github-watch.js                         26.04 kB │ gzip:  8.40 kB
 ℹ [ESM] lib/tools.js                                 5.05 kB │ gzip:  1.64 kB
@@ -32,7 +32,7 @@
 ℹ [ESM] lib/work-sources.js                          0.22 kB │ gzip:  0.15 kB
 ℹ [ESM] lib/work.js                                  0.15 kB │ gzip:  0.11 kB
 ℹ [ESM] lib/work-types.js                            0.11 kB │ gzip:  0.11 kB
-ℹ [ESM] lib/work-d55QymqN.js                       235.33 kB │ gzip: 53.09 kB
+ℹ [ESM] lib/work-CN5dorRY.js                       236.20 kB │ gzip: 53.19 kB
 ℹ [ESM] lib/dao-Cbt2M-mc.js                        120.56 kB │ gzip: 29.11 kB
 ℹ [ESM] lib/discovery-Bw24T8KG.js                   67.49 kB │ gzip: 17.17 kB
 ℹ [ESM] lib/store-r1BlXwzj.js                       26.89 kB │ gzip:  7.96 kB
@@ -44,8 +44,8 @@
 ℹ [ESM] lib/task-session-title-writer-DqXkYMcF.js    3.56 kB │ gzip:  1.22 kB
 ℹ [ESM] lib/github-remote-Cd_OrFOj.js                1.05 kB │ gzip:  0.61 kB
 ℹ [ESM] lib/route-auth-sLEZTfdd.js                   0.58 kB │ gzip:  0.36 kB
-ℹ [ESM] 27 files, total: 824.76 kB
-✔ Build complete in 1785ms
+ℹ [ESM] 27 files, total: 825.83 kB
+✔ Build complete in 354ms
 ℹ Hint: consider adding deps.onlyBundle option to avoid unintended bundling of dependencies, or set deps.onlyBundle: false to disable this hint.
 See more at https://tsdown.dev/options/dependencies#deps-onlybundle
 Detected dependencies in bundle:
@@ -124,4 +124,4 @@ Detected dependencies in bundle:
 ℹ [CJS] lib/client.js      1.35 MB
 ℹ [CJS] lib/client.js.map  2.21 MB
 ℹ [CJS] 2 files, total: 3.56 MB
-✔ Build complete in 2163ms
+✔ Build complete in 530ms
