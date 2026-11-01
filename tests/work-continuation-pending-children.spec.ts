@@ -13,7 +13,14 @@ const material = { body: 'Retain original accepted work.', decisions: 'Continue 
 const report = { specificationVersion: 1, stage: 'done' as const, summary: 'verified', next: '', blockers: [], criteria: [{ index: 0, passed: true, evidence: ['native result verified'] }] }
 
 async function receiveChild(h: Awaited<ReturnType<ExecutionFixtures['mount']>>, agent: import('@deepseek-ai/dsh-agent').Agent, childId: string, epoch: number, fixtures: ExecutionFixtures) {
+  const input = createUserMessage({ content: [{ type: 'text', text: 'Receive the exact child result completely.' }], source: { kind: 'user' } })
+  let first = true
   h.model.selectTool = request => {
+    if (request.sessionId !== agent.id || !request.messages.some(message => message.id === input.id)) return
+    if (first) {
+      first = false
+      return { name: 'work_child_recover', arguments: { child_session_id: childId, action: 'result', expected_epoch: epoch } }
+    }
     const output = request.messages.findLast(message => message.role === 'tool')
     if (!output) return
     const text = output.content.map(block => block.type === 'text' ? block.text : '').join('')
@@ -21,8 +28,7 @@ async function receiveChild(h: Awaited<ReturnType<ExecutionFixtures['mount']>>, 
     try { page = JSON.parse(text) } catch { return }
     if (page.nextCursor !== undefined) return { name: 'work_child_recover', arguments: { child_session_id: childId, action: 'result', expected_epoch: epoch, cursor: page.nextCursor, revision: page.revision } }
   }
-  h.model.nextTool = { name: 'work_child_recover', arguments: { child_session_id: childId, action: 'result', expected_epoch: epoch } }
-  agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Receive the exact child result completely.' }], source: { kind: 'user' } }))
+  agent.followup(input)
   await fixtures.run(() => agent.whenIdle())
   h.model.selectTool = undefined
 }
@@ -111,6 +117,8 @@ it('hands off while a real native child tool is running, receives its late resul
 it.for(['resume', 'replace', 'resume-wait', 'resume-wait-startup'] as const)('cold-recovers actual host-lost child work via %s without reviving old coordination', { timeout: 20_000 }, async (mode, { signal }) => {
   const fixtures = new ExecutionFixtures(signal)
   let releaseRecovered = () => {}
+  let releaseForeign = () => {}
+  let foreignChildId: string | undefined
   try {
     const awaitingNotice = mode === 'resume-wait' || mode === 'resume-wait-startup'
     const { spawn } = await import('node:child_process')
@@ -183,7 +191,26 @@ it.for(['resume', 'replace', 'resume-wait', 'resume-wait-startup'] as const)('co
       const foreignExecution = ok(await h.app.execute({ type: 'task.start', commandId: 'foreign-start', ref: { projectId: foreignTask.projectId, taskId: foreignTask.id }, expectedVersion: 1, resource, agentId: foreignTask.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'read-only' }, operator)).execution!
       const foreignParent = h.ctx.agents.get(SessionId(foreignExecution.session.sessionId))!
       await fixtures.run(() => foreignParent.whenIdle())
+      const foreignGate = new Promise<void>(resolve => { releaseForeign = resolve })
+      const stream = h.model.stream.bind(h.model)
+      let heldForeign = false
+      vi.spyOn(h.model, 'stream').mockImplementation(async function* (request) {
+        if (!heldForeign && JSON.stringify(request.messages).includes('Verify a different Task')) {
+          heldForeign = true
+          await foreignGate
+        }
+        yield* stream(request)
+      })
       const foreign = await h.ctx.subagents.startContinuable({ provider: 'fresh-local', label: 'foreign verification', request: { parent: foreignParent, prompt: [{ type: 'text', text: 'Verify a different Task' }] }, signal: signal! })
+      foreignChildId = foreign.childId
+      h.ctx.on('agent/pre-step', async ({ agent, messages }, next) => {
+        if (agent === successor && JSON.stringify(messages).includes('Receive the exact child result completely.')) {
+          // Another real Session may reach the shared adapter before the coordinator.
+          releaseForeign()
+          await h.ctx.agents.get(foreign.childId)!.whenIdle()
+        }
+        return next()
+      })
       expect(await h.app.sessionChildRecovery(current.session, 'foreign-replacement', seed.childId, 'replace', undefined, 2, signal!, 0, undefined, foreign.childId)).toMatchObject({ status: 'failed', error: { code: 'child-replacement-unrelated' } })
       expect(await h.app.sessionChildRecovery(current.session, 'foreign-result', foreign.childId, 'result', undefined, 2, signal!)).toMatchObject({ status: 'failed', error: { code: 'unrelated-child' } })
     } else {
@@ -260,7 +287,11 @@ it.for(['resume', 'replace', 'resume-wait', 'resume-wait-startup'] as const)('co
       expect((await new RuntimeHost(h.ctx).events(SessionId(seed.execution.session.sessionId))).some(event => event.type === 'user/message' && event.data.source?.kind === 'subagent-settled')).toBe(false)
     } else await receiveChild(h, successor, resultChildId, 2, fixtures)
     if (mode === 'replace') {
-      expect(await h.app.sessionChildRecovery(current.session, 'accept-replacement', seed.childId, 'replace', undefined, 2, signal!, 0, undefined, resultChildId)).toMatchObject({ status: 'completed', childStatus: 'replaced', replacement: { sessionId: resultChildId } })
+      const foreignEvents = await new RuntimeHost(h.ctx).events(SessionId(foreignChildId!))
+      expect(foreignEvents.filter(event => event.type === 'tool/call' && event.data.name === 'work_child_recover')).toHaveLength(0)
+      const replacementResult = await h.app.sessionChildRecovery(current.session, 'accept-replacement', seed.childId, 'replace', undefined, 2, signal!, 0, undefined, resultChildId)
+      const trace = replacementResult.status === 'failed' ? await Promise.all([successor.id, SessionId(foreignChildId!)].map(async id => ({ id, events: (await new RuntimeHost(h.ctx).events(id)).filter(event => event.type === 'tool/call' || event.type === 'tool/result' || event.type === 'turn/end') }))) : undefined
+      expect(replacementResult, JSON.stringify({ replacementResult, trace })).toMatchObject({ status: 'completed', childStatus: 'replaced', replacement: { sessionId: resultChildId } })
     }
     const received = ok(await h.app.query({ type: 'task.execution', ref: seed.ref }, operator)).execution!
     const facts = await h.host.execution.observation!(received)
@@ -323,5 +354,5 @@ it.for(['resume', 'replace', 'resume-wait', 'resume-wait-startup'] as const)('co
       await receiveChild(h, third, resultChildId, 3, fixtures)
       expect(await h.app.sessionReport(final.session, 'replacement-accepted-done', report, 3)).toMatchObject({ status: 'completed' })
     }
-  } finally { releaseRecovered(); await fixtures.close() }
+  } finally { releaseRecovered(); releaseForeign(); await fixtures.close() }
 })
