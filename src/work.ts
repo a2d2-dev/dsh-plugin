@@ -1320,6 +1320,37 @@ export class WorkApplication {
     this.titleUpdates = operation
     await operation
   }
+  private readonly controlRecoveries = new Map<string, Promise<void>>()
+  async pendingSessionControls(): Promise<string[]> {
+    return (await this.load()).executions.filter(execution => continuationInFlight(execution) || execution.control?.status === 'accepted')
+      .map(execution => execution.session.sessionId)
+  }
+  /** Recover only already-persisted lifecycle intent, independently of source and queue scans. */
+  async reconcileSessionControls(sessionId: string): Promise<void> {
+    const host = this.host.execution
+    if (!host) return
+    const snapshot = await this.load()
+    const pending: Promise<void>[] = []
+    for (const initial of snapshot.executions) {
+      if (initial.session.sessionId !== sessionId) continue
+      if (!continuationInFlight(initial) && initial.control?.status !== 'accepted') continue
+      if (isTaskCompleted(taskAt(snapshot, initial.ref)) && initial.control?.action !== 'end') continue
+      if (host.status(initial) === 'running') continue
+      const existing = this.controlRecoveries.get(initial.id)
+      if (existing) { pending.push(existing); continue }
+      const operation = (async () => {
+        await this.observeRuntimeFailure(initial.id)
+        const current = (await this.load()).executions.find(item => item.id === initial.id)!
+        if (current.owner !== initial.owner || current.epoch !== initial.epoch || !sameSession(current.session, initial.session)
+          || host.status(current) === 'running') return
+        if (!continuationInFlight(current) && current.control?.status !== 'accepted') return
+        await this.ensureExecution(current.id, current.control?.commandId ?? current.continuation!.commandId)
+      })().finally(() => { this.controlRecoveries.delete(initial.id) })
+      this.controlRecoveries.set(initial.id, operation)
+      pending.push(operation)
+    }
+    await Promise.all(pending)
+  }
   /** Host lifecycle recovery includes starts, handoffs, controls and task-owned titles. */
   async reconcileControls(): Promise<void> {
     const before = await this.load()
