@@ -33,7 +33,7 @@ import { WorkDao } from './work-store/dao.ts'
 export { WorkDao } from './work-store/dao.ts'
 import type { WorkExecutionHost } from './work-execution/host.ts'
 export type { WorkExecutionHost } from './work-execution/host.ts'
-import type { HostResource, NativeWorkMessage, Project, ResourceRef, SessionCandidate, TaskRef, WorkCommand, WorkEvent, WorkResult, WorkTask } from './work-types.ts'
+import type { HostResource, NativeWorkMessage, Project, ResourceRef, SessionCandidate, TaskRef, WorkCommand, WorkEvent, WorkExecution, WorkResult, WorkTask } from './work-types.ts'
 export type * from './work-types.ts'
 
 /** Only trusted adapters construct authorization; browser payloads cannot supply it. */
@@ -752,6 +752,7 @@ export class WorkApplication {
     }
     const lease = join(this.directory, 'continuous.scheduler')
     await withFileLock(lease, async () => {
+      const runningObservations = new Map<string, Pick<WorkExecution, 'owner' | 'epoch' | 'session'>>()
       await this.sourceTransaction(async state => {
         for (const rule of state.continuousRules ?? []) {
           const source = state.sources.find(source => source.id === rule.sourceId)
@@ -762,6 +763,7 @@ export class WorkApplication {
             if (current?.actual && host.status(current) === 'running' && !item.end && current.control?.action !== 'end'
               && !continuousCompleted(state, current) && !['waiting', 'paused'].includes(current.state)
               && (!current.control || current.control.action === 'resume')) {
+              runningObservations.set(current.id, { owner: current.owner, epoch: current.epoch, session: { ...current.session } })
               if (current.runtimeFailure?.userCancelled && !current.runtimeFailure.acknowledged) {
                 item.state = 'blocked'; item.reason = current.runtimeFailure.message
                 // An existing slot still fences unsettled native work; normal
@@ -800,7 +802,9 @@ export class WorkApplication {
             // Re-observe current live work as well as the known legacy read-only
             // failure. Neither observation nor repairing occupancy sends input.
             const legacyObservation = "Cannot read properties of undefined (reading 'observeSession')"
-            const wasRunning = host.status(execution) === 'running'
+            const scanned = runningObservations.get(execution.id)
+            const wasRunning = host.status(execution) === 'running' || !!scanned && scanned.owner === execution.owner
+              && scanned.epoch === execution.epoch && sameSession(scanned.session, execution.session)
             if (execution.actual && owner.item.executionId === execution.id && host.failure
               && (wasRunning && (owner.item.reason || execution.runtimeFailure)
                 || owner.item.recoveryBlocked && owner.item.reason === legacyObservation)) {

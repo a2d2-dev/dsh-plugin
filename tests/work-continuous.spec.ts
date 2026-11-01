@@ -1469,7 +1469,12 @@ it.each(['idle', 'running', 'waiting', 'paused', 'model-failure', 'user-aborted'
   } finally { await ctx.fiber.dispose() }
 })
 
-it.each(['Last model turn ended interrupted: previous turn', 'Execution is idle without new actionable progress; send input or explicitly resume'])('settles historical protection when the current turn finishes during observation (%s)', async reason => {
+it.each([
+  ['Last model turn ended interrupted: previous turn', 'read'],
+  ['Last model turn ended interrupted: previous turn', 'scan'],
+  ['Execution is idle without new actionable progress; send input or explicitly resume', 'read'],
+  ['Execution is idle without new actionable progress; send input or explicitly resume', 'scan'],
+] as const)('settles historical protection when the current turn finishes during observation (%s, %s)', async (reason, finishAt) => {
   const h = await setup()
   completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1 } }, operator))
   const first = await h.execution()
@@ -1480,6 +1485,18 @@ it.each(['Last model turn ended interrupted: previous turn', 'Execution is idle 
     state.executions[0]!.runtimeFailure = { id: 'old-failure', message: reason, userCancelled: false }
   })
   let finished = false
+  if (finishAt === 'scan') {
+    const status = h.host.execution.status
+    let scheduled = false
+    h.host.execution.status = execution => {
+      const current = status(execution)
+      if (execution.id === first.id && current === 'running' && !scheduled) {
+        scheduled = true
+        queueMicrotask(() => { finished = true; h.host.idle(first) })
+      }
+      return current
+    }
+  }
   h.host.execution.failure = async execution => {
     if (execution.id === first.id && !finished) { finished = true; h.host.idle(first) }
     return undefined

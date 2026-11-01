@@ -79,7 +79,7 @@ PATH=/root/.nvm/versions/node/v22.23.1/bin:$PATH pnpm exec vitest run tests/work
 
 真实 Agent 场景让 `hold_recovery` 工具保持运行，注入历史协调保护并保留或移除槽位；`continuous.status` 应显示同一个执行 active、占用恢复、错误清除，模型请求与 Task 数量不增加。另一路先由真实模型循环记录 provider 失败，再由原生人工输入明确继续、开启新轮次，确认正式 failure 不再把上一轮失败当作当前结果。原生 Stop 回归使用公开 `Agent.cancel({ kind: 'user' })`，随后同一 Session 仅问状态并执行 hold 工具，分别覆盖已持久观察停止、未观察停止，以及状态问句正常完成后才扫描（关闭自动纠正仍保留观察）；三者均保留未确认的用户停止，不授业务槽位。初始红灯日志 `/tmp/issue-300-user-stop-red.log`（2 失败）；正常结束先于扫描的补充红灯 `/tmp/issue-300-user-stop-idle-red.log`（1 失败）。工具返回后，非用户停止的原槽位经正常空闲结算释放，下一项取得槽位。负例覆盖观察期间 owner／epoch／Session 改变、旧 ExecutionId、历史／关联会话运行、真实错误、wait/pause/end 以及容量已满时的旧待投递输入；数据从宿主事实进入执行协调记录，再由只读查询投影，业务规格与验收不随恢复改变。
 
-显式恢复仍沿用准确 ExecutionId／owner／epoch 的既有入口：`task.control resume` 和 `task.input kind=input` 确认已观察的停止；受管项的显式 `task.reconcile` 重试也确认该用户停止，`kind=result` 只排队不确认。只加强停止保留而未保留 reconcile 确认时，真实回归在重试运行后失去槽位，红灯见 `/tmp/issue-300-user-stop-reconcile-red-final.log`（1 失败）。观察开始时准确当前会话正在运行、提交时已正常空闲的，仍可淘汰同身份的旧保护，再由普通空闲结算重读当前结果并安全释放；不把当前时刻不再 running 当作保留旧保护的理由。完整回归与开发发布记录见 [#300 验证说明](../verification/issue-300-running-recovery.md)。测试使用真实 Agent／公开取消／持久化与工具执行，外部模型输出受控。
+显式恢复仍沿用准确 ExecutionId／owner／epoch 的既有入口：`task.control resume` 和 `task.input kind=input` 确认已观察的停止；受管项的显式 `task.reconcile` 重试也确认该用户停止，`kind=result` 只排队不确认。只加强停止保留而未保留 reconcile 确认时，真实回归在重试运行后失去槽位，红灯见 `/tmp/issue-300-user-stop-reconcile-red-final.log`（1 失败）。同轮补槽扫描已见准确当前会话运行时，保留这次观察的 ExecutionId、owner、epoch 与 Session；逐项读取前或失败观察期间正常结束的，只有身份仍匹配才沿用该事实淘汰旧保护，再由普通空闲结算重读当前结果并安全释放；不把当前时刻不再 running 当作保留旧保护的理由。完整回归与开发发布记录见 [#300 验证说明](../verification/issue-300-running-recovery.md)。测试使用真实 Agent／公开取消／持久化与工具执行，外部模型输出受控。
 
 ## 实现覆盖
 
