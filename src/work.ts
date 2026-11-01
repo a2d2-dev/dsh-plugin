@@ -1438,7 +1438,8 @@ export class WorkApplication {
         && known.some(known => sameSession(known.parent, parent.session) && sameSession(known.child, child.session)) ? [{ parent: parent.session, child: child.session, label: child.label, ...child.notice }] : []))
       for (const notice of notices) {
         const id = `child-result:${createHash('sha256').update(JSON.stringify([initial.id, notice.parent, notice.child, notice.endSeq, notice.message.id])).digest('hex')}`
-        const execution = await this.sourceTransaction(async state => {
+        // Stable inbox IDs already present need no creation transaction; pending delivery still rereads current authority below.
+        const execution = initial.events.some(event => event.id === id) ? initial : await this.sourceTransaction(async state => {
           const current = state.executions.find(item => item.id === initial.id)
           if (!current || current.owner !== initial.owner || current.epoch !== initial.epoch || !sameSession(current.session, initial.session) || isTaskCompleted(taskAt(state, current.ref)) || current.control?.action === 'end') return
           if (!current.events.some(event => event.id === id)) {
@@ -1448,10 +1449,11 @@ export class WorkApplication {
           return current
         })
         if (!execution) continue
-        const event = execution.events.find(event => event.id === id)!
-        if (!pendingEvent(event) || continuationInFlight(execution)) continue
-        const state = await this.load(), current = state.executions.find(item => item.id === execution.id)!
-        if (current.epoch !== execution.epoch || !sameSession(current.session, execution.session) || isTaskCompleted(taskAt(state, current.ref)) || current.control?.action === 'end') continue
+        if (!pendingEvent(execution.events.find(event => event.id === id)!) || continuationInFlight(execution)) continue
+        const state = await this.load(), current = state.executions.find(item => item.id === execution.id)
+        if (!current || current.owner !== execution.owner || current.epoch !== execution.epoch || !sameSession(current.session, execution.session) || isTaskCompleted(taskAt(state, current.ref)) || current.control?.action === 'end' || continuationInFlight(current)) continue
+        const event = current.events.find(event => event.id === id)
+        if (!event || !pendingEvent(event)) continue
         const delegated = modelOwnedWait(state, current) && current.control?.yield?.reason === 'executor' && !!current.control.yield.executor && sameSession(current.control.yield.executor, notice.child)
         const active = continuousMayAdvance(state, current) && ['ready', 'running'].includes(current.state) && (!current.control || current.control.action === 'resume')
         if (!delegated && !active) continue
