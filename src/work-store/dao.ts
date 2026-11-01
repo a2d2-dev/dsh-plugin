@@ -1,22 +1,28 @@
+import { z } from 'zod'
 import { screeningArchiveSchema, type ScreeningReview } from '../work-screening-record.ts'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { readFileSync, realpathSync } from 'node:fs'
-import { mkdir, readFile, stat } from 'node:fs/promises'
+import { mkdir, readFile, stat, readdir, lstat, unlink } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { executionSchema, historyRefSchema, receiptSchema, snapshotSchema, type WorkSnapshot } from '../work-schema.ts'
 import { normalizeLegacyLocalChildren } from '../work-migrate.ts'
-import { sourceSchema } from '../work-sources/schema.ts'
+import { checkpointSchema, sourceSchema } from '../work-sources/schema.ts'
 import type { WorkExecution, WorkResult } from '../work-types.ts'
 import type { WorkSource } from '../work-sources/types.ts'
+import { checkpointChunkSchema, checkpointChunk, applyCheckpointChunk, type CheckpointChunk } from './checkpoint.ts'
 import { attachBulk, bulkOf, bulkPath, hasInlineBulk, readBulkSync, type SourceBulk } from './source-bulk.ts'
 
 type History = WorkExecution['history']
 type Receipt = WorkSnapshot['commands'][number]
 export interface HistoryRef { head: string; length: number; first?: History[number] }
-export interface StorageRefs { version: 1; receipts: Record<string, string>; histories: Record<string, HistoryRef>; sources: Record<string, string> }
+export interface StorageRefs { version: 1; receipts: Record<string, string>; histories: Record<string, HistoryRef>; sources: Record<string, string>; checkpoints: Record<string, string | null> }
+export interface ArchiveCollection {
+  version: 1; dryRun: boolean; controlBytes: number; controlSha256: string; reachableBytes: number; candidateBytes: number
+  reachable: string[]; roles: Record<string, string>; candidates: { file: string; bytes: number }[]; ignored: string[]; manifest: string
+}
 interface HistoryState { ref?: HistoryRef; pending: History; loaded?: History }
-interface SourceState { ref?: string; base: () => SourceBulk; value?: SourceBulk; mutable: boolean; legacy: boolean; hadDiscovery?: boolean }
+interface SourceState { checkpointRef?: string | null; checkpointBase: () => SourceBulk['checkpoint']; checkpointValue?: SourceBulk['checkpoint']; checkpointLoaded?: boolean; ref?: string; base: () => SourceBulk; value?: SourceBulk; mutable: boolean; legacy: boolean; hadDiscovery?: boolean }
 const empty = (): WorkSnapshot => snapshotSchema.parse({ schemaVersion: 3, projects: [], agents: [], tasks: [], commands: [], legacyMappings: [] })
 const options = { mode: 0o600, dirMode: 0o700 }
 const instances = new Map<string, WeakRef<WorkDao>>()
@@ -69,6 +75,7 @@ export class WorkDao {
   // Immutable identities let cold values survive unrelated control commits, without retaining unused history forever.
   private historyCache = new Map<string, WeakRef<History>>()
   private receiptCache = new Map<string, WeakRef<Receipt['result']>>()
+  private checkpointCache = new Map<string, WeakRef<NonNullable<SourceBulk['checkpoint']>>>()
   private sourceCache = new Map<string, WeakRef<SourceBulk>>()
   private constructor(readonly directory: string) { this.file = join(directory, 'work-v3.json') }
   /** Observers re-read after commit; listener failures never turn a durable commit into failure. */
@@ -119,9 +126,12 @@ export class WorkDao {
       const ref = state.storage?.sources[source.id]
       const inline = hasInlineBulk(source)
       const bulk = inline ? bulkOf(source) : undefined
-      this.attachSource(source, { ref: inline ? undefined : ref, legacy: !ref || inline, mutable: false,
+      const base = () => bulk ?? (state.storage ? this.readSource(ref!, source) : this.validateSource(source, readBulkSync(bulkPath(this.directory, source.id))?.bulk ?? { observations: [], pages: [] }))
+      const checkpointRef = inline ? undefined : state.storage?.checkpoints?.[source.id]
+      this.attachSource(source, { ref: inline ? undefined : ref, legacy: !ref || inline || !state.storage?.checkpoints, mutable: false, checkpointRef,
+        checkpointBase: () => checkpointRef === null ? undefined : checkpointRef ? this.readCheckpoint(checkpointRef) : base().checkpoint,
         // Only unmarked legacy stores may consult mutable sidecars or have no saved bulk.
-        base: () => bulk ?? (state.storage ? this.readSource(ref!, source) : this.validateSource(source, readBulkSync(bulkPath(this.directory, source.id))?.bulk ?? { observations: [], pages: [] })) })
+        base })
     }
     return freeze(state)
   }
@@ -150,6 +160,24 @@ export class WorkDao {
     this.sourceCache.set(ref, new WeakRef(bulk))
     return bulk
   }
+  private readCheckpoint(ref: string): NonNullable<SourceBulk['checkpoint']> {
+    const cached = this.checkpointCache.get(ref)?.deref()
+    if (cached) return cached
+    const chunks: CheckpointChunk[] = [], seen = new Set<string>()
+    let next: string | undefined = ref, value: SourceBulk['checkpoint']
+    while (next) {
+      if (seen.has(next)) throw new Error('Cyclic work checkpoint archive')
+      seen.add(next)
+      const cached = this.checkpointCache.get(next)?.deref()
+      if (cached) { value = cached; break }
+      const chunk = checkpointChunkSchema.parse(this.blob(next))
+      chunks.push(chunk); next = chunk.previous
+    }
+    for (const chunk of chunks.reverse()) value = applyCheckpointChunk(chunk, value)
+    const result = freeze(value!)
+    this.checkpointCache.set(ref, new WeakRef(result))
+    return result
+  }
   private attachSource(source: WorkSource, meta: SourceState): void {
     sources.set(source, meta)
     meta.hadDiscovery = !!source.discovery
@@ -157,7 +185,15 @@ export class WorkDao {
     for (const key of ['observations', 'pages', 'repositorySnapshot', 'projectSnapshot'] as const) {
       Object.defineProperty(source, key, { enumerable: true, configurable: true, get: () => get()[key], set: value => { if (Object.isFrozen(source)) throw new Error('Cannot modify a committed work source'); get()[key] = value } })
     }
-    if (source.discovery) Object.defineProperty(source.discovery, 'checkpoint', { enumerable: true, configurable: true, get: () => get().checkpoint, set: value => { if (Object.isFrozen(source)) throw new Error('Cannot modify a committed work source'); get().checkpoint = value } })
+    const checkpoint = () => {
+      if (!meta.checkpointLoaded) {
+        const value = meta.checkpointBase()
+        meta.checkpointValue = meta.mutable ? structuredClone(value) : freeze(value)
+        meta.checkpointLoaded = true
+      }
+      return meta.checkpointValue
+    }
+    if (source.discovery) Object.defineProperty(source.discovery, 'checkpoint', { enumerable: true, configurable: true, get: checkpoint, set: value => { if (Object.isFrozen(source)) throw new Error('Cannot modify a committed work source'); meta.checkpointValue = value; meta.checkpointLoaded = true } })
   }
   private history(meta: HistoryState): History {
     if (meta.loaded) return meta.loaded
@@ -224,7 +260,7 @@ export class WorkDao {
     draft.executions = state.executions.map(execution => this.copyExecution(execution))
     draft.sources = state.sources.map(source => {
       const copy = structuredClone(sourceControl(source)), meta = sources.get(source)!
-      this.attachSource(copy, { ref: meta.ref, legacy: meta.legacy, mutable: true, base: () => meta.value ?? meta.base() })
+      this.attachSource(copy, { ref: meta.ref, legacy: meta.legacy, mutable: true, base: () => meta.value ?? meta.base(), checkpointRef: meta.checkpointRef, checkpointBase: () => meta.checkpointLoaded ? meta.checkpointValue : meta.checkpointBase() })
       return copy
     })
     return draft
@@ -260,8 +296,8 @@ export class WorkDao {
     return ref
   }
   private async commit(before: WorkSnapshot, draft: WorkSnapshot): Promise<void> {
-    const refs: StorageRefs = { version: 1, receipts: Object.create(null), histories: Object.create(null), sources: Object.create(null) }
-    let changed = !before.storage || comparable(before) !== comparable(draft)
+    const refs: StorageRefs = { version: 1, receipts: Object.create(null), histories: Object.create(null), sources: Object.create(null), checkpoints: Object.create(null) }
+    let changed = !before.storage?.checkpoints || comparable(before) !== comparable(draft)
     // Validate only live facts here. New cold records are validated separately once.
     const live = control(draft); delete live.storage
     snapshotSchema.parse(live)
@@ -286,15 +322,30 @@ export class WorkDao {
       const meta = sources.get(source)
       let ref = meta?.ref
       const deleted = ['observations', 'pages', 'repositorySnapshot', 'projectSnapshot'].some(key => !Object.getOwnPropertyDescriptor(source, key)?.get)
-        || (meta?.hadDiscovery && !source.discovery) || (source.discovery && !Object.getOwnPropertyDescriptor(source.discovery, 'checkpoint')?.get)
       if (!meta || meta.legacy || meta.value !== undefined || deleted) {
-        const bulk = bulkOf(source)
-        sourceSchema.parse(source)
-        if (!ref || JSON.stringify(bulk) !== JSON.stringify(meta!.base())) {
+        const { checkpoint: ignored, ...bulk } = bulkOf(source)
+        // Validate body independently: progress updates must not traverse the body.
+        this.validateSource(source, bulk)
+        const original = meta && meta.base()
+        const base = original && omit(original, ['checkpoint'])
+        if (!ref || meta?.legacy || JSON.stringify(bulk) !== JSON.stringify(base)) {
           ref = await this.put(bulk); changed = true
         }
       }
       if (ref) refs.sources[source.id] = ref
+      let checkpointRef = meta?.checkpointRef ?? null
+      const checkpointDeleted = (meta?.hadDiscovery && !source.discovery) || (source.discovery && !Object.getOwnPropertyDescriptor(source.discovery, 'checkpoint')?.get)
+      if (!meta || meta.legacy || meta.checkpointLoaded || checkpointDeleted) {
+        const checkpoint = source.discovery?.checkpoint
+        if (checkpoint) checkpointSchema.parse(checkpoint)
+        if (!meta || meta.legacy || JSON.stringify(checkpoint) !== JSON.stringify(meta.checkpointBase())) {
+          const original = meta?.checkpointBase()
+          checkpointRef = checkpoint ? await this.put(checkpointChunk(checkpoint, meta?.checkpointRef && original ? { ref: meta.checkpointRef, value: original } : undefined)) : null
+          if (checkpointRef && checkpoint) this.checkpointCache.set(checkpointRef, new WeakRef(freeze(checkpoint)))
+          changed = true
+        }
+      }
+      refs.checkpoints[source.id] = checkpointRef
     }
     if (!changed) return
     const persisted = control(draft); persisted.storage = refs
@@ -304,6 +355,118 @@ export class WorkDao {
     await writeFileAtomic(this.file, content, options)
     const key = await this.key()
     if (this.cached?.key !== key || this.cached.content !== content) { this.cached = { key, content, state }; this.notify() }
+  }
+  /** All readers and writers must be stopped: readers may still hold an older root.
+   * The normal writer lock additionally excludes cooperating accidental writers.
+   * Only reachable blobs are parsed; unreachable large source bodies stay unopened.
+   */
+  async collectArchives(options: { offline: true; dryRun?: boolean }): Promise<ArchiveCollection> {
+    if (options.offline !== true) throw new Error('Archive collection requires stopped readers and writers')
+    return this.transaction(async state => {
+      if (!state.storage) throw new Error('Migrate the store before archive collection')
+      type Job = { kind: 'history' | 'receipt' | 'source' | 'checkpoint' | 'screening'; ref: string; source?: WorkSource }
+      const checkpointRoots: string[] = [], checkpointChunks = new Map<string, CheckpointChunk>()
+      const queue: Job[] = [], seen = new Map<string, Job['kind']>(), historyRefs: HistoryRef[] = []
+      const chunks = new Map<string, { previous?: string; length: number }>(), screening = new Map<string, string | undefined>(), checkpoints = new Map<string, string | undefined>()
+      const addHistory = (ref: HistoryRef) => { historyRefs.push(ref); queue.push({ kind: 'history', ref: ref.head }) }
+      for (const ref of Object.values(state.storage.histories)) addHistory(ref)
+      for (const ref of Object.values(state.storage.receipts)) queue.push({ kind: 'receipt', ref })
+      for (const [id, ref] of Object.entries(state.storage.sources)) {
+        const source = state.sources.find(source => source.id === id)
+        if (!source) throw new Error('Source archive index has no source')
+        queue.push({ kind: 'source', ref, source })
+      }
+      for (const [id, ref] of Object.entries(state.storage.checkpoints ?? {})) {
+        if (!state.sources.some(source => source.id === id)) throw new Error('Checkpoint archive index has no source')
+        if (ref) { checkpointRoots.push(ref); queue.push({ kind: 'checkpoint', ref }) }
+      }
+      for (const rule of state.continuousRules ?? []) if (rule.screeningReview) queue.push({ kind: 'screening', ref: rule.screeningReview.ref })
+      const historyChunk = z.object({ previous: historyRefSchema.shape.head.optional(), entries: executionSchema.shape.history }).strict()
+      const receiptArchive = z.object({ result: receiptSchema, history: historyRefSchema.optional() }).strict()
+      for (let index = 0; index < queue.length; index++) {
+        const job = queue[index]!, prior = seen.get(job.ref)
+        if (prior) { if (prior !== job.kind) throw new Error('Archive reference has conflicting kinds'); continue }
+        const info = await lstat(this.blobPath(job.ref))
+        if (!info.isFile()) throw new Error('Reachable archive is not a regular file')
+        const value = this.blob(job.ref)
+        seen.set(job.ref, job.kind)
+        switch (job.kind) {
+          case 'source': this.validateSource(job.source!, value as SourceBulk); break
+          case 'checkpoint': {
+            const chunk = checkpointChunkSchema.parse(value)
+            checkpoints.set(job.ref, chunk.previous); checkpointChunks.set(job.ref, chunk)
+            if (chunk.previous) queue.push({ kind: 'checkpoint', ref: chunk.previous })
+            break
+          }
+          case 'history': {
+            const chunk = historyChunk.parse(value)
+            chunks.set(job.ref, { previous: chunk.previous, length: chunk.entries.length })
+            if (chunk.previous) queue.push({ kind: 'history', ref: chunk.previous })
+            break
+          }
+          case 'receipt': {
+            const receipt = receiptArchive.parse(value)
+            if (receipt.history) {
+              if (!receipt.result.execution) throw new Error('History archive without receipt execution')
+              addHistory(receipt.history)
+            }
+            const review = receipt.result.continuousRule?.screeningReview
+            if (review) queue.push({ kind: 'screening', ref: review.ref })
+            break
+          }
+          case 'screening': {
+            const archive = screeningArchiveSchema.parse(value)
+            screening.set(job.ref, archive.previous)
+            if (archive.previous) queue.push({ kind: 'screening', ref: archive.previous })
+            break
+          }
+        }
+      }
+      // Memoize chain lengths: many receipts share long history prefixes.
+      const lengths = new Map<string, number>()
+      for (const root of historyRefs) {
+        const path: string[] = [], visiting = new Set<string>(); let ref: string | undefined = root.head
+        while (ref && !lengths.has(ref)) {
+          if (visiting.has(ref)) throw new Error('Cyclic work history archive')
+          visiting.add(ref); path.push(ref); ref = chunks.get(ref)!.previous
+        }
+        let length = ref ? lengths.get(ref)! : 0
+        for (const ref of path.reverse()) { length += chunks.get(ref)!.length; lengths.set(ref, length) }
+        if (lengths.get(root.head) !== root.length) throw new Error('Incomplete work history archive')
+      }
+      for (const chain of [screening, checkpoints]) {
+        const checked = new Set<string>()
+        for (const root of chain.keys()) {
+          const path = new Set<string>(); let ref: string | undefined = root
+          while (ref && !checked.has(ref)) {
+            if (path.has(ref)) throw new Error('Cyclic screening/checkpoint archive')
+            path.add(ref); ref = chain.get(ref)
+          }
+          for (const ref of path) checked.add(ref)
+        }
+      }
+      for (const root of checkpointRoots) {
+        const path: CheckpointChunk[] = []; let ref: string | undefined = root, value: SourceBulk['checkpoint']
+        while (ref) { const chunk: CheckpointChunk = checkpointChunks.get(ref)!; path.push(chunk); ref = chunk.previous }
+        for (const chunk of path.reverse()) value = applyCheckpointChunk(chunk, value)
+      }
+      const archiveDirectory = join(this.directory, 'work-v3.archive')
+      const report: ArchiveCollection = { version: 1, dryRun: options.dryRun !== false, controlBytes: (await stat(this.file)).size,
+        controlSha256: createHash('sha256').update(await readFile(this.file)).digest('hex'), reachableBytes: 0, candidateBytes: 0, reachable: [...seen.keys()].sort(), roles: Object.fromEntries(seen), candidates: [], ignored: [], manifest: join(this.directory, `work-v3.gc-${randomUUID()}.json`) }
+      const files = await readdir(archiveDirectory, { withFileTypes: true })
+      for (const file of files) {
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.json$/.test(file.name) || !file.isFile()) { report.ignored.push(file.name); continue }
+        const info = await lstat(join(archiveDirectory, file.name))
+        if (!info.isFile()) throw new Error('Archive changed during offline collection')
+        if (seen.has(file.name)) report.reachableBytes += info.size
+        else { report.candidates.push({ file: file.name, bytes: info.size }); report.candidateBytes += info.size }
+      }
+      report.candidates.sort((a, b) => a.file.localeCompare(b.file)); report.ignored.sort()
+      // Write the complete plan before any deletion. Failed/corrupt graphs never reach this point.
+      await writeFileAtomic(report.manifest, `${JSON.stringify(report)}\n`, { mode: 0o600, dirMode: 0o700 })
+      if (!report.dryRun) for (const candidate of report.candidates) await unlink(this.blobPath(candidate.file))
+      return report
+    }, () => false)
   }
   /** Explicit offline downgrade/audit boundary: materializes all cold data. */
   async exportSnapshot(): Promise<WorkSnapshot> {

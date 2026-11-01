@@ -176,6 +176,7 @@ export const snapshotSchema = z.object({
   // Deliberately unknown to pre-DAO strict schemas: old writers must reject this format.
   storage: z.object({ version: z.literal(1), receipts: receiptIndexSchema,
     histories: z.record(z.string(), historyRefSchema),
+    checkpoints: z.record(z.string(), archiveFileSchema.nullable()).optional(),
     sources: z.record(z.string(), z.string().regex(/^[0-9a-f-]{36}\.json$/)),
   }).strict().optional(), projects: z.array(projectSchema), agents: z.array(agentSchema), tasks: z.array(taskSchema),
   sources: z.array(sourceSchema).default([]), externalBindings: z.array(bindingSchema).default([]),
@@ -187,6 +188,7 @@ export const snapshotSchema = z.object({
 }).strict().superRefine((state, ctx) => {
   if (state.storage && state.commands.some(receipt => !Object.hasOwn(state.storage!.receipts, receipt.commandId))) ctx.addIssue({ code: 'custom', message: 'Missing command archive reference' })
   if (state.storage && state.sources.some(source => !Object.hasOwn(state.storage!.sources, source.id))) ctx.addIssue({ code: 'custom', message: 'Missing source archive reference' })
+  if (state.storage?.checkpoints && state.sources.some(source => !Object.hasOwn(state.storage!.checkpoints!, source.id))) ctx.addIssue({ code: 'custom', message: 'Missing source checkpoint reference' })
   const ruleSources = new Set<string>(), claimedTasks = new Set<string>()
   for (const rule of state.continuousRules ?? []) {
     if (ruleSources.has(rule.sourceId) || !state.sources.some(source => source.id === rule.sourceId && source.projectId === rule.projectId)) ctx.addIssue({ code: 'custom', message: 'Continuous rule source authority is inconsistent' })

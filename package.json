@@ -90,6 +90,7 @@
   },
   "files": [
     "lib/*.js",
+    "scripts/work-archive-gc.mjs",
     "lib/types/**/*.d.ts",
     "cordis.patch.yml",
     "dsh.plugin.json",
@@ -108,6 +109,7 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.client.json",
     "test": "vitest run",
     "test:node": "node --test tests/a2d2-v3-121-acceptance.test.mjs tests/a2d2-v3-121-run.test.mjs",
+    "work:archive-gc": "node scripts/work-archive-gc.mjs",
     "verify:repository": "node scripts/verify-repository.mjs",
     "verify:pack-exports": "node scripts/verify-pack-exports.mjs",
     "prepack": "pnpm build && node scripts/assert-pack-entrypoints.mjs"
