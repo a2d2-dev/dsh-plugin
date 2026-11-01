@@ -220,7 +220,13 @@ it.each(['wait', 'pause'] as const)('replaces a continuous %s Session without ac
 })
 
 
-it('reconciles legacy protection against the real current running Agent without interrupting its tool or duplicating work', async () => {
+it.each([
+  ["Cannot read properties of undefined (reading 'observeSession')", false],
+  ["Cannot read properties of undefined (reading 'observeSession')", true],
+  ['Last model turn ended interrupted', false],
+  ['Last model turn ended interrupted', true],
+  ['Execution is idle without new actionable progress; send input or explicitly resume', true],
+] as const)('reconciles historical protection %s (missing slot: %s) against the real current running Agent without interrupting its tool or duplicating work', async (reason, missingSlot) => {
   const fixtures = new ExecutionFixtures()
   let release = () => {}
   try {
@@ -238,18 +244,30 @@ it('reconciles legacy protection against the real current running Agent without 
     h.ctx.tools.register(defineTool({ name: 'hold_recovery', description: 'Keep a real running tool across queue reconciliation', parameters: {},
       output: { schema: { type: 'object', additionalProperties: false, properties: { result: { type: 'string', required: true } } }, render: (_, value) => [{ type: 'text', text: value.result }] },
       async execute() { entered(); await gate; return { result: 'Original tool completed' } } }))
-    h.model.nextTool = { name: 'hold_recovery', arguments: {} }
+    if (reason === 'Last model turn ended interrupted') h.model.selectTool = () => { throw new Error('Historical provider interruption') }
+    else h.model.nextTool = { name: 'hold_recovery', arguments: {} }
     await execute({ type: 'continuous.configure', commandId: 'enable', projectId, sourceId, expectedVersion: 0, assignee: '@me', labels: ['bug'], resource: options.resources[0]!.ref, model: options.defaults.model, agentPreset: options.defaults.agentPreset, permissionPreset: options.defaults.permissionPreset, enabled: true })
-    await started
     const rule = (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!
     const ref = rule.active!
     const first = (await query({ type: 'task.detail', ref })).execution!
     const agent = h.ctx.agents.get(SessionId(first.session.sessionId))!
+    if (reason === 'Last model turn ended interrupted') {
+      await fixtures.run(() => agent.whenIdle())
+      const failure = await h.host.execution.failure!(first)
+      expect(failure?.message).toContain('Historical provider interruption')
+      await WorkDao.forDirectory(h.app.directory).transaction(async state => { state.executions.find(item => item.id === first.id)!.runtimeFailure = failure })
+      h.model.selectTool = undefined
+      h.model.nextTool = { name: 'hold_recovery', arguments: {} }
+      agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Continue the already authorized work after recovering the provider.' }], source: { kind: 'user' } }))
+    }
+    await started
+    if (reason === 'Last model turn ended interrupted') expect(await h.host.execution.failure!(first)).toBeUndefined()
     const requests = h.model.requests.length
     await WorkDao.forDirectory(h.app.directory).transaction(async state => {
       const item = state.continuousRules![0]!.items[0]!
       item.state = 'blocked'; item.recoveryBlocked = true
-      item.reason = "Cannot read properties of undefined (reading 'observeSession')"
+      item.reason = reason
+      if (missingSlot) { state.continuousRules![0]!.slots = []; delete state.continuousRules![0]!.active }
     })
     await fixtures.run(() => app.reconcileContinuous())
     const after = (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!
@@ -262,10 +280,18 @@ it('reconciles legacy protection against the real current running Agent without 
     expect(h.model.requests).toHaveLength(requests)
     expect((await query({ type: 'project.detail', projectId })).tasks).toHaveLength(1)
     expect((await query({ type: 'task.detail', ref })).execution).toMatchObject({ id: first.id, session: first.session, owner: first.owner, epoch: first.epoch, model: first.model, permissionPreset: first.permissionPreset })
+    await fixtures.run(() => app.reconcileContinuous())
+    expect((await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!.slots).toEqual([ref])
+    expect(h.model.requests).toHaveLength(requests)
+    expect((await query({ type: 'task.detail', ref })).execution!.runtimeFailure).toBeUndefined()
     release()
     await fixtures.run(() => agent.whenIdle())
     await fixtures.run(() => app.reconcileControls())
-    expect((await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!.items[0]).toMatchObject({ state: 'blocked', reason: expect.stringContaining('idle without new actionable progress') })
+    const rotated = (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!
+    expect(rotated.items[0]).toMatchObject({ state: 'blocked', reason: expect.stringContaining('idle without new actionable progress') })
+    expect(rotated.slots).not.toContainEqual(ref)
+    expect(rotated.items[1]!.state).toBe('active')
+    expect((await query({ type: 'project.detail', projectId })).tasks).toHaveLength(2)
   } finally { release(); await fixtures.close() }
 }, 20_000)
 

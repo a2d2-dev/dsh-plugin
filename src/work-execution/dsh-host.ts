@@ -182,6 +182,9 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     const events = await this.runtime.events(SessionId(execution.session.sessionId))
     const last = events.findLast(event => event.type === 'turn/end')
     const kind = last?.data.reason?.kind
+    // A newer live turn has already superseded the previous turn's outcome.
+    // An idle/cold Session still retains its last unresolved failure.
+    if (this.status(execution) === 'running' && events.some(event => event.type === 'turn/start' && (!last || event.seq > last.seq))) return undefined
     // Controlled admission blocks are already described by control/handoff state.
     if (!['error', 'aborted', 'interrupted', 'max-tokens'].includes(kind)) return undefined
     return { id: `${execution.session.sessionId}:${last!.seq}`, message: `Last model turn ended ${kind}: ${last!.data.reason?.error?.message ?? ''}`.slice(0, 100_000), userCancelled: kind === 'aborted' && last!.data.reason?.reason?.kind === 'user' }

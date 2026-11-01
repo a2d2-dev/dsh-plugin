@@ -747,6 +747,12 @@ export class WorkApplication {
           const source = state.sources.find(source => source.id === rule.sourceId)
           rule.error = sourceScopeError(rule, source)
           observeContinuousTasks(state, rule)
+          for (const item of rule.items) {
+            const current = state.executions.find(execution => execution.id === item.executionId && sameTask(execution.ref, item.ref))
+            if (current?.actual && host.status(current) === 'running' && !item.end && current.control?.action !== 'end'
+              && !continuousCompleted(state, current) && !['waiting', 'paused'].includes(current.state)
+              && (!current.control || current.control.action === 'resume') && !continuousHasSlot(rule, current.ref)) continuousSetSlot(rule, current.ref, true)
+          }
           const recovery = rule.items.find(item => item.recoveryBlocked)
           if (!rule.error && recovery) rule.error = { code: 'continuous-recovery-blocked', message: recovery.reason ?? 'Host recovery needs an explicit retry' }
           if (!rule.error && source) {
@@ -775,31 +781,40 @@ export class WorkApplication {
               continue
             }
             let owner = continuousOwner(state, execution.ref)!
-            // Older hosts could activate the controller before sessionQuery. Only
-            // that proven read-only failure is safe to re-observe automatically;
-            // unknown settlement/creation outcomes still require explicit recovery.
-            if (owner.item.recoveryBlocked && execution.actual && owner.item.executionId === execution.id
-              && owner.item.reason === "Cannot read properties of undefined (reading 'observeSession')" && host.failure) {
+            // Re-observe current live work as well as the known legacy read-only
+            // failure. Neither observation nor repairing occupancy sends input.
+            const legacyObservation = "Cannot read properties of undefined (reading 'observeSession')"
+            if (execution.actual && owner.item.executionId === execution.id && host.failure
+              && (host.status(execution) === 'running' && (owner.item.reason || execution.runtimeFailure)
+                || owner.item.recoveryBlocked && owner.item.reason === legacyObservation)) {
               try {
                 await this.observeRuntimeFailure(execution.id)
               } catch { continue } // The required observation is still unavailable.
               await this.sourceTransaction(async state => {
                 const current = state.executions.find(item => item.id === execution!.id)!
                 const managed = continuousOwner(state, current.ref)!
-                if (current.control?.action === 'end' || continuousCompleted(state, current)
-                  || current.epoch !== execution!.epoch || !sameSession(current.session, execution!.session)
-                  || managed.item.executionId !== current.id || !continuousHasSlot(managed.rule, current.ref)
-                  || managed.item.reason !== "Cannot read properties of undefined (reading 'observeSession')") return
-                delete managed.item.recoveryBlocked; delete managed.item.reason
+                if (current.owner !== execution!.owner || current.epoch !== execution!.epoch || !sameSession(current.session, execution!.session)
+                  || managed.rule.id !== ruleId || managed.item.executionId !== current.id || managed.item.end
+                  || current.control?.action === 'end' || continuousCompleted(state, current)) return
+                const running = host.status(current) === 'running'
+                const held = ['waiting', 'paused'].includes(current.state) || current.control && current.control.action !== 'resume'
+                const obsolete = managed.item.reason === legacyObservation
+                  || running && (managed.item.reason === 'Execution is idle without new actionable progress; send input or explicitly resume'
+                    || managed.item.reason?.startsWith('Last model turn ended '))
+                if (!obsolete || !running && !continuousHasSlot(managed.rule, current.ref)) return
+                const error = current.error ?? current.continuation?.error ?? current.continuationBlocked
+                  ?? (current.runtimeFailure && !current.runtimeFailure.acknowledged ? current.runtimeFailure : undefined)
+                // A successful read disproves the legacy observation error only.
+                // Live work can replace stale reasons with an independent real error.
+                if (managed.item.reason !== legacyObservation && (held || current.state === 'failed' || continuationInFlight(current) && !error)) return
+                delete managed.item.recoveryBlocked; delete managed.item.retryAt
                 managed.item.attempts = 0
-                if (!continuousCompleted(state, current) && current.state !== 'failed' && !current.error && !current.continuation?.error
-                  && !current.continuationBlocked && !(current.runtimeFailure && !current.runtimeFailure.acknowledged)) {
+                if (error) managed.item.state = 'blocked'
+                else if (current.state !== 'failed') {
                   managed.item.state = ['waiting', 'paused'].includes(current.state) ? current.state as 'waiting' | 'paused'
-                    : current.control?.status === 'accepted' && current.control.action !== 'resume' ? 'blocked' : 'active'
+                    : held ? 'blocked' : 'active'
                 }
-                managed.item.reason = (current.error ?? current.continuation?.error ?? current.continuationBlocked
-                  ?? (current.runtimeFailure && !current.runtimeFailure.acknowledged ? current.runtimeFailure : undefined))?.message
-                  ?? (['waiting', 'paused'].includes(current.state) || current.control?.status === 'accepted' && current.control.action !== 'resume' ? current.control?.reason : undefined)
+                managed.item.reason = error?.message ?? (held ? current.control?.reason : undefined)
                 const remaining = managed.rule.items.find(item => item.recoveryBlocked)
                 managed.rule.error = sourceScopeError(managed.rule, state.sources.find(source => source.id === managed.rule.sourceId))
                   ?? (remaining ? { code: 'continuous-recovery-blocked', message: remaining.reason ?? 'Host recovery needs an explicit retry' } : undefined)
@@ -872,6 +887,10 @@ export class WorkApplication {
                   if (continuousHasSlot(owner.rule, current.ref) && current.epoch === boundary.epoch && owner.item.state === release && host.status(current) !== 'running') continuousSetSlot(owner.rule, current.ref, false)
                 })
               } else {
+                if (continuousSlots(currentOwner.rule).filter(ref => {
+                  const other = state.executions.find(item => sameTask(item.ref, ref))
+                  return other && host.status(other) === 'running'
+                }).length >= (currentOwner.rule.queue?.concurrency ?? 1)) continue
                 if (currentOwner.item.resumeRequested) {
                   await this.sourceTransaction(async state => {
                     const current = state.executions.find(item => item.id === execution!.id)!
@@ -1208,7 +1227,7 @@ export class WorkApplication {
     if (failure?.id === execution.runtimeFailure?.id) return
     await this.sourceTransaction(async state => {
       const current = state.executions.find(item => item.id === id)!
-      if (current.epoch !== execution.epoch) return
+      if (current.owner !== execution.owner || current.epoch !== execution.epoch || !sameSession(current.session, execution.session)) return
       if (failure) current.runtimeFailure = failure
       else delete current.runtimeFailure
     })
