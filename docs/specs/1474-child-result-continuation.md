@@ -71,7 +71,7 @@ context: [AGENTS.md, CONTEXT.md]
 - 检查旧格式重启提示仅属于status。
   [work.ts:526](../../src/work.ts#L526)
 - 检查真实原生分页与跨接续负例，以及持久格式兼容。
-  [work-continuation-pending-children.spec.ts:30](../../tests/work-continuation-pending-children.spec.ts#L30)
+  [work-continuation-pending-children.spec.ts:33](../../tests/work-continuation-pending-children.spec.ts#L33)
   [work-schema.spec.ts:5](../../tests/work-schema.spec.ts#L5)
 
 验证报告： [issue-358-child-results.md](../verification/issue-358-child-results.md)。原始证据位于本机 docs/artifacts/1474-child-result-2026-11-01/，遵守仓库私有证据排除规则。
@@ -79,3 +79,5 @@ context: [AGENTS.md, CONTEXT.md]
 ## Delivery Record
 
 实现与验收报告已完成；Git交付以[PR #359](https://github.com/a2d2-dev/dsh-plugin/pull/359)最终merge/checks回读及[Issue #358](https://github.com/a2d2-dev/dsh-plugin/issues/358)状态为准。原业务#1474剩余三页受既有单槽队列限制，已保留原进度和恢复请求；该限制没有作为产品缺陷或完整业务验收通过。
+
+- 合并前主干更新至2071c64/c663ca3。保留新主干通知免重复写入优化，测试冲突保留两边断言，独立复核通过；合并后相关10项、类型与构建通过。运行包同步集成该优化。
