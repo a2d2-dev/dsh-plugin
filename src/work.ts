@@ -16,6 +16,7 @@ import { isTaskCompleted, queueParentResults } from './work-completion/index.ts'
 import { mkdir } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
 import { isAbsolute, join, normalize } from 'node:path'
+import { isDeepStrictEqual } from 'node:util'
 import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
 import { commandSchema, querySchema } from './work-schema.ts'
 import { applySourceCommand, refreshSource, sourceResult } from './work-sources/application.ts'
@@ -132,7 +133,7 @@ export class WorkApplication {
           && messages.some(message => (message.source as { kind?: string } | undefined)?.kind === 'subagent-settled')) {
           const facts = await this.host.execution.observation(owner)
           const parent = facts.sessions.find(row => row.session.sessionId === sessionId)
-          const notices = parent?.children.filter(child => child.settlement && messages.some(message => JSON.stringify(message) === JSON.stringify(child.settlement!.message))) ?? []
+          const notices = parent?.children.filter(child => child.settlement && messages.some(message => isDeepStrictEqual(message, child.settlement!.message))) ?? []
           if (notices.length) return this.dao.transaction(async current => {
             const execution = current.executions.find(item => item.id === owner.id)!
             const operation = execution.continuation
@@ -151,14 +152,14 @@ export class WorkApplication {
           })
         }
         const step = op.collections?.find(step => step.status === 'requested' && step.session.sessionId === sessionId)
-        if (step && messages.some(message => message.id === step.requestId && JSON.stringify(message.source) === JSON.stringify({ kind: 'a2d2-work-maintenance', operationId: op.operationId, step: 'collect' }))) return { operationId: op.operationId, step: 'collect', jobIds: step.jobs.map(job => job.id) }
+        if (step && messages.some(message => message.id === step.requestId && isDeepStrictEqual(message.source, { kind: 'a2d2-work-maintenance', operationId: op.operationId, step: 'collect' }))) return { operationId: op.operationId, step: 'collect', jobIds: step.jobs.map(job => job.id) }
       }
       const maintenance = state.executions.find(item => item.continuation && item.session.sessionId === sessionId)
       const operation = maintenance?.continuation
       if (operation && !isTaskCompleted(taskAt(state, maintenance!.ref))) {
         const step = operation.phase === 'material-requested' ? 'material' : ['taken', 'delivered'].includes(operation.phase) ? 'receive' : undefined
         const id = step === 'material' ? operation.materialRequestId : operation.readRequestId ?? operation.kickoffId
-        if (step && messages.some(message => message.id === id && JSON.stringify(message.source) === JSON.stringify({ kind: 'a2d2-work-maintenance', operationId: operation.operationId, step }))) return { operationId: operation.operationId, step }
+        if (step && messages.some(message => message.id === id && isDeepStrictEqual(message.source, { kind: 'a2d2-work-maintenance', operationId: operation.operationId, step }))) return { operationId: operation.operationId, step }
       }
       if (state.executions.some(item => item.retired?.some(old => old.session.sessionId === sessionId) || (item.continuation?.successor.sessionId === sessionId && item.session.sessionId !== sessionId))) return false
       const execution = state.executions.find(item => item.session.sessionId === sessionId)
