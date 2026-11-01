@@ -127,6 +127,7 @@ export class Model extends LlmAdapter {
   requests: GenerateOptions[] = []
   acknowledgeContinuation = true
   uniqueToolIds = false
+  responseText = 'Recorded work progress'
   nextTool?: { name: string; arguments: Record<string, unknown> }
   selectTool?: (request: GenerateOptions) => Model['nextTool']
   async listModels(provider: string) { return ['default', 'selected'].map(id => ({ provider, id, name: id })) }
@@ -151,8 +152,8 @@ export class Model extends LlmAdapter {
       return
     }
     yield { type: 'block-start', index: 0, blockType: 'text' }
-    yield { type: 'text-delta', index: 0, text: 'Recorded work progress' }
-    yield { type: 'block-end', index: 0, block: { type: 'text', text: 'Recorded work progress' } }
+    yield { type: 'text-delta', index: 0, text: this.responseText }
+    yield { type: 'block-end', index: 0, block: { type: 'text', text: this.responseText } }
     yield { type: 'finish', reason: { kind: 'stop' } }
   }
 }

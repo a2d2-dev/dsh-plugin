@@ -458,10 +458,11 @@ export class WorkApplication {
     const execution = state.executions.find(item => sameSession(item.session, session))
     if (!execution || execution.epoch !== epoch) return failed('stale-execution-authority', 'Only the current coordinator at this epoch may recover child work')
     if ((action === 'resume' || action === 'replace') && isTaskCompleted(taskAt(state, execution.ref))) return failed('task-completed', 'Accepted Task completion does not authorize further child work')
-    const facts = await this.host.execution?.observation?.(execution)
+    const carried = [execution.continuation, ...(execution.continuationHistory ?? [])].flatMap(op => op?.pendingChildren ?? []).find(child => child.child.sessionId === childId)
+    const facts = !carried || action === 'replace' ? await this.host.execution?.observation?.(execution) : undefined
     const native = facts?.sessions.flatMap(parent => parent.children.map(child => ({ parent: parent.session, child }))) ?? []
     const scoped = native.find(item => item.child.session.sessionId === childId && [execution.session, ...(execution.retired ?? []).map(item => item.session)].some(parent => sameSession(parent, item.parent)))
-    const child = [execution.continuation, ...(execution.continuationHistory ?? [])].flatMap(op => op?.pendingChildren ?? []).find(child => child.child.sessionId === childId)
+    const child = carried
       ?? (scoped ? { parent: scoped.parent, child: scoped.child.session, mode: scoped.child.mode, status: scoped.child.status, result: scoped.child.result, returned: scoped.child.returned ?? false, tools: [], jobs: [], blockers: [], next: 'Inspect native result' } : undefined)
     if (!child) return failed('unrelated-child', 'Child is not in this Task continuation or coordinator native catalog')
     if (!this.host.execution?.childRecovery) return failed('host-capability-unavailable', 'Public native child recovery is unavailable')
@@ -497,6 +498,8 @@ export class WorkApplication {
         else (current.childRecovery ??= []).push(request!)
       })
     }
+    const savedReceipt = execution.childReceipts?.find(item => sameSession(item.child, child.child))
+    const trustedReceipt = savedReceipt && await this.host.execution.childReceiptCommitted?.(execution, savedReceipt) ? savedReceipt : undefined
     const result = await this.host.execution.childRecovery(execution, child, action, request, signal)
     const raw = JSON.stringify(result.events ?? [])
     const resultRevision = createHash('sha256').update(raw).digest('hex')
@@ -508,11 +511,26 @@ export class WorkApplication {
       if (request && result.messageId) current.childRecovery!.find(item => item.requestId === requestId)!.messageId = result.messageId
       if (action === 'result' && result.endSeq !== undefined && result.status === 'returned') {
         const prior = current.childReceipts?.find(item => sameSession(item.child, child.child))
-        if (cursor && (!prior || prior.epoch !== epoch || prior.endSeq !== result.endSeq || prior.revision !== resultRevision || prior.cursor !== cursor)) throw new WorkExecutionError('child-result-page-order', 'Read each result page in order from cursor zero')
-        current.childReceipts = [...(current.childReceipts ?? []).filter(item => !sameSession(item.child, child.child)), { child: child.child, endSeq: result.endSeq, epoch, callId, callIds: [...(cursor ? prior!.callIds : []), callId], cursor: nextCursor, revision: resultRevision, complete: nextCursor === raw.length }]
+        if (cursor && (!prior || (prior.epoch !== epoch && (prior.revision !== trustedReceipt?.revision || prior.cursor !== trustedReceipt?.cursor)) || prior.endSeq !== result.endSeq || prior.revision !== resultRevision || prior.cursor !== cursor)) throw new WorkExecutionError('child-result-page-order', 'Read each result page in order from cursor zero')
+        const pages = cursor ? prior!.pages ?? prior!.callIds.map(callId => ({
+          session: prior!.epoch === epoch ? session : execution.retired!.find(item => item.epoch === prior!.epoch)!.session,
+          epoch: prior!.epoch, callId,
+        })) : []
+        current.childReceipts = [...(current.childReceipts ?? []).filter(item => !sameSession(item.child, child.child)), {
+          child: child.child, endSeq: result.endSeq, epoch, callId,
+          callIds: [...(cursor ? prior!.callIds : []), callId], pages: [...pages, { session, epoch, callId }],
+          cursor: nextCursor, revision: resultRevision, complete: nextCursor === raw.length,
+        }]
       }
     })
-    return { ...result, childStatus: result.status, status: 'completed' as const, child: child.child, ...(action === 'result' && result.status === 'returned' ? { events: undefined, content: raw.slice(cursor, nextCursor), revision: resultRevision, complete: nextCursor === raw.length, ...(nextCursor < raw.length ? { nextCursor } : {}) } : {}) }
+    const progress: { readProgress?: { cursor: number; revision: string; complete: boolean }; restartRequired?: boolean; next?: { action: 'result'; cursor: number } } = {}
+    if (action === 'status' && trustedReceipt && trustedReceipt.endSeq === result.endSeq) {
+      if (!trustedReceipt.complete && !trustedReceipt.pages) {
+        progress.restartRequired = true
+        progress.next = { action: 'result', cursor: 0 }
+      } else progress.readProgress = { cursor: trustedReceipt.cursor, revision: trustedReceipt.revision, complete: trustedReceipt.complete }
+    }
+    return { ...result, childStatus: result.status, status: 'completed' as const, child: child.child, ...progress, ...(action === 'result' && result.status === 'returned' ? { events: undefined, content: raw.slice(cursor, nextCursor), revision: resultRevision, complete: nextCursor === raw.length, ...(nextCursor < raw.length ? { nextCursor } : {}) } : {}) }
   }
   /** Public trusted adapter: source identity and Task references are resolved on the server. */
   async sessionContinuationMaterial(session: import('./work-types.ts').SessionRef, callId: string,

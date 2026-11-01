@@ -60,7 +60,7 @@ export interface HostExecutionChoices {
 export interface WorkExecutionOptions extends HostExecutionChoices { agentId: string; resources: HostResource[] }
 export interface ExecutionRef { ref: TaskRef; executionId: string }
 export interface NativeWorkMessage { id: string; role: 'user'; content: readonly unknown[]; source: unknown }
-export interface WorkEvent { id: string; text: string; kind: 'input' | 'result'; delivery: 'accepted' | 'delivered' | 'consumed' | 'discarded'; acceptance: 'unassessed'; nativeMessage?: NativeWorkMessage }
+export interface WorkEvent { id: string; text: string; kind: 'input' | 'result'; delivery: 'accepted' | 'delivered' | 'consumed' | 'discarded'; acceptance: 'unassessed'; discardReason?: 'superseded'; nativeMessage?: NativeWorkMessage }
 /** Source-authored material; full original text is retained before any delivery redaction. */
 export interface ContinuationContent { body: string; decisions: string; evidence: string; unfinished: string; next: string }
 export interface ContinuationMaterial extends ContinuationContent {
@@ -84,7 +84,7 @@ export interface WorkExecution {
   retired?: { session: SessionRef; epoch: number; operationId: string }[]
   childReplacements?: { child: SessionRef; parent: SessionRef; endSeq: number; replacement: SessionRef; replacementParent: SessionRef; replacementEndSeq: number; coordinator: SessionRef; epoch: number; commandId: string }[]
   childRecovery?: { requestId: string; parent: SessionRef; child: SessionRef; epoch: number; text: string; messageId?: string }[]
-  childReceipts?: { child: SessionRef; endSeq: number; epoch: number; callId: string; callIds: string[]; cursor: number; revision: string; complete: boolean }[]
+  childReceipts?: { child: SessionRef; endSeq: number; epoch: number; callId: string; callIds: string[]; pages?: { session: SessionRef; epoch: number; callId: string }[]; cursor: number; revision: string; complete: boolean }[]
   continuationMaterial?: ContinuationMaterial
   progress?: string
   executionGuard?: { corrections: number; progress: string[]; exhausted?: boolean }
