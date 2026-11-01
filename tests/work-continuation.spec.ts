@@ -761,3 +761,101 @@ it('executes the accepted next step when material and receive sources have reord
   const request = h.model.requests.find(request => request.messages.some(message => message.id === business.id))!
   expect(JSON.stringify(request.messages)).toContain(material.next)
 })
+
+
+it('supersedes only the exact old host activation when the next handoff takes its epoch', async () => {
+  const h = await setup()
+  const second = await rotate(h)
+  const successor = h.ctx.agents.get(SessionId(second.session.sessionId))!
+  const oldId = `continuation-business:${second.continuation!.operationId}`
+  const deliver = h.host.execution.deliver.bind(h.host.execution)
+  let requested: Promise<unknown> | undefined
+  vi.spyOn(h.host.execution, 'deliver').mockImplementation(async (execution, event, maintenance) => {
+    if (event.id !== oldId) return deliver(execution, event, maintenance)
+    await successor.runMaintenance(async () => {
+      await deliver(execution, event, true)
+      expect(successor.inbox.nextTurn.some(message => message.id === oldId)).toBe(true)
+      h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+      requested = h.app.execute({ type: 'task.continue', commandId: 'next-epoch-before-old-activation', ...fence(execution) }, operator)
+      await expect.poll(async () => {
+        const current = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+        return current.status === 'completed' && current.execution?.continuation?.sourceEpoch
+      }).toBe(2)
+    })
+    return 'delivered'
+  })
+  await h.app.reconcileControls()
+  await requested
+  await fixtures.run(() => successor.whenIdle())
+  await h.app.reconcileControls()
+  await fixtures.run(() => successor.whenIdle())
+  await h.app.reconcileControls()
+  const current = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (current.status !== 'completed' || !current.execution) throw Error('Missing next generation')
+  expect(current.execution.epoch).toBe(3)
+  expect(current.execution.events.find(event => event.id === oldId)).toMatchObject({ delivery: 'discarded', discardReason: 'superseded' })
+  const third = h.ctx.agents.get(SessionId(current.execution.session.sessionId))!
+  await fixtures.run(() => third.whenIdle())
+  await h.app.reconcileControls()
+  await fixtures.run(() => third.whenIdle())
+  expect(third.session.snapshotEvents().some(event => event.type === 'user/message' && event.data.id === oldId)).toBe(false)
+  expect(successor.session.snapshotEvents().some(event => event.type === 'user/message' && event.data.id === oldId)).toBe(false)
+})
+
+it.each(['continue', 'stop'] as const)('preserves native %s order and accepted result payloads before current activation', async intent => {
+  const h = await setup()
+  const source = h.ctx.agents.get(SessionId(h.execution.session.sessionId))!
+  const human = createUserMessage({ content: [{ type: 'text', text: intent === 'stop' ? '暂停任务，不要继续执行。原始第二行。' : '保留原始人工要求。\n第二行不省略。' }], source: { kind: 'user' } })
+  const automatic = createUserMessage({ content: [{ type: 'text', text: 'continuation-business:quoted-not-an-operation\nPreserve different-source content.' }], source: { kind: 'a2d2-work-dispatch' } })
+  const seal = h.host.execution.sealInput!.bind(h.host.execution)
+  vi.spyOn(h.host.execution, 'sealInput').mockImplementation(async (execution, operationId) => {
+    source.followup(human)
+    source.followup(automatic)
+    return seal(execution, operationId)
+  })
+  const ensure = h.host.execution.ensure.bind(h.host.execution)
+  let acceptedResult: import('../src/work-types.ts').WorkEvent | undefined
+  vi.spyOn(h.host.execution, 'ensure').mockImplementation(async (execution, allowed) => {
+    const actual = await ensure(execution, allowed)
+    if (execution.epoch === 2 && !acceptedResult) {
+      const saved = await h.app.execute({ type: 'task.input', commandId: 'accepted-result-during-handoff', ...fence(h.execution), kind: 'result', text: 'Accepted result payload.\nKeep every line.' }, operator)
+      if (saved.status !== 'completed' || !saved.execution) throw Error('Result not accepted')
+      acceptedResult = saved.execution.events.find(event => event.kind === 'result')!
+    }
+    return actual
+  })
+  const current = await rotate(h)
+  const successor = h.ctx.agents.get(SessionId(current.session.sessionId))!
+  let stopped = false
+  h.model.selectTool = request => {
+    if (intent === 'stop' && !stopped && request.messages.some(message => message.id === human.id)) {
+      stopped = true
+      return { name: 'work_control', arguments: { action: 'pause', text: '用户明确暂停任务。' } }
+    }
+  }
+  const order: string[] = []
+  const deliver = h.host.execution.deliver.bind(h.host.execution)
+  vi.spyOn(h.host.execution, 'deliver').mockImplementation(async (execution, event, maintenance) => {
+    if (execution.epoch === 2) order.push(event.id)
+    return deliver(execution, event, maintenance)
+  })
+  await h.app.reconcileControls()
+  await fixtures.run(() => successor.whenIdle())
+  const activation = `continuation-business:${current.continuation!.operationId}`
+  expect(order.indexOf(human.id)).toBeGreaterThanOrEqual(0)
+  expect(order.indexOf(human.id)).toBeLessThan(order.indexOf(activation))
+  expect(order.indexOf(activation)).toBeLessThan(order.indexOf(automatic.id))
+  const log = successor.session.snapshotEvents()
+  expect(log.find(event => event.type === 'user/message' && event.data.id === human.id)).toMatchObject({ data: { content: human.content, source: human.source } })
+  const final = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (final.status !== 'completed' || !final.execution) throw Error('Missing execution')
+  expect(final.execution.events.find(event => event.id === acceptedResult!.id)).toMatchObject({ kind: 'result', text: acceptedResult!.text })
+  if (intent === 'stop') {
+    expect(stopped).toBe(true)
+    expect(final.execution.control?.action).toBe('pause')
+    expect(log.some(event => event.type === 'user/message' && event.data.id === activation)).toBe(false)
+  } else {
+    expect(log.find(event => event.type === 'user/message' && event.data.id === automatic.id)).toMatchObject({ data: { content: automatic.content, source: automatic.source } })
+    expect(JSON.stringify(log)).toContain('Accepted result payload.')
+  }
+})
