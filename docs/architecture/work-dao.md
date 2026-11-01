@@ -118,10 +118,10 @@ JS
 
 ```sh
 pnpm exec vitest run tests/source-storage.spec.ts tests/project-discovery.spec.ts
-node --experimental-transform-types docs/artifacts/a2d2-source-storage-2026-11-01/benchmark.mjs
+node --experimental-transform-types scripts/benchmark-source-storage.mjs
 ```
 
-基准使用实际 NVMe 文件：约 20 MB 来源正文、17 MB 已累计 checkpoint，五页各新增一条 20 KB Issue，并执行来源 reservation 的完整 clone。对比旧 DAO 与当前 DAO 的真实新增 archive 字节，结果记录于同目录 `benchmark.json`。checkpoint 的正文只写初始首块和各页真实新增/更新数据，控制仍为引用。全量扫描完成时，观察时间等事实变化仍可能新增一份来源正文；命令回执和执行历史也继续保留。这是正常增长，需按实际磁盘使用离线维护，不声称存储总量恒定，不设置自动重启任务。
+基准使用实际 NVMe 文件：约 20 MB 来源正文、17 MB 已累计 checkpoint，五页各新增一条 20 KB Issue，并执行来源 reservation 的完整 clone。对比旧 DAO 与当前 DAO 的真实新增 archive 字节，结果记录于本地 `docs/artifacts/a2d2-source-storage-2026-11-01/benchmark.json`；仓库提交公共摘要 `docs/verification/source-storage.md`，本地日志和验收记录不入 Git。checkpoint 的正文只写初始首块和各页真实新增/更新数据，控制仍为引用。全量扫描完成时，观察时间等事实变化仍可能新增一份来源正文；命令回执和执行历史也继续保留。这是正常增长，需按实际磁盘使用离线维护，不声称存储总量恒定，不设置自动重启任务。
 
 ### 离线可达备份和归档清理
 
@@ -141,3 +141,5 @@ node scripts/work-archive-gc.mjs --offline /absolute/work-directory --apply
 **可达备份**：服务停止时复制 `work-v3.json` 和 manifest 的全部 `reachable` 相对文件到备份的 `work-v3.archive/`，保留权限与 manifest。若仍使用旧 v1 格式，此图也包含其 source bulk 内的 checkpoint。manifest 不替代备份本身；核实备份能完整导出后才执行 apply。无需为恢复复制已证明不可达的历史来源正文。不能按日期清理 archive，旧命令回执仍可能指向早期历史和 screening 链。
 
 **完成判据**：apply 返回可删除数量和字节数；控制 SHA-256 不变、全部 reachable 仍存在，备份/清理前后 `exportSnapshot()` 一致。原文件目录完整备份和显式旧格式导出仍是回退边界。
+
+历史开发实例可能保留 Issue #197 版本写入的 `Project.executionDefaults`。存储 schema 使用原字段的严格定义接受并完整保留 resource、model（含 reasoningEffort）、agentPreset、permissionPreset；迁移、普通提交和导出均不删除配置。此兼容边界不恢复旧版本的启动选择行为，未知字段仍拒绝。

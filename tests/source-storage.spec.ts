@@ -170,3 +170,20 @@ it.each(['missing', 'cycle', 'count'] as const)('fails closed on %s checkpoint c
   await expect(dao.collectArchives({ offline: true, dryRun: false })).rejects.toThrow()
   expect(await readFile(join(archive, garbage), 'utf8')).toBe('garbage')
 })
+
+it('preserves historical project executionDefaults through read, migration, transaction and export', async () => {
+  const { dao, file } = await setup()
+  const baseline = await dao.exportSnapshot()
+  const defaults = { resource: { runtimeId: 'host', workspaceId: 'workspace' }, model: { provider: 'test', model: 'test', reasoningEffort: 'medium' }, agentPreset: 'test', permissionPreset: 'workspace-write' }
+  const fixture = { ...baseline, projects: baseline.projects.map(project => ({ ...project, executionDefaults: defaults })) }
+  await writeFile(file, JSON.stringify(fixture))
+  expect((await dao.read()).projects[0]).toMatchObject({ executionDefaults: defaults })
+  await dao.migrate()
+  expect(await dao.exportSnapshot()).toEqual(fixture)
+  await dao.transaction(async state => { state.projects[0]!.name = 'Renamed with defaults preserved' })
+  expect((await dao.exportSnapshot()).projects[0]).toMatchObject({ name: 'Renamed with defaults preserved', executionDefaults: defaults })
+  const saved = JSON.parse(await readFile(file, 'utf8'))
+  saved.projects[0].executionDefaults.unrecognized = true
+  await writeFile(file, JSON.stringify(saved))
+  await expect(dao.read()).rejects.toThrow()
+})

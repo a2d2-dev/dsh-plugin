@@ -1,10 +1,10 @@
 // Run from the repository root with node --experimental-transform-types. Uses real NVMe files, no filesystem mocks.
-import { mkdtemp, writeFile, readdir, stat, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, writeFile, readdir, stat, rm } from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
 import { resolve, join } from 'node:path'
-import { WorkDao } from '../../../src/work-store/dao.ts'
+import { WorkDao } from '../src/work-store/dao.ts'
 const repo = resolve('.'), baselineFile = join(repo, 'src/work-store', `.benchmark-${randomUUID()}.ts`)
 const directory = await mkdtemp('/data/_ssd2t/a2d2-source-storage-benchmark-')
 const baselineCommit = 'f39d93e45915a71b331c4a31b250dbd6372f3e7e'
@@ -37,6 +37,7 @@ try {
     if (exported.sources[0].observations.length !== 1000 || exported.sources[0].discovery.checkpoint.pages !== 5) throw Error('Benchmark semantic verification failed')
   }
   const report = { baselineCommit, workload: '1000 observations with 20KB issue bodies, 850 accumulated checkpoint issues (~17MB); five pages adding one issue each with source reservation clone', filesystem: execFileSync('stat', ['-f', '-c', '%T', directory], { encoding: 'utf8' }).trim(), results }
+  await mkdir(join(repo, 'docs/artifacts/a2d2-source-storage-2026-11-01'), { recursive: true })
   const output = join(repo, 'docs/artifacts/a2d2-source-storage-2026-11-01/benchmark.json')
   await writeFile(output, JSON.stringify(report, null, 2) + '\n')
   console.log(JSON.stringify(report, null, 2))

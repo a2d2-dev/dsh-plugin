@@ -1,3 +1,0 @@
-
-> @a2d2/dsh-a2d2@0.0.23 typecheck /data/_ssd2t/worktrees/dsh-plugin-source-storage
-> tsc --noEmit && tsc -p tsconfig.client.json
