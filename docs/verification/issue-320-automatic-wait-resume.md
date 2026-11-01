@@ -31,4 +31,26 @@ pnpm test
 
 这些回归使用真实宿主 AgentLoop、Inbox、JSONL、文件工具和 jobs／subagent 生命周期；模型输出与外部 GitHub 服务由确定性 fixture 控制。GitHub 通知准入依赖现有可信 watcher 来源，登记与投递由 watcher 原有测试负责。自动唤醒仅允许核实和继续原授权工作，不把通知认定为业务验收。
 
-本实现阶段未安装插件、未重启开发或生产服务、未改变 #184 业务工作。现有开发实例的页面与供应商验收由集成人员另行记录，测试通过不替代页面验收。宿主 blocked 空轮显示文案不属于本次插件改动。
+## 最终验证结果
+
+- 最终代码 `30ae9c9`：130 个测试文件、1589/1589 项通过；定向 guard/continuous 129 项通过，类型检查、仓库检查和打包入口检查通过。独立审查发现的「通知早于 wait 应用」和「队列恢复后重复通知」均已修复并复核通过。
+- 开发兼容分支 `dev/320-wait-resume-acceptance`，提交 `9a92c39`，在主干 `e5ec679` 上保留开发实例已有 #281 及存储所需 #197，再集成本修复。两项开发改动不进入本 PR。兼容回归 29/29 通过。
+
+## 开发实例真实模型验收
+
+目的：在指定页面 `https://dsh-dev.e5box.a2d2.dev/` 验证原生完成事件可唤醒真实模型，而非仅验证模拟模型 fixture。
+
+步骤：通过 agent-browser 创建独立本地 QA 工作区与任务；使用真实 `codex/gpt-6.1-sol`、medium reasoning 启动后台 Python 作业。作业等候测试 release 文件，模型保存准确 `bash-1` 的 executor 等待并结束首轮。控制者读到 waiting/applied 后才释放文件，全程不向会话补发人工消息。模型收到宿主生成的 tool-jobs 通知后调用正式 job_output、写文件、回读，并按测试要求暂停。
+
+记录（UTC 2026-11-01）：
+
+- 最终 QA Session：`session-80ebed2a-8796-4eca-9542-9eff2a4cc5b5`；Task：`3e8e99fc-0b93-48b9-b0b0-3c085309f3a5`。
+- 实测 `waiting / wait applied / idle → running / automatic-wake resume applied → paused / pause applied / idle`。
+- 正式 job_output 得到 `QA320-FINAL-NATIVE-RESULT-30ae9c9`；`job-final.proof.txt` 内容回读一致。原始 journal 为两轮、10 次工具调用，人工追加消息 0、blocked 回合 0。首次 write 缺少 justification 的调用被工具拒绝，模型补齐参数后写入成功；该记录保留，没有将拒绝当作成功。
+- 最终安装使用独立路径 `packages/issue320-final-30ae9c9/a2d2-dsh-a2d2-0.0.23.tgz`，安装后的全部 199 个 lib 文件与包逐项哈希一致。重复覆盖同路径 tarball 曾导致缓存复用，已核实并纠正后再执行最终验收。
+- 开发重启回执 `302d4531-3573-439c-b9b4-70597c77367f` 为 succeeded，运行 PID `3181880`；正式服务 PID `3102758` 未变。
+- 本机证据：`/data/_ssd2t/dsh/home/docs/artifacts/dsh-wait-resume-2026-10-31/` 中 `final-evidence.json`、`final-waiting.png`、`final-proof.png` 以及安装/构建日志。截图已实际打开检查。
+
+开发环境前置问题已恢复：旧包不识别现存 executionDefaults，集成保留 #197 后原记录可读；两天前残留的 0 字节写锁经 inode、时间及无打开 FD 核验后隔离保存，原工作记录未删除。两个 QA 会话均已按要求暂停，无活动测试作业或提醒；共享开发实例已交接给 #334。
+
+本次交付仅安装开发实例。正式 #184 未恢复，正式推广另行安排；宿主历史 blocked 空回合的显示整理仍属于 #320 未完成部分。
