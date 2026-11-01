@@ -761,3 +761,49 @@ it('executes the accepted next step when material and receive sources have reord
   const request = h.model.requests.find(request => request.messages.some(message => message.id === business.id))!
   expect(JSON.stringify(request.messages)).toContain(material.next)
 })
+
+it('seals duplicate native reminders once and keeps human intake across takeover and cold replay', async () => {
+  const h = await setup()
+  h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+  await h.app.execute({ type: 'task.continue', commandId: 'reminder-backlog-takeover', ...fence(h.execution) }, operator)
+  const source = h.ctx.agents.get(SessionId(h.execution.session.sessionId))!
+  await fixtures.run(() => source.whenIdle())
+  const reminders = Array.from({ length: 70 }, (_, i) => createUserMessage({
+    source: { kind: 'schedule' } as never,
+    content: [{ type: 'text', text: '[SCHEDULE REMINDER BATCH]\nThis is a scheduled message from the user\nreminders_json: ' + JSON.stringify([{ schedule_id: 'takeover-schedule', occurrence_at: new Date((i + 1) * 1000).toISOString(), reminder_prompt: 'Check the accepted dependency' }]) }],
+  }))
+  const human = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'Preserve this human decision across takeover' }] })
+  const seal = h.host.execution.sealInput!.bind(h.host.execution)
+  let inserted = false
+  vi.spyOn(h.host.execution, 'sealInput').mockImplementation(async (execution, operationId) => {
+    if (!inserted) {
+      inserted = true
+      source.inbox.splice('next-turn', source.inbox.nextTurn.length, 0, [...reminders, human])
+    }
+    return seal(execution, operationId)
+  })
+  await fixtures.run(() => h.app.reconcileControls())
+  let detail = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (detail.status !== 'completed' || !detail.execution) throw Error('No successor')
+  const successorId = SessionId(detail.execution.session.sessionId)
+  await fixtures.run(() => h.ctx.agents.get(successorId)!.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  await fixtures.run(() => h.ctx.agents.get(successorId)!.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  detail = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (detail.status !== 'completed' || !detail.execution) throw Error('No execution')
+  for (const old of reminders.slice(0, -1)) expect(detail.execution.events.find(row => row.id === old.id)?.delivery).toBe('discarded')
+  const consumed = h.ctx.agents.get(successorId)!.session.snapshotEvents().filter(event => event.type === 'user/message').map(event => event.data.id)
+  for (const old of reminders.slice(0, -1)) expect(consumed).not.toContain(old.id)
+  for (const retained of [reminders.at(-1)!, human]) expect(consumed.filter(id => id === retained.id)).toHaveLength(1)
+  await fixtures.dispose(h.ctx)
+  const restored = await fixtures.mount(h.workspace.path)
+  installWorkTools(restored.ctx, restored.app, 'runtime')
+  for (let pass = 0; pass < 3; pass++) await fixtures.run(() => restored.app.reconcileControls())
+  const successor = restored.ctx.agents.get(successorId)
+  if (successor) await fixtures.run(() => successor.whenIdle())
+  expect(restored.model.requests).toHaveLength(0)
+  const log = await fixtures.run(() => restored.ctx.sessionController.inspect(successorId))
+  for (const old of reminders.slice(0, -1)) expect(log.events.filter(event => event.type === 'user/message' && event.data.id === old.id)).toHaveLength(0)
+  for (const retained of [reminders.at(-1)!, human]) expect(log.events.filter(event => event.type === 'user/message' && event.data.id === retained.id)).toHaveLength(1)
+}, 15000)
