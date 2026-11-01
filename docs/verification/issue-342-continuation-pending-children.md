@@ -26,7 +26,7 @@ Issue：https://github.com/a2d2-dev/dsh-plugin/issues/342
 
 原生同 ID 恢复遵守 direct-parent 权限。递归 child 的原 parent 自身已冷却、普通 SessionController 无权恢复该 parent 时，返回准确 `child-recovery-parent-unavailable`，不能假称已恢复。当前协调应先确认旧执行已停止，再依据保存进度显式重新委派剩余工作，不自动唤醒整条链或复制运行中的工作。
 
-本次未修改生产 home、1474 业务代码，未部署或重启。真实 dev 页面验收由主会话完成，此报告不将组件集成测试当作页面验收。
+本次未修改生产 home 或 #1474 业务代码。开发实例的实际安装、重启与页面验收见下节；正式实例尚未推广。
 
 
 ## 正式 review P1 替代处置回归
@@ -46,4 +46,20 @@ Issue：https://github.com/a2d2-dev/dsh-plugin/issues/342
 
 负例让同一 child 开始新一轮，重放旧通知不唤醒新 wait；用户 pause 后新结果只入箱不运行当前协调，随后显式人工 wait 也保持。断言按当前协调的真实 assistant/message 与 tool/call 计数（不使用可能去重的 request/header），child 自己完成所需的模型请求不算成当前协调被唤醒。原生结果消费、当前结果完整收取和业务验收分别检查，旧 parent 的原生通知仍未作为 user/message 消费。
 
-最终 live/启动重载及全部新负例两条场景通过；相关 4 文件、28 项与 guard 35 项通过；typecheck/build 通过。红绿、相关回归、类型与构建日志分别为 `continuation-relay-red.log`、`continuation-relay-green.log`、`continuation-relay-affected.log`、`continuation-relay-typecheck.log`、`continuation-relay-build.log`，位于同一 artifact 目录并保留 `/tmp/` 原件。本次未操作 dev/生产实例，真实页面验收继续由主会话负责。
+最终 live/启动重载及全部新负例两条场景通过；相关 4 文件、28 项与 guard 35 项通过；typecheck/build 通过。红绿、相关回归、类型与构建日志分别为 `continuation-relay-red.log`、`continuation-relay-green.log`、`continuation-relay-affected.log`、`continuation-relay-typecheck.log`、`continuation-relay-build.log`，位于同一 artifact 目录并保留 `/tmp/` 原件。该回归测试未操作运行实例；主会话随后完成下述真实开发验收。
+
+
+## 真实开发实例验收
+
+入口为 `https://dsh-dev.e5box.a2d2.dev/`，隔离测试 Issue [#343](https://github.com/a2d2-dev/dsh-plugin/issues/343)。使用 agent-browser 和正式工作 API 创建独立工作区及测试任务，没有复制生产工作库或修改 #1474 业务代码。
+
+1. 在旧包中启动一个真实 continuable 子会话，让其后台作业等待测试释放文件。原主会话空闲后正式请求接续，现场得到 `reserved` 和 `native-result-pending/tool-result-pending/executor-unsettled/job-unsettled`。固定后继已预留，未实际接任。
+2. 通过独立 Supervisor helper 重启开发实例，原子会话最后持久事件为未完成的 `job_output` 调用，没有真实结束事件；对应等待进程不存在。保留这组记录用于后续验收。
+3. 安装修复后，既有 operation 自动从 epoch 1 接续到同一个预留后继。后继成功调用 `work_continuation_received`，状态为 `received`，准确收到 child 身份、原 parent、`interrupted`、结果 pending 和旧 job lost；原人工等待控制保持。
+4. 操作者明确恢复测试并创建释放文件后，后继经 `work_child_recover` 恢复同一 child。child 实际读取释放文件、写入并回读 `child-finished.txt=QA342_CHILD_FINISHED`，新 turn 真实 completed；没有新建 child 或由主会话代写完成文件。中途无效工具参数和权限模式失败保留在原始轨迹，未冒充成功。
+5. 首轮页面验证发现完成通知仅到旧 parent、当前协调停在 executor wait。保留该现场并安装 `4839c00` 的通知修正后，启动 reconciliation 自动补投唯一结果事件，当前协调自动恢复。没有再次向当前会话发送人工输入。后继按同一 revision 顺序读取 7 页真实结果（endSeq 84），全部成功工具回执落盘，独立读文件后正式 `work_report` 验收为 done，completion closeout 为 settled。
+6. 真实页面最终显示四项验收通过和 7 页结果完整读取。截图 `dev-baseline.png`、`dev-successor-resume.png`、`dev-result-wait-gap.png`、`dev-final.png` 已实际查看；`dev-final.json` 保存操作、接收回执、唯一转发事件、完成记录与服务状态。已知旧失败和修正后结果分别保留。
+
+最终开发组合候选为 `599642089118cf33c0ab4bb2996c3bbe2480b2ed`，在原开发候选上叠加本项三个修复，保留已有 #197/#281/#320 功能。组合类型检查、62 项相关回归、构建和打包通过。包 SHA-256 为 `2180cc19571c859aba6db782bd0129e8766122fbd5a5419ef87c1cf5106dab63`；安装后的 199 个 lib 文件逐个匹配，其余 profile 配置及依赖未改。最终重启回执 `6957248c-47e7-4520-a14f-df4341508955` succeeded，开发 PID 变为 3567607，正式 PID 始终为 3102758。
+
+源码 `4839c00` 经三轮独立只读审查后 APPROVE；其分支和 PR 的 Node 22、Node 24、secrets 全部通过。源码库未提交编译产物或私有会话轨迹。完整本机证据在 `docs/artifacts/continuation-pending-children-20261101/`，安装证明在开发实例的 `qa/issue342/`。正式实例尚未安装本项修复，生产 #1474 的接续尚未操作。
