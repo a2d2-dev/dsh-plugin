@@ -1586,9 +1586,9 @@ it('rechecks an end accepted after resume candidate selection inside the real di
   h.remote.issues = [h.remote.issues[0]!]; completed(await h.refresh())
   completed(await h.app.execute(h.configure, operator))
   const first = await h.execution(); h.host.idle(first)
-  completed(await h.app.execute({ type: 'task.control', commandId: 'dispatch-race-wait', ...fence(first), action: 'wait', text: '等待外部结果' }, operator))
+  completed(await h.app.sessionControl(first.session, 'dispatch-race-wait', 'wait', '等待外部结果或定时复查', undefined, { reason: 'external', checkedFacts: ['外部结果未返回'], wakeCondition: '定时复查' }))
   await h.app.reconcileContinuous()
-  expect(await h.host.authorize(first.session.sessionId, [{ id: 'automatic-before-end', role: 'user', content: [{ type: 'text', text: 'new external result' }], source: { kind: 'external-result' } }])).toBe(false)
+  expect(await h.host.authorize(first.session.sessionId, [{ id: 'automatic-before-end', role: 'user', content: [{ type: 'text', text: 'recheck the external result' }], source: { kind: 'schedule' } }])).toBe(false)
   expect((await h.status()).items[0]!.resumeRequested).toBe(true)
   const dao = WorkDao.forDirectory(h.directory), transaction = dao.transaction.bind(dao), candidates = continuous.continuousCandidates
   let selected = false, used = false, entered!: () => void, release!: () => void
