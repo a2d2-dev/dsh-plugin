@@ -347,7 +347,8 @@ it.each([
     expect(during.runtimeFailure).toEqual(stopped)
     const duringRule = (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!
     expect(duringRule.items[0]).toMatchObject({ state: 'blocked', reason: stopped!.message })
-    expect(duringRule.slots).not.toContainEqual(ref)
+    if (!previouslyObserved && scanWhileRunning) expect(duringRule.slots).toContainEqual(ref)
+    else expect(duringRule.slots).not.toContainEqual(ref)
     expect(duringRule.items[0]!.resumeRequested).toBeUndefined()
     expect(agent.status).toBe(scanWhileRunning ? 'running' : 'idle')
     expect(h.model.requests).toHaveLength(requests)

@@ -764,7 +764,8 @@ export class WorkApplication {
               && (!current.control || current.control.action === 'resume')) {
               if (current.runtimeFailure?.userCancelled && !current.runtimeFailure.acknowledged) {
                 item.state = 'blocked'; item.reason = current.runtimeFailure.message
-                continuousSetSlot(rule, current.ref, false)
+                // An existing slot still fences unsettled native work; normal
+                // idle settlement below owns its release.
               } else if (!continuousHasSlot(rule, current.ref)) continuousSetSlot(rule, current.ref, true)
             }
           }
@@ -828,10 +829,8 @@ export class WorkApplication {
                 if (managed.item.reason !== legacyObservation && (held || current.state === 'failed' || continuationInFlight(current) && !error)) return
                 delete managed.item.recoveryBlocked; delete managed.item.retryAt
                 managed.item.attempts = 0
-                if (error) {
-                  managed.item.state = 'blocked'
-                  if (current.runtimeFailure?.userCancelled && !current.runtimeFailure.acknowledged) continuousSetSlot(managed.rule, current.ref, false)
-                } else if (current.state !== 'failed') {
+                if (error) managed.item.state = 'blocked'
+                else if (current.state !== 'failed') {
                   managed.item.state = ['waiting', 'paused'].includes(current.state) ? current.state as 'waiting' | 'paused'
                     : held ? 'blocked' : 'active'
                 }
