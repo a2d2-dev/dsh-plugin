@@ -1,7 +1,7 @@
 import type { WorkExecution } from '../work-types.ts'
 
 export interface MaintenanceAdmission { operationId: string; step: 'material' | 'collect' | 'receive' | 'settle'; jobIds?: string[]; messageIds?: string[] }
-export type WorkAdmission = boolean | MaintenanceAdmission
+export type WorkAdmission = boolean | MaintenanceAdmission | { kind: 'business'; instruction: string }
 
 /** Trusted host boundary. check must be read-only and reject missing capabilities before reservation. */
 export interface WorkExecutionHost {

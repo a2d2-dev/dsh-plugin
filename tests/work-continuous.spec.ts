@@ -1916,3 +1916,32 @@ it('requests the existing queue slot only for a valid model wait wake and preser
   expect((await h.execution(execution.ref)).control).toMatchObject({ action: 'wait', status: 'applied' })
   expect((await h.status()).items.find(item => item.executionId === execution.id)?.resumeRequested).toBeUndefined()
 }, 15000)
+
+it.each(['pause', 'human-wait', 'end', 'no-slot', 'old-session'] as const)('does not grant post-receipt business instructions through %s', async protection => {
+  const h = await setup()
+  completed(await h.app.execute(h.configure, operator))
+  const execution = await h.execution()
+  const old = { ...execution.session, sessionId: 'retired-before-receipt' }
+  const operationId = randomUUID()
+  await WorkDao.forDirectory(h.directory).transaction(async state => {
+    const current = state.executions.find(item => item.id === execution.id)!
+    current.epoch = 2
+    current.retired = [{ session: old, epoch: 1, operationId }]
+    current.continuation = { protocolVersion: 1, operationId, commandId: 'continue', automatic: true, phase: 'received', source: old,
+      successor: current.session, sourceEpoch: 1, materialRequestId: 'material', kickoffId: 'receipt', goal: 'Original task',
+      specification: { version: 1, text: 'Original scope', acceptance: ['Real result'] }, title: 'Issue 1', history: { ref: current.ref, session: old } }
+    if (protection === 'no-slot') { state.continuousRules![0]!.slots = []; delete state.continuousRules![0]!.active; state.continuousRules![0]!.items.find(item => item.executionId === current.id)!.state = 'queued' }
+    if (protection === 'pause' || protection === 'end') current.control = { commandId: 'explicit-hold', action: protection, status: 'accepted', reason: 'User control remains effective' }
+    if (protection === 'human-wait') {
+      current.state = 'waiting'
+      current.control = { commandId: 'tool:human-wait', action: 'wait', status: 'applied', reason: 'Wait for LF', yield: { reason: 'human', checkedFacts: ['LF decision required'], wakeCondition: 'LF answers' } }
+    }
+  })
+  const before = await h.execution(execution.ref)
+  const message: NativeWorkMessage = { id: 'post-receipt-automatic', role: 'user', content: [{ type: 'text', text: 'Continue after receipt' }], source: { kind: 'a2d2-work-dispatch' } }
+  expect(await h.host.authorize(protection === 'old-session' ? old.sessionId : execution.session.sessionId, [message])).toBe(false)
+  const after = await h.execution(execution.ref)
+  expect(after.control).toEqual(before.control)
+  expect(after.session).toEqual(before.session)
+  expect(after.epoch).toBe(before.epoch)
+})
