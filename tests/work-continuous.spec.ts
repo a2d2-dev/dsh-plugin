@@ -1586,9 +1586,9 @@ it('rechecks an end accepted after resume candidate selection inside the real di
   h.remote.issues = [h.remote.issues[0]!]; completed(await h.refresh())
   completed(await h.app.execute(h.configure, operator))
   const first = await h.execution(); h.host.idle(first)
-  completed(await h.app.execute({ type: 'task.control', commandId: 'dispatch-race-wait', ...fence(first), action: 'wait', text: '等待外部结果' }, operator))
+  completed(await h.app.sessionControl(first.session, 'dispatch-race-wait', 'wait', '等待外部结果或定时复查', undefined, { reason: 'external', checkedFacts: ['外部结果未返回'], wakeCondition: '定时复查' }))
   await h.app.reconcileContinuous()
-  expect(await h.host.authorize(first.session.sessionId, [{ id: 'automatic-before-end', role: 'user', content: [{ type: 'text', text: 'new external result' }], source: { kind: 'external-result' } }])).toBe(false)
+  expect(await h.host.authorize(first.session.sessionId, [{ id: 'automatic-before-end', role: 'user', content: [{ type: 'text', text: 'recheck the external result' }], source: { kind: 'schedule' } }])).toBe(false)
   expect((await h.status()).items[0]!.resumeRequested).toBe(true)
   const dao = WorkDao.forDirectory(h.directory), transaction = dao.transaction.bind(dao), candidates = continuous.continuousCandidates
   let selected = false, used = false, entered!: () => void, release!: () => void
@@ -1670,3 +1670,36 @@ it('does not apply or dispatch an old resume receipt after end replaces it durin
     expect((await h.status()).slots).not.toContainEqual(first.ref)
   } finally { release(); await pending }
 })
+
+it('requests the existing queue slot only for a valid model wait wake and preserves queued notification payloads', async () => {
+  const h = await setup()
+  completed(await h.app.execute(h.configure, operator))
+  const execution = await h.execution()
+  const active = await h.status()
+  completed(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'stop-new-intake', ...h.scope, expectedVersion: active.version, enabled: false }, operator))
+  h.host.idle(execution)
+  completed(await h.app.sessionControl(execution.session, 'external-wait', 'wait', '等待已登记 PR 更新或定时复查', undefined, { reason: 'external', checkedFacts: ['PR CI pending'], wakeCondition: 'PR watch 更新或定时复查' }))
+  await h.app.reconcileControls()
+  const waiting = await h.execution(execution.ref)
+  expect(waiting.state).toBe('waiting')
+  expect((await h.status()).slots).not.toContainEqual(execution.ref)
+  const unrelated: NativeWorkMessage = { id: 'unrelated-notice', role: 'user', content: [{ type: 'text', text: 'unrelated automatic input' }], source: { kind: 'a2d2-work-dispatch' } }
+  expect(await h.host.authorize(execution.session.sessionId, [unrelated])).toBe(false)
+  expect((await h.status()).items.find(item => item.executionId === execution.id)?.resumeRequested).toBeUndefined()
+  const reminder: NativeWorkMessage = { id: 'valid-recheck', role: 'user', content: [{ type: 'text', text: 'recheck accepted CI wait' }], source: { kind: 'schedule' } }
+  expect(await h.host.authorize(execution.session.sessionId, [reminder])).toBe(false)
+  expect((await h.status()).items.find(item => item.executionId === execution.id)?.resumeRequested).toBe(true)
+  expect((await h.status()).slots).not.toContainEqual(execution.ref)
+  expect((await h.execution(execution.ref)).events.find(event => event.id === reminder.id)).toMatchObject({ delivery: 'accepted', nativeMessage: reminder })
+  await h.app.reconcileContinuous()
+  expect((await h.status()).slots).toContainEqual(execution.ref)
+  expect((await h.execution(execution.ref)).control).toMatchObject({ action: 'resume', status: 'applied' })
+  // The real host fixture records consumption independently of admission.
+  h.host.idle(await h.execution(execution.ref))
+  completed(await h.app.sessionControl(execution.session, 'wait-again', 'wait', '仍需等待下一次新通知', undefined, { reason: 'external', checkedFacts: ['已消费本次复查'], wakeCondition: '新的复查' }))
+  await h.app.reconcileControls()
+  expect((await h.execution(execution.ref)).events.find(event => event.id === reminder.id)?.delivery).toBe('consumed')
+  expect(await h.host.authorize(execution.session.sessionId, [reminder])).toBe(false)
+  expect((await h.execution(execution.ref)).control).toMatchObject({ action: 'wait', status: 'applied' })
+  expect((await h.status()).items.find(item => item.executionId === execution.id)?.resumeRequested).toBeUndefined()
+}, 15000)

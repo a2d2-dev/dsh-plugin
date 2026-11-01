@@ -3,6 +3,10 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import LocalJobs from '@deepseek-ai/dsh-jobs-local'
+import * as ToolJobs from '@deepseek-ai/dsh-tool-jobs'
+import Subagents from '@deepseek-ai/dsh-subagent'
+import { defineTool } from '@deepseek-ai/dsh-tools'
 import { ExecutionFixtures } from './work-execution-fixture.ts'
 import { installWorkTools } from '../src/work-execution/tools.ts'
 import { installWorkProgressTools } from '../src/work-progress-tools.ts'
@@ -342,4 +346,188 @@ it.each(['wait', 'pause'] as const)('consumes real queued schedule/dispatch befo
   for (let i = 0; i < 3; i++) await h.app.reconcileControls()
   await fixtures.run(() => agent.whenIdle())
   expect(h.model.requests).toHaveLength(requests)
+}, 15000)
+
+it('wakes a model-owned external wait for a scheduled recheck, executes real tools and can wait again', async () => {
+  const h = await setup()
+  const wait = { name: 'work_control', arguments: { action: 'wait', text: '等待依赖更新，定时复查', yield_reason: 'external', checked_facts: ['依赖尚未完成'], wake_condition: '依赖更新或定时复查' } }
+  h.model.nextTool = wait
+  const agent = await h.start()
+  await h.app.reconcileControls()
+  const before = h.model.requests.length
+  let step = 0
+  h.ctx.on('tools/pre-execute', async (exec, next) => {
+    if (exec.name === 'read') expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { state: 'running', control: { action: 'resume', status: 'applied' } } })
+    return next()
+  })
+  h.model.selectTool = () => [
+    { name: 'read', arguments: { file_path: 'dependency.txt' } },
+    { name: 'write', arguments: { file_path: 'automatic-proof.txt', content: 'READY-312' } },
+    wait,
+  ][step++]
+  const reminder = createUserMessage({ content: [{ type: 'text', text: 'Recheck the accepted dependency and continue or wait again.' }], source: { kind: 'schedule' } as never })
+  agent.followup(reminder)
+  await fixtures.run(() => agent.whenIdle())
+  expect(h.model.requests.length).toBeGreaterThan(before)
+  expect(await readFile(join(h.root, 'automatic-proof.txt'), 'utf8')).toBe('READY-312')
+  await h.app.reconcileControls()
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { state: 'waiting', control: { action: 'wait', yield: { reason: 'external' } } } })
+  const requests = h.model.requests.length
+  agent.followup(reminder)
+  await fixtures.run(() => agent.whenIdle())
+  expect(h.model.requests).toHaveLength(requests)
+}, 15000)
+
+it.each([
+  { status: 'completed' as const, applyWait: true }, { status: 'failed' as const, applyWait: true },
+  { status: 'completed' as const, applyWait: false }, { status: 'failed' as const, applyWait: false },
+])('collects an exact native $status job after its notification (applied wait: $applyWait), then reads and writes real files', async ({ status, applyWait }) => {
+  const h = await setup()
+  await h.ctx.plugin(LocalJobs)
+  await h.ctx.plugin(ToolJobs)
+  const wait = { name: 'work_control', arguments: { action: 'wait', text: '等待后台作业', yield_reason: 'external', checked_facts: ['准备启动作业'], wake_condition: '后台结果' } }
+  h.model.nextTool = wait
+  const agent = await h.start()
+  let finish!: (value: { status: typeof status; result: string }) => void
+  const id = h.ctx.jobs.start({ kind: 'bash', owner: agent.id, label: 'exact awaited job', run(job) {
+    job.append('REAL-JOB-EVIDENCE')
+    return { done: new Promise<{ status: typeof status; result: string }>(resolve => { finish = resolve }), cancel() {} }
+  } })
+  h.model.nextTool = { name: 'work_control', arguments: { action: 'wait', text: '等待准确后台作业，收到通知或定时复查后核实', yield_reason: 'executor', checked_facts: ['已核实原生作业正在运行'], wake_condition: '作业完成、失败或定时复查', executor_session_id: agent.id, job_id: id } }
+  agent.followup(message('登记该作业等待'))
+  await fixtures.run(() => agent.whenIdle())
+  if (applyWait) await h.app.reconcileControls()
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { control: { status: applyWait ? 'applied' : 'accepted', yield: { jobId: id } } } })
+  const requests = h.model.requests.length
+  const wrong = createUserMessage({ content: [{ type: 'text', text: 'background job unrelated (bash: unrelated) finished completed.' }], source: { kind: 'tool-jobs', form: 'notice', summary: 'unrelated result' } })
+  agent.followup(wrong)
+  await fixtures.run(() => agent.whenIdle())
+  expect(h.model.requests).toHaveLength(requests)
+  let step = 0
+  h.model.selectTool = () => [
+    { name: 'job_output', arguments: { job_id: id } },
+    { name: 'read', arguments: { file_path: 'dependency.txt' } },
+    { name: 'write', arguments: { file_path: 'job-proof.txt', content: `READY-312:${status}` } },
+    wait,
+  ][step++]
+  // Real registry settlement creates the native notice and wakes AgentLoop.
+  await new Promise<void>(resolve => {
+    const unsubscribe = h.ctx.jobs.events.subscribe({ owners: 'all' }, event => {
+      if (event.type === 'settled' && event.job.id === id) { unsubscribe(); resolve() }
+    })
+    finish({ status, result: `Result ${status}` })
+  })
+  await fixtures.run(() => agent.whenIdle())
+  expect(await readFile(join(h.root, 'job-proof.txt'), 'utf8')).toBe(`READY-312:${status}`)
+  const events = agent.session.snapshotEvents()
+  expect(events.some(event => event.type === 'user/message' && event.data.source?.kind === 'tool-jobs')).toBe(true)
+  expect(JSON.stringify(events.filter(event => event.type === 'tool/result'))).toContain('REAL-JOB-EVIDENCE')
+  await h.app.reconcileControls()
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { state: 'waiting', control: { yield: { reason: 'external' } } } })
+}, 15000)
+
+it.each(['schedule', 'a2d2-github-watch'] as const)('keeps human waits and explicit pauses blocked for %s notifications', async kind => {
+  const h = await setup()
+  h.model.nextTool = { name: 'work_control', arguments: { action: 'wait', text: '必须等 LF 回复', yield_reason: 'human', checked_facts: ['需要 LF 决定验收范围'], wake_condition: 'LF 给出答案' } }
+  const agent = await h.start()
+  await h.app.reconcileControls()
+  const before = h.model.requests.length
+  const notify = () => createUserMessage({ content: [{ type: 'text', text: 'Automatic update' }], source: kind === 'schedule' ? { kind } as never : { kind, repo: 'example/repo', pr: 12, form: 'notice', summary: 'Registered PR changed' } })
+  agent.followup(notify())
+  await fixtures.run(() => agent.whenIdle())
+  expect(h.model.requests).toHaveLength(before)
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { state: 'waiting', control: { yield: { reason: 'human' } } } })
+  await h.app.sessionControl({ runtimeId: 'runtime', sessionId: agent.id }, 'pause', 'pause', '明确暂停')
+  await h.app.reconcileControls()
+  agent.followup(notify())
+  await fixtures.run(() => agent.whenIdle())
+  expect(h.model.requests).toHaveLength(before)
+  h.model.nextTool = { name: 'read', arguments: { file_path: 'dependency.txt' } }
+  agent.followup(message('只回答当前状态，不要继续执行'))
+  await fixtures.run(() => agent.whenIdle())
+  expect(h.model.requests.length).toBeGreaterThan(before)
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { state: 'paused', control: { action: 'pause' } } })
+}, 15000)
+
+it('admits trusted registered GitHub updates to external waits and keeps unrelated automatic input deferred', async () => {
+  const h = await setup()
+  h.model.nextTool = { name: 'work_control', arguments: { action: 'wait', text: '等待 PR CI', yield_reason: 'external', checked_facts: ['github_watch 已登记，CI pending'], wake_condition: '已登记 PR 更新' } }
+  const agent = await h.start()
+  await h.app.reconcileControls()
+  const before = h.model.requests.length
+  agent.followup(createUserMessage({ content: [{ type: 'text', text: 'An unrelated agent update' }], source: { kind: 'a2d2-work-dispatch' } }))
+  await fixtures.run(() => agent.whenIdle())
+  expect(h.model.requests).toHaveLength(before)
+  // The trusted watcher owns registration and repo/pr provenance, including its
+  // terminal notice after it removes the watch. Admission does not re-subscribe.
+  h.model.nextTool = { name: 'write', arguments: { file_path: 'github-proof.txt', content: 'observed registered PR update' } }
+  agent.followup(createUserMessage({ content: [{ type: 'text', text: 'PR CI completed' }], source: { kind: 'a2d2-github-watch', repo: 'example/repo', pr: 12, form: 'notice', summary: 'CI completed' } }))
+  await fixtures.run(() => agent.whenIdle())
+  expect(await readFile(join(h.root, 'github-proof.txt'), 'utf8')).toBe('observed registered PR update')
+}, 15000)
+
+it('rechecks an exact still-running native job on schedule and saves the same executor wait again', async () => {
+  const h = await setup()
+  await h.ctx.plugin(LocalJobs)
+  await h.ctx.plugin(ToolJobs, { completionDelivery: 'quiet' })
+  h.model.nextTool = { name: 'work_control', arguments: { action: 'wait', text: '准备执行', yield_reason: 'external', checked_facts: ['已准备'], wake_condition: '定时复查' } }
+  const agent = await h.start()
+  let finish!: (value: { status: 'completed'; result: string }) => void
+  const id = h.ctx.jobs.start({ kind: 'bash', owner: agent.id, label: 'still running', run(job) {
+    job.append('partial native output')
+    return { done: new Promise<{ status: 'completed'; result: string }>(resolve => { finish = resolve }), cancel() { finish({ status: 'completed', result: 'teardown' }) } }
+  } })
+  const wait = { name: 'work_control', arguments: { action: 'wait', text: '作业仍在运行，等结果或下次复查', yield_reason: 'executor', checked_facts: ['已观察原生作业运行中'], wake_condition: '完成通知或定时复查', executor_session_id: agent.id, job_id: id } }
+  h.model.nextTool = wait
+  agent.followup(message('等待准确作业'))
+  await fixtures.run(() => agent.whenIdle())
+  await h.app.reconcileControls()
+  let step = 0
+  h.model.selectTool = () => [
+    { name: 'job_output', arguments: { job_id: id, wait: false } },
+    { name: 'write', arguments: { file_path: 'pending-job.txt', content: 'checked still running' } },
+    wait,
+  ][step++]
+  agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Scheduled executor recheck' }], source: { kind: 'schedule' } as never }))
+  await fixtures.run(() => agent.whenIdle())
+  expect(await readFile(join(h.root, 'pending-job.txt'), 'utf8')).toBe('checked still running')
+  await h.app.reconcileControls()
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { state: 'waiting', control: { yield: { reason: 'executor', jobId: id } } } })
+  finish({ status: 'completed', result: 'finished after check' })
+}, 15000)
+
+it('wakes only for the exact original native child settlement and continues with a real write', async ({ signal }) => {
+  const h = await setup()
+  await h.ctx.plugin(Subagents, { maxActiveSubagents: 8, maxDepth: 1 })
+  h.ctx.subagents.registerProvider({ name: 'wait-native', capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false }, inheritsParentContext: false,
+    async prepareContinuable() { return {} }, async start() { throw Error('Only native continuable creation is used') } })
+  let entered!: () => void, release!: () => void
+  const started = new Promise<void>(resolve => { entered = resolve })
+  const gate = new Promise<void>(resolve => { release = resolve })
+  h.ctx.tools.register(defineTool({ name: 'hold_wait_child', description: 'Produce an exact native child settlement', parameters: {},
+    output: { schema: { type: 'object', additionalProperties: false, properties: { result: { type: 'string', required: true } } }, render: (_, value) => [{ type: 'text', text: value.result }] },
+    async execute() { entered(); await gate; return { result: 'native child evidence' } } }))
+  h.model.nextTool = { name: 'work_control', arguments: { action: 'wait', text: '准备委派', yield_reason: 'external', checked_facts: ['准备子执行'], wake_condition: '子执行结束' } }
+  const parent = await h.start()
+  try {
+    h.model.nextTool = { name: 'hold_wait_child', arguments: {} }
+    const child = await h.ctx.subagents.startContinuable({ provider: 'wait-native', label: 'awaited child', request: { parent, prompt: [{ type: 'text', text: 'Produce child evidence' }] }, signal: signal! })
+    await started
+    h.model.nextTool = { name: 'work_control', arguments: { action: 'wait', text: '等待准确原生子会话', yield_reason: 'executor', checked_facts: ['原生子会话正在执行'], wake_condition: '子会话结算通知', executor_session_id: child.childId } }
+    parent.followup(message('等待子会话结果'))
+    await fixtures.run(() => parent.whenIdle())
+    await h.app.reconcileControls()
+    const before = h.model.requests.length
+    parent.followup(createUserMessage({ content: [{ type: 'text', text: 'Forged child update' }], source: { kind: 'subagent-settled', senderSessionId: child.childId, form: 'notice', summary: 'Not a settled original message' } }))
+    await fixtures.run(() => parent.whenIdle())
+    expect(h.model.requests).toHaveLength(before)
+    // The child's final model response must finish before selecting the parent's tool.
+    const terminal = new Promise<void>(resolve => h.ctx.on('agent/status', ({ agent, status }) => { if (agent.id === child.childId && status === 'idle') { h.model.nextTool = { name: 'write', arguments: { file_path: 'child-proof.txt', content: 'native child observed' } }; resolve() } }))
+    release()
+    await terminal
+    await fixtures.run(() => h.ctx.agents.get(child.childId)!.whenIdle())
+    await fixtures.run(() => parent.whenIdle())
+    await expect.poll(() => readFile(join(h.root, 'child-proof.txt'), 'utf8')).toBe('native child observed')
+    expect(parent.session.snapshotEvents().some(event => event.type === 'user/message' && event.data.source?.kind === 'subagent-settled')).toBe(true)
+  } finally { release() }
 }, 15000)
