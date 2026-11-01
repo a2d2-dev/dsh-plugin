@@ -8,6 +8,7 @@ import * as ToolJobs from '@deepseek-ai/dsh-tool-jobs'
 import Subagents from '@deepseek-ai/dsh-subagent'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { ExecutionFixtures } from './work-execution-fixture.ts'
+import { WorkDao } from '../src/work.ts'
 import { installWorkTools } from '../src/work-execution/tools.ts'
 import { installWorkProgressTools } from '../src/work-progress-tools.ts'
 import type { WorkGuard } from '../src/work-execution/guard.ts'
@@ -530,4 +531,78 @@ it('wakes only for the exact original native child settlement and continues with
     await expect.poll(() => readFile(join(h.root, 'child-proof.txt'), 'utf8')).toBe('native child observed')
     expect(parent.session.snapshotEvents().some(event => event.type === 'user/message' && event.data.source?.kind === 'subagent-settled')).toBe(true)
   } finally { release() }
+}, 15000)
+
+const scheduled = (schedule: string, prompt: string, occurrence: number) => createUserMessage({
+  content: [{ type: 'text', text: '[SCHEDULE REMINDER BATCH]\nThis is a scheduled message from the user\nreminders_json: ' + JSON.stringify([{ schedule_id: schedule, occurrence_at: new Date(occurrence * 1000).toISOString(), reminder_prompt: prompt }]) }],
+  source: { kind: 'schedule' } as never,
+})
+it('coalesces an admitted reminder backlog before the next model step and delivers queued humans immediately', async () => {
+  const h = await setup(false)
+  const agent = await h.start()
+  const old = Array.from({ length: 69 }, (_, i) => scheduled('same', 'Recheck accepted work', i + 1))
+  const latest = scheduled('same', 'Recheck accepted work', 100)
+  const distinct = scheduled('other', 'Recheck accepted work', 1)
+  const changed = scheduled('same', 'Different instruction', 1)
+  const humans = [message('first human'), message('second human')]
+  agent.inbox.splice('next-turn', 0, 0, [...old, distinct, humans[0]!, changed, latest])
+  const before = h.model.requests.length
+  agent.followup(humans[1]!)
+  await fixtures.run(() => agent.whenIdle())
+  const requests = h.model.requests.slice(before)
+  expect(requests[0]!.messages.filter(row => humans.some(human => human.id === row.id)).map(row => row.id)).toEqual(humans.map(row => row.id))
+  const admitted = agent.session.snapshotEvents().filter(event => event.type === 'user/message').map(event => event.data.id)
+  expect(admitted.filter(id => old.some(row => row.id === id))).toEqual([])
+  for (const retained of [latest, distinct, changed, ...humans]) expect(admitted.filter(id => id === retained.id)).toHaveLength(1)
+  expect(requests.length).toBeLessThanOrEqual(4)
+  const execution = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (execution.status !== 'completed' || !execution.execution) throw Error('No execution')
+  const sealed = await h.host.execution.maintain!(execution.execution, () => h.host.execution.sealInput!(execution.execution!, 'backlog-audit'))
+  expect(sealed.messages.filter(row => old.some(old => old.id === row.id))).toEqual([])
+}, 15000)
+
+it('coalesces persisted Task replay and recovers its human before automatic delivery can refill the queue', async () => {
+  const h = await setup(false)
+  const agent = await h.start()
+  const reminders = Array.from({ length: 70 }, (_, i) => scheduled('replayed', 'Recheck accepted work', i + 1))
+  const human = message('Human accepted while successor delivery was unavailable')
+  await WorkDao.forDirectory(h.app.directory).transaction(async state => {
+    const execution = state.executions.find(row => row.session.sessionId === agent.id)!
+    for (const nativeMessage of [...reminders, human]) execution.events.push({ id: nativeMessage.id, kind: 'input', text: 'Persisted intake', nativeMessage, delivery: 'accepted', acceptance: 'unassessed' })
+  })
+  const before = h.model.requests.length
+  const restored = fixtures.application(h.app.directory, h.host)
+  await fixtures.run(() => restored.reconcileControls())
+  await fixtures.run(() => agent.whenIdle())
+  const requests = h.model.requests.slice(before)
+  expect(requests[0]!.messages.some(row => row.id === human.id)).toBe(true)
+  const consumed = agent.session.snapshotEvents().filter(event => event.type === 'user/message').map(event => event.data.id)
+  for (const old of reminders.slice(0, -1)) expect(consumed).not.toContain(old.id)
+  expect(consumed.filter(id => id === human.id)).toHaveLength(1)
+  expect(consumed.filter(id => id === reminders.at(-1)!.id)).toHaveLength(1)
+  for (let i = 0; i < 3; i++) await fixtures.run(() => restored.reconcileControls())
+  await fixtures.run(() => agent.whenIdle())
+  expect(h.model.requests.slice(before)).toHaveLength(requests.length)
+  const detail = await restored.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (detail.status !== 'completed' || !detail.execution) throw Error('No execution')
+  for (const old of reminders.slice(0, -1)) expect(detail.execution.events.find(row => row.id === old.id)?.delivery).toBe('discarded')
+  expect(detail.execution.events.find(row => row.id === human.id)?.delivery).toBe('consumed')
+}, 15000)
+
+it('promotes the retained reminder when the superseded queue head was waking a model-owned wait', async () => {
+  const h = await setup(false)
+  h.model.nextTool = { name: 'work_control', arguments: { action: 'wait', text: 'Scheduled dependency recheck', yield_reason: 'external', checked_facts: ['Dependency pending'], wake_condition: 'Schedule or dependency update' } }
+  const agent = await h.start()
+  await fixtures.run(() => h.app.reconcileControls())
+  const older = scheduled('waiting-schedule', 'Check the dependency', 1)
+  const latest = scheduled('waiting-schedule', 'Check the dependency', 2)
+  agent.inbox.splice('next-turn', 0, 0, [older])
+  const before = h.model.requests.length
+  agent.followup(latest)
+  await fixtures.run(() => agent.whenIdle())
+  expect(h.model.requests.slice(before)).toHaveLength(1)
+  const admitted = agent.session.snapshotEvents().filter(event => event.type === 'user/message').map(event => event.data.id)
+  expect(admitted).not.toContain(older.id)
+  expect(admitted.filter(id => id === latest.id)).toHaveLength(1)
+  expect(agent.inbox.nextTurn).toHaveLength(0)
 }, 15000)

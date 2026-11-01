@@ -1,3 +1,4 @@
+import { supersededReminders } from './reminders.ts'
 import { continuationBoundary } from './continuation.ts'
 import { createHash } from 'node:crypto'
 import { humanGuardIntent } from './guard.ts'
@@ -74,45 +75,69 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     this.ctx.on('agent/pre-step', async ({ agent, messages, turn }, next) => {
       // Task scheduling controls automatic turns, never the native human conversation.
       // An admitted turn can finish its tool results and final answer after wait/done.
-      let human = messages.some(message => message.source?.kind === 'user')
-      // Tool results are committed before this boundary, including later empty
-      // steps of a human-started turn. Maintenance retains its narrow tool lane.
-      const proceed = human || this.maintenanceTurns.has(agent) || await this.stepBoundary?.(agent.id) !== false
-      if (!human && (!proceed || this.admittedTurns.get(agent) !== turn)) {
-        const admission = await this.authorize!(agent.id, messages)
-        if (!admission) {
-          // The host claims only one queued turn and stops its driver on reject.
-          // A blocked automatic input must not strand human messages behind it.
-          // Keep automatic input with its existing Task/producer recovery lane;
-          // move only native human envelopes through the public durable Inbox.
-          const pending = [...agent.inbox.nextStep, ...agent.inbox.nextTurn].filter(message => message.source?.kind === 'user')
-          if (!pending.length) return { kind: 'reject' }
-          const recovered = pending.filter(message => agent.inbox.remove(message.id))
-          messages.splice(0, messages.length, ...recovered)
-          human = true
-          this.maintenanceTurns.delete(agent)
-        } else if (typeof admission === 'object') this.maintenanceTurns.set(agent, admission)
-        else this.maintenanceTurns.delete(agent)
+      const managed = !!await this.conversation?.(agent.id)
+      if (managed) {
+        const superseded = supersededReminders([...messages, ...agent.inbox.nextStep, ...agent.inbox.nextTurn])
+        for (const id of superseded) {
+          if (agent.inbox.remove(MessageId(id))) continue
+          const claimed = messages.find(message => message.id === id)
+          if (claimed) {
+            // A claim is not consumption. Publish its explicit cancellation so
+            // a later source seal cannot resurrect this superseded envelope.
+            agent.inbox.splice('next-turn', agent.inbox.nextTurn.length, 0, [claimed])
+            agent.inbox.remove(claimed.id)
+          }
+        }
+        const replacedHead = messages.some(message => superseded.has(message.id))
+        for (let i = messages.length - 1; i >= 0; i--) if (superseded.has(messages[i]!.id)) messages.splice(i, 1)
+        if (replacedHead && !messages.length) {
+          const retained = agent.inbox.nextStep[0] ?? agent.inbox.nextTurn[0]
+          if (retained && agent.inbox.remove(retained.id)) messages.push(retained)
+        }
       }
+      const humans = messages.filter(message => message.source?.kind === 'user')
+      const automatic = messages.filter(message => message.source?.kind !== 'user')
+      // Queue controls normal unmanaged conversations. Managed Task input must
+      // reach the next safe step even when the automatic head is admissible.
+      if (managed) for (const message of [...agent.inbox.nextStep, ...agent.inbox.nextTurn]) {
+        if (message.source?.kind === 'user' && agent.inbox.remove(message.id)) humans.push(message)
+      }
+      if (managed && this.pendingHumanInput) {
+        const pending = await this.pendingHumanInput(agent.id)
+        if (pending.length) {
+          const seen = new Set<string>(messages.map(message => message.id))
+          for (const message of humans) seen.add(message.id)
+          for (const event of await this.runtime.events(agent.id)) if (event.type === 'user/message') seen.add(event.data.id)
+          humans.unshift(...structuredClone(pending.filter(message => !seen.has(message.id))) as UserMessage[])
+        }
+      }
+      const human = humans.length > 0
+      const proceed = human || this.maintenanceTurns.has(agent) || await this.stepBoundary?.(agent.id) !== false
+      if (human && automatic.length || !human && (!proceed || this.admittedTurns.get(agent) !== turn)) {
+        const admission = await this.authorize!(agent.id, automatic)
+        if (!admission) {
+          // Authorization persists deferred automatic envelopes in their Task
+          // recovery lane. Human conversation never smuggles them past control.
+          if (!human) return { kind: 'reject' }
+          messages.splice(0, messages.length, ...humans)
+          this.maintenanceTurns.delete(agent)
+        } else {
+          if (human && typeof admission === 'object') agent.inbox.splice('next-turn', 0, 0, automatic)
+          messages.splice(0, messages.length, ...(human && typeof admission === 'object' ? [] : automatic), ...humans)
+          if (!human && typeof admission === 'object') this.maintenanceTurns.set(agent, admission)
+          else this.maintenanceTurns.delete(agent)
+        }
+      } else if (human) messages.splice(0, messages.length, ...humans)
       if (human) {
         this.maintenanceTurns.delete(agent)
-        this.guardIntent.set(agent, humanGuardIntent(messages))
-        await this.guard?.(agent.id, { kind: 'ingress', messages })
+        this.guardIntent.set(agent, humanGuardIntent(humans))
+        await this.guard?.(agent.id, { kind: 'ingress', messages: humans })
       }
       const decision = await next()
       if (decision.kind === 'reject') return decision
       const scope = this.maintenanceTurns.get(agent)
       if (scope?.step === 'settle') decision.messages = decision.messages.filter(message => scope.messageIds!.includes(message.id))
       this.admittedTurns.set(agent, turn)
-      if (human && this.pendingHumanInput) {
-        const pending = await this.pendingHumanInput(agent.id)
-        if (pending.length) {
-          const seen = new Set<string>(decision.messages.map(message => message.id))
-          for (const event of await this.runtime.events(agent.id)) if (event.type === 'user/message') seen.add(event.data.id)
-          const recovered = pending.filter(message => !seen.has(message.id)) as UserMessage[]
-          decision.messages.unshift(...structuredClone(recovered))
-        }
-      }
       const context = [await this.conversation?.(agent.id), this.resumeInstructions.get(agent)].filter(Boolean).join('\n')
       this.resumeInstructions.delete(agent)
       if (context && context !== this.conversationSnapshots.get(agent)) {
