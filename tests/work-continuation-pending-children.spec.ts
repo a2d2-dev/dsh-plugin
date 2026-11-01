@@ -12,6 +12,21 @@ const ok = (result: WorkResult) => { if (result.status !== 'completed') throw Er
 const material = { body: 'Retain original accepted work.', decisions: 'Continue the same Task.', evidence: 'Native child still owes a result.', unfinished: 'Collect pending child work.', next: 'Use work_child_recover for the exact pending child.' }
 const report = { specificationVersion: 1, stage: 'done' as const, summary: 'verified', next: '', blockers: [], criteria: [{ index: 0, passed: true, evidence: ['native result verified'] }] }
 
+async function receiveChild(h: Awaited<ReturnType<ExecutionFixtures['mount']>>, agent: import('@deepseek-ai/dsh-agent').Agent, childId: string, epoch: number, fixtures: ExecutionFixtures) {
+  h.model.selectTool = request => {
+    const output = request.messages.findLast(message => message.role === 'tool')
+    if (!output) return
+    const text = output.content.map(block => block.type === 'text' ? block.text : '').join('')
+    let page: { nextCursor?: number; revision?: string }
+    try { page = JSON.parse(text) } catch { return }
+    if (page.nextCursor !== undefined) return { name: 'work_child_recover', arguments: { child_session_id: childId, action: 'result', expected_epoch: epoch, cursor: page.nextCursor, revision: page.revision } }
+  }
+  h.model.nextTool = { name: 'work_child_recover', arguments: { child_session_id: childId, action: 'result', expected_epoch: epoch } }
+  agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Receive the exact child result completely.' }], source: { kind: 'user' } }))
+  await fixtures.run(() => agent.whenIdle())
+  h.model.selectTool = undefined
+}
+
 it('hands off while a real native child tool is running, receives its late result and preserves native delivery facts', async ({ signal }) => {
   const fixtures = new ExecutionFixtures(signal)
   let release!: () => void
@@ -55,6 +70,7 @@ it('hands off while a real native child tool is running, receives its late resul
     expect(JSON.stringify(log)).toContain(child.childId)
     expect(JSON.stringify(log)).toContain('Unreturned child work')
     expect(await h.app.sessionReport(current.session, 'premature-done', report, 2)).toMatchObject({ status: 'failed', error: { code: 'completion-results-unsettled' } })
+    expect(await h.app.sessionChildRecovery(current.session, 'running-no-replace', child.childId, 'replace', undefined, 2, signal!, 0, undefined, 'unused-replacement')).toMatchObject({ status: 'failed', error: { code: 'child-replacement-not-stopped' } })
     expect(await h.app.sessionChildRecovery(current.session, 'running-no-restart', child.childId, 'resume', 'Finish verification', 2, signal!)).toMatchObject({ status: 'completed', childStatus: 'running' })
     expect(await h.app.sessionControl(execution.session, 'retired-write', 'progress', 'No authority')).toMatchObject({ status: 'failed', error: { code: 'forbidden' } })
     await h.app.execute(command, operator)
@@ -68,17 +84,7 @@ it('hands off while a real native child tool is running, receives its late resul
     while ('nextCursor' in page && page.nextCursor !== undefined) page = await h.app.sessionChildRecovery(current.session, `uncommitted-result-${pageIndex++}`, child.childId, 'result', undefined, 2, signal!, page.nextCursor, page.revision)
     const uncommitted = ok(await h.app.query({ type: 'task.execution', ref }, operator)).execution!
     expect((await h.host.execution.observation!(uncommitted)).settlement).toBe('pending')
-    h.model.selectTool = request => {
-      const output = request.messages.findLast(message => message.role === 'tool')
-      if (!output) return
-      const text = output.content.map(block => block.type === 'text' ? block.text : '').join('')
-      let page: { nextCursor?: number; revision?: string }
-      try { page = JSON.parse(text) } catch { return }
-      if (page.nextCursor !== undefined) return { name: 'work_child_recover', arguments: { child_session_id: child.childId, action: 'result', expected_epoch: 2, cursor: page.nextCursor, revision: page.revision } }
-    }
-    h.model.nextTool = { name: 'work_child_recover', arguments: { child_session_id: child.childId, action: 'result', expected_epoch: 2 } }
-    successor.followup(createUserMessage({ content: [{ type: 'text', text: 'Receive the real child result.' }], source: { kind: 'user' } }))
-    await fixtures.run(() => successor.whenIdle())
+    await receiveChild(h, successor, child.childId, 2, fixtures)
     const received = ok(await h.app.query({ type: 'task.execution', ref }, operator)).execution!
     expect(received.childReceipts).toMatchObject([{ child: { sessionId: child.childId }, complete: true, epoch: 2 }])
     const facts = await h.host.execution.observation!(received)
@@ -86,12 +92,23 @@ it('hands off while a real native child tool is running, receives its late resul
     expect(facts.sessions.find(row => row.role === 'retired')!.children[0]!.result).toBe('pending')
     expect(JSON.stringify(await new RuntimeHost(h.ctx).events(successor.id))).toContain('late native verification passed')
     expect((await new RuntimeHost(h.ctx).events(parent.id)).some(event => event.type === 'user/message' && event.data.source?.kind === 'subagent-settled')).toBe(false)
-    expect(await h.app.sessionReport(current.session, 'accepted-done', report, 2)).toMatchObject({ status: 'completed' })
-    expect(await h.app.sessionChildRecovery(current.session, 'completed-resume', child.childId, 'resume', 'Should not run', 2, signal!)).toMatchObject({ status: 'failed', error: { code: 'task-completed' } })
+    h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+    await h.app.execute({ type: 'task.continue', commandId: 'continue-already-received-child', ref, executionId: current.id, owner: current.owner, epoch: 2 }, operator)
+    await fixtures.run(() => successor.whenIdle())
+    await fixtures.run(() => h.app.reconcileControls())
+    current = ok(await h.app.query({ type: 'task.execution', ref }, operator)).execution!
+    expect(current.epoch).toBe(3)
+    const third = h.ctx.agents.get(SessionId(current.session.sessionId))!
+    await fixtures.run(() => third.whenIdle())
+    await fixtures.run(() => h.app.reconcileControls())
+    expect(await h.app.sessionReport(current.session, 'third-before-receipt', report, 3)).toMatchObject({ status: 'failed', error: { code: 'completion-results-unsettled' } })
+    await receiveChild(h, third, child.childId, 3, fixtures)
+    expect(await h.app.sessionReport(current.session, 'accepted-done', report, 3)).toMatchObject({ status: 'completed' })
+    expect(await h.app.sessionChildRecovery(current.session, 'completed-resume', child.childId, 'resume', 'Should not run', 3, signal!)).toMatchObject({ status: 'failed', error: { code: 'task-completed' } })
   } finally { release?.(); await fixtures.close() }
 })
 
-it('cold-recovers an actual host-lost child through the original parent, without reviving old coordination', async ({ signal }) => {
+it.for(['resume', 'replace'] as const)('cold-recovers actual host-lost child work via %s without reviving old coordination', { timeout: 20_000 }, async (mode, { signal }) => {
   const fixtures = new ExecutionFixtures(signal)
   try {
     const { spawn } = await import('node:child_process')
@@ -144,29 +161,70 @@ it('cold-recovers an actual host-lost child through the original parent, without
     successor = restoredSuccessor.agent
     const unfinishedFacts = await h.host.execution.observation!(pending)
     expect(unfinishedFacts.blockers).toContainEqual(expect.objectContaining({ code: 'child-work-unfinished', session: { runtimeId: 'runtime', sessionId: seed.childId } }))
-    const send = h.ctx.subagents.sendMessage.bind(h.ctx.subagents)
-    let lost = false
-    vi.spyOn(h.ctx.subagents, 'sendMessage').mockImplementation(async (...args) => {
-      const receipt = await send(...args)
-      if (!lost) { lost = true; throw Error('Real child accepted; recovery receipt lost') }
-      return receipt
-    })
-    await expect(h.app.sessionChildRecovery(current.session, 'recover-host-lost-child', seed.childId, 'resume', 'Finish the interrupted verification and report real evidence.', 2, signal!)).rejects.toThrow('recovery receipt lost')
-    expect(lost).toBe(true)
-    await expect.poll(async () => (await new RuntimeHost(h.ctx).executionFacts(restoredParent.agent.id, 'runtime', 'retired')).children[0]?.returned).toBe(true)
-    expect(await h.app.sessionChildRecovery(current.session, 'recover-host-lost-child', seed.childId, 'resume', 'Finish the interrupted verification and report real evidence.', 2, signal!)).toMatchObject({ status: 'completed', childStatus: 'returned' })
+    let resultChildId = seed.childId
+    if (mode === 'replace') {
+      vi.spyOn(h.ctx.subagents, 'sendMessage').mockRejectedValueOnce(Error('Original child provider cannot be restored'))
+      await expect(h.app.sessionChildRecovery(current.session, 'unrecoverable-original', seed.childId, 'resume', 'Continue remaining verification.', 2, signal!)).rejects.toThrow('cannot be restored')
+      let replacementRuns = 0
+      h.ctx.tools.register(defineTool({ name: 'replacement_verification', description: 'Perform replacement verification', parameters: {},
+        output: { schema: { type: 'object', additionalProperties: false, properties: { result: { type: 'string', required: true } } }, render: (_, value) => [{ type: 'text', text: value.result }] },
+        async execute() { replacementRuns++; return { result: 'Replacement performed the unfinished verification successfully.' } } }))
+      h.model.nextTool = { name: 'replacement_verification', arguments: {} }
+      const replacement = await fixtures.run(() => h.ctx.subagents.startContinuable({ provider: 'fresh-local', label: 'replacement verification', request: { parent: successor, prompt: [{ type: 'text', text: 'Perform the unfinished original verification and return real evidence.' }] }, signal: signal! }))
+      resultChildId = replacement.childId
+      await expect.poll(async () => (await new RuntimeHost(h.ctx).executionFacts(successor.id, 'runtime', 'current')).children.find(child => child.session.sessionId === resultChildId)?.returned).toBe(true)
+      await fixtures.run(() => successor.whenIdle())
+      expect(replacementRuns).toBe(1)
+      expect(await h.app.sessionChildRecovery(current.session, 'unreceived-replacement', seed.childId, 'replace', undefined, 2, signal!, 0, undefined, resultChildId)).toMatchObject({ status: 'failed', error: { code: 'child-replacement-unreceived' } })
+      const resource = { runtimeId: 'runtime', workspaceId: h.workspace.id }
+      const foreignTask = ok(await h.app.execute({ type: 'task.create', commandId: 'foreign-task', projectId: seed.ref.projectId, title: 'foreign', goal: 'separate authorization', specification: 'foreign verification', acceptance: ['verified'] }, operator)).task!
+      const foreignExecution = ok(await h.app.execute({ type: 'task.start', commandId: 'foreign-start', ref: { projectId: foreignTask.projectId, taskId: foreignTask.id }, expectedVersion: 1, resource, agentId: foreignTask.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'read-only' }, operator)).execution!
+      const foreignParent = h.ctx.agents.get(SessionId(foreignExecution.session.sessionId))!
+      await fixtures.run(() => foreignParent.whenIdle())
+      const foreign = await h.ctx.subagents.startContinuable({ provider: 'fresh-local', label: 'foreign verification', request: { parent: foreignParent, prompt: [{ type: 'text', text: 'Verify a different Task' }] }, signal: signal! })
+      expect(await h.app.sessionChildRecovery(current.session, 'foreign-replacement', seed.childId, 'replace', undefined, 2, signal!, 0, undefined, foreign.childId)).toMatchObject({ status: 'failed', error: { code: 'child-replacement-unrelated' } })
+      expect(await h.app.sessionChildRecovery(current.session, 'foreign-result', foreign.childId, 'result', undefined, 2, signal!)).toMatchObject({ status: 'failed', error: { code: 'unrelated-child' } })
+    } else {
+      const send = h.ctx.subagents.sendMessage.bind(h.ctx.subagents)
+      let lost = false
+      vi.spyOn(h.ctx.subagents, 'sendMessage').mockImplementation(async (...args) => {
+        const receipt = await send(...args)
+        if (!lost) { lost = true; throw Error('Real child accepted; recovery receipt lost') }
+        return receipt
+      })
+      await expect(h.app.sessionChildRecovery(current.session, 'recover-host-lost-child', seed.childId, 'resume', 'Finish the interrupted verification and report real evidence.', 2, signal!)).rejects.toThrow('recovery receipt lost')
+      expect(lost).toBe(true)
+      await expect.poll(async () => (await new RuntimeHost(h.ctx).executionFacts(restoredParent.agent.id, 'runtime', 'retired')).children[0]?.returned).toBe(true)
+      expect(await h.app.sessionChildRecovery(current.session, 'recover-host-lost-child', seed.childId, 'resume', 'Finish the interrupted verification and report real evidence.', 2, signal!)).toMatchObject({ status: 'completed', childStatus: 'returned' })
+    }
     const childEvents = await new RuntimeHost(h.ctx).events(SessionId(seed.childId))
-    expect(childEvents.filter(event => event.type === 'turn/start')).toHaveLength(2)
+    expect(childEvents.filter(event => event.type === 'turn/start')).toHaveLength(mode === 'resume' ? 2 : 1)
     expect(childEvents.filter(event => event.type === 'tool/call' && event.data.name === 'crash_native')).toHaveLength(1)
     expect(childEvents.find(event => event.type === 'tool/result' && event.data.message?.toolCallId === childEvents.find(event => event.type === 'tool/call')!.data.callId)).toMatchObject({ data: { message: { isError: true } } })
     expect(await h.app.sessionChildRecovery(seed.execution.session, 'retired-resume', seed.childId, 'resume', 'Must reject', 1, signal!)).toMatchObject({ status: 'failed', error: { code: 'stale-execution-authority' } })
     expect(await h.app.sessionReport(current.session, 'unreceived-done', report, 2)).toMatchObject({ status: 'failed', error: { code: 'completion-results-unsettled' } })
-    h.model.nextTool = { name: 'work_child_recover', arguments: { child_session_id: seed.childId, action: 'result', expected_epoch: 2 } }
-    successor.followup(createUserMessage({ content: [{ type: 'text', text: 'Receive recovered child evidence.' }], source: { kind: 'user' } }))
-    await fixtures.run(() => successor.whenIdle())
+    await receiveChild(h, successor, resultChildId, 2, fixtures)
+    if (mode === 'replace') {
+      expect(await h.app.sessionChildRecovery(current.session, 'accept-replacement', seed.childId, 'replace', undefined, 2, signal!, 0, undefined, resultChildId)).toMatchObject({ status: 'completed', childStatus: 'replaced', replacement: { sessionId: resultChildId } })
+    }
     const received = ok(await h.app.query({ type: 'task.execution', ref: seed.ref }, operator)).execution!
     const facts = await h.host.execution.observation!(received)
     expect(facts.settlement, JSON.stringify(facts)).toBe('settled')
     expect(ok(await h.app.query({ type: 'task.execution', ref: seed.ref }, operator)).execution!.session).toEqual(current.session)
+    if (mode === 'replace') {
+      expect(facts.sessions.flatMap(row => row.children).find(child => child.session.sessionId === seed.childId)).toMatchObject({ returned: true, attempt: { reason: 'interrupted' }, result: 'pending' })
+      h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+      await h.app.execute({ type: 'task.continue', commandId: 'continue-with-replacement-binding', ref: seed.ref, executionId: current.id, owner: current.owner, epoch: 2 }, operator)
+      await fixtures.run(() => successor.whenIdle())
+      await fixtures.run(() => h.app.reconcileControls())
+      const final = ok(await h.app.query({ type: 'task.execution', ref: seed.ref }, operator)).execution!
+      expect(final.epoch).toBe(3)
+      const third = h.ctx.agents.get(SessionId(final.session.sessionId))!
+      await fixtures.run(() => third.whenIdle())
+      await fixtures.run(() => h.app.reconcileControls())
+      expect(await h.app.sessionReport(final.session, 'replacement-before-new-receipt', report, 3)).toMatchObject({ status: 'failed', error: { code: 'completion-results-unsettled' } })
+      await receiveChild(h, third, resultChildId, 3, fixtures)
+      expect(await h.app.sessionReport(final.session, 'replacement-accepted-done', report, 3)).toMatchObject({ status: 'completed' })
+    }
   } finally { await fixtures.close() }
-}, 20_000)
+})

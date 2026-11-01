@@ -99,3 +99,10 @@ PATH=/root/.nvm/versions/node/v22.23.1/bin:$PATH pnpm exec vitest run tests/work
 恢复请求先持久保存固定 requestId，再把标记放入真实消息；重试读原生 inbox insertion/user/message，或直接返回已运行/已结束状态。完整结果接收记录另存 child/endSeq/epoch/全部分页 callIds。完成门回读当前协调会话的准确成功 `work_child_recover` tool/result、结果 revision 与最新 endSeq，全部页面真实交付后才解除该结果门；单独写接收声明、未读完、错误结果、新一轮 child 或旧 epoch 均不足以通过。原生 parent 通知 consumed 与插件当前协调接收是两项独立事实，业务验收仍需成立。
 
 若递归子会话的原 parent 自身冷却且普通 SessionController 无恢复权，工具返回 `child-recovery-parent-unavailable`，包含准确 parent/child 与宿主错误。插件不隐式唤醒整条层级；当前协调先核实旧执行已停止，再按保存的工作区和进度显式重新委派剩余工作，不复制仍在运行的执行。此限制不阻止接续，且不能假报已恢复。已完成 Task、pause/end 与维护阶段不允许启动子工作。
+
+
+### 无法恢复时的可核实替代处置（#342 review 修正）
+
+明确停止的旧 child 可以由当前协调重新委派，但重派本身不清除旧失败门。`work_child_recover action=replace` 带 `child_session_id` 与 `replacement_child_session_id`，必须先满足：旧 child 最新 returned/endSeq 可读、旧 child 及可见后代无运行或未知活动/未完工具/活动作业；替代者是当前 Task 当前协调真实 catalog 下的另一个原生 child，最新一轮 completed；当前协调已用 `result` 完整接收其全部分页且真实成功 tool/result 可回读。不能用说明文字、未运行的替代 child 或其他 Task 的 child 解除旧门。
+
+执行协调记录持久保存旧 parent/child/endSeq、替代 parent/child/completed endSeq 与作出处置的协调会话/epoch/command。完成观察重新核对旧执行仍停在该 endSeq、替代者仍是该 completed endSeq、当前代次已正式收取替代结果，才解除旧 unfinished 与原生结果等待门。旧 interrupted/error 日志和 native consumed 状态完整保留；旧执行重新启动或替代结果版本改变都会使绑定失效，其他工具/作业门不被豁免。替代绑定写进后继交接与 `work_read continuation`；后续换代可通过本 Task 历史协调的真实 catalog 再读准确 child 结果，不能因旧接收 epoch 失效形成不可解除的等待。

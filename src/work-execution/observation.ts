@@ -25,6 +25,8 @@ export interface NativeExecution {
   status: 'running' | 'idle' | 'inactive' | 'unknown'
   result: ResultState
   returned?: boolean
+  /** Current coordinator has received every real result page for this exact end. */
+  coordinatorReceived?: boolean
   attempt?: { turn: number; reason?: string }
   endSeq?: number
   /** Original unconsumed native inbox notice, covering this exact latest end. */

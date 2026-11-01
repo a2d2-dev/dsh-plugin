@@ -283,9 +283,17 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
         if ((row.status === 'running' && !ownReport) || row.status === 'unknown') blockers.push({ code: row.status === 'unknown' ? 'executor-state-unknown' : 'executor-unsettled', session: row.session })
         if (row.waitingHuman) blockers.push({ code: 'executor-waiting-human', session: row.session })
         for (const child of row.children) {
+          child.coordinatorReceived = child.returned === true && child.endSeq !== undefined && receivedChildren.get(sessionKey(child.session)) === child.endSeq
           const carried = [execution.continuation, ...(execution.continuationHistory ?? [])].some(op => op?.pendingChildren?.some(pending => sessionKey(pending.child) === sessionKey(child.session)))
-          if (carried && child.returned && child.attempt?.reason !== 'completed') blockers.push({ code: 'child-work-unfinished', session: child.session })
-          if (!child.returned || (child.mode === 'continuable' && child.result !== 'consumed' && receivedChildren.get(sessionKey(child.session)) !== child.endSeq) || child.mode === 'unknown') blockers.push({ code: 'native-result-pending', session: row.session })
+          const binding = execution.childReplacements?.find(item => sessionKey(item.child) === sessionKey(child.session) && sessionKey(item.parent) === sessionKey(row.session))
+          let replaced = false
+          if (binding && child.returned && child.endSeq === binding.endSeq && ['idle', 'inactive'].includes(child.status) && receivedChildren.get(sessionKey(binding.replacement)) === binding.replacementEndSeq) {
+            const parent = await this.runtime.executionFacts(SessionId(binding.replacementParent.sessionId), this.runtimeId, 'retired')
+            const replacement = parent.children.find(item => sessionKey(item.session) === sessionKey(binding.replacement))
+            replaced = replacement?.returned === true && replacement.endSeq === binding.replacementEndSeq && replacement.attempt?.reason === 'completed' && ['idle', 'inactive'].includes(replacement.status)
+          }
+          if (carried && child.returned && child.attempt?.reason !== 'completed' && !replaced) blockers.push({ code: 'child-work-unfinished', session: child.session })
+          if (!replaced && (!child.returned || (child.mode === 'continuable' && child.result !== 'consumed' && !child.coordinatorReceived) || child.mode === 'unknown')) blockers.push({ code: 'native-result-pending', session: row.session })
           if (!roots.has(sessionKey(child.session))) roots.set(sessionKey(child.session), { session: child.session, role: 'native-child', parent: row.session })
         }
         if (row.jobObservation === 'unavailable') { blockers.push({ code: 'job-observation-unavailable', session: row.session }); limitations.add('当前宿主缺少正式 jobs.observe 非消费接口，无法证明终态结果已交付。') }
@@ -328,7 +336,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     const accepted = events.flatMap(event => event.type === 'user/message' ? [event.data] : event.type === 'agent/inbox/spliced' ? event.data.inserted ?? [] : []).find(message => message.role === 'user' && message.content?.some((block: { type: string; text?: string }) => block.type === 'text' && block.text?.startsWith(marker)))
     if (accepted) return { status: 'accepted', messageId: accepted.id as string }
     const parent = await this.runtime.agent(parentId).catch(error => {
-      throw new WorkExecutionError('child-recovery-parent-unavailable', `Original parent ${parentId} is unavailable for child ${childId}: ${String(error)}. Public child routing cannot restore this layer through an ordinary Session controller. The current coordinator must verify the old execution has stopped before explicitly redelegating its remaining work from the saved workspace and progress; do not duplicate a running child.`)
+      throw new WorkExecutionError('child-recovery-parent-unavailable', `Original parent ${parentId} is unavailable for child ${childId}: ${String(error)}. Public child routing cannot restore this layer through an ordinary Session controller. The current coordinator must verify the old execution has stopped before explicitly redelegating its remaining work from the saved workspace and progress. After the replacement completes, fully read its result with work_child_recover result, then call replace for this old child with replacement_child_session_id. Do not duplicate a running child.`)
     })
     const service = (this.ctx.get as (name: string) => unknown).call(this.ctx, 'subagents') as { sendMessage?: (parent: Agent, child: SessionId, content: { type: 'text'; text: string }[], options: { signal: AbortSignal }) => Promise<string> } | undefined
     if (!service?.sendMessage) throw new WorkExecutionError('host-capability-unavailable', 'Public subagents.sendMessage is required for native recovery')

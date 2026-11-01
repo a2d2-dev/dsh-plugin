@@ -27,3 +27,12 @@ Issue：https://github.com/a2d2-dev/dsh-plugin/issues/342
 原生同 ID 恢复遵守 direct-parent 权限。递归 child 的原 parent 自身已冷却、普通 SessionController 无权恢复该 parent 时，返回准确 `child-recovery-parent-unavailable`，不能假称已恢复。当前协调应先确认旧执行已停止，再依据保存进度显式重新委派剩余工作，不自动唤醒整条链或复制运行中的工作。
 
 本次未修改生产 home、1474 业务代码，未部署或重启。真实 dev 页面验收由主会话完成，此报告不将组件集成测试当作页面验收。
+
+
+## 正式 review P1 替代处置回归
+
+目的：修复“提示重新委派，但旧 interrupted child 永远阻止完成”的闭环缺口。
+
+步骤与记录：新增 `replace` 后，独立 SIGKILL 场景使用 `vi.spyOn(subagents.sendMessage).mockRejectedValueOnce` 注入一次 provider 不可恢复错误（不声称该错误来自实际宿主权限拒绝），当前协调通过原生 API 创建替代 child，实际执行 `replacement_verification` 并返回证据。未正式读取结果时 replace 被拒；当前协调完整分页收取后，replace 持久绑定停止的旧 endSeq 与真实替代 completed endSeq，完成观察解除旧失败门。旧 child 的 interrupted 与 native pending 保持原样。随后再接续一代，旧接收 epoch 不授新代完成权，新协调可重新读取同一替代 child 并完成。另一路对已成功收到的普通 child 同样跨两次 handoff 再读取并完成。运行中的旧 child 不可替代；其他 Task 的替代 child 与结果读取均被拒。
+
+原始红灯：`/tmp/continuation-replacement-red.log`（旧实现没有正式替代准入，外层 1 失败）。绿灯：`/tmp/continuation-replacement-green.log`（真实原生 3 场景通过）。相关 7 文件、65 项回归通过，类型与构建分别记录在 `continuation-replacement-affected.log`、`continuation-replacement-typecheck.log`、`continuation-replacement-build.log`。CI 中两条 continuous wait/pause fixture 已等待首次材料维护结束，再显式重试同一 operation 的材料请求；原控制、槽位与其他自动消息不执行业务的断言保留。该文件连同最终原生回归 2 文件、20 项通过（`continuation-replacement-final.log`）。日志同存 artifact 目录。

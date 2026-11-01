@@ -82,6 +82,7 @@ export interface WorkExecution {
   continuation?: ContinuationOperation
   continuationHistory?: ContinuationOperation[]
   retired?: { session: SessionRef; epoch: number; operationId: string }[]
+  childReplacements?: { child: SessionRef; parent: SessionRef; endSeq: number; replacement: SessionRef; replacementParent: SessionRef; replacementEndSeq: number; coordinator: SessionRef; epoch: number; commandId: string }[]
   childRecovery?: { requestId: string; parent: SessionRef; child: SessionRef; epoch: number; text: string; messageId?: string }[]
   childReceipts?: { child: SessionRef; endSeq: number; epoch: number; callId: string; callIds: string[]; cursor: number; revision: string; complete: boolean }[]
   continuationMaterial?: ContinuationMaterial

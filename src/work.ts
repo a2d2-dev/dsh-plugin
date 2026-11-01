@@ -430,15 +430,37 @@ export class WorkApplication {
     { operator: false, session, agentId: execution.agentId })
   }
   /** Current Task authority may recover only a child carried by a real handoff. */
-  async sessionChildRecovery(session: import('./work-types.ts').SessionRef, callId: string, childId: string, action: 'status' | 'result' | 'resume', text: string | undefined, epoch: number, signal: AbortSignal, cursor = 0, revision?: string) {
+  async sessionChildRecovery(session: import('./work-types.ts').SessionRef, callId: string, childId: string, action: 'status' | 'result' | 'resume' | 'replace', text: string | undefined, epoch: number, signal: AbortSignal, cursor = 0, revision?: string, replacementChildId?: string) {
     const state = await this.load()
     const execution = state.executions.find(item => sameSession(item.session, session))
     if (!execution || execution.epoch !== epoch) return failed('stale-execution-authority', 'Only the current coordinator at this epoch may recover child work')
-    if (action === 'resume' && isTaskCompleted(taskAt(state, execution.ref))) return failed('task-completed', 'Accepted Task completion does not authorize further child work')
+    if ((action === 'resume' || action === 'replace') && isTaskCompleted(taskAt(state, execution.ref))) return failed('task-completed', 'Accepted Task completion does not authorize further child work')
+    const facts = await this.host.execution?.observation?.(execution)
+    const native = facts?.sessions.flatMap(parent => parent.children.map(child => ({ parent: parent.session, child }))) ?? []
+    const scoped = native.find(item => item.child.session.sessionId === childId && [execution.session, ...(execution.retired ?? []).map(item => item.session)].some(parent => sameSession(parent, item.parent)))
     const child = [execution.continuation, ...(execution.continuationHistory ?? [])].flatMap(op => op?.pendingChildren ?? []).find(child => child.child.sessionId === childId)
-    if (!child) return failed('unrelated-child', 'Child is not in this Task continuation records')
+      ?? (scoped ? { parent: scoped.parent, child: scoped.child.session, mode: scoped.child.mode, status: scoped.child.status, result: scoped.child.result, returned: scoped.child.returned ?? false, tools: [], jobs: [], blockers: [], next: 'Inspect native result' } : undefined)
+    if (!child) return failed('unrelated-child', 'Child is not in this Task continuation or coordinator native catalog')
     if (!this.host.execution?.childRecovery) return failed('host-capability-unavailable', 'Public native child recovery is unavailable')
-    if (action === 'resume' && (continuationInFlight(execution) || ['waiting', 'paused'].includes(execution.state) || execution.control?.action === 'end' || (execution.control?.status === 'accepted' && execution.control.action !== 'resume'))) return failed('child-recovery-paused', 'Explicit Task control and continuation maintenance do not authorize child business work')
+    if ((action === 'resume' || action === 'replace') && (continuationInFlight(execution) || ['waiting', 'paused'].includes(execution.state) || execution.control?.action === 'end' || (execution.control?.status === 'accepted' && execution.control.action !== 'resume'))) return failed('child-recovery-paused', 'Explicit Task control and continuation maintenance do not authorize child business work')
+    if (action === 'replace') {
+      const old = native.find(item => sameSession(item.parent, child.parent) && sameSession(item.child.session, child.child))
+      if (!old?.child.returned || old.child.endSeq === undefined || !['idle', 'inactive'].includes(old.child.status)) return failed('child-replacement-not-stopped', 'Replacement requires the exact old child to have a returned, non-running latest turn')
+      const oldScope = new Set([JSON.stringify(child.child)])
+      for (const row of facts!.sessions) if (row.parent && oldScope.has(JSON.stringify(row.parent))) oldScope.add(JSON.stringify(row.session))
+      const oldRows = facts!.sessions.filter(row => oldScope.has(JSON.stringify(row.session)))
+      if (!oldRows.length || oldRows.some(row => ['running', 'unknown'].includes(row.status) || row.tools?.length || row.jobs.some(job => ['running', 'stopping'].includes(job.status)))) return failed('child-replacement-not-stopped', 'Old child still has unresolved activity')
+      const replacement = native.find(item => sameSession(item.parent, execution.session) && item.child.session.sessionId === replacementChildId && !sameSession(item.child.session, child.child))
+      if (!replacement) return failed('child-replacement-unrelated', 'Replacement must be a real native child of this Task current coordinator')
+      if (!replacement.child.returned || replacement.child.attempt?.reason !== 'completed' || replacement.child.endSeq === undefined || !replacement.child.coordinatorReceived) return failed('child-replacement-unreceived', 'Replacement must complete and its full real result must be successfully received by this coordinator first')
+      const binding = { child: child.child, parent: child.parent, endSeq: old.child.endSeq, replacement: replacement.child.session, replacementParent: replacement.parent, replacementEndSeq: replacement.child.endSeq, coordinator: session, epoch, commandId: callId }
+      await this.sourceTransaction(async state => {
+        const current = state.executions.find(item => item.id === execution.id)!
+        if (current.epoch !== epoch || !sameSession(current.session, session) || isTaskCompleted(taskAt(state, current.ref)) || continuationInFlight(current) || ['waiting', 'paused'].includes(current.state) || (current.control?.status === 'accepted' && current.control.action !== 'resume') || current.control?.action === 'end') throw new WorkExecutionError('stale-execution-authority', 'Task authority or control changed before replacement acceptance')
+        current.childReplacements = [...(current.childReplacements ?? []).filter(item => !sameSession(item.child, child.child)), binding]
+      })
+      return { status: 'completed' as const, childStatus: 'replaced', child: child.child, replacement: replacement.child.session, endSeq: old.child.endSeq, replacementEndSeq: replacement.child.endSeq }
+    }
     const requestId = `child-recovery:${createHash('sha256').update(JSON.stringify([session, callId])).digest('hex')}`
     let request: NonNullable<WorkExecution['childRecovery']>[number] | undefined
     if (action === 'resume') {
@@ -1388,7 +1410,7 @@ export class WorkApplication {
           })
         }
         const op = execution.continuation!
-        const request = maintenanceEvent(op, 'receive', op.readRequestId ?? op.kickoffId, successorMessage(op, execution.policy.instructions))
+        const request = maintenanceEvent(op, 'receive', op.readRequestId ?? op.kickoffId, successorMessage(op, execution.policy.instructions, execution.childReplacements))
         const observed = await host.observe(execution, request)
         if (observed === 'consumed') return save(current => { current.continuation!.kickoffDelivery = observed; current.continuation!.error = { code: 'continuation-read-unconfirmed', message: 'The successor consumed material without a committed readable receipt; explicitly retry this operation to request acknowledgement again' } })
         const delivered = await host.deliver(execution, request)
@@ -1500,7 +1522,7 @@ export class WorkApplication {
         if (continuationFactsKey(fresh) !== operation.materialFactsKey) throw new WorkExecutionError('continuation-material-stale', 'Execution results changed after material preparation; the plugin will collect and refresh material before takeover')
         if (!operation.material || operation.material.executionId !== execution.id || !sameTask(operation.material.ref, execution.ref) || operation.material.specificationVersion !== operation.specification.version || !sameSession(operation.material.source, operation.source) || operation.material.epoch !== operation.sourceEpoch || operation.material.settlementKey !== operation.materialFactsKey) throw new WorkExecutionError('continuation-material-missing', 'Saved source material is required before creating a successor')
         // Validate message preparation before any successor creation or authority transfer.
-        kickoffText = successorMessage(operation, execution.policy.instructions)
+        kickoffText = successorMessage(operation, execution.policy.instructions, execution.childReplacements)
         if (operation.phase === 'material-saved' || operation.phase === 'successor-created') {
           const profile = operation.profile!
           const successor = { ...execution, session: operation.successor, sessionMode: 'create' as const, epoch: operation.sourceEpoch + 1,
@@ -1553,7 +1575,7 @@ export class WorkApplication {
           await host.maintain(source, sealInput)
         }
         const op = execution.continuation!
-        const event = maintenanceEvent(op, 'receive', op.kickoffId, kickoffText ?? successorMessage(op, execution.policy.instructions))
+        const event = maintenanceEvent(op, 'receive', op.kickoffId, kickoffText ?? successorMessage(op, execution.policy.instructions, execution.childReplacements))
         // Source authority was retired in the same transaction as the epoch change.
         const delivered = await host.deliver(execution, event)
         execution = await save(current => { current.continuation!.kickoffDelivery = delivered; current.continuation!.phase = 'delivered'; delete current.continuation!.error })
