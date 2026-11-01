@@ -1494,6 +1494,32 @@ it.each(['Last model turn ended interrupted: previous turn', 'Execution is idle 
   expect(h.host.sessionsCreated.size).toBe(2)
 })
 
+it('retains a stopped owner slot until the native status turn reaches a safe boundary', async () => {
+  const h = await setup()
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1 } }, operator))
+  const first = await h.execution()
+  const stopped = { id: 'user-stop', message: 'Last model turn ended aborted: user stopped the original turn', userCancelled: true }
+  h.host.execution.failure = async execution => execution.id === first.id ? stopped : undefined
+  await WorkDao.forDirectory(h.directory).transaction(async state => {
+    state.executions[0]!.runtimeFailure = stopped
+    state.continuousRules![0]!.items[0]!.state = 'blocked'
+    state.continuousRules![0]!.items[0]!.reason = stopped.message
+  })
+  const sends = h.host.sends.length
+  await h.app.reconcileContinuous()
+  const during = await h.status()
+  expect(during.slots).toEqual([first.ref])
+  expect(during.items[0]).toMatchObject({ state: 'blocked', reason: stopped.message })
+  expect(during.items[1]!.state).toBe('queued')
+  expect(h.host.sends).toHaveLength(sends)
+  expect((await h.execution(first.ref)).runtimeFailure).toEqual(stopped)
+  h.host.idle(first)
+  await h.app.reconcileContinuous()
+  const after = await h.status()
+  expect(after.slots).not.toContainEqual(first.ref)
+  expect(after.items[1]!.state).toBe('active')
+})
+
 it('rejects stale ExecutionId recovery without clearing current running protection or creating work', async () => {
   const h = await setup()
   completed(await h.app.execute(h.configure, operator))
