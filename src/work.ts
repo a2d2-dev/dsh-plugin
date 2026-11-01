@@ -54,6 +54,15 @@ function lifecycleOwned(message: NativeWorkMessage | undefined): boolean {
   const source = message?.source
   return typeof source === 'object' && source !== null && 'kind' in source && (source.kind === 'goal' || source.kind === 'a2d2-work-maintenance')
 }
+/** A model can delegate one result-observation turn; human holds never do. */
+function modelOwnedWait(state: WorkSnapshot, execution: WorkExecution | undefined): boolean {
+  return !!execution && ['ready', 'running', 'waiting'].includes(execution.state)
+    && execution.control?.action === 'wait' && execution.control.commandId.startsWith('tool:')
+    && ['executor', 'external'].includes(execution.control.yield?.reason ?? '')
+    && !isTaskCompleted(taskAt(state, execution.ref)) && !continuousCompleted(state, execution)
+    && !execution.error && !(execution.runtimeFailure && !execution.runtimeFailure.acknowledged)
+    && !execution.continuationBlocked && !continuationInFlight(execution)
+}
 function pendingEvent(event: WorkEvent): boolean { return event.delivery !== 'consumed' && event.delivery !== 'discarded' }
 function discardLifecycleEvents(execution: import('./work-types.ts').WorkExecution): void {
   for (const event of execution.events) if (pendingEvent(event) && lifecycleOwned(event.nativeMessage)) event.delivery = 'discarded'
@@ -166,13 +175,7 @@ export class WorkApplication {
       if (mayAdvance(execution) || messages.length === 0) return mayAdvance(execution)
       // Only a model-owned structured wait delegates a future observation turn.
       // A notification is permission to inspect facts, never proof of success.
-      const modelWait = (owner: typeof execution) => !!owner && ['ready', 'running', 'waiting'].includes(owner.state)
-        && owner.control?.action === 'wait' && owner.control.commandId.startsWith('tool:')
-        && ['executor', 'external'].includes(owner.control.yield?.reason ?? '')
-        && !isTaskCompleted(taskAt(state, owner.ref)) && !continuousCompleted(state, owner)
-        && !owner.error && !(owner.runtimeFailure && !owner.runtimeFailure.acknowledged)
-        && !owner.continuationBlocked && !continuationInFlight(owner)
-      const wait = modelWait(execution) ? execution!.control : undefined
+      const wait = modelOwnedWait(state, execution) ? execution!.control : undefined
       const facts = wait?.yield?.reason === 'executor' && this.host.execution?.observation
         ? await this.host.execution.observation(execution!) : undefined
       const wake = wait && messages.find(message => {
@@ -187,6 +190,14 @@ export class WorkApplication {
           return jobId === awaited.jobId && !!facts?.sessions.some(row => (!awaited.executor || sameSession(row.session, awaited.executor))
             && row.jobs.some(job => job.id === jobId && ['completed', 'failed', 'killed'].includes(job.status) && job.availability !== 'lost' && job.delivery !== 'delivered'))
         }
+        if (source?.kind === 'a2d2-work-child-result') {
+          const accepted = execution!.events.find(event => event.kind === 'result' && event.id === message.id && isDeepStrictEqual(event.nativeMessage, message))
+          if (!accepted) return false
+          const original = message.source as { executionId: string; parent: import('./work-types.ts').SessionRef; child: import('./work-types.ts').SessionRef; endSeq: number; noticeId: string }
+          return original.executionId === execution!.id && !!awaited.executor && sameSession(original.child, awaited.executor)
+            && !!facts?.sessions.some(parent => sameSession(parent.session, original.parent) && parent.children.some(child => sameSession(child.session, original.child)
+              && child.returned && child.notice?.endSeq === original.endSeq && child.notice?.message.id === original.noticeId))
+        }
         return source?.kind === 'subagent-settled' && !!awaited.executor && !!facts?.sessions.some(row => row.children.some(child => sameSession(child.session, awaited.executor!)
           && child.settlement && isDeepStrictEqual(child.settlement.message, message)))
       })
@@ -195,7 +206,7 @@ export class WorkApplication {
         if (current.executions.some(item => item.retired?.some(old => old.session.sessionId === sessionId))) return false
         state = current
         if (mayAdvance(owner)) return true
-        const waking = !!wake && modelWait(owner) && owner!.control!.commandId === wait!.commandId
+        const waking = !!wake && modelOwnedWait(current, owner) && owner!.control!.commandId === wait!.commandId
           && !owner!.history.some(entry => entry.commandId === `automatic-wake:${wake.id}`)
         if (waking && continuousMayAdvance(current, owner!)) {
           owner!.control = { commandId: `automatic-wake:${wake.id}`, action: 'resume', status: 'applied', reason: '等待条件收到通知，核实结果并继续已授权工作；条件未满足时重新登记等待。' }
@@ -1314,6 +1325,7 @@ export class WorkApplication {
     for (const execution of (await this.load()).executions) {
       if (execution.control?.action === 'end' && execution.control.status === 'accepted' && this.host.execution.status(execution) !== 'running') await this.ensureExecution(execution.id, execution.control.commandId)
     }
+    await this.reconcileChildResults()
     await this.reconcileContinuous()
     const snapshot = await this.load()
     for (const initial of snapshot.executions) {
@@ -1325,6 +1337,45 @@ export class WorkApplication {
       if (execution.control?.status === 'accepted' || continuationInFlight(execution) || ['accepted', 'creating', 'failed'].includes(execution.state)
         || execution.events.some(event => pendingEvent(event) && !['waiting', 'paused'].includes(execution.state))) {
         await this.ensureExecution(execution.id, execution.control?.commandId ?? execution.continuation?.commandId ?? this.dao.firstHistory(execution)!.commandId)
+      }
+    }
+  }
+  /** Relay authentic retired-parent child notices into the same Task inbox. */
+  private async reconcileChildResults(): Promise<void> {
+    const host = this.host.execution
+    if (!host?.observation) return
+    const snapshot = await this.load()
+    for (const initial of snapshot.executions) {
+      if (isTaskCompleted(taskAt(snapshot, initial.ref)) || initial.control?.action === 'end') continue
+      const known = [...[initial.continuation, ...(initial.continuationHistory ?? [])].flatMap(op => (op?.pendingChildren ?? []).map(child => ({ parent: child.parent, child: child.child }))), ...(initial.childRecovery ?? []).map(child => ({ parent: child.parent, child: child.child })), ...(initial.childReplacements ?? []).map(child => ({ parent: child.replacementParent, child: child.replacement }))]
+      if (!known.some(child => !sameSession(child.parent, initial.session))) continue
+      const facts = await host.observation(initial)
+      const notices = facts.sessions.flatMap(parent => parent.children.flatMap(child => child.returned && child.notice && !sameSession(parent.session, initial.session)
+        && known.some(known => sameSession(known.parent, parent.session) && sameSession(known.child, child.session)) ? [{ parent: parent.session, child: child.session, label: child.label, ...child.notice }] : []))
+      for (const notice of notices) {
+        const id = `child-result:${createHash('sha256').update(JSON.stringify([initial.id, notice.parent, notice.child, notice.endSeq, notice.message.id])).digest('hex')}`
+        const execution = await this.sourceTransaction(async state => {
+          const current = state.executions.find(item => item.id === initial.id)
+          if (!current || current.owner !== initial.owner || current.epoch !== initial.epoch || !sameSession(current.session, initial.session) || isTaskCompleted(taskAt(state, current.ref)) || current.control?.action === 'end') return
+          if (!current.events.some(event => event.id === id)) {
+            const text = `Native child ${notice.child.sessionId}${notice.label ? ` (${notice.label})` : ''} returned. Original parent: ${notice.parent.sessionId}; latest endSeq: ${notice.endSeq}; original native notice: ${notice.message.id}. This is a result notification, not result receipt or Task acceptance. Inspect the real result with work_child_recover action=result, child_session_id=${notice.child.sessionId}, the current coordinator expected_epoch from work_control status; read every page before assessing the remaining work.`
+            current.events.push({ id, kind: 'result', text, delivery: 'accepted', acceptance: 'unassessed', nativeMessage: { id, role: 'user', content: [{ type: 'text', text }], source: { kind: 'a2d2-work-child-result', executionId: current.id, parent: notice.parent, child: notice.child, endSeq: notice.endSeq, noticeId: notice.message.id } } })
+          }
+          return current
+        })
+        if (!execution) continue
+        const event = execution.events.find(event => event.id === id)!
+        if (!pendingEvent(event) || continuationInFlight(execution)) continue
+        const state = await this.load(), current = state.executions.find(item => item.id === execution.id)!
+        if (current.epoch !== execution.epoch || !sameSession(current.session, execution.session) || isTaskCompleted(taskAt(state, current.ref)) || current.control?.action === 'end') continue
+        const delegated = modelOwnedWait(state, current) && current.control?.yield?.reason === 'executor' && !!current.control.yield.executor && sameSession(current.control.yield.executor, notice.child)
+        const active = continuousMayAdvance(state, current) && ['ready', 'running'].includes(current.state) && (!current.control || current.control.action === 'resume')
+        if (!delegated && !active) continue
+        const delivery = await host.deliver(current, event)
+        await this.sourceTransaction(async state => {
+          const latest = state.executions.find(item => item.id === current.id)!
+          if (latest.epoch === current.epoch && sameSession(latest.session, current.session)) latest.events.find(event => event.id === id)!.delivery = delivery
+        })
       }
     }
   }

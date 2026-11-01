@@ -26,6 +26,7 @@ import { settleUncollectedJob } from './job-observation.ts'
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
     'a2d2-work-input-seal': { kind: 'a2d2-work-input-seal'; operationId: string }
+    'a2d2-work-child-result': { kind: 'a2d2-work-child-result'; executionId: string; parent: import('../work-types.ts').SessionRef; child: import('../work-types.ts').SessionRef; endSeq: number; noticeId: string }
     'a2d2-work-dispatch': { kind: 'a2d2-work-dispatch' }
     'a2d2-work-context': { kind: 'a2d2-work-context'; form: 'notice'; summary: string }
   }

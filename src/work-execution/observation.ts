@@ -29,6 +29,8 @@ export interface NativeExecution {
   coordinatorReceived?: boolean
   attempt?: { turn: number; reason?: string }
   endSeq?: number
+  /** Authentic latest native notice, independent of original parent's consumption. */
+  notice?: { message: import('../work-types.ts').NativeWorkMessage; endSeq: number }
   /** Original unconsumed native inbox notice, covering this exact latest end. */
   settlement?: { message: import('../work-types.ts').NativeWorkMessage; endSeq: number }
 }

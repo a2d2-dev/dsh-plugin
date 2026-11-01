@@ -106,3 +106,10 @@ PATH=/root/.nvm/versions/node/v22.23.1/bin:$PATH pnpm exec vitest run tests/work
 明确停止的旧 child 可以由当前协调重新委派，但重派本身不清除旧失败门。`work_child_recover action=replace` 带 `child_session_id` 与 `replacement_child_session_id`，必须先满足：旧 child 最新 returned/endSeq 可读、旧 child 及可见后代无运行或未知活动/未完工具/活动作业；替代者是当前 Task 当前协调真实 catalog 下的另一个原生 child，最新一轮 completed；当前协调已用 `result` 完整接收其全部分页且真实成功 tool/result 可回读。不能用说明文字、未运行的替代 child 或其他 Task 的 child 解除旧门。
 
 执行协调记录持久保存旧 parent/child/endSeq、替代 parent/child/completed endSeq 与作出处置的协调会话/epoch/command。完成观察重新核对旧执行仍停在该 endSeq、替代者仍是该 completed endSeq、当前代次已正式收取替代结果，才解除旧 unfinished 与原生结果等待门。旧 interrupted/error 日志和 native consumed 状态完整保留；旧执行重新启动或替代结果版本改变都会使绑定失效，其他工具/作业门不被豁免。替代绑定写进后继交接与 `work_read continuation`；后续换代可通过本 Task 历史协调的真实 catalog 再读准确 child 结果，不能因旧接收 epoch 失效形成不可解除的等待。
+
+
+### 退休 parent 的真实结果通知回到当前协调（#342 dev 验收修正）
+
+同 ID 恢复的 child 仍把原生 terminal notice 发给原 direct-parent。插件在既有启动、idle 与兜底 reconciliation 中，仅观察本 Task 已持久 pending、恢复或替代关系下的准确 parent/child，核实原生 header/descriptor、最新 endSeq 和首次持久 notice 身份，再向本 Task 当前协调收件箱写 `a2d2-work-child-result` 结果事件。事件 ID 来自 execution/parent/child/endSeq/原 noticeId，与会话代次无关，重载或重试不重复投递；不伪装原生通知，不改变旧 parent 的原生 consumed，不让退休 root 执行业务，也不创建新 Task。
+
+当前协调的 model-owned executor wait 复用既有自动恢复准入：等待的准确 child、当前事件完整 envelope、持久 Task event 与新的真实 terminal notice 都必须吻合。人工 wait、pause/end、完成 Task 和未解决错误不被解除；通知在暂停中只持久保存，明确恢复后沿普通 Task 事件投递。无 continuous rule 的 Task 同样可由该通知自动恢复。接收通知只允许核实结果，不是 `childReceipts`、结果完整读取或业务验收；当前协调仍须调用 `work_child_recover result` 读完实际结果。旧通知不能重复唤醒后续 wait，新 turn 必须有自身最新 end/notice 身份。未返回 child 与公开 query 为崩溃生成的 interrupted 闭合没有真实 notice，不生成这种自动唤醒。

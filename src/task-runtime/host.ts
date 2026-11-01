@@ -111,13 +111,14 @@ export class RuntimeHost {
         const consumed = new Set(events.filter(event => event.type === 'user/message').map(event => event.data.id))
         const descriptor = childEvents.findLast(event => event.type === 'subagent/descriptor')
         const native = childObservation.header?.origin === 'subagent' && childObservation.header.parentSession === id && descriptor?.data.mode === 'continuable'
-        const pending = native && mode === 'continuable' && end && result === 'pending' && childStatus !== 'running' && !(start && start.seq > end.seq)
-          ? [...inserted.values()].find(({ message, time }) => !consumed.has(message.id) && time >= end.time && message.role === 'user'
+        const terminalNotice = native && mode === 'continuable' && end && childStatus !== 'running' && !(start && start.seq > end.seq)
+          ? [...inserted.values()].find(({ message, time }) => time >= end.time && message.role === 'user'
             && (message.source as { kind?: string; form?: string; senderSessionId?: string } | undefined)?.kind === 'subagent-settled'
             && (message.source as { form?: string }).form === 'notice' && (message.source as { senderSessionId?: string }).senderSessionId === childId) : undefined
         children.push({ ...(typeof catalogEvent.data.label === 'string' ? { label: catalogEvent.data.label } : {}), session: { runtimeId, sessionId: childId }, mode, status: childStatus, result, returned: !!end && !(start && start.seq > end.seq),
           ...(end ? { endSeq: end.seq, attempt: { turn: end.data.turn, reason: end.data.reason?.kind } } : {}),
-          ...(pending ? { settlement: { message: structuredClone(pending.message), endSeq: end!.seq } } : {}) })
+          ...(terminalNotice ? { notice: { message: structuredClone(terminalNotice.message), endSeq: end!.seq } } : {}),
+          ...(terminalNotice && result === 'pending' && !consumed.has(terminalNotice.message.id) ? { settlement: { message: structuredClone(terminalNotice.message), endSeq: end!.seq } } : {}) })
       } catch {
         // A missing/orphan child must remain an explicit unresolved identity; it
         // cannot erase the readable parent's own safety and intake facts.
