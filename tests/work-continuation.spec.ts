@@ -549,6 +549,12 @@ it.each(['missing', 'failed-commit'] as const)('recovers a %s successor read res
 
 it('refreshes source material after the host reports newly collected result facts', async () => {
   const h = await setup()
+  const deliver = h.host.execution.deliver.bind(h.host.execution)
+  vi.spyOn(h.host.execution, 'deliver').mockImplementation((execution, event, maintenance) => {
+    const message = event.nativeMessage
+    if (message) event = { ...event, nativeMessage: { ...message, source: Object.fromEntries(Object.entries(message.source as object).reverse()) } }
+    return deliver(execution, event, maintenance)
+  })
   h.model.nextTool = { name: 'work_continuation_material', arguments: material }
   await h.app.execute({ type: 'task.continue', commandId: 'fresh-material', ...fence(h.execution) }, operator)
   const source = h.ctx.agents.get(SessionId(h.execution.session.sessionId))!
@@ -568,6 +574,7 @@ it('refreshes source material after the host reports newly collected result fact
   })
   await fixtures.run(() => h.app.reconcileControls())
   await fixtures.run(() => source.whenIdle())
+  expect(h.model.requests.some(request => request.messages.some(message => (message as { source?: { step?: string } }).source?.step === 'collect'))).toBe(true)
   delivery = 'delivered'
   await fixtures.run(() => h.app.reconcileControls())
   const refreshing = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
@@ -649,8 +656,14 @@ it.each(['ready', 'waiting', 'paused'] as const)('does not reopen or certify a l
   await fixtures.run(() => restored.ctx.agents.get(SessionId(successor.sessionId))!.whenIdle())
 })
 
-it('automatically executes the accepted next step after a normal successor confirms material', async () => {
+it('executes the accepted next step when material and receive sources have reordered keys', async () => {
   const h = await setup()
+  const deliver = h.host.execution.deliver.bind(h.host.execution)
+  vi.spyOn(h.host.execution, 'deliver').mockImplementation((execution, event, maintenance) => {
+    const message = event.nativeMessage
+    if (message) event = { ...event, nativeMessage: { ...message, source: Object.fromEntries(Object.entries(message.source as object).reverse()) } }
+    return deliver(execution, event, maintenance)
+  })
   h.model.nextTool = { name: 'work_continuation_material', arguments: material }
   await h.app.execute({ type: 'task.continue', commandId: 'normal-next-step', ...fence(h.execution) }, operator)
   await fixtures.run(() => h.ctx.agents.get(SessionId(h.execution.session.sessionId))!.whenIdle())

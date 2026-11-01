@@ -9,7 +9,7 @@ import { installWorkTools } from '../src/work-execution/tools.ts'
 import { installWorkProgressTools } from '../src/work-progress-tools.ts'
 import { RuntimeHost } from '../src/task-runtime/host.ts'
 import { ExecutionFixtures } from './work-execution-fixture.ts'
-import type { WorkResult } from '../src/work-types.ts'
+import type { NativeWorkMessage, WorkResult } from '../src/work-types.ts'
 const operator = { operator: true }
 const ok = (result: WorkResult) => { if (result.status !== 'completed') throw Error(JSON.stringify(result)); return result }
 const report = { specificationVersion: 1, stage: 'done' as const, summary: 'verified', next: '', blockers: [], criteria: [{ index: 0, passed: true, evidence: ['verified native results'] }] }
@@ -194,7 +194,7 @@ it('records the native owner capability boundary when returned child jobs are re
   } finally { await fixtures.close() }
 })
 
-it.for(['ready', 'waiting', 'paused'] as const)('continues the same operation after a running native child settles under %s control', async (state, { signal }) => {
+it.for(['ready', 'waiting', 'paused'] as const)('continues the same operation after a native notice is requeued with reordered keys under %s control', async (state, { signal }) => {
   const fixtures = new ExecutionFixtures(signal)
   let release!: () => void
   try {
@@ -239,10 +239,37 @@ it.for(['ready', 'waiting', 'paused'] as const)('continues the same operation af
       return state === 'waiting' ? { name: 'business_probe', arguments: {} } : { name: 'work_control', arguments: { action: 'progress', text: 'Forbidden settlement business work' } }
     }
     const unrelated = createUserMessage({ content: [{ type: 'text', text: 'Unrelated automatic business input must stay queued.' }], source: { kind: 'a2d2-work-dispatch' } })
+    let pendingNotice!: NativeWorkMessage
     await fixtures.run(() => parent.runMaintenance(async () => {
       release()
       await childAgent.whenIdle()
       await expect.poll(() => [...parent.inbox.nextTurn, ...parent.inbox.nextStep].some(message => message.source?.kind === 'subagent-settled')).toBe(true)
+      pendingNotice = structuredClone([...parent.inbox.nextTurn, ...parent.inbox.nextStep].find(message => message.source?.kind === 'subagent-settled')!)
+      expect(parent.inbox.remove(pendingNotice.id as ReturnType<typeof createUserMessage>['id'])).toBe(true)
+    }))
+    // The authoritative notice stays in the durable first insertion. Neither
+    // its identity nor its complete envelope may be weakened to admit a replay.
+    const beforeInvalid = h.model.requests.length
+    for (const change of [
+      (message: typeof pendingNotice) => { message.id = 'wrong-notice' as typeof message.id },
+      (message: typeof pendingNotice) => { message.role = 'assistant' as typeof message.role },
+      (message: typeof pendingNotice) => { message.content = [{ type: 'text', text: 'Changed native evidence' }] },
+      (message: typeof pendingNotice) => { message.source = { ...message.source as object, senderSessionId: 'wrong-child' } },
+      (message: typeof pendingNotice) => { message.source = { ...message.source as object, extra: 'untrusted' } },
+    ]) {
+      const altered = structuredClone(pendingNotice)
+      change(altered)
+      parent.followup(altered as never)
+      await fixtures.run(() => parent.whenIdle())
+      expect(h.model.requests).toHaveLength(beforeInvalid)
+    }
+    await fixtures.run(() => parent.runMaintenance(async () => {
+      const reordered = { id: pendingNotice.id, role: pendingNotice.role,
+        content: pendingNotice.content.map(block => Object.fromEntries(Object.entries(block as object).reverse())),
+        source: Object.fromEntries(Object.entries(pendingNotice.source!).reverse()) }
+      expect(reordered).toEqual(pendingNotice)
+      expect(JSON.stringify(reordered)).not.toBe(JSON.stringify(pendingNotice))
+      parent.followup(reordered as never)
       parent.inject(unrelated)
     }))
     await fixtures.run(() => parent.whenIdle())
