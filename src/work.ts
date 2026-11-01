@@ -799,8 +799,9 @@ export class WorkApplication {
             // Re-observe current live work as well as the known legacy read-only
             // failure. Neither observation nor repairing occupancy sends input.
             const legacyObservation = "Cannot read properties of undefined (reading 'observeSession')"
+            const wasRunning = host.status(execution) === 'running'
             if (execution.actual && owner.item.executionId === execution.id && host.failure
-              && (host.status(execution) === 'running' && (owner.item.reason || execution.runtimeFailure)
+              && (wasRunning && (owner.item.reason || execution.runtimeFailure)
                 || owner.item.recoveryBlocked && owner.item.reason === legacyObservation)) {
               try {
                 await this.observeRuntimeFailure(execution.id)
@@ -813,8 +814,11 @@ export class WorkApplication {
                   || current.control?.action === 'end' || continuousCompleted(state, current)) return
                 const running = host.status(current) === 'running'
                 const held = ['waiting', 'paused'].includes(current.state) || current.control && current.control.action !== 'resume'
+                // The same current turn may finish during the read. Ordinary
+                // idle settlement below re-observes its outcome before release.
+                const observedActivity = running || wasRunning && host.status(current) === 'idle'
                 const obsolete = managed.item.reason === legacyObservation
-                  || running && (managed.item.reason === 'Execution is idle without new actionable progress; send input or explicitly resume'
+                  || observedActivity && (managed.item.reason === 'Execution is idle without new actionable progress; send input or explicitly resume'
                     || managed.item.reason?.startsWith('Last model turn ended '))
                 if (!obsolete || !running && !continuousHasSlot(managed.rule, current.ref)) return
                 const error = current.error ?? current.continuation?.error ?? current.continuationBlocked

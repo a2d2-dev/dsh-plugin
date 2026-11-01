@@ -1469,6 +1469,31 @@ it.each(['idle', 'running', 'waiting', 'paused', 'model-failure', 'user-aborted'
   } finally { await ctx.fiber.dispose() }
 })
 
+it.each(['Last model turn ended interrupted: previous turn', 'Execution is idle without new actionable progress; send input or explicitly resume'])('settles historical protection when the current turn finishes during observation (%s)', async reason => {
+  const h = await setup()
+  completed(await h.app.execute({ ...h.configure, queue: { ...queue, concurrency: 1 } }, operator))
+  const first = await h.execution()
+  await WorkDao.forDirectory(h.directory).transaction(async state => {
+    const rule = state.continuousRules![0]!
+    rule.slots = []; delete rule.active
+    rule.items[0]!.state = 'blocked'; rule.items[0]!.reason = reason; rule.items[0]!.recoveryBlocked = true
+    state.executions[0]!.runtimeFailure = { id: 'old-failure', message: reason, userCancelled: false }
+  })
+  let finished = false
+  h.host.execution.failure = async execution => {
+    if (execution.id === first.id && !finished) { finished = true; h.host.idle(first) }
+    return undefined
+  }
+  await h.app.reconcileContinuous()
+  const rule = await h.status()
+  expect(finished).toBe(true)
+  expect(rule.items[0]!.recoveryBlocked).toBeUndefined()
+  expect(rule.items[0]).toMatchObject({ state: 'blocked', reason: 'Execution is idle without new actionable progress; send input or explicitly resume' })
+  expect(rule.slots).not.toContainEqual(first.ref)
+  expect(rule.items[1]!.state).toBe('active')
+  expect(h.host.sessionsCreated.size).toBe(2)
+})
+
 it('rejects stale ExecutionId recovery without clearing current running protection or creating work', async () => {
   const h = await setup()
   completed(await h.app.execute(h.configure, operator))
