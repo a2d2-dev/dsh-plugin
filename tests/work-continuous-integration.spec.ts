@@ -199,7 +199,7 @@ it.each(['wait', 'pause'] as const)('replaces a continuous %s Session without ac
     await fixtures.run(() => parent.whenIdle())
     const log = await new RuntimeHost(h.ctx).events(parent.id)
     expect(log.filter(event => event.type === 'user/message' && event.data.source?.kind === 'subagent-settled' && event.data.source.senderSessionId === child.childId)).toHaveLength(1)
-    expect(log.some(event => event.type === 'user/message' && event.data.id === unrelated.id)).toBe(false)
+    expect(log.filter(event => event.type === 'user/message' && event.data.id === unrelated.id)).toHaveLength(1)
     const intakeRule = (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!
     expect(intakeRule.slots ?? []).toEqual(beforeRule.slots ?? [])
     expect(intakeRule.items[0]!.resumeRequested).toBeUndefined()
@@ -576,7 +576,7 @@ it('ends a real running root and native child through public cancellation, retai
     expect(detail.task).toEqual(taskBefore)
     expect(detail.task!.completion).toBeUndefined()
     expect(detail.execution!.events).toEqual(expect.arrayContaining(execution.events))
-    expect(detail.execution!.events).toContainEqual(expect.objectContaining({ delivery: 'accepted', acceptance: 'unassessed', nativeMessage: expect.objectContaining({ source: expect.objectContaining({ kind: 'subagent-settled', senderSessionId: child.childId }) }) }))
+    expect(parent.session.snapshotEvents()).toContainEqual(expect.objectContaining({ type: 'user/message', data: expect.objectContaining({ source: expect.objectContaining({ kind: 'subagent-settled', senderSessionId: child.childId }) }) }))
     expect(h.ctx.jobs.get(jobIds[0]!, parent.id).status).toBe('completed')
     expect(h.ctx.jobs.get(jobIds[1]!, parent.id).status).toBe('killed')
     expect(h.ctx.jobs.readAt(jobIds[0]!, 0, parent.id).chunks.map(chunk => chunk.text).join('')).toContain('unconsumed terminal evidence')

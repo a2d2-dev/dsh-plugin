@@ -1,13 +1,15 @@
 import type { WorkExecution } from '../work-types.ts'
 
 export interface MaintenanceAdmission { operationId: string; step: 'material' | 'collect' | 'receive' | 'settle'; jobIds?: string[]; messageIds?: string[] }
+/** Booleans describe scheduling/wakeup eligibility, never permission to deliver
+ * native messages. Only a concrete maintenance scope restricts tool execution. */
 export type WorkAdmission = boolean | MaintenanceAdmission | { kind: 'business'; instruction: string }
 
 /** Trusted host boundary. check must be read-only and reject missing capabilities before reservation. */
 export interface WorkExecutionHost {
   connect(authorize: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<WorkAdmission>, conversation?: (sessionId: string) => Promise<string | undefined>, pendingHumanInput?: (sessionId: string) => Promise<readonly import('../work-types.ts').NativeWorkMessage[]>, filterInput?: (sessionId: string, messages: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<readonly import('../work-types.ts').NativeWorkMessage[]>): void
-  /** Observe between completed steps. False rechecks admission without revoking
-   * an admitted turn's ordinary result/final-answer allowance after wait/done. */
+  /** Observe between completed steps. False refreshes Task scheduling and the
+   * maintenance tool scope without rejecting native messages or tool results. */
   connectStepBoundary?(observe: (sessionId: string) => Promise<boolean>): void
   connectGuard?(guard: import('./guard.ts').WorkGuard): void
   connectObservation?(scope: import('./observation.ts').ObservationScope): void

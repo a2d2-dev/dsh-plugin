@@ -162,10 +162,6 @@ export class WorkApplication {
               if (!operation.settlements?.some(step => step.messageId === notice.message.id)) (operation.settlements ??= []).push({ parent: parent!.session, child: child.session, endSeq: notice.endSeq, messageId: notice.message.id, delivery: 'delivered' })
             }
             const messageIds = notices.map(child => child.settlement!.message.id)
-            for (const message of messages) {
-              if (messageIds.includes(message.id) || lifecycleOwned(message) || execution.events.some(event => event.id === message.id)) continue
-              execution.events.push({ id: message.id, text: 'Automatic input deferred during native settlement maintenance', kind: 'input', delivery: 'accepted', acceptance: 'unassessed', nativeMessage: structuredClone(message) })
-            }
             return { operationId: operation.operationId, step: 'settle' as const, messageIds }
           })
         }
@@ -232,13 +228,6 @@ export class WorkApplication {
           queued.item.resumeRequested = true; queued.item.attempts = 0; delete queued.item.retryAt
           // Retain the same input identity when wake must first wait for a slot.
           this.dao.appendHistory(owner!, { state: owner!.state, commandId: `automatic-wake:${wake!.id}` })
-        }
-        for (const message of messages) {
-          if (lifecycleOwned(message) || owner!.events.some(item => item.id === message.id)) continue
-          const text = message.content.flatMap(block => typeof block === 'object' && block !== null && 'type' in block && block.type === 'text' && 'text' in block && typeof block.text === 'string' ? [block.text] : []).join('\n')
-          const managed = continuousOwner(current, owner!.ref)
-          if (managed && (owner!.state !== 'waiting' || waking || (message.source as { kind?: string } | undefined)?.kind === 'user') && !managed.item.end && owner!.control?.action !== 'end' && (!(owner!.error || owner!.continuation?.error || owner!.runtimeFailure || managed.item.recoveryBlocked) || typeof message.source === 'object' && message.source !== null && 'kind' in message.source && message.source.kind === 'user') && managed.item.state !== 'completed' && !continuousCompleted(current, owner!) && owner!.state !== 'paused' && !(owner!.control?.action === 'pause' && owner!.control.status === 'accepted')) { managed.item.resumeRequested = true; managed.item.attempts = 0; delete managed.item.retryAt; delete managed.item.recoveryBlocked; if (owner!.runtimeFailure) owner!.runtimeFailure.acknowledged = true }
-          owner!.events.push({ id: message.id, text: text.trim() ? text.slice(0, 100_000) : 'Native Session input', kind: 'input', delivery: 'accepted', acceptance: 'unassessed', nativeMessage: structuredClone(message) })
         }
         return false
       })
@@ -1565,14 +1554,21 @@ export class WorkApplication {
         if (facts.settlement !== 'settled') {
           const pending = facts.blockers.filter(blocker => blocker.code === 'job-unsettled')
           if (!pending.length || facts.blockers.length !== pending.length) throw new WorkExecutionError('continuation-waiting-executions', `Lifecycle prerequisites remain unresolved: ${facts.blockers.map(blocker => `${blocker.code}:${blocker.session.sessionId}:${blocker.jobId ?? ''}`).join(', ')}`)
-          for (const blocker of pending) {
-            const job = jobs.find(job => sameSession(job.owner, blocker.session) && job.id === blocker.jobId)
-            if (!job || job.availability !== 'live' || !['completed', 'failed', 'killed'].includes(job.status) || job.delivery !== 'pending') throw new WorkExecutionError('continuation-collection-unavailable', 'Only reachable terminal jobs with pending formal output can be collected')
+          // A short job ID can be reused by a new host registry. Historical
+          // rows remain evidence, but only the live instance can be collected.
+          const pendingJobs = pending.map(blocker => {
+            const job = jobs.find(job => sameSession(job.owner, blocker.session) && job.id === blocker.jobId && job.availability === 'live')
+            if (!job || job.delivery !== 'pending') throw new WorkExecutionError('continuation-collection-unavailable', 'Only reachable jobs with pending formal output can be collected')
+            return job
+          })
+          if (pendingJobs.some(job => ['running', 'stopping'].includes(job.status))) return save(current => { delete current.continuation!.error })
+          for (const job of pendingJobs) {
+            if (!['completed', 'failed', 'killed'].includes(job.status)) throw new WorkExecutionError('continuation-collection-unavailable', 'Only reachable terminal jobs with pending formal output can be collected')
           }
           execution = await save(current => {
             const op = current.continuation!
-            for (const blocker of pending) {
-              const job = jobs.find(job => sameSession(job.owner, blocker.session) && job.id === blocker.jobId)!
+            delete op.error
+            for (const job of pendingJobs) {
               let step = op.collections?.find(step => step.status === 'requested' && sameSession(step.session, job.owner))
               if (!step) { step = { session: job.owner, jobs: [], requestId: `collection:${op.operationId}:${randomUUID()}`, delivery: 'accepted', status: 'requested' }; (op.collections ??= []).push(step) }
               if (!step.jobs.some(item => item.id === job.id && item.registryEpoch === job.registryEpoch && item.instanceId === job.instanceId)) step.jobs.push({ id: job.id, ...(job.registryEpoch ? { registryEpoch: job.registryEpoch } : {}), ...(job.instanceId ? { instanceId: job.instanceId } : {}) })

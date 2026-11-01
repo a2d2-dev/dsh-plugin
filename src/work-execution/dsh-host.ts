@@ -76,7 +76,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     if (this.connected) return
     this.connected = true
     this.ctx.on('agent/pre-step', async ({ agent, messages, turn }, next) => {
-      // Task scheduling controls automatic turns, never the native human conversation.
+      // Task scheduling observes native input; it does not own message delivery.
       // An admitted turn can finish its tool results and final answer after wait/done.
       const managed = !!await this.conversation?.(agent.id)
       if (managed) {
@@ -134,23 +134,16 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       const proceed = human || this.maintenanceTurns.has(agent) || await this.stepBoundary?.(agent.id) !== false
       if (human && automatic.length || !human && (!proceed || this.admittedTurns.get(agent) !== turn)) {
         const admission = await this.authorize!(agent.id, automatic)
-        if (!admission) {
-          // Authorization persists deferred automatic envelopes in their Task
-          // recovery lane. Human conversation never smuggles them past control.
-          if (!human) return { kind: 'reject' }
-          messages.splice(0, messages.length, ...humans)
+        // A scheduling decision changes Task authority, never native delivery.
+        // Business admission carries instructions, not a maintenance tool scope.
+        const maintenance = typeof admission === 'object' && 'step' in admission
+        if (!human && maintenance) this.maintenanceTurns.set(agent, admission)
+        else {
           this.maintenanceTurns.delete(agent)
-        } else {
-          const maintenance = typeof admission === 'object' && 'step' in admission
-          if (human && maintenance) agent.inbox.splice('next-turn', 0, 0, automatic)
-          messages.splice(0, messages.length, ...(human && maintenance ? [] : automatic), ...humans)
-          if (!human && maintenance) this.maintenanceTurns.set(agent, admission)
-          else {
-            this.maintenanceTurns.delete(agent)
-            if (!human && typeof admission === 'object' && 'instruction' in admission) businessInstruction = admission.instruction
-          }
+          if (!human && typeof admission === 'object' && 'instruction' in admission) businessInstruction = admission.instruction
         }
-      } else if (human) messages.splice(0, messages.length, ...humans)
+      }
+      messages.splice(0, messages.length, ...automatic, ...humans)
       if (human) {
         this.maintenanceTurns.delete(agent)
         this.guardIntent.set(agent, humanGuardIntent(humans))
@@ -158,8 +151,6 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       }
       const decision = await next()
       if (decision.kind === 'reject') return decision
-      const scope = this.maintenanceTurns.get(agent)
-      if (scope?.step === 'settle') decision.messages = decision.messages.filter(message => scope.messageIds!.includes(message.id))
       this.admittedTurns.set(agent, turn)
       if (businessInstruction) decision.messages.push(createUserMessage({
         content: [{ type: 'text', text: businessInstruction }],
@@ -351,7 +342,9 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
             replaced = replacement?.returned === true && replacement.endSeq === binding.replacementEndSeq && replacement.attempt?.reason === 'completed' && ['idle', 'inactive'].includes(replacement.status)
           }
           if (carried && child.returned && child.attempt?.reason !== 'completed' && !replaced) blockers.push({ code: 'child-work-unfinished', session: child.session })
-          if (!replaced && (!child.returned || (child.mode === 'continuable' && child.result !== 'consumed' && !child.coordinatorReceived) || child.mode === 'unknown')) blockers.push({ code: 'native-result-pending', session: row.session })
+          // A retired parent's native receipt does not deliver a carried result
+          // to this coordinator; its complete current-epoch read remains required.
+          if (!replaced && (!child.returned || (child.mode === 'continuable' && (carried || child.result !== 'consumed') && !child.coordinatorReceived) || child.mode === 'unknown')) blockers.push({ code: 'native-result-pending', session: row.session })
           if (!roots.has(sessionKey(child.session))) roots.set(sessionKey(child.session), { session: child.session, role: 'native-child', parent: row.session })
         }
         if (row.jobObservation === 'unavailable') { blockers.push({ code: 'job-observation-unavailable', session: row.session }); limitations.add('当前宿主缺少正式 jobs.observe 非消费接口，无法证明终态结果已交付。') }

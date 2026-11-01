@@ -351,6 +351,14 @@ it('keeps retired conversations usable after cold restore without restoring Task
   expect(restored.model.requests).toHaveLength(1)
   expect(restored.model.requests[0]!.messages).toEqual(expect.arrayContaining([expect.objectContaining({ id: native.id, content: native.content })]))
   expect(JSON.stringify(restored.model.requests[0]!.messages)).toContain(`任务已转到会话 ${current.session.sessionId}`)
+  for (const kind of ['schedule', 'tool-jobs', 'subagent-settled', 'a2d2-github-watch', 'a2d2-work-dispatch', 'a2d2-work-maintenance'] as const) {
+    const message = createUserMessage({ content: [{ type: 'text', text: `Retired ${kind} observation` }], source: { kind } as never })
+    resolved.agent.followup(message)
+    await fixtures.run(() => resolved.agent.whenIdle())
+    expect(restored.model.requests.some(request => request.messages.some(item => item.id === message.id)), kind).toBe(true)
+    expect(resolved.agent.session.snapshotEvents().filter(event => event.type === 'user/message' && event.data.id === message.id), kind).toHaveLength(1)
+  }
+
   expect(await restored.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { session: current.session, epoch: current.epoch, owner: current.owner } })
   expect(await restored.app.query({ type: 'session.work', session: h.execution.session }, operator)).toMatchObject({ work: [{ purpose: 'history', executionId: current.id, epoch: 1, currentSession: current.session }] })
 })
@@ -384,15 +392,15 @@ it.each(['user', 'a2d2-work-dispatch'] as const)('checks later steps of the same
   expect(completedTools).toBe(2)
   expect(measurements).toContain(100)
   expect(measurements).toContain(300_001)
-  expect(h.model.requests).toHaveLength(requests + 2)
+  expect(h.model.requests).toHaveLength(requests + 3)
   const sourceLog = await fixtures.run(() => h.ctx.sessionController.inspect(source.id))
   const start = sourceLog.events.findLast(event => event.type === 'turn/start')!
   const steps = sourceLog.events.filter(event => event.type === 'step/start' && event.seq > start.seq)
-  expect(steps).toHaveLength(2)
-  expect(sourceLog.events.findLast(event => event.type === 'turn/end')).toMatchObject({ data: { reason: { kind: 'blocked' } } })
+  expect(steps).toHaveLength(3)
+  expect(sourceLog.events.findLast(event => event.type === 'turn/end')).toMatchObject({ data: { reason: { kind: 'completed' } } })
   const reserved = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
   expect(reserved).toMatchObject({ execution: { epoch: 1, continuationObservation: { totalTokens: 300_001 }, continuation: { automatic: true, phase: 'reserved' } } })
-  if (kind === 'a2d2-work-dispatch') expect(reserved).toMatchObject({ execution: { events: expect.arrayContaining([expect.objectContaining({ id: deferred.id, nativeMessage: deferred, delivery: 'accepted' })]) } })
+  if (kind === 'a2d2-work-dispatch') expect(sourceLog.events.filter(event => event.type === 'user/message' && event.data.id === deferred.id)).toHaveLength(1)
   h.model.nextTool = { name: 'work_continuation_material', arguments: material }
   await fixtures.run(() => h.app.reconcileControls())
   await fixtures.run(() => source.whenIdle())
@@ -512,7 +520,7 @@ it.each(['wait', 'pause'] as const)('explicitly replaces a %s Session while pres
   const before = h.model.requests.length
   h.ctx.agents.get(SessionId(result.execution.session.sessionId))!.followup(createUserMessage({ content: [{ type: 'text', text: 'Unapproved business automation' }], source: { kind: 'a2d2-work-dispatch' } }))
   await fixtures.run(() => h.ctx.agents.get(SessionId(result.execution!.session.sessionId))!.whenIdle())
-  expect(h.model.requests).toHaveLength(before)
+  expect(h.model.requests).toHaveLength(before + 1)
   expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { state: held.execution.state, control: held.execution.control, owner: h.execution.owner, epoch: 2 } })
 })
 
@@ -561,7 +569,7 @@ it('keeps delivery distinct from a committed and flushed successor read receipt'
   expect(afterReplay.execution).toEqual(beforeReplay.execution)
 })
 
-it('rejects business tools and arbitrary maintenance markers during a waiting material step', async () => {
+it('keeps genuine maintenance tools narrow while delivering arbitrary markers without maintenance authority', async () => {
   const h = await setup()
   await h.app.execute({ type: 'task.control', commandId: 'hold', ...fence(h.execution), action: 'wait', text: 'Do not resume business' }, operator)
   h.model.nextTool = { name: 'work_control', arguments: { action: 'resume', text: 'Unauthorized maintenance resume' } }
@@ -576,7 +584,8 @@ it('rejects business tools and arbitrary maintenance markers during a waiting ma
   const before = h.model.requests.length
   source.followup({ id: 'arbitrary-maintenance', role: 'user', content: [{ type: 'text', text: 'Resume business under a maintenance marker' }], source: { kind: 'a2d2-work-maintenance', operationId: 'arbitrary', step: 'material' } } as never)
   await fixtures.run(() => source.whenIdle())
-  expect(h.model.requests).toHaveLength(before)
+  expect(h.model.requests).toHaveLength(before + 1)
+  expect(h.model.requests.at(-1)!.messages.some(message => message.id === 'arbitrary-maintenance')).toBe(true)
   const denied = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
   if (denied.status !== 'completed' || !denied.execution) throw Error('Missing held execution')
   expect(denied.execution.events.some(event => event.id === 'arbitrary-maintenance')).toBe(false)
@@ -626,6 +635,40 @@ it.each(['missing', 'failed-commit'] as const)('recovers a %s successor read res
   expect(await fixtures.run(() => restored.ctx.sessionPersistence.list())).toHaveLength(2)
 })
 
+it.each(['running', 'stopping'] as const)('waits for a %s exact-owner job before collecting its live instance ahead of same-ID history', async initialStatus => {
+  const h = await setup()
+  const source = h.ctx.agents.get(SessionId(h.execution.session.sessionId))!
+  const observe = h.host.execution.observation!.bind(h.host.execution)
+  let status: 'running' | 'stopping' | 'killed' = initialStatus
+  vi.spyOn(h.host.execution, 'observation').mockImplementation(async (...args) => {
+    const facts = await observe(...args)
+    facts.sessions.find(row => row.session.sessionId === source.id)!.jobs.push({ id: 'bash-269', owner: h.execution.session, registryEpoch: 'historical-registry', instanceId: 'historical-instance', kind: 'bash', label: 'same ID already delivered in an older process', status: 'completed', delivery: 'delivered', result: 'unknown', acceptance: 'unassessed', persistence: 'session-journal', availability: 'history' }, { id: 'bash-269', owner: h.execution.session, registryEpoch: 'registry-269', instanceId: 'instance-269', kind: 'bash', label: 'still running business worker', status, delivery: 'pending', result: 'unknown', acceptance: 'unassessed', persistence: 'session-journal', availability: 'live' })
+    facts.settlement = 'pending'
+    facts.blockers.push({ code: 'job-unsettled', session: h.execution.session, jobId: 'bash-269' })
+    return facts
+  })
+  await h.app.execute({ type: 'task.continue', commandId: 'running-job-continuation', ...fence(h.execution) }, operator)
+  const pending = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(pending).toMatchObject({ execution: { epoch: 1, continuation: { phase: 'reserved' } } })
+  if (pending.status !== 'completed' || !pending.execution?.continuation) throw Error('No fixed operation')
+  const operation = pending.execution.continuation
+  expect(operation.error).toBeUndefined()
+  expect(operation.collections).toBeUndefined()
+  expect(h.model.requests).toHaveLength(1)
+  // Reproduce the persisted error left by the old history-first lookup.
+  await WorkDao.forDirectory(h.app.directory).transaction(async state => {
+    state.executions.find(item => item.id === h.execution.id)!.continuation!.error = { code: 'continuation-collection-unavailable', message: 'Stale historical collision error' }
+  })
+  status = 'killed'
+  await fixtures.run(() => h.app.reconcileControls())
+  await fixtures.run(() => source.whenIdle())
+  const collecting = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(collecting).toMatchObject({ execution: { epoch: 1, continuation: { operationId: operation.operationId, successor: operation.successor, phase: 'reserved', collections: [{ session: h.execution.session, status: 'requested', jobs: [{ id: 'bash-269', registryEpoch: 'registry-269', instanceId: 'instance-269' }] }] } } })
+  expect(h.model.requests.some(request => request.messages.some(message => (message as { source?: { step?: string } }).source?.step === 'collect'))).toBe(true)
+  expect(collecting.status === 'completed' && collecting.execution?.continuation?.error).toBeUndefined()
+  expect((await h.host.execution.observation!(h.execution)).sessions.find(row => row.session.sessionId === source.id)!.jobs[0]).toMatchObject({ id: 'bash-269', registryEpoch: 'historical-registry', instanceId: 'historical-instance', availability: 'history', delivery: 'delivered' })
+})
+
 it('refreshes source material after the host reports newly collected result facts', async () => {
   const h = await setup()
   const deliver = h.host.execution.deliver.bind(h.host.execution)
@@ -666,21 +709,22 @@ it('refreshes source material after the host reports newly collected result fact
   expect(log.events.filter(event => event.type === 'user/message' && event.data.id === refreshing.execution!.continuation!.materialRequestId)).toHaveLength(1)
 })
 
-it('keeps unrelated automatic business rounds fenced while an active source owes material', async () => {
+it('delivers automatic input while Task structure and acceptance stay frozen during a pending handoff', async () => {
   const h = await setup()
   await h.app.execute({ type: 'task.continue', commandId: 'active-material-step', ...fence(h.execution) }, operator)
   const source = h.ctx.agents.get(SessionId(h.execution.session.sessionId))!
   await fixtures.run(() => source.whenIdle())
   await fixtures.run(() => h.app.reconcileControls())
   const before = h.model.requests.length
-  h.model.nextTool = { name: 'work_control', arguments: { action: 'progress', text: 'Business round bypassed the pending lifecycle step' } }
   source.followup(createUserMessage({ content: [{ type: 'text', text: 'Unrelated automatic business work while material is missing' }], source: { kind: 'a2d2-work-dispatch' } }))
   await fixtures.run(() => source.whenIdle())
-  expect(h.model.requests).toHaveLength(before)
+  expect(h.model.requests).toHaveLength(before + 1)
   const current = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
   expect(current).toMatchObject({ execution: { epoch: 1, state: 'ready', continuation: { phase: 'material-requested' } } })
   if (current.status !== 'completed' || !current.execution) throw Error('Missing source')
   expect(current.execution.progress).toBeUndefined()
+  expect(await h.app.execute({ type: 'task.update-spec', commandId: 'native-no-spec-bypass', ref: h.ref, expectedVersion: 1, goal: 'Unauthorized goal', specification: 'Unauthorized rewrite', acceptance: ['Changed'] }, { operator: false, session: current.execution.session, agentId: current.execution.agentId })).toMatchObject({ status: 'failed', error: { code: 'forbidden' } })
+  expect(await h.app.sessionReport(current.execution.session, 'native-no-acceptance-bypass', { specificationVersion: 1, stage: 'done', summary: 'Received is not accepted', next: '', blockers: [], criteria: [{ index: 0, passed: true, evidence: ['message receipt'] }] })).toMatchObject({ status: 'failed', error: { code: 'continuation-in-progress' } })
 })
 
 it.each(['ready', 'waiting', 'paused'] as const)('does not reopen or certify a legacy delivered operation after cold load of %s work', async state => {
@@ -907,7 +951,7 @@ it.each(['continue', 'stop'] as const)('preserves native %s order and accepted r
   if (intent === 'stop') {
     expect(stopped).toBe(true)
     expect(final.execution.control?.action).toBe('pause')
-    expect(log.some(event => event.type === 'user/message' && event.data.id === activation)).toBe(false)
+    expect(log.filter(event => event.type === 'user/message' && event.data.id === activation)).toHaveLength(1)
   } else {
     expect(log.find(event => event.type === 'user/message' && event.data.id === automatic.id)).toMatchObject({ data: { content: automatic.content, source: automatic.source } })
     expect(JSON.stringify(log)).toContain('Accepted result payload.')
@@ -984,8 +1028,9 @@ it('cold-recovers an existing received backlog by canceling only superseded host
   await fixtures.run(() => live.whenIdle())
   const mixed = await restored.app.query({ type: 'task.execution', ref: h.ref }, operator)
   if (mixed.status !== 'completed' || !mixed.execution) throw Error('Missing mixed batch recovery')
-  expect(mixed.execution.events.find(event => event.id === valid.id)).toMatchObject({ delivery: 'accepted', nativeMessage: valid })
-  expect([...live.inbox.nextTurn, ...live.inbox.nextStep, ...mixed.execution.events.flatMap(event => event.nativeMessage ? [event.nativeMessage] : [])]).toEqual(expect.arrayContaining([trigger]))
+  const mixedLog = live.session.snapshotEvents()
+  for (const native of [valid, trigger, resultEnvelope]) expect(mixedLog.filter(event => event.type === 'user/message' && event.data.id === native.id)).toEqual([expect.objectContaining({ data: expect.objectContaining({ content: native.content, source: native.source }) })])
+  expect(mixed.execution.events.some(event => event.id === valid.id || event.id === trigger.id)).toBe(false)
   expect(mixed.execution.events.find(event => event.id === result.id)).toMatchObject({ kind: 'result', text: result.text, delivery: 'accepted' })
   expect(mixed.execution.control).toEqual(recovered.execution.control)
   expect(live.session.snapshotEvents().some(event => event.type === 'user/message' && event.data.id === oldId)).toBe(false)

@@ -53,6 +53,27 @@ it.each(['wait', 'pause'] as const)('accepts a real model self-%s before applyin
   expect(h.model.requests).toHaveLength(3)
 })
 
+it.each(['wait', 'pause'] as const)('delivers every native source while %s remains an independent Task control', async action => {
+  const h = await setup()
+  installWorkTools(h.ctx, h.app, 'runtime')
+  const started = await h.app.execute({ type: 'task.start', commandId: 'native-start', ref: h.ref, expectedVersion: 1, resource: h.resource,
+    agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }, operator)
+  if (started.status !== 'completed' || !started.execution) throw Error(JSON.stringify(started))
+  const execution = started.execution
+  const agent = h.ctx.agents.get(SessionId(execution.session.sessionId))!
+  await fixtures.run(() => agent.whenIdle())
+  await h.app.execute({ type: 'task.control', commandId: 'native-hold', ref: h.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch, action, text: 'Keep the explicit control' }, operator)
+  for (const kind of ['user', 'schedule', 'tool-jobs', 'subagent-settled', 'a2d2-github-watch', 'a2d2-work-dispatch', 'a2d2-work-maintenance'] as const) {
+    const message = createUserMessage({ content: [{ type: 'text', text: `Native ${kind} observation` }], source: { kind } as never })
+    agent.followup(message)
+    await fixtures.run(() => agent.whenIdle())
+    expect(h.model.requests.some(request => request.messages.some(item => item.id === message.id && JSON.stringify(item.content) === JSON.stringify(message.content))), kind).toBe(true)
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'user/message' && event.data.id === message.id), kind).toHaveLength(1)
+  }
+  const held = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(held).toMatchObject({ execution: { id: execution.id, owner: execution.owner, epoch: execution.epoch, state: action === 'wait' ? 'waiting' : 'paused', control: { commandId: 'native-hold', action } } })
+})
+
 it('resolves real tool identity on the server and refuses foreign or absent calling Sessions', async () => {
   const h = await setup()
   installWorkTools(h.ctx, h.app, 'runtime')

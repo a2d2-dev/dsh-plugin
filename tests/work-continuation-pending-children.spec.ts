@@ -33,7 +33,7 @@ async function receiveChild(h: Awaited<ReturnType<ExecutionFixtures['mount']>>, 
   h.model.selectTool = undefined
 }
 
-it('hands off while a real native child tool is running, receives its late result and preserves native delivery facts', async ({ signal }) => {
+it('hands off while a real native child tool is running, receives its late result and preserves native delivery facts', { timeout: 20_000 }, async ({ signal }) => {
   const fixtures = new ExecutionFixtures(signal)
   let release!: () => void
   try {
@@ -95,9 +95,9 @@ it('hands off while a real native child tool is running, receives its late resul
     expect(received.childReceipts).toMatchObject([{ child: { sessionId: child.childId }, complete: true, epoch: 2 }])
     const facts = await h.host.execution.observation!(received)
     expect(facts.settlement, JSON.stringify(facts)).toBe('settled')
-    expect(facts.sessions.find(row => row.role === 'retired')!.children[0]!.result).toBe('pending')
+    expect(facts.sessions.find(row => row.role === 'retired')!.children[0]!.result).toBe('consumed')
     expect(JSON.stringify(await new RuntimeHost(h.ctx).events(successor.id))).toContain('late native verification passed')
-    expect((await new RuntimeHost(h.ctx).events(parent.id)).some(event => event.type === 'user/message' && event.data.source?.kind === 'subagent-settled')).toBe(false)
+    expect((await new RuntimeHost(h.ctx).events(parent.id)).some(event => event.type === 'user/message' && event.data.source?.kind === 'subagent-settled')).toBe(true)
     h.model.nextTool = { name: 'work_continuation_material', arguments: material }
     await h.app.execute({ type: 'task.continue', commandId: 'continue-already-received-child', ref, executionId: current.id, owner: current.owner, epoch: 2 }, operator)
     await fixtures.run(() => successor.whenIdle())
@@ -284,7 +284,7 @@ it.for(['resume', 'replace', 'resume-wait', 'resume-wait-startup'] as const)('co
       await fixtures.run(() => h.app.reconcileControls())
       const successorLog = await new RuntimeHost(h.ctx).events(successor.id)
       expect(successorLog.filter(event => event.type === 'user/message' && event.data.source?.kind === 'a2d2-work-child-result')).toHaveLength(1)
-      expect((await new RuntimeHost(h.ctx).events(SessionId(seed.execution.session.sessionId))).some(event => event.type === 'user/message' && event.data.source?.kind === 'subagent-settled')).toBe(false)
+      expect((await new RuntimeHost(h.ctx).events(SessionId(seed.execution.session.sessionId))).some(event => event.type === 'user/message' && event.data.source?.kind === 'subagent-settled')).toBe(true)
     } else await receiveChild(h, successor, resultChildId, 2, fixtures)
     if (mode === 'replace') {
       const foreignEvents = await new RuntimeHost(h.ctx).events(SessionId(foreignChildId!))
@@ -315,13 +315,19 @@ it.for(['resume', 'replace', 'resume-wait', 'resume-wait-startup'] as const)('co
       const nextWait = ok(await h.app.query({ type: 'task.execution', ref: seed.ref }, operator)).execution!
       const oldNotice = nextWait.events.find(event => event.id.startsWith('child-result:'))!.nativeMessage!
       const requests = (await new RuntimeHost(h.ctx).events(successor.id)).filter(event => event.type === 'assistant/message' || event.type === 'tool/call').length
+      // The scripted result reader has completed. A replay is now an ordinary
+      // native observation, not a second scripted request to read every page.
+      h.model.selectTool = undefined
       successor.followup(oldNotice as never)
       await fixtures.run(() => successor.whenIdle())
       await fixtures.run(() => h.app.reconcileControls())
       const afterReplay = ok(await h.app.query({ type: 'task.execution', ref: seed.ref }, operator)).execution!
       expect(afterReplay.control).toEqual(nextWait.control)
       expect(afterReplay.state).toBe('waiting')
-      expect((await new RuntimeHost(h.ctx).events(successor.id)).filter(event => event.type === 'assistant/message' || event.type === 'tool/call')).toHaveLength(requests)
+      const replayed = await new RuntimeHost(h.ctx).events(successor.id)
+      expect(replayed.filter(event => event.type === 'assistant/message' || event.type === 'tool/call')).toHaveLength(requests + 1)
+      expect(replayed.filter(event => event.type === 'user/message' && event.data.id === oldNotice.id)).toHaveLength(2)
+      const afterReplayRequests = requests + 1
       await h.app.execute({ type: 'task.control', commandId: 'explicit-user-pause-before-late-result', ref: seed.ref, executionId: current.id, owner: current.owner, epoch: 2, action: 'pause', text: 'User paused this Task' }, operator)
       await fixtures.run(() => h.app.reconcileControls())
       await expect.poll(async () => ok(await h.app.query({ type: 'task.execution', ref: seed.ref }, operator)).execution!.state, { timeout: 6000 }).toBe('paused')
@@ -331,13 +337,13 @@ it.for(['resume', 'replace', 'resume-wait', 'resume-wait-startup'] as const)('co
       const paused = ok(await h.app.query({ type: 'task.execution', ref: seed.ref }, operator)).execution!
       expect(paused).toMatchObject({ state: 'paused', control: { action: 'pause', commandId: 'explicit-user-pause-before-late-result' } })
       expect(paused.events.filter(event => event.id.startsWith('child-result:'))[1]).toMatchObject({ delivery: 'accepted', acceptance: 'unassessed' })
-      expect((await new RuntimeHost(h.ctx).events(successor.id)).filter(event => event.type === 'assistant/message' || event.type === 'tool/call')).toHaveLength(requests)
+      expect((await new RuntimeHost(h.ctx).events(successor.id)).filter(event => event.type === 'assistant/message' || event.type === 'tool/call')).toHaveLength(afterReplayRequests)
       await h.app.execute({ type: 'task.control', commandId: 'explicit-user-wait-after-late-result', ref: seed.ref, executionId: current.id, owner: current.owner, epoch: 2, action: 'wait', text: 'User has not delegated an automatic observation turn' }, operator)
       await fixtures.run(() => h.app.reconcileControls())
       await fixtures.run(() => h.app.reconcileControls())
       await expect.poll(async () => ok(await h.app.query({ type: 'task.execution', ref: seed.ref }, operator)).execution!.state, { timeout: 6000 }).toBe('waiting')
       expect(ok(await h.app.query({ type: 'task.execution', ref: seed.ref }, operator)).execution!).toMatchObject({ state: 'waiting', control: { commandId: 'explicit-user-wait-after-late-result', action: 'wait' } })
-      expect((await new RuntimeHost(h.ctx).events(successor.id)).filter(event => event.type === 'assistant/message' || event.type === 'tool/call')).toHaveLength(requests)
+      expect((await new RuntimeHost(h.ctx).events(successor.id)).filter(event => event.type === 'assistant/message' || event.type === 'tool/call')).toHaveLength(afterReplayRequests)
     }
     if (mode === 'replace') {
       expect(facts.sessions.flatMap(row => row.children).find(child => child.session.sessionId === seed.childId)).toMatchObject({ returned: true, attempt: { reason: 'interrupted' }, result: 'pending' })

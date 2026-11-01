@@ -218,8 +218,8 @@ it('waiting yields after the safe boundary, and public/native input plus resume 
   expect(await h.host.authorize(first.session.sessionId)).toBe(true)
   const resumed = await h.execution(first.ref)
   expect(resumed).toMatchObject({ owner: first.owner, epoch: first.epoch, state: 'ready' })
-  expect(resumed.events.filter(event => event.id === 'native-answer')).toHaveLength(1)
-  expect(h.host.sends).toHaveLength(5)
+  expect(resumed.events.filter(event => event.id === 'native-answer')).toHaveLength(0)
+  expect(h.host.sends).toHaveLength(4)
 })
 
 it('requires explicit recovery of an unknown create outcome and retains the execution and Session after restart', async () => {
@@ -312,7 +312,7 @@ it('retains an explicit pause despite native and public replies until a serializ
   expect(h.host.sends).toHaveLength(2)
   await h.app.reconcileControls()
   expect((await h.status()).active).toEqual(first.ref)
-  expect(h.host.sends).toHaveLength(6)
+  expect(h.host.sends).toHaveLength(5)
 })
 
 it('rechecks Project membership and labels atomically after asynchronous host admission', async () => {
@@ -1789,7 +1789,7 @@ it('preserves a released waiting item end when automatic native input arrives be
     expect(current.control).toMatchObject({ action: 'end', status: 'accepted' })
     expect(item.resumeRequested).toBeUndefined()
     expect((await h.status()).slots).not.toContainEqual(first.ref)
-    expect(current.events).toContainEqual(expect.objectContaining({ id: input.id, delivery: 'accepted', acceptance: 'unassessed' }))
+    expect(current.events.some(event => event.id === input.id)).toBe(false)
     expect({ ensures: h.host.ensures.length, sends: h.host.sends.length, wakes: h.host.wakes.length }).toEqual(before)
   } finally { release(); await ending }
 })
@@ -1884,7 +1884,7 @@ it('does not apply or dispatch an old resume receipt after end replaces it durin
   } finally { release(); await pending }
 })
 
-it('requests the existing queue slot only for a valid model wait wake and preserves queued notification payloads', async () => {
+it('requests the existing queue slot only for a valid model wait wake without duplicating native delivery', async () => {
   const h = await setup()
   completed(await h.app.execute(h.configure, operator))
   const execution = await h.execution()
@@ -1903,15 +1903,15 @@ it('requests the existing queue slot only for a valid model wait wake and preser
   expect(await h.host.authorize(execution.session.sessionId, [reminder])).toBe(false)
   expect((await h.status()).items.find(item => item.executionId === execution.id)?.resumeRequested).toBe(true)
   expect((await h.status()).slots).not.toContainEqual(execution.ref)
-  expect((await h.execution(execution.ref)).events.find(event => event.id === reminder.id)).toMatchObject({ delivery: 'accepted', nativeMessage: reminder })
+  expect((await h.execution(execution.ref)).events.some(event => event.id === reminder.id)).toBe(false)
   await h.app.reconcileContinuous()
   expect((await h.status()).slots).toContainEqual(execution.ref)
   expect((await h.execution(execution.ref)).control).toMatchObject({ action: 'resume', status: 'applied' })
-  // The real host fixture records consumption independently of admission.
+  // Native delivery remains owned by the host, not a second Task input queue.
   h.host.idle(await h.execution(execution.ref))
   completed(await h.app.sessionControl(execution.session, 'wait-again', 'wait', '仍需等待下一次新通知', undefined, { reason: 'external', checkedFacts: ['已消费本次复查'], wakeCondition: '新的复查' }))
   await h.app.reconcileControls()
-  expect((await h.execution(execution.ref)).events.find(event => event.id === reminder.id)?.delivery).toBe('consumed')
+  expect((await h.execution(execution.ref)).events.some(event => event.id === reminder.id)).toBe(false)
   expect(await h.host.authorize(execution.session.sessionId, [reminder])).toBe(false)
   expect((await h.execution(execution.ref)).control).toMatchObject({ action: 'wait', status: 'applied' })
   expect((await h.status()).items.find(item => item.executionId === execution.id)?.resumeRequested).toBeUndefined()

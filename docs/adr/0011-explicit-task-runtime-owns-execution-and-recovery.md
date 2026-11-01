@@ -117,3 +117,14 @@ PATH=/root/.nvm/versions/node/v22.23.1/bin:$PATH pnpm exec vitest run tests/work
 同 ID 恢复的 child 仍把原生 terminal notice 发给原 direct-parent。插件在既有启动、idle 与兜底 reconciliation 中，仅观察本 Task 已持久 pending、恢复或替代关系下的准确 parent/child，核实原生 header/descriptor、最新 endSeq 和首次持久 notice 身份，再向本 Task 当前协调收件箱写 `a2d2-work-child-result` 结果事件。事件 ID 来自 execution/parent/child/endSeq/原 noticeId，与会话代次无关，重载或重试不重复投递；不伪装原生通知，不改变旧 parent 的原生 consumed，不让退休 root 执行业务，也不创建新 Task。
 
 当前协调的 model-owned executor wait 复用既有自动恢复准入：等待的准确 child、当前事件完整 envelope、持久 Task event 与新的真实 terminal notice 都必须吻合。人工 wait、pause/end、完成 Task 和未解决错误不被解除；通知在暂停中只持久保存，明确恢复后沿普通 Task 事件投递。无 continuous rule 的 Task 同样可由该通知自动恢复。接收通知只允许核实结果，不是 `childReceipts`、结果完整读取或业务验收；当前协调仍须调用 `work_child_recover result` 读完实际结果。旧通知不能重复唤醒后续 wait，新 turn 必须有自身最新 end/notice 身份。未返回 child 与公开 query 为崩溃生成的 interrupted 闭合没有真实 notice，不生成这种自动唤醒。
+
+
+### 原生消息与 Task 控制分离（#352）
+
+所有原生人工、schedule、作业、子会话、GitHub 通知、dispatch 和维护消息都可进入模型，waiting、paused、接续维护和 retired 会话不构成消息入口拒绝条件。宿主入口继续合并同一提醒的旧积压，并优先带入人工消息。Task 的唤醒判断只更新既有调度与准确等待事实，不再把原生消息另复制为待重放的 Task 输入；已存在的 Task inbox 及旧人工缓冲继续按原身份处理，不清队列、不伪造消费。
+
+消息送达不授予 Task owner、epoch、槽位或修改权限，也不确认结果、验收或完成。退休会话保留对话，但仍无当前协调权；用户暂停和结束保持生效。真实持久 operation 的 material、collect、receive、settle 步骤继续限制维护工具，任意自称维护的 source 标记不能取得该范围。工具边界与 Task 命令授权分别检查，不能以拒绝消息代替。
+
+接续收集先从准确 owner 的公开观察中选择当前 live 作业实例。同一短作业号可在旧注册表重用，历史 completed/delivered 记录不能遮住当前 live/pending 行，也不能成为收集对象。保存 registryEpoch、instanceId；running/stopping 时保留固定 operation/successor 并等待后续观察，不请求终态输出或持久化不可收集错误。终态后才向准确 owner 请求正式 job_output；收集仍须由 flush 后的正式交付事实证明。历史结果保持原状，消息消费本身不能伪装 collected。
+
+原生 retired parent 可以消费子会话通知，但交接记录携带的子执行仍必须由当前 epoch 的协调会话完整正式读取结果，才能解除完成结果门。旧 parent 的 `consumed` 不能代替 `coordinatorReceived`；真实、已核实的 replacement 绑定继续独立成立。

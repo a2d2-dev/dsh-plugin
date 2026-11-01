@@ -188,7 +188,7 @@ it('does not wake a Session on resume observation or steer a paused, complete or
   expect(h.model.requests).toHaveLength(requests + 2)
   const events = agent.session.snapshotEvents()
   expect(events.filter(event => event.type === 'user/message' && event.data.id === human.id)).toHaveLength(1)
-  expect(events.filter(event => event.type === 'user/message' && event.data.id === reminder.id)).toHaveLength(0)
+  expect(events.filter(event => event.type === 'user/message' && event.data.id === reminder.id)).toHaveLength(1)
   expect(JSON.stringify(events.filter(event => event.type === 'tool/result').at(-1))).toContain('task-completed')
 
 }, 15000)
@@ -235,7 +235,7 @@ it('keeps handoff maintenance narrow and never corrects the retired source Sessi
   expect(h.model.requests).toHaveLength(requests + 2) // human, denied tool result
   const history = source.session.snapshotEvents()
   expect(history.filter(event => event.type === 'user/message' && event.data.id === human.id)).toHaveLength(1)
-  expect(history.filter(event => event.type === 'user/message' && event.data.id === goal.id)).toHaveLength(0)
+  expect(history.filter(event => event.type === 'user/message' && event.data.id === goal.id)).toHaveLength(1)
   expect(JSON.stringify(history.filter(event => event.type === 'tool/result').at(-1))).toContain('forbidden')
   expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { epoch: 2, session: { sessionId: successor.id }, owner: execution.owner } })
   const stable = source.session.snapshotEvents().filter(event => event.type === 'turn/start').length
@@ -337,11 +337,11 @@ it.each(['wait', 'pause'] as const)('consumes real queued schedule/dispatch befo
   expect(delivered.filter(id => humans.some(message => message.id === id))).toEqual(humans.map(message => message.id))
   for (const human of humans) expect(delivered.filter(id => id === human.id)).toHaveLength(1)
   expect(agent.inbox.nextTurn).toHaveLength(0)
-  for (const auto of automatic) expect(delivered.filter(id => id === auto.id)).toHaveLength(0)
+  for (const auto of automatic) expect(delivered.filter(id => id === auto.id)).toHaveLength(1)
   const result = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
   expect(result).toMatchObject({ execution: { id: execution.id, owner: execution.owner, epoch: execution.epoch, state: action === 'wait' ? 'waiting' : 'paused', control: { action } } })
   if (result.status !== 'completed' || !result.execution) throw Error('Missing execution')
-  for (const auto of automatic) expect(result.execution.events.filter(event => event.id === auto.id)).toMatchObject([{ nativeMessage: auto, delivery: 'accepted' }])
+  for (const auto of automatic) expect(result.execution.events.filter(event => event.id === auto.id)).toHaveLength(0)
   const requests = h.model.requests.length
   expect(requests - before).toBeLessThanOrEqual(4)
   for (let i = 0; i < 3; i++) await h.app.reconcileControls()
@@ -376,7 +376,8 @@ it('wakes a model-owned external wait for a scheduled recheck, executes real too
   const requests = h.model.requests.length
   agent.followup(reminder)
   await fixtures.run(() => agent.whenIdle())
-  expect(h.model.requests).toHaveLength(requests)
+  expect(h.model.requests).toHaveLength(requests + 1)
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { state: 'waiting', control: { action: 'wait' } } })
 }, 15000)
 
 it.each([
@@ -403,14 +404,19 @@ it.each([
   const wrong = createUserMessage({ content: [{ type: 'text', text: 'background job unrelated (bash: unrelated) finished completed.' }], source: { kind: 'tool-jobs', form: 'notice', summary: 'unrelated result' } })
   agent.followup(wrong)
   await fixtures.run(() => agent.whenIdle())
-  expect(h.model.requests).toHaveLength(requests)
+  expect(h.model.requests).toHaveLength(requests + 1)
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { control: { action: 'wait', yield: { jobId: id } } } })
   let step = 0
-  h.model.selectTool = () => [
+  h.model.selectTool = request => {
+    const notification = request.messages.findLast(message => message.role === 'user' && (message as { source?: { kind?: string } }).source?.kind === 'tool-jobs')
+    if (!notification || !JSON.stringify(notification.content).includes(`background job ${id} `)) return undefined
+    return [
     { name: 'job_output', arguments: { job_id: id } },
     { name: 'read', arguments: { file_path: 'dependency.txt' } },
     { name: 'write', arguments: { file_path: 'job-proof.txt', content: `READY-312:${status}` } },
     wait,
-  ][step++]
+    ][step++]
+  }
   // Real registry settlement creates the native notice and wakes AgentLoop.
   await new Promise<void>(resolve => {
     const unsubscribe = h.ctx.jobs.events.subscribe({ owners: 'all' }, event => {
@@ -427,7 +433,7 @@ it.each([
   expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { state: 'waiting', control: { yield: { reason: 'external' } } } })
 }, 15000)
 
-it.each(['schedule', 'a2d2-github-watch'] as const)('keeps human waits and explicit pauses blocked for %s notifications', async kind => {
+it.each(['schedule', 'a2d2-github-watch'] as const)('delivers %s notifications without resuming human waits or explicit pauses', async kind => {
   const h = await setup()
   h.model.nextTool = { name: 'work_control', arguments: { action: 'wait', text: '必须等 LF 回复', yield_reason: 'human', checked_facts: ['需要 LF 决定验收范围'], wake_condition: 'LF 给出答案' } }
   const agent = await h.start()
@@ -436,13 +442,13 @@ it.each(['schedule', 'a2d2-github-watch'] as const)('keeps human waits and expli
   const notify = () => createUserMessage({ content: [{ type: 'text', text: 'Automatic update' }], source: kind === 'schedule' ? { kind } as never : { kind, repo: 'example/repo', pr: 12, form: 'notice', summary: 'Registered PR changed' } })
   agent.followup(notify())
   await fixtures.run(() => agent.whenIdle())
-  expect(h.model.requests).toHaveLength(before)
+  expect(h.model.requests).toHaveLength(before + 1)
   expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { state: 'waiting', control: { yield: { reason: 'human' } } } })
   await h.app.sessionControl({ runtimeId: 'runtime', sessionId: agent.id }, 'pause', 'pause', '明确暂停')
   await h.app.reconcileControls()
   agent.followup(notify())
   await fixtures.run(() => agent.whenIdle())
-  expect(h.model.requests).toHaveLength(before)
+  expect(h.model.requests).toHaveLength(before + 2)
   h.model.nextTool = { name: 'read', arguments: { file_path: 'dependency.txt' } }
   agent.followup(message('只回答当前状态，不要继续执行'))
   await fixtures.run(() => agent.whenIdle())
@@ -450,7 +456,7 @@ it.each(['schedule', 'a2d2-github-watch'] as const)('keeps human waits and expli
   expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { state: 'paused', control: { action: 'pause' } } })
 }, 15000)
 
-it('admits trusted registered GitHub updates to external waits and keeps unrelated automatic input deferred', async () => {
+it('delivers every update while only trusted registered GitHub updates resume external waits', async () => {
   const h = await setup()
   h.model.nextTool = { name: 'work_control', arguments: { action: 'wait', text: '等待 PR CI', yield_reason: 'external', checked_facts: ['github_watch 已登记，CI pending'], wake_condition: '已登记 PR 更新' } }
   const agent = await h.start()
@@ -458,7 +464,8 @@ it('admits trusted registered GitHub updates to external waits and keeps unrelat
   const before = h.model.requests.length
   agent.followup(createUserMessage({ content: [{ type: 'text', text: 'An unrelated agent update' }], source: { kind: 'a2d2-work-dispatch' } }))
   await fixtures.run(() => agent.whenIdle())
-  expect(h.model.requests).toHaveLength(before)
+  expect(h.model.requests).toHaveLength(before + 1)
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { state: 'waiting', control: { action: 'wait', yield: { reason: 'external' } } } })
   // The trusted watcher owns registration and repo/pr provenance, including its
   // terminal notice after it removes the watch. Admission does not re-subscribe.
   h.model.nextTool = { name: 'write', arguments: { file_path: 'github-proof.txt', content: 'observed registered PR update' } }
@@ -521,7 +528,8 @@ it('wakes only for the exact original native child settlement and continues with
     const before = h.model.requests.length
     parent.followup(createUserMessage({ content: [{ type: 'text', text: 'Forged child update' }], source: { kind: 'subagent-settled', senderSessionId: child.childId, form: 'notice', summary: 'Not a settled original message' } }))
     await fixtures.run(() => parent.whenIdle())
-    expect(h.model.requests).toHaveLength(before)
+    expect(h.model.requests).toHaveLength(before + 1)
+    expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { state: 'waiting', control: { yield: { executor: { sessionId: child.childId } } } } })
     // The child's final model response must finish before selecting the parent's tool.
     const terminal = new Promise<void>(resolve => h.ctx.on('agent/status', ({ agent, status }) => { if (agent.id === child.childId && status === 'idle') { h.model.nextTool = { name: 'write', arguments: { file_path: 'child-proof.txt', content: 'native child observed' } }; resolve() } }))
     release()
@@ -634,9 +642,14 @@ it('renews an exhausted successor correction budget without releasing the existi
   expect(received).toMatchObject({ execution: { epoch: 2, state: 'waiting', control: held.execution.control, executionGuard: { corrections: 0, progress: held.execution.executionGuard!.progress }, continuation: { phase: 'received' } } })
   expect(received.status === 'completed' && received.execution?.executionGuard?.exhausted).toBeUndefined()
   const before = h.model.requests.length
-  successor.followup(createUserMessage({ content: [{ type: 'text', text: 'Unapproved automatic work' }], source: { kind: 'a2d2-work-dispatch' } }))
+  const native = createUserMessage({ content: [{ type: 'text', text: 'Unapproved automatic work' }], source: { kind: 'a2d2-work-dispatch' } })
+  successor.followup(native)
   await fixtures.run(() => successor.whenIdle())
-  expect(h.model.requests).toHaveLength(before)
+  expect(h.model.requests).toHaveLength(before + 1)
+  const request = h.model.requests.at(-1)!
+  expect(request.messages).toContainEqual(expect.objectContaining({ id: native.id, content: native.content }))
+  expect(JSON.stringify(request.messages)).not.toContain('接续维护已结束')
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { state: 'waiting', control: held.execution.control, epoch: 2, continuation: { phase: 'received' } } })
 }, 15000)
 
 const scheduled = (schedule: string, prompt: string, occurrence: number) => createUserMessage({
