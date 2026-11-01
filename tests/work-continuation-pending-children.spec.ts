@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest'
+import { randomUUID } from 'node:crypto'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import Subagents from '@deepseek-ai/dsh-subagent'
@@ -7,6 +8,7 @@ import { installWorkControlRecovery, installWorkTools } from '../src/work-execut
 import { RuntimeHost } from '../src/task-runtime/host.ts'
 import { ExecutionFixtures } from './work-execution-fixture.ts'
 import type { WorkResult } from '../src/work-types.ts'
+import { WorkDao } from '../src/work-store/dao.ts'
 const operator = { operator: true }
 const ok = (result: WorkResult) => { if (result.status !== 'completed') throw Error(JSON.stringify(result)); return result }
 const material = { body: 'Retain original accepted work.', decisions: 'Continue the same Task.', evidence: 'Native child still owes a result.', unfinished: 'Collect pending child work.', next: 'Use work_child_recover for the exact pending child.' }
@@ -78,6 +80,8 @@ it('hands off while a real native child tool is running, receives its late resul
     release()
     await expect.poll(async () => (await new RuntimeHost(h.ctx).executionFacts(parent.id, 'runtime', 'retired')).children[0]?.returned).toBe(true)
     await fixtures.run(() => parent.whenIdle())
+    await fixtures.run(() => Promise.all([h.app.reconcileControls(), h.app.reconcileControls()]))
+    expect(ok(await h.app.query({ type: 'task.execution', ref }, operator)).execution!.events.filter(event => event.id.startsWith('child-result:'))).toHaveLength(1)
     expect(await h.app.sessionReport(current.session, 'still-unreceived', report, 2)).toMatchObject({ status: 'failed', error: { code: 'completion-results-unsettled' } })
     let page = await h.app.sessionChildRecovery(current.session, 'uncommitted-result-0', child.childId, 'result', undefined, 2, signal!)
     let pageIndex = 1
@@ -300,6 +304,51 @@ it.for(['resume', 'replace', 'resume-wait', 'resume-wait-startup'] as const)('co
       const paused = ok(await h.app.query({ type: 'task.execution', ref: seed.ref }, operator)).execution!
       expect(paused).toMatchObject({ state: 'paused', control: { action: 'pause', commandId: 'explicit-user-pause-before-late-result' } })
       expect(paused.events.filter(event => event.id.startsWith('child-result:'))[1]).toMatchObject({ delivery: 'accepted', acceptance: 'unassessed' })
+      // Real native notices remain pending under pause; rereading them must not fork
+      // the durable DAO just to discover that their stable inbox IDs already exist.
+      const transactions = vi.spyOn(WorkDao.forDirectory(h.app.directory), 'transaction')
+      await fixtures.run(() => h.app.reconcileControls())
+      expect(transactions).not.toHaveBeenCalled()
+      transactions.mockRestore()
+      expect(ok(await h.app.query({ type: 'task.execution', ref: seed.ref }, operator)).execution!.events).toEqual(paused.events)
+      if (mode === 'resume-wait') {
+        const dao = WorkDao.forDirectory(h.app.directory)
+        const taskBefore = (await dao.read()).tasks.find(task => task.id === seed.ref.taskId)!
+        const observation = h.host.execution.observation!.bind(h.host.execution)
+        const deliver = vi.spyOn(h.host.execution, 'deliver')
+        for (const change of ['owner', 'epoch', 'consumed', 'removed', 'pause', 'end', 'completed'] as const) {
+          // Begin with the real persisted pending notice eligible for delivery,
+          // then change current authority/inbox while native observation awaits.
+          await dao.transaction(async state => {
+            const current = state.executions.find(item => item.id === paused.id)!
+            current.state = 'ready'
+            delete current.control
+          })
+          const observe = vi.spyOn(h.host.execution, 'observation').mockImplementationOnce(async initial => {
+            const facts = await observation(initial)
+            await dao.transaction(async state => {
+              const current = state.executions.find(item => item.id === paused.id)!
+              const event = current.events.find(event => event.id === paused.events.filter(event => event.id.startsWith('child-result:'))[1]!.id)!
+              if (change === 'owner') current.owner = randomUUID()
+              if (change === 'epoch') current.epoch++
+              if (change === 'consumed') event.delivery = 'consumed'
+              if (change === 'removed') current.events = current.events.filter(item => item.id !== event.id)
+              if (change === 'pause' || change === 'end') current.control = { ...paused.control!, action: change }
+              if (change === 'completed') state.tasks.find(task => task.id === seed.ref.taskId)!.progress = { ...report, specificationVersion: taskBefore.specification.version, updatedAt: new Date().toISOString() }
+            })
+            return facts
+          })
+          deliver.mockClear()
+          await fixtures.run(() => h.app['reconcileChildResults']())
+          expect(deliver, change).not.toHaveBeenCalled()
+          observe.mockRestore()
+          await dao.transaction(async state => {
+            state.executions[state.executions.findIndex(item => item.id === paused.id)] = structuredClone(paused)
+            if (change === 'completed') state.tasks[state.tasks.findIndex(task => task.id === seed.ref.taskId)] = structuredClone(taskBefore)
+          })
+        }
+        deliver.mockRestore()
+      }
       expect((await new RuntimeHost(h.ctx).events(successor.id)).filter(event => event.type === 'assistant/message' || event.type === 'tool/call')).toHaveLength(requests)
       await h.app.execute({ type: 'task.control', commandId: 'explicit-user-wait-after-late-result', ref: seed.ref, executionId: current.id, owner: current.owner, epoch: 2, action: 'wait', text: 'User has not delegated an automatic observation turn' }, operator)
       await fixtures.run(() => h.app.reconcileControls())
@@ -307,6 +356,17 @@ it.for(['resume', 'replace', 'resume-wait', 'resume-wait-startup'] as const)('co
       await expect.poll(async () => ok(await h.app.query({ type: 'task.execution', ref: seed.ref }, operator)).execution!.state, { timeout: 6000 }).toBe('waiting')
       expect(ok(await h.app.query({ type: 'task.execution', ref: seed.ref }, operator)).execution!).toMatchObject({ state: 'waiting', control: { commandId: 'explicit-user-wait-after-late-result', action: 'wait' } })
       expect((await new RuntimeHost(h.ctx).events(successor.id)).filter(event => event.type === 'assistant/message' || event.type === 'tool/call')).toHaveLength(requests)
+      ok(await h.app.execute({ type: 'task.control', commandId: 'explicit-resume-pending-native-notice', ref: seed.ref, executionId: current.id, owner: current.owner, epoch: 2, action: 'resume', text: 'Resume and inspect the pending native child result' }, operator))
+      await expect.poll(async () => {
+        await fixtures.run(() => h.app.reconcileControls())
+        return ok(await h.app.query({ type: 'task.execution', ref: seed.ref }, operator)).execution!.events.filter(event => event.id.startsWith('child-result:'))[1]!.delivery
+      }, { timeout: 6000 }).toMatch(/^(delivered|consumed)$/)
+      await fixtures.run(() => successor.whenIdle())
+      await fixtures.run(() => h.app.reconcileControls())
+      const resumed = ok(await h.app.query({ type: 'task.execution', ref: seed.ref }, operator)).execution!
+      expect(resumed.events.filter(event => event.id.startsWith('child-result:'))).toHaveLength(2)
+      expect(resumed.events.filter(event => event.id.startsWith('child-result:'))[1]!.delivery).toMatch(/^(delivered|consumed)$/)
+      expect((await new RuntimeHost(h.ctx).events(successor.id)).filter(event => event.type === 'user/message' && event.data.source?.kind === 'a2d2-work-child-result')).toHaveLength(2)
     }
     if (mode === 'replace') {
       expect(facts.sessions.flatMap(row => row.children).find(child => child.session.sessionId === seed.childId)).toMatchObject({ returned: true, attempt: { reason: 'interrupted' }, result: 'pending' })
