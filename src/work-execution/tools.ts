@@ -13,16 +13,22 @@ export function installWorkControlRecovery(ctx: Context, app: WorkApplication): 
     let scanning: Promise<void> | undefined
     const lifecycle = new Map<string, Promise<void>>()
     const recover = (sessionId: string) => {
-      if (closed || lifecycle.has(sessionId)) return
+      if (closed) return
+      const existing = lifecycle.get(sessionId)
+      if (existing) return existing
       const operation = app.reconcileSessionControls(sessionId)
         .catch(error => { ctx.logger.warn(`work Session control recovery: ${String(error)}`) })
         .finally(() => { lifecycle.delete(sessionId) })
       lifecycle.set(sessionId, operation)
+      return operation
     }
     const tick = () => {
       // A slow full scan must not strand material already saved by an idle Session.
       // The startup/timer pass also recovers intent whose idle event predates this plugin.
-      if (!closed && !scanning) scanning = app.pendingSessionControls().then(sessions => { for (const sessionId of sessions) recover(sessionId) })
+      if (!closed && !scanning) scanning = app.pendingSessionControls().then(async sessions => {
+        // One background recovery at a time; exact idle events retain their own lane.
+        for (const sessionId of sessions) await recover(sessionId)
+      })
         .catch(error => { ctx.logger.warn(`work pending control scan: ${String(error)}`) }).finally(() => { scanning = undefined })
       if (closed || running) return
       running = app.reconcileControls().catch(error => { ctx.logger.warn(`work control recovery: ${String(error)}`) }).finally(() => { running = undefined })

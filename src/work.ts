@@ -1337,7 +1337,12 @@ export class WorkApplication {
       if (isTaskCompleted(taskAt(snapshot, initial.ref)) && initial.control?.action !== 'end') continue
       if (host.status(initial) === 'running') continue
       const existing = this.controlRecoveries.get(initial.id)
-      if (existing) { pending.push(existing); continue }
+      if (existing) {
+        // Successor receipt can become idle before the source recovery releases its lease.
+        // Re-read this exact Session after joining, so that notification is not lost.
+        pending.push(existing.then(() => this.reconcileSessionControls(sessionId)))
+        continue
+      }
       const operation = (async () => {
         await this.observeRuntimeFailure(initial.id)
         const current = (await this.load()).executions.find(item => item.id === initial.id)!
