@@ -78,6 +78,6 @@ context: [AGENTS.md, CONTEXT.md]
 
 ## Delivery Record
 
-实现与验收报告已完成；Git交付以[PR #359](https://github.com/a2d2-dev/dsh-plugin/pull/359)最终merge/checks回读及[Issue #358](https://github.com/a2d2-dev/dsh-plugin/issues/358)状态为准。原业务#1474剩余三页受既有单槽队列限制，已保留原进度和恢复请求；该限制没有作为产品缺陷或完整业务验收通过。
+实现与验收报告已完成；Git交付以[PR #359](https://github.com/a2d2-dev/dsh-plugin/pull/359)最终merge/checks回读及[Issue #358](https://github.com/a2d2-dev/dsh-plugin/issues/358)状态为准。原业务#1474已取得原单槽规则执行资格，并在会话8沿保留游标收齐三个结果，继续原业务验收；业务Issue未因子结果收齐而关单。
 
 - 合并前主干更新至2071c64/c663ca3。保留新主干通知免重复写入优化，测试冲突保留两边断言，独立复核通过；合并后相关10项、类型与构建通过。运行包同步集成该优化。
