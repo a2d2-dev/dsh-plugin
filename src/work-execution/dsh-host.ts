@@ -47,6 +47,8 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     return service as NonNullable<Context[K]>
   }
   private authorize?: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<WorkAdmission>
+  private stepBoundary?: (sessionId: string) => Promise<boolean>
+  connectStepBoundary(observe: (sessionId: string) => Promise<boolean>): void { this.stepBoundary = observe }
   private conversation?: (sessionId: string) => Promise<string | undefined>
   private pendingHumanInput?: (sessionId: string) => Promise<readonly import('../work-types.ts').NativeWorkMessage[]>
   private readonly maintenanceTurns = new WeakMap<Agent, MaintenanceAdmission>()
@@ -73,7 +75,10 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       // Task scheduling controls automatic turns, never the native human conversation.
       // An admitted turn can finish its tool results and final answer after wait/done.
       let human = messages.some(message => message.source?.kind === 'user')
-      if (!human && this.admittedTurns.get(agent) !== turn) {
+      // Tool results are committed before this boundary, including later empty
+      // steps of a human-started turn. Maintenance retains its narrow tool lane.
+      const proceed = human || this.maintenanceTurns.has(agent) || await this.stepBoundary?.(agent.id) !== false
+      if (!human && (!proceed || this.admittedTurns.get(agent) !== turn)) {
         const admission = await this.authorize!(agent.id, messages)
         if (!admission) {
           // The host claims only one queued turn and stops its driver on reject.

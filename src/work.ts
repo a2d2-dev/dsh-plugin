@@ -124,17 +124,25 @@ export class WorkApplication {
       if (!exact && !sealing) throw new WorkExecutionError('stale-execution-authority', 'Observation scope is stale for this coordinator epoch')
       return sealing ? [...task.sessions, { session: current.session, purpose: 'related' as const }] : task.sessions
     })
+    this.host.execution?.connectStepBoundary?.(async sessionId => {
+      const state = await this.load()
+      const initial = state.executions.find(item => item.session.sessionId === sessionId)
+      // A finished/held business turn still owns its final result and answer.
+      // Its next turn will go through ordinary admission rather than this cache.
+      if (!initial || isTaskCompleted(taskAt(state, initial.ref)) || ['waiting', 'paused'].includes(initial.state)
+        || initial.control?.status === 'accepted' && initial.control.action !== 'resume') return true
+      if (continuationInFlight(initial) || initial.continuationBlocked) return false
+      if (!initial.continuationPolicy?.enabled) return true
+      await this.observeContinuation(initial.id)
+      const current = (await this.load()).executions.find(item => item.id === initial.id)!
+      return !continuationInFlight(current) && !current.continuationBlocked
+    })
     this.host.execution?.connect(async (sessionId, messages = []) => {
       const mayAdvance = (execution: import('./work-types.ts').WorkExecution | undefined) => !execution || (!isTaskCompleted(taskAt(state, execution.ref)) && continuousMayAdvance(state, execution) && !['accepted', 'creating', 'failed', 'waiting', 'paused'].includes(execution.state)
         && !(execution.control?.status === 'accepted' && execution.control.action !== 'resume')
         && !execution.continuationBlocked
         && !continuationInFlight(execution))
       let state = await this.load()
-      const initial = state.executions.find(item => item.session.sessionId === sessionId)
-      if (initial && messages.length > 0 && initial.continuationPolicy?.enabled && !continuationInFlight(initial)) {
-        await this.observeContinuation(initial.id)
-        state = await this.load()
-      }
       for (const owner of state.executions) {
         const op = owner.continuation
         if (!op || !continuationInFlight(owner) || isTaskCompleted(taskAt(state, owner.ref))) continue
@@ -1413,7 +1421,10 @@ export class WorkApplication {
     } catch (cause) { error = { code: cause instanceof WorkExecutionError ? cause.code : 'continuation-observation-failed', message: cause instanceof Error ? cause.message : 'Continuation observation failed' } }
     await this.sourceTransaction(async state => {
       const current = state.executions.find(item => item.id === id)!
-      if (isTaskCompleted(taskAt(state, current.ref)) || current.epoch !== execution.epoch || current.continuationPolicy?.version !== policy.version || continuationInFlight(current)) return
+      if (isTaskCompleted(taskAt(state, current.ref)) || current.owner !== execution.owner || current.epoch !== execution.epoch || !sameSession(current.session, execution.session)
+        || !continuousMayAdvance(state, current) || current.continuationPolicy?.version !== policy.version || !current.continuationPolicy.enabled
+        || current.runtimeFailure && !current.runtimeFailure.acknowledged || current.continuationBlocked || continuationInFlight(current)
+        || !['ready', 'running'].includes(current.state) || current.control?.status === 'accepted' && current.control.action !== 'resume') return
       if (observation) current.continuationObservation = observation
       if (error) current.continuationBlocked = error
       else if (observation!.totalTokens >= policy.targetTokens) reserveContinuation(current, taskAt(state, current.ref)!, `auto:${current.id}:${current.epoch}:${policy.version}`, true)
