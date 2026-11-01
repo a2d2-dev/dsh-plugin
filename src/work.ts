@@ -166,8 +166,8 @@ export class WorkApplication {
       if (mayAdvance(execution) || messages.length === 0) return mayAdvance(execution)
       // Only a model-owned structured wait delegates a future observation turn.
       // A notification is permission to inspect facts, never proof of success.
-      const modelWait = (owner: typeof execution) => owner?.state === 'waiting'
-        && owner.control?.action === 'wait' && owner.control.status === 'applied' && owner.control.commandId.startsWith('tool:')
+      const modelWait = (owner: typeof execution) => !!owner && ['ready', 'running', 'waiting'].includes(owner.state)
+        && owner.control?.action === 'wait' && owner.control.commandId.startsWith('tool:')
         && ['executor', 'external'].includes(owner.control.yield?.reason ?? '')
         && !isTaskCompleted(taskAt(state, owner.ref)) && !continuousCompleted(state, owner)
         && !owner.error && !(owner.runtimeFailure && !owner.runtimeFailure.acknowledged)
@@ -202,6 +202,12 @@ export class WorkApplication {
           owner!.state = 'running'
           this.dao.appendHistory(owner!, { state: 'running', commandId: owner!.control.commandId })
           return true
+        }
+        const queued = owner && continuousOwner(current, owner.ref)
+        if (waking && queued && !queued.item.end && !(owner!.error || owner!.continuation?.error || owner!.runtimeFailure || queued.item.recoveryBlocked)) {
+          queued.item.resumeRequested = true; queued.item.attempts = 0; delete queued.item.retryAt
+          // Retain the same input identity when wake must first wait for a slot.
+          this.dao.appendHistory(owner!, { state: owner!.state, commandId: `automatic-wake:${wake!.id}` })
         }
         for (const message of messages) {
           if (lifecycleOwned(message) || owner!.events.some(item => item.id === message.id)) continue

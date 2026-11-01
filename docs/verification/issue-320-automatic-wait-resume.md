@@ -18,12 +18,12 @@ pnpm test
 ## 观测记录
 
 - 红灯：外部等待收到 schedule 后，模型请求仍为 2，断言 `expected 2 to be greater than 2` 失败；不是模型回复或文件系统权限导致。
-- 成功／失败作业：使用真实 LocalJobs 和 ToolJobs，registry 结算生成原生通知并唤醒父会话；模型实际调用 `job_output`，工具日志含 `REAL-JOB-EVIDENCE`，随后读取 `dependency.txt`、写入 `job-proof.txt`。无关 job 通知仍不进入模型。
+- 成功／失败作业：使用真实 LocalJobs 和 ToolJobs，registry 结算生成原生通知并唤醒父会话；分别在等待控制 accepted 与 applied 时结算，四组回归均通过。模型实际调用 `job_output`，工具日志含 `REAL-JOB-EVIDENCE`，随后读取 `dependency.txt`、写入 `job-proof.txt`。无关 job 通知仍不进入模型。
 - 定时复查：外部等待执行真实读写；执行者等待在作业仍运行时调用 `job_output(wait=false)` 并重新保存相同 job 的等待。读工具执行时断言协调状态已为 running、resume 已应用。
 - 子会话：真实 continuable 子会话运行受控工具；伪造的提前结算消息不能进入父模型；原生结算信封到达后父会话实际写入 `child-proof.txt`。
 - 重复事件：同一已准入通知在再次等待后不新增模型请求。
 - 人工边界：human 等待和显式 pause 拒绝 schedule 与 GitHub 自动通知；真实人工消息仍可进入对话。已有完成、退役、维护及人工消息接回回归继续执行。
-- 队列边界：等待项无槽位时，无关自动输入不请求恢复；有效复查保留原始消息并请求调度，取得既有槽位后 resume 应用，不绕过队列。
+- 队列边界：等待项无槽位时，无关自动输入不请求恢复；有效复查保留原始消息并请求调度，取得既有槽位后 resume 应用，不绕过队列。独立确认消息已消费后再次保存模型等待，重放旧通知不会恢复或再申请槽位。
 
 原始本地日志保存在忽略目录 `docs/artifacts/issue-320-20261031/`；公开源码不附带真实业务会话或私有工作库。
 

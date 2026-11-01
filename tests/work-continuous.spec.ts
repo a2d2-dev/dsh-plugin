@@ -1694,4 +1694,12 @@ it('requests the existing queue slot only for a valid model wait wake and preser
   await h.app.reconcileContinuous()
   expect((await h.status()).slots).toContainEqual(execution.ref)
   expect((await h.execution(execution.ref)).control).toMatchObject({ action: 'resume', status: 'applied' })
+  // The real host fixture records consumption independently of admission.
+  h.host.idle(await h.execution(execution.ref))
+  completed(await h.app.sessionControl(execution.session, 'wait-again', 'wait', '仍需等待下一次新通知', undefined, { reason: 'external', checkedFacts: ['已消费本次复查'], wakeCondition: '新的复查' }))
+  await h.app.reconcileControls()
+  expect((await h.execution(execution.ref)).events.find(event => event.id === reminder.id)?.delivery).toBe('consumed')
+  expect(await h.host.authorize(execution.session.sessionId, [reminder])).toBe(false)
+  expect((await h.execution(execution.ref)).control).toMatchObject({ action: 'wait', status: 'applied' })
+  expect((await h.status()).items.find(item => item.executionId === execution.id)?.resumeRequested).toBeUndefined()
 }, 15000)

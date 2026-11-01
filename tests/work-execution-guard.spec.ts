@@ -378,7 +378,10 @@ it('wakes a model-owned external wait for a scheduled recheck, executes real too
   expect(h.model.requests).toHaveLength(requests)
 }, 15000)
 
-it.each(['completed', 'failed'] as const)('collects an exact native %s job after its notification, then reads and writes real files', async status => {
+it.each([
+  { status: 'completed' as const, applyWait: true }, { status: 'failed' as const, applyWait: true },
+  { status: 'completed' as const, applyWait: false }, { status: 'failed' as const, applyWait: false },
+])('collects an exact native $status job after its notification (applied wait: $applyWait), then reads and writes real files', async ({ status, applyWait }) => {
   const h = await setup()
   await h.ctx.plugin(LocalJobs)
   await h.ctx.plugin(ToolJobs)
@@ -393,8 +396,8 @@ it.each(['completed', 'failed'] as const)('collects an exact native %s job after
   h.model.nextTool = { name: 'work_control', arguments: { action: 'wait', text: '等待准确后台作业，收到通知或定时复查后核实', yield_reason: 'executor', checked_facts: ['已核实原生作业正在运行'], wake_condition: '作业完成、失败或定时复查', executor_session_id: agent.id, job_id: id } }
   agent.followup(message('登记该作业等待'))
   await fixtures.run(() => agent.whenIdle())
-  await h.app.reconcileControls()
-  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { state: 'waiting', control: { yield: { jobId: id } } } })
+  if (applyWait) await h.app.reconcileControls()
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { control: { status: applyWait ? 'applied' : 'accepted', yield: { jobId: id } } } })
   const requests = h.model.requests.length
   const wrong = createUserMessage({ content: [{ type: 'text', text: 'background job unrelated (bash: unrelated) finished completed.' }], source: { kind: 'tool-jobs', form: 'notice', summary: 'unrelated result' } })
   agent.followup(wrong)
