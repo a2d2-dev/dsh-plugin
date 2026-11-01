@@ -23,3 +23,13 @@
 - TypeScript 检查：[typecheck.log](../artifacts/continuation-auto-work-20261101/typecheck.log)
 
 本提交未安装插件、重启服务或修改真实 Task。开发及正式实例的真实模型验收由集成阶段执行；这里的工具动作证据来自真实宿主测试链路，模型为根据收到的提示选择工具的确定性 fixture。
+
+## 跨代消息生命周期补充
+
+源会话先已取得当前接续回执，宿主生成的 `continuation-business:<operationId>` 仍在公开 Inbox 的 next-turn 中、没有 `user/message` 消费记录时，再次接续。修复前真实三代回归在 epoch 3 接任后断言失败：旧通知为 `accepted`，仍会继续搬运；这是语义红，非超时。修复后该旧通知为 `discarded` 且 `discardReason=superseded`，不进入第三代模型，也不伪造源会话的消费记录。
+
+失效仅发生在接任事务，只匹配 `kind=input`、无 `nativeMessage`、ID 精确等于当前 execution 的 `continuationHistory` 中旧 operation 所生成的业务激活通知。人工输入、结果、其他来源和文本相似消息不会按文本匹配失效。已消费记录保持原状，原会话 journal 不修改；无需批量清理旧 Inbox，退役准入与 `discarded` 状态阻止它被再次搬运。
+
+当前 operation 的激活在回执确认后排入待投事件，位置保留已有 pending 原生人工消息在前，仅优先于后续非人工通知。真实 AgentLoop 回归分别验证普通人工消息的多行内容和 source 完整保留，以及人工停止先进入模型、成功调用 pause、当前激活没有进入模型。通过公开 Task input 接口接收的 result 也保留原 kind 与多行载荷，没有冒充消费或验收。源模型编写的停止摘要与人工停止分别判断。
+
+本轮新增日志仅保存在本地 `docs/artifacts/continuation-auto-work-20261101/`，不新增日志追踪：`message-red.log`、`message-green.log`、`message-related.log`、`message-protected.log`、`message-typecheck.log`。其中前三条精准回归全部通过；完整相关组、禁止准入边界与类型检查结果按对应日志核对。没有重复实现 schedule 合并，也没有取消源会话的其他输入。

@@ -1511,7 +1511,11 @@ export class WorkApplication {
           return save(current => {
             current.continuation!.phase = 'received'
             delete current.continuation!.error
-            if (!['waiting', 'paused'].includes(current.state)) current.events.push({ id: `continuation-business:${operationId}`, text: 'Continue the same Task using the received material and its accepted next step, under the current Task control and permissions.', kind: 'input', delivery: 'accepted', acceptance: 'unassessed' })
+            if (!['waiting', 'paused'].includes(current.state)) {
+              // Preserve pending native human order; only older automatic inputs yield to activation.
+              const human = current.events.findLastIndex(event => pendingEvent(event) && (event.nativeMessage?.source as { kind?: string } | undefined)?.kind === 'user')
+              current.events.splice(human + 1, 0, { id: `continuation-business:${operationId}`, text: 'Continue the same Task using the received material and its accepted next step, under the current Task control and permissions.', kind: 'input', delivery: 'accepted', acceptance: 'unassessed' })
+            }
           })
         }
         const op = execution.continuation!
@@ -1660,6 +1664,11 @@ export class WorkApplication {
             current.sessionMode = 'create'
             current.epoch = op.sourceEpoch + 1
             if (current.executionGuard) { current.executionGuard.corrections = 0; delete current.executionGuard.exhausted }
+            for (const event of current.events) if (pendingEvent(event) && event.kind === 'input' && !event.nativeMessage
+              && current.continuationHistory?.some(old => event.id === `continuation-business:${old.operationId}`)) {
+              event.delivery = 'discarded'
+              event.discardReason = 'superseded'
+            }
             current.actual = profile
             current.agentPreset = profile.agentPreset
             current.model = { provider: profile.provider, model: profile.model, ...(profile.reasoningEffort ? { reasoningEffort: profile.reasoningEffort } : {}) }
