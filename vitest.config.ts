@@ -10,6 +10,7 @@ const hostTests = [
   'tests/session-title-live.spec.ts',
   'tests/work-compact-results.spec.ts',
   'tests/work-completion-native.spec.ts',
+  'tests/work-control-recovery.spec.ts',
   'tests/work-continuation.spec.ts',
   'tests/work-continuous-integration.spec.ts',
   'tests/work-execution-boundary.spec.ts',
