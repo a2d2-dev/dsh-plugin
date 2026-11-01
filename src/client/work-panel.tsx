@@ -74,13 +74,13 @@ export function WorkPanel({ controller }: { controller: WorkPanelController }) {
         </>}
         {state.detailTab==='related'&&<><Requirements controller={controller}/>{issue&&<NativeIssueRelations issue={issue} controller={controller}/>}</>}
         {state.detailTab==='sessions'&&<>{detail?.executionGraph?<ExecutionSessions graph={detail.executionGraph} onReadIssue={issue=>void controller.openNativeIssue(issue)} onOpenTask={ref=>void controller.openTask(ref)} onEnterTask={ref=>void controller.enterTask(ref)} onOpenSession={session=>controller.openSession(session)} onReadHistory={session=>void controller.openHistory(session)}/>:<p role="status">执行图尚未读取，执行与结果状态未知。</p>}<HistoryTranscript controller={controller}/></>}
-        {state.detailTab==='continuation'&&<><ExecutionContinuation graph={detail?.executionGraph} execution={detail?.execution} policy={detail?.execution?.continuationPolicy??project?.continuationPolicy} busy={state.startup.busy} completed={continuationCompleted} {...(!continuationCompleted?{onContinue:()=>void controller.controlExecution('continue'),onRecover:()=>void controller.controlExecution('reconcile'),onResume:()=>void controller.controlExecution('resume')}: {})}/>{detail?.execution&&!continuationCompleted&&<Section title="自动接续"><ContinuationSettings key={`execution/${detail.execution.id}/${detail.execution.continuationPolicy?.version??0}`} controller={controller} policy={detail.execution.continuationPolicy??project?.continuationPolicy} forExecution/></Section>}</>}
+        {state.detailTab==='continuation'&&<><ExecutionContinuation graph={detail?.executionGraph} execution={detail?.execution} policy={detail?.execution?.continuationPolicy??project?.continuationPolicy} busy={state.startup.busy} completed={continuationCompleted} {...(!continuationCompleted?{onContinue:()=>void controller.controlExecution('continue'),onRecover:()=>void controller.controlExecution('reconcile'),onResume:()=>void controller.controlExecution('resume')}: {})}/>{detail?.execution&&!continuationCompleted&&<Section title="自动接续"><ContinuationSettings key={`execution/${detail.execution.id}/${detail.execution.continuationPolicy?.version??0}`} controller={controller} policy={detail.execution.continuationPolicy??project?.continuationPolicy} version={detail.execution.continuationPolicy?.version??0} forExecution/></Section>}</>}
         {state.detailTab==='activity'&&<Section title="活动记录">{task?.activity.length?<ol>{[...task.activity].reverse().map(item=><li key={item.commandId}>版本 {item.version} · {activityLabel(item.type)}</li>)}</ol>:<p>尚无处理活动。</p>}</Section>}
         </>}
       </div>
       <ErrorText error={state.source.error??''}/>
     </>:!connecting&&state.projectId&&<>
-      <SourceDirectory controller={controller} panel={panel} onPanel={setPanel} delegation={source?<ContinuousProcessing key={`${state.projectId}/${source.id}`} controller={controller}/>:null} panelContent={panel==='continuation'&&project?<section className={styles.settingsPanel} aria-label="新执行默认自动接续"><div className={styles.delegationHeader}><strong>新执行默认自动接续</strong><button onClick={()=>setPanel('none')}>收起</button></div><ContinuationSettings key={`${project.id}/${project.continuationPolicy?.version??0}`} controller={controller} policy={project.continuationPolicy}/></section>:null} issues={<IssueSourcePanel key={source?.id} controller={controller}/>}/>
+      <SourceDirectory controller={controller} panel={panel} onPanel={setPanel} delegation={source?<ContinuousProcessing key={`${state.projectId}/${source.id}`} controller={controller}/>:null} panelContent={panel==='continuation'&&project?<section className={styles.settingsPanel} aria-label="新执行默认自动接续"><div className={styles.delegationHeader}><strong>新执行默认自动接续</strong><button onClick={()=>setPanel('none')}>收起</button></div><ContinuationSettings key={`${project.id}/${project.version}/${project.continuationPolicy?.version??0}`} controller={controller} policy={project.continuationPolicy} version={project.continuationPolicy?.version??0}/></section>:null} issues={<IssueSourcePanel key={source?.id} controller={controller}/>}/>
     </>}
   </main>
 }
@@ -296,13 +296,13 @@ function HistoryTranscript({controller}:{controller:WorkPanelController}) {
     {history.loaded&&history.nextCursor===undefined&&!history.error&&<p>已读到记录末尾。</p>}
   </section>
 }
-function ContinuationSettings({controller,policy,forExecution=false}:{controller:WorkPanelController;policy?:import('../work-types.ts').ContinuationPolicy;forExecution?:boolean}) {
+function ContinuationSettings({controller,policy,version,forExecution=false}:{controller:WorkPanelController;policy?:import('../work-types.ts').ContinuationPolicy;version:number;forExecution?:boolean}) {
   const [enabled,setEnabled]=useState(policy?.enabled??false),[target,setTarget]=useState(String(policy?.targetTokens??200000)),[reserve,setReserve]=useState(String(policy?.reserveTokens??16000))
-  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[saved,setSaved]=useState(false)
+  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[saved,setSaved]=useState(false),[conflict,setConflict]=useState(false)
   async function save(event:FormEvent) {
-    event.preventDefault();if(busy)return
+    event.preventDefault();if(busy||conflict)return
     setBusy(true);setError('');setSaved(false)
-    try {await controller.saveContinuation({version:(policy?.version??0)+1,enabled,targetTokens:Number(target),reserveTokens:Number(reserve)},forExecution);setSaved(true)}catch(error){setError(message(error))}finally{setBusy(false)}
+    try {await controller.saveContinuation({version:version+1,enabled,targetTokens:Number(target),reserveTokens:Number(reserve)},forExecution);setSaved(true)}catch(error){const text=message(error),stale=text.startsWith('continuation-policy-version:')||text.startsWith('version-conflict:');setConflict(stale);setError(stale?'设置已在其他页面更新。本次未保存，请刷新后核对设置，再重新保存。':text)}finally{setBusy(false)}
   }
   return <div className={styles.continuation}><h3>{forExecution?'当前执行自动接续':'项目自动接续'}</h3><p>{policy?.enabled?`${policy.targetTokens.toLocaleString()} token 目标`:'自动接续未启用'}</p>
     <form className={styles.form} onSubmit={event=>void save(event)}>
@@ -311,7 +311,7 @@ function ContinuationSettings({controller,policy,forExecution=false}:{controller
       <label>提前接续目标（token）<input disabled={busy} type="number" min="1" step="1" required value={target} onChange={event=>setTarget(event.target.value)}/></label>
       <details><summary>高级接续设置</summary><label>接续预留（token）<input disabled={busy} type="number" min="1024" step="1" required value={reserve} onChange={event=>setReserve(event.target.value)}/></label></details>
       <p>这是安全边界上的提前接续目标。宿主会按实际模型窗口和输出预留检查；长轮次可能超过目标。{forExecution?'保存后适用于当前执行。':'项目默认只用于新执行，当前执行可单独设置。'}</p>
-      <ErrorText error={error}/>{saved&&<p role="status">接续策略已保存</p>}<button type="submit" disabled={busy}>{busy?'正在保存…':'保存'}</button>
+      <ErrorText error={error}/>{conflict&&<button type="button" disabled={busy} onClick={()=>{setBusy(true);void (forExecution?controller.refreshTask():controller.selectProject(controller.getSnapshot().projectId!,false)).finally(()=>setBusy(false))}}>刷新设置</button>}{saved&&<p role="status">接续策略已保存</p>}<button type="submit" disabled={busy||conflict}>{busy?'正在保存…':'保存'}</button>
     </form>
   </div>
 }
