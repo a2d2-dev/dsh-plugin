@@ -1,5 +1,7 @@
+import { cp, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { createUserMessage, ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, MessageId, ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { WorkDao } from '../src/work.ts'
 import { ExecutionFixtures } from './work-execution-fixture.ts'
@@ -763,7 +765,7 @@ it('executes the accepted next step when material and receive sources have reord
 })
 
 
-it('supersedes only the exact old host activation when the next handoff takes its epoch', async () => {
+async function nextEpochWithPendingActivation() {
   const h = await setup()
   const second = await rotate(h)
   const successor = h.ctx.agents.get(SessionId(second.session.sessionId))!
@@ -792,6 +794,12 @@ it('supersedes only the exact old host activation when the next handoff takes it
   await h.app.reconcileControls()
   const current = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
   if (current.status !== 'completed' || !current.execution) throw Error('Missing next generation')
+  return { h, current: current.execution, oldId, successor }
+}
+
+it('supersedes only the exact old host activation when the next handoff takes its epoch', async () => {
+  const { h, current: execution, oldId, successor } = await nextEpochWithPendingActivation()
+  const current = { execution }
   expect(current.execution.epoch).toBe(3)
   expect(current.execution.events.find(event => event.id === oldId)).toMatchObject({ delivery: 'discarded', discardReason: 'superseded' })
   const third = h.ctx.agents.get(SessionId(current.execution.session.sessionId))!
@@ -858,4 +866,99 @@ it.each(['continue', 'stop'] as const)('preserves native %s order and accepted r
     expect(log.find(event => event.type === 'user/message' && event.data.id === automatic.id)).toMatchObject({ data: { content: automatic.content, source: automatic.source } })
     expect(JSON.stringify(log)).toContain('Accepted result payload.')
   }
+})
+
+
+it('cold-recovers an existing received backlog by canceling only superseded host activation envelopes', async () => {
+  const { h, current, oldId } = await nextEpochWithPendingActivation()
+  const agent = h.ctx.agents.get(SessionId(current.session.sessionId))!
+  await fixtures.run(() => agent.whenIdle())
+  await h.app.reconcileControls()
+  await fixtures.run(() => agent.whenIdle())
+  await h.app.execute({ type: 'task.control', commandId: 'keep-user-pause', ...fence(current), action: 'pause', text: 'User pause must remain effective through cleanup.' }, operator)
+  const human = createUserMessage({ content: [{ type: 'text', text: '暂停，不要继续。\nKeep original native user payload.' }], source: { kind: 'user' } })
+  const other = createUserMessage({ content: [{ type: 'text', text: `${oldId} is quoted data, not a host activation.` }], source: { kind: 'a2d2-work-dispatch' } })
+  // Recreate the exact pre-upgrade received state proven by the semantic red test.
+  await WorkDao.forDirectory(h.app.directory).transaction(async state => {
+    const execution = state.executions.find(item => item.id === current.id)!
+    const old = execution.events.find(item => item.id === oldId)!
+    old.delivery = 'delivered'
+    delete old.discardReason
+  })
+  const state = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (state.status !== 'completed' || !state.execution) throw Error('Missing received state')
+  const old = state.execution.events.find(event => event.id === oldId)!
+  const activation = state.execution.events.find(event => event.id === `continuation-business:${current.continuation!.operationId}`)!
+  const oldEnvelope = { id: MessageId(old.id), role: 'user' as const, content: [{ type: 'text' as const, text: old.text }], source: { kind: 'a2d2-work-dispatch' as const } }
+  const currentEnvelope = { id: MessageId(activation.id), role: 'user' as const, content: [{ type: 'text' as const, text: activation.text }], source: { kind: 'a2d2-work-dispatch' as const } }
+  await agent.runMaintenance(async () => {
+    agent.inbox.splice('next-turn', 0, 0, [oldEnvelope, currentEnvelope, human, other])
+    await h.ctx.sessions.flush(agent.session)
+  })
+  // Graceful disposal cancels native Inbox work. Restore a byte-for-byte durable
+  // snapshot taken before disposal, as a cold host would after process loss.
+  const snapshot = await fixtures.root()
+  await cp(h.workspace.path, snapshot, { recursive: true })
+  await fixtures.dispose(h.ctx)
+  const restored = await fixtures.mount(snapshot)
+  installWorkTools(restored.ctx, restored.app, 'runtime')
+  await restored.app.reconcileControls()
+  const live = restored.ctx.agents.get(SessionId(current.session.sessionId))!
+  await fixtures.run(() => live.whenIdle())
+  const recovered = await restored.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (recovered.status !== 'completed' || !recovered.execution) throw Error('Missing recovered state')
+  expect(recovered.execution.events.find(event => event.id === oldId)).toMatchObject({ delivery: 'discarded', discardReason: 'superseded' })
+  expect(recovered.execution.control).toEqual(state.execution.control)
+  expect(live.inbox.nextTurn.some(message => message.id === oldId)).toBe(false)
+  const log = live.session.snapshotEvents()
+  const preserved = [...live.inbox.nextTurn, ...live.inbox.nextStep, ...log.flatMap(event => event.type === 'user/message' ? [event.data] : []), ...recovered.execution.events.flatMap(event => event.nativeMessage ? [event.nativeMessage] : [])]
+  expect(preserved).toEqual(expect.arrayContaining([currentEnvelope, human, other]))
+  expect(log.some(event => event.type === 'user/message' && event.data.id === oldId)).toBe(false)
+  const lanes: Record<string, string[]> = { 'next-turn': [], 'next-step': [] }
+  const canceled: string[] = []
+  for (const event of log) if (event.type === 'agent/inbox/spliced') {
+    const data = event.data
+    const removed = lanes[data.target]!.splice(data.start, data.removedCount ?? 0, ...data.inserted.map(message => message.id))
+    if (data.outcome === 'canceled' && removed.includes(oldId)) canceled.push(...removed)
+  }
+  expect(canceled).toEqual([oldId])
+  const before = log.filter(event => event.type === 'agent/inbox/spliced').length
+  await restored.app.reconcileControls()
+  expect(live.session.snapshotEvents().filter(event => event.type === 'agent/inbox/spliced')).toHaveLength(before)
+  const valid = createUserMessage({ content: [{ type: 'text', text: 'Keep the full mixed automatic input.\nSecond line.' }], source: { kind: 'a2d2-work-dispatch' } })
+  const trigger = createUserMessage({ content: [{ type: 'text', text: 'Preserve the next-turn envelope too.' }], source: { kind: 'a2d2-work-dispatch' } })
+  const saved = await restored.app.execute({ type: 'task.input', commandId: 'mixed-accepted-result', ...fence(recovered.execution), kind: 'result', text: 'Accepted result in the same native step.\nKeep all result lines.' }, operator)
+  if (saved.status !== 'completed' || !saved.execution) throw Error('Result not accepted')
+  const result = saved.execution.events.find(event => event.text.startsWith('Accepted result in the same native step.'))!
+  const resultEnvelope = { id: MessageId(result.id), role: 'user' as const, content: [{ type: 'text' as const, text: result.text }], source: { kind: 'a2d2-work-dispatch' as const } }
+  await live.runMaintenance(async () => {
+    live.inbox.splice('next-step', 0, 0, [oldEnvelope, valid, resultEnvelope])
+    live.followup(trigger)
+  })
+  await fixtures.run(() => live.whenIdle())
+  const mixed = await restored.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (mixed.status !== 'completed' || !mixed.execution) throw Error('Missing mixed batch recovery')
+  expect(mixed.execution.events.find(event => event.id === valid.id)).toMatchObject({ delivery: 'accepted', nativeMessage: valid })
+  expect([...live.inbox.nextTurn, ...live.inbox.nextStep, ...mixed.execution.events.flatMap(event => event.nativeMessage ? [event.nativeMessage] : [])]).toEqual(expect.arrayContaining([trigger]))
+  expect(mixed.execution.events.find(event => event.id === result.id)).toMatchObject({ kind: 'result', text: result.text, delivery: 'accepted' })
+  expect(mixed.execution.control).toEqual(recovered.execution.control)
+  expect(live.session.snapshotEvents().some(event => event.type === 'user/message' && event.data.id === oldId)).toBe(false)
+  await writeFile(join(h.workspace.path, 'admitted-step.txt'), 'REAL-MULTISTEP-EVIDENCE')
+  const humanStep = createUserMessage({ content: [{ type: 'text', text: 'Read the existing evidence twice and answer; preserve the user pause.' }], source: { kind: 'user' } })
+  let reads = 0
+  restored.model.uniqueToolIds = true
+  restored.model.selectTool = request => request.messages.some(message => message.id === humanStep.id) && reads++ < 2 ? { name: 'read', arguments: { file_path: 'admitted-step.txt' } } : undefined
+  let injected = false
+  restored.ctx.on('tools/result', exec => {
+    if (exec.agent === live && exec.name === 'read' && !injected) { injected = true; live.steer(oldEnvelope) }
+  })
+  live.followup(humanStep)
+  await fixtures.run(() => live.whenIdle())
+  const final = live.session.snapshotEvents()
+  expect(injected).toBe(true)
+  const toolResults = final.filter(event => event.type === 'tool/result' && !event.data.message.isError && JSON.stringify(event.data.message.content).includes('REAL-MULTISTEP-EVIDENCE'))
+  expect(toolResults).toHaveLength(2)
+  expect(new Set(toolResults.map(event => event.type === 'tool/result' ? event.data.turn : undefined)).size).toBe(1)
+  expect(final.findLast(event => event.type === 'turn/end')).toMatchObject({ data: { reason: { kind: 'completed' } } })
+  expect(final.some(event => event.type === 'user/message' && event.data.id === oldId)).toBe(false)
 })

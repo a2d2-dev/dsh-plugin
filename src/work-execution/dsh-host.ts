@@ -1,5 +1,6 @@
 import { continuationBoundary } from './continuation.ts'
 import { createHash } from 'node:crypto'
+import { isDeepStrictEqual } from 'node:util'
 import { humanGuardIntent } from './guard.ts'
 import type { WorkGuard } from './guard.ts'
 import type { Context } from '@deepseek-ai/cordis'
@@ -51,6 +52,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
   connectStepBoundary(observe: (sessionId: string) => Promise<boolean>): void { this.stepBoundary = observe }
   private conversation?: (sessionId: string) => Promise<string | undefined>
   private pendingHumanInput?: (sessionId: string) => Promise<readonly import('../work-types.ts').NativeWorkMessage[]>
+  private filterInput?: (sessionId: string, messages: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<readonly import('../work-types.ts').NativeWorkMessage[]>
   private readonly maintenanceTurns = new WeakMap<Agent, MaintenanceAdmission>()
   private readonly admittedTurns = new WeakMap<Agent, number>()
   private readonly conversationSnapshots = new WeakMap<Agent, string>()
@@ -65,15 +67,21 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     agent.steer(createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'a2d2-work-context', form: 'notice', summary: '继续已授权的工作' } }))
   }
   private connected = false
-  connect(authorize: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<WorkAdmission>, conversation?: (sessionId: string) => Promise<string | undefined>, pendingHumanInput?: (sessionId: string) => Promise<readonly import('../work-types.ts').NativeWorkMessage[]>): void {
+  connect(authorize: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<WorkAdmission>, conversation?: (sessionId: string) => Promise<string | undefined>, pendingHumanInput?: (sessionId: string) => Promise<readonly import('../work-types.ts').NativeWorkMessage[]>, filterInput?: (sessionId: string, messages: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<readonly import('../work-types.ts').NativeWorkMessage[]>): void {
     this.authorize = authorize
     this.conversation = conversation
     this.pendingHumanInput = pendingHumanInput
+    this.filterInput = filterInput
     if (this.connected) return
     this.connected = true
     this.ctx.on('agent/pre-step', async ({ agent, messages, turn }, next) => {
       // Task scheduling controls automatic turns, never the native human conversation.
       // An admitted turn can finish its tool results and final answer after wait/done.
+      if (messages.length && this.filterInput) {
+        const filtered = await this.filterInput(agent.id, messages)
+        messages.splice(0, messages.length, ...filtered as UserMessage[])
+        if (!messages.length && this.admittedTurns.get(agent) !== turn) return { kind: 'reject' }
+      }
       let human = messages.some(message => message.source?.kind === 'user')
       let businessInstruction: string | undefined
       // Tool results are committed before this boundary, including later empty
@@ -548,6 +556,11 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     const message: UserMessage = event.nativeMessage ? event.nativeMessage as UserMessage : { id: MessageId(event.id), role: 'user', content: [{ type: 'text', text: event.text }], source: { kind: 'a2d2-work-dispatch' } }
     if (message.id !== event.id || message.role !== 'user') throw new WorkExecutionError('invalid-native-message', 'Stored native input identity is inconsistent')
     return { id: event.id, message }
+  }
+  async discardInput(execution: WorkExecution, event: WorkEvent): Promise<void> {
+    const agent = await this.runtime.agent(SessionId(execution.session.sessionId))
+    const expected = this.delivery(event).message
+    if ([...agent.inbox.nextTurn, ...agent.inbox.nextStep].some(message => isDeepStrictEqual(message, expected)) && agent.inbox.remove(expected.id)) await this.runtime.flush(agent)
   }
   async observe(execution: WorkExecution, event: WorkEvent): Promise<'accepted' | 'delivered' | 'consumed'> {
     const state = await this.runtime.deliveryState(SessionId(execution.session.sessionId), this.delivery(event))

@@ -23,7 +23,7 @@ import { applySourceCommand, refreshSource, sourceResult } from './work-sources/
 import type { GitHubSourcePort } from './work-sources/types.ts'
 import type { WorkSnapshot } from './work-schema.ts'
 import { WorkExecutionError } from './work-execution/host.ts'
-import { continuationBoundary, continuationChildren, continuationInFlight, continuationFactsKey, collectionRequest, MANAGED_WORK_INSTRUCTIONS, maintenanceEvent, materialRequest, reserveContinuation, successorMessage } from './work-execution/continuation.ts'
+import { continuationBoundary, continuationChildren, continuationInFlight, continuationFactsKey, collectionRequest, MANAGED_WORK_INSTRUCTIONS, maintenanceEvent, materialRequest, reserveContinuation, successorMessage, supersededContinuationActivation } from './work-execution/continuation.ts'
 import { applyTaskOrganization, isAcceptedNativeChild, taskStructureBlocker } from './work-organization.ts'
 import { isCanonicalChild } from './work-migrate.ts'
 import { applyTaskReport, projectProgress, taskProgressView } from './work-progress.ts'
@@ -248,6 +248,10 @@ export class WorkApplication {
         const source = message?.source
         return pendingEvent(event) && message && typeof source === 'object' && source !== null && 'kind' in source && source.kind === 'user' ? [message] : []
       })
+    }, async (sessionId, messages) => {
+      const execution = (await this.load()).executions.find(item => item.session.sessionId === sessionId)
+      return execution ? messages.filter(message => !execution.events.some(event => supersededContinuationActivation(execution, event) && message.id === event.id
+        && isDeepStrictEqual(message.source, { kind: 'a2d2-work-dispatch' }) && isDeepStrictEqual(message.content, [{ type: 'text', text: event.text }]))) : messages
     })
   }
   /** Only the current authorized execution can receive a correction, never its history. */
@@ -1330,6 +1334,16 @@ export class WorkApplication {
     if (before.executions.some(execution => execution.events.some(event => pendingEvent(event) && lifecycleOwned(event.nativeMessage)))) {
       await this.sourceTransaction(async state => { for (const execution of state.executions) discardLifecycleEvents(execution) })
     }
+    if (before.executions.some(execution => execution.events.some(event => pendingEvent(event) && supersededContinuationActivation(execution, event)))) {
+      await this.sourceTransaction(async state => {
+        for (const execution of state.executions) for (const event of execution.events) if (pendingEvent(event) && supersededContinuationActivation(execution, event)) {
+          event.delivery = 'discarded'; event.discardReason = 'superseded'
+        }
+      })
+    }
+    for (const execution of (await this.load()).executions) for (const event of execution.events) if (event.delivery === 'discarded' && event.discardReason === 'superseded' && supersededContinuationActivation(execution, event)) {
+      await this.host.execution?.discardInput?.(execution, event)
+    }
     await this.refreshSessionTitles()
     await this.reconcileCompletions()
     if (!this.host.execution) return
@@ -1625,8 +1639,7 @@ export class WorkApplication {
             current.sessionMode = 'create'
             current.epoch = op.sourceEpoch + 1
             if (current.executionGuard) { current.executionGuard.corrections = 0; delete current.executionGuard.exhausted }
-            for (const event of current.events) if (pendingEvent(event) && event.kind === 'input' && !event.nativeMessage
-              && current.continuationHistory?.some(old => event.id === `continuation-business:${old.operationId}`)) {
+            for (const event of current.events) if (pendingEvent(event) && supersededContinuationActivation(current, event)) {
               event.delivery = 'discarded'
               event.discardReason = 'superseded'
             }

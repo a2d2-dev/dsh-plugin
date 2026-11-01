@@ -33,3 +33,13 @@
 当前 operation 的激活在回执确认后排入待投事件，位置保留已有 pending 原生人工消息在前，仅优先于后续非人工通知。真实 AgentLoop 回归分别验证普通人工消息的多行内容和 source 完整保留，以及人工停止先进入模型、成功调用 pause、当前激活没有进入模型。通过公开 Task input 接口接收的 result 也保留原 kind 与多行载荷，没有冒充消费或验收。源模型编写的停止摘要与人工停止分别判断。
 
 本轮新增日志仅保存在本地 `docs/artifacts/continuation-auto-work-20261101/`，不新增日志追踪：`message-red.log`、`message-green.log`、`message-related.log`、`message-protected.log`、`message-typecheck.log`。其中前三条精准回归全部通过；完整相关组、禁止准入边界与类型检查结果按对应日志核对。没有重复实现 schedule 合并，也没有取消源会话的其他输入。
+
+## 已存在 received 会话的恢复
+
+未来接任的失效规则还不足以处理升级前已经进入当前 Inbox 的旧激活。恢复流程现在先将准确旧 operation 的未消费 Task event 持久记为 `discarded/superseded`，再通过公开 `Inbox.remove` 取消当前会话中 ID、source 与完整内容均吻合的旧宿主信封并 flush。原 journal 不重写，不将取消写成消费；重复恢复没有新的取消记录。
+
+为避免冷加载驱动先领取旧通知，原生 pre-step 在普通准入之前使用同一权威身份规则仅滤掉准确旧信封。同一步其余人工消息、自动输入和已接受结果完整保留，并继续原有准入与保存路径。若滤空发生在已经准入的业务 turn，仍允许后续工具步骤和最终答复；只有尚未准入、仅含旧激活的新 turn 被拒绝。
+
+冷恢复回归从真实三代会话的持久化目录在停机前取得字节快照，再挂载全新的宿主。采用停机前快照是因为正常 fixture disposal 会原生取消全部 pending 输入，直接在 disposal 后挂载无法代表已有积压。回归确认旧 event 从 `delivered` 变为 `discarded/superseded`，当前激活、人工暂停和其他来源的完整原载荷保留，暂停控制不变，公开取消记录只移除旧 ID。另把旧激活、有效自动输入与 accepted result 放入同一 next-step 批次，确认其余输入与结果仍准确保存；已准入的同一人工 turn 两次成功正式文件读取之间插入旧激活，仍完成第二次读取与最终答复。
+
+反证红还验证“滤空一律拒绝”的错误实现只能得到一次读取；最终实现保留已准入 turn，得到两次同 turn 的成功文件工具结果。对应本地证据为 `backlog-red.log`、`backlog-admitted-red.log`、`backlog-green.log`、`backlog-mixed-green.log`、`backlog-typecheck.log`，不新增日志追踪。未对真实 Task 或服务执行这些测试数据操作。
