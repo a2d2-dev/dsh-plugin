@@ -505,6 +505,8 @@ export class WorkApplication {
         else (current.childRecovery ??= []).push(request!)
       })
     }
+    const savedReceipt = execution.childReceipts?.find(item => sameSession(item.child, child.child))
+    const trustedReceipt = savedReceipt && await this.host.execution.childReceiptCommitted?.(execution, savedReceipt) ? savedReceipt : undefined
     const result = await this.host.execution.childRecovery(execution, child, action, request, signal)
     const raw = JSON.stringify(result.events ?? [])
     const resultRevision = createHash('sha256').update(raw).digest('hex')
@@ -516,11 +518,19 @@ export class WorkApplication {
       if (request && result.messageId) current.childRecovery!.find(item => item.requestId === requestId)!.messageId = result.messageId
       if (action === 'result' && result.endSeq !== undefined && result.status === 'returned') {
         const prior = current.childReceipts?.find(item => sameSession(item.child, child.child))
-        if (cursor && (!prior || prior.epoch !== epoch || prior.endSeq !== result.endSeq || prior.revision !== resultRevision || prior.cursor !== cursor)) throw new WorkExecutionError('child-result-page-order', 'Read each result page in order from cursor zero')
-        current.childReceipts = [...(current.childReceipts ?? []).filter(item => !sameSession(item.child, child.child)), { child: child.child, endSeq: result.endSeq, epoch, callId, callIds: [...(cursor ? prior!.callIds : []), callId], cursor: nextCursor, revision: resultRevision, complete: nextCursor === raw.length }]
+        if (cursor && (!prior || (prior.epoch !== epoch && (prior.revision !== trustedReceipt?.revision || prior.cursor !== trustedReceipt?.cursor)) || prior.endSeq !== result.endSeq || prior.revision !== resultRevision || prior.cursor !== cursor)) throw new WorkExecutionError('child-result-page-order', 'Read each result page in order from cursor zero')
+        const pages = cursor ? prior!.pages ?? prior!.callIds.map(callId => ({
+          session: prior!.epoch === epoch ? session : execution.retired!.find(item => item.epoch === prior!.epoch)!.session,
+          epoch: prior!.epoch, callId,
+        })) : []
+        current.childReceipts = [...(current.childReceipts ?? []).filter(item => !sameSession(item.child, child.child)), {
+          child: child.child, endSeq: result.endSeq, epoch, callId,
+          callIds: [...(cursor ? prior!.callIds : []), callId], pages: [...pages, { session, epoch, callId }],
+          cursor: nextCursor, revision: resultRevision, complete: nextCursor === raw.length,
+        }]
       }
     })
-    return { ...result, childStatus: result.status, status: 'completed' as const, child: child.child, ...(action === 'result' && result.status === 'returned' ? { events: undefined, content: raw.slice(cursor, nextCursor), revision: resultRevision, complete: nextCursor === raw.length, ...(nextCursor < raw.length ? { nextCursor } : {}) } : {}) }
+    return { ...result, childStatus: result.status, status: 'completed' as const, child: child.child, ...(trustedReceipt && trustedReceipt.endSeq === result.endSeq ? { readProgress: { cursor: trustedReceipt.cursor, revision: trustedReceipt.revision, complete: trustedReceipt.complete } } : {}), ...(action === 'result' && result.status === 'returned' ? { events: undefined, content: raw.slice(cursor, nextCursor), revision: resultRevision, complete: nextCursor === raw.length, ...(nextCursor < raw.length ? { nextCursor } : {}) } : {}) }
   }
   /** Public trusted adapter: source identity and Task references are resolved on the server. */
   async sessionContinuationMaterial(session: import('./work-types.ts').SessionRef, callId: string,

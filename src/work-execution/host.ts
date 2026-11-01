@@ -12,6 +12,7 @@ export interface WorkExecutionHost {
   connectGuard?(guard: import('./guard.ts').WorkGuard): void
   connectObservation?(scope: import('./observation.ts').ObservationScope): void
   observation?(execution: WorkExecution, associations?: readonly import('../work-types.ts').SessionAssociation[], reporter?: import('@deepseek-ai/dsh-tools').ToolExecutionToken): Promise<import('./observation.ts').ExecutionObservation>
+  childReceiptCommitted?(execution: WorkExecution, receipt: NonNullable<WorkExecution['childReceipts']>[number]): Promise<boolean>
   childRecovery?(execution: WorkExecution, child: NonNullable<import('../work-types.ts').ContinuationOperation['pendingChildren']>[number], action: 'status' | 'result' | 'resume', request?: NonNullable<WorkExecution['childRecovery']>[number], signal?: AbortSignal): Promise<{ status: string; endSeq?: number; messageId?: string; events?: unknown[] }>
   wake(execution: WorkExecution): Promise<void>
   status(execution: WorkExecution): 'running' | 'idle' | 'inactive'

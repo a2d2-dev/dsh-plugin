@@ -33,7 +33,7 @@ async function receiveChild(h: Awaited<ReturnType<ExecutionFixtures['mount']>>, 
   h.model.selectTool = undefined
 }
 
-it('hands off while a real native child tool is running, receives its late result and preserves native delivery facts', async ({ signal }) => {
+it.for(['complete', 'partial'] as const)('hands off a %s real native child result without discarding committed progress', async (reading, { signal }) => {
   const fixtures = new ExecutionFixtures(signal)
   let release!: () => void
   try {
@@ -81,22 +81,36 @@ it('hands off while a real native child tool is running, receives its late resul
     expect(await h.app.sessionControl(execution.session, 'retired-write', 'progress', 'No authority')).toMatchObject({ status: 'failed', error: { code: 'forbidden' } })
     await h.app.execute(command, operator)
     expect(ok(await h.app.query({ type: 'task.execution', ref }, operator)).execution!.epoch).toBe(2)
+    const originalAssistantText = 'Original assistant verification passed' + (reading === 'partial' ? ' long original evidence'.repeat(1200) : '')
+    h.model.responseText = originalAssistantText
     release()
     await expect.poll(async () => (await new RuntimeHost(h.ctx).executionFacts(parent.id, 'runtime', 'retired')).children[0]?.returned).toBe(true)
     await fixtures.run(() => parent.whenIdle())
+    h.model.responseText = 'Recorded work progress'
     expect(await h.app.sessionReport(current.session, 'still-unreceived', report, 2)).toMatchObject({ status: 'failed', error: { code: 'completion-results-unsettled' } })
     let page = await h.app.sessionChildRecovery(current.session, 'uncommitted-result-0', child.childId, 'result', undefined, 2, signal!)
     let pageIndex = 1
     while ('nextCursor' in page && page.nextCursor !== undefined) page = await h.app.sessionChildRecovery(current.session, `uncommitted-result-${pageIndex++}`, child.childId, 'result', undefined, 2, signal!, page.nextCursor, page.revision)
     const uncommitted = ok(await h.app.query({ type: 'task.execution', ref }, operator)).execution!
     expect((await h.host.execution.observation!(uncommitted)).settlement).toBe('pending')
-    await receiveChild(h, successor, child.childId, 2, fixtures)
+    expect(await h.app.sessionChildRecovery(current.session, 'uncommitted-status', child.childId, 'status', undefined, 2, signal!)).not.toHaveProperty('readProgress')
+    if (reading === 'complete') await receiveChild(h, successor, child.childId, 2, fixtures)
+    else {
+      h.model.nextTool = { name: 'work_child_recover', arguments: { child_session_id: child.childId, action: 'result', expected_epoch: 2 } }
+      successor.followup(createUserMessage({ content: [{ type: 'text', text: 'Read the first real result page before continuation.' }], source: { kind: 'user' } }))
+      await fixtures.run(() => successor.whenIdle())
+    }
     const received = ok(await h.app.query({ type: 'task.execution', ref }, operator)).execution!
-    expect(received.childReceipts).toMatchObject([{ child: { sessionId: child.childId }, complete: true, epoch: 2 }])
+    expect(received.childReceipts).toMatchObject([{ child: { sessionId: child.childId }, complete: reading === 'complete', epoch: 2 }])
     const facts = await h.host.execution.observation!(received)
-    expect(facts.settlement, JSON.stringify(facts)).toBe('settled')
+    expect(facts.settlement, JSON.stringify(facts)).toBe(reading === 'complete' ? 'settled' : 'pending')
+    const receipt = received.childReceipts![0]!
+    expect(await h.host.execution.childReceiptCommitted!(received, { ...receipt, pages: undefined })).toBe(true)
+    expect(await h.host.execution.childReceiptCommitted!(received, { ...receipt, callIds: [], pages: [] })).toBe(false)
+    expect(await h.host.execution.childReceiptCommitted!(received, { ...receipt, cursor: receipt.cursor + 1 })).toBe(false)
+    expect(await h.host.execution.childReceiptCommitted!(received, { ...receipt, pages: receipt.pages!.map(page => ({ ...page, session: { ...page.session, sessionId: 'unrelated-coordinator' } })) })).toBe(false)
     expect(facts.sessions.find(row => row.role === 'retired')!.children[0]!.result).toBe('pending')
-    expect(JSON.stringify(await new RuntimeHost(h.ctx).events(successor.id))).toContain('late native verification passed')
+    expect(JSON.stringify(await new RuntimeHost(h.ctx).events(successor.id))).toContain('Original assistant verification passed')
     expect((await new RuntimeHost(h.ctx).events(parent.id)).some(event => event.type === 'user/message' && event.data.source?.kind === 'subagent-settled')).toBe(false)
     h.model.nextTool = { name: 'work_continuation_material', arguments: material }
     await h.app.execute({ type: 'task.continue', commandId: 'continue-already-received-child', ref, executionId: current.id, owner: current.owner, epoch: 2 }, operator)
@@ -107,8 +121,33 @@ it('hands off while a real native child tool is running, receives its late resul
     const third = h.ctx.agents.get(SessionId(current.session.sessionId))!
     await fixtures.run(() => third.whenIdle())
     await fixtures.run(() => h.app.reconcileControls())
-    expect(await h.app.sessionReport(current.session, 'third-before-receipt', report, 3)).toMatchObject({ status: 'failed', error: { code: 'completion-results-unsettled' } })
-    await receiveChild(h, third, child.childId, 3, fixtures)
+    expect((await h.host.execution.observation!(current)).settlement).toBe(reading === 'complete' ? 'settled' : 'pending')
+    const progress = await h.app.sessionChildRecovery(current.session, 'inspect-inherited-progress', child.childId, 'status', undefined, 3, signal!)
+    expect(progress).toMatchObject({ readProgress: { cursor: receipt.cursor, revision: receipt.revision, complete: receipt.complete } })
+    if (reading === 'partial') {
+      expect(await h.app.sessionChildRecovery(current.session, 'wrong-revision', child.childId, 'result', undefined, 3, signal!, receipt.cursor, 'outdated')).toMatchObject({ status: 'failed', error: { code: 'child-result-changed' } })
+      h.model.selectTool = request => {
+        const output = request.messages.findLast(message => message.role === 'tool')
+        if (!output) return
+        const page = JSON.parse(output.content.map(block => block.type === 'text' ? block.text : '').join(''))
+        if (page.nextCursor !== undefined) return { name: 'work_child_recover', arguments: { child_session_id: child.childId, action: 'result', expected_epoch: 3, cursor: page.nextCursor, revision: page.revision } }
+      }
+      h.model.nextTool = { name: 'work_child_recover', arguments: { child_session_id: child.childId, action: 'result', expected_epoch: 3, cursor: receipt.cursor, revision: receipt.revision } }
+      third.followup(createUserMessage({ content: [{ type: 'text', text: 'Continue at the inherited cursor, preserving the original first page.' }], source: { kind: 'user' } }))
+      await fixtures.run(() => third.whenIdle())
+      h.model.selectTool = undefined
+      const completed = ok(await h.app.query({ type: 'task.execution', ref }, operator)).execution!
+      expect(completed.childReceipts![0]!.pages![0]).toEqual(receipt.pages![0])
+      expect(completed.childReceipts![0]!.complete).toBe(true)
+      const receiptLogs = [...await new RuntimeHost(h.ctx).events(successor.id), ...await new RuntimeHost(h.ctx).events(third.id)]
+      const fullResult = completed.childReceipts![0]!.pages!.map(page => {
+        const event = receiptLogs.find(event => event.type === 'tool/result' && event.data.message?.toolCallId === page.callId)!
+        return JSON.parse(event.data.message.content.map((block: { text?: string }) => block.text ?? '').join('')).content
+      }).join('')
+      expect(JSON.parse(fullResult).filter((event: { type: string }) => event.type === 'assistant/message').flatMap((event: { data: { message: { content: { text: string }[] } } }) => event.data.message.content).map((block: { text: string }) => block.text).join('')).toBe(originalAssistantText)
+      expect((await h.host.execution.observation!(completed)).settlement).toBe('settled')
+    }
+    expect(await h.app.sessionChildRecovery(execution.session, 'retired-result', child.childId, 'result', undefined, 1, signal!)).toMatchObject({ status: 'failed', error: { code: 'stale-execution-authority' } })
     expect(await h.app.sessionReport(current.session, 'accepted-done', report, 3)).toMatchObject({ status: 'completed' })
     expect(await h.app.sessionChildRecovery(current.session, 'completed-resume', child.childId, 'resume', 'Should not run', 3, signal!)).toMatchObject({ status: 'failed', error: { code: 'task-completed' } })
   } finally { release?.(); await fixtures.close() }
@@ -330,6 +369,7 @@ it.for(['resume', 'replace', 'resume-wait', 'resume-wait-startup'] as const)('co
       await expect.poll(async () => ok(await h.app.query({ type: 'task.execution', ref: seed.ref }, operator)).execution!.events.filter(event => event.id.startsWith('child-result:')).length, { timeout: 6000 }).toBe(2)
       const paused = ok(await h.app.query({ type: 'task.execution', ref: seed.ref }, operator)).execution!
       expect(paused).toMatchObject({ state: 'paused', control: { action: 'pause', commandId: 'explicit-user-pause-before-late-result' } })
+      expect((await h.host.execution.observation!(paused)).sessions.flatMap(row => row.children).find(child => child.session.sessionId === seed.childId)?.coordinatorReceived).toBe(false)
       expect(paused.events.filter(event => event.id.startsWith('child-result:'))[1]).toMatchObject({ delivery: 'accepted', acceptance: 'unassessed' })
       expect((await new RuntimeHost(h.ctx).events(successor.id)).filter(event => event.type === 'assistant/message' || event.type === 'tool/call')).toHaveLength(requests)
       await h.app.execute({ type: 'task.control', commandId: 'explicit-user-wait-after-late-result', ref: seed.ref, executionId: current.id, owner: current.owner, epoch: 2, action: 'wait', text: 'User has not delegated an automatic observation turn' }, operator)
@@ -350,8 +390,7 @@ it.for(['resume', 'replace', 'resume-wait', 'resume-wait-startup'] as const)('co
       const third = h.ctx.agents.get(SessionId(final.session.sessionId))!
       await fixtures.run(() => third.whenIdle())
       await fixtures.run(() => h.app.reconcileControls())
-      expect(await h.app.sessionReport(final.session, 'replacement-before-new-receipt', report, 3)).toMatchObject({ status: 'failed', error: { code: 'completion-results-unsettled' } })
-      await receiveChild(h, third, resultChildId, 3, fixtures)
+      expect((await h.host.execution.observation!(final)).settlement).toBe('settled')
       expect(await h.app.sessionReport(final.session, 'replacement-accepted-done', report, 3)).toMatchObject({ status: 'completed' })
     }
   } finally { releaseRecovered(); releaseForeign(); await fixtures.close() }

@@ -33,7 +33,7 @@ Issue：https://github.com/a2d2-dev/dsh-plugin/issues/342
 
 目的：修复“提示重新委派，但旧 interrupted child 永远阻止完成”的闭环缺口。
 
-步骤与记录：新增 `replace` 后，独立 SIGKILL 场景使用 `vi.spyOn(subagents.sendMessage).mockRejectedValueOnce` 注入一次 provider 不可恢复错误（不声称该错误来自实际宿主权限拒绝），当前协调通过原生 API 创建替代 child，实际执行 `replacement_verification` 并返回证据。未正式读取结果时 replace 被拒；当前协调完整分页收取后，replace 持久绑定停止的旧 endSeq 与真实替代 completed endSeq，完成观察解除旧失败门。旧 child 的 interrupted 与 native pending 保持原样。随后再接续一代，旧接收 epoch 不授新代完成权，新协调可重新读取同一替代 child 并完成。另一路对已成功收到的普通 child 同样跨两次 handoff 再读取并完成。运行中的旧 child 不可替代；其他 Task 的替代 child 与结果读取均被拒。
+步骤与记录：新增 `replace` 后，独立 SIGKILL 场景使用 `vi.spyOn(subagents.sendMessage).mockRejectedValueOnce` 注入一次 provider 不可恢复错误（不声称该错误来自实际宿主权限拒绝），当前协调通过原生 API 创建替代 child，实际执行 `replacement_verification` 并返回证据。未正式读取结果时 replace 被拒；当前协调完整分页收取后，replace 持久绑定停止的旧 endSeq 与真实替代 completed endSeq，完成观察解除旧失败门。旧 child 的 interrupted 与 native pending 保持原样。当时版本随后再接续一代时要求新协调重新读取替代 child；普通 child 同样跨两次 handoff 重读。#1474 修复已以可信原始工具提交验证取代该要求：同一不可变结果的完整和部分进度均可继承，详见 [子会话结果读取](../agents/child-result-reading.md)。运行中的旧 child 不可替代；其他 Task 的替代 child 与结果读取均被拒。
 
 原始红灯：`/tmp/continuation-replacement-red.log`（旧实现没有正式替代准入，外层 1 失败）。绿灯：`/tmp/continuation-replacement-green.log`（真实原生 3 场景通过）。相关 7 文件、65 项回归通过，类型与构建分别记录在 `continuation-replacement-affected.log`、`continuation-replacement-typecheck.log`、`continuation-replacement-build.log`。CI 中两条 continuous wait/pause fixture 已等待首次材料维护结束，再显式重试同一 operation 的材料请求；原控制、槽位与其他自动消息不执行业务的断言保留。该文件连同最终原生回归 2 文件、20 项通过（`continuation-replacement-final.log`）。日志同存 artifact 目录。
 

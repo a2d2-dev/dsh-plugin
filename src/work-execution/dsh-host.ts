@@ -34,6 +34,20 @@ declare module '@deepseek-ai/dsh-llm' {
   }
 }
 
+/** Deterministic original visible output. seq/turn/message IDs resolve the full native log. */
+export function projectChildResult(events: readonly Pick<Awaited<ReturnType<RuntimeHost['events']>>[number], 'type' | 'seq' | 'data'>[]) {
+  return events.flatMap<{ type: string; seq: number; data: Record<string, unknown> }>(event => {
+    const { type, seq, data } = event
+    if (type === 'turn/start' || type === 'turn/end') return [{ type, seq, data: { ...(data.turn !== undefined ? { turn: data.turn } : {}), ...(data.reason !== undefined ? { reason: data.reason } : {}) } }]
+    if (type !== 'assistant/message' && type !== 'tool/result') return []
+    const message = data.message
+    if (type === 'tool/result' && !message?.isError) return [{ type, seq, data: { toolCallId: message?.toolCallId, isError: false } }]
+    const content = (message?.content ?? []).flatMap((block: { type: string; text?: string }) => block.type === 'text' ? [{ type: 'text', text: block.text }] : [])
+    if (!content.length && !message?.isError) return []
+    return [{ type, seq, data: { message: { id: message.id, role: message.role, ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}), ...(message.isError !== undefined ? { isError: message.isError } : {}), content } } }]
+  })
+}
+
 const installed = new WeakMap<Agent, { executionId: string }>()
 /** Public DSH create, preset, local model, maintenance and persisted delivery APIs. */
 export class DshWorkExecutionHost implements WorkExecutionHost {
@@ -305,21 +319,11 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     roots.set(sessionKey(execution.session), { session: execution.session, role: 'current' })
     const receivedChildren = new Map<string, number>()
     if (execution.childReceipts?.length) {
-      const receiptEvents = await this.runtime.events(SessionId(execution.session.sessionId))
       for (const receipt of execution.childReceipts) {
-        if (receipt.epoch !== execution.epoch || !receipt.complete) continue
-        const committed = receipt.callIds.every(callId => {
-          const call = receiptEvents.find(event => event.type === 'tool/call' && event.data.callId === callId && event.data.name === 'work_child_recover')
-          const result = receiptEvents.find(event => event.type === 'tool/result' && event.data.message?.toolCallId === callId && !event.data.message?.isError)
-          if (!call || !result) return false
-          const text = result.data.message.content?.filter((block: { type: string }) => block.type === 'text').map((block: { text: string }) => block.text).join('')
-          let returned: { status?: string; childStatus?: string; endSeq?: number; revision?: string; child?: { sessionId?: string } }
-          try { returned = JSON.parse(text) } catch { return false }
-          return returned.status === 'completed' && returned.childStatus === 'returned' && returned.child?.sessionId === receipt.child.sessionId && returned.endSeq === receipt.endSeq && returned.revision === receipt.revision
-        })
-        if (committed) receivedChildren.set(sessionKey(receipt.child), receipt.endSeq)
+        if (receipt.complete && await this.childReceiptCommitted(execution, receipt)) receivedChildren.set(sessionKey(receipt.child), receipt.endSeq)
       }
     }
+
     const reporting = reporter && this.activeTools.get(reporter)
     const trustedReport = reporting?.name === 'work_report' && !reporting.parent && reporting.agent?.id === execution.session.sessionId ? reporting : undefined
     const sessions: import('./observation.ts').ObservedSession[] = []
@@ -376,6 +380,36 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     const unknown = blockers.some(blocker => /unknown|unavailable/.test(blocker.code))
     return { settlement: unknown ? 'unknown' : blockers.length ? 'pending' : 'settled', sessions, blockers, reminders: [...reminders], limitations: [...limitations] }
   }
+  /** Read facts from their original trusted coordinator logs, including retired epochs. */
+  async childReceiptCommitted(execution: WorkExecution, receipt: NonNullable<WorkExecution['childReceipts']>[number]): Promise<boolean> {
+    const coordinators = [{ session: execution.session, epoch: execution.epoch }, ...(execution.retired ?? [])]
+    // Legacy receipts have one epoch and no per-page provenance. Resolve only through this execution.
+    const legacy = coordinators.find(item => item.epoch === receipt.epoch)
+    const pages = receipt.pages ?? (legacy ? receipt.callIds.map(callId => ({ session: legacy.session, epoch: receipt.epoch, callId })) : [])
+    if (!pages.length || pages.length !== receipt.callIds.length) return false
+    const logs = new Map<string, Awaited<ReturnType<RuntimeHost['events']>>>()
+    let cursor = 0
+    for (const [index, page] of pages.entries()) {
+      if (page.callId !== receipt.callIds[index] || page.session.runtimeId !== this.runtimeId || !coordinators.some(item => item.epoch === page.epoch && item.session.runtimeId === page.session.runtimeId && item.session.sessionId === page.session.sessionId)) return false
+      const id = page.session.sessionId
+      if (!logs.has(id)) logs.set(id, await this.runtime.events(SessionId(id)))
+      const events = logs.get(id)!
+      const call = events.find(event => event.type === 'tool/call' && event.data.callId === page.callId && event.data.name === 'work_child_recover')
+      const result = events.find(event => event.type === 'tool/result' && event.data.message?.toolCallId === page.callId && !event.data.message?.isError)
+      if (!call || !result || result.seq <= call.seq) return false
+      let arguments_: { child_session_id?: string; action?: string; expected_epoch?: number; cursor?: number; revision?: string }
+      try { arguments_ = JSON.parse(call.data.arguments) } catch { return false }
+      if (arguments_.child_session_id !== receipt.child.sessionId || arguments_.action !== 'result' || arguments_.expected_epoch !== page.epoch || (arguments_.cursor ?? 0) !== cursor || (cursor > 0 && arguments_.revision !== receipt.revision)) return false
+      const text = result.data.message.content?.filter((block: { type: string }) => block.type === 'text').map((block: { text: string }) => block.text).join('')
+      let returned: { status?: string; childStatus?: string; endSeq?: number; revision?: string; child?: { runtimeId?: string; sessionId?: string }; content?: string; nextCursor?: number; complete?: boolean }
+      try { returned = JSON.parse(text) } catch { return false }
+      if (returned.status !== 'completed' || returned.childStatus !== 'returned' || returned.child?.sessionId !== receipt.child.sessionId || returned.child.runtimeId !== receipt.child.runtimeId || returned.endSeq !== receipt.endSeq || returned.revision !== receipt.revision || typeof returned.content !== 'string') return false
+      cursor += returned.content.length
+      if (index < pages.length - 1 && (returned.complete !== false || returned.nextCursor !== cursor)) return false
+      if (index === pages.length - 1 && (returned.complete !== receipt.complete || (!receipt.complete && returned.nextCursor !== cursor))) return false
+    }
+    return cursor === receipt.cursor
+  }
   async childRecovery(execution: WorkExecution, child: NonNullable<import('../work-types.ts').ContinuationOperation['pendingChildren']>[number], action: 'status' | 'result' | 'resume', request?: NonNullable<WorkExecution['childRecovery']>[number], signal: AbortSignal = new AbortController().signal): Promise<{ status: string; endSeq?: number; messageId?: string; events?: unknown[] }> {
     if (child.child.runtimeId !== this.runtimeId || child.parent.runtimeId !== this.runtimeId) throw new WorkExecutionError('executor-runtime-unavailable', 'Child belongs to another runtime')
     const parentId = SessionId(child.parent.sessionId), childId = SessionId(child.child.sessionId)
@@ -386,7 +420,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     const events = await this.runtime.events(childId)
     if (native.returned && !(action === 'resume' && ['interrupted', 'error', 'aborted', 'blocked', 'max-tokens'].includes(native.attempt?.reason ?? ''))) {
       const start = events.findLastIndex(event => event.type === 'turn/start')
-      return { status: 'returned', endSeq: native.endSeq, ...(action === 'result' ? { events: events.slice(Math.max(0, start)) } : {}) }
+      return { status: 'returned', endSeq: native.endSeq, ...(action === 'result' ? { events: projectChildResult(events.slice(Math.max(0, start))) } : {}) }
     }
     if (action !== 'resume') return { status: native.status }
     if (native.mode !== 'continuable' || !request) throw new WorkExecutionError('child-not-resumable', 'This exact child is not a native continuable Session')
