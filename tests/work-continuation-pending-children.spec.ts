@@ -1,4 +1,6 @@
 import { expect, it, vi } from 'vitest'
+import { join } from 'node:path'
+import { WorkDao } from '../src/work-store/dao.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import Subagents from '@deepseek-ai/dsh-subagent'
@@ -31,7 +33,8 @@ it.for(['complete', 'partial'] as const)('hands off a %s real native child resul
   const fixtures = new ExecutionFixtures(signal)
   let release!: () => void
   try {
-    const h = await fixtures.mount(await fixtures.root(), 'read-only')
+    const root = await fixtures.root()
+    const h = await fixtures.mount(root, 'read-only')
     h.model.uniqueToolIds = true
     await h.ctx.plugin(Subagents, { maxActiveSubagents: 8, maxDepth: 1 })
     h.ctx.subagents.registerProvider({ name: 'fresh-local', capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false }, inheritsParentContext: false,
@@ -99,6 +102,24 @@ it.for(['complete', 'partial'] as const)('hands off a %s real native child resul
     const facts = await h.host.execution.observation!(received)
     expect(facts.settlement, JSON.stringify(facts)).toBe(reading === 'complete' ? 'settled' : 'pending')
     const receipt = received.childReceipts![0]!
+    const dao = WorkDao.forDirectory(join(root, 'work'))
+    await dao.transaction(async state => { delete state.executions.find(item => item.id === received.id)!.childReceipts![0]!.pages })
+    const legacyStatus = await h.app.sessionChildRecovery(current.session, 'legacy-format-status', child.childId, 'status', undefined, 2, signal!)
+    if (reading === 'partial') {
+      expect(legacyStatus).toMatchObject({ restartRequired: true, next: { action: 'result', cursor: 0 } })
+      expect(legacyStatus).not.toHaveProperty('readProgress')
+    } else expect(legacyStatus).toMatchObject({ readProgress: { complete: true, cursor: receipt.cursor } })
+    await dao.transaction(async state => { state.executions.find(item => item.id === received.id)!.childReceipts![0]!.pages = receipt.pages })
+    const globalObservation = vi.spyOn(h.host.execution, 'observation').mockRejectedValue(Error('Global graph is unavailable'))
+    expect(await h.app.sessionChildRecovery(current.session, 'carried-status-without-global-graph', child.childId, 'status', undefined, 2, signal!)).toMatchObject({ status: 'completed', childStatus: 'returned' })
+    expect(await h.app.sessionChildRecovery(current.session, 'carried-result-without-global-graph', child.childId, 'result', undefined, 2, signal!)).toMatchObject({ status: 'completed', childStatus: 'returned' })
+    expect(globalObservation).not.toHaveBeenCalled()
+    await expect(h.app.sessionChildRecovery(current.session, 'unknown-child-needs-discovery', 'unrelated-child', 'status', undefined, 2, signal!)).rejects.toThrow('Global graph is unavailable')
+    expect(globalObservation).toHaveBeenCalledTimes(1)
+    globalObservation.mockRestore()
+    // Restore the actual committed receipt after the deliberately uncommitted direct read above.
+    await dao.transaction(async state => { state.executions.find(item => item.id === received.id)!.childReceipts = received.childReceipts })
+    await expect(h.host.execution.childRecovery!(received, { ...received.continuation!.pendingChildren![0]!, parent: current.session }, 'status')).rejects.toMatchObject({ code: 'unrelated-child' })
     expect(await h.host.execution.childReceiptCommitted!(received, { ...receipt, pages: undefined })).toBe(true)
     expect(await h.host.execution.childReceiptCommitted!(received, { ...receipt, callIds: [], pages: [] })).toBe(false)
     expect(await h.host.execution.childReceiptCommitted!(received, { ...receipt, cursor: receipt.cursor + 1 })).toBe(false)
