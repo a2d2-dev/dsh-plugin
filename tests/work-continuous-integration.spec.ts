@@ -295,6 +295,99 @@ it.each([
   } finally { release(); await fixtures.close() }
 }, 20_000)
 
+it.each([
+  [true, true], [false, true], [false, false],
+] as const)('preserves a native user Stop across a human status turn (previously observed: %s, scan while running: %s)', async (previouslyObserved, scanWhileRunning) => {
+  const fixtures = new ExecutionFixtures()
+  let release = () => {}
+  try {
+    const h = await fixtures.mount(await fixtures.root(), 'read-only', true)
+    const app = new WorkApplication(h.app.directory, h.host, source, undefined, { enabled: scanWhileRunning })
+    const execute = (command: unknown) => fixtures.run(async () => completed(await app.execute(command, actor)))
+    const query = (request: unknown) => fixtures.run(async () => completed(await app.query(request, actor)))
+    const connected = await execute({ type: 'source.connect', commandId: 'connect-stop', githubProject: { owner: 'example', type: 'org', number: 1 } })
+    const projectId = connected.project!.id, sourceId = connected.source!.id
+    await query({ type: 'source.issues', projectId, sourceId, page: 1, perPage: 20, assignee: '@me', state: 'open', refresh: true })
+    const options = (await query({ type: 'source.execution-options', projectId, sourceId })).executionOptions!
+    let entered = 0
+    h.ctx.tools.register(defineTool({ name: 'hold_user_stop', description: 'Keep native conversation running after user Stop', parameters: {},
+      output: { schema: { type: 'object', additionalProperties: false, properties: { result: { type: 'string', required: true } } }, render: (_, value) => [{ type: 'text', text: value.result }] },
+      async execute(_, exec) {
+        entered++
+        await new Promise<void>(resolve => { release = resolve; exec.signal.addEventListener('abort', () => resolve(), { once: true }) })
+        return { result: 'Status evidence read' }
+      } }))
+    h.model.uniqueToolIds = true
+    h.model.nextTool = { name: 'hold_user_stop', arguments: {} }
+    await execute({ type: 'continuous.configure', commandId: 'enable-stop', projectId, sourceId, expectedVersion: 0, assignee: '@me', labels: ['bug'], resource: options.resources[0]!.ref, model: options.defaults.model, agentPreset: options.defaults.agentPreset, permissionPreset: options.defaults.permissionPreset, enabled: true })
+    const rule = (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!, ref = rule.active!
+    const first = (await query({ type: 'task.detail', ref })).execution!
+    const agent = h.ctx.agents.get(SessionId(first.session.sessionId))!
+    await vi.waitFor(() => expect(entered).toBe(1))
+    await execute({ type: 'continuous.set-enabled', commandId: 'pause-intake-stop', projectId, sourceId, expectedVersion: rule.version, enabled: false })
+    agent.cancel({ kind: 'user' })
+    await fixtures.run(() => agent.whenIdle())
+    const stopped = await h.host.execution.failure!(first)
+    expect(stopped).toMatchObject({ userCancelled: true, message: expect.stringContaining('Last model turn ended aborted') })
+    if (previouslyObserved) {
+      await fixtures.run(() => app.reconcileControls())
+      expect((await query({ type: 'task.detail', ref })).execution!.runtimeFailure).toEqual(stopped)
+      expect((await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!.slots).not.toContainEqual(ref)
+    }
+    h.model.nextTool = { name: 'hold_user_stop', arguments: {} }
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: '现在是什么状态？只回答状态。' }], source: { kind: 'user' } }))
+    await vi.waitFor(() => expect(entered).toBe(2))
+    if (!scanWhileRunning) {
+      release()
+      await fixtures.run(() => agent.whenIdle())
+    }
+    const requests = h.model.requests.length
+    await fixtures.run(() => app.reconcileControls())
+    const during = (await query({ type: 'task.detail', ref })).execution!
+    expect(during.runtimeFailure).toEqual(stopped)
+    const duringRule = (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!
+    expect(duringRule.items[0]).toMatchObject({ state: 'blocked', reason: stopped!.message })
+    expect(duringRule.slots).not.toContainEqual(ref)
+    expect(duringRule.items[0]!.resumeRequested).toBeUndefined()
+    expect(agent.status).toBe(scanWhileRunning ? 'running' : 'idle')
+    expect(h.model.requests).toHaveLength(requests)
+    expect(during).toMatchObject({ id: first.id, owner: first.owner, epoch: first.epoch, session: first.session })
+    expect(during.control).toEqual(first.control)
+    release()
+    await fixtures.run(() => agent.whenIdle())
+    const last = (await new RuntimeHost(h.ctx).events(agent.id)).findLast(event => event.type === 'turn/end')!
+    expect(last.data.reason.kind).toBe('completed')
+    await fixtures.run(() => app.reconcileControls())
+    expect((await query({ type: 'task.detail', ref })).execution!.runtimeFailure).toEqual(stopped)
+    const after = (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!
+    expect(after.items[0]).toMatchObject({ state: 'blocked', reason: stopped!.message })
+    expect(after.slots).not.toContainEqual(ref)
+    expect((await query({ type: 'project.detail', projectId })).tasks).toHaveLength(1)
+    const authority = { ref, executionId: first.id, owner: first.owner, epoch: first.epoch }
+    if (scanWhileRunning) {
+      if (!previouslyObserved) {
+        await execute({ type: 'task.input', commandId: 'result-awaiting-retry', ...authority, kind: 'result', text: '仅保存待处理事实，等待显式恢复。' })
+        expect((await query({ type: 'task.detail', ref })).execution!.runtimeFailure).toEqual(stopped)
+      }
+      h.model.nextTool = { name: 'hold_user_stop', arguments: {} }
+      await execute(previouslyObserved
+        ? { type: 'task.control', commandId: 'resume-native-stop', ...authority, action: 'resume', text: '明确继续原任务' }
+        : { type: 'task.reconcile', commandId: 'retry-native-stop', ...authority })
+      await fixtures.run(() => app.reconcileControls())
+      await vi.waitFor(() => expect(entered).toBe(3))
+      await fixtures.run(() => app.reconcileControls())
+      expect((await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!.slots).toContainEqual(ref)
+      const resumedFailure = (await query({ type: 'task.detail', ref })).execution!.runtimeFailure
+      expect(resumedFailure?.userCancelled && !resumedFailure.acknowledged).not.toBe(true)
+    } else {
+      await execute({ type: 'task.input', commandId: 'business-input-after-stop', ...authority, kind: 'input', text: '已明确授权继续处理原任务' })
+      expect((await query({ type: 'task.detail', ref })).execution!.runtimeFailure?.acknowledged).toBe(true)
+      // Business input retains the existing pause-intake ordering policy.
+      expect((await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!.slots).not.toContainEqual(ref)
+    }
+  } finally { release(); await fixtures.close() }
+}, 20_000)
+
 it('ends a real running root and native child through public cancellation, retaining capacity until owner jobs stop', async ({ signal }) => {
   const fixtures = new ExecutionFixtures(signal)
   const releaseTools = new Map<string, () => void>()

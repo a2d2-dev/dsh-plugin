@@ -98,7 +98,7 @@ export class WorkApplication {
     if (!isAbsolute(directory)) throw new Error('Work record directory must be absolute')
     this.dao = WorkDao.forDirectory(directory)
     this.executionGuardEnabled = guardOptions.enabled !== false && !!this.host.execution?.connectGuard
-    if (this.executionGuardEnabled) this.host.execution?.connectGuard?.((sessionId, input) => this.guardExecution(sessionId, input))
+    this.host.execution?.connectGuard?.((sessionId, input) => this.guardExecution(sessionId, input))
     this.host.execution?.connectObservation?.(async requested => {
       const state = await this.load()
       const current = state.executions.find(item => item.id === requested.id && sameTask(item.ref, requested.ref))
@@ -229,7 +229,17 @@ export class WorkApplication {
   }
   /** Only the current authorized execution can receive a correction, never its history. */
   private async guardExecution(sessionId: string, input: WorkGuardInput): Promise<string | undefined> {
-    if (input.kind === 'ingress') return undefined
+    if (input.kind === 'ingress') {
+      const execution = (await this.load()).executions.find(item => item.session.sessionId === sessionId)
+      if (execution?.actual) {
+        // Observe before the human turn can hide an as-yet unrecorded Stop
+        // behind a successful turn/end. This never acknowledges or resumes it.
+        try { await this.observeRuntimeFailure(execution.id) }
+        catch { /* Unavailable Task observation must not reject native conversation. */ }
+      }
+      return undefined
+    }
+    if (!this.executionGuardEnabled) return undefined
     // Observe without the DAO writer lock. No maintenance/whenIdle calls here:
     // this callback runs inside the exact Agent's stopping boundary.
     const observed = input.kind === 'stopping' ? (await this.load()).executions.find(item => item.session.sessionId === sessionId) : undefined
@@ -751,7 +761,12 @@ export class WorkApplication {
             const current = state.executions.find(execution => execution.id === item.executionId && sameTask(execution.ref, item.ref))
             if (current?.actual && host.status(current) === 'running' && !item.end && current.control?.action !== 'end'
               && !continuousCompleted(state, current) && !['waiting', 'paused'].includes(current.state)
-              && (!current.control || current.control.action === 'resume') && !continuousHasSlot(rule, current.ref)) continuousSetSlot(rule, current.ref, true)
+              && (!current.control || current.control.action === 'resume')) {
+              if (current.runtimeFailure?.userCancelled && !current.runtimeFailure.acknowledged) {
+                item.state = 'blocked'; item.reason = current.runtimeFailure.message
+                continuousSetSlot(rule, current.ref, false)
+              } else if (!continuousHasSlot(rule, current.ref)) continuousSetSlot(rule, current.ref, true)
+            }
           }
           const recovery = rule.items.find(item => item.recoveryBlocked)
           if (!rule.error && recovery) rule.error = { code: 'continuous-recovery-blocked', message: recovery.reason ?? 'Host recovery needs an explicit retry' }
@@ -809,8 +824,10 @@ export class WorkApplication {
                 if (managed.item.reason !== legacyObservation && (held || current.state === 'failed' || continuationInFlight(current) && !error)) return
                 delete managed.item.recoveryBlocked; delete managed.item.retryAt
                 managed.item.attempts = 0
-                if (error) managed.item.state = 'blocked'
-                else if (current.state !== 'failed') {
+                if (error) {
+                  managed.item.state = 'blocked'
+                  if (current.runtimeFailure?.userCancelled && !current.runtimeFailure.acknowledged) continuousSetSlot(managed.rule, current.ref, false)
+                } else if (current.state !== 'failed') {
                   managed.item.state = ['waiting', 'paused'].includes(current.state) ? current.state as 'waiting' | 'paused'
                     : held ? 'blocked' : 'active'
                 }
@@ -1228,6 +1245,7 @@ export class WorkApplication {
     await this.sourceTransaction(async state => {
       const current = state.executions.find(item => item.id === id)!
       if (current.owner !== execution.owner || current.epoch !== execution.epoch || !sameSession(current.session, execution.session)) return
+      if (current.runtimeFailure?.userCancelled && !current.runtimeFailure.acknowledged && !failure?.userCancelled) return
       if (failure) current.runtimeFailure = failure
       else delete current.runtimeFailure
     })
@@ -1747,7 +1765,10 @@ export class WorkApplication {
         if (command.type !== 'task.reconcile') return failed('continuous-ended', '本项队列已明确结束，不能恢复业务处理；历史记录仍可查看')
       }
       if (command.type === 'task.organize') return applyTaskOrganization(state, execution, command.organization, command.commandId, randomUUID)
-      if (managed && command.type === 'task.reconcile' && execution.control?.action !== 'end') { managed.item.resumeRequested = true; managed.item.explicitResumeRequested = true; managed.item.attempts = 0; delete managed.item.retryAt; delete managed.item.recoveryBlocked }
+      if (managed && command.type === 'task.reconcile' && execution.control?.action !== 'end') {
+        managed.item.resumeRequested = true; managed.item.explicitResumeRequested = true; managed.item.attempts = 0; delete managed.item.retryAt; delete managed.item.recoveryBlocked
+        if (execution.runtimeFailure?.userCancelled) execution.runtimeFailure.acknowledged = true
+      }
       if (managed && continuousCompleted(state, execution) && (command.type === 'task.input' || command.type === 'task.continue' || (command.type === 'task.control' && command.action === 'resume'))) return failed('continuous-completed', 'Completed continuous work cannot restart')
       if (command.type === 'task.report') {
         let reminders: string[] | undefined

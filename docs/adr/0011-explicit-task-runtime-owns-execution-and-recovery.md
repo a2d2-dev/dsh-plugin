@@ -67,7 +67,7 @@
 
 旧版本在会话观察服务缺失时会持久保存 `recoveryBlocked` 和准确错误 `Cannot read properties of undefined (reading 'observeSession')`。对此已确认的只读观察失败，周期恢复重新通过当前 Execution 的正式 failure 观察读取真实会话日志；读取仍失败则保留原保护。恢复先在调度锁内扫描队列已绑定的准确 ExecutionId／TaskRef：当前主会话确实 running、实际配置已确认且没有业务 wait、用户 pause/end 或完成事实时，补回遗失的槽位，再观察旧槽位的收尾，最后才安排候选。历史、子会话和无关会话运行不构成恢复证明。
 
-正式 failure 观察按当前会话日志区分轮次：有更新的 `turn/start` 且当前 Agent 仍 running 时，上一轮的 `turn/end` 已被真实新轮次取代；没有这个事实的空闲或冷会话继续保留其最后失败。观察提交同时核对 ExecutionId、owner、epoch 和准确 Session；排队项的投影还须匹配当前规则与执行关联。成功观察后，只清理已被事实推翻的旧 interrupted／model-turn、idle-without-progress 和 observeSession 保护；若仍有真实执行错误、接续错误或当前未解决的 runtimeFailure，则继续 blocked 并呈现真实原因，不把旧保护文案留作当前错误。
+正式 failure 观察按当前会话日志区分轮次：有更新的 `turn/start` 且当前 Agent 仍 running 时，上一轮 provider 错误可被真实新轮次取代；原生用户 Stop（`aborted` 且 `reason.kind=user`）必须沿用已有显式恢复／业务输入的确认语义，普通状态问句不构成确认。人工消息 ingress 在正常对话执行前观察当前执行，保存尚未协调观察的 Stop；观察失败不拒绝原生对话，关闭自动纠正也不关闭此取消事实观察。后续无失败或正常 `turn/end` 不删除未确认的 `userCancelled`，其状态问句及工具不取得业务槽位。没有新轮次事实的空闲或冷会话继续保留其最后失败。观察提交同时核对 ExecutionId、owner、epoch 和准确 Session；排队项的投影还须匹配当前规则与执行关联。成功观察后，只清理已被事实推翻的旧 interrupted／model-turn、idle-without-progress 和 observeSession 保护；若仍有真实执行错误、接续错误或当前未解决的 runtimeFailure，则继续 blocked 并呈现真实原因，不把旧保护文案留作当前错误。
 
 业务等待、人工暂停／结束、尚未完成的维护以及未知创建或结算结果继续独立成立，不以 running 或观察成功解除。没有新输入的空闲执行按正常安全结算让出槽位，不自动发送续跑消息；其他未知结果沿用带当前 ExecutionId、owner、epoch 的 `task.reconcile` 或明确 `task.control resume`。恢复保持 Task、Execution、Session、owner、epoch、模型和权限，不创建替代执行。遗失槽位与旧保留槽位并存时，实际 running 已占满容量便不唤醒旧 idle 工作；仍需安全收尾的槽位保留到正常结算，结束后再继续有序轮转。
 
@@ -77,7 +77,9 @@
 PATH=/root/.nvm/versions/node/v22.23.1/bin:$PATH pnpm exec vitest run tests/work-continuous-integration.spec.ts tests/work-continuous.spec.ts
 ```
 
-真实 Agent 场景让 `hold_recovery` 工具保持运行，注入历史协调保护并保留或移除槽位；`continuous.status` 应显示同一个执行 active、占用恢复、错误清除，模型请求与 Task 数量不增加。另一路先由真实模型循环记录失败，再由原生人工输入开启新轮次，确认正式 failure 不再把上一轮失败当作当前结果。工具返回后，原槽位经正常空闲结算释放，下一项取得槽位。负例覆盖观察期间 owner／epoch／Session 改变、旧 ExecutionId、历史／关联会话运行、真实错误、wait/pause/end 以及容量已满时的旧待投递输入；数据从宿主事实进入执行协调记录，再由只读查询投影，业务规格与验收不随恢复改变。
+真实 Agent 场景让 `hold_recovery` 工具保持运行，注入历史协调保护并保留或移除槽位；`continuous.status` 应显示同一个执行 active、占用恢复、错误清除，模型请求与 Task 数量不增加。另一路先由真实模型循环记录 provider 失败，再由原生人工输入明确继续、开启新轮次，确认正式 failure 不再把上一轮失败当作当前结果。原生 Stop 回归使用公开 `Agent.cancel({ kind: 'user' })`，随后同一 Session 仅问状态并执行 hold 工具，分别覆盖已持久观察停止、未观察停止，以及状态问句正常完成后才扫描（关闭自动纠正仍保留观察）；三者均保留未确认的用户停止，不授业务槽位。初始红灯日志 `/tmp/issue-300-user-stop-red.log`（2 失败）；正常结束先于扫描的补充红灯 `/tmp/issue-300-user-stop-idle-red.log`（1 失败）。工具返回后，非用户停止的原槽位经正常空闲结算释放，下一项取得槽位。负例覆盖观察期间 owner／epoch／Session 改变、旧 ExecutionId、历史／关联会话运行、真实错误、wait/pause/end 以及容量已满时的旧待投递输入；数据从宿主事实进入执行协调记录，再由只读查询投影，业务规格与验收不随恢复改变。
+
+显式恢复仍沿用准确 ExecutionId／owner／epoch 的既有入口：`task.control resume` 和 `task.input kind=input` 确认已观察的停止；受管项的显式 `task.reconcile` 重试也确认该用户停止，`kind=result` 只排队不确认。只加强停止保留而未保留 reconcile 确认时，真实回归在重试运行后失去槽位，红灯见 `/tmp/issue-300-user-stop-reconcile-red-final.log`（1 失败）。最终六文件回归包含原五文件 164 项、新增 3 项和 ingress 相关护栏 35 项，共 202 项通过，日志 `/tmp/issue-300-user-stop-final-regression.log`；`pnpm typecheck` 通过，日志 `/tmp/issue-300-user-stop-typecheck-final.log`。测试使用真实 Agent／公开取消／持久化与工具执行，外部模型输出受控；本轮未执行页面或服务操作。
 
 ## 实现覆盖
 
