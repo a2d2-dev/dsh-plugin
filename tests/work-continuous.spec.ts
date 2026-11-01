@@ -1670,3 +1670,28 @@ it('does not apply or dispatch an old resume receipt after end replaces it durin
     expect((await h.status()).slots).not.toContainEqual(first.ref)
   } finally { release(); await pending }
 })
+
+it('requests the existing queue slot only for a valid model wait wake and preserves queued notification payloads', async () => {
+  const h = await setup()
+  completed(await h.app.execute(h.configure, operator))
+  const execution = await h.execution()
+  const active = await h.status()
+  completed(await h.app.execute({ type: 'continuous.set-enabled', commandId: 'stop-new-intake', ...h.scope, expectedVersion: active.version, enabled: false }, operator))
+  h.host.idle(execution)
+  completed(await h.app.sessionControl(execution.session, 'external-wait', 'wait', '等待已登记 PR 更新或定时复查', undefined, { reason: 'external', checkedFacts: ['PR CI pending'], wakeCondition: 'PR watch 更新或定时复查' }))
+  await h.app.reconcileControls()
+  const waiting = await h.execution(execution.ref)
+  expect(waiting.state).toBe('waiting')
+  expect((await h.status()).slots).not.toContainEqual(execution.ref)
+  const unrelated: NativeWorkMessage = { id: 'unrelated-notice', role: 'user', content: [{ type: 'text', text: 'unrelated automatic input' }], source: { kind: 'a2d2-work-dispatch' } }
+  expect(await h.host.authorize(execution.session.sessionId, [unrelated])).toBe(false)
+  expect((await h.status()).items.find(item => item.executionId === execution.id)?.resumeRequested).toBeUndefined()
+  const reminder: NativeWorkMessage = { id: 'valid-recheck', role: 'user', content: [{ type: 'text', text: 'recheck accepted CI wait' }], source: { kind: 'schedule' } }
+  expect(await h.host.authorize(execution.session.sessionId, [reminder])).toBe(false)
+  expect((await h.status()).items.find(item => item.executionId === execution.id)?.resumeRequested).toBe(true)
+  expect((await h.status()).slots).not.toContainEqual(execution.ref)
+  expect((await h.execution(execution.ref)).events.find(event => event.id === reminder.id)).toMatchObject({ delivery: 'accepted', nativeMessage: reminder })
+  await h.app.reconcileContinuous()
+  expect((await h.status()).slots).toContainEqual(execution.ref)
+  expect((await h.execution(execution.ref)).control).toMatchObject({ action: 'resume', status: 'applied' })
+}, 15000)

@@ -164,16 +164,50 @@ export class WorkApplication {
       if (state.executions.some(item => item.retired?.some(old => old.session.sessionId === sessionId) || (item.continuation?.successor.sessionId === sessionId && item.session.sessionId !== sessionId))) return false
       const execution = state.executions.find(item => item.session.sessionId === sessionId)
       if (mayAdvance(execution) || messages.length === 0) return mayAdvance(execution)
+      // Only a model-owned structured wait delegates a future observation turn.
+      // A notification is permission to inspect facts, never proof of success.
+      const modelWait = (owner: typeof execution) => owner?.state === 'waiting'
+        && owner.control?.action === 'wait' && owner.control.status === 'applied' && owner.control.commandId.startsWith('tool:')
+        && ['executor', 'external'].includes(owner.control.yield?.reason ?? '')
+        && !isTaskCompleted(taskAt(state, owner.ref)) && !continuousCompleted(state, owner)
+        && !owner.error && !(owner.runtimeFailure && !owner.runtimeFailure.acknowledged)
+        && !owner.continuationBlocked && !continuationInFlight(owner)
+      const wait = modelWait(execution) ? execution!.control : undefined
+      const facts = wait?.yield?.reason === 'executor' && this.host.execution?.observation
+        ? await this.host.execution.observation(execution!) : undefined
+      const wake = wait && messages.find(message => {
+        if (execution!.history.some(entry => entry.commandId === `automatic-wake:${message.id}`)) return false
+        const source = message.source as { kind?: string } | undefined
+        if (source?.kind === 'schedule') return true
+        if (wait.yield!.reason === 'external') return source?.kind === 'a2d2-github-watch'
+        const awaited = wait.yield!
+        if (source?.kind === 'tool-jobs' && awaited.jobId) {
+          const text = message.content.flatMap(block => typeof block === 'object' && block !== null && 'type' in block && block.type === 'text' && 'text' in block ? [block.text] : []).join('\n')
+          const jobId = /^background job (\S+)(?:\s|$)/.exec(text)?.[1]
+          return jobId === awaited.jobId && !!facts?.sessions.some(row => (!awaited.executor || sameSession(row.session, awaited.executor))
+            && row.jobs.some(job => job.id === jobId && ['completed', 'failed', 'killed'].includes(job.status) && job.availability !== 'lost' && job.delivery !== 'delivered'))
+        }
+        return source?.kind === 'subagent-settled' && !!awaited.executor && !!facts?.sessions.some(row => row.children.some(child => sameSession(child.session, awaited.executor!)
+          && child.settlement && isDeepStrictEqual(child.settlement.message, message)))
+      })
       return this.dao.transaction(async current => {
         const owner = current.executions.find(item => item.session.sessionId === sessionId)
         if (current.executions.some(item => item.retired?.some(old => old.session.sessionId === sessionId))) return false
         state = current
         if (mayAdvance(owner)) return true
+        const waking = !!wake && modelWait(owner) && owner!.control!.commandId === wait!.commandId
+          && !owner!.history.some(entry => entry.commandId === `automatic-wake:${wake.id}`)
+        if (waking && continuousMayAdvance(current, owner!)) {
+          owner!.control = { commandId: `automatic-wake:${wake.id}`, action: 'resume', status: 'applied', reason: '等待条件收到通知，核实结果并继续已授权工作；条件未满足时重新登记等待。' }
+          owner!.state = 'running'
+          this.dao.appendHistory(owner!, { state: 'running', commandId: owner!.control.commandId })
+          return true
+        }
         for (const message of messages) {
           if (lifecycleOwned(message) || owner!.events.some(item => item.id === message.id)) continue
           const text = message.content.flatMap(block => typeof block === 'object' && block !== null && 'type' in block && block.type === 'text' && 'text' in block && typeof block.text === 'string' ? [block.text] : []).join('\n')
           const managed = continuousOwner(current, owner!.ref)
-          if (managed && !managed.item.end && owner!.control?.action !== 'end' && (!(owner!.error || owner!.continuation?.error || owner!.runtimeFailure || managed.item.recoveryBlocked) || typeof message.source === 'object' && message.source !== null && 'kind' in message.source && message.source.kind === 'user') && managed.item.state !== 'completed' && !continuousCompleted(current, owner!) && owner!.state !== 'paused' && !(owner!.control?.action === 'pause' && owner!.control.status === 'accepted')) { managed.item.resumeRequested = true; managed.item.attempts = 0; delete managed.item.retryAt; delete managed.item.recoveryBlocked; if (owner!.runtimeFailure) owner!.runtimeFailure.acknowledged = true }
+          if (managed && (owner!.state !== 'waiting' || waking || (message.source as { kind?: string } | undefined)?.kind === 'user') && !managed.item.end && owner!.control?.action !== 'end' && (!(owner!.error || owner!.continuation?.error || owner!.runtimeFailure || managed.item.recoveryBlocked) || typeof message.source === 'object' && message.source !== null && 'kind' in message.source && message.source.kind === 'user') && managed.item.state !== 'completed' && !continuousCompleted(current, owner!) && owner!.state !== 'paused' && !(owner!.control?.action === 'pause' && owner!.control.status === 'accepted')) { managed.item.resumeRequested = true; managed.item.attempts = 0; delete managed.item.retryAt; delete managed.item.recoveryBlocked; if (owner!.runtimeFailure) owner!.runtimeFailure.acknowledged = true }
           owner!.events.push({ id: message.id, text: text.trim() ? text.slice(0, 100_000) : 'Native Session input', kind: 'input', delivery: 'accepted', acceptance: 'unassessed', nativeMessage: structuredClone(message) })
         }
         return false
