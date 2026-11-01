@@ -123,7 +123,7 @@ PATH=/root/.nvm/versions/node/v22.23.1/bin:$PATH pnpm exec vitest run tests/work
 
 所有原生人工、schedule、作业、子会话、GitHub 通知、dispatch 和维护消息都可进入模型，waiting、paused、接续维护和 retired 会话不构成消息入口拒绝条件。宿主入口继续合并同一提醒的旧积压，并优先带入人工消息。Task 的唤醒判断只更新既有调度与准确等待事实，不再把原生消息另复制为待重放的 Task 输入；已存在的 Task inbox 及旧人工缓冲继续按原身份处理，不清队列、不伪造消费。
 
-消息送达不授予 Task owner、epoch、槽位或修改权限，也不确认结果、验收或完成。退休会话保留对话，但仍无当前协调权；用户暂停和结束保持生效。真实持久 operation 的 material、collect、receive、settle 步骤继续限制维护工具，任意自称维护的 source 标记不能取得该范围。工具边界与 Task 命令授权分别检查，不能以拒绝消息代替。
+消息送达不授予 Task owner、epoch、槽位或修改权限，也不确认结果、验收或完成。退休会话保留对话，但仍无当前协调权；用户暂停和结束保持生效。真实持久 operation 的 material、collect、receive、settle 步骤继续限制维护工具，任意自称维护的 source 标记不能取得该范围。同批人工输入和同一维护轮后续送达的人工消息均不扩大工具范围；准确维护 scope 保留到该轮结束，维护回执本身不提前开放业务工具。工具边界与 Task 命令授权分别检查，不能以拒绝消息代替。
 
 接续收集先从准确 owner 的公开观察中选择当前 live 作业实例。同一短作业号可在旧注册表重用，历史 completed/delivered 记录不能遮住当前 live/pending 行，也不能成为收集对象。保存 registryEpoch、instanceId；running/stopping 时保留固定 operation/successor 并等待后续观察，不请求终态输出或持久化不可收集错误。终态后才向准确 owner 请求正式 job_output；收集仍须由 flush 后的正式交付事实证明。历史结果保持原状，消息消费本身不能伪装 collected。
 

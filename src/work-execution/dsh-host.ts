@@ -137,15 +137,12 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
         // A scheduling decision changes Task authority, never native delivery.
         // Business admission carries instructions, not a maintenance tool scope.
         const maintenance = typeof admission === 'object' && 'step' in admission
-        if (!human && maintenance) this.maintenanceTurns.set(agent, admission)
-        else {
-          this.maintenanceTurns.delete(agent)
-          if (!human && typeof admission === 'object' && 'instruction' in admission) businessInstruction = admission.instruction
-        }
+        if (maintenance) this.maintenanceTurns.set(agent, admission)
+        else if (!human && !this.maintenanceTurns.has(agent) && typeof admission === 'object' && 'instruction' in admission) businessInstruction = admission.instruction
       }
       messages.splice(0, messages.length, ...automatic, ...humans)
       if (human) {
-        this.maintenanceTurns.delete(agent)
+        // Native human input is delivered without widening this maintenance turn.
         this.guardIntent.set(agent, humanGuardIntent(humans))
         await this.guard?.(agent.id, { kind: 'ingress', messages: humans })
       }

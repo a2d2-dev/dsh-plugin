@@ -34,3 +34,13 @@
 结果：首轮未改的执行、控制恢复、持续队列、持续队列集成四组共 183 项通过。最终组合三组 93 项中 92 项通过，首项真实三代子会话测试超过默认 5 秒；它此前在产品修正后已通过。给该测试与同文件其余宿主测试一致的 20 秒总预算，不改变内部等待条件，定向重跑 1 项通过。复用未改变代码的有效检查，合计七组 276 项通过；保留原超时日志。覆盖真实暂停消息矩阵、准确维护工具、业务指示后真实文件写入、live 作业实例、跨代子结果正式读取、旧激活冷恢复。TypeScript 检查退出 0。日志位于本机 `docs/artifacts/session-recovery-20261101/`：`related.log` 保留初始失败，`combined-final.log` 为最终三组记录，`native-child-green.log` 为超时单项的重跑，`typecheck-final-green.log` 为类型检查。不重复全套；日志按仓库规则仅本机保存。
 
 现场限制：主会话另已确认 #184 源会话在发生阻塞时位于宿主 `workspace.json` 的 `global.archivedSessionIds` 中，DSH core 的 archived-session gate 会拒绝归档会话及其后代。#352 不修改该门，也不能被称为现场循环解除的前提。本候选未安装、未重启、未修改正式 Task；真实模型与指定开发页面验收未在本分支执行，现场恢复由主会话负责。
+
+## 混合人工输入不得扩大维护工具范围（P1 review 修正）
+
+目的：真实持久 material、receive、collect 请求与人工消息同批到达时，仍按该维护步骤限制工具；人工消息送达不提前结束维护轮。
+
+步骤与记录：新增三项真实 AgentLoop 回归，使用当前固定 operation 的准确会话、请求 ID 和 source，同时投递两行人工消息。模型先尝试正式 `write`，再调用准确维护工具，再次尝试 `write`；第一项写入的结果返回时，通过公开 steer 再插入一条人工消息，覆盖同轮后续步骤。collect 使用真实 LocalJobs 和正式 `job_output` 读取实际输出，不模拟工具成功或正式交付。
+
+修复前 `mixed-maintenance-red.log` 的三项均因 `write` 实际成功而失败。修复后，准确维护 scope 无论同批是否包含人工消息都生效，持续到该轮 idle 才清理；人工消息照常完整送达。业务 admission 仍以 `step` 区分，不误入维护工具域。三项定向回归通过：前后两次正式写入均失败且文件不存在，准确 material／receive／job_output 成功，两条人工消息各完整送达一次，Task 原 pause、owner 和 epoch 保留。
+
+证据目录沿用 `docs/artifacts/session-recovery-20261101/`：`mixed-maintenance-green.log` 为三项定向绿灯，`mixed-maintenance-related.log` 为接续、执行守卫及未返回子执行三组回归，`mixed-maintenance-typecheck.log` 为类型检查。相关三组共 96 项全部通过，TypeScript 检查退出 0，diff check 通过。此修正只更新独立候选，未部署、未创建 PR 或合并。

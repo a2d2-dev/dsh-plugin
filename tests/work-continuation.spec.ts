@@ -1,8 +1,10 @@
-import { cp, writeFile } from 'node:fs/promises'
+import { cp, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { createUserMessage, MessageId, ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import LocalJobs from '@deepseek-ai/dsh-jobs-local'
+import * as ToolJobs from '@deepseek-ai/dsh-tool-jobs'
 import { WorkDao } from '../src/work.ts'
 import { ExecutionFixtures } from './work-execution-fixture.ts'
 import { installWorkTools } from '../src/work-execution/tools.ts'
@@ -591,6 +593,81 @@ it('keeps genuine maintenance tools narrow while delivering arbitrary markers wi
   expect(denied.execution.events.some(event => event.id === 'arbitrary-maintenance')).toBe(false)
   expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(1)
 })
+
+it.each(['material', 'receive', 'collect'] as const)('keeps exact %s maintenance narrow with native human input in the same batch and later steps', async step => {
+  const h = await setup()
+  h.model.uniqueToolIds = true
+  h.model.acknowledgeContinuation = false
+  await h.app.execute({ type: 'task.control', commandId: 'mixed-pause', ...fence(h.execution), action: 'pause', text: 'Preserve the user business pause' }, operator)
+  if (step === 'receive') h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+  await h.app.execute({ type: 'task.continue', commandId: 'mixed-maintenance', ...fence(h.execution) }, operator)
+  await fixtures.run(() => h.ctx.agents.get(SessionId(h.execution.session.sessionId))!.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  let current = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (current.status !== 'completed' || !current.execution?.continuation) throw Error('Missing fixed maintenance operation')
+  const agent = h.ctx.agents.get(SessionId(current.execution.session.sessionId))!
+  await fixtures.run(() => agent.whenIdle())
+  const op = current.execution.continuation
+  const requestId = `mixed-${step}:${op.operationId}`
+  let jobId: ReturnType<typeof h.ctx.jobs.start> | undefined
+  if (step === 'collect') {
+    await h.ctx.plugin(LocalJobs)
+    await h.ctx.plugin(ToolJobs)
+    jobId = h.ctx.jobs.start({ kind: 'bash', owner: agent.id, label: 'Real mixed maintenance output', run(job) {
+      job.append('REAL-MIXED-COLLECTION-EVIDENCE')
+      return { done: Promise.resolve({ status: 'completed' as const, result: 'Real collection completed' }), cancel() {} }
+    } })
+    await expect.poll(() => h.ctx.jobs.get(jobId!, agent.id).status).toBe('completed')
+    await fixtures.run(() => agent.whenIdle())
+  }
+  await WorkDao.forDirectory(h.app.directory).transaction(async state => {
+    const execution = state.executions.find(item => item.id === h.execution.id)!
+    const operation = execution.continuation!
+    if (step === 'material') operation.materialRequestId = requestId
+    if (step === 'receive') operation.readRequestId = requestId
+    if (step === 'collect') operation.collections = [{ session: execution.session, jobs: [{ id: jobId! }], requestId, delivery: 'accepted', status: 'requested' }]
+  })
+  const human = createUserMessage({ content: [{ type: 'text', text: 'Observe maintenance only. Keep the business pause.\nKeep this full native payload.' }], source: { kind: 'user' } })
+  const laterHuman = createUserMessage({ content: [{ type: 'text', text: 'Still keep the same maintenance scope and user pause.' }], source: { kind: 'user' } })
+  const request = { ...createUserMessage({ content: [{ type: 'text', text: `Exact persisted ${step} maintenance request` }], source: { kind: 'a2d2-work-maintenance', operationId: op.operationId, step } as never }), id: MessageId(requestId) }
+  const allowed = step === 'material' ? { name: 'work_continuation_material', arguments: { ...material, expected_epoch: current.execution.epoch } }
+    : step === 'receive' ? { name: 'work_continuation_received', arguments: { operation_id: op.operationId, material_command_id: op.material!.commandId, expected_epoch: current.execution.epoch } }
+    : { name: 'job_output', arguments: { job_id: jobId! } }
+  let selected = 0
+  h.model.selectTool = input => {
+    if (input.sessionId !== agent.id || !input.messages.some(message => message.id === human.id)) return
+    return [
+      { name: 'write', arguments: { file_path: `mixed-${step}-before.txt`, content: 'Business write must be denied' } },
+      allowed,
+      { name: 'write', arguments: { file_path: `mixed-${step}-after.txt`, content: 'Receipt does not end the maintenance turn' } },
+    ][selected++]
+  }
+  let inserted = false
+  h.ctx.on('tools/result', exec => {
+    if (exec.agent === agent && exec.name === 'write' && !inserted) { inserted = true; agent.steer(laterHuman) }
+  })
+  const from = agent.session.seq
+  await agent.runMaintenance(async () => {
+    agent.inbox.splice('next-step', 0, 0, [request, human])
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Deliver the queued native batch' }], source: { kind: 'schedule' } as never }))
+  })
+  await fixtures.run(() => agent.whenIdle())
+  const log = agent.session.snapshotEvents().filter(event => event.seq >= from)
+  for (const native of [request, human, laterHuman]) expect(log.filter(event => event.type === 'user/message' && event.data.id === native.id)).toEqual([expect.objectContaining({ data: expect.objectContaining({ content: native.content, source: native.source }) })])
+  const writes = log.filter(event => event.type === 'tool/call' && event.data.name === 'write')
+  expect(writes).toHaveLength(2)
+  for (const call of writes) {
+    if (call.type !== 'tool/call') throw Error('Missing actual write call')
+    expect(log.find(event => event.type === 'tool/result' && event.data.message.toolCallId === call.data.callId)).toMatchObject({ data: { message: { isError: true } } })
+  }
+  expect(JSON.stringify(log)).toContain(`permits only its ${step} maintenance step`)
+  const call = log.find(event => event.type === 'tool/call' && event.data.name === allowed.name)
+  if (call?.type !== 'tool/call') throw Error('Missing actual allowed maintenance call')
+  expect(log.find(event => event.type === 'tool/result' && event.data.message.toolCallId === call.data.callId)).toMatchObject({ data: { message: { isError: false } } })
+  for (const suffix of ['before', 'after']) await expect(readFile(join(h.workspace.path, `mixed-${step}-${suffix}.txt`), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+  current = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(current).toMatchObject({ execution: { state: 'paused', control: { commandId: 'mixed-pause', action: 'pause' }, owner: h.execution.owner, epoch: step === 'receive' ? 2 : 1 } })
+}, 20_000)
 
 it.each(['missing', 'failed-commit'] as const)('recovers a %s successor read result after cold restore without another takeover', async mode => {
   const h = await setup()
