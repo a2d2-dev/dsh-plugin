@@ -22,7 +22,7 @@
 - 已接收状态的五项禁止准入边界：[protected.log](../artifacts/continuation-auto-work-20261101/protected.log)
 - TypeScript 检查：[typecheck.log](../artifacts/continuation-auto-work-20261101/typecheck.log)
 
-本提交未安装插件、重启服务或修改真实 Task。开发及正式实例的真实模型验收由集成阶段执行；这里的工具动作证据来自真实宿主测试链路，模型为根据收到的提示选择工具的确定性 fixture。
+上述回归通过真实宿主与确定性模型验证工具动作；真实模型开发验收记录见下文。
 
 ## 跨代消息生命周期补充
 
@@ -48,4 +48,18 @@
 
 保留 #348 已安装的重复提醒合并和人工输入恢复。提醒替换队首之后，再经过同一权威旧接续控制过滤；过滤掉已领取旧控制时，先处理待处理人工输入，再让有效原始信封沿普通业务准入继续。没有有效输入的新轮才拒绝，已准入轮次的工具结果与最终答复仍能完成。
 
-集成回归先证明两项真实失败：直接拒绝空队首会搁住后面的人工/自动输入；在提醒替换前过滤会让旧控制绕过校验。修复后精确冷恢复、跨代失效、人工停止、有效自动输入、提醒替换共 8 项通过，typecheck 退出 0；此前组合相关 104 项通过。日志保存在本机 `docs/artifacts/continuation-auto-work-20261101/`，不进入 Git。指定开发实例真实模型验证仍由主协调完成。
+集成回归先证明两项真实失败：直接拒绝空队首会搁住后面的人工/自动输入；在提醒替换前过滤会让旧控制绕过校验。修复后精确冷恢复、跨代失效、人工停止、有效自动输入、提醒替换共 8 项通过，typecheck 退出 0；此前组合相关 104 项通过。日志保存在本机 `docs/artifacts/continuation-auto-work-20261101/`，不进入 Git。指定开发实例真实模型验证记录见下文。
+
+## 指定开发实例真实模型验收
+
+目的：模拟 #183 保存材料后接任，验证后继自动实际工作，而非仅回执。开发入口 https://dsh-dev.e5box.a2d2.dev/ ，包来自 `4ae2aa5`，SHA256 `2aa756cc5809c09ea3078d34df345c56270cee46fe863c6f8431620930ea2751`，198 个 lib 文件全部匹配；后续 CI 测试补丁不改变产品代码。
+
+步骤：原任务先真实读取依赖并结束源业务轮；安装后按正式入口仅请求一次接续。此后未补 Task.input、resume 或“继续”，由真实 `codex/gpt-6.1-sol` medium 后继完成回执、下一业务轮的 status、依赖 read、证明 write/read，最后按 QA 规格主动暂停。
+
+记录：Execution `1b32de9c-4b27-4734-8191-90a1f6cfa5d8`，后继 `session-66b9c883-fc96-4327-8785-86cfaf4fc68e`。receipt 为 turn1 seq23/24；业务 turn2 seq42/43 成功读取依赖，seq65/66 写入证明，seq70/71 回读成功并按 callId 对应。证明字节精确为 `QA349-183-AUTOMATIC-WORK-VERIFIED`。原生人工输入0，当前激活已 consumed，最终 epoch2/received/paused、pause applied，公开页面确认 runtime idle、无失败。模型期间的读不存在文件、空 justification、错误 escalation 三次拒绝均保留，随后自行纠正完成，无人工介入。
+
+本地证据目录 `docs/artifacts/continuation-auto-work-20261101/`：`dev-verification.json`、`dev-install-attestation.json`、`dev-restart.json`、`dev-proof.png`、`dev-received.png`；两张截图已实际检查。QA 按规格暂停，不代表 #183 或 #1474 原业务完成。
+
+## Node22 CI 测试脚本归属
+
+原候选 Node24 全绿；Node22 子会话替换单项失败但日志未显示准确错误。本机原目标自然重复8次通过。受控真实调度证明共享 nextTool 会被 foreign Session 抢先领取，导致错误 actor 读结果被拒，协调者未收结果，最终替换断言失败。仅修测试 helper，按 Session 和本次输入 ID 路由首调用与分页，保留原权限、替换及完整结果门禁，并断言 foreign 未调用收结果工具。该文件5项及 typecheck 通过。原 CI 准确原因仍未追溯确认，保留旧失败；以最终 head 全 CI 验收。详细原生红绿与 journal 见本地 `ci-child-diagnosis.md`、`ci-child-ordered-trace.json`。
