@@ -64,6 +64,9 @@ function modelOwnedWait(state: WorkSnapshot, execution: WorkExecution | undefine
     && !execution.error && !(execution.runtimeFailure && !execution.runtimeFailure.acknowledged)
     && !execution.continuationBlocked && !continuationInFlight(execution)
 }
+function effectiveContinuationPolicy(state: WorkSnapshot, execution: WorkExecution) {
+  return execution.continuationPolicy ?? state.projects.find(project => project.id === execution.ref.projectId)?.continuationPolicy
+}
 function pendingEvent(event: WorkEvent): boolean { return event.delivery !== 'consumed' && event.delivery !== 'discarded' }
 function discardLifecycleEvents(execution: import('./work-types.ts').WorkExecution): void {
   for (const event of execution.events) if (pendingEvent(event) && lifecycleOwned(event.nativeMessage)) event.delivery = 'discarded'
@@ -133,7 +136,7 @@ export class WorkApplication {
       if (!initial || isTaskCompleted(taskAt(state, initial.ref)) || ['waiting', 'paused'].includes(initial.state)
         || initial.control?.status === 'accepted' && initial.control.action !== 'resume') return true
       if (continuationInFlight(initial) || initial.continuationBlocked) return false
-      if (!initial.continuationPolicy?.enabled) return true
+      if (!effectiveContinuationPolicy(state, initial)?.enabled) return true
       await this.observeContinuation(initial.id)
       const current = (await this.load()).executions.find(item => item.id === initial.id)!
       return !continuationInFlight(current) && !current.continuationBlocked
@@ -1462,7 +1465,7 @@ export class WorkApplication {
     const state = await this.load()
     const execution = state.executions.find(item => item.id === id)!
     if (isTaskCompleted(taskAt(state, execution.ref)) || !continuousMayAdvance(state, execution)) return
-    const policy = execution.continuationPolicy
+    const policy = effectiveContinuationPolicy(state, execution)
     if (!policy?.enabled || (execution.runtimeFailure && !execution.runtimeFailure.acknowledged) || execution.continuationBlocked || continuationInFlight(execution) || !['ready', 'running'].includes(execution.state)
       || (execution.control?.status === 'accepted' && execution.control.action !== 'resume')) return
     let observation: import('./work-types.ts').ContinuationObservation | undefined
@@ -1477,7 +1480,7 @@ export class WorkApplication {
     await this.sourceTransaction(async state => {
       const current = state.executions.find(item => item.id === id)!
       if (isTaskCompleted(taskAt(state, current.ref)) || current.owner !== execution.owner || current.epoch !== execution.epoch || !sameSession(current.session, execution.session)
-        || !continuousMayAdvance(state, current) || current.continuationPolicy?.version !== policy.version || !current.continuationPolicy.enabled
+        || !continuousMayAdvance(state, current) || !isDeepStrictEqual(effectiveContinuationPolicy(state, current), policy)
         || current.runtimeFailure && !current.runtimeFailure.acknowledged || current.continuationBlocked || continuationInFlight(current)
         || !['ready', 'running'].includes(current.state) || current.control?.status === 'accepted' && current.control.action !== 'resume') return
       if (observation) current.continuationObservation = observation
@@ -1515,7 +1518,7 @@ export class WorkApplication {
     }
     if (execution.control?.status === 'accepted' && execution.control.action !== 'resume') return execution
     if (execution.epoch === execution.continuation!.sourceEpoch && execution.continuation!.automatic && execution.runtimeFailure && !execution.runtimeFailure.acknowledged) return save(current => { current.continuation!.error = { code: 'continuation-source-failed', message: 'The source model turn failed or was cancelled; explicit resume, input or manual continuation is required' } })
-    if (execution.epoch === execution.continuation!.sourceEpoch && execution.continuation!.automatic && !execution.continuationPolicy?.enabled) return save(current => { current.continuation!.error = { code: 'continuation-disabled', message: 'Automatic continuation is disabled; explicit manual continuation can resume this same operation' } })
+    if (execution.epoch === execution.continuation!.sourceEpoch && execution.continuation!.automatic && !effectiveContinuationPolicy(await this.load(), execution)?.enabled) return save(current => { current.continuation!.error = { code: 'continuation-disabled', message: 'Automatic continuation is disabled; explicit manual continuation can resume this same operation' } })
     let kickoffText: string | undefined
     try {
       if (!host.maintain || !host.profile) throw new WorkExecutionError('host-capability-unavailable', 'Safe continuation host boundary is unavailable')
@@ -1616,9 +1619,11 @@ export class WorkApplication {
         const actual = await host.profile!(execution)
         if (operation.automatic) {
           if (!host.measure) throw new WorkExecutionError('continuation-meter-unavailable', 'Automatic handoff requires current public token measurement')
+          const policy = effectiveContinuationPolicy(await this.load(), execution)
+          if (!policy?.enabled) throw new WorkExecutionError('continuation-disabled', 'Automatic continuation is disabled; explicit manual continuation can resume this same operation')
           const observed = await host.measure(execution)
           if (execution.continuationObservation && observed.routeKey !== execution.continuationObservation.routeKey) throw new WorkExecutionError('continuation-route-changed', 'Source route metadata changed during automatic handoff')
-          if (operation.phase === 'reserved' && observed.totalTokens + observed.outputReserve + execution.continuationPolicy!.reserveTokens > observed.capacity) throw new WorkExecutionError('continuation-reserve-exhausted', 'The source passed the soft target before reaching idle and lacks the configured handoff reserve')
+          if (operation.phase === 'reserved' && observed.totalTokens + observed.outputReserve + policy.reserveTokens > observed.capacity) throw new WorkExecutionError('continuation-reserve-exhausted', 'The source passed the soft target before reaching idle and lacks the configured handoff reserve')
         }
         if (operation.phase === 'reserved') {
           execution = await save(current => {
@@ -1949,6 +1954,10 @@ export class WorkApplication {
       if (project.version !== command.expectedVersion) return conflict(project.version)
       if (command.policy.version !== (project.continuationPolicy?.version ?? 0) + 1) return failed('continuation-policy-version', 'Policy version must advance by one')
       project.continuationPolicy = structuredClone(command.policy)
+      for (const execution of state.executions) if (execution.ref.projectId === project.id && !execution.continuationPolicy) {
+        delete execution.continuationObservation
+        delete execution.continuationBlocked
+      }
       project.version++
       return { status: 'completed', project }
     }
