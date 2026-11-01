@@ -19,7 +19,7 @@
 
 维护准入绑定持久 operation、准确 Session、固定请求身份及具体步骤。tools.guard 只允许 material 步骤保存材料、collect 步骤正式 job_output 指定 jobs、receive 步骤确认指定材料；任意 marker、业务工具和嵌套分派不取得准入。人类正常对话仍沿用宿主权限，对话、页面查看、完成和归档不解除 Task 控制。
 
-原生结算另有无工具的 settle 步骤：从真实父 catalog、child header/descriptor、最新 turn/end 及原通知首次 inbox insertion 核实 parent/child/endSeq/messageId，绑定当前 operation/source epoch。只让准确通知进入父 user/message；同批其他自动输入持久排队，不获得业务权限或设置 resumeRequested。旧通知重插不刷新首次入箱时间；消费通知、child returned 与 Task 验收仍分别核实，接任前保留原生结果消费门。材料新鲜度同时覆盖 job 身份与 child 最新结束身份。
+原生结算另有无工具的 settle 步骤：从真实父 catalog、child header/descriptor、最新 turn/end 及原通知首次 inbox insertion 核实 parent/child/endSeq/messageId，绑定当前 operation/source epoch。只让准确通知进入父 user/message；同批其他自动输入持久排队，不获得业务权限或设置 resumeRequested。旧通知重插不刷新首次入箱时间；消费通知、child returned 与 Task 验收仍分别核实，接续触发后，原生子工作与未消费通知不再构成接任门；原生消费事实保留，后继通过准确子会话结果另行收取。材料新鲜度覆盖源主会话及非原生关联执行者的 job 身份，变化中的子工作由独立持久快照交接。
 
 指定宿主 rc.3（22ddee3792402c3e70ec5f86a63c3e3e895a2f60）及匹配依赖的 LocalJobs 在准确 owner Agent 退役时删除其注册记录。真实原生 activation 返回且父已消费旧通知后，先前两个 completed 作业已经不可达；普通 SessionController 也不具有原生 child 冷恢复权限。不能把这个能力负例说成“returned child 的两个 reachable pending jobs 已补收”，不能伪造 pending 注册表、裸读结果或绕过子会话路由。本轮正式负例与已有准确 owner 正式补收 lane 分开记证；将来宿主支持该前置条件时，仍需原生新通知消费和新材料的完整实证。
 
@@ -28,7 +28,7 @@
 - 使用宿主公开的安全维护边界；源会话达到可接续状态后，固定后继和操作身份，保存接续内容，创建或恢复后继，校验环境与配置，受控接任，再投递剩余事件。
 - 接续保持 Project、Task、负责 Agent、Execution 与业务 Stage；只增加会话代次和对应协调版本。评审会话与独立子任务会话不因新建而取代当前处理会话。
 - 接续材料包含完整本地目标、已接受决定、证据、未完成项、下一步及历史引用。尚未正式落盘的关键讨论必须被明确保存；不能用泛泛的“沿用上下文”代替内容。
-- 原生子会话结果仍受宿主父子关系约束。没有可靠结果迁移能力时，等待未结算的相关子执行及通知消费后再换代；独立子 Task 的存在本身不构成禁止交接的理由。
+- 原生子会话结果仍受宿主父子关系约束。手动或自动接续一旦触发，不等待原生子会话返回：保存准确 parent/child、label、运行/返回/结果状态、工具、作业与下一动作，随接续材料交给后继。源主会话自身及非原生关联执行者的安全门、明确 pause/end 均保留；不另增任意超时器。独立子 Task 本身也不阻止交接。
 - 200K／300K 等设置是提前接续软目标。安全边界上通过公开计量与实际路由元数据观察 token、模型窗口、输出预留及接续余量，记录读数来源和新鲜度。
 - 界面近似压力读数只供显示，不能单独充当硬预算依据。缺计量、估算、路由变化或长 turn 延迟必须可见；硬性“下一个请求绝不超窗”需要宿主与最终请求绑定的预算契约，不在本次直接承诺。
 - 新根会话通过公开 SessionController/preset 装配，继承实际 cwd、workspace、策略与有效权限；使用会话本地模型选择。恢复已有会话时，读取并采用宿主当前有效的 provider、模型和推理强度，按 ADR 0009 更新当前执行配置；不将启动快照、旧接续 profile 或上一请求路由当作不可变的模型约束。模型选择变化本身不产生新 Task、Execution、Session、owner 或 epoch。
@@ -88,3 +88,28 @@ PATH=/root/.nvm/versions/node/v22.23.1/bin:$PATH pnpm exec vitest run tests/work
 ## 实现覆盖
 
 已有运行器的 owner 锁、安全维护、固定后继、分步交接、inbox 和恢复测试可以复用；它当前仍以项目根/Issue 寻址，未提供完整 TaskId/epoch/Project Agent、新来源队列和验收 outbox。现有 `rotateTokens` 使用近似投影，需按上面的计量契约扩展。实现与验证必须在隔离开发环境中完成，不接管或重启现有 18780/18781 实例。
+
+
+## 未返回子工作随接续转交（#342）
+
+`ContinuationOperation.pendingChildren` 保存观察快照，`work_read continuation` 可再次读取；收到交接不把原生结果标为 completed/consumed。旧未完结 operation 在正常恢复时使用同一规则，固定 operation/successor/epoch，不自动复活历史终态。运行中子工作与 unknown、未完工具不阻止接续；Task 完成仍检查全部相关执行事实。
+
+后继用 `work_child_recover(child_session_id, action, expected_epoch)` 接手准确子工作：`status` 只观察；`result` 返回真实最新 turn 的 JSON 字符片段，每页不超过 12000 字符，以 `nextCursor/revision` 读到完整；`resume` 通过原 direct-parent 的公开 `subagents.sendMessage` 恢复同一 childId，不 reparent，不给退休主会话投递业务输入。running 不重复启动；正常 completed 返回先读结果，interrupted/error/aborted 等结束允许继续剩余工作。宿主公开 query/resume 对崩溃 turn 的错误闭合不等于业务成功，插件不修改日志。
+
+恢复请求先持久保存固定 requestId，再把标记放入真实消息；重试读原生 inbox insertion/user/message，或直接返回已运行/已结束状态。完整结果接收记录另存 child/endSeq/epoch/全部分页 callIds。完成门回读当前协调会话的准确成功 `work_child_recover` tool/result、结果 revision 与最新 endSeq，全部页面真实交付后才解除该结果门；单独写接收声明、未读完、错误结果、新一轮 child 或旧 epoch 均不足以通过。原生 parent 通知 consumed 与插件当前协调接收是两项独立事实，业务验收仍需成立。
+
+若递归子会话的原 parent 自身冷却且普通 SessionController 无恢复权，工具返回 `child-recovery-parent-unavailable`，包含准确 parent/child 与宿主错误。插件不隐式唤醒整条层级；当前协调先核实旧执行已停止，再按保存的工作区和进度显式重新委派剩余工作，不复制仍在运行的执行。此限制不阻止接续，且不能假报已恢复。已完成 Task、pause/end 与维护阶段不允许启动子工作。
+
+
+### 无法恢复时的可核实替代处置（#342 review 修正）
+
+明确停止的旧 child 可以由当前协调重新委派，但重派本身不清除旧失败门。`work_child_recover action=replace` 带 `child_session_id` 与 `replacement_child_session_id`，必须先满足：旧 child 最新 returned/endSeq 可读、旧 child 及可见后代无运行或未知活动/未完工具/活动作业；替代者是当前 Task 当前协调真实 catalog 下的另一个原生 child，最新一轮 completed；当前协调已用 `result` 完整接收其全部分页且真实成功 tool/result 可回读。不能用说明文字、未运行的替代 child 或其他 Task 的 child 解除旧门。
+
+执行协调记录持久保存旧 parent/child/endSeq、替代 parent/child/completed endSeq 与作出处置的协调会话/epoch/command。完成观察重新核对旧执行仍停在该 endSeq、替代者仍是该 completed endSeq、当前代次已正式收取替代结果，才解除旧 unfinished 与原生结果等待门。旧 interrupted/error 日志和 native consumed 状态完整保留；旧执行重新启动或替代结果版本改变都会使绑定失效，其他工具/作业门不被豁免。替代绑定写进后继交接与 `work_read continuation`；后续换代可通过本 Task 历史协调的真实 catalog 再读准确 child 结果，不能因旧接收 epoch 失效形成不可解除的等待。
+
+
+### 退休 parent 的真实结果通知回到当前协调（#342 dev 验收修正）
+
+同 ID 恢复的 child 仍把原生 terminal notice 发给原 direct-parent。插件在既有启动、idle 与兜底 reconciliation 中，仅观察本 Task 已持久 pending、恢复或替代关系下的准确 parent/child，核实原生 header/descriptor、最新 endSeq 和首次持久 notice 身份，再向本 Task 当前协调收件箱写 `a2d2-work-child-result` 结果事件。事件 ID 来自 execution/parent/child/endSeq/原 noticeId，与会话代次无关，重载或重试不重复投递；不伪装原生通知，不改变旧 parent 的原生 consumed，不让退休 root 执行业务，也不创建新 Task。
+
+当前协调的 model-owned executor wait 复用既有自动恢复准入：等待的准确 child、当前事件完整 envelope、持久 Task event 与新的真实 terminal notice 都必须吻合。人工 wait、pause/end、完成 Task 和未解决错误不被解除；通知在暂停中只持久保存，明确恢复后沿普通 Task 事件投递。无 continuous rule 的 Task 同样可由该通知自动恢复。接收通知只允许核实结果，不是 `childReceipts`、结果完整读取或业务验收；当前协调仍须调用 `work_child_recover result` 读完实际结果。旧通知不能重复唤醒后续 wait，新 turn 必须有自身最新 end/notice 身份。未返回 child 与公开 query 为崩溃生成的 interrupted 闭合没有真实 notice，不生成这种自动唤醒。

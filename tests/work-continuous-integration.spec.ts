@@ -186,7 +186,9 @@ it.each(['wait', 'pause'] as const)('replaces a continuous %s Session without ac
     const child = await h.ctx.subagents.startContinuable({ provider: 'fresh-local', label: 'held continuous verification', request: { parent, prompt: [{ type: 'text', text: 'Return the required native result' }] }, signal: new AbortController().signal })
     await started
     const childAgent = h.ctx.agents.get(child.childId)!
-    await execute({ type: 'task.continue', commandId: 'replace-only', ref, executionId: held.id, owner: held.owner, epoch: held.epoch })
+    const reserved = await execute({ type: 'task.continue', commandId: 'replace-only', ref, executionId: held.id, owner: held.owner, epoch: held.epoch })
+    expect(reserved.execution!.continuation).toMatchObject({ phase: 'material-requested', pendingChildren: [{ child: { sessionId: child.childId }, returned: false }] })
+    await fixtures.run(() => parent.whenIdle())
     const unrelated = createUserMessage({ content: [{ type: 'text', text: 'Keep this automatic work queued under the original hold.' }], source: { kind: 'a2d2-work-dispatch' } })
     await fixtures.run(() => parent.runMaintenance(async () => {
       release()
@@ -201,7 +203,9 @@ it.each(['wait', 'pause'] as const)('replaces a continuous %s Session without ac
     const intakeRule = (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!
     expect(intakeRule.slots ?? []).toEqual(beforeRule.slots ?? [])
     expect(intakeRule.items[0]!.resumeRequested).toBeUndefined()
+    await fixtures.run(() => app.reconcileControls())
     h.model.nextTool = { name: 'work_continuation_material', arguments: { body: 'Preserve the accepted Issue and explicit hold.', decisions: 'No business work until explicit resume.', evidence: 'Original hold and native result are applied.', unfinished: 'Wait for LF.', next: 'Remain waiting for explicit resume.' } }
+    await execute({ type: 'task.continue', commandId: 'retry-replace-only-material', ref, executionId: held.id, owner: held.owner, epoch: held.epoch })
     await fixtures.run(() => app.reconcileControls())
     await fixtures.run(() => h.ctx.agents.get(SessionId(first.session.sessionId))!.whenIdle())
     await fixtures.run(() => app.reconcileControls())

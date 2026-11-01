@@ -19,13 +19,18 @@ export interface ExecutionJob {
   availability?: 'live' | 'lost' | 'history'
 }
 export interface NativeExecution {
+  label?: string
   session: SessionRef
   mode: 'one-shot' | 'continuable' | 'unknown'
   status: 'running' | 'idle' | 'inactive' | 'unknown'
   result: ResultState
   returned?: boolean
+  /** Current coordinator has received every real result page for this exact end. */
+  coordinatorReceived?: boolean
   attempt?: { turn: number; reason?: string }
   endSeq?: number
+  /** Authentic latest native notice, independent of original parent's consumption. */
+  notice?: { message: import('../work-types.ts').NativeWorkMessage; endSeq: number }
   /** Original unconsumed native inbox notice, covering this exact latest end. */
   settlement?: { message: import('../work-types.ts').NativeWorkMessage; endSeq: number }
 }

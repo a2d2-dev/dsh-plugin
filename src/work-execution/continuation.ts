@@ -1,3 +1,5 @@
+import { sessionKey } from './observation.ts'
+import type { ExecutionObservation } from './observation.ts'
 import { continuationInFlight } from './state.ts'
 export { continuationInFlight } from './state.ts'
 import { createHash, randomUUID } from 'node:crypto'
@@ -42,10 +44,10 @@ export function reserveContinuation(execution: WorkExecution, task: WorkTask, co
 export function materialRequest(operation: ContinuationOperation): string {
   return `Prepare a safe continuation of this same Task. Call work_continuation_material now, with expected_epoch ${operation.sourceEpoch}. Preserve original concrete decisions, evidence, unfinished acceptance work and the exact next step. Include necessary local references and unsaved discussion in body. Explicitly state gaps. Do not claim the Task is complete. After saving, stop; the host will transfer coordination.\n\nGoal: ${operation.goal}\nSpecification version: ${operation.specification.version}\nMissing material: ${JSON.stringify(operation.specification.missing ?? [])}\nSpecification: ${operation.specification.text}\nAcceptance: ${operation.specification.acceptance.join('\n')}`
 }
-export function successorMessage(operation: ContinuationOperation, policyInstructions: string): string {
+export function successorMessage(operation: ContinuationOperation, policyInstructions: string, replacements: import('../work-types.ts').WorkExecution['childReplacements'] = []): string {
   if (!operation.material) throw new Error('Cannot continue without saved source material')
   const m = operation.material
-  return redactText(`${policyInstructions}\n\n${MANAGED_WORK_INSTRUCTIONS}\n\nReceive the same Task from its saved source material. Preserve the current waiting/paused control and reason; this request only transfers context and never authorizes business work. Completion still requires accepted evidence.\n\nTask: ${operation.title}\nGoal: ${operation.goal}\nSpecification version: ${operation.specification.version}\nMissing material: ${JSON.stringify(operation.specification.missing ?? [])}\nSpecification: ${operation.specification.text}\nAcceptance:\n${operation.specification.acceptance.join('\n')}\n\nOriginal material:\n${m.body}\n\nDecisions:\n${m.decisions}\n\nEvidence:\n${m.evidence}\n\nUnfinished:\n${m.unfinished}\n\nNext:\n${m.next}\n\nLocal read-only history: task.history ${JSON.stringify(operation.history)}\nSource epoch: ${operation.sourceEpoch}\n\nRead this supplied material, then call work_continuation_received with operation_id ${operation.operationId}, material_command_id ${m.commandId}, expected_epoch ${operation.sourceEpoch + 1}. Stop after this receipt; the plugin owns further scheduling.`).text
+  return redactText(`${policyInstructions}\n\n${MANAGED_WORK_INSTRUCTIONS}\n\nReceive the same Task from its saved source material. Preserve the current waiting/paused control and reason; this request only transfers context and never authorizes business work. Completion still requires accepted evidence.\n\nTask: ${operation.title}\nGoal: ${operation.goal}\nSpecification version: ${operation.specification.version}\nMissing material: ${JSON.stringify(operation.specification.missing ?? [])}\nSpecification: ${operation.specification.text}\nAcceptance:\n${operation.specification.acceptance.join('\n')}\n\nOriginal material:\n${m.body}\n\nDecisions:\n${m.decisions}\n\nEvidence:\n${m.evidence}\n\nUnfinished:\n${m.unfinished}\n\nUnreturned child work (host observations, not completion):\n${JSON.stringify(operation.pendingChildren ?? [])}\n\nVerified child replacement bindings (read the replacement result again at your current epoch before completion):\n${JSON.stringify(replacements)}\n\nNext:\n${m.next}\n\nLocal read-only history: task.history ${JSON.stringify(operation.history)}\nSource epoch: ${operation.sourceEpoch}\n\nRead this supplied material, then call work_continuation_received with operation_id ${operation.operationId}, material_command_id ${m.commandId}, expected_epoch ${operation.sourceEpoch + 1}. Stop after this receipt; the plugin owns further scheduling.`).text
 }
 
 /** Only persisted operation requests receive maintenance admission. */
@@ -56,10 +58,30 @@ export function maintenanceEvent(operation: ContinuationOperation, step: 'materi
 /** Identity/freshness proof, independent of registry iteration order and labels. */
 export function continuationFactsKey(facts: import('./observation.ts').ExecutionObservation): string {
   return createHash('sha256').update(JSON.stringify({
-    jobs: facts.sessions.flatMap(row => row.jobs.map(job => [row.session.runtimeId, row.session.sessionId, job.id, job.registryEpoch ?? null, job.instanceId ?? null, job.status, job.availability ?? null, job.delivery])).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
-    children: facts.sessions.flatMap(row => row.children.map(child => [row.session.runtimeId, row.session.sessionId, child.session.runtimeId, child.session.sessionId, child.mode, child.endSeq ?? null, child.attempt?.turn ?? null, child.result])).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+    jobs: continuationBoundary(facts).sessions.flatMap(row => row.jobs.map(job => [row.session.runtimeId, row.session.sessionId, job.id, job.registryEpoch ?? null, job.instanceId ?? null, job.status, job.availability ?? null, job.delivery])).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
   })).digest('hex')
 }
 export function collectionRequest(operation: ContinuationOperation, step: NonNullable<ContinuationOperation['collections']>[number]): string {
   return `Lifecycle maintenance only for operation ${operation.operationId}. In this exact owner Session, call the formal job_output tool for each of these completed jobs: ${step.jobs.map(job => job.id).join(', ')}. Keep every full real result in this Session. Do not call jobs.read, no-log tools.execute or invent a turn/step. Stop after collection; do not save material or resume business work. The plugin will flush, re-observe delivery, and separately request fresh source material. Existing waiting/paused control remains effective.`
+}
+
+/** Child work transfers as unresolved work; only the source/associated owners fence takeover. */
+export function continuationBoundary(facts: ExecutionObservation): ExecutionObservation {
+  const children = new Set(facts.sessions.filter(row => row.role === 'native-child').map(row => sessionKey(row.session)))
+  for (const row of facts.sessions) for (const child of row.children) children.add(sessionKey(child.session))
+  const sessions = facts.sessions.filter(row => !children.has(sessionKey(row.session))).map(row => ({ ...row, children: [] }))
+  const blockers = facts.blockers.filter(blocker => blocker.code !== 'native-result-pending' && !children.has(sessionKey(blocker.session)))
+  return { ...facts, sessions, blockers, settlement: blockers.some(blocker => /unknown|unavailable/.test(blocker.code)) ? 'unknown' : blockers.length ? 'pending' : 'settled' }
+}
+
+/** Preserve original observations without converting return/delivery into acceptance. */
+export function continuationChildren(facts: ExecutionObservation, carried: NonNullable<ContinuationOperation['pendingChildren']> = []): NonNullable<ContinuationOperation['pendingChildren']> {
+  return facts.sessions.flatMap(parent => parent.children.flatMap(child => {
+    const row = facts.sessions.find(row => sessionKey(row.session) === sessionKey(child.session))
+    if (!carried.some(item => sessionKey(item.child) === sessionKey(child.session)) && child.returned && child.attempt?.reason === 'completed' && child.result === 'consumed' && !row?.tools?.length && !row?.jobs.some(job => job.delivery !== 'delivered')) return []
+    return [{ parent: parent.session, child: child.session, ...(child.label ? { label: child.label } : {}), ...(child.attempt?.reason ? { reason: child.attempt.reason } : {}), mode: child.mode, status: child.status, result: child.result, returned: child.returned ?? false,
+      ...(child.endSeq !== undefined ? { endSeq: child.endSeq } : {}), tools: row?.tools ?? [], jobs: (row?.jobs ?? []).map(job => ({ id: job.id, label: job.label, status: job.status, delivery: job.delivery, ...(job.availability ? { availability: job.availability } : {}) })),
+      blockers: facts.blockers.filter(blocker => sessionKey(blocker.session) === sessionKey(child.session)).map(blocker => blocker.code),
+      next: 'Inspect this exact child and its original parent. Use work_child_recover action=status/result/resume/replace with child_session_id and current expected_epoch; read every result page in order using nextCursor/revision. Resume interrupted/error work through its original parent; keep unfinished work pending until real results are received and verified.' }]
+  }))
 }

@@ -22,7 +22,7 @@ export function workMaterialPage(result: WorkResult, request: WorkReadRequest, r
       requiredNativeChildren: (result.bindings ?? []).map(binding => ({ nodeId: binding.nodeId, children: binding.acceptedChildren ?? binding.accepted.subIssues })) }),
     progress: () => ({ progress: task.progress, breakdown: task.breakdown, completion: task.completion }),
     sources: () => ({ sourceIssues: result.sourceIssues, bindings: result.bindings }),
-    continuation: () => ({ material: execution.continuationMaterial, continuation: execution.continuation, history: execution.continuationHistory }),
+    continuation: () => ({ material: execution.continuationMaterial, continuation: execution.continuation, history: execution.continuationHistory, childReplacements: execution.childReplacements, childReceipts: execution.childReceipts }),
   }
   const content = JSON.stringify(sections[request.section]())
   const revision = createHash('sha256').update(JSON.stringify([request.section, task.version, execution.epoch, content])).digest('hex')

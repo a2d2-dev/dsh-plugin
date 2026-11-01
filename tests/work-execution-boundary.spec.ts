@@ -33,7 +33,7 @@ it('flushes and holds associated executors before entering a settled maintenance
 let fixtures: ExecutionFixtures
 beforeEach(({ signal }) => { fixtures = new ExecutionFixtures(signal) })
 afterEach(() => fixtures.close())
-it('observes explicitly associated and retired roots without activating them and fences unresolved descendants', async () => {
+it('observes unresolved descendants for completion while allowing source-safe continuation maintenance', async () => {
   const root = await fixtures.root()
   const h = await fixtures.mount(root)
   const create = () => fixtures.run(() => h.ctx.sessionController.create({ workspaceId: h.workspace.id, agentPreset: 'contract' }))
@@ -49,8 +49,25 @@ it('observes explicitly associated and retired roots without activating them and
   expect(facts.sessions.some(row => row.session.sessionId === unrelated.sessionId)).toBe(false)
   expect(facts.blockers).toContainEqual({ code: 'native-result-pending', session: { runtimeId: 'runtime', sessionId: old.sessionId } })
   let entered = false
-  await expect(fixtures.run(() => host.maintain(execution, async () => { entered = true }))).rejects.toMatchObject({ code: 'continuation-waiting-executions' })
-  expect(entered).toBe(false)
+  await fixtures.run(() => host.maintain(execution, async () => { entered = true }))
+  expect(entered).toBe(true)
+  expect((await host.observation(execution)).blockers).toContainEqual({ code: 'native-result-pending', session: { runtimeId: 'runtime', sessionId: old.sessionId } })
+  expect(h.model.requests).toHaveLength(0)
+})
+
+it('preserves an orphan catalog identity without making readable source safety unavailable', async () => {
+  const h = await fixtures.mount(await fixtures.root())
+  const source = await h.ctx.sessionController.create({ workspaceId: h.workspace.id, agentPreset: 'contract' })
+  const parent = h.ctx.agents.get(source.sessionId)!
+  parent.session.append('subagent/catalog', { version: 1, childId: 'orphan-child', childCreatedAt: 1, mode: 'continuable', label: 'unfinished orphan' } as never)
+  await h.ctx.sessions.flush(parent.session)
+  const host = new DshWorkExecutionHost(h.ctx, 'runtime')
+  host.connectObservation(async () => [])
+  const execution: WorkExecution = { ...executionDefaults, id: 'execution', ref: { projectId: 'project', taskId: 'task' }, session: { runtimeId: 'runtime', sessionId: source.sessionId }, resource: { runtimeId: 'runtime', workspaceId: h.workspace.id } }
+  const facts = await host.observation(execution)
+  expect(facts.sessions.find(row => row.role === 'current')!.children).toMatchObject([{ session: { sessionId: 'orphan-child' }, status: 'unknown', returned: false, result: 'unknown' }])
+  expect(facts.blockers).toContainEqual({ code: 'executor-observation-unavailable', session: { runtimeId: 'runtime', sessionId: 'orphan-child' } })
+  await host.maintain(execution, async () => 'source remains safe')
   expect(h.model.requests).toHaveLength(0)
 })
 

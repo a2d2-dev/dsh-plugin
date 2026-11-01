@@ -317,3 +317,8 @@ host 命令在既有列表中加入 completion-native、compact-results、source
 仓库门禁失败与 R1 业务代码分开记证：LF 要求的四份纯架构规格 HTML/浏览器渲染图与原 `docs/artifacts/` 全禁规则冲突。CEO 明确裁决仅允许这四个完整文件路径，已在 `scripts/verify-repository.mjs` 和 `docs/testing.md` 补最小例外；同目录的其他文件、其他 artifacts、architecture/evidence、.dsh/.local/.scratch 均仍拒绝，负例不修改真实 index，也不豁免实际会话或产品验收截图。
 
 R1 第二路径的 [CEO 能力裁决](https://github.com/a2d2-dev/dsh-plugin/issues/274#issuecomment-6415979835) 接受当前宿主能力负例，不将其替换成真实 pending 补收成功；#268 普通准确 owner 的两个 pending jobs 原验收继续保留。新测试没有更改 DSH、伪造 turn/step、直接 append user/message、裸 jobs.read、跨 owner 收取或把 pending 改成 settled。#275/#276 及父 #270、#259/#268 的既有 GUI 完整模式尚未由本轮验证；未操作真实 #265/#182/#2104、未部署或另起服务，未合并或关闭任何票。
+
+
+### 原生子工作不阻断接续（#342）
+
+本节覆盖前文“全部相关执行者先结算”的旧门：接续触发后仅源主会话和非原生关联执行者进入安全维护锁。未返回子会话、unknown 状态、未完工具与子 owner 作业写入 `pendingChildren`，真实交给后继，不标记完成或消费。`work_child_recover` 提供准确 Task 范围的状态、分页结果与原 parent 路由恢复；完整工具结果凭据与 Task 验收分别核实。当前接口、幂等规则、cold 中断语义及递归 parent 限制以 [ADR 0011](../adr/0011-explicit-task-runtime-owns-execution-and-recovery.md#未返回子工作随接续转交342) 为准。
