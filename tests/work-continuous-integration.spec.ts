@@ -296,6 +296,112 @@ it.each([
 }, 20_000)
 
 it.each([
+  ['reconcile', false], ['resume', false], ['input', false], ['reconcile', true],
+] as const)('retries a native user Stop on the first explicit %s before any status ingress or scheduler observation (check fences: %s)', async (recovery, checkFences) => {
+  const fixtures = new ExecutionFixtures()
+  let release = () => {}
+  try {
+    const h = await fixtures.mount(await fixtures.root(), 'read-only', true)
+    const app = new WorkApplication(h.app.directory, h.host, source)
+    const execute = (command: unknown) => fixtures.run(async () => completed(await app.execute(command, actor)))
+    const query = (request: unknown) => fixtures.run(async () => completed(await app.query(request, actor)))
+    const connected = await execute({ type: 'source.connect', commandId: 'connect-unobserved-stop', githubProject: { owner: 'example', type: 'org', number: 1 } })
+    const projectId = connected.project!.id, sourceId = connected.source!.id
+    await query({ type: 'source.issues', projectId, sourceId, page: 1, perPage: 20, assignee: '@me', state: 'open', refresh: true })
+    const options = (await query({ type: 'source.execution-options', projectId, sourceId })).executionOptions!
+    let entered = 0
+    h.ctx.tools.register(defineTool({ name: 'hold_unobserved_stop', description: 'Keep the real Agent running until native cancellation or test release', parameters: {},
+      output: { schema: { type: 'object', additionalProperties: false, properties: { result: { type: 'string', required: true } } }, render: (_, value) => [{ type: 'text', text: value.result }] },
+      async execute(_, exec) {
+        entered++
+        await new Promise<void>(resolve => { release = resolve; exec.signal.addEventListener('abort', () => resolve(), { once: true }) })
+        return { result: 'Pending result processed' }
+      } }))
+    h.model.uniqueToolIds = true
+    h.model.nextTool = { name: 'hold_unobserved_stop', arguments: {} }
+    await execute({ type: 'continuous.configure', commandId: 'enable-unobserved-stop', projectId, sourceId, expectedVersion: 0, assignee: '@me', labels: ['bug'], resource: options.resources[0]!.ref, model: options.defaults.model, agentPreset: options.defaults.agentPreset, permissionPreset: options.defaults.permissionPreset, enabled: true })
+    const rule = (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!, ref = rule.active!
+    const first = (await query({ type: 'task.detail', ref })).execution!
+    const agent = h.ctx.agents.get(SessionId(first.session.sessionId))!
+    await vi.waitFor(() => expect(entered).toBe(1))
+    await execute({ type: 'continuous.set-enabled', commandId: 'pause-intake-unobserved-stop', projectId, sourceId, expectedVersion: rule.version, enabled: false })
+    agent.cancel({ kind: 'user' })
+    await fixtures.run(() => agent.whenIdle())
+    const stopped = await h.host.execution.failure!(first)
+    expect(stopped).toMatchObject({ userCancelled: true })
+    expect((await query({ type: 'task.detail', ref })).execution!.runtimeFailure).toBeUndefined()
+    const authority = { ref, executionId: first.id, owner: first.owner, epoch: first.epoch }
+    const retry = recovery === 'reconcile' ? { type: 'task.reconcile', commandId: 'retry-unobserved-stop', ...authority }
+      : recovery === 'resume' ? { type: 'task.control', commandId: 'retry-unobserved-stop', ...authority, action: 'resume', text: '明确恢复原任务。' }
+        : { type: 'task.input', commandId: 'retry-unobserved-stop', ...authority, kind: 'input', text: '明确授权继续处理原任务。' }
+    const recoveryActor = recovery === 'input' ? { operator: false, session: first.session, agentId: first.agentId } : actor
+    if (checkFences) {
+      const failure = h.host.execution.failure!.bind(h.host.execution)
+      const observation = vi.spyOn(h.host.execution, 'failure')
+      for (const invalid of [{ owner: '11111111-1111-4111-8111-111111111111' }, { epoch: first.epoch + 1 }, { ref: { ...ref, taskId: '22222222-2222-4222-8222-222222222222' } }]) {
+        expect(await fixtures.run(() => app.execute({ ...retry, ...invalid }, actor))).toMatchObject({ status: 'failed' })
+      }
+      expect(await fixtures.run(() => app.execute(retry, { operator: false, session: { ...first.session, sessionId: 'historical-session' }, agentId: first.agentId }))).toMatchObject({ status: 'failed', error: { code: 'forbidden' } })
+      expect(observation).not.toHaveBeenCalled()
+      observation.mockRejectedValueOnce(new Error('Host failure log is unavailable'))
+      expect(await fixtures.run(() => app.execute(retry, actor))).toMatchObject({ status: 'failed', error: { code: 'host-observation-failed' } })
+      expect((await query({ type: 'task.detail', ref })).execution!.runtimeFailure).toBeUndefined()
+      for (const change of ['owner', 'epoch', 'session'] as const) {
+        observation.mockImplementationOnce(async execution => {
+          const observed = await failure(execution)
+          // This write completing also proves slow host observation owns no DAO writer lock.
+          await WorkDao.forDirectory(h.app.directory).transaction(async state => {
+            const current = state.executions.find(item => item.id === first.id)!
+            if (change === 'owner') current.owner = '11111111-1111-4111-8111-111111111111'
+            else if (change === 'epoch') current.epoch++
+            else current.session = { ...current.session, sessionId: 'replacement-session' }
+          })
+          return observed
+        })
+        const refused = await fixtures.run(() => app.execute(retry, actor))
+        expect(refused, JSON.stringify({ change, refused })).toMatchObject({ status: 'failed', error: { code: 'stale-execution-authority' } })
+        expect((await query({ type: 'task.detail', ref })).execution!.runtimeFailure).toBeUndefined()
+        await WorkDao.forDirectory(h.app.directory).transaction(async state => {
+          Object.assign(state.executions.find(item => item.id === first.id)!, { owner: first.owner, epoch: first.epoch, session: first.session })
+        })
+      }
+      observation.mockRestore()
+    }
+    h.model.nextTool = { name: 'hold_unobserved_stop', arguments: {} }
+    completed(await fixtures.run(() => app.execute(retry, recoveryActor)))
+    if (recovery === 'reconcile') {
+      // A required result arrives after the explicit retry but before scheduling.
+      // Accepting this result must neither observe nor acknowledge native Stop.
+      await WorkDao.forDirectory(h.app.directory).transaction(async state => {
+        state.executions.find(item => item.id === first.id)!.events.push({ id: 'pending-result-after-retry', kind: 'result', text: '已接受的必要结果，等待明确重试。', delivery: 'accepted', acceptance: 'unassessed' })
+      })
+    }
+    await fixtures.run(() => app.reconcileControls())
+    await vi.waitFor(() => expect(entered).toBe(2))
+    await fixtures.run(() => app.reconcileControls())
+    const resumedRule = (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!
+    expect(resumedRule.items[0]!.state).toBe('active')
+    expect(resumedRule.slots).toEqual([ref])
+    const resumed = (await query({ type: 'task.detail', ref })).execution!
+    expect(resumed.runtimeFailure?.userCancelled && !resumed.runtimeFailure.acknowledged).not.toBe(true)
+    expect((await query({ type: 'task.detail', ref })).execution).toMatchObject({ id: first.id, owner: first.owner, epoch: first.epoch, session: first.session })
+    expect((await query({ type: 'project.detail', projectId })).tasks).toHaveLength(1)
+    agent.cancel({ kind: 'user' })
+    await fixtures.run(() => agent.whenIdle())
+    const laterStop = await h.host.execution.failure!(first)
+    expect(laterStop).toMatchObject({ userCancelled: true })
+    expect(laterStop!.id).not.toBe(stopped!.id)
+    completed(await fixtures.run(() => app.execute(retry, recoveryActor)))
+    await fixtures.run(() => app.reconcileControls())
+    const replayed = (await query({ type: 'task.detail', ref })).execution!
+    expect(replayed.runtimeFailure).toMatchObject({ id: laterStop!.id, userCancelled: true })
+    expect(replayed.runtimeFailure!.acknowledged).not.toBe(true)
+    expect((await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!.items[0]!.state).toBe('blocked')
+    expect(entered).toBe(2)
+  } finally { release(); await fixtures.close() }
+}, 20_000)
+
+it.each([
   [true, true], [false, true], [false, false],
 ] as const)('preserves a native user Stop across a human status turn (previously observed: %s, scan while running: %s)', async (previouslyObserved, scanWhileRunning) => {
   const fixtures = new ExecutionFixtures()

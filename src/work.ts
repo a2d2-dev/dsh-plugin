@@ -1093,6 +1093,24 @@ export class WorkApplication {
       try { admissionChoices = await this.host.execution.check({ ...command, sessionMode: 'session' in command && command.session ? 'reuse' : 'create', session: ('session' in command ? command.session : undefined) ?? { runtimeId: command.resource.runtimeId, sessionId: `session-${randomUUID()}` } }) }
       catch (error) { return failed(error instanceof WorkExecutionError ? error.code : 'host-admission-failed', error instanceof WorkExecutionError ? error.message : 'Host execution admission failed') }
     }
+    let recovery: { execution: import('./work-types.ts').WorkExecution; failureId?: string } | undefined
+    if (!recorded && (command.type === 'task.reconcile' || command.type === 'task.continue'
+      || command.type === 'task.control' && command.action === 'resume' || command.type === 'task.input' && command.kind === 'input')) {
+      const state = await this.load()
+      const execution = state.executions.find(item => item.id === command.executionId)
+      if (!actor.operator && (!execution || actor.agentId !== execution.agentId || !actor.session || !sameSession(actor.session, execution.session))) return failed('forbidden', 'Caller is not the responsible current Session and Project Agent')
+      const refusal = await this.authorize(state, command)
+      if (refusal) return refusal
+      // A replay recovers its original receipt, never acknowledges a later Stop.
+      if (!state.commands.some(item => item.commandId === command.commandId) && !isTaskCompleted(taskAt(state, execution!.ref))
+        && !continuousCompleted(state, execution!) && execution!.control?.action !== 'end') {
+        try {
+          // Host log reads happen outside the DAO writer lock, against this exact identity.
+          const failure = await this.observeRuntimeFailure(execution!.id, execution)
+          recovery = { execution: execution!, failureId: failure?.id }
+        } catch (error) { return failed(error instanceof WorkExecutionError ? error.code : 'host-observation-failed', error instanceof Error ? error.message : 'Host runtime failure observation is unavailable') }
+      }
+    }
     const receipt = await this.dao.transaction<WorkResult>(async state => {
       if (!actor.operator) {
         const execution = 'executionId' in command ? state.executions.find(item => item.id === command.executionId) : undefined
@@ -1107,6 +1125,10 @@ export class WorkApplication {
       const fingerprint = JSON.stringify(command)
       const previous = state.commands.find(item => item.commandId === command.commandId)
       if (previous) return previous.fingerprint === fingerprint ? previous.result : { status: 'conflict', error: { code: 'command-id-reused', message: 'Command ID already has different content' } }
+      if (recovery) {
+        const current = state.executions.find(item => item.id === recovery.execution.id)!
+        if (!sameSession(current.session, recovery.execution.session) || current.runtimeFailure?.id !== recovery.failureId) return failed('stale-execution-authority', 'Current Session or model outcome changed during recovery; retry against the current execution')
+      }
       const result = await this.apply(state, command, admissionChoices, sourceCandidate, actor.reporter)
       if (result.status !== 'completed') return result
       // An explicit start from the existing Task page may resolve a pre-admission queue problem.
@@ -1244,17 +1266,20 @@ export class WorkApplication {
       }
     }
   }
-  private async observeRuntimeFailure(id: string): Promise<void> {
-    if (!this.host.execution?.failure) return
-    const execution = (await this.load()).executions.find(item => item.id === id)!
+  private async observeRuntimeFailure(id: string, expected?: import('./work-types.ts').WorkExecution): Promise<import('./work-types.ts').WorkExecution['runtimeFailure']> {
+    const execution = expected ?? (await this.load()).executions.find(item => item.id === id)!
+    if (!this.host.execution?.failure) return execution.runtimeFailure
     const failure = await this.host.execution.failure(execution)
-    if (failure?.id === execution.runtimeFailure?.id) return
-    await this.sourceTransaction(async state => {
-      const current = state.executions.find(item => item.id === id)!
-      if (current.owner !== execution.owner || current.epoch !== execution.epoch || !sameSession(current.session, execution.session)) return
-      if (current.runtimeFailure?.userCancelled && !current.runtimeFailure.acknowledged && !failure?.userCancelled) return
+    if (failure?.id === execution.runtimeFailure?.id) return execution.runtimeFailure
+    return this.sourceTransaction(async state => {
+      const current = state.executions.find(item => item.id === id)
+      if (!current || !sameTask(current.ref, execution.ref) || current.owner !== execution.owner || current.epoch !== execution.epoch || !sameSession(current.session, execution.session)) return
+      // Explicit recovery may confirm only the outcome it read, not a newer Stop.
+      if (expected && current.runtimeFailure?.id !== execution.runtimeFailure?.id) return failure
+      if (current.runtimeFailure?.userCancelled && !current.runtimeFailure.acknowledged && !failure?.userCancelled) return current.runtimeFailure
       if (failure) current.runtimeFailure = failure
       else delete current.runtimeFailure
+      return current.runtimeFailure
     })
   }
   private async observeContinuation(id: string): Promise<void> {
@@ -1772,7 +1797,7 @@ export class WorkApplication {
         if (command.type !== 'task.reconcile') return failed('continuous-ended', '本项队列已明确结束，不能恢复业务处理；历史记录仍可查看')
       }
       if (command.type === 'task.organize') return applyTaskOrganization(state, execution, command.organization, command.commandId, randomUUID)
-      if (managed && command.type === 'task.reconcile' && execution.control?.action !== 'end') {
+      if (managed && command.type === 'task.reconcile' && execution.control?.action !== 'end' && !continuousCompleted(state, execution) && !isTaskCompleted(task)) {
         managed.item.resumeRequested = true; managed.item.explicitResumeRequested = true; managed.item.attempts = 0; delete managed.item.retryAt; delete managed.item.recoveryBlocked
         if (execution.runtimeFailure?.userCancelled) execution.runtimeFailure.acknowledged = true
       }
