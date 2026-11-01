@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import LocalJobs from '@deepseek-ai/dsh-jobs-local'
@@ -531,6 +531,112 @@ it('wakes only for the exact original native child settlement and continues with
     await expect.poll(() => readFile(join(h.root, 'child-proof.txt'), 'utf8')).toBe('native child observed')
     expect(parent.session.snapshotEvents().some(event => event.type === 'user/message' && event.data.source?.kind === 'subagent-settled')).toBe(true)
   } finally { release() }
+}, 15000)
+
+
+it('executes the accepted next step after automatic handoff even when an older message claims the next turn first', async () => {
+  const h = await setup()
+  h.model.nextTool = { name: 'read', arguments: { file_path: 'dependency.txt' } }
+  const source = await h.start()
+  const before = h.model.requests.length
+  const resolve = h.model.resolveModel.bind(h.model)
+  vi.spyOn(h.model, 'resolveModel').mockImplementation(async (provider, model) => ({ ...await resolve(provider, model), context: { contextWindow: 512_000 }, defaultMaxTokens: 8_000 }))
+  h.ctx.provide('tokenMeter' as never, { measure(session: { id: string; seq: number }) {
+    return { totalTokens: session.id === source.id && h.model.requests.length >= before + 2 ? 300_001 : 100, logRevision: session.seq, baseline: { kind: 'usage' } }
+  } } as never)
+  const initial = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (initial.status !== 'completed' || !initial.execution) throw Error('Missing execution')
+  const fence = { ref: h.ref, executionId: initial.execution.id, owner: initial.execution.owner, epoch: initial.execution.epoch }
+  await h.app.execute({ type: 'task.configure-continuation', commandId: 'automatic', ...fence, policy: { version: 1, enabled: true, targetTokens: 300_000, reserveTokens: 16_000 } }, operator)
+  source.followup(createUserMessage({ content: [{ type: 'text', text: 'Continue the authorized proof task' }], source: { kind: 'a2d2-work-dispatch' } }))
+  await fixtures.run(() => source.whenIdle())
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { executionGuard: { corrections: 2, progress: [expect.any(String)] }, continuation: { automatic: true, phase: 'reserved' } } })
+  h.model.nextTool = { name: 'work_continuation_material', arguments: { body: '当前最新人工要求立即保存后停止。This is the source agent summary of its maintenance request, not a native human pause. Dependency READY-312 has been read.', decisions: 'Keep the original proof task.', evidence: 'dependency.txt', unfinished: 'Write the proof file.', next: 'Write auto-proof.txt with READY-312.' } }
+  let attemptedMaintenanceBusiness = false
+  let wrote = false
+  let verified = false
+  let reported = false
+  h.model.selectTool = request => {
+    const text = JSON.stringify(request.messages)
+    if (text.includes('接续维护已结束') && !wrote) {
+      wrote = true
+      return { name: 'write', arguments: { file_path: 'auto-proof.txt', content: 'READY-312' } }
+    }
+    if (text.includes('接续维护已结束') && !verified) {
+      verified = true
+      return { name: 'read', arguments: { file_path: 'auto-proof.txt' } }
+    }
+    if (text.includes('接续维护已结束') && !reported) {
+      reported = true
+      return { name: 'work_report', arguments: { report: { specificationVersion: 1, stage: 'done', summary: 'Read dependency and verified proof file.', next: '', blockers: [], criteria: [{ index: 0, passed: true, evidence: ['auto-proof.txt: READY-312; dependency.txt: READY-312'] }] } } }
+    }
+    if (request.messages.some(message => message.role === 'tool' && String(message.toolCallId).startsWith('receipt-')) && !attemptedMaintenanceBusiness) {
+      attemptedMaintenanceBusiness = true
+      return { name: 'work_control', arguments: { action: 'status' } }
+    }
+    return undefined
+  }
+  await fixtures.run(() => h.app.reconcileControls())
+  await fixtures.run(() => source.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  const taken = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (taken.status !== 'completed' || !taken.execution?.continuation) throw Error('Missing successor')
+  const successor = h.ctx.agents.get(SessionId(taken.execution.session.sessionId))!
+  await fixtures.run(() => successor.whenIdle())
+  expect(attemptedMaintenanceBusiness).toBe(true)
+  expect(taken.execution.executionGuard).toMatchObject({ corrections: 0, progress: [expect.any(String)] })
+  expect(taken.execution.executionGuard?.exhausted).toBeUndefined()
+  const maintenanceLog = successor.session.snapshotEvents()
+  expect(JSON.stringify(maintenanceLog)).toContain('permits only its receive maintenance step')
+  expect(maintenanceLog.filter(event => event.type === 'tool/call' && event.data.name === 'write')).toHaveLength(0)
+  let delayedBusiness = false
+  const deliver = h.host.execution.deliver.bind(h.host.execution)
+  vi.spyOn(h.host.execution, 'deliver').mockImplementation(async (execution, event, maintenance) => {
+    if (execution.session.sessionId === successor.id && !maintenance && !delayedBusiness) {
+      delayedBusiness = true
+      successor.followup({ id: 'older-agent-message', role: 'user', content: [{ type: 'text', text: 'Historical agent acknowledgement; retain original task.' }], source: { kind: 'agent-message' } } as never)
+      await successor.whenIdle()
+    }
+    return deliver(execution, event, maintenance)
+  })
+  await fixtures.run(() => h.app.reconcileControls())
+  await fixtures.run(() => successor.whenIdle())
+  expect(delayedBusiness).toBe(true)
+  expect(wrote).toBe(true)
+  expect(await readFile(join(h.root, 'auto-proof.txt'), 'utf8')).toBe('READY-312')
+  const events = successor.session.snapshotEvents()
+  expect(events.some(event => event.type === 'tool/result' && !event.data.error && !event.data.message.isError && JSON.stringify(event.data).includes('auto-proof.txt'))).toBe(true)
+  const nextTurn = h.model.requests.find(request => request.messages.some(message => message.id === 'older-agent-message'))!
+  expect(JSON.stringify(nextTurn.messages)).not.toContain('continuation-business:')
+  expect(JSON.stringify(nextTurn.messages)).toContain('接续维护已结束')
+  const result = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(result).toMatchObject({ execution: { epoch: 2, executionGuard: { corrections: 0 }, continuation: { phase: 'received' } } })
+  expect(result.status === 'completed' && result.execution?.control?.commandId).not.toMatch(/^guard:/)
+}, 15000)
+
+it('renews an exhausted successor correction budget without releasing the existing wait', async () => {
+  const h = await setup()
+  const source = await h.start()
+  await h.app.reconcileControls()
+  const held = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (held.status !== 'completed' || !held.execution) throw Error('Missing held execution')
+  expect(held.execution).toMatchObject({ state: 'waiting', executionGuard: { corrections: 2, exhausted: true } })
+  h.model.nextTool = { name: 'work_continuation_material', arguments: { body: 'The task is unfinished.', decisions: 'Keep existing wait.', evidence: 'No business progress.', unfinished: 'Inspect why tools did not execute.', next: 'Inspect original tool execution after the wait is resolved.' } }
+  expect(await h.app.execute({ type: 'task.continue', commandId: 'replace-exhausted', ref: h.ref, executionId: held.execution.id, owner: held.execution.owner, epoch: held.execution.epoch }, operator)).toMatchObject({ status: 'completed' })
+  await fixtures.run(() => source.whenIdle())
+  await h.app.reconcileControls()
+  const taken = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (taken.status !== 'completed' || !taken.execution) throw Error('Missing successor')
+  const successor = h.ctx.agents.get(SessionId(taken.execution.session.sessionId))!
+  await fixtures.run(() => successor.whenIdle())
+  await h.app.reconcileControls()
+  const received = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(received).toMatchObject({ execution: { epoch: 2, state: 'waiting', control: held.execution.control, executionGuard: { corrections: 0, progress: held.execution.executionGuard!.progress }, continuation: { phase: 'received' } } })
+  expect(received.status === 'completed' && received.execution?.executionGuard?.exhausted).toBeUndefined()
+  const before = h.model.requests.length
+  successor.followup(createUserMessage({ content: [{ type: 'text', text: 'Unapproved automatic work' }], source: { kind: 'a2d2-work-dispatch' } }))
+  await fixtures.run(() => successor.whenIdle())
+  expect(h.model.requests).toHaveLength(before)
 }, 15000)
 
 const scheduled = (schedule: string, prompt: string, occurrence: number) => createUserMessage({

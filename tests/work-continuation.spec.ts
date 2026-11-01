@@ -1,5 +1,7 @@
+import { cp, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { createUserMessage, ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, MessageId, ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { WorkDao } from '../src/work.ts'
 import { ExecutionFixtures } from './work-execution-fixture.ts'
@@ -807,3 +809,234 @@ it('seals duplicate native reminders once and keeps human intake across takeover
   for (const old of reminders.slice(0, -1)) expect(log.events.filter(event => event.type === 'user/message' && event.data.id === old.id)).toHaveLength(0)
   for (const retained of [reminders.at(-1)!, human]) expect(log.events.filter(event => event.type === 'user/message' && event.data.id === retained.id)).toHaveLength(1)
 }, 15000)
+
+
+async function nextEpochWithPendingActivation() {
+  const h = await setup()
+  const second = await rotate(h)
+  const successor = h.ctx.agents.get(SessionId(second.session.sessionId))!
+  const oldId = `continuation-business:${second.continuation!.operationId}`
+  const deliver = h.host.execution.deliver.bind(h.host.execution)
+  let requested: Promise<unknown> | undefined
+  vi.spyOn(h.host.execution, 'deliver').mockImplementation(async (execution, event, maintenance) => {
+    if (event.id !== oldId) return deliver(execution, event, maintenance)
+    await successor.runMaintenance(async () => {
+      await deliver(execution, event, true)
+      expect(successor.inbox.nextTurn.some(message => message.id === oldId)).toBe(true)
+      h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+      requested = h.app.execute({ type: 'task.continue', commandId: 'next-epoch-before-old-activation', ...fence(execution) }, operator)
+      await expect.poll(async () => {
+        const current = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+        return current.status === 'completed' && current.execution?.continuation?.sourceEpoch
+      }).toBe(2)
+    })
+    return 'delivered'
+  })
+  await h.app.reconcileControls()
+  await requested
+  await fixtures.run(() => successor.whenIdle())
+  await h.app.reconcileControls()
+  await fixtures.run(() => successor.whenIdle())
+  await h.app.reconcileControls()
+  const current = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (current.status !== 'completed' || !current.execution) throw Error('Missing next generation')
+  return { h, current: current.execution, oldId, successor }
+}
+
+it('supersedes only the exact old host activation when the next handoff takes its epoch', async () => {
+  const { h, current: execution, oldId, successor } = await nextEpochWithPendingActivation()
+  const current = { execution }
+  expect(current.execution.epoch).toBe(3)
+  expect(current.execution.events.find(event => event.id === oldId)).toMatchObject({ delivery: 'discarded', discardReason: 'superseded' })
+  const third = h.ctx.agents.get(SessionId(current.execution.session.sessionId))!
+  await fixtures.run(() => third.whenIdle())
+  await h.app.reconcileControls()
+  await fixtures.run(() => third.whenIdle())
+  expect(third.session.snapshotEvents().some(event => event.type === 'user/message' && event.data.id === oldId)).toBe(false)
+  expect(successor.session.snapshotEvents().some(event => event.type === 'user/message' && event.data.id === oldId)).toBe(false)
+})
+
+it.each(['continue', 'stop'] as const)('preserves native %s order and accepted result payloads before current activation', async intent => {
+  const h = await setup()
+  const source = h.ctx.agents.get(SessionId(h.execution.session.sessionId))!
+  const human = createUserMessage({ content: [{ type: 'text', text: intent === 'stop' ? '暂停任务，不要继续执行。原始第二行。' : '保留原始人工要求。\n第二行不省略。' }], source: { kind: 'user' } })
+  const automatic = createUserMessage({ content: [{ type: 'text', text: 'continuation-business:quoted-not-an-operation\nPreserve different-source content.' }], source: { kind: 'a2d2-work-dispatch' } })
+  const seal = h.host.execution.sealInput!.bind(h.host.execution)
+  vi.spyOn(h.host.execution, 'sealInput').mockImplementation(async (execution, operationId) => {
+    source.followup(human)
+    source.followup(automatic)
+    return seal(execution, operationId)
+  })
+  const ensure = h.host.execution.ensure.bind(h.host.execution)
+  let acceptedResult: import('../src/work-types.ts').WorkEvent | undefined
+  vi.spyOn(h.host.execution, 'ensure').mockImplementation(async (execution, allowed) => {
+    const actual = await ensure(execution, allowed)
+    if (execution.epoch === 2 && !acceptedResult) {
+      const saved = await h.app.execute({ type: 'task.input', commandId: 'accepted-result-during-handoff', ...fence(h.execution), kind: 'result', text: 'Accepted result payload.\nKeep every line.' }, operator)
+      if (saved.status !== 'completed' || !saved.execution) throw Error('Result not accepted')
+      acceptedResult = saved.execution.events.find(event => event.kind === 'result')!
+    }
+    return actual
+  })
+  const current = await rotate(h)
+  const successor = h.ctx.agents.get(SessionId(current.session.sessionId))!
+  let stopped = false
+  h.model.selectTool = request => {
+    if (intent === 'stop' && !stopped && request.messages.some(message => message.id === human.id)) {
+      stopped = true
+      return { name: 'work_control', arguments: { action: 'pause', text: '用户明确暂停任务。' } }
+    }
+  }
+  const order: string[] = []
+  const deliver = h.host.execution.deliver.bind(h.host.execution)
+  vi.spyOn(h.host.execution, 'deliver').mockImplementation(async (execution, event, maintenance) => {
+    if (execution.epoch === 2) order.push(event.id)
+    return deliver(execution, event, maintenance)
+  })
+  await h.app.reconcileControls()
+  await fixtures.run(() => successor.whenIdle())
+  const activation = `continuation-business:${current.continuation!.operationId}`
+  expect(order.indexOf(human.id)).toBeGreaterThanOrEqual(0)
+  expect(order.indexOf(human.id)).toBeLessThan(order.indexOf(activation))
+  expect(order.indexOf(activation)).toBeLessThan(order.indexOf(automatic.id))
+  const log = successor.session.snapshotEvents()
+  expect(log.find(event => event.type === 'user/message' && event.data.id === human.id)).toMatchObject({ data: { content: human.content, source: human.source } })
+  const final = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (final.status !== 'completed' || !final.execution) throw Error('Missing execution')
+  expect(final.execution.events.find(event => event.id === acceptedResult!.id)).toMatchObject({ kind: 'result', text: acceptedResult!.text })
+  if (intent === 'stop') {
+    expect(stopped).toBe(true)
+    expect(final.execution.control?.action).toBe('pause')
+    expect(log.some(event => event.type === 'user/message' && event.data.id === activation)).toBe(false)
+  } else {
+    expect(log.find(event => event.type === 'user/message' && event.data.id === automatic.id)).toMatchObject({ data: { content: automatic.content, source: automatic.source } })
+    expect(JSON.stringify(log)).toContain('Accepted result payload.')
+  }
+})
+
+
+it('cold-recovers an existing received backlog by canceling only superseded host activation envelopes', async () => {
+  const { h, current, oldId } = await nextEpochWithPendingActivation()
+  const agent = h.ctx.agents.get(SessionId(current.session.sessionId))!
+  await fixtures.run(() => agent.whenIdle())
+  await h.app.reconcileControls()
+  await fixtures.run(() => agent.whenIdle())
+  await h.app.execute({ type: 'task.control', commandId: 'keep-user-pause', ...fence(current), action: 'pause', text: 'User pause must remain effective through cleanup.' }, operator)
+  const human = createUserMessage({ content: [{ type: 'text', text: '暂停，不要继续。\nKeep original native user payload.' }], source: { kind: 'user' } })
+  const other = createUserMessage({ content: [{ type: 'text', text: `${oldId} is quoted data, not a host activation.` }], source: { kind: 'a2d2-work-dispatch' } })
+  // Recreate the exact pre-upgrade received state proven by the semantic red test.
+  await WorkDao.forDirectory(h.app.directory).transaction(async state => {
+    const execution = state.executions.find(item => item.id === current.id)!
+    const old = execution.events.find(item => item.id === oldId)!
+    old.delivery = 'delivered'
+    delete old.discardReason
+  })
+  const state = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (state.status !== 'completed' || !state.execution) throw Error('Missing received state')
+  const old = state.execution.events.find(event => event.id === oldId)!
+  const activation = state.execution.events.find(event => event.id === `continuation-business:${current.continuation!.operationId}`)!
+  const oldEnvelope = { id: MessageId(old.id), role: 'user' as const, content: [{ type: 'text' as const, text: old.text }], source: { kind: 'a2d2-work-dispatch' as const } }
+  const currentEnvelope = { id: MessageId(activation.id), role: 'user' as const, content: [{ type: 'text' as const, text: activation.text }], source: { kind: 'a2d2-work-dispatch' as const } }
+  await agent.runMaintenance(async () => {
+    agent.inbox.splice('next-turn', 0, 0, [oldEnvelope, currentEnvelope, human, other])
+    await h.ctx.sessions.flush(agent.session)
+  })
+  // Graceful disposal cancels native Inbox work. Restore a byte-for-byte durable
+  // snapshot taken before disposal, as a cold host would after process loss.
+  const snapshot = await fixtures.root()
+  await cp(h.workspace.path, snapshot, { recursive: true })
+  await fixtures.dispose(h.ctx)
+  const restored = await fixtures.mount(snapshot)
+  installWorkTools(restored.ctx, restored.app, 'runtime')
+  await restored.app.reconcileControls()
+  const live = restored.ctx.agents.get(SessionId(current.session.sessionId))!
+  await fixtures.run(() => live.whenIdle())
+  const recovered = await restored.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (recovered.status !== 'completed' || !recovered.execution) throw Error('Missing recovered state')
+  expect(recovered.execution.events.find(event => event.id === oldId)).toMatchObject({ delivery: 'discarded', discardReason: 'superseded' })
+  expect(recovered.execution.control).toEqual(state.execution.control)
+  expect(live.inbox.nextTurn.some(message => message.id === oldId)).toBe(false)
+  const log = live.session.snapshotEvents()
+  const preserved = [...live.inbox.nextTurn, ...live.inbox.nextStep, ...log.flatMap(event => event.type === 'user/message' ? [event.data] : []), ...recovered.execution.events.flatMap(event => event.nativeMessage ? [event.nativeMessage] : [])]
+  expect(preserved).toEqual(expect.arrayContaining([currentEnvelope, human, other]))
+  expect(log.some(event => event.type === 'user/message' && event.data.id === oldId)).toBe(false)
+  const lanes: Record<string, string[]> = { 'next-turn': [], 'next-step': [] }
+  const canceled: string[] = []
+  for (const event of log) if (event.type === 'agent/inbox/spliced') {
+    const data = event.data
+    const removed = lanes[data.target]!.splice(data.start, data.removedCount ?? 0, ...data.inserted.map(message => message.id))
+    if (data.outcome === 'canceled' && removed.includes(oldId)) canceled.push(...removed)
+  }
+  expect(canceled).toEqual([oldId])
+  const before = log.filter(event => event.type === 'agent/inbox/spliced').length
+  await restored.app.reconcileControls()
+  expect(live.session.snapshotEvents().filter(event => event.type === 'agent/inbox/spliced')).toHaveLength(before)
+  const valid = createUserMessage({ content: [{ type: 'text', text: 'Keep the full mixed automatic input.\nSecond line.' }], source: { kind: 'a2d2-work-dispatch' } })
+  const trigger = createUserMessage({ content: [{ type: 'text', text: 'Preserve the next-turn envelope too.' }], source: { kind: 'a2d2-work-dispatch' } })
+  const saved = await restored.app.execute({ type: 'task.input', commandId: 'mixed-accepted-result', ...fence(recovered.execution), kind: 'result', text: 'Accepted result in the same native step.\nKeep all result lines.' }, operator)
+  if (saved.status !== 'completed' || !saved.execution) throw Error('Result not accepted')
+  const result = saved.execution.events.find(event => event.text.startsWith('Accepted result in the same native step.'))!
+  const resultEnvelope = { id: MessageId(result.id), role: 'user' as const, content: [{ type: 'text' as const, text: result.text }], source: { kind: 'a2d2-work-dispatch' as const } }
+  await live.runMaintenance(async () => {
+    live.inbox.splice('next-step', 0, 0, [oldEnvelope, valid, resultEnvelope])
+    live.followup(trigger)
+  })
+  await fixtures.run(() => live.whenIdle())
+  const mixed = await restored.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (mixed.status !== 'completed' || !mixed.execution) throw Error('Missing mixed batch recovery')
+  expect(mixed.execution.events.find(event => event.id === valid.id)).toMatchObject({ delivery: 'accepted', nativeMessage: valid })
+  expect([...live.inbox.nextTurn, ...live.inbox.nextStep, ...mixed.execution.events.flatMap(event => event.nativeMessage ? [event.nativeMessage] : [])]).toEqual(expect.arrayContaining([trigger]))
+  expect(mixed.execution.events.find(event => event.id === result.id)).toMatchObject({ kind: 'result', text: result.text, delivery: 'accepted' })
+  expect(mixed.execution.control).toEqual(recovered.execution.control)
+  expect(live.session.snapshotEvents().some(event => event.type === 'user/message' && event.data.id === oldId)).toBe(false)
+  await writeFile(join(h.workspace.path, 'admitted-step.txt'), 'REAL-MULTISTEP-EVIDENCE')
+  const humanStep = createUserMessage({ content: [{ type: 'text', text: 'Read the existing evidence twice and answer; preserve the user pause.' }], source: { kind: 'user' } })
+  let reads = 0
+  restored.model.uniqueToolIds = true
+  restored.model.selectTool = request => request.messages.some(message => message.id === humanStep.id) && reads++ < 2 ? { name: 'read', arguments: { file_path: 'admitted-step.txt' } } : undefined
+  let injected = false
+  restored.ctx.on('tools/result', exec => {
+    if (exec.agent === live && exec.name === 'read' && !injected) { injected = true; live.steer(oldEnvelope) }
+  })
+  live.followup(humanStep)
+  await fixtures.run(() => live.whenIdle())
+  const final = live.session.snapshotEvents()
+  expect(injected).toBe(true)
+  const toolResults = final.filter(event => event.type === 'tool/result' && !event.data.message.isError && JSON.stringify(event.data.message.content).includes('REAL-MULTISTEP-EVIDENCE'))
+  expect(toolResults).toHaveLength(2)
+  expect(new Set(toolResults.map(event => event.type === 'tool/result' ? event.data.turn : undefined)).size).toBe(1)
+  expect(final.findLast(event => event.type === 'turn/end')).toMatchObject({ data: { reason: { kind: 'completed' } } })
+  expect(final.some(event => event.type === 'user/message' && event.data.id === oldId)).toBe(false)
+})
+
+it.each(['human', 'automatic', 'reminder'] as const)('keeps %s input moving when an expired activation claimed the queue head', async kind => {
+  const { h, current, oldId } = await nextEpochWithPendingActivation()
+  const agent = h.ctx.agents.get(SessionId(current.session.sessionId))!
+  await fixtures.run(() => agent.whenIdle())
+  await fixtures.run(() => h.app.reconcileControls())
+  await fixtures.run(() => agent.whenIdle())
+  const old = current.events.find(event => event.id === oldId)!
+  const expired = { id: MessageId(old.id), role: 'user', content: [{ type: 'text', text: old.text }], source: { kind: 'a2d2-work-dispatch' } } as ReturnType<typeof createUserMessage>
+  const reminder = (occurrence: number) => createUserMessage({ content: [{ type: 'text', text: '[SCHEDULE REMINDER BATCH]\nThis is a scheduled message from the user\nreminders_json: ' + JSON.stringify([{ schedule_id: 'expired-head-reminder', occurrence_at: new Date(occurrence * 1000).toISOString(), reminder_prompt: 'Observe the same accepted task' }]) }], source: { kind: 'schedule' } as never })
+  const retained = kind === 'reminder' ? reminder(2) : createUserMessage({ content: [{ type: 'text', text: kind === 'human' ? '暂停任务，不要继续执行。' : 'Preserve this valid result acknowledgement.' }], source: kind === 'human' ? { kind: 'user' } : { kind: 'a2d2-work-dispatch' } })
+  let stopped = false
+  h.model.selectTool = request => {
+    if (kind === 'human' && !stopped && request.messages.some(message => message.id === retained.id)) {
+      stopped = true
+      return { name: 'work_control', arguments: { action: 'pause', text: 'Follow the pending human stop.' } }
+    }
+  }
+  const before = agent.session.seq
+  await agent.runMaintenance(async () => {
+    agent.inbox.splice('next-turn', 0, 0, kind === 'reminder' ? [reminder(1), expired] : [expired])
+    agent.followup(retained)
+  })
+  await fixtures.run(() => agent.whenIdle())
+  const received = agent.session.snapshotEvents().filter(event => event.type === 'user/message').filter(event => event.seq >= before)
+  expect(received.some(event => event.data.id === oldId)).toBe(false)
+  expect(received.find(event => event.data.id === retained.id)).toMatchObject({ data: { content: retained.content, source: retained.source } })
+  if (kind === 'human') {
+    expect(stopped).toBe(true)
+    expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { control: { action: 'pause' } } })
+  }
+})

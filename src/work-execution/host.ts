@@ -1,11 +1,11 @@
 import type { WorkExecution } from '../work-types.ts'
 
 export interface MaintenanceAdmission { operationId: string; step: 'material' | 'collect' | 'receive' | 'settle'; jobIds?: string[]; messageIds?: string[] }
-export type WorkAdmission = boolean | MaintenanceAdmission
+export type WorkAdmission = boolean | MaintenanceAdmission | { kind: 'business'; instruction: string }
 
 /** Trusted host boundary. check must be read-only and reject missing capabilities before reservation. */
 export interface WorkExecutionHost {
-  connect(authorize: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<WorkAdmission>, conversation?: (sessionId: string) => Promise<string | undefined>, pendingHumanInput?: (sessionId: string) => Promise<readonly import('../work-types.ts').NativeWorkMessage[]>): void
+  connect(authorize: (sessionId: string, messages?: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<WorkAdmission>, conversation?: (sessionId: string) => Promise<string | undefined>, pendingHumanInput?: (sessionId: string) => Promise<readonly import('../work-types.ts').NativeWorkMessage[]>, filterInput?: (sessionId: string, messages: readonly import('../work-types.ts').NativeWorkMessage[]) => Promise<readonly import('../work-types.ts').NativeWorkMessage[]>): void
   /** Observe between completed steps. False rechecks admission without revoking
    * an admitted turn's ordinary result/final-answer allowance after wait/done. */
   connectStepBoundary?(observe: (sessionId: string) => Promise<boolean>): void
@@ -19,6 +19,8 @@ export interface WorkExecutionHost {
   check(request: Pick<WorkExecution, 'resource' | 'session' | 'sessionMode' | 'agentPreset' | 'model' | 'permissionPreset'>): Promise<import('../work-types.ts').HostExecutionChoices>
   ensure(execution: WorkExecution, allowed: () => Promise<boolean>): Promise<NonNullable<WorkExecution['actual']>>
   deliver(execution: WorkExecution, event: import('../work-types.ts').WorkEvent, inMaintenance?: boolean): Promise<'delivered' | 'consumed'>
+  /** Cancel an exact queued host input without claiming model consumption. */
+  discardInput?(execution: WorkExecution, event: import('../work-types.ts').WorkEvent): Promise<void>
   observe(execution: WorkExecution, event: import('../work-types.ts').WorkEvent): Promise<'accepted' | 'delivered' | 'consumed'>
   /** Stop only this execution and its native children; pending results remain a visible retryable barrier. */
   end?(execution: WorkExecution): Promise<void>

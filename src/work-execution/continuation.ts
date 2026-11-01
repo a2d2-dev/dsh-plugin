@@ -4,7 +4,7 @@ import { continuationInFlight } from './state.ts'
 export { continuationInFlight } from './state.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { redactText } from '../handoff.ts'
-import type { ContinuationOperation, WorkExecution, WorkTask } from '../work-types.ts'
+import type { ContinuationOperation, WorkEvent, WorkExecution, WorkTask } from '../work-types.ts'
 
 export const MANAGED_WORK_INSTRUCTIONS = `负责推进当前已授权的任务，直到完成验收或核实真实阻塞。用户追问状态、要求解释或批评执行方式时，简短回答后继续原任务；不要停在解释、道歉或要求用户说“继续”。用户明确暂停、停止、只作答或改变目标时服从。工具权限不扩大任务授权。
 保留原始 Issue 的目标和已接受要求。启动资料已提供任务内容；work_control status 用于核对当前身份、epoch 和版本，传入已完整读取的 known_specification_version。规格缺失或版本变化时，用 work_read specification 读完全部分页，不能编造或削弱验收要求。work_read sources 读取已接受引用；work_related_issue 可核实已接受的原始 Issue、必要原生子任务和依赖，读取不授予修改权限。
@@ -47,7 +47,7 @@ export function materialRequest(operation: ContinuationOperation): string {
 export function successorMessage(operation: ContinuationOperation, policyInstructions: string, replacements: import('../work-types.ts').WorkExecution['childReplacements'] = []): string {
   if (!operation.material) throw new Error('Cannot continue without saved source material')
   const m = operation.material
-  return redactText(`${policyInstructions}\n\n${MANAGED_WORK_INSTRUCTIONS}\n\nReceive the same Task from its saved source material. Preserve the current waiting/paused control and reason; this request only transfers context and never authorizes business work. Completion still requires accepted evidence.\n\nTask: ${operation.title}\nGoal: ${operation.goal}\nSpecification version: ${operation.specification.version}\nMissing material: ${JSON.stringify(operation.specification.missing ?? [])}\nSpecification: ${operation.specification.text}\nAcceptance:\n${operation.specification.acceptance.join('\n')}\n\nOriginal material:\n${m.body}\n\nDecisions:\n${m.decisions}\n\nEvidence:\n${m.evidence}\n\nUnfinished:\n${m.unfinished}\n\nUnreturned child work (host observations, not completion):\n${JSON.stringify(operation.pendingChildren ?? [])}\n\nVerified child replacement bindings (read the replacement result again at your current epoch before completion):\n${JSON.stringify(replacements)}\n\nNext:\n${m.next}\n\nLocal read-only history: task.history ${JSON.stringify(operation.history)}\nSource epoch: ${operation.sourceEpoch}\n\nRead this supplied material, then call work_continuation_received with operation_id ${operation.operationId}, material_command_id ${m.commandId}, expected_epoch ${operation.sourceEpoch + 1}. Stop after this receipt; the plugin owns further scheduling.`).text
+  return redactText(`${policyInstructions}\n\n${MANAGED_WORK_INSTRUCTIONS}\n\nReceive the same Task from its saved source material. Preserve the current waiting/paused control and reason; this request only transfers context and authorizes no business work in this maintenance turn, including after the receipt. A later turn may proceed only when the plugin explicitly admits it under the current Task owner, epoch, control and dispatch slot. Completion still requires accepted evidence.\n\nTask: ${operation.title}\nGoal: ${operation.goal}\nSpecification version: ${operation.specification.version}\nMissing material: ${JSON.stringify(operation.specification.missing ?? [])}\nSpecification: ${operation.specification.text}\nAcceptance:\n${operation.specification.acceptance.join('\n')}\n\nOriginal material:\n${m.body}\n\nDecisions:\n${m.decisions}\n\nEvidence:\n${m.evidence}\n\nUnfinished:\n${m.unfinished}\n\nUnreturned child work (host observations, not completion):\n${JSON.stringify(operation.pendingChildren ?? [])}\n\nVerified child replacement bindings (read the replacement result again at your current epoch before completion):\n${JSON.stringify(replacements)}\n\nNext:\n${m.next}\n\nLocal read-only history: task.history ${JSON.stringify(operation.history)}\nSource epoch: ${operation.sourceEpoch}\n\nRead this supplied material, then call work_continuation_received with operation_id ${operation.operationId}, material_command_id ${m.commandId}, expected_epoch ${operation.sourceEpoch + 1}. Stop after this receipt; the plugin owns further scheduling.`).text
 }
 
 /** Only persisted operation requests receive maintenance admission. */
@@ -84,4 +84,11 @@ export function continuationChildren(facts: ExecutionObservation, carried: NonNu
       blockers: facts.blockers.filter(blocker => sessionKey(blocker.session) === sessionKey(child.session)).map(blocker => blocker.code),
       next: 'Inspect this exact child and its original parent. Use work_child_recover action=status/result/resume/replace with child_session_id and current expected_epoch; read every result page in order using nextCursor/revision. Resume interrupted/error work through its original parent; keep unfinished work pending until real results are received and verified.' }]
   }))
+}
+
+
+/** Only exact host activation identities from this execution's retired operations expire. */
+export function supersededContinuationActivation(execution: WorkExecution, event: WorkEvent): boolean {
+  return event.kind === 'input' && !event.nativeMessage
+    && !!execution.continuationHistory?.some(old => event.id === `continuation-business:${old.operationId}`)
 }

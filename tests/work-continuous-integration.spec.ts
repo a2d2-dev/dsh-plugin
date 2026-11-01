@@ -208,10 +208,10 @@ it.each(['wait', 'pause'] as const)('replaces a continuous %s Session without ac
     await execute({ type: 'task.continue', commandId: 'retry-replace-only-material', ref, executionId: held.id, owner: held.owner, epoch: held.epoch })
     await fixtures.run(() => app.reconcileControls())
     await fixtures.run(() => h.ctx.agents.get(SessionId(first.session.sessionId))!.whenIdle())
-    await fixtures.run(() => app.reconcileControls())
+    await fixtures.run(() => app.reconcileSessionControls(first.session.sessionId))
     const successor = (await query({ type: 'task.detail', ref })).execution!
     await fixtures.run(() => h.ctx.agents.get(SessionId(successor.session.sessionId))!.whenIdle())
-    await fixtures.run(() => app.reconcileControls())
+    await fixtures.run(() => app.reconcileSessionControls(successor.session.sessionId))
     const final = (await query({ type: 'task.detail', ref })).execution!
     expect(final).toMatchObject({ id: held.id, owner: held.owner, epoch: 2, state: held.state, control: held.control, continuation: { phase: 'received' } })
     const afterRule = (await query({ type: 'continuous.status', projectId, sourceId })).continuousRule!
