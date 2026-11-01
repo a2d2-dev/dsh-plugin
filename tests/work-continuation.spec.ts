@@ -1009,7 +1009,7 @@ it('cold-recovers an existing received backlog by canceling only superseded host
   expect(final.some(event => event.type === 'user/message' && event.data.id === oldId)).toBe(false)
 })
 
-it.each(['human', 'automatic'] as const)('keeps %s input moving when an expired activation claimed the queue head', async kind => {
+it.each(['human', 'automatic', 'reminder'] as const)('keeps %s input moving when an expired activation claimed the queue head', async kind => {
   const { h, current, oldId } = await nextEpochWithPendingActivation()
   const agent = h.ctx.agents.get(SessionId(current.session.sessionId))!
   await fixtures.run(() => agent.whenIdle())
@@ -1017,7 +1017,8 @@ it.each(['human', 'automatic'] as const)('keeps %s input moving when an expired 
   await fixtures.run(() => agent.whenIdle())
   const old = current.events.find(event => event.id === oldId)!
   const expired = { id: MessageId(old.id), role: 'user', content: [{ type: 'text', text: old.text }], source: { kind: 'a2d2-work-dispatch' } } as ReturnType<typeof createUserMessage>
-  const retained = createUserMessage({ content: [{ type: 'text', text: kind === 'human' ? '暂停任务，不要继续执行。' : 'Preserve this valid result acknowledgement.' }], source: kind === 'human' ? { kind: 'user' } : { kind: 'a2d2-work-dispatch' } })
+  const reminder = (occurrence: number) => createUserMessage({ content: [{ type: 'text', text: '[SCHEDULE REMINDER BATCH]\nThis is a scheduled message from the user\nreminders_json: ' + JSON.stringify([{ schedule_id: 'expired-head-reminder', occurrence_at: new Date(occurrence * 1000).toISOString(), reminder_prompt: 'Observe the same accepted task' }]) }], source: { kind: 'schedule' } as never })
+  const retained = kind === 'reminder' ? reminder(2) : createUserMessage({ content: [{ type: 'text', text: kind === 'human' ? '暂停任务，不要继续执行。' : 'Preserve this valid result acknowledgement.' }], source: kind === 'human' ? { kind: 'user' } : { kind: 'a2d2-work-dispatch' } })
   let stopped = false
   h.model.selectTool = request => {
     if (kind === 'human' && !stopped && request.messages.some(message => message.id === retained.id)) {
@@ -1027,7 +1028,7 @@ it.each(['human', 'automatic'] as const)('keeps %s input moving when an expired 
   }
   const before = agent.session.seq
   await agent.runMaintenance(async () => {
-    agent.inbox.splice('next-turn', 0, 0, [expired])
+    agent.inbox.splice('next-turn', 0, 0, kind === 'reminder' ? [reminder(1), expired] : [expired])
     agent.followup(retained)
   })
   await fixtures.run(() => agent.whenIdle())

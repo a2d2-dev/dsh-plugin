@@ -78,12 +78,6 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
     this.ctx.on('agent/pre-step', async ({ agent, messages, turn }, next) => {
       // Task scheduling controls automatic turns, never the native human conversation.
       // An admitted turn can finish its tool results and final answer after wait/done.
-      let filteredHead = false
-      if (messages.length && this.filterInput) {
-        const filtered = await this.filterInput(agent.id, messages)
-        filteredHead = filtered.length === 0
-        messages.splice(0, messages.length, ...filtered as UserMessage[])
-      }
       const managed = !!await this.conversation?.(agent.id)
       if (managed) {
         const superseded = supersededReminders([...messages, ...agent.inbox.nextStep, ...agent.inbox.nextTurn])
@@ -103,6 +97,12 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
           const retained = agent.inbox.nextStep[0] ?? agent.inbox.nextTurn[0]
           if (retained && agent.inbox.remove(retained.id)) messages.push(retained)
         }
+      }
+      let filteredHead = false
+      if (messages.length && this.filterInput) {
+        const filtered = await this.filterInput(agent.id, messages)
+        filteredHead = filtered.length === 0
+        messages.splice(0, messages.length, ...filtered as UserMessage[])
       }
       const humans = messages.filter(message => message.source?.kind === 'user')
       const automatic = messages.filter(message => message.source?.kind !== 'user')
