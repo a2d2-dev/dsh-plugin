@@ -2,6 +2,8 @@
 
 **状态：当前目标决策。** 浏览器用于观察和表达意图，长程推进由 DSH 宿主中的运行器负责。执行协调沿用本地可恢复机制，并扩展为独立领域身份与明确的当前处理会话。
 
+2026-11-01 已按本决策形成[实现与正式运行核对矩阵（私有证据）](https://github.com/a2d2-dev/project/blob/5b2fd29/dsh-plugin/docs/artifacts/270-runtime-contract-2026-11-01/README.md)。本文的目标合同不等于所有版本均已满足；主干、正式包、候选和 GUI 验收状态在矩阵中分别记录。
+
 ## 执行资格
 
 - 只发现和驱动已明确启用的执行。绑定会话、浏览项目或重载插件不自动接管工作；“开始处理”与“持续处理”按 ADR 0007 授权。
@@ -22,6 +24,8 @@
 插件对同一 Task 持续持有接续推进责任；当前业务主会话身份只在正式接任事务切换。会话只执行插件指定的收取、保存或读取确认步骤。显式 `task.continue` 允许 idle 且相关事实满足条件的 waiting/paused 执行仅换会话，保留 Task、Execution、owner、全部规格验收与完整 control 原因；维护不取得 continuous slot，不设置 resumeRequested，不把 waiting/paused 改为 ready。
 
 维护准入绑定持久 operation、准确 Session、固定请求身份及具体步骤。tools.guard 只允许 material 步骤保存材料、collect 步骤正式 job_output 指定 jobs、receive 步骤确认指定材料；任意 marker、业务工具和嵌套分派不取得准入。人类正常对话仍沿用宿主权限，对话、页面查看、完成和归档不解除 Task 控制。
+
+当前宿主另有归档硬门：归档 Session 及其原生 subagent 后代不能执行任何模型步骤，包含上述维护步骤和人工对话。前述原生对话合同不能解读为插件可绕过该宿主门。恢复归档不改变 Task 的 pause/wait/end；必需源材料尚未可靠保存时，归档会阻断接续。#184 的人工恢复已验证同 operation 继续且 pause 保留，插件自动恢复归档与退休提醒收口尚未闭环。
 
 原生结算另有无工具的 settle 步骤：从真实父 catalog、child header/descriptor、最新 turn/end 及原通知首次 inbox insertion 核实 parent/child/endSeq/messageId，绑定当前 operation/source epoch。只让准确通知进入父 user/message；同批其他自动输入持久排队，不获得业务权限或设置 resumeRequested。旧通知重插不刷新首次入箱时间；消费通知、child returned 与 Task 验收仍分别核实，接续触发后，原生子工作与未消费通知不再构成接任门；原生消费事实保留，后继通过准确子会话结果另行收取。材料新鲜度覆盖源主会话及非原生关联执行者的 job 身份，变化中的子工作由独立持久快照交接。
 
@@ -91,7 +95,9 @@ PATH=/root/.nvm/versions/node/v22.23.1/bin:$PATH pnpm exec vitest run tests/work
 
 ## 实现覆盖
 
-已有运行器的 owner 锁、安全维护、固定后继、分步交接、inbox 和恢复测试可以复用；它当前仍以项目根/Issue 寻址，未提供完整 TaskId/epoch/Project Agent、新来源队列和验收 outbox。现有 `rotateTokens` 使用近似投影，需按上面的计量契约扩展。实现与验证必须在隔离开发环境中完成，不接管或重启现有 18780/18781 实例。
+当前主干已经具有独立 TaskRef、TaskExecution、Project Agent、owner/epoch、持续处理规则、事件收件箱及完成发布恢复记录；早期“仍仅以项目根/Issue 寻址”的实现描述已过期。这些身份和记录并不证明本决策的全部边界或 GUI 已验收。#274/PR#282 后端已交付；#275/PR#285 页面与 #276 整体验收尚未闭环，具体运行缺口见上述核对矩阵。计量仍须区分近似投影与实际路由预算，不承诺硬窗口保证。
+
+新增实现与真实模型验收使用既有隔离开发入口 `https://dsh-dev.e5box.a2d2.dev/`；正式运行只读核对入口为 `https://dsh.e5box.a2d2.dev/`。不以历史 18780/18781 实例替代当前验收，也不因文档核对升级或重启正式服务。
 
 
 ## 未返回子工作随接续转交（#342）
