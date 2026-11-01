@@ -466,10 +466,11 @@ export class WorkApplication {
     const execution = state.executions.find(item => sameSession(item.session, session))
     if (!execution || execution.epoch !== epoch) return failed('stale-execution-authority', 'Only the current coordinator at this epoch may recover child work')
     if ((action === 'resume' || action === 'replace') && isTaskCompleted(taskAt(state, execution.ref))) return failed('task-completed', 'Accepted Task completion does not authorize further child work')
-    const facts = await this.host.execution?.observation?.(execution)
+    const carried = [execution.continuation, ...(execution.continuationHistory ?? [])].flatMap(op => op?.pendingChildren ?? []).find(child => child.child.sessionId === childId)
+    const facts = !carried || action === 'replace' ? await this.host.execution?.observation?.(execution) : undefined
     const native = facts?.sessions.flatMap(parent => parent.children.map(child => ({ parent: parent.session, child }))) ?? []
     const scoped = native.find(item => item.child.session.sessionId === childId && [execution.session, ...(execution.retired ?? []).map(item => item.session)].some(parent => sameSession(parent, item.parent)))
-    const child = [execution.continuation, ...(execution.continuationHistory ?? [])].flatMap(op => op?.pendingChildren ?? []).find(child => child.child.sessionId === childId)
+    const child = carried
       ?? (scoped ? { parent: scoped.parent, child: scoped.child.session, mode: scoped.child.mode, status: scoped.child.status, result: scoped.child.result, returned: scoped.child.returned ?? false, tools: [], jobs: [], blockers: [], next: 'Inspect native result' } : undefined)
     if (!child) return failed('unrelated-child', 'Child is not in this Task continuation or coordinator native catalog')
     if (!this.host.execution?.childRecovery) return failed('host-capability-unavailable', 'Public native child recovery is unavailable')
@@ -530,7 +531,7 @@ export class WorkApplication {
         }]
       }
     })
-    return { ...result, childStatus: result.status, status: 'completed' as const, child: child.child, ...(trustedReceipt && trustedReceipt.endSeq === result.endSeq ? { readProgress: { cursor: trustedReceipt.cursor, revision: trustedReceipt.revision, complete: trustedReceipt.complete } } : {}), ...(action === 'result' && result.status === 'returned' ? { events: undefined, content: raw.slice(cursor, nextCursor), revision: resultRevision, complete: nextCursor === raw.length, ...(nextCursor < raw.length ? { nextCursor } : {}) } : {}) }
+    return { ...result, childStatus: result.status, status: 'completed' as const, child: child.child, ...(trustedReceipt && trustedReceipt.endSeq === result.endSeq ? !trustedReceipt.complete && !trustedReceipt.pages ? { restartRequired: true, next: { action: 'result', cursor: 0 } } : { readProgress: { cursor: trustedReceipt.cursor, revision: trustedReceipt.revision, complete: trustedReceipt.complete } } : {}), ...(action === 'result' && result.status === 'returned' ? { events: undefined, content: raw.slice(cursor, nextCursor), revision: resultRevision, complete: nextCursor === raw.length, ...(nextCursor < raw.length ? { nextCursor } : {}) } : {}) }
   }
   /** Public trusted adapter: source identity and Task references are resolved on the server. */
   async sessionContinuationMaterial(session: import('./work-types.ts').SessionRef, callId: string,
