@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /data/src/github.com/a2d2-dev/dsh-plugin.worktrees/fix-continuation-auto-work
+
+
+ Test Files  1 passed (1)
+      Tests  5 passed | 116 skipped (121)
+   Start at  07:06:56
+   Duration  3.92s (transform 2.36s, setup 0ms, import 2.95s, tests 668ms, environment 0ms)
+

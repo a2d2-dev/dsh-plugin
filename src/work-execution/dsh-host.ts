@@ -75,6 +75,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       // Task scheduling controls automatic turns, never the native human conversation.
       // An admitted turn can finish its tool results and final answer after wait/done.
       let human = messages.some(message => message.source?.kind === 'user')
+      let businessInstruction: string | undefined
       // Tool results are committed before this boundary, including later empty
       // steps of a human-started turn. Maintenance retains its narrow tool lane.
       const proceed = human || this.maintenanceTurns.has(agent) || await this.stepBoundary?.(agent.id) !== false
@@ -91,8 +92,11 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
           messages.splice(0, messages.length, ...recovered)
           human = true
           this.maintenanceTurns.delete(agent)
-        } else if (typeof admission === 'object') this.maintenanceTurns.set(agent, admission)
-        else this.maintenanceTurns.delete(agent)
+        } else if (typeof admission === 'object' && 'step' in admission) this.maintenanceTurns.set(agent, admission)
+        else {
+          this.maintenanceTurns.delete(agent)
+          if (typeof admission === 'object') businessInstruction = admission.instruction
+        }
       }
       if (human) {
         this.maintenanceTurns.delete(agent)
@@ -113,6 +117,10 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
           decision.messages.unshift(...structuredClone(recovered))
         }
       }
+      if (businessInstruction) decision.messages.push(createUserMessage({
+        content: [{ type: 'text', text: businessInstruction }],
+        source: { kind: 'a2d2-work-context', form: 'notice', summary: '接续维护已结束，推进原任务' },
+      }))
       const context = [await this.conversation?.(agent.id), this.resumeInstructions.get(agent)].filter(Boolean).join('\n')
       this.resumeInstructions.delete(agent)
       if (context && context !== this.conversationSnapshots.get(agent)) {
@@ -148,7 +156,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       const allowed = scope.step === 'material' ? exec.name === 'work_continuation_material'
         : scope.step === 'receive' ? exec.name === 'work_continuation_received'
         : scope.step === 'collect' && exec.name === 'job_output' && scope.jobIds?.includes(String((exec.arguments as { job_id?: unknown } | undefined)?.job_id))
-      if (!allowed || exec.parent) return `Continuation ${scope.operationId} permits only its ${scope.step} maintenance step; business tools require explicit Task resume`
+      if (!allowed || exec.parent) return `Continuation ${scope.operationId} permits only its ${scope.step} maintenance step; business tools are unavailable in this maintenance turn, including after receipt; stop this turn and let the plugin admit the next business turn under current Task control`
     }), 'narrow continuation maintenance tools') })
     this.ctx.on('tools/result', (exec, result) => {
       this.activeTools.delete(exec.token)
