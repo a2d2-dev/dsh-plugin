@@ -95,3 +95,65 @@ it('waits for the real source turn to become idle before taking saved material',
     await vi.waitFor(async () => expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { epoch: 2, continuation: { phase: 'received' } } }), { timeout: 5000 })
   } finally { release() }
 })
+
+it('limits startup backlog creation to one while repeated timer ticks cannot duplicate the batch', async () => {
+  const h = await setup()
+  const executions = [h.execution]
+  for (let index = 1; index < 4; index++) {
+    const task = await h.app.execute({ type: 'task.create', commandId: `task-${index}`, projectId: h.ref.projectId, title: `Pending ${index}`, goal: 'Recover saved material', specification: 'Use one successor', acceptance: ['Receive the original material'] }, operator)
+    if (task.status !== 'completed' || !task.task) throw Error('Missing Task')
+    const started = await h.app.execute({ type: 'task.start', commandId: `start-${index}`, ref: { projectId: h.ref.projectId, taskId: task.task.id }, expectedVersion: 1, resource: h.execution.resource, agentId: h.execution.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }, operator)
+    if (started.status !== 'completed' || !started.execution) throw Error('Missing execution')
+    executions.push(started.execution)
+    await fixtures.run(() => h.ctx.agents.get(SessionId(started.execution!.session.sessionId))!.whenIdle())
+  }
+  const successors = new Set<string>()
+  for (const execution of executions.slice(0, 3)) {
+    h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+    await h.app.execute({ type: 'task.continue', commandId: `continue-${execution.id}`, ...fence(execution) }, operator)
+    await fixtures.run(() => h.ctx.agents.get(SessionId(execution.session.sessionId))!.whenIdle())
+    const current = await h.app.query({ type: 'task.execution', ref: execution.ref }, operator)
+    if (current.status !== 'completed' || !current.execution?.continuation) throw Error('Missing continuation')
+    expect(current.execution.continuation.phase).toBe('material-saved')
+    successors.add(current.execution.continuation.successor.sessionId)
+  }
+  let releaseCreate!: () => void
+  let releaseScan!: () => void
+  const createGate = new Promise<void>(resolve => { releaseCreate = resolve })
+  const scanGate = new Promise<void>(resolve => { releaseScan = resolve })
+  vi.spyOn(h.app, 'reconcileContinuous').mockImplementation(() => scanGate)
+  const ensure = h.host.execution.ensure.bind(h.host.execution)
+  const created = new Set<string>()
+  let active = 0
+  let maxActive = 0
+  vi.spyOn(h.host.execution, 'ensure').mockImplementation(async (execution, allowed) => {
+    if (!successors.has(execution.session.sessionId) || created.has(execution.session.sessionId)) return ensure(execution, allowed)
+    created.add(execution.session.sessionId)
+    active++
+    maxActive = Math.max(maxActive, active)
+    try { await createGate; return await ensure(execution, allowed) }
+    finally { active-- }
+  })
+  try {
+    installWorkControlRecovery(h.ctx, h.app)
+    await vi.waitFor(() => expect(created.size).toBeGreaterThan(0))
+    // Observe the existing two-second timer fire while the first real create is parked.
+    await new Promise(resolve => setTimeout(resolve, 2200))
+    expect(created.size).toBe(1)
+    expect(maxActive).toBe(1)
+    // A fresh native idle can still advance its exact Session while the backlog is parked.
+    const fresh = executions[3]!
+    h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+    await h.app.execute({ type: 'task.continue', commandId: 'continue-fresh', ...fence(fresh) }, operator)
+    await fixtures.run(() => h.ctx.agents.get(SessionId(fresh.session.sessionId))!.whenIdle())
+    await vi.waitFor(async () => expect(await h.app.query({ type: 'task.execution', ref: fresh.ref }, operator)).toMatchObject({ execution: { epoch: 2, continuation: { phase: 'received' } } }), { timeout: 6000 })
+    expect(created.size).toBe(1)
+    releaseCreate()
+    await vi.waitFor(async () => {
+      for (const execution of executions) expect(await h.app.query({ type: 'task.execution', ref: execution.ref }, operator)).toMatchObject({ execution: { epoch: 2, continuation: { phase: 'received' } } })
+    }, { timeout: 6000 })
+    expect(created.size).toBe(3)
+    expect(maxActive).toBe(1)
+    expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(8)
+  } finally { releaseCreate(); releaseScan() }
+})
