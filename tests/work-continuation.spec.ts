@@ -353,7 +353,7 @@ it('keeps retired conversations usable after cold restore without restoring Task
   expect(await restored.app.query({ type: 'session.work', session: h.execution.session }, operator)).toMatchObject({ work: [{ purpose: 'history', executionId: current.id, epoch: 1, currentSession: current.session }] })
 })
 
-it.each(['user', 'a2d2-work-dispatch'] as const)('checks later steps of the same %s turn after a completed tool crosses the soft target', async kind => {
+it.each([['user', false], ['a2d2-work-dispatch', false], ['user', true], ['a2d2-work-dispatch', true]] as const)('checks later steps of the same %s turn with inherited policy %s after a completed tool crosses the soft target', async (kind, inherited) => {
   const h = await setup()
   const source = h.ctx.agents.get(SessionId(h.execution.session.sessionId))!
   const resolve = h.model.resolveModel.bind(h.model)
@@ -371,7 +371,10 @@ it.each(['user', 'a2d2-work-dispatch'] as const)('checks later steps of the same
     completedTools++
     if (completedTools === 2 && kind === 'a2d2-work-dispatch') source.steer(deferred)
   })
-  await h.app.execute({ type: 'task.configure-continuation', commandId: 'step-policy', ...fence(h.execution), policy: { version: 1, enabled: true, targetTokens: 300_000, reserveTokens: 16_000 } }, operator)
+  const policy = { version: 1, enabled: true, targetTokens: 300_000, reserveTokens: 16_000 }
+  expect(await h.app.execute(inherited
+    ? { type: 'project.configure-continuation', commandId: 'step-policy', projectId: h.ref.projectId, expectedVersion: 1, policy }
+    : { type: 'task.configure-continuation', commandId: 'step-policy', ...fence(h.execution), policy }, operator)).toMatchObject({ status: 'completed' })
   h.model.nextTool = { name: 'work_control', arguments: { action: 'progress', text: 'Tool completed before the next safe step' } }
   h.model.uniqueToolIds = true
   let remaining = 1
@@ -407,6 +410,62 @@ it.each(['user', 'a2d2-work-dispatch'] as const)('checks later steps of the same
   expect(h.model.requests.some(request => request.messages.some(message => message.id === `continuation-business:${taken.execution!.continuation!.operationId}`))).toBe(true)
   if (kind === 'a2d2-work-dispatch') expect(h.model.requests.some(request => request.messages.some(message => message.id === deferred.id && JSON.stringify(message.content) === JSON.stringify(deferred.content)))).toBe(true)
   expect(await fixtures.run(() => h.ctx.sessionPersistence.list())).toHaveLength(2)
+})
+
+it.each([false, true])('observes changed project defaults while preserving explicit disabled override %s', async override => {
+  const h = await setup()
+  const resolve = h.model.resolveModel.bind(h.model)
+  vi.spyOn(h.model, 'resolveModel').mockImplementation(async (provider, model) => ({ ...await resolve(provider, model), context: { contextWindow: 512_000 }, defaultMaxTokens: 8_000 }))
+  h.ctx.provide('tokenMeter' as never, { measure(session: { seq: number }) { return { totalTokens: 250_000, logRevision: session.seq, baseline: { kind: 'usage' } } } } as never)
+  if (override) expect(await h.app.execute({ type: 'task.configure-continuation', commandId: 'disabled-override', ...fence(h.execution), policy: { version: 1, enabled: false, targetTokens: 200_000, reserveTokens: 16_000 } }, operator)).toMatchObject({ status: 'completed' })
+  expect(await h.app.execute({ type: 'project.configure-continuation', commandId: 'project-policy', projectId: h.ref.projectId, expectedVersion: 1, policy: { version: 1, enabled: true, targetTokens: 300_000, reserveTokens: 16_000 } }, operator)).toMatchObject({ status: 'completed' })
+  await fixtures.run(() => h.app.reconcileControls())
+  const below = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(below.status === 'completed' && below.execution?.continuation).toBeUndefined()
+  expect(await h.app.execute({ type: 'project.configure-continuation', commandId: 'lower-project-policy', projectId: h.ref.projectId, expectedVersion: 2, policy: { version: 2, enabled: true, targetTokens: 200_000, reserveTokens: 16_000 } }, operator)).toMatchObject({ status: 'completed' })
+  await fixtures.run(() => h.app.reconcileControls())
+  const changed = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  if (override) {
+    expect(changed.status === 'completed' && changed.execution?.continuation).toBeUndefined()
+    expect(changed).toMatchObject({ execution: { continuationPolicy: { enabled: false, version: 1 } } })
+  } else {
+    expect(changed).toMatchObject({ execution: { continuation: { automatic: true, phase: 'material-requested' }, continuationObservation: { totalTokens: 250_000 } } })
+    expect(changed.status === 'completed' && changed.execution?.continuationPolicy).toBeUndefined()
+  }
+})
+
+it('rechecks an invalid inherited policy after its project default is corrected', async () => {
+  const h = await setup()
+  const resolve = h.model.resolveModel.bind(h.model)
+  vi.spyOn(h.model, 'resolveModel').mockImplementation(async (provider, model) => ({ ...await resolve(provider, model), context: { contextWindow: 512_000 }, defaultMaxTokens: 8_000 }))
+  h.ctx.provide('tokenMeter' as never, { measure(session: { seq: number }) { return { totalTokens: 250_000, logRevision: session.seq, baseline: { kind: 'usage' } } } } as never)
+  expect(await h.app.execute({ type: 'project.configure-continuation', commandId: 'invalid-default', projectId: h.ref.projectId, expectedVersion: 1, policy: { version: 1, enabled: true, targetTokens: 500_000, reserveTokens: 16_000 } }, operator)).toMatchObject({ status: 'completed' })
+  await fixtures.run(() => h.app.reconcileControls())
+  expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { continuationBlocked: { code: 'continuation-policy-invalid' } } })
+  expect(await h.app.execute({ type: 'project.configure-continuation', commandId: 'valid-default', projectId: h.ref.projectId, expectedVersion: 2, policy: { version: 2, enabled: true, targetTokens: 200_000, reserveTokens: 16_000 } }, operator)).toMatchObject({ status: 'completed' })
+  await fixtures.run(() => h.app.reconcileControls())
+  const result = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(result).toMatchObject({ execution: { continuation: { automatic: true, phase: 'material-requested' } } })
+  expect(result.status === 'completed' && result.execution?.continuationBlocked).toBeUndefined()
+})
+
+it('discards an inherited measurement when project policy changes before commit', async () => {
+  const h = await setup()
+  const resolve = h.model.resolveModel.bind(h.model)
+  vi.spyOn(h.model, 'resolveModel').mockImplementation(async (provider, model) => ({ ...await resolve(provider, model), context: { contextWindow: 512_000 }, defaultMaxTokens: 8_000 }))
+  h.ctx.provide('tokenMeter' as never, { measure(session: { seq: number }) { return { totalTokens: 250_000, logRevision: session.seq, baseline: { kind: 'usage' } } } } as never)
+  expect(await h.app.execute({ type: 'project.configure-continuation', commandId: 'project-policy', projectId: h.ref.projectId, expectedVersion: 1, policy: { version: 1, enabled: true, targetTokens: 200_000, reserveTokens: 16_000 } }, operator)).toMatchObject({ status: 'completed' })
+  const measure = h.host.execution.measure!.bind(h.host.execution)
+  const measured = vi.spyOn(h.host.execution, 'measure').mockImplementationOnce(async execution => {
+    const observation = await measure(execution)
+    expect(await h.app.execute({ type: 'project.configure-continuation', commandId: 'disable-project', projectId: h.ref.projectId, expectedVersion: 2, policy: { version: 2, enabled: false, targetTokens: 200_000, reserveTokens: 16_000 } }, operator)).toMatchObject({ status: 'completed' })
+    return observation
+  })
+  await fixtures.run(() => h.app.reconcileControls())
+  expect(measured).toHaveBeenCalledOnce()
+  const result = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(result.status === 'completed' && result.execution?.continuation).toBeUndefined()
+  expect(result.status === 'completed' && result.execution?.continuationObservation).toBeUndefined()
 })
 
 it.each(['pause', 'wait'] as const)('keeps the admitted final answer and %s after a tool crosses the target', async action => {

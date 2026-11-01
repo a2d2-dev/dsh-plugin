@@ -102,3 +102,15 @@ it('saves project defaults at their own version and refreshes a real stale proje
   const detail = await app.query({ type: 'task.detail', ref }, { operator: true })
   expect(detail.status === 'completed' && detail.execution?.continuationPolicy).toBeUndefined()
 })
+
+it('refreshes inherited values after a project default change and still saves execution version one', async () => {
+  const { app, panel, view, command, ref } = await settings()
+  const project = panel.getSnapshot().projects[0]!
+  expect(await app.execute({ type: 'project.configure-continuation', commandId: 'changed-default', projectId: project.id, expectedVersion: project.version, policy: { version: 8, enabled: false, targetTokens: 220000, reserveTokens: 18000 } }, { operator: true })).toMatchObject({ status: 'completed' })
+  await panel.selectProject(project.id, false)
+  expect(view.inputs().map(input => input.props.value)).toEqual(['220000', '18000'])
+  expect(view.nodes('select')[0].props.value).toBe('off')
+  view.submit()
+  await vi.waitFor(() => expect(command.mock.calls.at(-1)?.[0]).toMatchObject({ type: 'task.configure-continuation', policy: { version: 1, enabled: false, targetTokens: 220000, reserveTokens: 18000 } }))
+  await vi.waitFor(() => expect(panel.getSnapshot().detail?.execution?.continuationPolicy?.version).toBe(1))
+})
