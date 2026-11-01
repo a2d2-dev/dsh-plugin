@@ -38,3 +38,15 @@ pnpm typecheck
 增强回归还捕获了后继 receipt 的 idle 与同 Execution 源恢复收尾重叠时，单纯加入旧 Promise 会漏掉下一次回读的问题：六秒后仍停在 delivered。加入旧恢复后重新读取该准确 Session，保留原准入和 lease，再推进其既有意图。最终 `recovery-bounded-green-final.log` 五项通过、测试主体10.16秒，idle/startup/paused 三项分别446/388/688 ms；`recovery-bounded-typecheck-final.log` 退出0。
 
 本分支只完成源码和宿主回归。正式 #183 无人工新输入接任的现场验收由主协调集成、部署后执行；本分支不操作正式任务、清锁或重启服务。
+
+## #183 集成时的测试分类修正
+
+目的：确认 `limits startup backlog creation` 的五秒超时是否由项目默认策略修复引入。
+
+在生产固定基线 `9813c56` 独立工作树运行原测试、原默认配置，不含本次有效策略修改，同样超时 `5000ms`。该文件此前漏列在 `vitest.config.ts` 的 `hostTests`，被当作普通 unit 测试。回归实际创建四个真实 Task／AgentLoop、保存三份接续材料、等待 2200ms 观察真实 timer，并最终验证八份 Session，与已有 host 测试属于同类。
+
+仅在诊断命令显式使用既有 host 预算 `--testTimeout 15000` 后，未改动的基线单例完成全部断言，测试主体 6.68 秒。这证明五秒总预算不足，不是本次策略修改造成业务断言失败。保留原超时日志，不将放宽诊断预算冒充原命令通过。
+
+修正只将 `tests/work-control-recovery.spec.ts` 加入已有 host 分类，复用原 15000ms、单 worker 设置；不改测试断言、测试内部 5000/6000ms 观察期限、2200ms timer 或产品运行时代码。随后不加任何 CLI timeout 覆盖，运行 `pnpm exec vitest run tests/work-control-recovery.spec.ts`，全部五项通过，测试主体 12.83 秒；`git diff --check` 退出 0。
+
+现场日志位于主协调证据目录 `/root/.dsh/docs/artifacts/issue183-continuation-2026-11-01/`：`issue183-recovery-baseline.log`、`issue183-recovery-baseline-hostbudget.log`、`issue183-recovery-classified.log`。本修正不解释正式 #183 的具体接任等待，业务现场原因仍需独立观察。
