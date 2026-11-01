@@ -13,6 +13,10 @@
 
 #315 的修复范围仅为人工对话：业务准入拒绝队首自动输入时，adapter 通过公开 Inbox 接口让其后已有的 source.kind=user 原始消息进入对话。自动输入的准入、路由、恢复和原控制全部保留，不因本轮修复允许 schedule 或其他自动来源进入 waiting/paused 会话，不自动恢复业务。被拒自动消息沿用既有 Task 事件或宿主生产者恢复路径；人工对话不授予当前 owner/epoch、不解除暂停或结束、不重开完成任务、不取得持续槽位。
 
+#348 在受管 Task 的安全 pre-step 同时整理当前 claim 与原生 Inbox：仅当同一 `schedule_id`、逐字相同 `reminder_prompt` 的待处理 occurrence 已有更新替代时取消旧 envelope，按 `occurrence_at` 保留最新原始消息及身份。批次中每一项都有替代才丢弃整批；混合批次中仍有独有提醒、格式未知、其他来源和不同指令均原样保留。原始 journal 不重写，已 claim 的替代项通过公开 Inbox 显式取消，不能冒充 `user/message` 消费。接续 seal 与 Task 重放保留事件及完整 payload，把替代项记为 `discarded`，不再投递成数十个模型轮次。
+
+受管会话的人工 Inbox 和已接受 Task 人工输入在下一安全 step 恢复，自动队首获准也不能让人工输入饥饿；非受管会话仍沿宿主 Queue 语义。人工消息保持身份及顺序，自动输入单独准入，暂停、结束、旧会话与维护范围不随人工消息扩大。维护请求与人工消息相遇时先交付人工对话，固定维护请求由其原有 operation 重试；不能借人工对话解除维护工具限制。
+
 ## 生命周期维护与业务准入
 
 插件对同一 Task 持续持有接续推进责任；当前业务主会话身份只在正式接任事务切换。会话只执行插件指定的收取、保存或读取确认步骤。显式 `task.continue` 允许 idle 且相关事实满足条件的 waiting/paused 执行仅换会话，保留 Task、Execution、owner、全部规格验收与完整 control 原因；维护不取得 continuous slot，不设置 resumeRequested，不把 waiting/paused 改为 ready。

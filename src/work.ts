@@ -1,3 +1,4 @@
+import { supersededReminders } from './work-execution/reminders.ts'
 import { CONTINUE_AUTHORIZED_WORK } from './work-execution/guard.ts'
 import type { WorkGuardInput, WorkGuardOptions, WorkYield } from './work-execution/guard.ts'
 import { continuousBlocks } from './work-blocks.ts'
@@ -1453,6 +1454,8 @@ export class WorkApplication {
           if (lifecycleOwned(message) || message.id === operation.materialRequestId || operation.collections?.some(step => step.requestId === message.id) || current.events.some(item => item.id === message.id)) continue
           current.events.push({ id: message.id, text: 'Input accepted before source intake was sealed', kind: 'input', delivery: 'accepted', acceptance: 'unassessed', nativeMessage: message })
         }
+        const superseded = supersededReminders(current.events.flatMap(event => pendingEvent(event) && event.nativeMessage ? [event.nativeMessage] : []))
+        for (const event of current.events) if (superseded.has(event.id)) event.delivery = 'discarded'
         current.continuation!.inputSeal = sealed.seq
       })
     }
@@ -1690,7 +1693,11 @@ export class WorkApplication {
         }
         return { status: 'completed', execution }
       }
-      if (execution.events.some(event => pendingEvent(event) && lifecycleOwned(event.nativeMessage))) execution = await save(discardLifecycleEvents)
+      const superseded = supersededReminders(execution.events.flatMap(event => pendingEvent(event) && event.nativeMessage ? [event.nativeMessage] : []))
+      if (superseded.size || execution.events.some(event => pendingEvent(event) && lifecycleOwned(event.nativeMessage))) execution = await save(item => {
+        discardLifecycleEvents(item)
+        for (const event of item.events) if (pendingEvent(event) && superseded.has(event.id)) event.delivery = 'discarded'
+      })
       if (isTaskCompleted(taskAt(state, execution.ref))) return { status: 'completed', execution }
       const owner = continuousOwner(state, execution.ref)
       const stopping = owner && continuousHasSlot(owner.rule, execution.ref) && execution.control?.status === 'accepted' && execution.control.action !== 'resume'
