@@ -377,7 +377,7 @@ it.each(['user', 'a2d2-work-dispatch'] as const)('checks later steps of the same
   let remaining = 1
   h.model.selectTool = () => remaining-- > 0 ? { name: 'work_control', arguments: { action: 'progress', text: 'Second completed tool crosses the soft target' } } : undefined
   const requests = h.model.requests.length
-  source.followup(createUserMessage({ content: [{ type: 'text', text: 'Continue the authorized task through multiple steps' }], source: { kind } }))
+  source.followup(createUserMessage({ content: [{ type: 'text', text: 'Continue the authorized task through multiple steps' }], source: kind === 'user' ? { kind: 'user' } : { kind: 'a2d2-work-dispatch' } }))
   await fixtures.run(() => source.whenIdle())
   expect(completedTools).toBe(2)
   expect(measurements).toContain(100)
