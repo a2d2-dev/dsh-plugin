@@ -720,7 +720,9 @@ export function HandoffOrb(props: {
 
   const handoffCard = handoffOpen ? createElement('div', { className: css.card },
     createElement('div', { className: css.cardTitle }, '交接到新会话'),
-    createElement('div', { className: css.cardHint }, '为后继会话写一句「下一步重点」（可留空），确认后自动创建新会话、带入当前会话摘要并切换过去。'),
+    createElement('div', { className: css.cardHint }, '创建新会话，带入摘要并切换；下一步重点可留空。'),
+    createElement('div', { className: css.cardHint }, '普通新建、浏览器协作交接与 Issue 协调绑定不会自动取得 TaskExecution 协调权，也不会撤销独立 Goal activation。已有 Task 请从当前协调会话「A²D² 接续」或工作详情「接续」进入受控流程。'),
+    createElement('div', { className: css.cardHint }, '受控停用 activation 不代表持久 phase 暂停，不会跨会话迁移或自动 rearm；Goal pause/resume 仍须人类授权。'),
     createElement('textarea', {
       className: css.cardInput,
       value: focus,
