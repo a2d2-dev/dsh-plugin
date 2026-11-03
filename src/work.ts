@@ -1769,6 +1769,17 @@ export class WorkApplication {
           const delivery = ['waiting', 'paused'].includes(execution.state)
             ? await this.host.execution!.observe(execution, event)
             : await this.host.execution!.deliver(execution, event)
+          if (delivery === event.delivery) {
+            // Host observation can await new controls or execution ownership.
+            // Reuse only a fresh matching receipt, never the pre-await snapshot.
+            const current = (await this.load()).executions.find(item => item.id === id)
+            if (current && current.owner === execution.owner && current.epoch === execution.epoch
+              && sameSession(current.session, execution.session)
+              && current.events.find(value => value.id === event.id)?.delivery === delivery) {
+              execution = current
+              continue
+            }
+          }
           execution = await save(item => { item.events.find(value => value.id === event.id)!.delivery = delivery })
         }
       } catch (error) {
