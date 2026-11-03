@@ -149,8 +149,11 @@ it('does not rewrite the store on a reconcile tick while Project observations ar
   await writeFile(file, JSON.stringify(state))
   const writes = vi.mocked(atomic.writeFileAtomic)
   writes.mockClear()
+  const transaction = vi.spyOn(WorkDao.forDirectory(directory), 'transaction')
   await app.reconcileSources()
   expect(projectRead).not.toHaveBeenCalled()
+  expect(transaction).toHaveBeenCalledTimes(1) // Only the existing project-title reconciliation writes.
+  transaction.mockRestore()
   expect(writes).not.toHaveBeenCalled()
   expect(JSON.parse(await readFile(file, 'utf8'))).toEqual(state)
 })
@@ -173,9 +176,55 @@ it('keeps a scheduling-only nextAttemptAt update in memory and honors it on the 
   await app.reconcileSources()
   expect(writes).not.toHaveBeenCalled()
   expect(await readFile(file, 'utf8')).toBe(before)
+  const transaction = vi.spyOn(WorkDao.forDirectory(directory), 'transaction')
   await app.reconcileSources()
   expect(projectRead).not.toHaveBeenCalled()
+  expect(transaction).toHaveBeenCalledTimes(1) // Only the existing project-title reconciliation writes.
+  transaction.mockRestore()
   expect(writes).not.toHaveBeenCalled()
+})
+
+it('does not open a writer for discovery when the application has no sources', async () => {
+  const { directory } = await open()
+  const app = new WorkApplication(directory, noHost, { list: vi.fn(), detail: vi.fn(), project: vi.fn() })
+  const transaction = vi.spyOn(WorkDao.forDirectory(directory), 'transaction')
+  try {
+    await app.reconcileSources()
+    expect(transaction).toHaveBeenCalledTimes(1) // Only the existing project-title reconciliation writes.
+  } finally { transaction.mockRestore() }
+})
+
+it('uses read snapshots through HTTP refresh and persists Project reserve and completion', async () => {
+  const { directory } = await open()
+  const project = { nodeId: 'PVT_1', title: 'HTTP Project', url: 'https://github.com/orgs/a2d2-dev/projects/1', closed: false }
+  const projectRead = vi.fn(async () => ({ identity: { login: 'lf', nodeId: 'U_1', name: null }, project,
+    items: [], issues: [], observedAt: '2026-11-03T00:00:00Z' }))
+  const app = new WorkApplication(directory, noHost, { list: vi.fn(), detail: vi.fn(), project: projectRead })
+  const created = await app.execute({ type: 'project.create', commandId: 'http-project', name: 'HTTP' }, operator)
+  if (created.status !== 'completed' || !created.project) throw new Error('Expected project')
+  const configured = await app.execute({ type: 'source.configure-project', commandId: 'http-source', projectId: created.project.id,
+    githubProject: { owner: 'a2d2-dev', type: 'org', number: 1 } }, operator)
+  if (configured.status !== 'completed' || !configured.source) throw new Error('Expected source')
+  const dao = WorkDao.forDirectory(directory), transaction = vi.spyOn(dao, 'transaction')
+  const handler = createWorkHandler(app, () => undefined)
+  const server = createServer((request, response) => { void handler(request, response) })
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+  try {
+    const address = server.address()
+    if (!address || typeof address === 'string') throw new Error('Expected isolated port')
+    const response = await fetch(`http://127.0.0.1:${address.port}`, { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ kind: 'query', value: { type: 'source.issues', projectId: created.project.id, sourceId: configured.source.id,
+        page: 1, perPage: 20, state: 'open', assignee: '*', refresh: true } }) })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ status: 'completed', source: { projectSnapshot: { project } } })
+    expect(projectRead).toHaveBeenCalledTimes(1)
+    // Reserve, page commit, and the existing end-of-pass cleanup remain writes.
+    expect(transaction).toHaveBeenCalledTimes(3)
+    expect((await dao.exportSnapshot()).sources[0]).toMatchObject({ projectSnapshot: { project }, discovery: { state: 'idle' } })
+  } finally {
+    transaction.mockRestore()
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+  }
 })
 
 it.each(['bad-json', 'bad-schema', 'lock-timeout', 'EACCES'] as const)('reports a safe storage reason over HTTP for %s', async failure => {

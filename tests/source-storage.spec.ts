@@ -119,13 +119,13 @@ it('persists a newly created discovery object and resumes actual pagination afte
     cursors.push(request.cursor)
     return { identity, project, items: [], issues: [], observedAt: checkpoint.startedAt, ...(request.cursor ? {} : { nextCursor: 'second-page' }) }
   } }
-  await reconcileProjectSources(apply => dao.transaction(apply), port, { force: true, maxPagesPerSource: 1 })
+  await reconcileProjectSources(apply => dao.transaction(apply), () => dao.read(), port, { force: true, maxPagesPerSource: 1 })
   const baseline = await dao.exportSnapshot()
   expect(baseline.sources[0]!.discovery!.checkpoint).toMatchObject({ cursor: 'second-page', pages: 1 })
   const cold = await mkdtemp(join(tmpdir(), 'source-storage-')); roots.push(cold)
   const { cp } = await import('node:fs/promises'); await cp(directory, cold, { recursive: true })
   const restarted = WorkDao.forDirectory(cold)
-  await reconcileProjectSources(apply => restarted.transaction(apply), port, { force: true, maxPagesPerSource: 1 })
+  await reconcileProjectSources(apply => restarted.transaction(apply), () => restarted.read(), port, { force: true, maxPagesPerSource: 1 })
   expect(cursors).toEqual([undefined, 'second-page'])
   expect((await restarted.read()).sources[0]!.discovery!.checkpoint).toBeUndefined()
   expect((await restarted.read()).sources[0]!.projectSnapshot).toMatchObject({ project })
