@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { installWorkTools, installWorkControlRecovery } from '../src/work-execution/tools.ts'
 
+import { WorkDao } from '../src/work.ts'
 import { ExecutionFixtures } from './work-execution-fixture.ts'
 let fixtures: ExecutionFixtures
 const operator = { operator: true }
@@ -678,4 +679,92 @@ it('fences continuation material by the real caller and epoch and replays the or
   expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { continuationMaterial: saved.execution.continuationMaterial } })
   expect(await invoke('accepted-material', { ...content, body: 'Changed command payload' }, agent)).toMatchObject({ content: [expect.objectContaining({ text: expect.stringContaining('command-id-reused') })] })
   expect(h.model.requests).toHaveLength(1)
+})
+
+// Use the real host/DAO and public reconcile path; only the asynchronous host
+// observation receipt is controlled, so no business model runs for these events.
+async function waitingDeliveryFixture() {
+  const h = await setup()
+  const started = await h.app.execute({ type: 'task.start', commandId: 'delivery-start', ref: h.ref, expectedVersion: 1,
+    resource: h.resource, agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }, operator)
+  if (started.status !== 'completed' || !started.execution) throw new Error('Missing execution')
+  await fixtures.run(() => h.ctx.agents.get(SessionId(started.execution!.session.sessionId))!.whenIdle())
+  const execution = started.execution
+  const fence = { ref: h.ref, executionId: execution.id, owner: execution.owner, epoch: execution.epoch }
+  await h.app.execute({ type: 'task.control', commandId: 'delivery-wait', ...fence, action: 'wait', text: 'Keep pending results waiting' }, operator)
+  const dao = WorkDao.forDirectory(h.app.directory)
+  await dao.transaction(async state => { state.executions.find(row => row.id === execution.id)!.events = [] })
+  let command = 0
+  const reconcile = () => h.app.execute({ type: 'task.reconcile', commandId: `delivery-observe-${++command}`, ...fence }, operator)
+  return { ...h, execution, dao, reconcile }
+}
+
+it.each([
+  ['waiting', 'accepted'], ['waiting', 'delivered'], ['paused', 'accepted'], ['paused', 'delivered'], ['ready', 'delivered'],
+] as const)('does not add write transactions for repeated unchanged %s / %s receipts', async (state, delivery) => {
+  const h = await waitingDeliveryFixture()
+  await h.dao.transaction(async snapshot => { const current = snapshot.executions.find(row => row.id === h.execution.id)!; current.state = state; delete current.control })
+  const writes = vi.spyOn(h.dao, 'transaction')
+  await h.reconcile()
+  const baseline = writes.mock.calls.length // Includes command receipt and actual-profile save.
+  await h.dao.transaction(async state => {
+    state.executions.find(row => row.id === h.execution.id)!.events = Array.from({ length: 5 }, (_, index) => ({ id: `pending-${index}`, kind: 'result', text: `Result ${index}`, delivery, acceptance: 'unassessed' }))
+  })
+  const observe = vi.spyOn(h.host.execution, state === 'ready' ? 'deliver' : 'observe').mockResolvedValue(delivery)
+  for (let pass = 0; pass < 2; pass++) {
+    writes.mockClear()
+    expect(await h.reconcile()).toMatchObject({ execution: { state, events: Array.from({ length: 5 }, () => expect.objectContaining({ delivery })) } })
+    expect(writes).toHaveBeenCalledTimes(baseline)
+  }
+  expect(observe).toHaveBeenCalledTimes(10)
+  expect(h.model.requests).toHaveLength(1)
+})
+
+it('persists real delivery advances and retains the fresh execution after an unchanged awaited receipt', async () => {
+  const h = await waitingDeliveryFixture()
+  await h.dao.transaction(async state => {
+    state.executions.find(row => row.id === h.execution.id)!.events = [{ id: 'pending', kind: 'result', text: 'Result', delivery: 'accepted', acceptance: 'unassessed' }]
+  })
+  const observe = vi.spyOn(h.host.execution, 'observe').mockResolvedValue('delivered')
+  expect(await h.reconcile()).toMatchObject({ execution: { events: [{ delivery: 'delivered' }] } })
+  expect((await h.dao.read()).executions[0]!.events[0]!.delivery).toBe('delivered')
+  observe.mockResolvedValue('consumed')
+  expect(await h.reconcile()).toMatchObject({ execution: { events: [{ delivery: 'consumed' }] } })
+  expect((await h.dao.read()).executions[0]!.events[0]!.delivery).toBe('consumed')
+})
+
+it.each(['pause', 'end', 'owner', 'epoch', 'session', 'consumed', 'removed'] as const)('preserves the original authoritative path after %s changes during host observation', async change => {
+  const h = await waitingDeliveryFixture()
+  await h.dao.transaction(async state => {
+    state.executions.find(row => row.id === h.execution.id)!.events = (change === 'pause' || change === 'end' ? ['pending', 'second'] : ['pending']).map(id => ({ id, kind: 'result', text: 'Result', delivery: 'accepted', acceptance: 'unassessed' }))
+  })
+  let entered!: () => void, release!: () => void
+  const reached = new Promise<void>(resolve => { entered = resolve })
+  const barrier = new Promise<void>(resolve => { release = resolve })
+  const observe = vi.spyOn(h.host.execution, 'observe').mockImplementation(async () => { entered(); await barrier; return 'accepted' })
+  const pending = h.reconcile()
+  await reached
+  await h.dao.transaction(async state => {
+    const current = state.executions.find(row => row.id === h.execution.id)!
+    current.progress = 'Written during awaited observation'
+    if (change === 'pause' || change === 'end') { current.state = 'paused'; current.control = { commandId: 'new-control', action: change, status: 'accepted', reason: 'New control' } }
+    if (change === 'owner') current.owner = '00000000-0000-4000-8000-000000000001'
+    if (change === 'epoch') current.epoch++
+    if (change === 'session') current.session = { ...current.session, sessionId: 'replacement-session' }
+    if (change === 'consumed') current.events[0]!.delivery = 'consumed'
+    if (change === 'removed') current.events = []
+  })
+  const writes = vi.spyOn(h.dao, 'transaction')
+  release()
+  const result = await pending
+  expect(result).toMatchObject({ status: 'completed', execution: { progress: 'Written during awaited observation' } })
+  if (change === 'pause' || change === 'end') expect(observe.mock.calls[1]![0]).toMatchObject({ state: 'paused', control: { commandId: 'new-control', action: change } })
+  if (change === 'pause' || change === 'end') expect(result).toMatchObject({ execution: { state: 'paused', control: { commandId: 'new-control', action: change, status: 'accepted' } } })
+  if (change === 'owner') expect(result).toMatchObject({ execution: { owner: '00000000-0000-4000-8000-000000000001' } })
+  if (change === 'epoch') expect(result).toMatchObject({ execution: { epoch: h.execution.epoch + 1 } })
+  if (change === 'session') expect(result).toMatchObject({ execution: { session: { sessionId: 'replacement-session' } } })
+  // Identity/event changes must still enter the existing save path. These checks
+  // protect fallback parity without declaring its older race semantics a contract.
+  if (change !== 'pause' && change !== 'end') expect(writes.mock.calls.length).toBeGreaterThan(0)
+  if (change === 'removed') expect(result).toMatchObject({ execution: { state: 'failed', error: { code: 'host-create-unknown' } } })
 })
