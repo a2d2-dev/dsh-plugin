@@ -611,7 +611,7 @@ export class WorkApplication {
     if (this.refreshCount > 0) return
     // The scheduled pull is a full refresh: one tick drains the Project so a
     // five-minute cadence never leaves a half-scanned view behind.
-    if (this.source) await reconcileProjectSources(apply => this.sourceTransaction(apply), this.source, { maxPagesPerSource: 200 })
+    if (this.source) await reconcileProjectSources(apply => this.sourceTransaction(apply), () => this.load(), this.source, { maxPagesPerSource: 200 })
     const snapshot = await this.load()
     const repositories = snapshot.sources.filter(source => source.enabled && source.repository && snapshot.continuousRules?.some(rule => rule.sourceId === source.id && rule.enabled && rule.planning && !rule.queue))
     if (repositories.length) {
@@ -708,7 +708,7 @@ export class WorkApplication {
     // request identity, so a concurrent pass coalesces instead of failing on a lock.
     let scan: WorkResult = { status: 'completed' }
     if (source.repository) scan = await refreshRepositoryCandidates(apply => this.sourceTransaction(apply), scope, this.source)
-    else await reconcileProjectSources(apply => this.sourceTransaction(apply), this.source, { ...scope, force: true, maxPagesPerSource: 200 })
+    else await reconcileProjectSources(apply => this.sourceTransaction(apply), () => this.load(), this.source, { ...scope, force: true, maxPagesPerSource: 200 })
     const refreshed = await withFileLock(lease, () => this.sourceTransaction(async state => {
       const current = state.continuousRules!.find(item => item.id === rule.id)!
       if (current.version !== scope.expectedVersion) return conflict(current.version)
@@ -2214,7 +2214,7 @@ export class WorkApplication {
     }
     if ((query.type === 'source.issues' || query.type === 'source.issue') && query.refresh) {
       this.refreshCount++
-      try { return tableResult(await refreshSource(apply => this.sourceTransaction(apply), query, this.source)) }
+      try { return tableResult(await refreshSource(apply => this.sourceTransaction(apply), () => this.load(), query, this.source)) }
       finally { this.refreshCount-- }
     }
     const state = await this.load()

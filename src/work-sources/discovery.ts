@@ -1,6 +1,6 @@
 import { hydrateCandidateRelationships } from './relationships.ts'
 import { randomUUID } from 'node:crypto'
-import type { SourceTransaction } from './application.ts'
+import type { SourceSnapshot, SourceTransaction } from './application.ts'
 import { SourceError } from './errors.ts'
 import { projectPageSchema } from './schema.ts'
 import { applyObservedIssue } from './observations.ts'
@@ -25,14 +25,14 @@ function merge<T>(previous: T[], values: T[], key: (value: T) => string): T[] {
   return [...map.values()]
 }
 /** Deterministic observation only: never imports Tasks, sends prompts, or claims execution. */
-export async function reconcileProjectSources(transaction: SourceTransaction, port: GitHubSourcePort | undefined, options: DiscoveryOptions = {}): Promise<void> {
+export async function reconcileProjectSources(transaction: SourceTransaction, read: SourceSnapshot, port: GitHubSourcePort | undefined, options: DiscoveryOptions = {}): Promise<void> {
   const now = options.now ?? Date.now, maxPages = options.maxPagesPerSource ?? 2, maxSources = options.maxSources ?? 10, perPage = options.perPage ?? 50, interval = options.intervalMs ?? 300_000
   for (const value of [maxPages, maxSources, perPage, interval]) if (!Number.isSafeInteger(value) || value < 1) throw new Error('Discovery limits must be positive integers')
   if (maxPages > 200 || maxSources > 100 || perPage > 100) throw new Error('Discovery read limits are too large')
-  const sources = await transaction(async state => state.sources.filter(source => source.enabled && source.githubProject
+  const sources = (await read()).sources.filter(source => source.enabled && source.githubProject
     && (!options.sourceId || source.id === options.sourceId) && (!options.projectId || source.projectId === options.projectId)
     && (options.force || due(source.discovery?.nextAttemptAt) <= now()) && due(source.lastError?.retryAt) <= now())
-    .sort((a, b) => due(a.discovery?.lastAttemptAt) - due(b.discovery?.lastAttemptAt)).slice(0, maxSources).map(source => source.id))
+    .sort((a, b) => due(a.discovery?.lastAttemptAt) - due(b.discovery?.lastAttemptAt)).slice(0, maxSources).map(source => source.id)
   for (const sourceId of sources) {
     const reserved = await transaction(async state => {
       const source = state.sources.find(item => item.id === sourceId), time = now()

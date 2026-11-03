@@ -11,6 +11,12 @@
 
 Node 22 与 24 的 CI 都执行适用检查。Vitest 的 `unit` 项目保留默认 5 秒用例预算；使用真实 Agent/JSONL 的 `host` 项目串行运行，完整场景预算为 15 秒。恢复测试会主动停住宿主操作 2.3 秒，并独立断言 1.5 秒的事件接收期限；分组预算不修改这些内部截止时间。总 worker 数上限为 2。测试临时目录应位于源码 Git 根之外；把 `TMPDIR` 指到 checkout 内部会改变向上解析项目标记的结果，造成无效的测试环境。
 
+## Project 发现的只读筛选
+
+Project 发现显式接收 `SourceSnapshot` 与 `SourceTransaction`：候选筛选读取应用快照，保留 `discoverySchedule` 的内存下次扫描时间；来源查询刷新、持续处理刷新和后台扫描均传入 `WorkApplication.load()`。读取不代表领取，后续事务仍按 ID 重读最新配置并检查 enabled、due、retry 和 inFlight，网络响应仍按原 version／reservation 校验后提交。
+
+定向回归：`pnpm exec vitest run tests/project-discovery.spec.ts tests/source-storage.spec.ts tests/work-store-contention.spec.ts tests/work-observation-refresh.spec.ts tests/work-continuous.spec.ts`。真实 App／DAO 和隔离 HTTP fixture 检查空／未到期筛选不开事务、调度 overlay 不重复扫描、HTTP Project refresh 仅保留 reserve／page commit／原 cleanup 三次事务；后台 `reconcileSources` 另有原项目更名事务。使用 deferred 屏障覆盖快照读取后停用、延后、限流、其他读取租约，以及按锁内最新配置领取；同时保留分页冷恢复、过期租约、迟到响应、cursor 错误、重试、最早尝试优先和最大页预算边界。这些回归不替代既有实例的页面与耗时验收。
+
 ## 页面和宿主验收
 
 源码编译和 mocked tests 不能证明运行中的 DSH 已加载新包。修改用户行为时，记录实际宿主版本、源码提交、包校验和、既有实例地址、浏览器步骤与截图。不要为了通过验收另起一个替代实例或把开发宿主的结果宣称为公开桌面版本兼容。
