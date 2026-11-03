@@ -10,6 +10,7 @@ import { applyObservedIssue } from './observations.ts'
 import { reconcileProjectSources } from './discovery.ts'
 type SourceCommand = Exclude<Extract<WorkCommand, { type: `source.${string}` }>, { type: 'source.connect' }>
 type SourceRead = Extract<WorkQuery, { type: 'source.issue' | 'source.issues' }>
+export type SourceSnapshot = () => Promise<WorkSnapshot>
 export type SourceTransaction = <T>(apply: (state: WorkSnapshot) => Promise<T>) => Promise<T>
 const fail = (code: string, message: string): WorkResult => ({ status: 'failed', error: { code, message } })
 function urlKey(url: string): string { return url.toLowerCase().replace(/\/$/, '') }
@@ -191,18 +192,17 @@ export function sourceResult(state: WorkSnapshot, query: SourceRead): WorkResult
   return { status: 'completed', source, page: { identity: page.identity, observedAt: page.observedAt, ...(page.nextPage ? { nextPage: page.nextPage } : {}), items: page.nodeIds.map(id => source.observations.find(item => item.issue.nodeId === id)!.issue) } }
 }
 /** Reserve locally, await remote I/O outside the transaction, then fence against disable and newer requests. */
-export async function refreshSource(transaction: SourceTransaction, query: SourceRead, port?: GitHubSourcePort): Promise<WorkResult> {
-  const selected = await transaction(async state => sourceAt(state, query.projectId, query.sourceId))
+export async function refreshSource(transaction: SourceTransaction, read: SourceSnapshot, query: SourceRead, port?: GitHubSourcePort): Promise<WorkResult> {
+  const selected = sourceAt(await read(), query.projectId, query.sourceId)
   if (selected?.githubProject) {
-    if (!selected.enabled) return transaction(async state => ({ ...sourceResult(state, query), status: 'failed' as const, error: { code: 'source-disabled', message: 'Source is disabled' } }))
+    if (!selected.enabled) return { ...sourceResult(await read(), query), status: 'failed', error: { code: 'source-disabled', message: 'Source is disabled' } }
     // A user refresh is a bounded HTTP request: a few pages per call keeps it
     // under proxy timeouts; the panel calls again while progress is partial.
-    await reconcileProjectSources(transaction, port, { sourceId: query.sourceId, projectId: query.projectId, force: true, maxPagesPerSource: 4 })
-    return transaction(async state => {
-      const result = sourceResult(state, query), source = sourceAt(state, query.projectId, query.sourceId)
-      if (source && (!source.enabled || source.version !== selected.version)) return { ...result, status: 'conflict' as const, error: { code: 'source-observation-superseded', message: 'Observation was discarded after source configuration changed' } }
-      return source?.lastError ? { ...result, status: 'failed' as const, error: source.lastError } : result
-    })
+    await reconcileProjectSources(transaction, read, port, { sourceId: query.sourceId, projectId: query.projectId, force: true, maxPagesPerSource: 4 })
+    const state = await read()
+    const result = sourceResult(state, query), source = sourceAt(state, query.projectId, query.sourceId)
+    if (source && (!source.enabled || source.version !== selected.version)) return { ...result, status: 'conflict', error: { code: 'source-observation-superseded', message: 'Observation was discarded after source configuration changed' } }
+    return source?.lastError ? { ...result, status: 'failed', error: source.lastError } : result
   }
   const reservation = await transaction(async state => {
     const source = sourceAt(state, query.projectId, query.sourceId)

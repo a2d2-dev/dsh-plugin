@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { WorkApplication } from '../src/work.ts'
+import { WorkDao } from '../src/work-store/dao.ts'
 import { snapshotSchema } from '../src/work-schema.ts'
 import { SourceError } from '../src/work-sources/github.ts'
 import { reconcileProjectSources, startProjectDiscovery } from '../src/work-sources/discovery.ts'
@@ -31,12 +32,78 @@ async function setup(sourcePort: GitHubSourcePort = port) {
   const app = new WorkApplication(directory, host, sourcePort)
   const project = complete(await app.execute({ type: 'project.create', commandId: 'project', name: 'Domain project' }, actor)).project!
   const source = complete(await app.execute({ type: 'source.configure-project', commandId: 'source', projectId: project.id, githubProject: { owner: 'a2d2-dev', type: 'org', number: 1 } }, actor)).source!
-  return { app, directory, source, project, transaction: transaction(directory) }
+  return { app, directory, source, project, transaction: transaction(directory), read: async () => snapshotSchema.parse(JSON.parse(await readFile(join(directory, 'work-v3.json'), 'utf8'))) }
 }
 const query = (source: WorkSource, refresh = false) => ({ type: 'source.issues' as const, projectId: source.projectId, sourceId: source.id, page: 1, perPage: 20, assignee: '@me' as const, state: 'open' as const, refresh })
 afterEach(async () => {
   vi.useRealTimers()
   for (const directory of roots.splice(0)) { if (!resolve(directory).startsWith(join(tmpdir(), 'a2d2-project-source-'))) throw Error('Unexpected test cleanup path'); await rm(directory, { recursive: true, force: true }) }
+})
+
+it.each(['disabled', 'due', 'retry', 'lease'] as const)('rechecks %s under the write lock after the discovery snapshot was read', async change => {
+  const project = vi.fn(async () => page([issue])), state = await setup({ ...port, project })
+  const dao = WorkDao.forDirectory(state.directory), time = Date.now() + 1000
+  const entered = deferred<void>(), release = deferred<void>()
+  const scan = reconcileProjectSources(apply => dao.transaction(apply), async () => {
+    const snapshot = await dao.read()
+    entered.resolve(); await release.promise
+    return snapshot
+  }, { ...port, project }, { now: () => time })
+  await entered.promise
+  await dao.transaction(async snapshot => {
+    const source = snapshot.sources[0]!
+    if (change === 'disabled') source.enabled = false
+    if (change === 'due') { source.sequence++; source.discovery!.nextAttemptAt = new Date(time + 60_000).toISOString() }
+    if (change === 'retry') source.lastError = { code: 'github-rate-limited', message: 'Retry later', retryAt: new Date(time + 60_000).toISOString() }
+    if (change === 'lease') source.discovery!.inFlight = { id: '00000000-0000-4000-8000-000000000001', expiresAt: new Date(time + 60_000).toISOString() }
+  })
+  const before = await dao.exportSnapshot()
+  release.resolve(); await scan
+  expect(project).not.toHaveBeenCalled()
+  expect(await dao.exportSnapshot()).toEqual(before)
+})
+
+it('reserves the latest source version and scope after a configuration change following the read', async () => {
+  const project = vi.fn(async () => page([issue])), state = await setup({ ...port, project })
+  const dao = WorkDao.forDirectory(state.directory), entered = deferred<void>(), release = deferred<void>()
+  const scan = reconcileProjectSources(apply => dao.transaction(apply), async () => {
+    const snapshot = await dao.read()
+    entered.resolve(); await release.promise
+    return snapshot
+  }, { ...port, project }, { force: true })
+  await entered.promise
+  await dao.transaction(async snapshot => { const source = snapshot.sources[0]!; source.version++; source.githubProject!.number = 2 })
+  release.resolve(); await scan
+  expect(project).toHaveBeenCalledExactlyOnceWith({ owner: 'a2d2-dev', type: 'org', number: 2 }, { perPage: 50 })
+  expect((await dao.exportSnapshot()).sources[0]).toMatchObject({ version: 2, projectSnapshot: { project: { nodeId: 'PVT_1' } } })
+  expect((await dao.exportSnapshot()).sources[0]!.observations[0]!.issue).toEqual(issue)
+})
+
+it('selects no writer for an empty or not-yet-due snapshot', async () => {
+  const state = await setup(), dao = WorkDao.forDirectory(state.directory)
+  let writes = 0
+  const write: SourceTransaction = apply => { writes++; return dao.transaction(apply) }
+  const time = Date.now()
+  await dao.transaction(async snapshot => { snapshot.sources[0]!.sequence++; snapshot.sources[0]!.discovery!.nextAttemptAt = new Date(time + 60_000).toISOString() })
+  await reconcileProjectSources(write, () => dao.read(), port, { now: () => time })
+  await reconcileProjectSources(write, async () => ({ ...await dao.read(), sources: [] }), port)
+  expect(writes).toBe(0)
+})
+
+it('keeps oldest-attempt fairness and the maximum page bound with snapshot selection', async () => {
+  const state = await setup(), dao = WorkDao.forDirectory(state.directory), time = Date.now() + 1000
+  const second = complete(await state.app.execute({ type: 'source.configure-project', commandId: 'second-source', projectId: state.project.id,
+    githubProject: { owner: 'a2d2-dev', type: 'org', number: 2 } }, actor)).source!
+  await dao.transaction(async snapshot => {
+    snapshot.sources.find(source => source.id === state.source.id)!.discovery!.lastAttemptAt = new Date(time - 1000).toISOString()
+    snapshot.sources.find(source => source.id === second.id)!.discovery!.lastAttemptAt = new Date(time - 2000).toISOString()
+  })
+  const project = vi.fn(async () => page([]))
+  await reconcileProjectSources(apply => dao.transaction(apply), () => dao.read(), { ...port, project }, { now: () => time, maxSources: 1, maxPagesPerSource: 200 })
+  expect(project).toHaveBeenCalledExactlyOnceWith(second.githubProject, { perPage: 50 })
+  const read = vi.fn(() => dao.read()), write = vi.fn()
+  await expect(reconcileProjectSources(write, read, port, { maxPagesPerSource: 201 })).rejects.toThrow('Discovery read limits are too large')
+  expect(read).not.toHaveBeenCalled(); expect(write).not.toHaveBeenCalled()
 })
 
 it('publishes only complete scans, persists partial cursors across restart, honors retries, and creates no Tasks', async () => {
@@ -51,21 +118,21 @@ it('publishes only complete scans, persists partial cursors across restart, hono
     return page([updated, second]) // repeated item across pages is still one membership
   } }
   const state = await setup(sourcePort), options = { now: () => time, force: true, maxPagesPerSource: 1 }
-  await reconcileProjectSources(state.transaction, sourcePort, options)
+  await reconcileProjectSources(state.transaction, state.read, sourcePort, options)
   expect(complete(await state.app.query(query(state.source), actor)).page?.items).toEqual([issue])
   phase = 1
-  await reconcileProjectSources(state.transaction, sourcePort, options)
+  await reconcileProjectSources(state.transaction, state.read, sourcePort, options)
   expect(complete(await state.app.query(query(state.source), actor)).page?.items[0]?.title).toBe('Issue 1')
   const coldTransaction = transaction(state.directory)
-  await reconcileProjectSources(coldTransaction, sourcePort, options)
+  await reconcileProjectSources(coldTransaction, state.read, sourcePort, options)
   const cached = complete(await new WorkApplication(state.directory, host).query(query(state.source), actor))
   expect(cached.source).toMatchObject({ discovery: { state: 'error', checkpoint: { cursor: 'next', pages: 1 } }, lastError: { code: 'github-rate-limited' } })
   expect(cached.page?.items[0]?.title).toBe('Issue 1')
   const before = calls
-  await reconcileProjectSources(coldTransaction, sourcePort, options)
+  await reconcileProjectSources(coldTransaction, state.read, sourcePort, options)
   expect(calls).toBe(before)
   phase = 2; time += 60_001
-  await reconcileProjectSources(coldTransaction, sourcePort, options)
+  await reconcileProjectSources(coldTransaction, state.read, sourcePort, options)
   const result = complete(await state.app.query(query(state.source), actor))
   expect(result.page?.items.map(item => item.nodeId)).toEqual(['I_1', 'I_2'])
   expect(result.page?.items[0]?.title).toBe('Updated')
@@ -79,11 +146,11 @@ it('reports fetched items, pages and the GitHub total while a scan is incomplete
   const second = { ...issue, nodeId: 'I_2', number: 2, url: 'https://github.com/a2d2-dev/one/issues/2' }
   const partial: GitHubSourcePort = { ...port, project: async () => ({ ...page([issue, second], 'next'), total: 120 }) }
   const state = await setup(partial)
-  await reconcileProjectSources(state.transaction, partial, { force: true, maxPagesPerSource: 1 })
+  await reconcileProjectSources(state.transaction, state.read, partial, { force: true, maxPagesPerSource: 1 })
   const running = complete(await state.app.query({ type: 'source.progress', projectId: state.project.id, sourceId: state.source.id }, actor))
   expect(running.scan).toMatchObject({ state: 'syncing', pages: 1, fetched: 2, total: 120 })
   const completePort: GitHubSourcePort = { ...port, project: async () => page([issue, second]) }
-  await reconcileProjectSources(state.transaction, completePort, { force: true, maxPagesPerSource: 2 })
+  await reconcileProjectSources(state.transaction, state.read, completePort, { force: true, maxPagesPerSource: 2 })
   const idle = complete(await state.app.query({ type: 'source.progress', projectId: state.project.id, sourceId: state.source.id }, actor))
   expect(idle.scan).toMatchObject({ state: 'idle', pages: 0, fetched: 0 })
 })
@@ -93,14 +160,14 @@ it('recovers an expired persisted reader lease and rejects the old reader after 
   const started = deferred<void>(), remote = deferred<GitHubProjectPage>()
   const sourcePort = { ...port, project: async () => { if (!slow) return page([issue]); started.resolve(); return remote.promise } }
   const state = await setup(sourcePort), options = { force: true, now: () => time }
-  await reconcileProjectSources(state.transaction, sourcePort, options)
+  await reconcileProjectSources(state.transaction, state.read, sourcePort, options)
   slow = true
-  const old = reconcileProjectSources(state.transaction, sourcePort, options)
+  const old = reconcileProjectSources(state.transaction, state.read, sourcePort, options)
   await started.promise
   expect(complete(await state.app.query(query(state.source), actor)).page?.items).toEqual([issue])
   time += 90_001
   const newer = { ...issue, title: 'Recovered reader', updatedAt: '2026-10-21T00:00:00Z' }
-  await reconcileProjectSources(transaction(state.directory), { ...port, project: async () => page([newer]) }, options)
+  await reconcileProjectSources(transaction(state.directory), state.read, { ...port, project: async () => page([newer]) }, options)
   remote.resolve(page([{ ...issue, title: 'Expired reader' }]))
   await old
   expect(complete(await state.app.query(query(state.source), actor)).page?.items[0]?.title).toBe('Recovered reader')
@@ -118,15 +185,15 @@ it('drops an invalid persisted cursor and restarts safely without replacing the 
     return page([{ ...issue, title: 'Fresh full scan' }])
   } }
   const state = await setup(sourcePort), options = { force: true, now: () => time, maxPagesPerSource: 1 }
-  await reconcileProjectSources(state.transaction, sourcePort, options)
+  await reconcileProjectSources(state.transaction, state.read, sourcePort, options)
   phase = 1
-  await reconcileProjectSources(state.transaction, sourcePort, options)
-  await reconcileProjectSources(transaction(state.directory), sourcePort, options)
+  await reconcileProjectSources(state.transaction, state.read, sourcePort, options)
+  await reconcileProjectSources(transaction(state.directory), state.read, sourcePort, options)
   const retained = complete(await state.app.query(query(state.source), actor))
   expect(retained.page?.items[0]?.title).toBe('Issue 1')
   expect(retained.source?.discovery?.checkpoint).toBeUndefined()
   phase = 2; time += 5001
-  await reconcileProjectSources(transaction(state.directory), sourcePort, { ...options, force: false })
+  await reconcileProjectSources(transaction(state.directory), state.read, sourcePort, { ...options, force: false })
   expect(cursors).toEqual([undefined, undefined, 'stale', undefined])
   expect(complete(await state.app.query(query(state.source), actor)).page?.items[0]?.title).toBe('Fresh full scan')
 })
@@ -136,11 +203,11 @@ it('fences concurrent consumers and late pages after disable/re-enable while ret
   let slow = false, calls = 0
   const sourcePort = { ...port, project: async () => { calls++; if (slow) { started.resolve(); return response.promise }; return page([issue]) } }
   const state = await setup(sourcePort)
-  await reconcileProjectSources(state.transaction, sourcePort, { force: true })
+  await reconcileProjectSources(state.transaction, state.read, sourcePort, { force: true })
   slow = true
-  const running = reconcileProjectSources(state.transaction, sourcePort, { force: true })
+  const running = reconcileProjectSources(state.transaction, state.read, sourcePort, { force: true })
   await started.promise
-  await reconcileProjectSources(transaction(state.directory), sourcePort, { force: true })
+  await reconcileProjectSources(transaction(state.directory), state.read, sourcePort, { force: true })
   expect(calls).toBe(2)
   await state.app.execute({ type: 'source.set-enabled', commandId: 'disable', projectId: state.project.id, sourceId: state.source.id, expectedVersion: 1, enabled: false }, actor)
   await state.app.execute({ type: 'source.set-enabled', commandId: 'enable', projectId: state.project.id, sourceId: state.source.id, expectedVersion: 2, enabled: true }, actor)
@@ -187,12 +254,12 @@ it('honors scheduled due times and discards a partial scan when the credential i
     return { ...page([issue]), identity: { ...identity, nodeId: 'U_other', login: 'other' } }
   } }
   const state = await setup(sourcePort), options = { now: () => time, intervalMs: 1000, maxPagesPerSource: 1 }
-  await reconcileProjectSources(state.transaction, sourcePort, options)
-  await reconcileProjectSources(state.transaction, sourcePort, options)
+  await reconcileProjectSources(state.transaction, state.read, sourcePort, options)
+  await reconcileProjectSources(state.transaction, state.read, sourcePort, options)
   expect(calls).toBe(1)
   changed = true; time += 1001
-  await reconcileProjectSources(state.transaction, sourcePort, options)
-  await reconcileProjectSources(state.transaction, sourcePort, options)
+  await reconcileProjectSources(state.transaction, state.read, sourcePort, options)
+  await reconcileProjectSources(state.transaction, state.read, sourcePort, options)
   const result = complete(await state.app.query(query(state.source), actor))
   expect(result.source?.lastError?.code).toBe('github-identity-changed')
   expect(result.source?.discovery?.checkpoint).toBeUndefined()
@@ -201,7 +268,7 @@ it('honors scheduled due times and discards a partial scan when the credential i
   await state.app.execute({ type: 'source.set-enabled', commandId: 'disable-due', projectId: state.project.id, sourceId: state.source.id, expectedVersion: 1, enabled: false }, actor)
   const before = calls
   time += 100_000
-  await reconcileProjectSources(state.transaction, sourcePort, { ...options, force: true })
+  await reconcileProjectSources(state.transaction, state.read, sourcePort, { ...options, force: true })
   expect(calls).toBe(before)
 })
 
