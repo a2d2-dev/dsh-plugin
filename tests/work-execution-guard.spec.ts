@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, rm, writeFile } from 'node:fs/promises'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -48,6 +48,76 @@ async function setup(guard = true) {
   return { ...h, ref, root, start, guard: () => guardCallback! }
 }
 const message = (text: string) => createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } })
+
+it.each(['active-resume', 'unrelated', 'completed', 'paused', 'waiting', 'failed', 'blocked', 'ended', 'exhausted', 'answer-only'] as const)('does not acquire the writer lock for a read-only %s guard', async scenario => {
+  const h = await setup()
+  h.model.nextTool = { name: 'read', arguments: { file_path: 'dependency.txt' } }
+  const agent = await h.start()
+  if (scenario === 'completed') expect(await h.app.sessionReport({ runtimeId: 'runtime', sessionId: agent.id }, 'completed', {
+    specificationVersion: 1, stage: 'done', summary: 'Verified dependency', next: '', blockers: [], criteria: [{ index: 0, passed: true, evidence: ['dependency.txt: READY-312'] }],
+  })).toMatchObject({ status: 'completed' })
+  const dao = WorkDao.forDirectory(h.app.directory)
+  await dao.transaction(async state => {
+    const execution = state.executions.find(row => row.session.sessionId === agent.id)!
+    if (scenario === 'paused') execution.state = 'paused'
+    if (scenario === 'waiting') execution.control = { action: 'wait', status: 'applied', commandId: 'external-wait', reason: 'Pending external approval' }
+    if (scenario === 'failed') execution.state = 'failed'
+    if (scenario === 'blocked') execution.continuationBlocked = { code: 'blocked', message: 'Requires operator intervention' }
+    if (scenario === 'ended') execution.control = { action: 'end', status: 'applied', commandId: 'ended' }
+    if (scenario === 'exhausted') execution.executionGuard = { corrections: 2, progress: [], exhausted: true }
+  })
+  const file = join(h.app.directory, 'work-v3.json'), lock = `${file}.lock`
+  const before = await readFile(file, 'utf8'), requests = h.model.requests.length
+  await writeFile(lock, '', { flag: 'wx' })
+  const checking = h.guard()(scenario === 'unrelated' ? 'unrelated-session' : agent.id,
+    scenario === 'active-resume' ? { kind: 'resume' } : { kind: 'stopping', progress: [], answerOnly: scenario === 'answer-only', recheckWait: false })
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    const result = await Promise.race([checking, new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('Read-only guard waited for the writer lock')), 500)
+    })])
+    if (scenario === 'active-resume') expect(result).toContain('任务尚未完成')
+    else expect(result).toBeUndefined()
+    expect(await readFile(file, 'utf8')).toBe(before)
+    expect(await readFile(lock, 'utf8')).toBe('')
+    expect(h.model.requests).toHaveLength(requests)
+  } finally {
+    clearTimeout(timer)
+    await rm(lock)
+    await checking
+  }
+}, 15000)
+
+it.each(['pause', 'wait', 'epoch'] as const)('rechecks a concurrent %s before saving a stopping correction', async change => {
+  const h = await setup()
+  h.model.nextTool = { name: 'read', arguments: { file_path: 'dependency.txt' } }
+  const agent = await h.start()
+  const dao = WorkDao.forDirectory(h.app.directory)
+  const before = (await dao.read()).executions.find(row => row.session.sessionId === agent.id)!.executionGuard
+  let entered!: () => void, release!: () => void
+  const started = new Promise<void>(resolve => { entered = resolve })
+  const gate = new Promise<void>(resolve => { release = resolve })
+  const writing = dao.transaction(async state => {
+    entered()
+    await gate
+    const execution = state.executions.find(row => row.session.sessionId === agent.id)!
+    if (change === 'pause') execution.control = { action: 'pause', status: 'accepted', commandId: 'concurrent-pause' }
+    if (change === 'wait') execution.control = { action: 'wait', status: 'accepted', commandId: 'concurrent-wait' }
+    if (change === 'epoch') execution.epoch++
+  })
+  await started
+  const transaction = vi.spyOn(dao, 'transaction')
+  const checking = h.guard()(agent.id, { kind: 'stopping', progress: [], answerOnly: false, recheckWait: false })
+  try {
+    await expect.poll(() => transaction.mock.calls.length).toBe(1)
+  } finally {
+    release()
+    await writing
+    transaction.mockRestore()
+  }
+  expect(await checking).toBeUndefined()
+  expect((await dao.read()).executions.find(row => row.session.sessionId === agent.id)!.executionGuard).toEqual(before)
+}, 15000)
 
 it.each(['没看懂，现在需要我做什么呢？', '到底是什么状态'])('corrects an old model wait after %s and executes the next real tool in the same turn', async question => {
   const h = await setup(false)
