@@ -265,9 +265,12 @@ export class WorkApplication {
     if (!this.executionGuardEnabled) return undefined
     // Observe without the DAO writer lock. No maintenance/whenIdle calls here:
     // this callback runs inside the exact Agent's stopping boundary.
-    const observed = input.kind === 'stopping' ? (await this.load()).executions.find(item => item.session.sessionId === sessionId) : undefined
-    const facts = observed && this.host.execution?.observation ? await this.host.execution.observation(observed) : undefined
-    return this.dao.transaction(async state => {
+    const snapshot = await this.load()
+    const observed = snapshot.executions.find(item => item.session.sessionId === sessionId)
+    const facts = input.kind === 'stopping' && observed && this.host.execution?.observation ? await this.host.execution.observation(observed) : undefined
+    // The same authority checks run against the committed read and, only when
+    // corrections need saving, again against the transaction's fresh state.
+    const eligible = (state: WorkSnapshot) => {
       const execution = state.executions.find(item => item.session.sessionId === sessionId)
       if (!execution || isTaskCompleted(taskAt(state, execution.ref)) || continuousCompleted(state, execution)
         || continuationInFlight(execution) || execution.continuationBlocked || execution.error
@@ -284,7 +287,7 @@ export class WorkApplication {
       if (waiting && (!ownWait || execution.control?.yield && execution.control.yield.reason !== 'internal' && !(input.kind === 'stopping' && input.recheckWait))) return undefined
       if (input.kind === 'resume') {
         if (waiting || !continuousMayAdvance(state, execution) || execution.executionGuard?.exhausted) return undefined
-        return CONTINUE_AUTHORIZED_WORK
+        return execution
       }
       // A status turn may recheck an old wait, then confirm the same real blocker.
       // Honor only the exact successful structured control observed this turn;
@@ -292,6 +295,16 @@ export class WorkApplication {
       if (waiting && execution.control?.yield && input.currentWaitCommand === execution.control.commandId) return undefined
       if (input.answerOnly || waiting && !input.recheckWait && execution.control?.status !== 'accepted') return undefined
       if (!waiting && !continuousMayAdvance(state, execution)) return undefined
+      if (execution.executionGuard?.exhausted && !input.progress.some(key => !execution.executionGuard!.progress.includes(key))) return undefined
+      return execution
+    }
+    if (!eligible(snapshot)) return undefined
+    // startup/resume/compact only prepare a prompt for the next legal input.
+    // They never update the correction budget or need the global writer lock.
+    if (input.kind === 'resume') return CONTINUE_AUTHORIZED_WORK
+    return this.dao.transaction(async state => {
+      const execution = eligible(state)
+      if (!execution) return undefined
       const guard = execution.executionGuard ??= { corrections: 0, progress: [] }
       const fresh = input.progress.filter(key => !guard.progress.includes(key))
       if (fresh.length) {
