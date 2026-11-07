@@ -450,9 +450,11 @@ it('wakes a model-owned external wait for a scheduled recheck, executes real too
 }, 15000)
 
 it.each([
-  { status: 'completed' as const, applyWait: true }, { status: 'failed' as const, applyWait: true },
-  { status: 'completed' as const, applyWait: false }, { status: 'failed' as const, applyWait: false },
-])('collects an exact native $status job after its notification (applied wait: $applyWait), then reads and writes real files', async ({ status, applyWait }) => {
+  { status: 'completed' as const, applyWait: true, backlog: false }, { status: 'failed' as const, applyWait: true, backlog: false },
+  { status: 'completed' as const, applyWait: false, backlog: false }, { status: 'failed' as const, applyWait: false, backlog: false },
+  { status: 'completed' as const, applyWait: true, backlog: true },
+  { status: 'completed' as const, applyWait: true, backlog: true, paused: true },
+])('handles an exact native $status job notification (applied wait: $applyWait, old notice backlog: $backlog, paused: $paused)', async ({ status, applyWait, backlog, paused }) => {
   const h = await setup()
   await h.ctx.plugin(LocalJobs)
   await h.ctx.plugin(ToolJobs)
@@ -469,6 +471,10 @@ it.each([
   await fixtures.run(() => agent.whenIdle())
   if (applyWait) await h.app.reconcileControls()
   expect(await h.app.query({ type: 'task.execution', ref: h.ref }, operator)).toMatchObject({ execution: { control: { status: applyWait ? 'applied' : 'accepted', yield: { jobId: id } } } })
+  if (paused) {
+    expect(await h.app.sessionControl({ runtimeId: 'runtime', sessionId: agent.id }, 'pause-backlog', 'pause', '明确暂停')).toMatchObject({ status: 'completed' })
+    await h.app.reconcileControls()
+  }
   const requests = h.model.requests.length
   const wrong = createUserMessage({ content: [{ type: 'text', text: 'background job unrelated (bash: unrelated) finished completed.' }], source: { kind: 'tool-jobs', form: 'notice', summary: 'unrelated result' } })
   agent.followup(wrong)
@@ -481,6 +487,13 @@ it.each([
     { name: 'write', arguments: { file_path: 'job-proof.txt', content: `READY-312:${status}` } },
     wait,
   ][step++]
+  // Reproduce the host's one-message claim: stale job notices precede the
+  // exact completion that will wake AgentLoop. None is a human input.
+  const stale = backlog ? ['bash-44', 'bash-75', 'bash-434'].map(job => createUserMessage({
+    content: [{ type: 'text', text: `background job ${job} (bash: old job) finished completed.` }],
+    source: { kind: 'tool-jobs', form: 'notice', summary: 'old job result' },
+  })) : []
+  agent.inbox.splice('next-turn', 0, 0, stale)
   // Real registry settlement creates the native notice and wakes AgentLoop.
   await new Promise<void>(resolve => {
     const unsubscribe = h.ctx.jobs.events.subscribe({ owners: 'all' }, event => {
@@ -489,8 +502,19 @@ it.each([
     finish({ status, result: `Result ${status}` })
   })
   await fixtures.run(() => agent.whenIdle())
+  if (paused) {
+    expect(h.model.requests).toHaveLength(requests)
+    const result = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+    expect(result).toMatchObject({ execution: { state: 'paused', control: { action: 'pause' } } })
+    if (result.status !== 'completed' || !result.execution) throw Error('Missing execution')
+    for (const notice of stale) expect(result.execution.events.find(event => event.id === notice.id)).toMatchObject({ delivery: 'accepted', nativeMessage: notice })
+    expect(result.execution.events.some(event => event.delivery === 'accepted' && JSON.stringify(event.nativeMessage).includes(`background job ${id} `))).toBe(true)
+    expect(agent.inbox.nextTurn).toHaveLength(0)
+    return
+  }
   expect(await readFile(join(h.root, 'job-proof.txt'), 'utf8')).toBe(`READY-312:${status}`)
   const events = agent.session.snapshotEvents()
+  for (const notice of stale) expect(events.filter(event => event.type === 'user/message' && event.data.id === notice.id)).toHaveLength(1)
   expect(events.some(event => event.type === 'user/message' && event.data.source?.kind === 'tool-jobs')).toBe(true)
   expect(JSON.stringify(events.filter(event => event.type === 'tool/result'))).toContain('REAL-JOB-EVIDENCE')
   await h.app.reconcileControls()
