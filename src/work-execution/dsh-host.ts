@@ -128,12 +128,13 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
       const human = humans.length > 0
       const proceed = human || this.maintenanceTurns.has(agent) || await this.stepBoundary?.(agent.id) !== false
       if (human && automatic.length || !human && (!proceed || this.admittedTurns.get(agent) !== turn)) {
-        // The host claims one next-turn envelope. Inspect all already queued
-        // automatic input at this safe boundary so an unrelated old notice
-        // cannot hide the exact result that satisfies a model-owned wait.
-        // Rejected input is persisted by authorize in the Task recovery lane.
-        if (managed) for (const message of [...agent.inbox.nextStep, ...agent.inbox.nextTurn]) {
-          if (message.source?.kind !== 'user' && agent.inbox.remove(message.id)) automatic.push(message)
+        // The host claims one next-turn envelope. Old job notices must not
+        // hide the exact awaited result. Keep maintenance batches and other
+        // queued inputs separate; they retain their original admission path.
+        if (managed && !automatic.some(message => (message.source as { kind?: string } | undefined)?.kind === 'a2d2-work-maintenance')) {
+          for (const message of [...agent.inbox.nextStep, ...agent.inbox.nextTurn]) {
+            if (message.source?.kind === 'tool-jobs' && agent.inbox.remove(message.id)) automatic.push(message)
+          }
         }
         const admission = await this.authorize!(agent.id, automatic)
         if (!admission) {
