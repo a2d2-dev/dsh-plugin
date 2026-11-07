@@ -152,7 +152,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
         // queued inputs separate; they retain their original admission path.
         if (managed && !automatic.some(message => (message.source as { kind?: string } | undefined)?.kind === 'a2d2-work-maintenance')) {
           for (const message of [...agent.inbox.nextStep, ...agent.inbox.nextTurn]) {
-            if (message.source?.kind === 'tool-jobs' && agent.inbox.remove(message.id)) automatic.push(message)
+            if ((message.source as { kind?: string } | undefined)?.kind === 'tool-jobs' && agent.inbox.remove(message.id)) automatic.push(message)
           }
         }
         const admission = await this.authorize!(agent.id, automatic)
