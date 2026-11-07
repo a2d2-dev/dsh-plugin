@@ -725,6 +725,50 @@ it('refreshes source material after the host reports newly collected result fact
   expect(log.events.filter(event => event.type === 'user/message' && event.data.id === refreshing.execution!.continuation!.materialRequestId)).toHaveLength(1)
 })
 
+it.each([
+  { step: 'material', position: 'before' }, { step: 'material', position: 'after' },
+  { step: 'receive', position: 'before' }, { step: 'receive', position: 'after' },
+] as const)('preserves job notices queued $position an exact $step maintenance request', async ({ step, position }) => {
+  const h = await setup()
+  let target = h.ctx.agents.get(SessionId(h.execution.session.sessionId))!
+  let deliveryExecution = h.execution
+  const notice = createUserMessage({ content: [{ type: 'text', text: 'background job bash-44 (bash: old result) finished completed.' }], source: { kind: 'tool-jobs', form: 'notice', summary: 'old result' } })
+  let request: import('../src/work-types.ts').WorkEvent | undefined
+  const deliver = h.host.execution.deliver.bind(h.host.execution)
+  vi.spyOn(h.host.execution, 'deliver').mockImplementation(async (execution, event, maintenance) => {
+    if (!request && (event.nativeMessage?.source as { step?: string } | undefined)?.step === step) {
+      deliveryExecution = execution
+      target = h.ctx.agents.get(SessionId(execution.session.sessionId))!
+      request = event
+      const input = event.nativeMessage! as ReturnType<typeof createUserMessage>
+      target.inbox.splice('next-turn', 0, 0, position === 'before' ? [notice, input] : [input, notice])
+    }
+    return deliver(execution, event, maintenance)
+  })
+  h.model.nextTool = { name: 'work_continuation_material', arguments: material }
+  expect(await h.app.execute({ type: 'task.continue', commandId: `mixed-material-${position}`, ...fence(h.execution) }, operator)).toMatchObject({ status: 'completed' })
+  await fixtures.run(() => target.whenIdle())
+  if (step === 'receive') {
+    await fixtures.run(() => h.app.reconcileControls())
+    await fixtures.run(() => target.whenIdle())
+  }
+  const consumed = () => target.session.snapshotEvents().filter(event => event.type === 'user/message')
+  expect(consumed().some(event => event.data.id === notice.id)).toBe(false)
+  if (!request) throw Error('No maintenance request delivered')
+  if (position === 'before') {
+    expect(target.inbox.nextTurn.some(message => message.id === request!.id)).toBe(true)
+    // The original lifecycle retry wakes its still-queued exact request.
+    await h.host.execution.deliver(deliveryExecution, request)
+    await fixtures.run(() => target.whenIdle())
+  }
+  expect(consumed().filter(event => event.data.id === request!.id)).toHaveLength(1)
+  expect(consumed().some(event => event.data.id === notice.id)).toBe(false)
+  const current = await h.app.query({ type: 'task.execution', ref: h.ref }, operator)
+  expect(current).toMatchObject({ execution: { continuation: { phase: step === 'material' ? 'material-saved' : 'delivered' } } })
+  if (current.status !== 'completed' || !current.execution) throw Error('No execution')
+  expect(current.execution.events.find(event => event.id === notice.id)).toMatchObject({ delivery: 'accepted', nativeMessage: notice })
+}, 15000)
+
 it('keeps unrelated automatic business rounds fenced while an active source owes material', async () => {
   const h = await setup()
   await h.app.execute({ type: 'task.continue', commandId: 'active-material-step', ...fence(h.execution) }, operator)
