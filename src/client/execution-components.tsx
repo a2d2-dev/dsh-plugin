@@ -6,8 +6,8 @@ import styles from './execution-components.module.css'
 /** Explicit historical links carry no execution authority. */
 export function HistoricalContextLinks({ sessions, onEnter, busy = false }: { sessions?: SessionRef[]; onEnter: (session: SessionRef) => void; busy?: boolean }) {
   if (!sessions?.length) return null
-  return <span className={styles.row}>{sessions.map(session => <span key={`${session.runtimeId}/${session.sessionId}`}>
-    <span title={session.sessionId}>后续上下文 · {session.sessionId.slice(0, 8)} </span>
+  return <span className={styles.row}>{sessions.map((session, index) => <span key={`${session.runtimeId}/${session.sessionId}`}>
+    <span>后续上下文{sessions.length > 1 ? index + 1 : ''} </span>
     <button type="button" disabled={busy} onClick={() => onEnter(session)}>进入会话</button>
   </span>)}</span>
 }
