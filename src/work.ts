@@ -1896,6 +1896,10 @@ export class WorkApplication {
         || execution.retired?.some(item => sameSession(item.session, command.session)))) {
         return failed('invalid-historical-context', 'Historical context requires a completed Task and an exact execution source with a separate related Session')
       }
+      if (command.historicalSource && state.executions.some(item => item.id !== execution!.id && (sameSession(item.session, command.session)
+        || item.retired?.some(old => sameSession(old.session, command.session)) || (item.continuation && sameSession(item.continuation.successor, command.session))))) {
+        return failed('session-in-use', 'Historical context Session belongs to another execution')
+      }
       if (!project || !(await this.candidates(project)).some(item => sameSession(item.ref, command.session)
         && (!command.historicalSource || sameResource(item.resource, execution!.resource)))) {
         return failed('incompatible-session', 'Session is not a compatible member of this project resource')
