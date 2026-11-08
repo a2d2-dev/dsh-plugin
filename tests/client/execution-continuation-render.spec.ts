@@ -17,6 +17,7 @@ function controllerFor(detail: WorkCompleted, purpose: AssociatedWork['purpose']
     command: vi.fn(async () => { throw Error('Render must not write') }),
     query: async query => {
       if (query.type === 'task.detail') return detail
+      if (query.type === 'project.detail') return { status: 'completed', tasks: detail.task ? [detail.task] : [] }
       if (query.type === 'resources.list') return { status: 'completed', resources: [{ ref: { runtimeId: 'runtime', workspaceId: 'ws' }, title: 'Workspace' }] }
       if (query.type === 'session.work') return { status: 'completed', work: [{ ref, title: 'Task continuation', projectName: 'Project', purpose }] }
       return { status: 'completed' }
@@ -222,11 +223,20 @@ it.each(['native', 'header', 'task'] as const)('opens the exact saved historical
   expect(detail.task!.completion).toEqual(completion)
 })
 
-it('rejects a stale historical context link rather than substituting the canonical executor', async () => {
-  const detail = taskDetail(), controller = controllerFor(detail)
+it.each(['missingTask', 'wrongProject', 'unfinished', 'removedBinding', 'reviewBinding', 'missingSource', 'wrongRuntime'] as const)('rejects %s historical context from the fresh project read without entering the canonical executor', async invalid => {
+  const detail = taskDetail(), successor = { runtimeId: 'runtime', sessionId: 'session-existing-context' }
   detail.task!.completion = completion
-  const entered = vi.spyOn(controller, 'openSession')
-  await expect(controller.openHistoricalContext(ref, { runtimeId: 'runtime', sessionId: 'unregistered' })).rejects.toThrow('后续上下文暂不可进入')
+  detail.task!.sessions = [{ session: successor, purpose: 'related', historicalSource: session }]
+  if (invalid === 'missingTask') delete detail.task
+  if (invalid === 'wrongProject') detail.task!.projectId = 'different-project'
+  if (invalid === 'unfinished') delete detail.task!.completion
+  if (invalid === 'removedBinding') detail.task!.sessions = []
+  if (invalid === 'reviewBinding') detail.task!.sessions[0]!.purpose = 'review'
+  if (invalid === 'missingSource') delete detail.task!.sessions[0]!.historicalSource
+  if (invalid === 'wrongRuntime') detail.task!.sessions[0]!.session = { ...successor, runtimeId: 'foreign-runtime' }
+  const controller = controllerFor(detail), query = vi.spyOn(controller.client, 'query'), entered = vi.spyOn(controller, 'openSession')
+  await expect(controller.openHistoricalContext(ref, successor)).rejects.toThrow('后续上下文暂不可进入')
+  expect(query).toHaveBeenCalledExactlyOnceWith({ type: 'project.detail', projectId: ref.projectId }, expect.any(AbortSignal))
   expect(entered).not.toHaveBeenCalled()
   expect(controller.client.command).not.toHaveBeenCalled()
 })
@@ -252,5 +262,30 @@ it.each(['control','history'] as const)('keeps the %s dock free of historical-co
     await expect.poll(() => entered.mock.calls.length).toBe(1)
     expect(entered).toHaveBeenCalledExactlyOnceWith(session)
   }
+  expect(controller.client.command).not.toHaveBeenCalled()
+})
+
+
+it('shows and opens projected historical context while the old execution detail never resolves', async () => {
+  const detail = taskDetail(), successor = { runtimeId: 'runtime', sessionId: 'session-existing-context' }
+  detail.task!.completion = completion
+  detail.task!.sessions = [{ session: successor, purpose: 'related', historicalSource: session }]
+  const controller = controllerFor(detail), query = controller.client.query.bind(controller.client)
+  controller.client.query = vi.fn(async (value, signal): Promise<WorkCompleted> => {
+    if (value.type === 'task.detail') return new Promise<WorkCompleted>(() => {})
+    if (value.type === 'session.work') return { status: 'completed', work: [{ ref, title: detail.task!.title, projectName: 'Project', purpose: 'control', historicalContexts: [successor] }] }
+    return query(value, signal)
+  })
+  const entered = vi.spyOn(controller, 'openSession')
+  const view = mountProductionComponent({ controller, sessionId: 'current' }, 'ExecutionConversationContinuation', new URL('../../src/client/execution-native.tsx', import.meta.url))
+  mounted.push(view)
+  await expect.poll(() => view.text()).toContain('后续上下文')
+  expect(view.text()).toContain('正在读取接续事实')
+  expect(entered).not.toHaveBeenCalled()
+  const before = vi.mocked(controller.client.query).mock.calls.length
+  view.click('进入会话')
+  await expect.poll(() => entered.mock.calls.length).toBe(1)
+  expect(entered).toHaveBeenCalledExactlyOnceWith(successor)
+  expect(vi.mocked(controller.client.query).mock.calls.slice(before).map(([value]) => value)).toEqual([{ type: 'project.detail', projectId: ref.projectId }])
   expect(controller.client.command).not.toHaveBeenCalled()
 })

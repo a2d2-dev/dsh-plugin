@@ -35,4 +35,6 @@
 
 6. 开发环境页面发现按钮未继承操作样式、输入区提示与主内容重复。历史入口复用现有 `taskActions` 与 `row` 样式；历史上下文不再单独生成输入区提示，原有正式交接提示保持。3 个相关 UI 测试文件共 58 项通过，类型检查通过。原始记录为本地 `/tmp/370-visual-tests.log`、`/tmp/370-visual-typecheck.log` 与 `/tmp/370-visual-client-typecheck.log`；测试 mock 的字面量类型修正后，客户端类型检查已单独通过，宿主检查复用同轮通过结果。
 
+7. 实际验收发现历史导航等待旧执行的 `task.detail` 完整历史观察，导致入口显示或点击受阻。仅调整客户端：历史入口使用已有 `session.work.historicalContexts` 投影显示；点击通过现有 `project.detail` 找到准确项目与 Task，核验完成事实及目标关联。普通当前会话导航仍使用 `task.detail`，后端查询与执行图行为不变。生产组件在 `task.detail` 永久不返回时仍显示并准确导航；新读数缺少任务、完成记录或精确关联时拒绝。2 个相关测试文件共 61 项通过，客户端类型检查通过。原始记录为本地 `/tmp/370-history-read-red.log`、`/tmp/370-history-read-tests.log` 与 `/tmp/370-history-read-typecheck.log`。
+
 本报告只记录代码级验证。实际开发环境页面截图、发布、既有生产后续会话登记与最终验收由主 agent 继续执行；本分支未部署、未重启服务、未修改生产数据。
