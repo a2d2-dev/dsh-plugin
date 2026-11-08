@@ -115,7 +115,7 @@ function NativeTaskContinuation({ controller, sessionId, work }: { controller: W
         {error && <p role="alert">{error}</p>}
       </aside>
       <div className={styles.configPane}>
-        {completed && <HistoricalContextLinks sessions={detail?.task?.sessions.filter(binding => binding.historicalSource?.sessionId === sessionId && binding.historicalSource.runtimeId === detail.execution?.resource.runtimeId).map(binding => binding.session)} busy={busy} onEnter={session => void enterContext(session)}/>}
+        <HistoricalContextLinks sessions={work.historicalContexts} busy={busy} onEnter={session => void enterContext(session)}/>
         {detail ? <ExecutionContinuation graph={detail.executionGraph} execution={detail.execution} policy={policy} busy={busy} completed={completed} {...(work.purpose === 'control' && !completed && detail.execution?.session.sessionId === sessionId ? { onContinue: () => void controlWork('continue'), onRecover: () => void controlWork('reconcile'), onResume: () => void controlWork('resume') } : {})}/> : !error && <p role="status">正在读取接续事实…</p>}
       </div>
     </div>
