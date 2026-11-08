@@ -55,8 +55,14 @@
 5. 使用 agent-browser 从源会话真实点击“进入会话”，MutationObserver 记录目标选中时间 **151 ms**，选中 ID 精确为既有 c007。被动 Network 记录按点击时间段检查，实际只有查询请求，包含 `project.detail`，没有工作命令。没有以失效的 fetch 包装器空数组作为证明。
 6. 对比两实例源/目标 journal，turn、人工/系统消息、模型请求、助手消息、工具调用及结果数量均未增加。原 GitHub Issue #183 仍 Closed、原 Project 仍 Done；没有业务恢复、模型运行、集群操作或额外验收。原交接材料73行及已接受的完成/延期事实保留。
 
-入口：打开 **#183 · 会话8 → A²D² 接续 → 后续上下文 → 进入会话**。目标沿现有命名规则显示为“#183 · 关联1”，Session 身份仍是既有 c007。这是已完成任务的历史上下文衔接，原执行完成记录与 epoch8 保留。
+入口：打开 **#183 · 会话8 → A²D² 接续 → 后续上下文 → 进入会话**。后继按来源会话序号命名为“#183 · 会话 9”，Session 身份仍是既有 c007。这是已完成任务的历史上下文衔接，原执行完成记录与 epoch8 保留。
 
 完整中文记录、截图、原始回归与结构化证明保存在本工作树 `docs/artifacts/dsh-370-2026-11-08/`，关键文件为 `prod-final-navigation-proof.json`、`final-original-state-proof.json`、`prod-final-journal-proof.json`、`prod-final-source-entry.png` 和 `prod-final-existing-target.png`。私有截图和业务上下文不提交公开仓库。旧失败与早期验证记录继续保留，不计作最终成功证据。
 
 Issue #370 的工作及验收完成，Project Status 为 Done；Issue 保持 Open，最终关闭由 LF 执行。
+
+## 会话命名修正（2026-11-08）
+
+Task #183 的当前执行会话是 epoch8，历史后续上下文使用所登记来源会话序号加一生成标题。因此后继显示为“会话 9”；这只调整会话标题，原 Task/Execution 仍保持已完成/epoch8，不创建 epoch9 执行。
+
+最终 v5 同包已安装至开发和正式实例。两个 Supervisor helper 重启后，后继 c007 标题均为“#183 · 会话 9”，没有恢复为“关联1”。测试和接续验收详见本报告前文。
