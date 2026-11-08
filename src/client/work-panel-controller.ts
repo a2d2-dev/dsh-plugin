@@ -1022,12 +1022,11 @@ export class WorkPanelController {
     signal?.addEventListener('abort', cancel, { once: true })
     const revision = this.revision, sourceRevision = this.sourceRevision
     try {
-      const detail = await this.client.query({ type: 'task.detail', ref }, abort.signal)
+      const detail = await this.client.query(historicalContext ? { type: 'project.detail', projectId: ref.projectId } : { type: 'task.detail', ref }, abort.signal)
       if (abort.signal.aborted || revision !== this.revision || sourceRevision !== this.sourceRevision) return
       if (historicalContext) {
-        const task = detail.task
-        if (task?.id !== ref.taskId || task.projectId !== ref.projectId || !task.completion
-          || !task.sessions.some(binding => binding.purpose === 'related' && binding.historicalSource
+        const task = detail.tasks?.find(item => item.id === ref.taskId && item.projectId === ref.projectId)
+        if (!task?.completion || !task.sessions.some(binding => binding.purpose === 'related' && binding.historicalSource
             && binding.session.runtimeId === historicalContext.runtimeId && binding.session.sessionId === historicalContext.sessionId)) throw Error('后续上下文暂不可进入，请刷新工作详情。')
         this.openSession(historicalContext)
         return
