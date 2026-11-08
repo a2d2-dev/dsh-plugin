@@ -193,7 +193,7 @@ it('keeps ended queue work disabled after its control has applied', async () => 
 })
 
 it.each(['native', 'header', 'dock', 'task'] as const)('opens the exact saved historical context from the completed %s surface without executing work', async surface => {
-  const detail = taskDetail(), successor = { runtimeId: 'runtime', sessionId: 'existing-historical-context' }
+  const detail = taskDetail(), successor = { runtimeId: 'runtime', sessionId: 'session-existing-historical-context' }
   detail.task!.completion = completion
   detail.task!.sessions = [{ session: successor, purpose: 'related', historicalSource: session }]
   const controller = controllerFor(detail)
@@ -209,6 +209,8 @@ it.each(['native', 'header', 'dock', 'task'] as const)('opens the exact saved hi
   } else view = mountProductionComponent({ controller, sessionId: 'current', blank: false, placement: surface === 'header' ? 'header' : 'dock' }, surface === 'native' ? 'ExecutionConversationContinuation' : 'ExecutionSessionWorkEntry', new URL('../../src/client/execution-native.tsx', import.meta.url))
   mounted.push(view)
   await expect.poll(() => view.text()).toContain('后续上下文')
+  expect(view.text()).not.toContain('后续上下文 ·')
+  expect(view.text()).not.toContain(successor.sessionId)
   expect(entered).not.toHaveBeenCalled()
   // Work detail also keeps its original execution Session link. The context is explicitly separate.
   const context = view.nodes('button').find(button => button.props.children === '进入会话')!
