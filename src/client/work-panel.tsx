@@ -3,7 +3,7 @@ import { ListQueryBar } from './list-query-bar.tsx'
 import { IssueMarkdown } from './issue-markdown.tsx'
 import { PanelIcon } from './icons.tsx'
 import { GitHubAccountControl } from './github-account.tsx'
-import { ExecutionSessions, ExecutionContinuation } from './execution-components.tsx'
+import { ExecutionSessions, ExecutionContinuation, HistoricalContextLinks } from './execution-components.tsx'
 import { CompletionStatus } from './completion-status.tsx'
 import { ContinuousDelegation } from './continuous-delegation.tsx'
 import { SourceConnect } from './source-connect.tsx'
@@ -14,7 +14,7 @@ import { SessionCell, sessionOf } from './session-cell.tsx'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import type { DetailTab, WorkPanelController } from './work-panel-controller.ts'
-import type { AssociatedWork, WorkExecution, WorkTask, WorkExecutionOptions, ContinuousWorkRule } from '../work-types.ts'
+import type { AssociatedWork, SessionRef, WorkExecution, WorkTask, WorkExecutionOptions, ContinuousWorkRule } from '../work-types.ts'
 import type { GitHubIssue } from '../work-sources/types.ts'
 import { message } from './work-panel-controller.ts'
 import styles from './work-panel.module.css'
@@ -249,9 +249,12 @@ function executionLabel(state: WorkExecution['state'], progress?: import('../wor
 function CurrentExecution({controller}:{controller:WorkPanelController}) {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot)
   const { execution, executionRuntime, progress } = state.detail ?? {}, { options, selection, busy } = state.startup
+  const [contextError,setContextError]=useState<string|null>(null)
   const completed = Boolean(state.detail?.task?.completion)||completedProgress(progress)
   if(!execution&&!options&&!completed)return null
   return <Section title="会话" className={!execution&&!options?styles.idleExecution:undefined}>
+    {completed && <HistoricalContextLinks sessions={state.detail?.task?.sessions.filter(binding=>binding.historicalSource).map(binding=>binding.session)} busy={busy} onEnter={session=>void controller.openHistoricalContext({projectId:state.detail!.task!.projectId,taskId:state.detail!.task!.id},session).catch(error=>setContextError(message(error)))}/>}
+    {contextError && <ErrorText error={contextError}/>}
     {execution ? <>
       <p>{(()=>{const task=state.detail?.task;if(!task)return null;const counts=controller.sessionCounts(task);return `${counts.total} 个会话 · 当前 ${counts.current} · 历史 ${counts.historical} · 其他关联 ${counts.associated}`})()}</p><p>执行状态：{execution.control?.action === 'end' ? (execution.control.status === 'applied' ? '队列已结束，业务验收未确认' : '正在结束队列处理') : state.detail?.task?.completion?({pending:'等待执行收口',settled:'执行已安全收口',error:'执行收口失败'})[state.detail.task.completion.closeout.status]:executionLabel(execution.state,progress,execution.control?.status)}{executionRuntime ? ` · 会话：${({running:'正在运行',idle:'空闲',inactive:'未激活'})[executionRuntime]}` : ''}</p>
       {execution.progress && <p>工作进展：{execution.progress}</p>}
@@ -350,8 +353,8 @@ function activityLabel(type:string):string {return ({'task.create':'创建工作
 function ErrorText({error}:{error:string}) {return error ? <p role="alert" className={styles.failure}>{error}</p>:null}
 
 /** Present native work links without owning navigation or execution side effects. */
-export function SessionWorkLinks({work,onReveal,onEnter,opening=false}:{work:AssociatedWork[];onReveal:(ref:AssociatedWork['ref'])=>void;onEnter:(ref:AssociatedWork['ref'])=>void;opening?:boolean}) {
-  return <>{work.map(item=><span key={`${item.ref.projectId}/${item.ref.taskId}`}><button onClick={()=>onReveal(item.ref)} title="查看工作与进展">{item.projectName} / {item.title} · 工作与进展</button>{item.purpose==='history'&&<><span> 处理会话已切换；内容投递状态见「A²D² 接续」 · </span><button disabled={opening} onClick={()=>onEnter(item.ref)}>{opening?'正在核对…':'进入会话'}</button></>}</span>)}</>
+export function SessionWorkLinks({work,onReveal,onEnter,opening=false}:{work:AssociatedWork[];onReveal:(ref:AssociatedWork['ref'])=>void;onEnter:(ref:AssociatedWork['ref'],session?:SessionRef)=>void;opening?:boolean}) {
+  return <>{work.map(item=><span key={`${item.ref.projectId}/${item.ref.taskId}`}><button onClick={()=>onReveal(item.ref)} title="查看工作与进展">{item.projectName} / {item.title} · 工作与进展</button>{item.purpose==='history'&&<><span> 处理会话已切换；内容投递状态见「A²D² 接续」 · </span><button disabled={opening} onClick={()=>onEnter(item.ref)}>{opening?'正在核对…':'进入会话'}</button></>}<HistoricalContextLinks sessions={item.historicalContexts} busy={opening} onEnter={session=>onEnter(item.ref,session)}/></span>)}</>
 }
 /** Mounted native entries observe role changes; polling never opens a Session or touches drafts. */
 export function SessionWorkEntry({controller, sessionId}: {controller: WorkPanelController; sessionId: string}) {
@@ -365,16 +368,16 @@ export function SessionWorkEntry({controller, sessionId}: {controller: WorkPanel
     const stop=controller.watchSessionWork(sessionId,setWork,setError)
     return () => {abort.abort();stop()}
   },[controller,sessionId])
-  async function enter(ref:AssociatedWork['ref']) {
+  async function enter(ref:AssociatedWork['ref'],session?:SessionRef) {
     if(!scope||scope.signal.aborted||opening)return
     setOpening(true);setNavigationError(null)
-    try {await controller.openCurrentTask(ref,scope.signal)}catch(error){if(!scope.signal.aborted)setNavigationError(message(error))}
+    try {await (session?controller.openHistoricalContext(ref,session,scope.signal):controller.openCurrentTask(ref,scope.signal))}catch(error){if(!scope.signal.aborted)setNavigationError(message(error))}
     finally {if(!scope.signal.aborted)setOpening(false)}
   }
   if (!work.length&&!error&&!navigationError) return null
   return <div className={styles.sessionEntry}>
     {error&&<span title={error}>工作关联读取失败</span>}
-    {SessionWorkLinks({work,onReveal:ref=>void controller.revealTask(ref),onEnter:ref=>void enter(ref),opening})}
+    {SessionWorkLinks({work,onReveal:ref=>void controller.revealTask(ref),onEnter:(ref,session)=>void enter(ref,session),opening})}
     {navigationError&&<span role="alert">{navigationError}</span>}
   </div>
 }

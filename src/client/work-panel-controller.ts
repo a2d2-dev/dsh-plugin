@@ -1012,7 +1012,9 @@ export class WorkPanelController {
   }
   private currentTaskRead?: AbortController
   /** Only an explicit click enters the freshly observed, verified control Session. */
-  async openCurrentTask(ref: TaskRef, signal?: AbortSignal): Promise<void> {
+  openCurrentTask(ref: TaskRef, signal?: AbortSignal): Promise<void> { return this.openTaskSession(ref, signal) }
+  openHistoricalContext(ref: TaskRef, session: SessionRef, signal?: AbortSignal): Promise<void> { return this.openTaskSession(ref, signal, session) }
+  private async openTaskSession(ref: TaskRef, signal?: AbortSignal, historicalContext?: SessionRef): Promise<void> {
     if (signal?.aborted) return
     this.currentTaskRead?.abort()
     const abort = new AbortController(); this.currentTaskRead = abort
@@ -1022,6 +1024,14 @@ export class WorkPanelController {
     try {
       const detail = await this.client.query({ type: 'task.detail', ref }, abort.signal)
       if (abort.signal.aborted || revision !== this.revision || sourceRevision !== this.sourceRevision) return
+      if (historicalContext) {
+        const task = detail.task
+        if (task?.id !== ref.taskId || task.projectId !== ref.projectId || !task.completion
+          || !task.sessions.some(binding => binding.purpose === 'related' && binding.historicalSource
+            && binding.session.runtimeId === historicalContext.runtimeId && binding.session.sessionId === historicalContext.sessionId)) throw Error('后续上下文暂不可进入，请刷新工作详情。')
+        this.openSession(historicalContext)
+        return
+      }
       const execution = detail.execution
       if (detail.task?.id !== ref.taskId || detail.task.projectId !== ref.projectId || !execution?.actual
         || execution.ref.taskId !== ref.taskId || execution.ref.projectId !== ref.projectId

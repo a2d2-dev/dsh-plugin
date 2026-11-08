@@ -198,3 +198,41 @@ it.each(['missing', 'throws'] as const)('names %s result observation before acce
  expect(await h.guard(h.execution.session.sessionId)).toBe(true)
  expect(h.writes()).toBe(0)
 })
+
+it.each([false,true])('durably links completed source to its exact existing historical context (already associated=%s) without changing completion or execution', async alreadyAssociated => {
+ const h=await setup(),task=await h.create('historical'),execution=await h.start(task)
+ const successor={runtimeId:'runtime',sessionId:'existing-context'}
+ h.host.sessions=async()=>[{ref:successor,resource:execution.resource,title:'Existing context'}]
+ const beforeDone=await h.detail(task)
+ const command={type:'task.associate-session',commandId:'historical-link',ref:execution.ref,expectedVersion:beforeDone.task!.version,session:successor,purpose:'related',historicalSource:execution.session}
+ expect(await h.app.execute({...command,commandId:'active-link'},operator)).toMatchObject({status:'failed',error:{code:'invalid-historical-context'}})
+ if(alreadyAssociated) ok(await h.app.execute({type:'task.associate-session',commandId:'plain-link',ref:execution.ref,expectedVersion:beforeDone.task!.version,session:successor,purpose:'related'},operator))
+ await h.done(execution)
+ const before=await h.detail(task)
+ const completedCommand={...command,expectedVersion:before.task!.version}
+ expect(await h.app.execute({...completedCommand,commandId:'wrong-source',historicalSource:{...execution.session,sessionId:'unrelated'}},operator)).toMatchObject({status:'failed',error:{code:'invalid-historical-context'}})
+ expect(await h.app.execute({...completedCommand,commandId:'self-link',session:execution.session},operator)).toMatchObject({status:'failed'})
+ h.host.sessions=async()=>[{ref:successor,resource:{...execution.resource,workspaceId:'other'},title:'Wrong workspace'}]
+ expect(await h.app.execute({...completedCommand,commandId:'wrong-workspace'},operator)).toMatchObject({status:'failed',error:{code:'incompatible-session'}})
+ h.host.sessions=async()=>[{ref:successor,resource:execution.resource,title:'Existing context'}]
+ const linked=ok(await h.app.execute(completedCommand,operator))
+ expect(linked.task!.sessions).toContainEqual({session:successor,purpose:'related',historicalSource:execution.session})
+ expect(await h.app.execute({...completedCommand,commandId:'same-link',expectedVersion:linked.task!.version},operator)).toMatchObject({status:'completed',task:{version:linked.task!.version}})
+ const {historicalSource:omitted,...legacyCommand}=completedCommand
+ expect(await h.app.execute({...legacyCommand,commandId:'legacy-repeat',expectedVersion:linked.task!.version},operator)).toMatchObject({status:'completed',task:{version:linked.task!.version}})
+ const restored=new WorkApplication(h.app.directory,h.host)
+ const after=ok(await restored.query({type:'task.detail',ref:execution.ref},operator))
+ expect(after.task!.completion).toEqual(before.task!.completion)
+ expect(after.task!.specification).toEqual(before.task!.specification)
+ expect(after.execution).toEqual(before.execution)
+ const source=ok(await restored.query({type:'session.work',session:execution.session},operator))
+ expect(source.work).toMatchObject([{purpose:'control',historicalContexts:[successor]}])
+ expect(await restored.query({type:'session.work',session:successor},operator)).toMatchObject({work:[{purpose:'related'}]})
+ const {createElement}=await import('react'),{renderToStaticMarkup}=await import('react-dom/server')
+ const panelPath='../src/client/work-panel.tsx'
+ const {SessionWorkLinks}=await import(panelPath)
+ const markup=renderToStaticMarkup(createElement(SessionWorkLinks,{work:source.work!,onReveal:()=>{},onEnter:()=>{}}))
+ expect(markup).toContain('后续上下文')
+ expect(markup).toContain('进入会话')
+ expect(h.calls.ensure).toBe(1)
+})

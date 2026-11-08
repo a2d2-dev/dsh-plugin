@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import type { AssociatedWork, ContinuationPolicy, WorkCompleted } from '../work-types.ts'
+import type { AssociatedWork, ContinuationPolicy, SessionRef, WorkCompleted } from '../work-types.ts'
 import type { ExecutionGraph } from '../work-execution/observation.ts'
 import type { WorkPanelController } from './work-panel-controller.ts'
-import { ExecutionContinuation } from './execution-components.tsx'
+import { ExecutionContinuation, HistoricalContextLinks } from './execution-components.tsx'
 import styles from './execution-components.module.css'
 
 type ExecutionDetail = WorkCompleted & { executionGraph?: ExecutionGraph }
@@ -25,25 +25,26 @@ export function ExecutionSessionWorkEntry({ controller, sessionId, blank, placem
   useEffect(() => { const abort = new AbortController(); scope.current = abort; setNavigationError(null); setOpening(false); return () => abort.abort() }, [sessionId])
   if (!work.length && !error) return null
   if (placement === 'header' && blank) return null
-  if (placement === 'dock' && !blank && !work.some(item => item.purpose === 'history')) return null
-  const enter = async (item: AssociatedWork) => {
+  if (placement === 'dock' && !blank && !work.some(item => item.purpose === 'history' || item.historicalContexts?.length)) return null
+  const enter = async (item: AssociatedWork, session?: SessionRef) => {
     const abort = scope.current
     if (!abort || abort.signal.aborted || opening) return
     setOpening(true); setNavigationError(null)
-    try { await controller.openCurrentTask(item.ref, abort.signal) }
+    try { await (session ? controller.openHistoricalContext(item.ref, session, abort.signal) : controller.openCurrentTask(item.ref, abort.signal)) }
     catch (error) { if (!abort.signal.aborted) setNavigationError(error instanceof Error ? error.message : String(error)) }
     finally { if (!abort.signal.aborted) setOpening(false) }
   }
-  if (placement === 'dock' && work.some(item => item.purpose === 'history')) return <div className={`${styles.entry} ${styles.card}`} role="status">
-    {work.filter(item => item.purpose === 'history').map(item => <div key={`${item.ref.projectId}/${item.ref.taskId}`}>
-      <p>“{item.title}”的处理会话已切换。交接内容是否送达，请查看「A²D² 接续」。你仍可在这里继续对话。</p>
-      <button type="button" disabled={opening} onClick={() => void enter(item)}>进入会话</button>
+  if (placement === 'dock' && work.some(item => item.purpose === 'history' || item.historicalContexts?.length)) return <div className={`${styles.entry} ${styles.card}`} role="status">
+    {work.filter(item => item.purpose === 'history' || item.historicalContexts?.length).map(item => <div key={`${item.ref.projectId}/${item.ref.taskId}`}>
+      {item.purpose === 'history' && <><p>“{item.title}”的处理会话已切换。交接内容是否送达，请查看「A²D² 接续」。你仍可在这里继续对话。</p>
+      <button type="button" disabled={opening} onClick={() => void enter(item)}>进入会话</button></>}
+      <HistoricalContextLinks sessions={item.historicalContexts} busy={opening} onEnter={session => void enter(item, session)}/>
     </div>)}
     {navigationError && <p role="alert">{navigationError}</p>}
   </div>
   return <details className={`${styles.entry} ${placement === 'dock' ? styles.dock : ''}`}><summary>关联任务{work.length ? ` · ${work.length}` : ''}</summary><div className={styles.popover}>
     {error && <p role="status">关联读取失败：{error}</p>}
-    {work.map(item => <article key={`${item.ref.projectId}/${item.ref.taskId}`}><p>{item.projectName} / {item.title}</p><p>{item.purpose === 'control' ? '当前协调' : item.purpose === 'history' ? '已交接 · 可继续对话' : item.purpose === 'review' ? '评审关联' : '工作关联'}</p><div className={styles.row}><button type="button" onClick={() => void controller.revealTask(item.ref)}>工作详情</button>{item.purpose === 'history' && <button type="button" disabled={opening} onClick={() => void enter(item)}>进入会话</button>}</div></article>)}
+    {work.map(item => <article key={`${item.ref.projectId}/${item.ref.taskId}`}><p>{item.projectName} / {item.title}</p><p>{item.purpose === 'control' ? '当前协调' : item.purpose === 'history' ? '已交接 · 可继续对话' : item.purpose === 'review' ? '评审关联' : '工作关联'}</p><div className={styles.row}><button type="button" onClick={() => void controller.revealTask(item.ref)}>工作详情</button>{item.purpose === 'history' && <button type="button" disabled={opening} onClick={() => void enter(item)}>进入会话</button>}</div><HistoricalContextLinks sessions={item.historicalContexts} busy={opening} onEnter={session => void enter(item, session)}/></article>)}
     {navigationError && <p role="alert">{navigationError}</p>}
   </div></details>
 }
@@ -90,6 +91,14 @@ function NativeTaskContinuation({ controller, sessionId, work }: { controller: W
     } catch (error) { if (!scope.signal.aborted) setError(error instanceof Error ? error.message : String(error)) }
     finally { if (!scope.signal.aborted) setBusy(false) }
   }
+  const enterContext = async (session: SessionRef) => {
+    const scope = lifetime.current
+    if (busy || !scope || scope.signal.aborted) return
+    setBusy(true); setError(null)
+    try { await controller.openHistoricalContext(work.ref, session, scope.signal) }
+    catch (error) { if (!scope.signal.aborted) setError(error instanceof Error ? error.message : String(error)) }
+    finally { if (!scope.signal.aborted) setBusy(false) }
+  }
   const completed = Boolean(detail?.task?.completion || detail?.progress?.completion || detail?.progress?.processingState === 'completed')
   const purpose = work.purpose === 'control' ? '当前协调' : work.purpose === 'history' ? '已交接 · 可继续对话' : work.purpose === 'review' ? '评审关联' : '工作关联'
   return <section className={styles.nativeView}>
@@ -107,6 +116,7 @@ function NativeTaskContinuation({ controller, sessionId, work }: { controller: W
         {error && <p role="alert">{error}</p>}
       </aside>
       <div className={styles.configPane}>
+        {completed && <HistoricalContextLinks sessions={detail?.task?.sessions.filter(binding => binding.historicalSource?.sessionId === sessionId && binding.historicalSource.runtimeId === detail.execution?.resource.runtimeId).map(binding => binding.session)} busy={busy} onEnter={session => void enterContext(session)}/>}
         {detail ? <ExecutionContinuation graph={detail.executionGraph} execution={detail.execution} policy={policy} busy={busy} completed={completed} {...(work.purpose === 'control' && !completed && detail.execution?.session.sessionId === sessionId ? { onContinue: () => void controlWork('continue'), onRecover: () => void controlWork('reconcile'), onResume: () => void controlWork('resume') } : {})}/> : !error && <p role="status">正在读取接续事实…</p>}
       </div>
     </div>
