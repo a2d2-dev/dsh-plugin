@@ -29,7 +29,7 @@ export const taskSchema = z.object({
   completion: completionSchema.optional(), childCompletions: z.array(childCompletionSchema).optional(),
   specification: specificationSchema, specificationHistory: z.array(specificationSchema),
   breakdown: z.array(block), parent: taskRefSchema.optional(), children: z.array(taskRefSchema),
-  sessions: z.array(z.object({ session: sessionRefSchema, purpose: z.enum(['related', 'review']) }).strict()),
+  sessions: z.array(z.object({ session: sessionRefSchema, purpose: z.enum(['related', 'review']), historicalSource: sessionRefSchema.optional() }).strict()),
   activity: z.array(z.object({ commandId: referenceId, type: referenceId, version: z.number().int().positive() }).strict()),
 }).strict()
 export const continuationContentSchema = z.object({ body: text, decisions: text, evidence: text, unfinished: text, next: text }).strict()
@@ -138,7 +138,7 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ ...change, type: z.literal('task.update-spec'), goal: text, specification: text, acceptance: content.acceptance }).strict(),
   z.object({ ...change, type: z.literal('task.replace-breakdown'), blocks: z.array(block).max(1000) }).strict(),
   z.object({ ...change, type: z.literal('task.link-child'), child: taskRefSchema, childExpectedVersion: z.number().int().positive() }).strict(),
-  z.object({ ...change, type: z.literal('task.associate-session'), session: sessionRefSchema, purpose: z.enum(['related', 'review']) }).strict(),
+  z.object({ ...change, type: z.literal('task.associate-session'), session: sessionRefSchema, purpose: z.enum(['related', 'review']), historicalSource: sessionRefSchema.optional() }).strict(),
   z.object({ ...change, type: z.literal('legacy.map'), address: legacyAddressSchema }).strict(),
   z.object({ ...change, type: z.literal('task.start'), agentId: id, resource: resourceRefSchema, session: sessionRefSchema.optional(),
     agentPreset: referenceId, model: modelSchema, permissionPreset: referenceId }).strict(),

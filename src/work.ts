@@ -1825,7 +1825,16 @@ export class WorkApplication {
     }
     if (command.type === 'task.associate-session') {
       const project = state.projects.find(item => item.id === command.ref.projectId)
-      if (!project || !(await this.candidates(project)).some(item => sameSession(item.ref, command.session))) {
+      const task = taskAt(state, command.ref)!
+      const execution = state.executions.find(item => item.id === task.completion?.executionId && sameTask(item.ref, command.ref))
+      if (command.historicalSource && (!isTaskCompleted(task) || command.purpose !== 'related' || !execution
+        || !(sameSession(execution.session, command.historicalSource) || execution.retired?.some(item => sameSession(item.session, command.historicalSource!)))
+        || sameSession(command.session, command.historicalSource) || sameSession(command.session, execution.session)
+        || execution.retired?.some(item => sameSession(item.session, command.session)))) {
+        return failed('invalid-historical-context', 'Historical context requires a completed Task and an exact execution source with a separate related Session')
+      }
+      if (!project || !(await this.candidates(project)).some(item => sameSession(item.ref, command.session)
+        && (!command.historicalSource || sameResource(item.resource, execution!.resource)))) {
         return failed('incompatible-session', 'Session is not a compatible member of this project resource')
       }
     }
@@ -2096,12 +2105,16 @@ export class WorkApplication {
       const existing = task.sessions.find(item => sameSession(item.session, command.session))
       if (existing) {
         if (existing.purpose !== command.purpose) return failed('association-purpose-conflict', 'Session is already associated with another purpose')
+        if (command.historicalSource) {
+          if (existing.historicalSource && !sameSession(existing.historicalSource, command.historicalSource)) return failed('association-source-conflict', 'Session already has another historical source')
+          if (!existing.historicalSource) { existing.historicalSource = command.historicalSource; this.changed(task, command) }
+        }
         return { status: 'completed', task }
       }
       if (state.tasks.some(item => item.projectId !== projectId && item.sessions.some(binding => sameSession(binding.session, command.session)))) {
         return failed('cross-project-reference', 'Session is associated with work in another project')
       }
-      task.sessions.push({ session: command.session, purpose: command.purpose })
+      task.sessions.push({ session: command.session, purpose: command.purpose, ...(command.historicalSource ? { historicalSource: command.historicalSource } : {}) })
       this.changed(task, command)
       return { status: 'completed', task }
     }
@@ -2262,7 +2275,11 @@ export class WorkApplication {
         ref: item.ref, title: taskAt(state, item.ref)!.title, projectName: state.projects.find(project => project.id === item.ref.projectId)!.name,
         purpose: 'control' as const, executionId: item.id, epoch: item.epoch,
       })),
-    ] }
+    ].map(item => {
+      const task = taskAt(state, item.ref)!
+      const contexts = isTaskCompleted(task) ? task.sessions.filter(binding => binding.historicalSource && sameSession(binding.historicalSource, query.session)).map(binding => binding.session) : []
+      return contexts.length ? { ...item, historicalContexts: contexts } : item
+    }) }
     if (query.type === 'session.candidates') {
       const project = state.projects.find(item => item.id === query.projectId)
       return project ? { status: 'completed', candidates: await this.candidates(project) } : failed('unknown-project', 'Project does not exist')
