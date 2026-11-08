@@ -60,12 +60,18 @@ export function workSessionTitles(state: WorkSnapshot, pending?: WorkExecution):
   }
   for (const task of state.tasks) {
     for (const purpose of ['related', 'review'] as const) {
-      task.sessions.filter(binding => binding.purpose === purpose).forEach((binding, index) => {
+      task.sessions.filter(binding => binding.purpose === purpose && !binding.historicalSource).forEach((binding, index) => {
         add(task, binding.session, `${purpose === 'review' ? '评审' : '关联'} ${index + 1}`, 0)
       })
     }
     const execution = executions.get(taskKey({ projectId: task.projectId, taskId: task.id }))
     if (!execution) continue
+    for (const binding of task.sessions) {
+      if (!binding.historicalSource) continue
+      const sourceEpoch = execution.retired?.find(old => sameSession(old.session, binding.historicalSource!))?.epoch
+        ?? (sameSession(execution.session, binding.historicalSource) ? execution.epoch : undefined)
+      if (sourceEpoch !== undefined) add(task, binding.session, `会话 ${sourceEpoch + 1}`, 3)
+    }
     for (const old of execution.retired ?? []) add(task, old.session, `会话 ${old.epoch}`, 1)
     add(task, execution.session, `会话 ${execution.epoch}`, 2)
     if (pending?.id === execution.id && !sameSession(pending.session, execution.session)) add(task, pending.session, `会话 ${pending.epoch}`, 2)
