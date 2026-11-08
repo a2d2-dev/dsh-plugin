@@ -29,7 +29,7 @@
 
 正式发布分支 `release/183-message-delivery-input` 在已部署的 `c17fdbb` 与主干受影响组件相同，本补丁可独立集成；不能以主干包覆盖该分支尚未合入的宿主和接续修复。
 
-## 发布与页面验收（2026-11-08）
+## 发布与页面验收（2026-11-08，第一阶段记录）
 
 独立只读审查 APPROVE。PR #369 的 Node 22、Node 24、secrets 两组检查全部成功，已合并为 `4c0fd85b`。发布组合以正式 `c17fdbb` 为基线，只叠加本票提交，代码 `4bb4f8d`；组合四文件 140 项、typecheck、build、pack 通过。未用 main 包覆盖正式尚未合入的修复。
 
@@ -48,3 +48,19 @@
 完整中文记录、截图、原始回归、lib 比对及重启回执位于本机 `docs/artifacts/dsh-368-2026-11-08/`；私有生产截图及业务上下文不提交公开仓库。包、部署前备份及结构化证明在本机 `/data/_ssd2t/dsh/packages/issue368-session6-v1/`。
 
 恢复条件：该原会话的 Codex 材料请求能正常返回。届时在原接续页点击“重试本次接续”，复用相同操作和后继，继续核实材料保存与 received；不要点击业务恢复绕过维护失败。Issue #368 保持 Open / Project In Progress，原会话完整接任未完成，最终关闭由 LF 执行。
+
+
+## 正式原会话接续已完成（2026-11-08）
+
+LF 要求继续修复后，复核发现原请求在上轮第六次重试之后已开始返回，但随后被停止，未执行保存；另 seq2166 持久记录了 DimAgent 选择，导致本次操作报 `continuation-profile-changed`。只读代码调查未找到自动切换路径，不能把该选择归因于目录加载。通过正式模型选择入口恢复原 `codex/gpt-6.1-sol/high`，seq2188 可核，然后重试原操作，未修改配置、账本或上游服务。此前 524/522 是真实失败记录，不因后来成功而删除；现有健康检查成功和真实请求返回已解除本次恢复前置，不扩大到迁移或改造上游。
+
+正式验收结果：
+
+- 原 Session `2d83a6c4` 的 seq2198 实际调用 `work_continuation_material`，seq2199 成功返回。材料正文 18144 字节，SHA-256 `2e11c9e11292c824cee2c7614c2b45f5561561b954378de3e789de19c556c2d7`；没有用摘要副本冒充源模型保存。
+- 原固定后继 `session-f6e94427-8cee-4494-bbf7-b75d1d3bb720` 正式接任为“#184 · 会话7”，epoch `6 → 7`。
+- 后继 seq23 实际调用 `work_continuation_received`，seq28 返回 `status=completed`、同操作 `abadbc11-5984-490d-9fbc-207b7b99478d` 和材料命令；工作库最终 phase=`received`，无接续错误。
+- 结构化校验确认同 Task、Execution、owner、完整 specification、原 wait 控制及原因均保持；原业务验收没有被标为完成。
+- 交接后的 seq33 出现真实人工“继续”，以及新的模型选择。这是原会话里的后续输入，不是修复方恢复业务；验收只将接收工具成功返回之前列为维护区间，未覆盖或撤销之后的人工操作。
+- agent-browser 实际进入会话7并检查接续页，“后继已确认材料可读”可见；截图与结构化证明已保存。模型上游无需新增代码修改，原接续故障已完成实际恢复。
+
+本机最终证据：`docs/artifacts/dsh-368-2026-11-08/prod-original-handoff-proof.json`、`prod-session7-received-visible.png` 以及原始源/后继日志。前一节“仍被上游阻塞”是第一阶段历史，已由本节正式成功验收替代。Issue #368 的 Project Status 更新为 Done；Issue 保持 Open，由 LF 最终关闭。
