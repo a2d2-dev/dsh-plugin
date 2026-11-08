@@ -5,7 +5,7 @@ import { expect, it } from 'vitest'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import styles from '../../src/client/execution-components.module.css'
-import { ExecutionSessions, ExecutionContinuation } from '../../src/client/execution-components.tsx'
+import { ExecutionSessions, ExecutionContinuation, HistoricalContextLinks } from '../../src/client/execution-components.tsx'
 import type { ExecutionGraph } from '../../src/work-execution/observation.ts'
 import type { WorkExecution } from '../../src/work-types.ts'
 
@@ -60,4 +60,13 @@ it('renders independent child entry, real job owner and distinct delivery/consum
     for (const name of classNames) css = css.replace(new RegExp(`\\.${name}\\b`, 'g'), `.${styles[name as keyof typeof styles]}`)
     await writeFile(resolve(directory, 'component-contract.html'), `<!doctype html><html lang="zh"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>#138 公开组件合同</title><style>body{margin:0;background:#141820;color:#e3e7ef;font:14px system-ui}main{max-width:980px;margin:auto;padding:24px}h1{font-size:20px}aside{padding:12px;background:#303747;border-radius:8px}main>section{margin-top:16px}${css}</style><main><h1>#138 公开组件合同验证</h1><aside>此页为合同测试夹具，非运行实例数据。复用实际产品组件与样式；最终宿主整合与原生聊天交互由 #141 在既有实例验收。</aside>${html}${continuation}</main></html>`)
   }
+})
+
+
+it('uses the existing task action tokens for historical context buttons outside execution surfaces', () => {
+  const html = renderToStaticMarkup(createElement(HistoricalContextLinks, { sessions: [{ runtimeId: 'runtime', sessionId: 'session-existing-context' }], onEnter: () => {} }))
+  expect(html).toContain(styles.taskActions)
+  expect(html).toContain(styles.row)
+  expect(html).toContain('后续上下文')
+  expect(html).not.toContain('session-existing-context')
 })

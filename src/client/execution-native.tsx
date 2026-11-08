@@ -25,7 +25,7 @@ export function ExecutionSessionWorkEntry({ controller, sessionId, blank, placem
   useEffect(() => { const abort = new AbortController(); scope.current = abort; setNavigationError(null); setOpening(false); return () => abort.abort() }, [sessionId])
   if (!work.length && !error) return null
   if (placement === 'header' && blank) return null
-  if (placement === 'dock' && !blank && !work.some(item => item.purpose === 'history' || item.historicalContexts?.length)) return null
+  if (placement === 'dock' && !blank && !work.some(item => item.purpose === 'history')) return null
   const enter = async (item: AssociatedWork, session?: SessionRef) => {
     const abort = scope.current
     if (!abort || abort.signal.aborted || opening) return
@@ -34,11 +34,10 @@ export function ExecutionSessionWorkEntry({ controller, sessionId, blank, placem
     catch (error) { if (!abort.signal.aborted) setNavigationError(error instanceof Error ? error.message : String(error)) }
     finally { if (!abort.signal.aborted) setOpening(false) }
   }
-  if (placement === 'dock' && work.some(item => item.purpose === 'history' || item.historicalContexts?.length)) return <div className={`${styles.entry} ${styles.card}`} role="status">
-    {work.filter(item => item.purpose === 'history' || item.historicalContexts?.length).map(item => <div key={`${item.ref.projectId}/${item.ref.taskId}`}>
-      {item.purpose === 'history' && <><p>“{item.title}”的处理会话已切换。交接内容是否送达，请查看「A²D² 接续」。你仍可在这里继续对话。</p>
-      <button type="button" disabled={opening} onClick={() => void enter(item)}>进入会话</button></>}
-      <HistoricalContextLinks sessions={item.historicalContexts} busy={opening} onEnter={session => void enter(item, session)}/>
+  if (placement === 'dock' && work.some(item => item.purpose === 'history')) return <div className={`${styles.entry} ${styles.card}`} role="status">
+    {work.filter(item => item.purpose === 'history').map(item => <div key={`${item.ref.projectId}/${item.ref.taskId}`}>
+      <p>“{item.title}”的处理会话已切换。交接内容是否送达，请查看「A²D² 接续」。你仍可在这里继续对话。</p>
+      <button type="button" disabled={opening} onClick={() => void enter(item)}>进入会话</button>
     </div>)}
     {navigationError && <p role="alert">{navigationError}</p>}
   </div>
