@@ -134,15 +134,17 @@ export function ExecutionContinuation({ graph, execution, policy, busy = false, 
   const failed = execution?.state === 'failed'
   const suspended = execution?.state === 'waiting' || execution?.state === 'paused'
   const pendingControl = execution?.control?.status === 'accepted' && execution.control.action !== 'resume'
-  const blocked = failed || suspended || pendingControl || execution?.state === 'accepted' || execution?.state === 'creating'
+  const ended = execution?.control?.action === 'end'
+  const blocked = failed || ended || pendingControl || execution?.state === 'accepted' || execution?.state === 'creating'
   return <section className={styles.surface} aria-label="接续">
     <div className={styles.sectionHead}><h2>接续</h2>
       {(onContinue || completed) && <button type="button" className={styles.primaryAction} disabled={completed || busy || blocked || !execution?.actual || !onContinue} onClick={completed ? undefined : onContinue}>{completed ? '准备接续' : busy ? '正在准备接续…' : op?.phase === 'taken' ? '重试内容投递' : execution && continuationInFlight(execution) ? '重试本次接续' : '准备接续'}</button>}
       {!completed && failed && onRecover && <button type="button" disabled={busy} onClick={onRecover}>重试原执行</button>}
-      {!completed && suspended && !pendingControl && onResume && <button type="button" disabled={busy} onClick={onResume}>恢复处理</button>}
+      {!completed && suspended && !ended && !pendingControl && onResume && <button type="button" disabled={busy} onClick={onResume}>恢复处理</button>}
     </div>
     {!completed && failed && <p role="alert">原执行恢复失败：{execution?.error ? `${execution.error.code}：${execution.error.message}` : '原因未知'}。请先重试原执行，恢复成功后再准备接续。</p>}
-    {!completed && suspended && <p role="status">原执行{execution?.state === 'paused' ? '已暂停' : '正在等待回复'}；请先恢复处理，再准备接续。</p>}
+    {!completed && suspended && !ended && <p role="status">仅切换会话，保留当前等待或暂停；恢复处理需单独操作。</p>}
+    {!completed && ended && <p role="status">本项队列处理已结束，不能继续接续。</p>}
     {!completed && pendingControl && !failed && <p role="status">原执行的等待或暂停请求尚未生效，请等待结算后刷新观察。</p>}
     {!completed && (execution?.state === 'accepted' || execution?.state === 'creating') && <p role="status">原执行尚未就绪，请等待创建或恢复后刷新观察。</p>}
     {completed && <p role="status">任务阶段：done（已验收完成） · 任务已验收完成，不能继续接续</p>}

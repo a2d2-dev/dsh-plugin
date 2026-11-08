@@ -84,7 +84,7 @@ it.each(['idle', 'inactive'] as const)('keeps an unfinished current Task availab
   expect(view.text()).not.toContain('已验收完成')
 })
 
-it.each(['failed', 'waiting', 'paused', 'accepted', 'creating'] as const)('explains why %s execution cannot prepare continuation', async state => {
+it.each(['failed', 'accepted', 'creating'] as const)('explains why %s execution cannot prepare continuation', async state => {
   const detail = taskDetail()
   detail.execution!.state = state
   if (state === 'failed') detail.execution!.error = { code: 'incompatible-session', message: 'Existing Session model differs' }
@@ -93,9 +93,6 @@ it.each(['failed', 'waiting', 'paused', 'accepted', 'creating'] as const)('expla
   if (state === 'failed') {
     expect(view.text()).toContain('原执行恢复失败：incompatible-session')
     expect(view.nodes('button').some(node => node.props.children === '重试原执行')).toBe(true)
-  } else if (state === 'waiting' || state === 'paused') {
-    expect(view.text()).toContain('请先恢复处理，再准备接续')
-    expect(view.nodes('button').some(node => node.props.children === '恢复处理')).toBe(true)
   } else expect(view.text()).toContain('原执行尚未就绪')
   expect(controller.client.command).not.toHaveBeenCalled()
 })
@@ -142,5 +139,55 @@ it.each(['task.completion', 'progress.completed'])('Issue continuation shows the
   expect(prepareButton(view)?.props.disabled).toBe(true)
   expect(view.text()).toContain('任务阶段：done（已验收完成）')
   expect(view.text()).toContain('任务已验收完成，不能继续接续')
+  expect(controller.client.command).not.toHaveBeenCalled()
+})
+
+
+it.each([
+  { state: 'waiting', surface: 'native' }, { state: 'paused', surface: 'native' },
+  { state: 'waiting', surface: 'issue' }, { state: 'paused', surface: 'issue' },
+] as const)('prepares maintenance continuation from $state in the $surface view without resuming business', async ({ state, surface }) => {
+  const detail = taskDetail()
+  detail.execution!.state = state
+  const control = { commandId: 'hold', action: state === 'waiting' ? 'wait' as const : 'pause' as const, status: 'applied' as const, reason: 'Keep the original condition' }
+  detail.execution!.control = control
+  let view: ReturnType<typeof mountProductionComponent>, controller: WorkPanelController
+  if (surface === 'native') ({ view, controller } = await nativeView(detail))
+  else {
+    controller = controllerFor(detail)
+    await controller.openTask(ref)
+    controller.setDetailTab('continuation')
+    view = mountProductionComponent({ controller }, 'WorkPanel', undefined, { document: { addEventListener() {}, removeEventListener() {} } })
+    mounted.push(view)
+  }
+  expect(prepareButton(view)?.props.disabled).toBe(false)
+  expect(view.text()).toContain('仅切换会话，保留当前等待或暂停')
+  const command = vi.fn(async (_value: unknown) => detail)
+  controller.client.command = command
+  view.click('准备接续')
+  await expect.poll(() => command.mock.calls.length).toBe(1)
+  expect(command.mock.calls[0]![0]).toMatchObject({ type: 'task.continue', ref, executionId: 'e', owner: 'owner', epoch: 1 })
+  expect(detail.execution).toMatchObject({ state, control })
+})
+
+it.each(['wait', 'pause', 'end'] as const)('keeps continuation disabled while %s control is still accepted', async action => {
+  const detail = taskDetail()
+  detail.execution!.state = action === 'wait' ? 'waiting' : 'paused'
+  detail.execution!.control = { commandId: 'pending', action, status: 'accepted', reason: 'Not settled yet' }
+  const { view, controller } = await nativeView(detail)
+  expect(prepareButton(view)?.props.disabled).toBe(true)
+  expect(view.text()).toContain('请求尚未生效')
+  expect(controller.client.command).not.toHaveBeenCalled()
+})
+
+
+it('keeps ended queue work disabled after its control has applied', async () => {
+  const detail = taskDetail()
+  detail.execution!.state = 'paused'
+  detail.execution!.control = { commandId: 'ended', action: 'end', status: 'applied', reason: 'Queue item ended' }
+  const { view, controller } = await nativeView(detail)
+  expect(prepareButton(view)?.props.disabled).toBe(true)
+  expect(view.text()).toContain('本项队列处理已结束')
+  expect(view.nodes('button').some(node => node.props.children === '恢复处理')).toBe(false)
   expect(controller.client.command).not.toHaveBeenCalled()
 })
