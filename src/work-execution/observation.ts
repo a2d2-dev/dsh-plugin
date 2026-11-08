@@ -89,7 +89,7 @@ export function buildExecutionGraph(input: { task: WorkTask; execution?: WorkExe
   const ref = { projectId: task.projectId, taskId: task.id }
   if (execution && !sameTask(execution.ref, ref)) throw new Error('Execution does not belong to this Task')
   const bound = new Map<string, ObservedSession>()
-  for (const association of task.sessions) bound.set(sessionKey(association.session), { session: association.session, role: association.purpose, status: 'unknown', children: [], jobs: [] })
+  for (const association of task.sessions.filter(item => !item.historicalSource)) bound.set(sessionKey(association.session), { session: association.session, role: association.purpose, status: 'unknown', children: [], jobs: [] })
   for (const old of execution?.retired ?? []) bound.set(sessionKey(old.session), { session: old.session, role: 'retired', status: 'unknown', children: [], jobs: [] })
   if (execution) bound.set(sessionKey(execution.session), { session: execution.session, role: 'current', status: 'unknown', children: [], jobs: [] })
   // Only an observation of an explicitly bound root or its native descendants belongs here.

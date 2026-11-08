@@ -2,9 +2,10 @@ import { afterEach, expect, it } from 'vitest'
 import { mkdtemp, realpath, readFile, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, dirname, basename } from 'node:path'
-import { WorkApplication, type WorkHost } from '../src/work.ts'
+import { WorkApplication, WorkDao, type WorkHost } from '../src/work.ts'
 import type { WorkCompleted, WorkResult, WorkTask, WorkExecution } from '../src/work-types.ts'
 import type { GitHubIssue, GitHubSourcePort } from '../src/work-sources/types.ts'
+import { reserveContinuation } from '../src/work-execution/continuation.ts'
 const operator={operator:true}
 const roots:string[]=[]
 afterEach(async()=>{for(const root of roots.splice(0)){if(dirname(root)!==tmpdir()||!basename(root).startsWith('completion-contract-')||await realpath(root)!==root)throw Error('Unsafe cleanup');await rm(root,{recursive:true,force:true})}})
@@ -235,4 +236,33 @@ it.each([false,true])('durably links completed source to its exact existing hist
  expect(markup).toContain('后续上下文')
  expect(markup).toContain('进入会话')
  expect(h.calls.ensure).toBe(1)
+})
+
+
+it.each(['current','retired','reserved'] as const)('rejects another Task execution %s Session as historical context while preserving ordinary related association', async occupied => {
+ const h=await setup(),task=await h.create('completed-source'),execution=await h.start(task)
+ await h.done(execution)
+ const otherTask=await h.create('other-business'),otherExecution=await h.start(otherTask)
+ let target=otherExecution.session
+ await WorkDao.forDirectory(h.app.directory).transaction(async state=>{
+  const other=state.executions.find(item=>item.id===otherExecution.id)!
+  if(occupied==='retired') {
+   other.epoch=2
+   target={runtimeId:other.session.runtimeId,sessionId:'other-retired-session'}
+   other.retired=[{session:target,epoch:1,operationId:'a3a35145-1234-4567-8910-123456789012'}]
+  }
+  if(occupied==='reserved') {
+   reserveContinuation(other,state.tasks.find(item=>item.id===otherTask.id)!,'other-reservation',false)
+   target=other.continuation!.successor
+  }
+ })
+ h.host.sessions=async()=>[{ref:target,resource:execution.resource,title:'Other business context'}]
+ const before=await h.detail(task),otherBefore=await h.detail(otherTask)
+ const command={type:'task.associate-session',commandId:'occupied-historical',ref:execution.ref,expectedVersion:before.task!.version,session:target,purpose:'related',historicalSource:execution.session}
+ expect(await h.app.execute(command,operator)).toMatchObject({status:'failed',error:{code:'session-in-use'}})
+ expect((await h.detail(task)).task).toEqual(before.task)
+ expect((await h.detail(task)).execution).toEqual(before.execution)
+ expect((await h.detail(otherTask)).execution).toEqual(otherBefore.execution)
+ const {historicalSource:omitted,...ordinary}=command
+ expect(await h.app.execute({...ordinary,commandId:'ordinary-related'},operator)).toMatchObject({status:'completed',task:{sessions:[{session:target,purpose:'related'}]}})
 })
