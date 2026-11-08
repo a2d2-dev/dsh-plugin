@@ -295,7 +295,7 @@ export class DshWorkExecutionHost implements WorkExecutionHost {
         bindings = await this.observationScope(execution)
       } catch { blockers.push({ code: 'execution-scope-unavailable', session: execution.session }); limitations.add('无法从权威 Task 记录证明完整关联范围，结算状态未知。') }
     }
-    for (const binding of bindings) roots.set(sessionKey(binding.session), { session: binding.session, role: binding.purpose })
+    for (const binding of bindings.filter(item => !item.historicalSource)) roots.set(sessionKey(binding.session), { session: binding.session, role: binding.purpose })
     for (const old of execution.retired ?? []) roots.set(sessionKey(old.session), { session: old.session, role: 'retired' })
     roots.set(sessionKey(execution.session), { session: execution.session, role: 'current' })
     const receivedChildren = new Map<string, number>()

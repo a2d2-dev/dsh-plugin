@@ -37,7 +37,7 @@ export interface ContinuationOperation {
 export interface Project { id: string; name: string; version: number; defaultAgentId: string; resources: ResourceRef[]; continuationPolicy?: ContinuationPolicy; executionDefaults?: Partial<Pick<WorkExecution, 'resource' | 'model' | 'agentPreset' | 'permissionPreset'>> }
 export interface WorkSpecification { version: number; text: string; acceptance: string[]; missing?: ('body' | 'acceptance')[] }
 export interface BreakdownBlock { id: string; title: string; description: string; status?: WorkStage; evidence?: string[]; child?: TaskRef }
-export interface SessionAssociation { session: SessionRef; purpose: 'related' | 'review' }
+export interface SessionAssociation { session: SessionRef; purpose: 'related' | 'review'; historicalSource?: SessionRef }
 export interface WorkActivity { commandId: string; type: string; version: number }
 export interface WorkTask {
   id: string; projectId: string; title: string; goal: string; version: number; agentId: string
@@ -149,7 +149,7 @@ export type WorkCommand =
   | (TaskChange & { type: 'task.update-spec'; goal: string; specification: string; acceptance: string[] })
   | (TaskChange & { type: 'task.replace-breakdown'; blocks: BreakdownBlock[] })
   | (TaskChange & { type: 'task.link-child'; child: TaskRef; childExpectedVersion: number })
-  | (TaskChange & { type: 'task.associate-session'; session: SessionRef; purpose: 'related' | 'review' })
+  | (TaskChange & { type: 'task.associate-session'; session: SessionRef; purpose: 'related' | 'review'; historicalSource?: SessionRef })
   | (TaskChange & { type: 'legacy.map'; address: LegacyAddress })
   | (Command & ExecutionRef & { type: 'task.configure-continuation'; owner: string; epoch: number; policy: ContinuationPolicy })
   | (Command & ExecutionRef & { type: 'task.continue'; owner: string; epoch: number })
@@ -183,7 +183,7 @@ export type WorkQuery =
   | { type: 'session.candidates'; projectId: string }
   | { type: 'session.work'; session: SessionRef }
   | { type: 'legacy.resolve'; address: LegacyAddress }
-export interface AssociatedWork { ref: TaskRef; title: string; projectName: string; purpose: 'related' | 'review' | 'control' | 'history'; executionId?: string; epoch?: number; currentSession?: SessionRef }
+export interface AssociatedWork { ref: TaskRef; title: string; projectName: string; purpose: 'related' | 'review' | 'control' | 'history'; executionId?: string; epoch?: number; currentSession?: SessionRef; historicalContexts?: SessionRef[] }
 /** Completed fields correspond to command/query; task.detail includes related children and parent. */
 export interface SourceResultFields {
   githubAccount?: import('./work-sources/types.ts').GitHubAccount

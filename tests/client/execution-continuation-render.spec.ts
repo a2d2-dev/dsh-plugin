@@ -191,3 +191,66 @@ it('keeps ended queue work disabled after its control has applied', async () => 
   expect(view.nodes('button').some(node => node.props.children === '恢复处理')).toBe(false)
   expect(controller.client.command).not.toHaveBeenCalled()
 })
+
+it.each(['native', 'header', 'task'] as const)('opens the exact saved historical context from the completed %s surface without executing work', async surface => {
+  const detail = taskDetail(), successor = { runtimeId: 'runtime', sessionId: 'session-existing-historical-context' }
+  detail.task!.completion = completion
+  detail.task!.sessions = [{ session: successor, purpose: 'related', historicalSource: session }]
+  const controller = controllerFor(detail)
+  const query = controller.client.query.bind(controller.client)
+  controller.client.query = async (value, signal) => value.type === 'session.work'
+    ? { status: 'completed', work: [{ ref, title: detail.task!.title, projectName: 'Project', purpose: 'control', historicalContexts: [successor] }] }
+    : query(value, signal)
+  const entered = vi.spyOn(controller, 'openSession')
+  let view: ReturnType<typeof mountProductionComponent>
+  if (surface === 'task') {
+    await controller.openTask(ref)
+    view = mountProductionComponent({ controller }, 'CurrentExecution')
+  } else view = mountProductionComponent({ controller, sessionId: 'current', blank: false, placement: surface === 'header' ? 'header' : 'dock' }, surface === 'native' ? 'ExecutionConversationContinuation' : 'ExecutionSessionWorkEntry', new URL('../../src/client/execution-native.tsx', import.meta.url))
+  mounted.push(view)
+  await expect.poll(() => view.text()).toContain('后续上下文')
+  expect(view.text()).not.toContain('后续上下文 ·')
+  expect(view.text()).not.toContain(successor.sessionId)
+  expect(entered).not.toHaveBeenCalled()
+  // Work detail also keeps its original execution Session link. The context is explicitly separate.
+  const context = view.nodes('button').find(button => button.props.children === '进入会话')!
+  await context.props.onClick()
+  await expect.poll(() => entered.mock.calls.length).toBe(1)
+  expect(entered).toHaveBeenCalledExactlyOnceWith(successor)
+  expect(controller.client.command).not.toHaveBeenCalled()
+  expect(detail.execution!.session).toEqual(session)
+  expect(detail.task!.completion).toEqual(completion)
+})
+
+it('rejects a stale historical context link rather than substituting the canonical executor', async () => {
+  const detail = taskDetail(), controller = controllerFor(detail)
+  detail.task!.completion = completion
+  const entered = vi.spyOn(controller, 'openSession')
+  await expect(controller.openHistoricalContext(ref, { runtimeId: 'runtime', sessionId: 'unregistered' })).rejects.toThrow('后续上下文暂不可进入')
+  expect(entered).not.toHaveBeenCalled()
+  expect(controller.client.command).not.toHaveBeenCalled()
+})
+
+
+it.each(['control','history'] as const)('keeps the %s dock free of historical-context duplicates and preserves formal history navigation', async purpose => {
+  const detail = taskDetail(), successor = { runtimeId: 'runtime', sessionId: 'session-historical-context' }
+  detail.task!.completion = completion
+  detail.task!.sessions = [{ session: successor, purpose: 'related', historicalSource: session }]
+  const controller = controllerFor(detail, purpose), query = controller.client.query.bind(controller.client)
+  controller.client.query = vi.fn(async (value, signal) => value.type === 'session.work'
+    ? { status: 'completed' as const, work: [{ ref, title: detail.task!.title, projectName: 'Project', purpose, historicalContexts: [successor] }] }
+    : query(value, signal))
+  const entered = vi.spyOn(controller, 'openSession')
+  const view = mountProductionComponent({ controller, sessionId: 'current', blank: false, placement: 'dock' }, 'ExecutionSessionWorkEntry', new URL('../../src/client/execution-native.tsx', import.meta.url))
+  mounted.push(view)
+  await expect.poll(() => vi.mocked(controller.client.query).mock.calls.some(([value]) => value.type === 'session.work')).toBe(true)
+  expect(view.text()).not.toContain('后续上下文')
+  if (purpose === 'control') expect(view.text()).toBe('')
+  else {
+    expect(view.text()).toContain('处理会话已切换')
+    view.click('进入会话')
+    await expect.poll(() => entered.mock.calls.length).toBe(1)
+    expect(entered).toHaveBeenCalledExactlyOnceWith(session)
+  }
+  expect(controller.client.command).not.toHaveBeenCalled()
+})

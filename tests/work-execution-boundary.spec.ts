@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import LocalJobs from '@deepseek-ai/dsh-jobs-local'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import { defineTool } from '@deepseek-ai/dsh-tools'
+import { buildExecutionGraph } from '../src/work-execution/observation.ts'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { ExecutionFixtures } from './work-execution-fixture.ts'
 import { DshWorkExecutionHost } from '../src/work-execution/dsh-host.ts'
@@ -90,4 +92,48 @@ it('reads real retired-owner jobs without collecting results or including unowne
   await expect(fixtures.run(() => host.maintain(execution, async () => 'unsafe'))).rejects.toMatchObject({ code: 'continuation-waiting-executions' })
   expect(h.ctx.jobs.read(terminal, SessionId(old.sessionId)).result).toBe('untouched result')
   expect(h.model.requests).toHaveLength(0)
+})
+
+
+it('keeps running historical context and its jobs outside execution settlement while ordinary related sessions remain observed', async () => {
+  const h = await fixtures.mount(await fixtures.root())
+  await h.ctx.plugin(LocalJobs)
+  h.ctx.jobs.attachController('historical-context-test')
+  const current = await h.ctx.sessionController.create({ workspaceId: h.workspace.id, agentPreset: 'contract' })
+  const context = await h.ctx.sessionController.create({ workspaceId: h.workspace.id, agentPreset: 'contract' })
+  const agent = h.ctx.agents.get(context.sessionId)!
+  let release!: () => void, entered!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+  const started = new Promise<void>(resolve => { entered = resolve })
+  h.ctx.tools.register(defineTool({ name: 'hold_historical_context', description: 'Independent historical conversation', parameters: {},
+    output: { schema: { type: 'object', additionalProperties: false, properties: { result: { type: 'string', required: true } } }, render: (_, value) => [{ type: 'text', text: value.result }] },
+    async execute() { entered(); await gate; return { result: 'Context complete' } } }))
+  const job = h.ctx.jobs.start({ kind: 'bash', label: 'historical context work', owner: context.sessionId, run: () => ({ cancel() { release() }, done: gate.then(() => ({ status: 'completed' as const })) }) })
+  h.model.nextTool = { name: 'hold_historical_context', arguments: {} }
+  agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Continue the independent conversation' }], source: { kind: 'user' } }))
+  await started
+  const execution: WorkExecution = { ...executionDefaults, id: 'execution', ref: { projectId: 'project', taskId: 'task' }, session: { runtimeId: 'runtime', sessionId: current.sessionId }, resource: { runtimeId: 'runtime', workspaceId: h.workspace.id } }
+  const historical = { session: { runtimeId: 'runtime', sessionId: context.sessionId }, purpose: 'related' as const, historicalSource: execution.session }
+  const host = new DshWorkExecutionHost(h.ctx, 'runtime')
+  host.connectObservation(async () => [historical])
+  try {
+    const facts = await host.observation(execution)
+    expect(facts.settlement).toBe('settled')
+    expect(facts.blockers).toEqual([])
+    expect(facts.sessions.map(row => row.session.sessionId)).toEqual([current.sessionId])
+    const { historicalSource: omitted, ...related } = historical
+    const ordinary = await host.observation(execution, [related])
+    expect(ordinary.sessions.find(row => row.session.sessionId === context.sessionId)).toMatchObject({ status: 'running', jobs: [expect.objectContaining({ id: job })] })
+    expect(ordinary.blockers).toContainEqual({ code: 'executor-unsettled', session: historical.session })
+    expect(ordinary.blockers.some(row => row.jobId === job)).toBe(true)
+    const task = { id: 'task', projectId: 'project', title: 'Completed source', goal: 'Goal', version: 1, agentId: 'agent', specification: { version: 1, text: 'Spec', acceptance: [] }, specificationHistory: [], breakdown: [], children: [], sessions: [historical], activity: [] }
+    const graph = buildExecutionGraph({ task, execution, observation: ordinary })
+    expect(graph.sessions.map(row => row.session.sessionId)).toEqual([current.sessionId])
+    expect(graph.blockers).toEqual([])
+    expect(buildExecutionGraph({ task: { ...task, sessions: [related] }, execution, observation: ordinary }).sessions.some(row => row.session.sessionId === context.sessionId)).toBe(true)
+  } finally {
+    release()
+    await fixtures.run(() => agent.whenIdle())
+    await h.ctx.jobs.wait(job, 1000, context.sessionId)
+  }
 })
