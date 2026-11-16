@@ -729,6 +729,13 @@
   font-weight: 700;
 }
 
+.botTitle {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.25;
+  font-weight: 700;
+}
+
 .configSubtitle {
   margin: 6px 0 0;
   font-size: 12px;
@@ -800,6 +807,86 @@
   margin: 0;
   font-size: 15px;
   line-height: 1.3;
+}
+
+.botSettingsRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
+  align-items: center;
+  gap: 16px;
+  border-top: 1px solid var(--dsw-alias-border-l2, #d7dee8);
+  padding: 16px 0;
+  color: var(--dsw-alias-label-primary, #1b2430);
+  font-size: 13px;
+}
+
+.botSettingsCopy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.botSettingsCopy p {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary, #5c6673);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.botSwitchLabel {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.botSwitchLabel input {
+  box-sizing: border-box;
+  appearance: none;
+  width: 38px;
+  height: 22px;
+  margin: 0;
+  border: 1px solid var(--dsw-alias-border-l2, #c8d1dc);
+  border-radius: 999px;
+  background: var(--dsw-alias-interactive-bg-hover, #eef0f6);
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.botSwitchLabel input::before {
+  content: '';
+  display: block;
+  width: 16px;
+  height: 16px;
+  margin: 2px;
+  border-radius: 50%;
+  background: var(--dsw-alias-bg-layer-1, #ffffff);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.24);
+  transition: transform 120ms ease;
+}
+
+.botSwitchLabel input:checked {
+  border-color: var(--dsw-alias-brand-primary, #1b2430);
+  background: var(--dsw-alias-brand-primary, #1b2430);
+}
+
+.botSwitchLabel input:checked::before {
+  transform: translateX(16px);
+}
+
+.botSwitchLabel input:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary, #1b2430);
+  outline-offset: 2px;
+}
+
+.botSwitchLabel input:disabled { cursor: default; opacity: 0.55; }
+
+@container (max-width: 560px) {
+  .botSettingsRow { grid-template-columns: minmax(0, 1fr); }
+  .botSwitchLabel { justify-content: flex-start; }
 }
 
 .configWarning {
