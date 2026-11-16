@@ -137,14 +137,14 @@ export function BotSettingsSection(props: BotSettingsSectionProps): ReactNode {
         ),
         createElement('div', { className: css.botSettingsRow },
           createElement('div', { className: css.botSettingsCopy },
-            createElement('strong', null, '任务会话可委派 Bot'),
-            createElement('p', null, '允许当前 Task 协调会话委派独立工作。'),
+            createElement('strong', null, '任务主会话可委派 Bot'),
+            createElement('p', null, '飞书聊天绑定为任务主会话后即可委派。'),
           ),
           createElement('label', { className: css.botSwitchLabel },
             createElement('input', {
               type: 'checkbox',
               role: 'switch',
-              'aria-label': '启用当前 Task 的 Bot 委派',
+              'aria-label': '启用任务主会话的 Bot 委派',
               checked: draft.enabled,
               disabled: saving || loading,
               onChange: (event: { currentTarget: { checked: boolean } }) => {

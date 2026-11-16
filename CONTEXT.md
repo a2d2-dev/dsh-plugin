@@ -143,7 +143,7 @@ _Avoid_: 子任务、CLI PID
 _Avoid_: 任意 CLI 都是可恢复子会话
 
 **外部 Bot 协作（External Bot Collaboration）**：
-通过 DSH 工具调用的远端 Bot 一次协作。它在当前处理 Session 内留下工具调用与结果，但 Bot 自己的账号、云端电脑和记忆仍在 DSH 外；它不是 Project Agent、Child Session 或子 Task。当前 Task 协调会话负责给出最少必要上下文，并核验 Bot 回复后再作为任务证据。
+通过 DSH 工具调用的远端 Bot 一次协作。它在当前处理 Session 内留下工具调用与结果，但 Bot 自己的账号、云端电脑和记忆仍在 DSH 外；它不是 Project Agent、Child Session 或子 Task。任务 Issue 的主会话负责给出最少必要上下文，并核验 Bot 回复后再作为任务证据；现有飞书桥接会话绑定为主会话后也适用。
 _Avoid_: 把远端 Bot 伪装成 DSH 会话或自动验收结果
 
 **交接／接续（Handoff）**：

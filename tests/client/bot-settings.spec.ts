@@ -33,6 +33,7 @@ describe('A2D2 Bot settings section', () => {
     const defaultBot = component.inputs().find(input => input.props.type === 'text')
     expect(enabled).toBeDefined()
     expect(defaultBot).toBeDefined()
+    expect(enabled.props['aria-label']).toBe('启用任务主会话的 Bot 委派')
     enabled.props.onChange({ currentTarget: { checked: true } })
     defaultBot.props.onChange({ currentTarget: { value: 'research-bot' } })
     expect(component.text()).toContain('保存')

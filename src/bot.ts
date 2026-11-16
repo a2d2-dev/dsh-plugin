@@ -3,7 +3,8 @@
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { Context, Volatile } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import type {} from './work-plugin.ts'
+import type { BoundTask } from './types.ts'
+import type {} from './index.ts'
 import { createBotConfigHandler } from './bot-config.ts'
 import { BOT_CONFIG_ROUTE_PATH, GROK_BOT_TOOLS } from './bot-contract.ts'
 import type { BotSettings } from './bot-contract.ts'
@@ -11,8 +12,8 @@ import type { BotSettings } from './bot-contract.ts'
 /** Cordis plugin name of the optional A2D2 Bot configuration and prompt half. */
 export const name = 'a2d2-bot'
 
-/** DSH services needed for settings and detection of the companion Grok Bot tools. */
-export const inject = ['tools', 'settings', 'a2d2Work']
+/** DSH services needed for settings, tool detection, and A²D² task ownership. */
+export const inject = ['tools', 'settings', 'a2d2']
 
 const SETTINGS_NAMESPACE = 'a2d2-bot'
 
@@ -53,10 +54,6 @@ interface ScopedSystemPrompt {
   getSectionOrder(name: 'TEAM_POLICY'): number
 }
 
-interface A2d2WorkService {
-  isCurrentCoordinatorSession(sessionId: string): Promise<boolean>
-}
-
 function missingTools(tools: ToolCatalog): string[] {
   return GROK_BOT_TOOLS.filter(tool => tools.get(tool) === undefined)
 }
@@ -71,9 +68,9 @@ function savedSettings(config: Config, value: unknown): BotSettings {
   }
 }
 
-export function botPromptText(settings: BotSettings, missing: readonly string[]): string {
+export function botPromptText(settings: BotSettings, missing: readonly string[], task?: Pick<BoundTask, 'state'>): string {
   const defaultBot = settings.defaultBot.trim()
-  if (!settings.enabled || missing.length > 0) return ''
+  if (!settings.enabled || missing.length > 0 || task?.state !== 'active') return ''
   return [
     '## External Grok Bot collaboration',
     defaultBot === ''
@@ -127,17 +124,16 @@ export function apply(ctx: Context, config: Config): void {
   })
 
   ctx.inject(['systemPrompt'], promptCtx => {
-    const work = ctx.a2d2Work as unknown as A2d2WorkService
     const tools = ctx.tools as unknown as ToolCatalog
     const installed = new Map<Agent, () => void>()
 
-    const install = (agent: Agent): void => {
+    const install = (agent: Agent, task: BoundTask): void => {
       if (installed.has(agent)) return
       const systemPrompt = promptForAgent(agent)
       installed.set(agent, systemPrompt.section({
         name: 'a2d2:bot',
         order: systemPrompt.getSectionOrder('TEAM_POLICY') + 11,
-        text: () => botPromptText({ enabled: config.enabled.get(), defaultBot: config.defaultBot.get() }, missingTools(tools)),
+        text: () => botPromptText({ enabled: config.enabled.get(), defaultBot: config.defaultBot.get() }, missingTools(tools), task),
         interpolate: false,
       }))
     }
@@ -146,8 +142,11 @@ export function apply(ctx: Context, config: Config): void {
       installed.delete(agent)
     }
     promptCtx.on('agent/pre-step', async ({ agent }, next) => {
-      const active = config.enabled.get() && missingTools(tools).length === 0
-      if (active && await work.isCurrentCoordinatorSession(agent.id)) install(agent)
+      const cwd = agent.session.header.cwd ?? ''
+      const task = config.enabled.get() && missingTools(tools).length === 0
+        ? await ctx.a2d2.taskOfMainSession(cwd, agent.id)
+        : undefined
+      if (task?.state === 'active') install(agent, task)
       else uninstall(agent)
       return await next()
     }, { prepend: true })

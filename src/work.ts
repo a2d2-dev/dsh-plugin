@@ -2164,12 +2164,6 @@ export class WorkApplication {
     }
     return failed('unsupported-command', 'Command is not implemented')
   }
-  /** Whether a DSH Session is the current coordinator of a managed Task execution. */
-  async isCurrentCoordinatorSession(sessionId: string): Promise<boolean> {
-    const state = await this.load()
-    return state.executions.some(execution => execution.session.sessionId === sessionId
-      && !isTaskCompleted(taskAt(state, execution.ref)))
-  }
   async query(input: unknown, actor: WorkActor): Promise<WorkResult> {
     if (!actor.operator) return failed('forbidden', 'Host operator authorization is required')
     const parsed = querySchema.safeParse(input)

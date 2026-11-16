@@ -22,15 +22,6 @@ async function setup(permissionPreset = 'workspace-write') {
   if (t.status !== 'completed' || !t.task) throw new Error('Missing task')
   return { ...h, directory: app.directory, app, resource, ref: { projectId: p.project.id, taskId: t.task.id }, agentId: p.project.defaultAgentId }
 }
-it('identifies only the current managed Task coordinator Session', async () => {
-  const h = await setup()
-  expect(await h.app.isCurrentCoordinatorSession('ordinary-session')).toBe(false)
-  const started = await h.app.execute({ type: 'task.start', commandId: 'bot-scope', ref: h.ref, expectedVersion: 1,
-    resource: h.resource, agentId: h.agentId, agentPreset: 'contract', model: { provider: 'contract', model: 'selected' }, permissionPreset: 'workspace-write' }, operator)
-  if (started.status !== 'completed' || !started.execution) throw new Error(JSON.stringify(started))
-  expect(await h.app.isCurrentCoordinatorSession(started.execution.session.sessionId)).toBe(true)
-})
-
 it.each(['wait', 'pause'] as const)('accepts a real model self-%s before applying it at the settled maintenance boundary', async action => {
   const h = await setup()
   installWorkTools(h.ctx, h.app, 'runtime')
