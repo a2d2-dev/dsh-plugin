@@ -16,6 +16,7 @@
  * - `lib/ceo-prompt.js` is the scoped CEO prompt plugin for main sessions.
  * - `lib/github-watch.js` is the GitHub watch plugin (`github_watch` tool and
  *   the hooks.a2d2.dev client); its own row because it needs live sessions.
+ * - `lib/bot.js` is the optional Grok Bot settings and scoped CEO prompt plugin.
  * - `lib/invariant.js` is the package invariant companion the harness probes.
  * - `lib/client.js` is the browser half: a classic script registering a CJS
  *   closure factory with `window.__ModuleLoader__`, whose id equals the package
@@ -160,7 +161,7 @@ function cssPlugin(): BuildPlugin {
 
 export default [
   {
-    entry: { 'work-sources': 'src/work-sources.ts', work: 'src/work.ts', 'work-types': 'src/work-types.ts', 'work-plugin': 'src/work-plugin.ts', 'session-title-live': 'src/session-title-live.ts', 'task-runtime': 'src/task-runtime.ts', index: 'src/index.ts', command: 'src/command.ts', tools: 'src/tools.ts', 'open-subtask-tools': 'src/open-subtask-tools.ts', 'complete-task-tools': 'src/complete-task-tools.ts', 'ceo-prompt': 'src/ceo-prompt.ts', 'agent-prompt': 'src/agent-prompt.ts', 'github-watch': 'src/github-watch.ts', invariant: 'src/invariant.ts' },
+    entry: { 'work-sources': 'src/work-sources.ts', work: 'src/work.ts', 'work-types': 'src/work-types.ts', 'work-plugin': 'src/work-plugin.ts', 'session-title-live': 'src/session-title-live.ts', 'task-runtime': 'src/task-runtime.ts', index: 'src/index.ts', command: 'src/command.ts', tools: 'src/tools.ts', 'open-subtask-tools': 'src/open-subtask-tools.ts', 'complete-task-tools': 'src/complete-task-tools.ts', 'ceo-prompt': 'src/ceo-prompt.ts', 'agent-prompt': 'src/agent-prompt.ts', 'github-watch': 'src/github-watch.ts', bot: 'src/bot.ts', invariant: 'src/invariant.ts' },
     outDir: 'lib',
     format: ['esm'],
     platform: 'node',

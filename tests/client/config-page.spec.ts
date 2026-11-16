@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import { apply, inject } from '../../src/client/index.tsx'
+import { BotSettingsSection } from '../../src/client/bot-settings.tsx'
 import {
   A2d2ConfigSection,
   addConfigCandidate,
@@ -122,10 +123,17 @@ describe('A2D2 config client registration', () => {
 
     declareSettings(b.slots)
     await Promise.resolve()
-    const entry = b.slots.entries('settings.section')[0]!
+    const entries = b.slots.entries('settings.section')
+    expect(entries).toHaveLength(2)
+    const entry = entries.find(candidate => candidate.options.id === 'a2d2-config')!
     expect(entry.component).toBe(A2d2ConfigSection)
     expect(entry.options).toMatchObject({ id: 'a2d2-config', order: 60 })
     expect(resolveSlotLabel(entry.options.label as SlotLabel)).toBe('A2D2 配置')
+
+    const botEntry = entries.find(candidate => candidate.options.id === 'a2d2-bot')!
+    expect(botEntry.component).toBe(BotSettingsSection)
+    expect(botEntry.options).toMatchObject({ id: 'a2d2-bot', order: 61 })
+    expect(resolveSlotLabel(botEntry.options.label as SlotLabel)).toBe('A²D² Bot')
 
     const injected = entry.inject as unknown as () => {
       readonly loadModelRoutes: () => Promise<readonly string[]>

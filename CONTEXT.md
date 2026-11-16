@@ -142,6 +142,10 @@ _Avoid_: 子任务、CLI PID
 通过 DSH provider 执行的一次 CLI 运行与结果。one-shot 能力不包含未经证明的续聊或冷恢复语义。
 _Avoid_: 任意 CLI 都是可恢复子会话
 
+**外部 Bot 协作（External Bot Collaboration）**：
+通过 DSH 工具调用的远端 Bot 一次协作。它在当前处理 Session 内留下工具调用与结果，但 Bot 自己的账号、云端电脑和记忆仍在 DSH 外；它不是 Project Agent、Child Session 或子 Task。当前 Task 协调会话负责给出最少必要上下文，并核验 Bot 回复后再作为任务证据。
+_Avoid_: 把远端 Bot 伪装成 DSH 会话或自动验收结果
+
 **交接／接续（Handoff）**：
 同一 Task 的处理工作从当前会话受控转移到后继会话，保留身份、进展和必要上下文。它改变会话关联，不自行推进业务阶段。插件持续负责流程推进，原／新会话只执行明确步骤；显式仅换会话保留 waiting/paused、控制原因和恢复条件，不取得持续处理槽位。维护请求按持久 operation、准确会话和具体步骤准入，不能由任意消息标记授予业务权限。
 _Avoid_: 重建任务、外部同步、迁移机器

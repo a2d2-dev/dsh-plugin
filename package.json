@@ -62,6 +62,10 @@
       "types": "./lib/types/github-watch.d.ts",
       "default": "./lib/github-watch.js"
     },
+    "./bot": {
+      "types": "./lib/types/bot.d.ts",
+      "default": "./lib/bot.js"
+    },
     "./invariant": {
       "types": "./lib/types/invariant.d.ts",
       "default": "./lib/invariant.js"

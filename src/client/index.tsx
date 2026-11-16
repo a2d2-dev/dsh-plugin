@@ -6,6 +6,7 @@
 
 import { createElement } from 'react'
 import { A2d2ConfigSection, loadModelRouteCatalog } from './config-page.tsx'
+import { BotSettingsSection } from './bot-settings.tsx'
 import { IconA2d2AgentsOutline16 } from './icons.tsx'
 import { HandoffOrb } from './orb.tsx'
 import type { OrbChatFacts } from './orb.tsx'
@@ -67,6 +68,14 @@ export function apply(ctx: A2d2ClientContext): void {
       }
     },
   }, A2d2ConfigSection)), 'a2d2 config settings section')
+
+  ctx.effect(() => ctx.slots.inject('settings.section', () => ctx.slots.register({
+    name: 'settings.section',
+    id: 'a2d2-bot',
+    order: 61,
+    label: () => 'A²D² Bot',
+    inject: () => ({ fetch: globalThis.fetch.bind(globalThis) }),
+  }, BotSettingsSection)), 'a2d2 bot settings section')
 
   const controller = new WorkPanelController(createWorkClient(), {
     selectPanel: id => ctx.layout.selectPanel(id as MainPanelId | null),

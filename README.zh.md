@@ -118,7 +118,7 @@ dsh plugin --profile web add /absolute/path/to/output/a2d2-dsh-a2d2-0.0.23.tgz
 
 ## 插件（namespace：`a2d2`）
 
-本包声明十个挂载行，其中 `a2d2-work` 提供受管工作面板和工具，兼容的 `a2d2-task-runtime` 默认禁用。其余八行保留以下会话工具能力。`ctx.a2d2` 是任务存储，不声明任何服务，因此在任何 profile 中都会加载；命令行声明了 `commands` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `/handoff`；基础工具行声明了 `tools` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `bind_main_session` 与 `dispatch_subagent`；开子任务工具行额外声明 `agents` 与 `llm`，因为 `open_subtask` 要创建根会话，并从 `grill` 阶段指定的 Agent 选择模型；完成任务工具行声明 `agents`，因为 `complete_task` 可能需要先恢复父任务主会话再发送通知；CEO 提示段行声明了 `agents`、`systemPrompt` 与 `a2d2`，所以只有同时组合 live Agents 与系统提示词组装的 profile 才得到主会话作用域指导；Agent 提示段行使用同一组服务，为已记录 Agent 的工程师/评审会话装配配置；GitHub 关注行声明了 `tools`、`agents`、`sessions` 与 `sessionController`，所以只有能唤醒会话的 profile 才得到 `github_watch`。`dispatch_subagent` 只在实际运行时查找 `subagents`，因此没有子代理服务的 profile 仍能加载基础工具行，`bind_main_session` 照常可用。Cordis 对"声明了却缺失的服务"是拒绝加载，这正是把它们拆成多行、而不是从一行里条件式注册的原因。悬浮球不需要自己的一行：它通过自己已经身处的那个会话驱动同一条命令。
+本包声明十一个挂载行，其中 `a2d2-work` 提供受管工作面板和工具，`a2d2-bot` 需要 `a2d2Work`、`tools` 与 `settings`，为当前受管 Task 协调会话提供可选 Grok Bot 配置和指导；兼容的 `a2d2-task-runtime` 默认禁用。其余八行保留以下会话工具能力。`ctx.a2d2` 是任务存储，不声明任何服务，因此在任何 profile 中都会加载；命令行声明了 `commands` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `/handoff`；基础工具行声明了 `tools` 与 `a2d2`，所以只有组合了两者的 profile 才得到 `bind_main_session` 与 `dispatch_subagent`；开子任务工具行额外声明 `agents` 与 `llm`，因为 `open_subtask` 要创建根会话，并从 `grill` 阶段指定的 Agent 选择模型；完成任务工具行声明 `agents`，因为 `complete_task` 可能需要先恢复父任务主会话再发送通知；CEO 提示段行声明了 `agents`、`systemPrompt` 与 `a2d2`，所以只有同时组合 live Agents 与系统提示词组装的 profile 才得到主会话作用域指导；Agent 提示段行使用同一组服务，为已记录 Agent 的工程师/评审会话装配配置；GitHub 关注行声明了 `tools`、`agents`、`sessions` 与 `sessionController`，所以只有能唤醒会话的 profile 才得到 `github_watch`。`dispatch_subagent` 只在实际运行时查找 `subagents`，因此没有子代理服务的 profile 仍能加载基础工具行，`bind_main_session` 照常可用。Cordis 对"声明了却缺失的服务"是拒绝加载，这正是把它们拆成多行、而不是从一行里条件式注册的原因。悬浮球不需要自己的一行：它通过自己已经身处的那个会话驱动同一条命令。
 
 发布前运行 `pnpm verify:pack-exports`。它先用 `git archive HEAD` 只把 git 跟踪的文件导出到临时干净树（并断言其中没有 `lib/`），在该树里运行 `pnpm pack`，让 `prepack` 从零构建；随后断言 tarball 文件清单包含全部显式 `exports` 目标（含类型声明与 client 产物）、`dsh.plugin.json` 与 `cordis.patch.yml`，再把同一个 tarball 安装到空的临时项目并逐个导入 `package.json` exports 声明的每个 Node 入口。因此这个检查既覆盖空壳 tarball（未构建就打包的失败形态），也会在发版前发现遗漏的 hash 构建分块，例如共享的交接分块。由于校验对象是已提交的 `HEAD`，工作区有未提交改动时该检查会直接失败：先 commit 或 stash。
 
@@ -141,6 +141,8 @@ dsh plugin --profile web add /absolute/path/to/output/a2d2-dsh-a2d2-0.0.23.tgz
   name: '@a2d2/dsh-a2d2/agent-prompt'
 - id: a2d2-github-watch
   name: '@a2d2/dsh-a2d2/github-watch'
+- id: a2d2-bot
+  name: '@a2d2/dsh-a2d2/bot'
 - id: a2d2-task-runtime
   name: '@a2d2/dsh-a2d2/task-runtime'
   config:
@@ -232,6 +234,12 @@ reviewer:
 页面不会从浏览器直接写任意 settings 命名空间。它调用本插件自己的路由 `/a2d2/api/config`。与所有 A²D² 浏览器路由（`/a2d2/api/config`、`/a2d2/api/consult`、`/a2d2/api/session-agent`、`/a2d2/api/tasks`）一样，它先询问 DSH 的 `connection` 服务（`requestRejection`），该检查与 DSH 内置通道相同：Host/Origin 栅栏加浏览器登录校验。未带 DSH 登录 cookie 的请求得到 `401`（`unauthenticated`），来自不受信 authority 或 origin 的请求得到 `403`（`untrusted`），均在读取请求体之前拒绝。仅凭 Host 或 Origin 请求头永远不够，因为任何非浏览器客户端都能伪造它们。没有 `connection` 服务的 profile 不注册这些路由。浏览器端同源 `fetch` 会自动带上登录 cookie，已登录的 DSH 页面无需额外处理。请求体上限是 64 KiB，JSON 解析失败会被拒绝；读取会返回当前 settings revision，保存必须带着该 revision 整体替换 `stageAgents` 值：`stages`、`agents`、`consult` 三节必须齐全，`stages` 必须覆盖全部闭集公路阶段，`agents` 必须包含 `ceo`、`engineer`、`reviewer`，`stageAgents` 内未知顶层键（例如旧形状的 `stations`）会被拒绝。缺 revision 不会写入；若保存时 revision 已过期，路由拒绝写入并返回最新值；空列表、格式错误 route 等 schema 失败会直接回显原因，且不会落盘。
 
 新增候选只能从 DSH 宿主模型目录（`llm.models`）选择，因此页面不会制造拼写错误的 route。每个已有候选旁都有 **测试** 动作：点击时宿主只发一次极小调用（`reply OK`，小输出预算），并把结果分类为正常、拒答、限流或报错，同时显示原因；空输出按报错处理。没有后台轮询探测。
+
+### A²D² Bot
+
+**A²D² Bot** 设置页为当前受管 Task 处理会话启用可选的 Grok Bot 协作，并保存 profile 级默认 Bot 名称或 id。它只增加受作用域限制的指导；实际消息仍由独立 DSH 工具插件 [`dsh-tool-grok-bot`](https://github.com/Lniosy/dsh-tool-grok-bot) 处理，需要另外安装。A²D² 只检查 `grok_bot_list`、`grok_bot_ask` 和 `grok_bot_wait` 工具是否已挂载，不读取账号登录状态，也不会从设置页发送测试消息。
+
+可在实际使用的 profile 安装：`dsh plugin --profile web add github:Lniosy/dsh-tool-grok-bot`。未设置默认 Bot 时，当前 Task 协调会话可先调用 `grok_bot_list` 选择；使用 `grok_bot_ask` 发送有界工作，再用 `grok_bot_wait` 读取结果，并自行核验后再作为证据。指导会在每轮开始时核对当前协调会话，接续后不再挂在旧会话上。Grok Bot 使用自己的云端电脑和记忆，是外部协作者，不是 Project Agent、DSH Session、子会话或子 Task。A²D² 不复制该插件的私有 API 客户端或凭据。
 
 ## 任务文档
 

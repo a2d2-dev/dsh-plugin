@@ -1,6 +1,6 @@
 # A²D² v3 当前架构决策
 
-以下 11 项是当前目标决策。它们已按 LF 确认的 v3 领域方向与 DSH 内控制面板原型逐份核查；冲突正文已直接替换，未保留另一套并列的旧规范。目标契约不等于全部产品能力已实现，代码覆盖见[实现能力核查](../architecture/a2d2-v3-implementation-evidence.md)。
+以下 12 项是当前目标决策。它们已按 LF 确认的 v3 领域方向与 DSH 内控制面板原型逐份核查；冲突正文已直接替换，未保留另一套并列的旧规范。目标契约不等于全部产品能力已实现，代码覆盖见[实现能力核查](../architecture/a2d2-v3-implementation-evidence.md)。
 
 | 编号 | 当前决策 |
 | --- | --- |
@@ -15,5 +15,6 @@
 | 0009 | [默认配置、项目策略与有效快照](0009-a2d2-settings-live-in-a-settings-namespace-with-own-page.md) |
 | 0010 | [通知语义与可选投递服务](0010-a2d2-decides-when-lf-is-needed-a-notifier-delivers.md) |
 | 0011 | [Task 协调权、接续、队列与恢复](0011-explicit-task-runtime-owns-execution-and-recovery.md) |
+| 0012 | [Grok Bot 保持为外部工具协作者](0012-grok-bot-remains-an-external-tool-collaborator.md) |
 
 0003、0004、0005 保留编号但改用符合当前语义的文件名，旧文件已移除。历史内容可通过 Git 追溯；历史评审稿的固定提交链接仍指向它们实际讨论的时点。

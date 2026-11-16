@@ -315,6 +315,10 @@ declare module '*.module.css' {
     readonly configNoSwitch: string
     readonly configAddRow: string
     readonly configSelect: string
+    readonly botTitle: string
+    readonly botSettingsRow: string
+    readonly botSettingsCopy: string
+    readonly botSwitchLabel: string
   }
   export default classes
 }
